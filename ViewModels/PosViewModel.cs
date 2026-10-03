@@ -113,6 +113,9 @@ public partial class PosViewModel : ObservableObject
     private decimal _totalCartAmount = 0m;
 
     [ObservableProperty]
+    private bool _hasCartItems;
+
+    [ObservableProperty]
     private string _patientName = "Público General";
 
     [ObservableProperty]
@@ -124,6 +127,12 @@ public partial class PosViewModel : ObservableObject
         "Tarjeta Débito/Crédito",
         "Transferencia"
     };
+
+    partial void OnCartChanged(ObservableCollection<CartItem> value)
+    {
+        value.CollectionChanged += (s, e) => RecalculateTotals();
+        RecalculateTotals();
+    }
 
     // ==========================================
     // NOTIFICACIONES Y ALERTAS
@@ -141,7 +150,9 @@ public partial class PosViewModel : ObservableObject
     {
         _inventoryService = inventoryService;
         _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
+        _cart.CollectionChanged += (s, e) => RecalculateTotals();
     }
+
 
     private void OnInventoryChangedHandler()
     {
@@ -430,7 +441,9 @@ public partial class PosViewModel : ObservableObject
     {
         TotalCartItems = Cart.Sum(c => c.Quantity);
         TotalCartAmount = Cart.Sum(c => c.Subtotal);
+        HasCartItems = Cart.Count > 0;
     }
+
 
     [RelayCommand]
     public async Task ProcessSaleAsync()

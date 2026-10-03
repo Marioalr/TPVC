@@ -35,6 +35,7 @@ public class Product
     // Helpers
     public bool IsLowStock => CurrentStock <= MinStock;
     public bool IsOutOfStock => CurrentStock <= 0;
+    public bool HasStock => CurrentStock > 0;
 
     public ProductBatch? NextExpiringBatch => Batches
         .Where(b => !b.IsDepleted && b.Quantity > 0)

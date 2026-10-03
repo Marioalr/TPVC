@@ -69,7 +69,7 @@ public class AppUpdateService
     public string CurrentVersion => 
         Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
         typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
-        "1.2.0";
+        "1.2.1";
 
     public async Task<UpdateCheckResult> CheckForUpdatesAsync()
     {

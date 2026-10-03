@@ -309,7 +309,7 @@
                                                 CommandParameter="{Binding}" 
                                                 Padding="10,5" 
                                                 VerticalAlignment="Center"
-                                                IsEnabled="{Binding IsOutOfStock, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                                                IsEnabled="{Binding HasStock}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="+" FontWeight="Bold" Margin="0,0,4,0" />
                                                 <TextBlock Text="Agregar" FontSize="11" />
@@ -371,7 +371,7 @@
                 <!-- ESTADO VACÍO: Cuando no hay productos agregados -->
                 <StackPanel VerticalAlignment="Center" 
                             HorizontalAlignment="Center" 
-                            Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                            Visibility="{Binding HasCartItems, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
                     <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
                             CornerRadius="40" 
                             Width="80" Height="80" 
@@ -412,7 +412,7 @@
                 </StackPanel>
 
                 <!-- TABLA DE ARTÍCULOS EN LA VENTA (CARRITO) -->
-                <Grid Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}}">
+                <Grid Visibility="{Binding HasCartItems, Converter={StaticResource BoolToVis}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -947,7 +947,7 @@
                                                         Command="{Binding DataContext.AddToCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
                                                         CommandParameter="{Binding}" 
                                                         Padding="14,6" 
-                                                        IsEnabled="{Binding IsOutOfStock, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                                                        IsEnabled="{Binding HasStock}">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" 
                                                               Fill="{DynamicResource ThemeAccentText}" 

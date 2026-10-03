@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using TPVC.Converters;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
@@ -288,6 +292,75 @@ public class InventoryTests
         Assert.IsTrue(string.IsNullOrEmpty(posVm.SearchText));
         Assert.IsFalse(posVm.IsSearchDropdownOpen);
     }
+
+    [TestMethod]
+    public void BoolToVisibilityConverter_HandlesIntsStringsObjectsAndBoolsCorrectly()
+    {
+        var converter = new BoolToVisibilityConverter();
+
+        // 1. Booleanos directos
+        Assert.AreEqual(Visibility.Visible, converter.Convert(true, typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(false, typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(true, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Visible, converter.Convert(false, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture));
+
+        // 2. Números enteros (ej. Cart.Count) - Aquí ocurría el bug crítico donde 1 is true evaluaba a false
+        Assert.AreEqual(Visibility.Visible, converter.Convert(1, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 1 debe ser Visible");
+        Assert.AreEqual(Visibility.Visible, converter.Convert(5, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 5 debe ser Visible");
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(0, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 0 debe ser Collapsed");
+        Assert.AreEqual(Visibility.Visible, converter.Convert(0, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture), "Cart.Count = 0 con Inverse debe ser Visible (EmptyState)");
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(1, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture), "Cart.Count = 1 con Inverse debe ser Collapsed (oculta EmptyState)");
+
+        // 3. Cadenas de texto (ej. SearchText o GenericName)
+        Assert.AreEqual(Visibility.Visible, converter.Convert("Paracetamol", typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert("", typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert("   ", typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(null, typeof(Visibility), null, CultureInfo.InvariantCulture));
+
+        // 4. Colecciones directas
+        Assert.AreEqual(Visibility.Visible, converter.Convert(new List<string> { "Item" }, typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(new List<string>(), typeof(Visibility), null, CultureInfo.InvariantCulture));
+
+        // 5. TargetType bool
+        Assert.IsTrue((bool)converter.Convert(1, typeof(bool), null, CultureInfo.InvariantCulture)!);
+        Assert.IsFalse((bool)converter.Convert(0, typeof(bool), null, CultureInfo.InvariantCulture)!);
+    }
+
+
+    [TestMethod]
+    public async Task PosViewModel_HasCartItems_UpdatesReactivelyOnCartModifications()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        // Inicialmente el carrito debe estar vacío y HasCartItems en false
+        Assert.IsFalse(posVm.HasCartItems);
+        Assert.AreEqual(0, posVm.TotalCartItems);
+
+        // Al agregar un producto, HasCartItems cambia reactivamente a true
+        var product = posVm.Products.First(p => p.CurrentStock > 0);
+        posVm.AddToCart(product);
+        Assert.IsTrue(posVm.HasCartItems);
+        Assert.AreEqual(1, posVm.TotalCartItems);
+
+        // Al incrementar cantidad sigue en true
+        var cartItem = posVm.Cart[0];
+        posVm.IncreaseQuantity(cartItem);
+        Assert.IsTrue(posVm.HasCartItems);
+        Assert.AreEqual(2, posVm.TotalCartItems);
+
+        // Al limpiar el carrito cambia reactivamente a false
+        posVm.ClearCart();
+        Assert.IsFalse(posVm.HasCartItems);
+        Assert.AreEqual(0, posVm.TotalCartItems);
+
+        // Al volver a agregar y luego removerlo uno a uno
+        posVm.AddToCart(product);
+        Assert.IsTrue(posVm.HasCartItems);
+        posVm.RemoveFromCart(posVm.Cart[0]);
+        Assert.IsFalse(posVm.HasCartItems);
+    }
 }
+
 
 

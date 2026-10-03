@@ -5,6 +5,7 @@
     <!-- Converters -->
     <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
     <conv:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+    <conv:InverseBooleanConverter x:Key="InverseBool" />
     <conv:StatusToBrushConverter x:Key="StatusToBrush" />
     <conv:ComparisonToBoolConverter x:Key="ComparisonToBool" />
 
