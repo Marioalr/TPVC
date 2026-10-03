@@ -45,11 +45,11 @@ public class InventoryTests
     public async Task DatabaseInitializer_SeedsGeneralMedicineCategoriesAndProducts()
     {
         var categories = await _inventoryService.GetCategoriesAsync();
-        Assert.IsTrue(categories.Count >= 5, "Debe tener al menos 5 categorías médicas");
+        Assert.IsGreaterThanOrEqualTo(5, categories.Count, "Debe tener al menos 5 categorías médicas");
         Assert.IsTrue(categories.Any(c => c.Name.Contains("Medicamentos")), "Debe existir categoría de Medicamentos");
 
         var products = await _inventoryService.GetProductsAsync();
-        Assert.IsTrue(products.Count >= 5, "Debe tener productos sembrados");
+        Assert.IsGreaterThanOrEqualTo(5, products.Count, "Debe tener productos sembrados");
     }
 
     [TestMethod]
@@ -112,9 +112,9 @@ public class InventoryTests
     public async Task DashboardMetrics_CalculatesCorrectTotals()
     {
         var metrics = await _inventoryService.GetDashboardMetricsAsync();
-        Assert.IsTrue(metrics.TotalProducts > 0);
-        Assert.IsTrue(metrics.LowStockCount >= 0);
-        Assert.IsTrue(metrics.ExpiringSoonCount >= 0);
+        Assert.IsGreaterThan(0, metrics.TotalProducts);
+        Assert.IsGreaterThanOrEqualTo(0, metrics.LowStockCount);
+        Assert.IsGreaterThanOrEqualTo(0, metrics.ExpiringSoonCount);
     }
 
     [TestMethod]

@@ -1,0 +1,40 @@
+name: CI / Build and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build & Run Unit Tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore TPVC.sln
+
+      - name: Build Solution
+        run: dotnet build TPVC.sln --configuration Release --no-restore
+
+      - name: Execute Unit Tests
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish Artifact
+        run: dotnet publish TPVC.csproj -c Release -r win-x64 --self-contained false -o ./publish/TPVC-win-x64
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPVC-win-x64
+          path: ./publish/TPVC-win-x64/

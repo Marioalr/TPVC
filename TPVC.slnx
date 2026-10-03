@@ -1,6 +1,0 @@
-<Solution>
-  <Folder Name="/tests/">
-    <Project Path="tests/TPVC.Tests/TPVC.Tests.csproj" />
-  </Folder>
-  <Project Path="TPVC.csproj" />
-</Solution>
