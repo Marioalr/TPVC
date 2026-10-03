@@ -28,6 +28,11 @@ public partial class MovementsViewModel : ObservableObject
     public MovementsViewModel(InventoryService inventoryService)
     {
         _inventoryService = inventoryService;
+
+        _inventoryService.OnInventoryChanged += () =>
+        {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = LoadMovementsAsync());
+        };
     }
 
     [RelayCommand]

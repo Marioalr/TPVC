@@ -59,6 +59,11 @@ public partial class InventoryViewModel : ObservableObject
     public InventoryViewModel(InventoryService inventoryService)
     {
         _inventoryService = inventoryService;
+
+        _inventoryService.OnInventoryChanged += () =>
+        {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = FilterProductsAsync());
+        };
     }
 
     [RelayCommand]

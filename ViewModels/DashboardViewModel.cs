@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
@@ -30,17 +31,42 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
-    [ObservableProperty]
-    private string _lastUpdatedText = "Sin actualizar";
-
-    [ObservableProperty]
-    private string _updateStatusText = "Buscar actualizaciones";
-
+    // Actualización de la Aplicación
     [ObservableProperty]
     private bool _isUpdateAvailable;
 
     [ObservableProperty]
+    private bool _isCheckingUpdate;
+
+    [ObservableProperty]
+    private bool _isDownloadingUpdate;
+
+    [ObservableProperty]
+    private double _downloadProgress;
+
+    [ObservableProperty]
+    private bool _isUpdateModalOpen;
+
+    [ObservableProperty]
+    private string _updateModalTitle = "Actualización de la Aplicación";
+
+    [ObservableProperty]
+    private string _updateModalMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _latestVersion = "1.0.0";
+
+    [ObservableProperty]
+    private string _releaseNotes = string.Empty;
+
+    [ObservableProperty]
     private string _updateUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _directDownloadUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _downloadFileName = string.Empty;
 
     public bool HasNoLowStock => LowStockProducts.Count == 0;
     public bool HasNoExpiringBatches => ExpiringBatches.Count == 0;
@@ -54,9 +80,17 @@ public partial class DashboardViewModel : ObservableObject
         _inventoryService = inventoryService;
         _updateService = updateService;
         _navigateAction = navigateAction;
+
+        // Auto-actualización reactiva en tiempo real sin presionar botones
+        _inventoryService.OnInventoryChanged += () =>
+        {
+            Application.Current?.Dispatcher?.Invoke(() => _ = RefreshAsync());
+        };
+
+        // Verificación silenciosa en segundo plano al iniciar
+        _ = CheckAppUpdateSilentlyAsync();
     }
 
-    [RelayCommand]
     public async Task RefreshAsync()
     {
         IsLoading = true;
@@ -79,12 +113,6 @@ public partial class DashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(HasNoLowStock));
             OnPropertyChanged(nameof(HasNoExpiringBatches));
             OnPropertyChanged(nameof(HasNoRecentMovements));
-
-            LastUpdatedText = $"Actualizado hoy a las {DateTime.Now:hh:mm:ss tt}";
-        }
-        catch (Exception ex)
-        {
-            LastUpdatedText = $"Error al actualizar: {ex.Message}";
         }
         finally
         {
@@ -92,18 +120,100 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    public async Task CheckAppUpdateAsync()
+    private async Task CheckAppUpdateSilentlyAsync()
     {
-        UpdateStatusText = "Comprobando en GitHub...";
-        var result = await _updateService.CheckForUpdatesAsync();
-        UpdateStatusText = result.Message;
-        IsUpdateAvailable = result.IsUpdateAvailable;
-        UpdateUrl = result.ReleaseUrl;
+        try
+        {
+            var result = await _updateService.CheckForUpdatesAsync();
+            if (result.IsUpdateAvailable)
+            {
+                IsUpdateAvailable = true;
+                LatestVersion = result.LatestVersion;
+                ReleaseNotes = result.ReleaseNotes;
+                UpdateUrl = result.ReleaseUrl;
+                DirectDownloadUrl = result.DirectDownloadUrl;
+                DownloadFileName = result.DownloadFileName;
+            }
+        }
+        catch
+        {
+            // Silencioso en comprobación en segundo plano
+        }
     }
 
     [RelayCommand]
-    public void OpenUpdateUrl()
+    public async Task CheckAppUpdateCommandAsync()
+    {
+        IsCheckingUpdate = true;
+        UpdateModalTitle = "Comprobando Actualización de la App...";
+        UpdateModalMessage = "Consultando el repositorio oficial en GitHub...";
+        IsUpdateModalOpen = true;
+
+        try
+        {
+            var result = await _updateService.CheckForUpdatesAsync();
+            LatestVersion = result.LatestVersion;
+            ReleaseNotes = result.ReleaseNotes;
+            UpdateUrl = result.ReleaseUrl;
+            DirectDownloadUrl = result.DirectDownloadUrl;
+            DownloadFileName = result.DownloadFileName;
+            IsUpdateAvailable = result.IsUpdateAvailable;
+
+            if (result.IsUpdateAvailable)
+            {
+                UpdateModalTitle = "🚀 ¡Nueva Versión Disponible!";
+                UpdateModalMessage = $"Existe una versión más reciente (v{result.LatestVersion}) en GitHub. Tu versión actual es v{result.CurrentVersion}.";
+            }
+            else
+            {
+                UpdateModalTitle = "Sistema al Día";
+                UpdateModalMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateModalTitle = "Error de Conexión";
+            UpdateModalMessage = $"No se pudo verificar la actualización: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task DownloadAndApplyUpdateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(DirectDownloadUrl))
+        {
+            // Si no hay archivo directo .exe adjunto, abrir la página de Releases
+            _updateService.OpenReleaseUrl(UpdateUrl);
+            IsUpdateModalOpen = false;
+            return;
+        }
+
+        IsDownloadingUpdate = true;
+        DownloadProgress = 0;
+        var progress = new Progress<double>(p => DownloadProgress = Math.Round(p, 1));
+
+        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, progress);
+        IsDownloadingUpdate = false;
+
+        if (!success)
+        {
+            UpdateModalMessage = "Hubo un inconveniente al descargar la actualización. Abriendo la página de GitHub...";
+            _updateService.OpenReleaseUrl(UpdateUrl);
+        }
+    }
+
+    [RelayCommand]
+    public void CloseUpdateModal()
+    {
+        IsUpdateModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void OpenReleasePage()
     {
         _updateService.OpenReleaseUrl(UpdateUrl);
     }

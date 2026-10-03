@@ -22,6 +22,8 @@ public class InventoryService
 {
     private readonly AppDbContext _context;
 
+    public event Action? OnInventoryChanged;
+
     public InventoryService(AppDbContext context)
     {
         _context = context;
@@ -113,6 +115,8 @@ public class InventoryService
             _context.Products.Update(product);
             await _context.SaveChangesAsync();
         }
+
+        OnInventoryChanged?.Invoke();
     }
 
     public async Task DeleteProductAsync(int id)
@@ -122,6 +126,7 @@ public class InventoryService
         {
             product.IsActive = false; // Borrado lógico
             await _context.SaveChangesAsync();
+            OnInventoryChanged?.Invoke();
         }
     }
 
@@ -143,6 +148,7 @@ public class InventoryService
             _context.Categories.Update(category);
         }
         await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
     }
 
     public async Task<List<ProductBatch>> GetBatchesAsync(int? productId = null)
@@ -172,6 +178,7 @@ public class InventoryService
             _context.ProductBatches.Update(batch);
         }
         await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
     }
 
     public async Task DeleteBatchAsync(int id)
@@ -181,6 +188,7 @@ public class InventoryService
         {
             _context.ProductBatches.Remove(batch);
             await _context.SaveChangesAsync();
+            OnInventoryChanged?.Invoke();
         }
     }
 
@@ -233,6 +241,7 @@ public class InventoryService
         });
 
         await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
     }
 
     // Registro genérico de movimiento
@@ -258,6 +267,7 @@ public class InventoryService
 
         _context.InventoryMovements.Add(movement);
         await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
     }
 
     public async Task<List<InventoryMovement>> GetRecentMovementsAsync(int count = 50)

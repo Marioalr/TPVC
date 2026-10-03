@@ -47,6 +47,11 @@ public partial class BatchesViewModel : ObservableObject
     public BatchesViewModel(InventoryService inventoryService)
     {
         _inventoryService = inventoryService;
+
+        _inventoryService.OnInventoryChanged += () =>
+        {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = LoadBatchesAsync());
+        };
     }
 
     [RelayCommand]

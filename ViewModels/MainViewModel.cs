@@ -85,31 +85,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task GlobalRefreshAsync()
+    public async Task CheckAppUpdatesAsync()
     {
-        IsRefreshing = true;
-        try
-        {
-            if (CurrentView is DashboardViewModel db)
-            {
-                await db.RefreshAsync();
-            }
-            else if (CurrentView is InventoryViewModel inv)
-            {
-                await inv.FilterProductsAsync();
-            }
-            else if (CurrentView is BatchesViewModel bat)
-            {
-                await bat.LoadBatchesAsync();
-            }
-            else if (CurrentView is MovementsViewModel mov)
-            {
-                await mov.LoadMovementsAsync();
-            }
-        }
-        finally
-        {
-            IsRefreshing = false;
-        }
+        NavigateTo("Dashboard");
+        await DashboardVM.CheckAppUpdateCommandCommand.ExecuteAsync(null);
     }
 }
