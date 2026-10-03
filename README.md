@@ -30,17 +30,14 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - **Navegación Intuitiva**: Todas las vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*).
 - **Interconexión Clínica**: Despache las recetas de los pacientes directamente al carrito de compras con el botón *"Cargar a Venta (POS)"*.
 
-### 2. Punto de Venta (POS) con Carrito de Compra Interactivo
-- **Catálogo de Productos**: Búsqueda reactiva instantánea por nombre comercial, principio activo o código SKU, filtrado por categorías y badges visuales de existencias.
-- **Carrito de Venta**:
-  - Listado dinámico de artículos con control de cantidades (`+`/`-`), eliminación de partidas y subtotales por renglón.
-  - Campo para asociar el nombre del paciente o cliente.
-  - Selector de método de pago: *Efectivo*, *Tarjeta Débito/Crédito*, *Transferencia*.
-  - Total a pagar en tiempo real con tipografía destacada.
-- **Cobro y Despacho Automatizado**:
-  - Descuenta existencias en SQLite aplicando la regla sanitaria **FEFO** (*First Expired, First Out*).
-  - Genera automáticamente el registro de auditoría en el Kardex (`SalidaVenta`).
-  - Actualiza todos los catálogos y métricas sin requerir interacción manual.
+### 2. Punto de Venta (POS / Farmacia)
+- **Área Central de Ticket**: Visualización principal en formato de tabla para los productos agregados a la venta actual (nombre comercial, genérico, SKU, stock disponible, precio unitario, stepper interactivo de cantidades `+`/`-`, subtotal y eliminación).
+- **Búsqueda Instantánea con Menú Desplegable**: Al teclear en la barra superior se despliega en tiempo real un menú flotante con los productos coincidentes, stock y precios para agregarlos con un solo clic o presionando `Enter`.
+- **Ventana Modal de Catálogo Completo**: Botón dedicado *"Buscar en Catálogo"* que abre una ventana emergente donde se exploran todos los productos por categoría, con badges de stock, temperatura (❄️) y botones para seguir agregando.
+- **Cobro en la Esquina Inferior Derecha**:
+  - Resumen de paciente/cliente, método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y contador de artículos.
+  - **TOTAL A PAGAR** destacado en tipografía de gran formato junto al botón prioritario **"Cobrar y Despachar Venta"**.
+  - Deducción automática de inventario mediante la regla sanitaria **FEFO** (*First Expired, First Out*) y registro inmutable en el Kardex (`SalidaVenta`).
 
 ### 3. Módulo de Expedientes Clínicos (TODO)
 - **Ficha Integral del Paciente**: Registro de folio, datos demográficos, signos vitales de la última consulta, diagnóstico médico, antecedentes y notas de evolución.

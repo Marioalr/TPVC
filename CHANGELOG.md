@@ -16,18 +16,17 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
   * Modales informativos enriquecidos al pulsar sobre *Nueva Consulta* o *Nuevo Expediente*.
 * **Visualización de Versión Precisa y Constante**:
   * Despliegue permanente de la versión exacta de la aplicación (`v1.1.0`) en la barra inferior de estado junto al título y el indicador de datos sincronizados, así como en los ajustes del sistema.
-* **Módulo de Punto de Venta (POS con Carrito)**:
-  * Catálogo de productos interactivo con buscador instantáneo, filtrado por categorías y badges de stock.
-  * Carrito de compra reactivo con ajuste de cantidades (`+`/`-`), eliminación de partidas, subtotal por renglón y total a pagar destacado.
-  * Soporte de precios de venta unitarios (`Price`) en la base de datos SQLite y formularios de producto.
-  * Despacho y cobro con selector de método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y registro de paciente/cliente.
-  * Deducción de existencias en tiempo real mediante el algoritmo sanitario **FEFO** (*First Expired, First Out*).
-  * Registro automático en el Kardex como `SalidaVenta` ("Venta en farmacia / POS").
+* **Rediseño Integral del Punto de Venta (POS / Farmacia)**:
+  * Sustitución del panel lateral de carrito por una **tabla central dedicada al ticket de venta**, optimizando el espacio de visualización para nombres comerciales, principios activos, SKU, stock disponible, precio unitario, stepper reactivo `+`/`-`, subtotal y eliminación.
+  * **Búsqueda Instantánea con Menú Desplegable**: Barra superior con autocompletado en tiempo real que lista productos sugeridos con semáforo de existencias y precios, permitiendo agregar al ticket en un clic o con `Enter`.
+  * **Ventana Modal de Catálogo Completo**: Botón dedicado *"Buscar en Catálogo"* para explorar toda la farmacia médica por categorías con filtros rápidos y botón de adición continua.
+  * **Zona de Cobro en la Esquina Inferior Derecha**: Despliegue de paciente/cliente, método de pago, contador de artículos, **TOTAL A PAGAR** destacado y botón prioritario **"Cobrar y Despachar Venta"**.
+  * Deducción de existencias en tiempo real mediante el algoritmo sanitario **FEFO** (*First Expired, First Out*) y registro automático en el Kardex como `SalidaVenta`.
 * **Módulo de Expedientes Clínicos (TODO)**:
   * Visualizador maestro-detalle de expedientes médicos de pacientes con datos demográficos, signos vitales, antecedentes y alertas de alergias.
-  * Botón interactivo *"Cargar a Venta (POS)"* que transfiere los medicamentos de la receta activa del paciente directamente al carrito del punto de venta.
+  * Botón interactivo *"Cargar a Venta (POS)"* que transfiere los medicamentos de la receta activa del paciente directamente al ticket del punto de venta.
 * **Suite de Pruebas Unitarias Ampliada**:
-  * Cobertura expandida a 8 pruebas unitarias automatizadas (validación de ventas POS, cálculos reactivos del carrito y despacho de recetas).
+  * Cobertura expandida a **10 pruebas unitarias automatizadas** (validación de ventas POS, cálculos reactivos del ticket, sugerencias de búsqueda en tiempo real, filtrado en modal de catálogo y despacho de recetas).
 
 ---
 

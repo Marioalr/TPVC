@@ -20,6 +20,7 @@ public partial class CartItem : ObservableObject
     public string Unit { get; set; } = "Piezas";
     public int AvailableStock { get; set; }
     public decimal UnitPrice { get; set; }
+    public bool RequiresRefrigeration { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Subtotal))]
@@ -36,12 +37,21 @@ public partial class PosViewModel : ObservableObject
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
 
+    // ==========================================
+    // BÚSQUEDA EN TIEMPO REAL CON DROPDOWN
+    // ==========================================
     [ObservableProperty]
     private string _searchText = string.Empty;
 
     [ObservableProperty]
-    private Category? _selectedCategory;
+    private ObservableCollection<Product> _searchSuggestions = new();
 
+    [ObservableProperty]
+    private bool _isSearchDropdownOpen;
+
+    // ==========================================
+    // CATÁLOGO GENERAL Y MODAL DE BÚSQUEDA
+    // ==========================================
     [ObservableProperty]
     private ObservableCollection<Category> _categories = new();
 
@@ -49,8 +59,20 @@ public partial class PosViewModel : ObservableObject
     private ObservableCollection<Product> _products = new();
 
     [ObservableProperty]
-    private ObservableCollection<Product> _filteredProducts = new();
+    private bool _isCatalogModalOpen;
 
+    [ObservableProperty]
+    private string _catalogSearchText = string.Empty;
+
+    [ObservableProperty]
+    private Category? _catalogSelectedCategory;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _catalogFilteredProducts = new();
+
+    // ==========================================
+    // VENTA ACTUAL / CARRITO PRINCIPAL
+    // ==========================================
     [ObservableProperty]
     private ObservableCollection<CartItem> _cart = new();
 
@@ -73,6 +95,9 @@ public partial class PosViewModel : ObservableObject
         "Transferencia"
     };
 
+    // ==========================================
+    // NOTIFICACIONES Y ALERTAS
+    // ==========================================
     [ObservableProperty]
     private string? _alertMessage;
 
@@ -106,31 +131,104 @@ public partial class PosViewModel : ObservableObject
         catList.AddRange(cats);
 
         Categories = new ObservableCollection<Category>(catList);
-        if (SelectedCategory == null || !Categories.Any(c => c.Id == SelectedCategory.Id))
+        if (CatalogSelectedCategory == null || !Categories.Any(c => c.Id == CatalogSelectedCategory.Id))
         {
-            SelectedCategory = allCat;
+            CatalogSelectedCategory = allCat;
         }
 
         var prods = await _inventoryService.GetProductsAsync();
         Products = new ObservableCollection<Product>(prods);
-        ApplyFilters();
+
+        ApplyCatalogFilters();
+        ApplySearchSuggestions(SearchText);
     }
 
-    partial void OnSearchTextChanged(string value) => ApplyFilters();
-    partial void OnSelectedCategoryChanged(Category? value) => ApplyFilters();
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplySearchSuggestions(value);
+    }
 
-    private void ApplyFilters()
+    private void ApplySearchSuggestions(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            SearchSuggestions.Clear();
+            IsSearchDropdownOpen = false;
+            return;
+        }
+
+        var q = query.Trim().ToLowerInvariant();
+        var matches = Products
+            .Where(p => 
+                p.Name.ToLowerInvariant().Contains(q) ||
+                (p.GenericName != null && p.GenericName.ToLowerInvariant().Contains(q)) ||
+                p.Code.ToLowerInvariant().Contains(q) ||
+                (p.Location != null && p.Location.ToLowerInvariant().Contains(q))
+            )
+            .OrderBy(p => p.Name)
+            .Take(8)
+            .ToList();
+
+        SearchSuggestions = new ObservableCollection<Product>(matches);
+        IsSearchDropdownOpen = SearchSuggestions.Count > 0;
+    }
+
+    [RelayCommand]
+    public void SelectSuggestion(Product product)
+    {
+        AddToCart(product);
+        SearchText = string.Empty;
+        IsSearchDropdownOpen = false;
+    }
+
+    [RelayCommand]
+    public void AddFirstSuggestion()
+    {
+        if (SearchSuggestions.Count > 0)
+        {
+            SelectSuggestion(SearchSuggestions[0]);
+        }
+    }
+
+    [RelayCommand]
+    public void CloseSearchDropdown()
+    {
+        IsSearchDropdownOpen = false;
+    }
+
+    // ==========================================
+    // MODAL DE CATÁLOGO COMPLETO
+    // ==========================================
+    [RelayCommand]
+    public void OpenCatalogModal()
+    {
+        CatalogSearchText = string.Empty;
+        CatalogSelectedCategory = Categories.FirstOrDefault();
+        ApplyCatalogFilters();
+        IsCatalogModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCatalogModal()
+    {
+        IsCatalogModalOpen = false;
+    }
+
+    partial void OnCatalogSearchTextChanged(string value) => ApplyCatalogFilters();
+    partial void OnCatalogSelectedCategoryChanged(Category? value) => ApplyCatalogFilters();
+
+    private void ApplyCatalogFilters()
     {
         var list = Products.AsEnumerable();
 
-        if (SelectedCategory != null && SelectedCategory.Id > 0)
+        if (CatalogSelectedCategory != null && CatalogSelectedCategory.Id > 0)
         {
-            list = list.Where(p => p.CategoryId == SelectedCategory.Id);
+            list = list.Where(p => p.CategoryId == CatalogSelectedCategory.Id);
         }
 
-        if (!string.IsNullOrWhiteSpace(SearchText))
+        if (!string.IsNullOrWhiteSpace(CatalogSearchText))
         {
-            var q = SearchText.Trim().ToLowerInvariant();
+            var q = CatalogSearchText.Trim().ToLowerInvariant();
             list = list.Where(p => 
                 p.Name.ToLowerInvariant().Contains(q) ||
                 (p.GenericName != null && p.GenericName.ToLowerInvariant().Contains(q)) ||
@@ -139,9 +237,12 @@ public partial class PosViewModel : ObservableObject
             );
         }
 
-        FilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+        CatalogFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
     }
 
+    // ==========================================
+    // OPERACIONES DE LA VENTA / CARRITO
+    // ==========================================
     [RelayCommand]
     public void AddToCart(Product product)
     {
@@ -158,7 +259,7 @@ public partial class PosViewModel : ObservableObject
             {
                 existing.Quantity++;
                 RecalculateTotals();
-                ShowAlert($"Se aumentó la cantidad de '{product.Name}' en el carrito.", true);
+                ShowAlert($"Se aumentó la cantidad de '{product.Name}' en la venta.", true);
             }
             else
             {
@@ -177,10 +278,11 @@ public partial class PosViewModel : ObservableObject
                 Unit = product.Unit,
                 AvailableStock = product.CurrentStock,
                 UnitPrice = product.Price,
+                RequiresRefrigeration = product.RequiresRefrigeration,
                 Quantity = 1
             });
             RecalculateTotals();
-            ShowAlert($"'{product.Name}' agregado al carrito.", true);
+            ShowAlert($"'{product.Name}' agregado a la venta.", true);
         }
     }
 
@@ -217,7 +319,7 @@ public partial class PosViewModel : ObservableObject
     {
         Cart.Remove(item);
         RecalculateTotals();
-        ShowAlert($"'{item.Name}' removido del carrito.", true);
+        ShowAlert($"'{item.Name}' removido de la venta.", true);
     }
 
     [RelayCommand]
@@ -238,7 +340,7 @@ public partial class PosViewModel : ObservableObject
     {
         if (Cart.Count == 0)
         {
-            ShowAlert("El carrito de venta está vacío.", false);
+            ShowAlert("La venta no contiene ningún producto.", false);
             return;
         }
 

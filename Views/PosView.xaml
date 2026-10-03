@@ -6,45 +6,50 @@
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:PosViewModel}"
-             d:DesignHeight="700" d:DesignWidth="1000">
+             d:DesignHeight="750" d:DesignWidth="1100">
 
-    <Grid Margin="16,14,16,14">
+    <Grid Margin="18,16,18,16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Cabecera de Punto de Venta -->
-        <Border Grid.Row="0" Margin="0,0,0,12">
+        <!-- ============================================ -->
+        <!-- FILA 0: CABECERA DE PUNTO DE VENTA -->
+        <!-- ============================================ -->
+        <Border Grid.Row="0" Margin="0,0,0,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="{DynamicResource ThemeAccent}" 
-                                CornerRadius="6" 
-                                Width="28" Height="28" 
-                                Margin="0,0,8,0">
+                                CornerRadius="8" 
+                                Width="32" Height="32" 
+                                Margin="0,0,10,0">
                             <Path Data="{StaticResource IconCart}" 
                                   Fill="{DynamicResource ThemeAccentText}" 
-                                  Width="14" Height="14" 
+                                  Width="16" Height="16" 
                                   Stretch="Uniform" 
                                   HorizontalAlignment="Center" 
                                   VerticalAlignment="Center" />
                         </Border>
                         <TextBlock Text="Punto de Venta / Farmacia" 
-                                   FontSize="20" 
+                                   FontSize="22" 
                                    FontWeight="Bold" 
                                    Foreground="{DynamicResource ThemeText}" 
                                    VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock Text="Despacho rápido y venta de medicamentos con carrito interactivo y descuento FEFO" 
+                    <TextBlock Text="Dispensación rápida y cobro de medicamentos con cálculo de totales y deducción automática FEFO" 
                                FontSize="12" 
                                Foreground="{DynamicResource ThemeTextSecondary}" 
-                               Margin="36,2,0,0" />
+                               Margin="42,3,0,0" />
                 </StackPanel>
 
                 <!-- Botón Volver a Inicio -->
@@ -52,53 +57,716 @@
                         Style="{DynamicResource OutlineButton}" 
                         Command="{Binding BackToHubCommand}" 
                         VerticalAlignment="Center" 
-                        Padding="12,6">
+                        Padding="14,8">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="←" FontWeight="Bold" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="←" FontWeight="Bold" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <TextBlock Text="Volver a Inicio" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
             </Grid>
         </Border>
 
-        <!-- Contenido Principal: Catálogo (Izquierda) + Carrito (Derecha) -->
-        <Grid Grid.Row="1">
+        <!-- ============================================ -->
+        <!-- FILA 1: BARRA DE BÚSQUEDA EN TIEMPO REAL CON DROPDOWN Y ACCIONES -->
+        <!-- ============================================ -->
+        <Grid Grid.Row="1" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" MinWidth="380" />
-                <ColumnDefinition Width="14" />
-                <ColumnDefinition Width="2*" MinWidth="340" MaxWidth="440" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- ============================================ -->
-            <!-- COLUMNA IZQUIERDA: CATÁLOGO DE PRODUCTOS -->
-            <!-- ============================================ -->
-            <Border Grid.Column="0" 
-                    Background="{DynamicResource ThemeCard}" 
-                    BorderBrush="{DynamicResource ThemeBorder}" 
-                    BorderThickness="1" 
-                    CornerRadius="10" 
-                    Padding="14">
-                <Grid>
+            <!-- Búsqueda en Tiempo Real (Input + Menú Desplegable) -->
+            <Grid Grid.Column="0">
+                <!-- Caja de Texto del Buscador -->
+                <Border x:Name="SearchBoxBorder"
+                        Background="{DynamicResource ThemeCard}" 
+                        BorderBrush="{DynamicResource ThemeBorder}" 
+                        BorderThickness="1" 
+                        CornerRadius="8" 
+                        Padding="12,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Path Grid.Column="0" 
+                              Data="{StaticResource IconSearch}" 
+                              Fill="{DynamicResource ThemeAccent}" 
+                              Width="15" Height="15" 
+                              Stretch="Uniform" 
+                              Margin="4,0,10,0" 
+                              VerticalAlignment="Center" />
+
+                        <TextBox Grid.Column="1" 
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                 Background="Transparent" 
+                                 BorderThickness="0" 
+                                 FontSize="13" 
+                                 VerticalAlignment="Center" 
+                                 Foreground="{DynamicResource ThemeText}">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding AddFirstSuggestionCommand}" />
+                                <KeyBinding Key="Esc" Command="{Binding CloseSearchDropdownCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+
+                        <TextBlock Grid.Column="1" 
+                                   Text="Buscar producto por nombre, principio activo o SKU... (ej. Paracetamol)" 
+                                   FontSize="13" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   VerticalAlignment="Center" 
+                                   IsHitTestVisible="False" 
+                                   Margin="2,0,0,0"
+                                   Visibility="{Binding SearchText, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+
+                        <!-- Botón para Limpiar / Cerrar Dropdown -->
+                        <Button Grid.Column="2" 
+                                Command="{Binding CloseSearchDropdownCommand}" 
+                                Visibility="{Binding SearchText, Converter={StaticResource BoolToVis}}" 
+                                Background="Transparent" 
+                                BorderThickness="0" 
+                                Cursor="Hand" 
+                                Padding="4" 
+                                Foreground="{DynamicResource ThemeTextSecondary}">
+                            <TextBlock Text="✕" FontSize="11" FontWeight="Bold" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Menú Desplegable en Tiempo Real (Dropdown Overlay) -->
+                <Border Panel.ZIndex="100" 
+                        VerticalAlignment="Top" 
+                        Margin="0,46,0,0" 
+                        Background="{DynamicResource ThemeSurface}" 
+                        BorderBrush="{DynamicResource ThemeAccent}" 
+                        BorderThickness="1.5" 
+                        CornerRadius="10" 
+                        MaxHeight="360" 
+                        Visibility="{Binding IsSearchDropdownOpen, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Cabecera del Dropdown -->
+                        <Border Grid.Row="0" 
+                                Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                BorderThickness="0,0,0,1" 
+                                Padding="12,6" 
+                                CornerRadius="9,9,0,0">
+                            <Grid>
+                                <TextBlock Text="Resultados de búsqueda instantánea (clic para agregar a la venta):" 
+                                           FontSize="11" 
+                                           FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                           VerticalAlignment="Center" />
+                                <Button Command="{Binding CloseSearchDropdownCommand}" 
+                                        HorizontalAlignment="Right" 
+                                        Background="Transparent" 
+                                        BorderThickness="0" 
+                                        Cursor="Hand">
+                                    <TextBlock Text="✕" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- Lista Desplegable de Resultados -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                            <ItemsControl ItemsSource="{Binding SearchSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource ThemeBorder}" 
+                                                BorderThickness="0,0,0,1" 
+                                                Padding="12,8" 
+                                                Background="Transparent">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Nombre y Principio Activo -->
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}" 
+                                                                   FontWeight="SemiBold" 
+                                                                   FontSize="13" 
+                                                                   Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Text=" ❄️" 
+                                                                   Visibility="{Binding RequiresRefrigeration, Converter={StaticResource BoolToVis}}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding GenericName, StringFormat='{}Genérico: {0}'}" 
+                                                               FontSize="11" 
+                                                               FontStyle="Italic" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                               Visibility="{Binding GenericName, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+
+                                                <!-- Stock Disponible Badge -->
+                                                <Border Grid.Column="1" 
+                                                        CornerRadius="4" 
+                                                        Padding="6,2" 
+                                                        Margin="12,0,12,0" 
+                                                        VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsOutOfStock}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource ThemeError}" />
+                                                                </DataTrigger>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsLowStock}" Value="True" />
+                                                                        <Condition Binding="{Binding IsOutOfStock}" Value="False" />
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Background" Value="{DynamicResource ThemeWarning}" />
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="White">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="{Binding CurrentStock, StringFormat='Stock: {0}'}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsOutOfStock}" Value="True">
+                                                                        <Setter Property="Text" Value="Agotado" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+
+                                                <!-- Precio Unitario -->
+                                                <TextBlock Grid.Column="2" 
+                                                           Text="{Binding Price, StringFormat='${0:N2}'}" 
+                                                           FontWeight="Bold" 
+                                                           FontSize="14" 
+                                                           Foreground="{DynamicResource ThemeAccent}" 
+                                                           VerticalAlignment="Center" 
+                                                           Margin="0,0,14,0" />
+
+                                                <!-- Botón Agregar Directo -->
+                                                <Button Grid.Column="3" 
+                                                        Style="{DynamicResource AccentButton}" 
+                                                        Command="{Binding DataContext.SelectSuggestionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                        CommandParameter="{Binding}" 
+                                                        Padding="10,5" 
+                                                        VerticalAlignment="Center"
+                                                        IsEnabled="{Binding IsOutOfStock, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="+" FontWeight="Bold" Margin="0,0,4,0" />
+                                                        <TextBlock Text="Agregar" FontSize="11" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Botón Buscar en Catálogo (Abre Ventana Modal de Exploración) -->
+            <Button Grid.Column="2" 
+                    Style="{DynamicResource AccentButton}" 
+                    Command="{Binding OpenCatalogModalCommand}" 
+                    Padding="16,8" 
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Path Data="{StaticResource IconBox}" 
+                          Fill="{DynamicResource ThemeAccentText}" 
+                          Width="13" Height="13" 
+                          Stretch="Uniform" 
+                          Margin="0,0,8,0" />
+                    <TextBlock Text="Buscar en Catálogo" FontSize="12" FontWeight="SemiBold" />
+                </StackPanel>
+            </Button>
+
+            <!-- Botón Vaciar Venta -->
+            <Button Grid.Column="4" 
+                    Style="{DynamicResource OutlineButton}" 
+                    Command="{Binding ClearCartCommand}" 
+                    Padding="14,8" 
+                    VerticalAlignment="Center"
+                    ToolTip="Vaciar todos los artículos de la venta actual">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Path Data="{StaticResource IconTrash}" 
+                          Fill="{DynamicResource ThemeError}" 
+                          Width="12" Height="12" 
+                          Stretch="Uniform" 
+                          Margin="0,0,6,0" />
+                    <TextBlock Text="Vaciar Venta" FontSize="12" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- ============================================ -->
+        <!-- FILA 2: ÁREA PRINCIPAL - TABLA DE PRODUCTOS AGREGADOS A LA VENTA -->
+        <!-- ============================================ -->
+        <Border Grid.Row="2" 
+                Background="{DynamicResource ThemeCard}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1" 
+                CornerRadius="12" 
+                Padding="16">
+            <Grid>
+                <!-- ESTADO VACÍO: Cuando no hay productos agregados -->
+                <StackPanel VerticalAlignment="Center" 
+                            HorizontalAlignment="Center" 
+                            Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            CornerRadius="40" 
+                            Width="80" Height="80" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,0,0,16">
+                        <Path Data="{StaticResource IconCart}" 
+                              Fill="{DynamicResource ThemeBorder}" 
+                              Width="38" Height="38" 
+                              Stretch="Uniform" 
+                              HorizontalAlignment="Center" 
+                              VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="La venta actual está vacía" 
+                               FontWeight="Bold" 
+                               FontSize="18" 
+                               Foreground="{DynamicResource ThemeText}" 
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="Escriba en la barra superior para buscar en tiempo real o abra el catálogo para agregar medicamentos e insumos." 
+                               FontSize="13" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               HorizontalAlignment="Center" 
+                               TextAlignment="Center" 
+                               MaxWidth="480" 
+                               Margin="0,6,0,20" />
+                    <Button Style="{DynamicResource AccentButton}" 
+                            Command="{Binding OpenCatalogModalCommand}" 
+                            HorizontalAlignment="Center" 
+                            Padding="20,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconBox}" 
+                                  Fill="{DynamicResource ThemeAccentText}" 
+                                  Width="13" Height="13" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,8,0" />
+                            <TextBlock Text="Explorar Catálogo Completo" FontSize="13" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- TABLA DE ARTÍCULOS EN LA VENTA (CARRITO) -->
+                <Grid Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Barra de Búsqueda y Filtro de Categoría -->
-                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <!-- Cabecera de la Tabla -->
+                    <Border Grid.Row="0" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="0,0,0,1" 
+                            CornerRadius="8" 
+                            Padding="14,10" 
+                            Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4*" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="PRODUCTO / MEDICAMENTO" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Grid.Column="1" Text="CÓDIGO / SKU" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Grid.Column="2" Text="DISPONIBLE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Grid.Column="3" Text="PRECIO UNIT." FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Grid.Column="4" Text="CANTIDAD" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="SUBTOTAL" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Column="6" Text="" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Lista con Scroll de Renglones de la Venta -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Cart}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14,10" 
+                                            Margin="0,0,0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="4*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="140" />
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="60" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 0: Nombre, Genérico y Presentación -->
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" 
+                                                               FontWeight="SemiBold" 
+                                                               FontSize="14" 
+                                                               Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text=" ❄️" 
+                                                               Visibility="{Binding RequiresRefrigeration, Converter={StaticResource BoolToVis}}" 
+                                                               ToolTip="Requiere cadena de frío" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                    <TextBlock Text="{Binding GenericName}" 
+                                                               FontSize="11" 
+                                                               FontStyle="Italic" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text=" • " 
+                                                               FontSize="11" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                               Visibility="{Binding GenericName, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding Presentation}" 
+                                                               FontSize="11" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- 1: SKU / Código -->
+                                            <TextBlock Grid.Column="1" 
+                                                       Text="{Binding Code}" 
+                                                       FontSize="12" 
+                                                       FontFamily="Consolas" 
+                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                       VerticalAlignment="Center" />
+
+                                            <!-- 2: Stock Disponible -->
+                                            <TextBlock Grid.Column="2" 
+                                                       Text="{Binding AvailableStock, StringFormat='{}{0} disp.'}" 
+                                                       FontSize="12" 
+                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                       VerticalAlignment="Center" />
+
+                                            <!-- 3: Precio Unitario -->
+                                            <TextBlock Grid.Column="3" 
+                                                       Text="{Binding UnitPrice, StringFormat='${0:N2}'}" 
+                                                       FontSize="13" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource ThemeText}" 
+                                                       VerticalAlignment="Center" />
+
+                                            <!-- 4: Controles de Cantidad [-] [Qty] [+] -->
+                                            <Border Grid.Column="4" 
+                                                    Background="{DynamicResource ThemeCard}" 
+                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="6" 
+                                                    Padding="4,2" 
+                                                    HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button Command="{Binding DataContext.DecreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                            CommandParameter="{Binding}" 
+                                                            Width="28" Height="26" 
+                                                            Background="Transparent" 
+                                                            BorderThickness="0" 
+                                                            Cursor="Hand" 
+                                                            Content="−" 
+                                                            FontWeight="Bold" 
+                                                            FontSize="14" 
+                                                            Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding Quantity}" 
+                                                               FontWeight="Bold" 
+                                                               FontSize="13" 
+                                                               VerticalAlignment="Center" 
+                                                               HorizontalAlignment="Center" 
+                                                               MinWidth="32" 
+                                                               TextAlignment="Center" 
+                                                               Foreground="{DynamicResource ThemeText}" />
+                                                    <Button Command="{Binding DataContext.IncreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                            CommandParameter="{Binding}" 
+                                                            Width="28" Height="26" 
+                                                            Background="Transparent" 
+                                                            BorderThickness="0" 
+                                                            Cursor="Hand" 
+                                                            Content="+" 
+                                                            FontWeight="Bold" 
+                                                            FontSize="14" 
+                                                            Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- 5: Subtotal -->
+                                            <TextBlock Grid.Column="5" 
+                                                       Text="{Binding Subtotal, StringFormat='${0:N2}'}" 
+                                                       FontWeight="Bold" 
+                                                       FontSize="15" 
+                                                       Foreground="{DynamicResource ThemeAccent}" 
+                                                       HorizontalAlignment="Right" 
+                                                       VerticalAlignment="Center" />
+
+                                            <!-- 6: Botón Eliminar -->
+                                            <Button Grid.Column="6" 
+                                                    Style="{DynamicResource OutlineButton}" 
+                                                    Command="{Binding DataContext.RemoveFromCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                    CommandParameter="{Binding}" 
+                                                    Padding="8,6" 
+                                                    HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center" 
+                                                    ToolTip="Quitar de la venta">
+                                                <Path Data="{StaticResource IconTrash}" 
+                                                      Fill="{DynamicResource ThemeError}" 
+                                                      Width="12" Height="12" 
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ============================================ -->
+        <!-- FILA 3: BARRA INFERIOR CON DATOS Y BOTÓN DE COBRAR EN LA ESQUINA DERECHA -->
+        <!-- ============================================ -->
+        <Border Grid.Row="3" 
+                Background="{DynamicResource ThemeCard}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1" 
+                CornerRadius="12" 
+                Padding="18,14" 
+                Margin="0,14,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Panel Izquierdo: Paciente, Forma de Pago y Contador -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Paciente / Cliente -->
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Paciente / Cliente:" 
+                                   FontSize="11" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   Margin="0,0,0,4" />
+                        <TextBox Style="{DynamicResource ModernTextBox}" 
+                                 Text="{Binding PatientName, UpdateSourceTrigger=PropertyChanged}" 
+                                 Width="210" 
+                                 FontSize="12" />
+                    </StackPanel>
+
+                    <!-- Método de Pago -->
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Método de Pago:" 
+                                   FontSize="11" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   Margin="0,0,0,4" />
+                        <ComboBox Style="{DynamicResource ModernComboBox}" 
+                                  ItemsSource="{Binding PaymentMethods}" 
+                                  SelectedItem="{Binding SelectedPaymentMethod}" 
+                                  Width="180" 
+                                  FontSize="12" />
+                    </StackPanel>
+
+                    <!-- Contador de Artículos en Venta -->
+                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="12,8" 
+                            VerticalAlignment="Bottom">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Artículos: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Text="{Binding TotalCartItems}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Panel Derecho: TOTAL A PAGAR Y BOTÓN DE COBRAR (Esquina Inferior Derecha) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <!-- Resumen del Total -->
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                        <TextBlock Text="TOTAL A PAGAR" 
+                                   FontWeight="Bold" 
+                                   FontSize="11" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding TotalCartAmount, StringFormat='${0:N2}'}" 
+                                   FontWeight="Bold" 
+                                   FontSize="28" 
+                                   Foreground="{DynamicResource ThemeAccent}" 
+                                   HorizontalAlignment="Right" />
+                    </StackPanel>
+
+                    <!-- Botón Destacado de Cobro en la Esquina Inferior Derecha -->
+                    <Button Style="{DynamicResource AccentButton}" 
+                            Command="{Binding ProcessSaleCommand}" 
+                            Padding="24,14" 
+                            FontSize="15" 
+                            FontWeight="Bold" 
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconCheck}" 
+                                  Fill="{DynamicResource ThemeAccentText}" 
+                                  Width="16" Height="16" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Cobrar y Despachar Venta" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================================ -->
+        <!-- FILA 4: BARRA DE NOTIFICACIÓN FLOTANTE (ALERTA) -->
+        <!-- ============================================ -->
+        <Border Grid.Row="4" 
+                Visibility="{Binding IsAlertVisible, Converter={StaticResource BoolToVis}}" 
+                CornerRadius="8" 
+                Padding="14,9" 
+                Margin="0,10,0,0">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSuccessAlert}" Value="False">
+                            <Setter Property="Background" Value="{DynamicResource ThemeError}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" 
+                           Text="{Binding AlertMessage}" 
+                           FontWeight="SemiBold" 
+                           FontSize="12" 
+                           Foreground="White" 
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1" 
+                        Command="{Binding DismissAlertCommand}" 
+                        Background="Transparent" 
+                        BorderThickness="0" 
+                        Foreground="White" 
+                        FontWeight="Bold" 
+                        Cursor="Hand" 
+                        Content="✕" 
+                        Padding="6,2" />
+            </Grid>
+        </Border>
+
+        <!-- ============================================ -->
+        <!-- MODAL / VENTANA DE CATÁLOGO GENERAL DE PRODUCTOS -->
+        <!-- ============================================ -->
+        <Border Grid.Row="0" Grid.RowSpan="5" 
+                Background="#AA000000" 
+                Visibility="{Binding IsCatalogModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Panel.ZIndex="200">
+            <Border Background="{DynamicResource ThemeCard}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="14" 
+                    MaxWidth="960" 
+                    MaxHeight="680" 
+                    MinHeight="500" 
+                    Margin="24" 
+                    HorizontalAlignment="Stretch" 
+                    VerticalAlignment="Center">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de la Ventana Modal -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="10" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Buscador -->
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeAccent}" 
+                                        CornerRadius="6" 
+                                        Width="28" Height="28" 
+                                        Margin="0,0,10,0">
+                                    <Path Data="{StaticResource IconBox}" 
+                                          Fill="{DynamicResource ThemeAccentText}" 
+                                          Width="14" Height="14" 
+                                          Stretch="Uniform" 
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="Catálogo Completo de Productos e Insumos" 
+                                           FontSize="18" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource ThemeText}" />
+                            </StackPanel>
+                            <TextBlock Text="Explore todos los insumos disponibles y presione '+ Agregar' para incorporarlos a la venta actual." 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       Margin="38,2,0,0" />
+                        </StackPanel>
+
+                        <!-- Botón Cerrar Ventana -->
+                        <Button Grid.Column="1" 
+                                Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CloseCatalogModalCommand}" 
+                                Padding="10,6" 
+                                VerticalAlignment="Center">
+                            <TextBlock Text="✕ Cerrar" FontWeight="Bold" FontSize="12" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Filtros de Búsqueda y Categoría dentro de la Ventana Modal -->
+                    <Grid Grid.Row="1" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="2*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Buscador dentro del Modal -->
                         <Border Grid.Column="0" 
                                 Background="{DynamicResource ThemeSurface}" 
                                 BorderBrush="{DynamicResource ThemeBorder}" 
                                 BorderThickness="1" 
                                 CornerRadius="8" 
-                                Padding="8,4">
+                                Padding="10,6">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -112,34 +780,34 @@
                                       Margin="4,0,8,0" 
                                       VerticalAlignment="Center" />
                                 <TextBox Grid.Column="1" 
-                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                         Text="{Binding CatalogSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                          Background="Transparent" 
                                          BorderThickness="0" 
                                          FontSize="13" 
                                          VerticalAlignment="Center" 
                                          Foreground="{DynamicResource ThemeText}" />
                                 <TextBlock Grid.Column="1" 
-                                           Text="Buscar por nombre, principio activo o SKU..." 
+                                           Text="Filtrar por nombre, principio activo o código..." 
                                            FontSize="12" 
                                            Foreground="{DynamicResource ThemeTextSecondary}" 
                                            VerticalAlignment="Center" 
                                            IsHitTestVisible="False" 
                                            Margin="4,0,0,0"
-                                           Visibility="{Binding SearchText, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+                                           Visibility="{Binding CatalogSearchText, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
                             </Grid>
                         </Border>
 
-                        <!-- Selector de Categoría -->
+                        <!-- Selector de Categoría dentro del Modal -->
                         <ComboBox Grid.Column="2" 
                                   Style="{DynamicResource ModernComboBox}" 
                                   ItemsSource="{Binding Categories}" 
                                   DisplayMemberPath="Name" 
-                                  SelectedItem="{Binding SelectedCategory}" />
+                                  SelectedItem="{Binding CatalogSelectedCategory}" />
                     </Grid>
 
-                    <!-- Lista de Productos en Tarjetas -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding FilteredProducts}">
+                    <!-- Lista de Productos en Tarjetas (Catálogo Completo) -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding CatalogFilteredProducts}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Background="{DynamicResource ThemeSurface}" 
@@ -147,14 +815,14 @@
                                             BorderThickness="1" 
                                             CornerRadius="8" 
                                             Margin="0,0,0,8" 
-                                            Padding="12,10">
+                                            Padding="14,10">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- Detalles del Producto -->
+                                            <!-- Información del Producto -->
                                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" 
@@ -180,9 +848,8 @@
                                                                Foreground="{DynamicResource ThemeTextSecondary}" />
                                                 </StackPanel>
 
-                                                <!-- Indicadores de Stock y Ubicación -->
+                                                <!-- Stock y Ubicación -->
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <!-- Badge de Stock -->
                                                     <Border CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
                                                         <Border.Style>
                                                             <Style TargetType="Border">
@@ -224,7 +891,7 @@
                                             </StackPanel>
 
                                             <!-- Precio y Botón Agregar -->
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="14,0,0,0">
                                                 <TextBlock Text="{Binding Price, StringFormat='${0:N2}'}" 
                                                            FontWeight="Bold" 
                                                            FontSize="16" 
@@ -235,7 +902,7 @@
                                                 <Button Style="{DynamicResource AccentButton}" 
                                                         Command="{Binding DataContext.AddToCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
                                                         CommandParameter="{Binding}" 
-                                                        Padding="12,5" 
+                                                        Padding="14,6" 
                                                         IsEnabled="{Binding IsOutOfStock, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" 
@@ -243,7 +910,7 @@
                                                               Width="11" Height="11" 
                                                               Stretch="Uniform" 
                                                               Margin="0,0,6,0" />
-                                                        <TextBlock Text="Agregar" FontSize="12" />
+                                                        <TextBlock Text="+ Agregar" FontSize="12" />
                                                     </StackPanel>
                                                 </Button>
                                             </StackPanel>
@@ -253,318 +920,31 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                </Grid>
-            </Border>
 
-            <!-- ============================================ -->
-            <!-- COLUMNA DERECHA: EL CARRITO DE VENTA -->
-            <!-- ============================================ -->
-            <Border Grid.Column="2" 
-                    Background="{DynamicResource ThemeCard}" 
-                    BorderBrush="{DynamicResource ThemeBorder}" 
-                    BorderThickness="1" 
-                    CornerRadius="10" 
-                    Padding="16">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <!-- Cabecera del Carrito -->
-                    <Border Grid.Row="0" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,10">
+                    <!-- Pie de la Ventana Modal -->
+                    <Border Grid.Row="3" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="0,1,0,0" 
+                            Padding="0,14,0,0" 
+                            Margin="0,12,0,0">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Data="{StaticResource IconCart}" 
-                                      Fill="{DynamicResource ThemeAccent}" 
-                                      Width="16" Height="16" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,8,0" />
-                                <TextBlock Text="Carrito de Venta" 
-                                           FontWeight="Bold" 
-                                           FontSize="16" 
-                                           Foreground="{DynamicResource ThemeText}" />
-                                <Border Background="{DynamicResource ThemeAccent}" 
-                                        CornerRadius="10" 
-                                        Padding="7,2" 
-                                        Margin="8,0,0,0" 
-                                        VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding TotalCartItems}" 
-                                               FontSize="11" 
-                                               FontWeight="Bold" 
-                                               Foreground="{DynamicResource ThemeAccentText}" />
-                                </Border>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="En la venta actual: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                <TextBlock Text="{Binding TotalCartItems, StringFormat='{}{0} productos'}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                <TextBlock Text="  •  Total acumulado: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                <TextBlock Text="{Binding TotalCartAmount, StringFormat='${0:N2}'}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccent}" />
                             </StackPanel>
 
-                            <Button Grid.Column="1" 
-                                    Style="{DynamicResource OutlineButton}" 
-                                    Command="{Binding ClearCartCommand}" 
-                                    Padding="8,4" 
-                                    FontSize="11" 
-                                    ToolTip="Vaciar todos los artículos del carrito">
-                                <TextBlock Text="Vaciar" FontSize="11" />
+                            <Button HorizontalAlignment="Right" 
+                                    Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding CloseCatalogModalCommand}" 
+                                    Padding="20,8">
+                                <TextBlock Text="Listo / Ver Venta" FontWeight="SemiBold" FontSize="12" />
                             </Button>
                         </Grid>
                     </Border>
-
-                    <!-- Datos del Paciente / Cliente -->
-                    <StackPanel Grid.Row="1" Margin="0,0,0,10">
-                        <TextBlock Text="Paciente / Cliente:" 
-                                   FontSize="11" 
-                                   FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" 
-                                   Margin="0,0,0,4" />
-                        <TextBox Style="{DynamicResource ModernTextBox}" 
-                                 Text="{Binding PatientName, UpdateSourceTrigger=PropertyChanged}" 
-                                 FontSize="12" />
-                    </StackPanel>
-
-                    <!-- Lista de Artículos en el Carrito -->
-                    <Grid Grid.Row="2">
-                        <!-- Estado Vacío -->
-                        <StackPanel VerticalAlignment="Center" 
-                                    HorizontalAlignment="Center" 
-                                    Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
-                            <Path Data="{StaticResource IconCart}" 
-                                  Fill="{DynamicResource ThemeBorder}" 
-                                  Width="36" Height="36" 
-                                  Stretch="Uniform" 
-                                  HorizontalAlignment="Center" 
-                                  Margin="0,0,0,10" />
-                            <TextBlock Text="Carrito Vacío" 
-                                       FontWeight="SemiBold" 
-                                       FontSize="14" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                                       HorizontalAlignment="Center" />
-                            <TextBlock Text="Agregue medicamentos o insumos desde el catálogo" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                                       HorizontalAlignment="Center" 
-                                       TextAlignment="Center" 
-                                       Margin="0,4,0,0" />
-                        </StackPanel>
-
-                        <!-- Lista con Scroll -->
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" 
-                                      Visibility="{Binding Cart.Count, Converter={StaticResource BoolToVis}}">
-                            <ItemsControl ItemsSource="{Binding Cart}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{DynamicResource ThemeSurface}" 
-                                                BorderBrush="{DynamicResource ThemeBorder}" 
-                                                BorderThickness="1" 
-                                                CornerRadius="6" 
-                                                Padding="10,8" 
-                                                Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-
-                                                <!-- Fila 1: Nombre y Botón Eliminar -->
-                                                <Grid Grid.Row="0">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Grid.Column="0">
-                                                        <TextBlock Text="{Binding Name}" 
-                                                                   FontWeight="SemiBold" 
-                                                                   FontSize="13" 
-                                                                   Foreground="{DynamicResource ThemeText}" 
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock Text="{Binding Presentation}" 
-                                                                   FontSize="11" 
-                                                                   Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                    </StackPanel>
-
-                                                    <Button Grid.Column="1" 
-                                                            Style="{DynamicResource OutlineButton}" 
-                                                            Command="{Binding DataContext.RemoveFromCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                            CommandParameter="{Binding}" 
-                                                            Padding="6,3" 
-                                                            VerticalAlignment="Top" 
-                                                            ToolTip="Quitar producto">
-                                                        <Path Data="{StaticResource IconTrash}" 
-                                                              Fill="{DynamicResource ThemeError}" 
-                                                              Width="11" Height="11" 
-                                                              Stretch="Uniform" />
-                                                    </Button>
-                                                </Grid>
-
-                                                <!-- Fila 2: Controles de Cantidad y Subtotal -->
-                                                <Grid Grid.Row="1" Margin="0,8,0,0">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <!-- Controles [-] [Qty] [+] -->
-                                                    <Border Grid.Column="0" 
-                                                            Background="{DynamicResource ThemeCard}" 
-                                                            BorderBrush="{DynamicResource ThemeBorder}" 
-                                                            BorderThickness="1" 
-                                                            CornerRadius="4" 
-                                                            Padding="2">
-                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Button Command="{Binding DataContext.DecreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                                    CommandParameter="{Binding}" 
-                                                                    Width="24" Height="22" 
-                                                                    Background="Transparent" 
-                                                                    BorderThickness="0" 
-                                                                    Cursor="Hand" 
-                                                                    Content="−" 
-                                                                    FontWeight="Bold" 
-                                                                    FontSize="13" 
-                                                                    Foreground="{DynamicResource ThemeText}" />
-                                                            <TextBlock Text="{Binding Quantity}" 
-                                                                       FontWeight="Bold" 
-                                                                       FontSize="12" 
-                                                                       VerticalAlignment="Center" 
-                                                                       HorizontalAlignment="Center" 
-                                                                       MinWidth="24" 
-                                                                       TextAlignment="Center" 
-                                                                       Foreground="{DynamicResource ThemeText}" />
-                                                            <Button Command="{Binding DataContext.IncreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                                    CommandParameter="{Binding}" 
-                                                                    Width="24" Height="22" 
-                                                                    Background="Transparent" 
-                                                                    BorderThickness="0" 
-                                                                    Cursor="Hand" 
-                                                                    Content="+" 
-                                                                    FontWeight="Bold" 
-                                                                    FontSize="13" 
-                                                                    Foreground="{DynamicResource ThemeText}" />
-                                                        </StackPanel>
-                                                    </Border>
-
-                                                    <TextBlock Grid.Column="1" 
-                                                               Text="{Binding UnitPrice, StringFormat='@ ${0:N2}'}" 
-                                                               FontSize="11" 
-                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                               VerticalAlignment="Center" 
-                                                               Margin="8,0,0,0" />
-
-                                                    <!-- Subtotal -->
-                                                    <TextBlock Grid.Column="2" 
-                                                               Text="{Binding Subtotal, StringFormat='${0:N2}'}" 
-                                                               FontWeight="Bold" 
-                                                               FontSize="14" 
-                                                               Foreground="{DynamicResource ThemeText}" 
-                                                               VerticalAlignment="Center" />
-                                                </Grid>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-
-                    <!-- Pie del Carrito: Totales y Cobro -->
-                    <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,10,0,0">
-                        <StackPanel>
-                            <!-- Forma de Pago -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Método de pago:" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
-                                <ComboBox Grid.Column="1" 
-                                          Style="{DynamicResource ModernComboBox}" 
-                                          ItemsSource="{Binding PaymentMethods}" 
-                                          SelectedItem="{Binding SelectedPaymentMethod}" 
-                                          MinWidth="140" />
-                            </Grid>
-
-                            <!-- Total General -->
-                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="TOTAL A PAGAR" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding TotalCartItems, StringFormat='{}{0} productos seleccionados'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="1" 
-                                               Text="{Binding TotalCartAmount, StringFormat='${0:N2}'}" 
-                                               FontWeight="Bold" 
-                                               FontSize="24" 
-                                               Foreground="{DynamicResource ThemeAccent}" 
-                                               VerticalAlignment="Center" />
-                                </Grid>
-                            </Border>
-
-                            <!-- Botón Finalizar Venta -->
-                            <Button Style="{DynamicResource AccentButton}" 
-                                    Command="{Binding ProcessSaleCommand}" 
-                                    Padding="14,12" 
-                                    FontSize="14" 
-                                    FontWeight="Bold">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <Path Data="{StaticResource IconCheck}" 
-                                          Fill="{DynamicResource ThemeAccentText}" 
-                                          Width="14" Height="14" 
-                                          Stretch="Uniform" 
-                                          Margin="0,0,8,0" />
-                                    <TextBlock Text="Cobrar y Despachar Venta" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </Border>
                 </Grid>
             </Border>
-        </Grid>
-
-        <!-- Barra de Notificación Flotante -->
-        <Border Grid.Row="2" 
-                Visibility="{Binding IsAlertVisible, Converter={StaticResource BoolToVis}}" 
-                CornerRadius="8" 
-                Padding="12,8" 
-                Margin="0,10,0,0">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsSuccessAlert}" Value="False">
-                            <Setter Property="Background" Value="{DynamicResource ThemeError}" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" 
-                           Text="{Binding AlertMessage}" 
-                           FontWeight="SemiBold" 
-                           FontSize="12" 
-                           Foreground="White" 
-                           VerticalAlignment="Center" />
-                <Button Grid.Column="1" 
-                        Command="{Binding DismissAlertCommand}" 
-                        Background="Transparent" 
-                        BorderThickness="0" 
-                        Foreground="White" 
-                        FontWeight="Bold" 
-                        Cursor="Hand" 
-                        Content="✕" 
-                        Padding="6,2" />
-            </Grid>
         </Border>
     </Grid>
 </UserControl>

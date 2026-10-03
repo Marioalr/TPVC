@@ -201,4 +201,53 @@ public class InventoryTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(medicineName));
         Assert.IsGreaterThanOrEqualTo(1, qty);
     }
+
+    [TestMethod]
+    public async Task PosViewModel_RealTimeSearchSuggestionsAndAddFirstWorkCorrectly()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        // 1. Al escribir texto debe abrir el dropdown con sugerencias coincidentes
+        posVm.SearchText = "Para";
+        Assert.IsTrue(posVm.IsSearchDropdownOpen);
+        Assert.IsGreaterThanOrEqualTo(1, posVm.SearchSuggestions.Count);
+        Assert.IsTrue(posVm.SearchSuggestions.Any(p => p.Name.Contains("Paracetamol", StringComparison.OrdinalIgnoreCase)));
+
+        // 2. Al seleccionar una sugerencia se agrega al carrito y se limpia el buscador
+        var chosen = posVm.SearchSuggestions[0];
+        posVm.SelectSuggestion(chosen);
+
+        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(chosen.Price, posVm.TotalCartAmount);
+        Assert.IsTrue(string.IsNullOrEmpty(posVm.SearchText));
+        Assert.IsFalse(posVm.IsSearchDropdownOpen);
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_CatalogModalOpensFiltersAndClosesCorrectly()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        // 1. Abrir modal
+        posVm.OpenCatalogModal();
+        Assert.IsTrue(posVm.IsCatalogModalOpen);
+        Assert.IsGreaterThanOrEqualTo(1, posVm.CatalogFilteredProducts.Count);
+
+        // 2. Filtrar dentro del modal
+        posVm.CatalogSearchText = "Amoxi";
+        Assert.IsTrue(posVm.CatalogFilteredProducts.All(p => p.Name.Contains("Amoxi", StringComparison.OrdinalIgnoreCase) || 
+                                                            (p.GenericName != null && p.GenericName.Contains("Amoxi", StringComparison.OrdinalIgnoreCase))));
+
+        // 3. Agregar desde el modal
+        var product = posVm.CatalogFilteredProducts.First(p => p.CurrentStock > 0);
+        posVm.AddToCart(product);
+        Assert.AreEqual(1, posVm.TotalCartItems);
+
+        // 4. Cerrar modal
+        posVm.CloseCatalogModal();
+        Assert.IsFalse(posVm.IsCatalogModalOpen);
+    }
 }
+

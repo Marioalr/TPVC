@@ -68,34 +68,43 @@ Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz
 
 ---
 
-## 4. Módulo 2: Punto de Venta (POS con Carrito de Compra)
+## 4. Módulo 2: Punto de Venta (POS / Farmacia)
 
-Diseñado como un punto de venta ágil especializado en medicamentos e insumos médicos.
+Diseñado como un punto de venta ágil y ergonómico especializado en la dispensación y cobro de medicamentos e insumos médicos en consultorio.
 
-### Catálogo de Productos (Panel Izquierdo)
-* **Buscador Reactivo**: Ingrese nombre comercial, principio activo o código SKU; la lista se filtra al instante.
-* **Filtro de Categorías**: Permite visualizar rápidamente familias específicas (ej. *Medicamentos y Fármacos*, *Material de Curación*, *Insumos Descartables*).
-* **Badges de Stock**:
-  * 🟢 **Verde**: Stock suficiente.
-  * 🟡 **Ámbar**: Stock bajo (en o por debajo del umbral mínimo).
-  * 🔴 **Rojo**: Agotado (el botón de agregar se desactiva automáticamente).
-* **Botón "+ Agregar"**: Añade 1 unidad al carrito de venta de forma instantánea.
+### 1. Barra de Búsqueda en Tiempo Real y Menú Desplegable
+* **Buscador Reactivo Superior**:
+  * Ingrese el nombre comercial, principio activo (genérico) o código SKU (ej. *Paracetamol*, *Amoxicilina*, *Gasa*).
+  * Al escribir, se despliega automáticamente un **menú desplegable en tiempo real** con los productos coincidentes, mostrando nombre, genérico, stock con semáforo y precio unitario.
+  * Haga clic sobre cualquier producto sugerido (o presione `Enter`) para agregarlo de forma inmediata a la venta.
+* **Botón "Buscar en Catálogo"**:
+  * Ubicado junto a la barra de búsqueda, abre una **ventana modal con el catálogo completo**.
+  * Permite filtrar por categorías médicas o texto, explorar todos los insumos disponibles con indicadores de temperatura (❄️) y stock, y agregarlos con el botón `+ Agregar`.
+* **Botón "Vaciar Venta"**:
+  * Permite limpiar rápidamente todos los artículos agregados al ticket actual.
 
-### Carrito de Venta (Panel Derecho)
-* **Contador de Artículos**: Muestra el total de unidades seleccionadas.
-* **Campo Paciente / Cliente**: Permite registrar a quién se despacha el medicamento (ej. *Juan Pérez* o *Público General*).
-* **Controles por Producto**:
-  * Botones `[−]` y `[+]` para ajustar cantidades sin exceder las existencias disponibles.
-  * Botón `[🗑]` para remover un producto del carrito.
-  * Cálculo dinámico de subtotal por renglón (`Cantidad × Precio Unitario`).
-* **Resumen y Cobro**:
-  * Selector de método de pago: *Efectivo*, *Tarjeta Débito/Crédito*, *Transferencia*.
-  * **TOTAL A PAGAR**: Destacado en tamaño grande con el color de acento del tema.
-  * Botón **"Cobrar y Despachar Venta"**:
+### 2. Área Principal: Tabla de Artículos en la Venta
+* El cuerpo principal de la pantalla muestra la **tabla detallada de los artículos agregados al ticket**:
+  * **Producto / Medicamento**: Nombre comercial, principio activo, presentación y advertencia de cadena de frío (❄️).
+  * **Código / SKU**: Identificador único escaneable.
+  * **Stock Disponible**: Existencias reales en consultorio.
+  * **Precio Unitario**: Tarifa unitaria vigente en pesos mexicanos ($ MXN).
+  * **Cantidad**: Controles de ajuste rápido `[−]` y `[+]` que respetan los límites de existencias.
+  * **Subtotal**: Cálculo dinámico en tiempo real (`Cantidad × Precio Unitario`).
+  * **Acciones**: Botón `[🗑]` para remover partidas individuales.
+
+### 3. Barra Inferior y Botón de Cobro (Esquina Inferior Derecha)
+* **Datos de la Operación**:
+  * **Paciente / Cliente**: Campo de texto para asociar el nombre del paciente (ej. *Juan Pérez* o *Público General*).
+  * **Método de Pago**: Selector con opciones *Efectivo*, *Tarjeta Débito/Crédito* y *Transferencia*.
+  * **Contador**: Muestra la cantidad total de artículos agregados.
+* **Cobro en la Esquina Inferior Derecha**:
+  * **TOTAL A PAGAR**: Destacado en tipografía grande con el color de acento del sistema.
+  * **Botón "Cobrar y Despachar Venta"**:
     1. Descuenta automáticamente el stock de cada producto en la base de datos SQLite.
-    2. Aplica el descuento inteligente **FEFO** sobre los lotes con caducidad más cercana.
-    3. Genera el registro correspondiente en el Kardex de Movimientos con tipo `SalidaVenta`.
-    4. Notifica en vivo a todos los módulos y limpia el carrito para la siguiente transacción.
+    2. Aplica el descuento inteligente **FEFO** (*First Expired, First Out*) deduciendo de los lotes más próximos a caducar.
+    3. Registra la auditoría en el Kardex de Movimientos con tipo `SalidaVenta`.
+    4. Notifica en vivo a todos los módulos y resetea el ticket para la siguiente operación.
 
 ---
 
