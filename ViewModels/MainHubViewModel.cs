@@ -24,4 +24,10 @@ public partial class MainHubViewModel : ObservableObject
     {
         _navigate("Records");
     }
+
+    [RelayCommand]
+    public void OpenConfiguration()
+    {
+        _navigate("Config");
+    }
 }

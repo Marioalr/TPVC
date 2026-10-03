@@ -163,14 +163,14 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [RelayCommand]
     public void NewPatient()
     {
-        InfoModalMessage = "📌 [TODO / En Desarrollo]\nEl módulo de alta de expedientes clínicos integrará la norma oficial NOM-004-SSA3, captura de antecedentes heredo-familiares, consentimiento informado y firma digital.";
+        InfoModalMessage = "El módulo de apertura de expedientes clínicos normados integrará:\n\n• Cumplimiento integral con la norma técnica NOM-004-SSA3.\n• Captura de antecedentes heredo-familiares y patológicos.\n• Formatos de consentimiento informado y firma digital.\n• Alertas sanitarias y semáforo de alergias medicamentosas.";
         IsInfoModalVisible = true;
     }
 
     [RelayCommand]
     public void NewConsultation()
     {
-        InfoModalMessage = "📌 [TODO / En Desarrollo]\nEl módulo de consulta médica permitirá registrar notas de evolución, signos vitales en vivo, diagnóstico CIE-10 y generación de recetas con código QR.";
+        InfoModalMessage = "El flujo integral de Nueva Consulta Médica integrará:\n\n• Registro en vivo de signos vitales (TA, FC, FR, Temp, Peso, IMC).\n• Notas médicas de evolución conforme a la NOM-004-SSA3.\n• Catálogo internacional de diagnósticos clínicos CIE-10.\n• Emisión de recetas médicas digitales con código QR.\n• Despacho y deducción inmediata en el inventario/POS.";
         IsInfoModalVisible = true;
     }
 

@@ -32,35 +32,39 @@ TPVC ha sido concebido para resolver las necesidades operativas de la atención 
 
 ## 2. Estructura de la Interfaz y Menú Lateral
 
-La pantalla principal se organiza en tres áreas fundamentales:
-1. **Menú Lateral de Navegación**:
-   * **Vista Principal**: Vista dividida que combina Expedientes Clínicos y Punto de Venta.
-   * **Venta / Carrito (POS)**: Acceso directo a pantalla completa del punto de venta.
-   * **Expedientes (TODO)**: Acceso directo a pantalla completa del módulo de expedientes.
-   * **Panel y Métricas**: Dashboard con KPIs en tiempo real y alertas de desabasto/caducidad.
-   * **Inventario e Insumos**: Catálogo general con precios, stock, ubicaciones y cadena de frío.
-   * **Lotes y Caducidades**: Control detallado de fechas de expiración con semáforo cromático.
-   * **Kardex de Movimientos**: Bitácora inmutable de entradas, salidas y ventas.
-   * **Temas y Ajustes**: Personalización visual de colores y verificador de actualizaciones.
-2. **Área de Trabajo Central**:
-   * Despliega las herramientas interactivas, tablas, filtros y formularios de cada sección.
-3. **Barra de Estado Inferior**:
-   * Muestra de un vistazo y de forma sutil el estado de sincronización (`● Datos sincronizados`), la versión del sistema (`v1.0.0` / `v1.1.0`) y el motor de base de datos activo (`SQLite Local`).
+La pantalla principal se organiza con una arquitectura intuitiva y moderna:
+1. **Vista Principal (Hub Central de 3 Tarjetas)**:
+   * **🛒 Nueva Venta**: Acceso directo al Punto de Venta (POS con Carrito) a pantalla completa.
+   * **📋 Nueva Consulta**: Acceso directo al módulo de Expedientes y Consulta Médica con distintivo **TODO** destacado en gran formato.
+   * **⚙️ Configuración**: Acceso directo al centro de administración del consultorio donde reside el **Panel Lateral de Navegación**.
+2. **Centro de Configuración y Panel Lateral**:
+   * Dentro de *Configuración*, el panel lateral permite alternar entre:
+     * **Panel y Métricas**: Dashboard con KPIs en tiempo real y alertas de desabasto/caducidad.
+     * **Inventario e Insumos**: Catálogo general con precios, stock, ubicaciones y cadena de frío.
+     * **Lotes y Caducidades**: Control detallado de fechas de expiración con semáforo cromático (FEFO).
+     * **Kardex de Movimientos**: Bitácora inmutable de entradas, salidas y ventas.
+     * **Temas y Ajustes**: Personalización visual de colores y verificador de actualizaciones.
+     * Botón **"← Volver a Inicio"** para regresar en cualquier momento a las 3 tarjetas principales.
+3. **Barra de Estado Inferior Constante**:
+   * Muestra de un vistazo el título del sistema, la **versión exacta de la aplicación (`v1.1.0`)** y el indicador discreto de sincronización (`● Datos sincronizados`).
 
 ---
 
-## 3. Módulo 1: Vista Principal (Nueva Venta y Nueva Consulta)
+## 3. Módulo 1: Vista Principal (Nueva Venta, Nueva Consulta TODO y Configuración)
 
-Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz limpia y libre de distracciones con **dos botones grandes tipo tarjeta (cards)** que canalizan las acciones prioritarias del día:
+Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz limpia y libre de distracciones con **tres botones grandes tipo tarjeta (cards)** que canalizan las acciones prioritarias del día:
 
 1. **Card 🛒 "Nueva Venta"**:
-   * Dirige directamente al **Punto de Venta (POS con Carrito)**.
+   * Dirige directamente al **Punto de Venta (POS con Carrito)** a pantalla completa.
    * Permite realizar la búsqueda de productos, agregar medicamentos al carrito de compra, ajustar cantidades, seleccionar el método de pago y procesar el cobro con deducción automática FEFO.
 2. **Card 📋 "Nueva Consulta"**:
    * Dirige directamente al módulo de **Expedientes Clínicos (TODO)**.
-   * Permite consultar la historia clínica del paciente, revisar antecedentes y alergias, consultar signos vitales y transferir recetas directamente al punto de venta.
+   * Presenta en la cabecera un **banner hero en gran formato destacando "⚠️ MÓDULO EN DESARROLLO (TODO)"**, detallando la integración de la norma NOM-004-SSA3, signos vitales, notas médicas de evolución y recetas con QR.
+   * Permite consultar el prototipo interactivo de pacientes, antecedentes, alergias y transferir recetas directamente al punto de venta.
+3. **Card ⚙️ "Configuración"**:
+   * Abre el centro de administración y gestión clínica, desplegando el **Panel Lateral** para consultar Métricas, Inventario, Lotes, Kardex y Temas/Ajustes.
 
-> Ambas vistas incluyen en su cabecera un botón **"← Volver a Inicio"** para regresar a la pantalla de las dos tarjetas en cualquier momento, además del acceso constante disponible en el menú lateral.
+> Todas las vistas incluyen en su cabecera o barra lateral el botón **"← Volver a Inicio"** para regresar a la pantalla de las tres tarjetas en cualquier momento.
 
 ---
 

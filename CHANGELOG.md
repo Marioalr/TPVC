@@ -7,9 +7,15 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 ## [1.1.0] - 2026-10-03
 
 ### Añadido
-* **Nueva Vista Principal Enfocada (Tarjetas de Acción Directa)**:
-  * Diseño limpio y centrado con **dos tarjetas de gran formato (cards)** para canalizar el trabajo diario: **Nueva Venta** (Punto de Venta con Carrito) y **Nueva Consulta** (Expedientes Clínicos TODO).
-  * Botón de navegación **"← Volver a Inicio"** integrado en las cabeceras de POS y Expedientes para un flujo fluido sin distracciones.
+* **Nueva Vista Principal con Tres Tarjetas de Acción Directa**:
+  * Diseño libre de distracciones con **tres tarjetas de gran formato (cards)**: **Nueva Venta** (POS con Carrito), **Nueva Consulta** (Expedientes Clínicos TODO) y **Configuración** (Gestión y Administración).
+  * Traslado del **Panel Lateral de Navegación** dentro del módulo de **Configuración**, liberando la ventana principal para una experiencia a pantalla completa limpia y centrada.
+  * Botón de navegación **"← Volver a Inicio"** integrado en las cabeceras de POS, Expedientes y en el Panel Lateral de Configuración para un flujo fluido sin pérdida de estado.
+* **Presentación Prominente del TODO en Nueva Consulta**:
+  * Banner hero en gran formato con distintivo `⚠️ MÓDULO EN DESARROLLO (TODO)`, especificación de integración con la norma oficial NOM-004-SSA3, signos vitales, notas de evolución y recetas con QR.
+  * Modales informativos enriquecidos al pulsar sobre *Nueva Consulta* o *Nuevo Expediente*.
+* **Visualización de Versión Precisa y Constante**:
+  * Despliegue permanente de la versión exacta de la aplicación (`v1.1.0`) en la barra inferior de estado junto al título y el indicador de datos sincronizados, así como en los ajustes del sistema.
 * **Módulo de Punto de Venta (POS con Carrito)**:
   * Catálogo de productos interactivo con buscador instantáneo, filtrado por categorías y badges de stock.
   * Carrito de compra reactivo con ajuste de cantidades (`+`/`-`), eliminación de partidas, subtotal por renglón y total a pagar destacado.
@@ -20,9 +26,6 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * **Módulo de Expedientes Clínicos (TODO)**:
   * Visualizador maestro-detalle de expedientes médicos de pacientes con datos demográficos, signos vitales, antecedentes y alertas de alergias.
   * Botón interactivo *"Cargar a Venta (POS)"* que transfiere los medicamentos de la receta activa del paciente directamente al carrito del punto de venta.
-  * Modales informativos para las acciones en desarrollo (alta de expedientes bajo NOM-004-SSA3, notas de evolución y recetas con QR).
-* **Navegación Lateral Optimizada**:
-  * Acceso directo a *Vista Principal*, *Venta / Carrito (POS)* y *Expedientes (TODO)*, manteniendo íntegramente las herramientas existentes (*Panel y Métricas*, *Inventario*, *Lotes*, *Kardex* y *Ajustes*).
 * **Suite de Pruebas Unitarias Ampliada**:
   * Cobertura expandida a 8 pruebas unitarias automatizadas (validación de ventas POS, cálculos reactivos del carrito y despacho de recetas).
 

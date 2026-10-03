@@ -15,78 +15,95 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Banner de Módulo en Desarrollo (TODO) -->
+        <!-- Banner Prominente y de Gran Formato de Módulo en Desarrollo (TODO) -->
         <Border Grid.Row="0" 
                 Background="{DynamicResource ThemeSurfaceSubtle}" 
                 BorderBrush="{DynamicResource ThemeAccent}" 
-                BorderThickness="1" 
-                CornerRadius="8" 
-                Padding="14,10" 
-                Margin="0,0,0,12">
+                BorderThickness="2" 
+                CornerRadius="14" 
+                Padding="24,18" 
+                Margin="0,0,0,16">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+
                 <StackPanel Grid.Column="0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Distintivo ENORME de TODO -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
                         <Border Background="{DynamicResource ThemeAccent}" 
-                                CornerRadius="4" 
-                                Padding="6,2" 
-                                Margin="0,0,10,0">
-                            <TextBlock Text="MÓDULO EN DESARROLLO (TODO)" 
-                                       FontSize="11" 
+                                CornerRadius="6" 
+                                Padding="12,5" 
+                                Margin="0,0,12,0">
+                            <TextBlock Text="⚠️ MÓDULO EN DESARROLLO (TODO)" 
+                                       FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="{DynamicResource ThemeAccentText}" />
                         </Border>
-                        <TextBlock Text="Expedientes Clínicos del Paciente" 
-                                   FontWeight="Bold" 
-                                   FontSize="15" 
-                                   Foreground="{DynamicResource ThemeText}" 
-                                   VerticalAlignment="Center" />
+                        <Border Background="{DynamicResource ThemeBorder}" 
+                                CornerRadius="6" 
+                                Padding="10,5">
+                            <TextBlock Text="PRÓXIMA INTEGRACIÓN" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Border>
                     </StackPanel>
-                    <TextBlock Text="Gestión de historias clínicas, notas de evolución, signos vitales y despacho de recetas médicas hacia el carrito de venta." 
-                               FontSize="12" 
+
+                    <!-- Título en Grande -->
+                    <TextBlock Text="Nueva Consulta Médica y Expedientes Clínicos" 
+                               FontWeight="Bold" 
+                               FontSize="24" 
+                               Foreground="{DynamicResource ThemeText}" 
+                               Margin="0,0,0,6" />
+
+                    <!-- Descripción Explicativa en Grande -->
+                    <TextBlock Text="Esta sección se encuentra actualmente en desarrollo y planificación (TODO). Incluirá la apertura de expedientes clínicos normados conforme a la NOM-004-SSA3, registro en vivo de signos vitales, notas médicas de evolución, catálogo de diagnósticos CIE-10 y emisión de recetas médicas con código QR interconectadas directamente con el inventario y punto de venta (POS)." 
+                               FontSize="13" 
+                               LineHeight="20" 
+                               TextWrapping="Wrap" 
                                Foreground="{DynamicResource ThemeTextSecondary}" 
-                               Margin="0,4,0,0" />
+                               MaxWidth="880" 
+                               HorizontalAlignment="Left" />
                 </StackPanel>
 
                 <!-- Botones Rápidos de Módulo -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                     <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding BackToHubCommand}" 
-                            Margin="0,0,8,0" 
-                            Padding="10,6">
+                            Margin="0,0,10,0" 
+                            Padding="14,10">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="←" FontWeight="Bold" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Volver a Inicio" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Text="←" FontWeight="Bold" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Volver a Inicio" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
 
                     <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding NewConsultationCommand}" 
-                            Margin="0,0,8,0" 
-                            Padding="12,6">
+                            Margin="0,0,10,0" 
+                            Padding="14,10">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" 
                                   Fill="{DynamicResource ThemeText}" 
-                                  Width="11" Height="11" 
+                                  Width="12" Height="12" 
                                   Stretch="Uniform" 
-                                  Margin="0,0,6,0" />
-                            <TextBlock Text="Nueva Consulta" FontSize="12" />
+                                  Margin="0,0,8,0" />
+                            <TextBlock Text="Nueva Consulta" FontSize="13" FontWeight="SemiBold" />
                         </StackPanel>
                     </Button>
 
                     <Button Style="{DynamicResource AccentButton}" 
                             Command="{Binding NewPatientCommand}" 
-                            Padding="12,6">
+                            Padding="14,10">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconUser}" 
                                   Fill="{DynamicResource ThemeAccentText}" 
-                                  Width="12" Height="12" 
+                                  Width="13" Height="13" 
                                   Stretch="Uniform" 
-                                  Margin="0,0,6,0" />
-                            <TextBlock Text="+ Nuevo Expediente" FontSize="12" />
+                                  Margin="0,0,8,0" />
+                            <TextBlock Text="+ Nuevo Expediente" FontSize="13" FontWeight="SemiBold" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -466,37 +483,47 @@
             </Border>
         </Grid>
 
-        <!-- Modal Informativo para Funcionalidades TODO -->
+        <!-- Modal Informativo de Gran Formato para Funcionalidades TODO -->
         <Border Grid.Row="0" Grid.RowSpan="3" 
-                Background="#88000000" 
+                Background="#99000000" 
                 Visibility="{Binding IsInfoModalVisible, Converter={StaticResource BoolToVis}}" 
                 HorizontalAlignment="Stretch" 
                 VerticalAlignment="Stretch">
             <Border Background="{DynamicResource ThemeSurface}" 
                     BorderBrush="{DynamicResource ThemeAccent}" 
-                    BorderThickness="1" 
-                    CornerRadius="12" 
-                    Padding="22" 
-                    MaxWidth="480" 
+                    BorderThickness="2" 
+                    CornerRadius="16" 
+                    Padding="30,26" 
+                    MaxWidth="560" 
                     HorizontalAlignment="Center" 
                     VerticalAlignment="Center">
                 <StackPanel>
-                    <TextBlock Text="Funcionalidad en Desarrollo (TODO)" 
+                    <Border Background="{DynamicResource ThemeAccent}" 
+                            CornerRadius="6" 
+                            Padding="12,5" 
+                            HorizontalAlignment="Left" 
+                            Margin="0,0,0,12">
+                        <TextBlock Text="📌 MÓDULO EN DESARROLLO (TODO)" 
+                                   FontWeight="Bold" 
+                                   FontSize="13" 
+                                   Foreground="{DynamicResource ThemeAccentText}" />
+                    </Border>
+                    <TextBlock Text="Nueva Consulta y Expedientes" 
                                FontWeight="Bold" 
-                               FontSize="16" 
+                               FontSize="20" 
                                Foreground="{DynamicResource ThemeText}" 
-                               Margin="0,0,0,10" />
+                               Margin="0,0,0,12" />
                     <TextBlock Text="{Binding InfoModalMessage}" 
                                FontSize="13" 
                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                TextWrapping="Wrap" 
-                               LineHeight="20" 
-                               Margin="0,0,0,18" />
+                               LineHeight="22" 
+                               Margin="0,0,0,24" />
                     <Button Style="{DynamicResource AccentButton}" 
                             Command="{Binding DismissInfoModalCommand}" 
                             HorizontalAlignment="Right" 
-                            Padding="16,8">
-                        <TextBlock Text="Entendido" />
+                            Padding="22,10">
+                        <TextBlock Text="Entendido" FontWeight="Bold" FontSize="13" />
                     </Button>
                 </StackPanel>
             </Border>

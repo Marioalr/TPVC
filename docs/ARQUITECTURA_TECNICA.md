@@ -128,17 +128,20 @@ flowchart TD
 
 ---
 
-## 4. Arquitectura de la Vista Principal (Hub Central de Dos Cards)
+## 4. Arquitectura de la Vista Principal (Hub de Tres Cards y Shell de Configuración)
 
-La Vista Principal (`MainHubView`) actúa como pantalla de bienvenida enfocada y libre de distracciones con **dos tarjetas interactivas de gran formato** (`BigActionCardStyle`):
+La Vista Principal (`MainHubView`) actúa como pantalla de bienvenida enfocada y libre de distracciones con **tres tarjetas interactivas de gran formato** (`BigActionCardStyle`):
 * **Card 1: "Nueva Venta"**:
   * Ejecuta `OpenNewSaleCommand` en `MainHubViewModel`, delegando la navegación a `PosView` a través de `MainViewModel.NavigateTo("Pos")`.
-  * Abre el flujo completo del Punto de Venta con catálogo reactivo, control de carrito, selección de método de pago y despacho FEFO.
+  * Abre el flujo completo del Punto de Venta a pantalla completa con catálogo reactivo, control de carrito, selección de método de pago y despacho FEFO.
 * **Card 2: "Nueva Consulta"**:
   * Ejecuta `OpenNewConsultationCommand` en `MainHubViewModel`, delegando la navegación a `MedicalRecordsView` a través de `MainViewModel.NavigateTo("Records")`.
-  * Abre el visualizador maestro-detalle de expedientes clínicos, signos vitales, notas médicas y prescripciones.
+  * Despliega en la cabecera un **banner hero en gran formato destacando "⚠️ MÓDULO EN DESARROLLO (TODO)"**, la hoja de ruta de la norma NOM-004-SSA3 y el visualizador maestro-detalle de expedientes.
+* **Card 3: "Configuración"**:
+  * Ejecuta `OpenConfigurationCommand` en `MainHubViewModel`, delegando la navegación a `ConfigurationShellView` a través de `MainViewModel.NavigateTo("Config")`.
+  * **Panel Lateral Trasladado**: Alberga el panel lateral de navegación administrativa para alternar entre *Dashboard*, *Inventario*, *Lotes*, *Kardex* y *Temas/Ajustes*.
 * **Navegación de Retorno Rápido**:
-  * Tanto `PosView` como `MedicalRecordsView` cuentan con el botón **"← Volver a Inicio"** (`BackToHubCommand`), permitiendo al médico o asistente regresar inmediatamente a la pantalla de las dos tarjetas sin perder el estado de la sesión.
+  * `PosView`, `MedicalRecordsView` y el panel lateral de `ConfigurationShellView` cuentan con el botón **"← Volver a Inicio"** (`BackToHubCommand`), permitiendo al usuario regresar inmediatamente a la pantalla de las tres tarjetas sin perder el estado de la sesión.
 * **Interconexión Clínica**:
   * `MainViewModel` implementa el delegado `OnSendPrescriptionToPos`, permitiendo que el botón *"Cargar a Venta (POS)"* en el expediente del paciente envíe automáticamente los medicamentos recetados al carrito de compras del POS prellenando el nombre del paciente y navegando fluidamente al POS.
 

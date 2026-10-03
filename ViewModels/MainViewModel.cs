@@ -27,6 +27,7 @@ public partial class MainViewModel : ObservableObject
     public MainHubViewModel MainHubVM { get; }
     public PosViewModel PosVM { get; }
     public MedicalRecordsViewModel MedicalRecordsVM { get; }
+    public ConfigurationShellViewModel ConfigurationShellVM { get; }
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
@@ -42,7 +43,7 @@ public partial class MainViewModel : ObservableObject
         _themeService = themeService;
         _updateService = updateService;
 
-        AppVersion = $"v{_updateService.CurrentVersion}";
+        AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
         MainHubVM = new MainHubViewModel(NavigateTo);
         PosVM = new PosViewModel(inventoryService);
@@ -70,7 +71,16 @@ public partial class MainViewModel : ObservableObject
         MovementsVM = new MovementsViewModel(inventoryService);
         SettingsVM = new SettingsViewModel(themeService, updateService);
 
-        // Iniciar en la Vista Principal (las dos cards principales: Nueva Venta y Nueva Consulta)
+        ConfigurationShellVM = new ConfigurationShellViewModel(
+            NavigateTo,
+            DashboardVM,
+            InventoryVM,
+            BatchesVM,
+            MovementsVM,
+            SettingsVM,
+            AppVersion);
+
+        // Iniciar en la Vista Principal (las 3 cards: Nueva Venta, Nueva Consulta y Configuración)
         NavigateTo("MainHub");
     }
 
@@ -91,24 +101,16 @@ public partial class MainViewModel : ObservableObject
             case "Records":
                 CurrentView = MedicalRecordsVM;
                 break;
+            case "Config":
+                CurrentView = ConfigurationShellVM;
+                break;
             case "Dashboard":
-                CurrentView = DashboardVM;
-                _ = DashboardVM.RefreshAsync();
-                break;
             case "Inventory":
-                CurrentView = InventoryVM;
-                _ = InventoryVM.LoadDataAsync();
-                break;
             case "Batches":
-                CurrentView = BatchesVM;
-                _ = BatchesVM.LoadBatchesAsync();
-                break;
             case "Movements":
-                CurrentView = MovementsVM;
-                _ = MovementsVM.LoadMovementsAsync();
-                break;
             case "Settings":
-                CurrentView = SettingsVM;
+                ConfigurationShellVM.NavigateSubView(viewName);
+                CurrentView = ConfigurationShellVM;
                 break;
         }
     }

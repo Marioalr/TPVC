@@ -23,6 +23,9 @@
         <DataTemplate DataType="{x:Type vm:MedicalRecordsViewModel}">
             <views:MedicalRecordsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ConfigurationShellViewModel}">
+            <views:ConfigurationShellView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView />
         </DataTemplate>
@@ -41,232 +44,46 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!-- Barra Lateral de Navegación -->
-        <Border Grid.Column="0" 
+        <!-- Área Principal de Contenido Dinámico a Ancho Completo -->
+        <ContentControl Grid.Row="0" Content="{Binding CurrentView}" />
+
+        <!-- Barra Inferior Discreta (Datos sincronizados y versión del sistema para consulta de un vistazo) -->
+        <Border Grid.Row="1" 
                 Background="{DynamicResource ThemeSurface}" 
                 BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="0,0,1,0">
-            <Grid Margin="18,22,18,18">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                BorderThickness="0,1,0,0" 
+                Padding="24,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                <!-- Logo y Título -->
-                <StackPanel Grid.Row="0" Margin="4,0,4,24">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource ThemeAccent}" 
-                                CornerRadius="8" 
-                                Width="34" Height="34" 
-                                Margin="0,0,10,0">
-                            <TextBlock Text="+" 
-                                       FontWeight="Bold" 
-                                       FontSize="22" 
-                                       Foreground="{DynamicResource ThemeAccentText}" 
-                                       HorizontalAlignment="Center" 
-                                       VerticalAlignment="Center" 
-                                       Margin="0,-2,0,0" />
-                        </Border>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="TPVC" 
-                                       FontWeight="Bold" 
-                                       FontSize="17" 
-                                       Foreground="{DynamicResource ThemeText}" />
-                            <TextBlock Text="Consultorio Médico" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </StackPanel>
-                    </StackPanel>
+                <!-- Identificador del Sistema y Versión Exacta -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AppTitle}" 
+                               FontSize="11" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="  •  " 
+                               FontSize="11" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="{Binding AppVersion}" 
+                               FontSize="11" 
+                               FontWeight="SemiBold" 
+                               Foreground="{DynamicResource ThemeAccent}" />
                 </StackPanel>
 
-                <!-- Menú de Navegación con Scroll -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,-6,0" Padding="0,0,6,0">
-                    <StackPanel>
-                        <!-- 1. Vista Principal (Expedientes y Venta POS) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     IsChecked="True"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="MainHub">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconHome}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Vista Principal" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 2. Venta (Carrito POS) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Pos">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconCart}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Venta / Carrito (POS)" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 3. Expedientes Clínicos (TODO) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Records">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconFileMedical}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Expedientes (TODO)" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- Separador de Sección -->
-                        <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="4,8,4,8" />
-
-                        <!-- 4. Resumen / Métricas (Dashboard) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Dashboard">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconDashboard}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Panel y Métricas" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 5. Inventario e Insumos -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Inventory">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconPill}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Inventario e Insumos" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 6. Lotes y Caducidades -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Batches">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconCalendar}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Lotes y Caducidades" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 7. Kardex de Movimientos -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Movements">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconHistory}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Kardex de Movimientos" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 8. Temas y Ajustes -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="MainNav"
-                                     Command="{Binding NavigateToCommand}" 
-                                     CommandParameter="Settings">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconSettings}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Temas y Ajustes" />
-                            </StackPanel>
-                        </RadioButton>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <!-- Pie de Barra Lateral -->
-                <StackPanel Grid.Row="2" Margin="4,0,4,4">
-                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Sistema de Consultorio" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Text="{Binding AppVersion}" 
-                                       FontSize="11" 
-                                       FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource ThemeAccent}" 
-                                       Margin="0,2,0,0" />
-                        </StackPanel>
-                    </Border>
+                <!-- Indicador discreto de sincronización de datos -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
         </Border>
-
-        <!-- Área Principal de Contenido -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-
-            <!-- Contenido Dinámico de la Vista Seleccionada -->
-            <ContentControl Grid.Row="0" Content="{Binding CurrentView}" />
-
-            <!-- Barra Inferior Discreta (Datos sincronizados en pequeño sin tanta importancia) -->
-            <Border Grid.Row="1" 
-                    Background="{DynamicResource ThemeSurface}" 
-                    BorderBrush="{DynamicResource ThemeBorder}" 
-                    BorderThickness="0,1,0,0" 
-                    Padding="24,5">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Column="0" 
-                               Text="{Binding AppTitle}" 
-                               FontSize="11" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               VerticalAlignment="Center" />
-
-                    <!-- Indicador discreto de sincronización de datos para consultar de un vistazo -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                        <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
     </Grid>
 </Window>

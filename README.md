@@ -22,11 +22,12 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 
 ## 🌟 Características Principales
 
-### 1. Nueva Vista Principal: Acceso Directo por Tarjetas (Cards)
-- **Flujo de Trabajo Médico Limpio y Enfocado**: La vista principal presenta una interfaz despejada con dos accesos directos de gran tamaño tipo tarjeta (*cards*):
-  - **Card 🛒 "Nueva Venta"**: Acceso inmediato al **Punto de Venta con Carrito (POS)** para búsqueda, dispensación y cobro de medicamentos.
-  - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos (TODO)** para historial médico, signos vitales y prescripción.
-- **Navegación Intuitiva**: Ambas vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*) además de la barra lateral permanente.
+### 1. Nueva Vista Principal: Hub Central de Tres Tarjetas (Cards)
+- **Flujo de Trabajo Médico Limpio y Enfocado**: La vista principal presenta una interfaz despejada a pantalla completa con tres accesos directos de gran tamaño tipo tarjeta (*cards*):
+  - **Card 🛒 "Nueva Venta"**: Acceso inmediato al **Punto de Venta con Carrito (POS)** para búsqueda, dispensación y cobro de medicamentos a pantalla completa.
+  - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos con distintivo TODO en gran formato**, visualizador interactivo y hoja de ruta de la norma NOM-004-SSA3.
+  - **Card ⚙️ "Configuración"**: Acceso al centro de gestión y administración que **alberga el panel lateral** con Métricas, Inventario, Lotes (FEFO), Kardex y Temas/Ajustes.
+- **Navegación Intuitiva**: Todas las vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*).
 - **Interconexión Clínica**: Despache las recetas de los pacientes directamente al carrito de compras con el botón *"Cargar a Venta (POS)"*.
 
 ### 2. Punto de Venta (POS) con Carrito de Compra Interactivo
