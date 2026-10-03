@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-v1.3.1-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.1)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -39,6 +39,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
   - Resumen de paciente/cliente, método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y contador de artículos.
   - **TOTAL A PAGAR** destacado en tipografía de gran formato junto al botón prioritario **"Cobrar y Despachar Venta"**.
   - Deducción automática de inventario mediante la regla sanitaria **FEFO** (*First Expired, First Out*) y registro inmutable en el Kardex (`SalidaVenta`).
+- **Simulador de Ticket de Compra al Despachar**: Al presionar *"Cobrar y Despachar Venta"*, se despliega automáticamente una ventana que simula un **ticket térmico de consultorio y farmacia** con encabezado oficial, RFC, cédula profesional, folio secuencial, fecha/hora, desglose de medicamentos con presentación y cantidades, subtotal, IVA tasa 0%, total cobrado, código de barras simulado y opciones interactivas para **Imprimir Ticket** o **Finalizar / Nueva Venta**.
 
 ### 3. Expedientes Clínicos y Catálogo de Servicios con Insumos (Plan de Consulta)
 - **Ficha Integral del Paciente**: Registro de folio, datos demográficos, signos vitales de la última consulta, diagnóstico médico, antecedentes y notas de evolución conforme a la NOM-004-SSA3.

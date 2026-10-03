@@ -456,7 +456,58 @@ public class InventoryTests
         Assert.AreEqual(Visibility.Collapsed, inverseConverter.Convert("Servicios", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
         Assert.AreEqual(Visibility.Visible, inverseConverter.Convert("Expedientes", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
     }
+
+    [TestMethod]
+    public async Task PosViewModel_ProcessSale_CreatesSaleReceiptAndOpensTicketModal()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        var productsWithStock = posVm.Products.Where(p => p.CurrentStock > 2).Take(2).ToList();
+        Assert.AreEqual(2, productsWithStock.Count, "Deben existir al menos 2 productos con stock para la prueba");
+
+        posVm.AddToCart(productsWithStock[0]);
+        posVm.AddToCart(productsWithStock[1]);
+        posVm.IncreaseQuantity(posVm.Cart[0]); // cantidad = 2
+
+        posVm.PatientName = "Ana Laura Domínguez";
+        posVm.SelectedPaymentMethod = "Tarjeta Débito/Crédito";
+
+        decimal expectedTotal = posVm.TotalCartAmount;
+        int expectedItems = posVm.TotalCartItems;
+
+        // Al despachar la venta
+        await posVm.ProcessSaleAsync();
+
+        // 1. Debe abrirse el modal del ticket simulado
+        Assert.IsTrue(posVm.IsTicketModalOpen, "El modal del ticket debe abrirse al despachar la venta");
+        Assert.IsNotNull(posVm.CurrentReceipt, "Debe existir un objeto SaleReceipt generado");
+
+        // 2. Debe contener los datos exactos cobrados
+        var receipt = posVm.CurrentReceipt;
+        Assert.IsTrue(receipt.Folio.StartsWith("TKT-", StringComparison.OrdinalIgnoreCase), "El folio debe comenzar con TKT-");
+        Assert.AreEqual("Ana Laura Domínguez", receipt.PatientName);
+        Assert.AreEqual("Tarjeta Débito/Crédito", receipt.PaymentMethod);
+        Assert.AreEqual(expectedTotal, receipt.TotalAmount, "El total cobrado en el ticket debe coincidir con el del carrito");
+        Assert.AreEqual(expectedItems, receipt.TotalItems, "El total de piezas en el ticket debe coincidir");
+        Assert.AreEqual(2, receipt.Items.Count);
+
+        // 3. El carrito debe haberse reiniciado para la siguiente venta
+        Assert.AreEqual(0, posVm.Cart.Count);
+        Assert.IsFalse(posVm.HasCartItems);
+
+        // 4. Probar comando de imprimir ticket
+        posVm.PrintTicket();
+        Assert.IsTrue(posVm.IsTicketPrinted);
+        Assert.IsNotNull(posVm.TicketStatusMessage);
+
+        // 5. Probar cerrar ticket / nueva venta
+        posVm.CloseTicketModal();
+        Assert.IsFalse(posVm.IsTicketModalOpen);
+        Assert.IsNull(posVm.CurrentReceipt);
+    }
 }
+
 
 
 

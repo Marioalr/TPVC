@@ -135,6 +135,21 @@ public partial class PosViewModel : ObservableObject
     }
 
     // ==========================================
+    // COMPROBANTE / TICKET DE VENTA SIMULADO
+    // ==========================================
+    [ObservableProperty]
+    private SaleReceipt? _currentReceipt;
+
+    [ObservableProperty]
+    private bool _isTicketModalOpen;
+
+    [ObservableProperty]
+    private string? _ticketStatusMessage;
+
+    [ObservableProperty]
+    private bool _isTicketPrinted;
+
+    // ==========================================
     // NOTIFICACIONES Y ALERTAS
     // ==========================================
     [ObservableProperty]
@@ -460,18 +475,59 @@ public partial class PosViewModel : ObservableObject
             var total = TotalCartAmount;
             var patient = string.IsNullOrWhiteSpace(PatientName) ? "Público General" : PatientName.Trim();
 
+            // Construir el recibo / ticket simulado con los datos exactos cobrados
+            var receipt = new SaleReceipt
+            {
+                Folio = $"TKT-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+                Date = DateTime.Now,
+                PatientName = patient,
+                PaymentMethod = SelectedPaymentMethod,
+                Cashier = "Dr. Titular / Consultorio TPVC",
+                Items = Cart.Select(c => new SaleReceiptItem
+                {
+                    ProductId = c.ProductId,
+                    Name = c.Name,
+                    GenericName = c.GenericName,
+                    Presentation = c.Presentation,
+                    Quantity = c.Quantity,
+                    UnitPrice = c.UnitPrice
+                }).ToList()
+            };
+
             await _inventoryService.RegisterSaleAsync(saleItems, patient, SelectedPaymentMethod);
+
+            // Presentar el ticket simulado en pantalla
+            CurrentReceipt = receipt;
+            IsTicketModalOpen = true;
+            IsTicketPrinted = false;
+            TicketStatusMessage = null;
 
             Cart.Clear();
             RecalculateTotals();
             PatientName = "Público General";
 
-            ShowAlert($"¡Venta procesada con éxito! Total cobrado: ${total:N2} ({SelectedPaymentMethod})", true);
+            ShowAlert($"¡Venta procesada con éxito! Comprobante generado: {receipt.Folio}", true);
         }
         catch (Exception ex)
         {
             ShowAlert($"Error al procesar la venta: {ex.Message}", false);
         }
+    }
+
+    [RelayCommand]
+    public void CloseTicketModal()
+    {
+        IsTicketModalOpen = false;
+        CurrentReceipt = null;
+        TicketStatusMessage = null;
+        IsTicketPrinted = false;
+    }
+
+    [RelayCommand]
+    public void PrintTicket()
+    {
+        IsTicketPrinted = true;
+        TicketStatusMessage = "¡Ticket enviado a la impresora térmica correctamente!";
     }
 
     public void AddPrescriptionItem(string medicineName, int qty = 1)

@@ -990,5 +990,363 @@
                 </Grid>
             </Border>
         </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL / VISTA SIMULADORA DE TICKET DE COMPRA (DESPACHO DE VENTA)          -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="5" 
+                Background="#B3000000" 
+                Visibility="{Binding IsTicketModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="#FFFFFF" 
+                    BorderBrush="#94A3B8" 
+                    BorderThickness="1.5" 
+                    CornerRadius="14" 
+                    MaxWidth="460" 
+                    MaxHeight="720" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center"
+                    SnapsToDevicePixels="True">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Barra Superior del Ticket -->
+                    <Border Grid.Row="0" 
+                            Background="#0F172A" 
+                            CornerRadius="12,12,0,0" 
+                            Padding="16,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#10B981" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                    <TextBlock Text="✓ VENTA DESPACHADA" FontSize="10" FontWeight="Bold" Foreground="#FFFFFF" />
+                                </Border>
+                                <TextBlock Text="Comprobante de Pago / Ticket" FontSize="13" FontWeight="Bold" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Button Grid.Column="1" 
+                                    Command="{Binding CloseTicketModalCommand}" 
+                                    Background="Transparent" 
+                                    BorderThickness="0" 
+                                    Foreground="#94A3B8" 
+                                    FontSize="14" 
+                                    FontWeight="Bold" 
+                                    Cursor="Hand"
+                                    Padding="4"
+                                    ToolTip="Cerrar ticket">
+                                <TextBlock Text="✕" Foreground="#E2E8F0" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Cuerpo del Ticket Térmico Simulado (Con Scroll si hay muchos productos) -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0" Padding="26,18,26,14">
+                        <StackPanel TextElement.FontFamily="Consolas, Segoe UI, sans-serif">
+                            <!-- Logotipo y Nombre del Consultorio -->
+                            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,10">
+                                <TextBlock Text="🩺" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                                <TextBlock Text="CONSULTORIO MÉDICO TPVC" 
+                                           FontWeight="Bold" 
+                                           FontSize="15" 
+                                           Foreground="#0F172A" 
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Atención Médica Integral &amp; Farmacia" 
+                                           FontSize="11" 
+                                           FontStyle="Italic" 
+                                           Foreground="#475569" 
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Av. Universidad #1200 • Consultorio 4" 
+                                           FontSize="10" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="RFC: TPVC-980415-XYZ • Tel: (55) 4123-8890" 
+                                           FontSize="10" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Médico General Titular • Céd. Prof. 8492019" 
+                                           FontSize="10" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+
+                            <!-- Línea de Guiones de Corte Térmico -->
+                            <TextBlock Text="- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -" 
+                                       FontSize="11" 
+                                       Foreground="#94A3B8" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,0,0,8" />
+
+                            <!-- Metadatos de la Venta (Folio, Fecha, Paciente, etc.) -->
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="FOLIO:" FontSize="11" FontWeight="Bold" Foreground="#0F172A" Margin="0,0,8,3" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CurrentReceipt.Folio}" FontSize="11" FontWeight="Bold" Foreground="#0F172A" HorizontalAlignment="Right" />
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="FECHA:" FontSize="10" Foreground="#475569" Margin="0,0,8,3" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CurrentReceipt.Date, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" FontSize="10" Foreground="#475569" HorizontalAlignment="Right" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="PACIENTE:" FontSize="10" Foreground="#475569" Margin="0,0,8,3" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentReceipt.PatientName}" FontSize="10" FontWeight="SemiBold" Foreground="#0F172A" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="MÉTODO PAGO:" FontSize="10" Foreground="#475569" Margin="0,0,8,3" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CurrentReceipt.PaymentMethod}" FontSize="10" FontWeight="Bold" Foreground="#0284C7" HorizontalAlignment="Right" />
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="ATENDIÓ:" FontSize="10" Foreground="#475569" Margin="0,0,8,3" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding CurrentReceipt.Cashier}" FontSize="10" Foreground="#64748B" HorizontalAlignment="Right" />
+                            </Grid>
+
+                            <!-- Línea Divisoria -->
+                            <TextBlock Text="=============================================================" 
+                                       FontSize="10" 
+                                       Foreground="#94A3B8" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,4,0,6" />
+
+                            <!-- Cabecera de Columnas del Ticket -->
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="65" />
+                                    <ColumnDefinition Width="70" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="CANT" FontSize="10" FontWeight="Bold" Foreground="#475569" />
+                                <TextBlock Grid.Column="1" Text="DESCRIPCIÓN" FontSize="10" FontWeight="Bold" Foreground="#475569" />
+                                <TextBlock Grid.Column="2" Text="P.UNIT" FontSize="10" FontWeight="Bold" Foreground="#475569" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="3" Text="TOTAL" FontSize="10" FontWeight="Bold" Foreground="#475569" HorizontalAlignment="Right" />
+                            </Grid>
+
+                            <TextBlock Text="- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -" 
+                                       FontSize="10" 
+                                       Foreground="#CBD5E1" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,0,0,6" />
+
+                            <!-- Lista de Partidas Cobradas en el Ticket -->
+                            <ItemsControl ItemsSource="{Binding CurrentReceipt.Items}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="32" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="65" />
+                                                    <ColumnDefinition Width="70" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Cantidad -->
+                                                <TextBlock Grid.Column="0" 
+                                                           Text="{Binding Quantity, StringFormat='{}{0}x'}" 
+                                                           FontSize="11" 
+                                                           FontWeight="Bold" 
+                                                           Foreground="#0F172A" 
+                                                           VerticalAlignment="Top" />
+
+                                                <!-- Nombre y Genérico -->
+                                                <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding Name}" 
+                                                               FontSize="11" 
+                                                               FontWeight="Bold" 
+                                                               Foreground="#0F172A" 
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding GenericName}" 
+                                                               FontSize="9.5" 
+                                                               FontStyle="Italic" 
+                                                               Foreground="#64748B" 
+                                                               TextWrapping="Wrap" 
+                                                               Visibility="{Binding GenericName, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+
+                                                <!-- Precio Unitario -->
+                                                <TextBlock Grid.Column="2" 
+                                                           Text="{Binding UnitPrice, StringFormat='${0:N2}'}" 
+                                                           FontSize="10.5" 
+                                                           Foreground="#475569" 
+                                                           HorizontalAlignment="Right" 
+                                                           VerticalAlignment="Top" />
+
+                                                <!-- Subtotal -->
+                                                <TextBlock Grid.Column="3" 
+                                                           Text="{Binding Subtotal, StringFormat='${0:N2}'}" 
+                                                           FontSize="11" 
+                                                           FontWeight="Bold" 
+                                                           Foreground="#0F172A" 
+                                                           HorizontalAlignment="Right" 
+                                                           VerticalAlignment="Top" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Línea de Totales -->
+                            <TextBlock Text="- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -" 
+                                       FontSize="10" 
+                                       Foreground="#94A3B8" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,4,0,8" />
+
+                            <!-- Desglose de Totales -->
+                            <StackPanel Margin="0,0,0,8">
+                                <Grid Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Total de Artículos:" FontSize="10.5" Foreground="#475569" />
+                                    <TextBlock Grid.Column="1" Text="{Binding CurrentReceipt.TotalItems, StringFormat='{}{0} pieza(s)'}" FontSize="10.5" FontWeight="SemiBold" Foreground="#0F172A" />
+                                </Grid>
+
+                                <Grid Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Subtotal Farmacia:" FontSize="10.5" Foreground="#475569" />
+                                    <TextBlock Grid.Column="1" Text="{Binding CurrentReceipt.TotalAmount, StringFormat='${0:N2}'}" FontSize="10.5" Foreground="#475569" />
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="IVA (Tasa 0% Medicamentos):" FontSize="10" Foreground="#64748B" />
+                                    <TextBlock Grid.Column="1" Text="$0.00" FontSize="10" Foreground="#64748B" />
+                                </Grid>
+
+                                <!-- TOTAL GENERAL COBRADO DESTACADO -->
+                                <Border Background="#F1F5F9" BorderBrush="#0F172A" BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="TOTAL COBRADO:" FontWeight="Bold" FontSize="13" Foreground="#0F172A" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding CurrentReceipt.TotalAmount, StringFormat='${0:N2} MXN'}" FontWeight="Bold" FontSize="17" Foreground="#0284C7" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Línea de Cierre -->
+                            <TextBlock Text="=============================================================" 
+                                       FontSize="10" 
+                                       Foreground="#94A3B8" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,0,0,10" />
+
+                            <!-- Pie del Ticket -->
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="*** ¡GRACIAS POR SU PREFERENCIA! ***" 
+                                           FontWeight="Bold" 
+                                           FontSize="11" 
+                                           Foreground="#0F172A" 
+                                           HorizontalAlignment="Center" 
+                                           Margin="0,0,0,3" />
+                                <TextBlock Text="Conserve este comprobante para cualquier aclaración." 
+                                           FontSize="9.5" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Medicamentos despachados bajo estricto control sanitario FEFO." 
+                                           FontSize="9" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" 
+                                           Margin="0,1,0,8" />
+
+                                <!-- Código de Barras Simulado -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,2">
+                                    <TextBlock Text="|||||| | |||||||||| | ||||| | |||||||| | ||||||" 
+                                               FontSize="16" 
+                                               FontWeight="Bold" 
+                                               Foreground="#1E293B" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding CurrentReceipt.Folio, StringFormat='* {0} *'}" 
+                                           FontSize="9" 
+                                           Foreground="#64748B" 
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Barra Inferior de Acciones del Ticket -->
+                    <Border Grid.Row="2" 
+                            Background="#F8FAFC" 
+                            BorderBrush="#E2E8F0" 
+                            BorderThickness="0,1,0,0" 
+                            CornerRadius="0,0,12,12" 
+                            Padding="18,12">
+                        <StackPanel>
+                            <!-- Aviso si se envió a imprimir -->
+                            <Border Background="#ECFDF5" 
+                                    BorderBrush="#10B981" 
+                                    BorderThickness="1" 
+                                    CornerRadius="6" 
+                                    Padding="10,6" 
+                                    Margin="0,0,0,10" 
+                                    Visibility="{Binding TicketStatusMessage, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="✓ " FontWeight="Bold" Foreground="#059669" />
+                                    <TextBlock Text="{Binding TicketStatusMessage}" FontSize="11" FontWeight="SemiBold" Foreground="#059669" />
+                                </StackPanel>
+                            </Border>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Botón Imprimir Ticket -->
+                                <Button Grid.Column="0" 
+                                        Style="{DynamicResource OutlineButton}" 
+                                        Command="{Binding PrintTicketCommand}" 
+                                        Padding="14,9" 
+                                        HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="🖨️" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Imprimir Ticket" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Botón Nueva Venta / Cerrar Ticket -->
+                                <Button Grid.Column="2" 
+                                        Style="{DynamicResource AccentButton}" 
+                                        Command="{Binding CloseTicketModalCommand}" 
+                                        Padding="14,9" 
+                                        HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="✓" FontWeight="Bold" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Nueva Venta / Cerrar" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </UserControl>
+
