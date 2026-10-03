@@ -15,7 +15,7 @@
                            FontSize="24" 
                            FontWeight="Bold" 
                            Foreground="{DynamicResource ThemeText}" />
-                <TextBlock Text="Ajusta el tema visual (colores de acento y fondo) y verifica actualizaciones" 
+                <TextBlock Text="Ajusta el tema visual (colores de acento y fondo) y actualiza la aplicación" 
                            FontSize="13" 
                            Foreground="{DynamicResource ThemeTextSecondary}" 
                            Margin="0,4,0,0" />
@@ -163,15 +163,15 @@
                 </StackPanel>
             </Border>
 
-            <!-- Sección 3: Actualizaciones desde GitHub -->
+            <!-- Sección 3: Actualizaciones de la Aplicación (Único lugar donde reside la actualización) -->
             <Border Style="{DynamicResource CardBorder}" Margin="0,0,0,20">
                 <StackPanel>
-                    <TextBlock Text="Actualizaciones de la Aplicación" 
+                    <TextBlock Text="Actualización de la Aplicación" 
                                FontSize="16" 
                                FontWeight="SemiBold" 
                                Foreground="{DynamicResource ThemeText}" 
                                Margin="0,0,0,4" />
-                    <TextBlock Text="Mantén el sistema al día con mejoras y nuevas características desde GitHub:" 
+                    <TextBlock Text="Comprueba y aplica las últimas mejoras del sistema:" 
                                FontSize="12" 
                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                Margin="0,0,0,14" />
@@ -183,7 +183,7 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding AppVersion, StringFormat='Versión instalada: {0}'}" 
+                            <TextBlock Text="{Binding AppVersion, StringFormat='Versión instalada: v{0}'}" 
                                        FontWeight="SemiBold" 
                                        FontSize="13" 
                                        Foreground="{DynamicResource ThemeText}" />
@@ -198,7 +198,7 @@
                                 Command="{Binding CheckUpdatesCommand}" 
                                 Padding="16,8">
                             <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconRefresh}" 
+                                <Path Data="{StaticResource IconDownload}" 
                                       Fill="{DynamicResource ThemeAccentText}" 
                                       Width="13" Height="13" 
                                       Stretch="Uniform" 
@@ -208,12 +208,47 @@
                         </Button>
                     </Grid>
 
-                    <Button Style="{DynamicResource OutlineButton}" 
-                            HorizontalAlignment="Left"
-                            Content="Ir a la página de Releases en GitHub" 
-                            Command="{Binding OpenReleasePageCommand}" 
-                            Padding="12,6" 
-                            FontSize="12" />
+                    <!-- Tarjeta cuando hay actualización disponible -->
+                    <Border Style="{DynamicResource CardBorder}" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}"
+                            BorderBrush="{DynamicResource ThemeAccent}"
+                            Margin="0,6,0,0"
+                            Padding="14"
+                            Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="¡Nueva versión disponible para instalar!" 
+                                               FontWeight="Bold" 
+                                               FontSize="13" 
+                                               Foreground="{DynamicResource ThemeAccent}" />
+                                    <TextBlock Text="{Binding LatestVersion, StringFormat='Versión nueva: v{0}'}" 
+                                               FontSize="12" 
+                                               Foreground="{DynamicResource ThemeText}" 
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Button Grid.Column="1" 
+                                        Style="{DynamicResource AccentButton}" 
+                                        Content="Descargar e Instalar" 
+                                        Command="{Binding DownloadAndInstallUpdateCommand}" 
+                                        Padding="14,6" />
+                            </Grid>
+
+                            <!-- Barra de progreso si está descargando -->
+                            <StackPanel Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}" Margin="0,8,0,0">
+                                <ProgressBar Height="8" Value="{Binding DownloadProgress}" Maximum="100" />
+                                <TextBlock Text="{Binding DownloadProgress, StringFormat='Descargando actualización: {0}%'}" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                           HorizontalAlignment="Center" 
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

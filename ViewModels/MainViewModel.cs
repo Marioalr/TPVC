@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Services;
@@ -19,13 +18,10 @@ public partial class MainViewModel : ObservableObject
     private string _activeViewName = "Dashboard";
 
     [ObservableProperty]
-    private string _appTitle = "TPVC - Inventario Consultorio Médico";
+    private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
     private string _appVersion = "1.0.0";
-
-    [ObservableProperty]
-    private bool _isRefreshing;
 
     // ViewModels
     public DashboardViewModel DashboardVM { get; }
@@ -45,7 +41,7 @@ public partial class MainViewModel : ObservableObject
 
         AppVersion = $"v{_updateService.CurrentVersion}";
 
-        DashboardVM = new DashboardViewModel(inventoryService, updateService, NavigateTo);
+        DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
         InventoryVM = new InventoryViewModel(inventoryService);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
@@ -82,12 +78,5 @@ public partial class MainViewModel : ObservableObject
                 CurrentView = SettingsVM;
                 break;
         }
-    }
-
-    [RelayCommand]
-    public async Task CheckAppUpdatesAsync()
-    {
-        NavigateTo("Dashboard");
-        await DashboardVM.CheckAppUpdateCommandCommand.ExecuteAsync(null);
     }
 }

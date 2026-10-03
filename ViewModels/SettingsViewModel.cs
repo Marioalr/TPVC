@@ -34,7 +34,7 @@ public partial class SettingsViewModel : ObservableObject
     private string _appVersion = "1.0.0";
 
     [ObservableProperty]
-    private string _updateStatusMessage = "Presiona 'Buscar actualizaciones' para comprobar en GitHub.";
+    private string _updateStatusMessage = "Presiona 'Buscar Actualizaciones' para comprobar.";
 
     [ObservableProperty]
     private bool _isCheckingUpdates;
@@ -43,7 +43,22 @@ public partial class SettingsViewModel : ObservableObject
     private bool _isUpdateAvailable;
 
     [ObservableProperty]
-    private string _updateReleaseUrl = string.Empty;
+    private string _latestVersion = string.Empty;
+
+    [ObservableProperty]
+    private string _releaseNotes = string.Empty;
+
+    [ObservableProperty]
+    private string _directDownloadUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _downloadFileName = string.Empty;
+
+    [ObservableProperty]
+    private bool _isDownloading;
+
+    [ObservableProperty]
+    private double _downloadProgress;
 
     public ObservableCollection<AccentPaletteOption> PaletteOptions { get; } = new()
     {
@@ -104,13 +119,16 @@ public partial class SettingsViewModel : ObservableObject
     public async Task CheckUpdatesAsync()
     {
         IsCheckingUpdates = true;
-        UpdateStatusMessage = "Consultando repositorio en GitHub...";
+        UpdateStatusMessage = "Comprobando si hay nuevas versiones...";
         try
         {
             var result = await _updateService.CheckForUpdatesAsync();
             UpdateStatusMessage = result.Message;
             IsUpdateAvailable = result.IsUpdateAvailable;
-            UpdateReleaseUrl = result.ReleaseUrl;
+            LatestVersion = result.LatestVersion;
+            ReleaseNotes = result.ReleaseNotes;
+            DirectDownloadUrl = result.DirectDownloadUrl;
+            DownloadFileName = result.DownloadFileName;
         }
         catch (Exception ex)
         {
@@ -123,8 +141,24 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void OpenReleasePage()
+    public async Task DownloadAndInstallUpdateAsync()
     {
-        _updateService.OpenReleaseUrl(UpdateReleaseUrl);
+        if (string.IsNullOrWhiteSpace(DirectDownloadUrl))
+        {
+            UpdateStatusMessage = "No se encontró paquete directo de actualización en la versión.";
+            return;
+        }
+
+        IsDownloading = true;
+        DownloadProgress = 0;
+        var progress = new Progress<double>(p => DownloadProgress = Math.Round(p, 1));
+
+        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, progress);
+        IsDownloading = false;
+
+        if (!success)
+        {
+            UpdateStatusMessage = "Hubo un error al descargar e instalar el archivo de actualización.";
+        }
     }
 }

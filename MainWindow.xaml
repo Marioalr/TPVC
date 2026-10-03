@@ -171,61 +171,38 @@
         <!-- Área Principal de Contenido -->
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="56" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Barra Superior Global con Botón de Actualizar Rápido -->
-            <Border Grid.Row="0" 
+            <!-- Contenido Dinámico de la Vista Seleccionada -->
+            <ContentControl Grid.Row="0" Content="{Binding CurrentView}" />
+
+            <!-- Barra Inferior Discreta (Datos sincronizados en pequeño sin tanta importancia) -->
+            <Border Grid.Row="1" 
                     Background="{DynamicResource ThemeSurface}" 
                     BorderBrush="{DynamicResource ThemeBorder}" 
-                    BorderThickness="0,0,0,1" 
-                    Padding="28,0">
+                    BorderThickness="0,1,0,0" 
+                    Padding="24,5">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- Título de sección activa -->
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AppTitle}" 
-                                   FontWeight="SemiBold" 
-                                   FontSize="14" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" />
-                    </StackPanel>
+                    <TextBlock Grid.Column="0" 
+                               Text="{Binding AppTitle}" 
+                               FontSize="11" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               VerticalAlignment="Center" />
 
-                    <!-- Estado de sincronización en tiempo real y Botón Actualizar App -->
+                    <!-- Indicador discreto de sincronización de datos para consultar de un vistazo -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                CornerRadius="12" 
-                                Padding="10,4" 
-                                Margin="0,0,12,0">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Width="7" Height="7" CornerRadius="4" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" />
-                                <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding CheckAppUpdatesCommand}" 
-                                Padding="12,6" 
-                                ToolTip="Buscar actualizaciones de la aplicación en GitHub">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconDownload}" 
-                                      Fill="{DynamicResource ThemeAccentText}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Actualizar App" FontWeight="SemiBold" FontSize="12" />
-                            </StackPanel>
-                        </Button>
+                        <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Grid>
             </Border>
-
-            <!-- Contenido Dinámico de la Vista Seleccionada -->
-            <ContentControl Grid.Row="1" Content="{Binding CurrentView}" />
         </Grid>
     </Grid>
 </Window>

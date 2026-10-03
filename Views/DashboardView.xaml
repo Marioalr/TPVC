@@ -6,370 +6,241 @@
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance vm:DashboardViewModel}">
-    <Grid>
-        <!-- Contenido Principal del Dashboard -->
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="28,24,28,32">
-                
-                <!-- Encabezado del Dashboard con Botón de Actualizar Aplicación -->
-                <Grid Margin="0,0,0,24">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24,28,32">
+            
+            <!-- Encabezado del Dashboard -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="Panel de Control Médico" 
+                           FontSize="24" 
+                           FontWeight="Bold" 
+                           Foreground="{DynamicResource ThemeText}" />
+                <TextBlock Text="Resumen de existencias, consumos clínicos y alertas de inventario" 
+                           FontSize="13" 
+                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                           Margin="0,4,0,0" />
+            </StackPanel>
 
-                    <!-- Título y subtítulo con indicador de datos en vivo -->
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Panel de Control Médico" 
-                                   FontSize="24" 
-                                   FontWeight="Bold" 
-                                   Foreground="{DynamicResource ThemeText}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0" VerticalAlignment="Center">
-                            <Border Width="8" Height="8" 
-                                    CornerRadius="4" 
-                                    Background="{DynamicResource ThemeSuccess}" 
-                                    Margin="0,0,6,0" />
-                            <TextBlock Text="Sincronización automática de inventario en tiempo real" 
-                                       FontSize="13" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Botón de Actualizar Aplicación (Software Update) -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Style="{DynamicResource AccentButton}"
-                                Command="{Binding CheckAppUpdateCommandCommand}"
-                                Padding="16,10">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconDownload}" 
-                                      Fill="{DynamicResource ThemeAccentText}" 
-                                      Width="14" Height="14" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,8,0" />
-                                <TextBlock Text="Actualizar Aplicación" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Notificación Automática si hay nueva versión de la App -->
-                <Border Style="{DynamicResource CardBorder}"
-                        BorderBrush="{DynamicResource ThemeAccent}"
-                        Background="{DynamicResource ThemeSurfaceSubtle}"
-                        Margin="0,0,0,24"
-                        Padding="16,12"
-                        Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}">
+            <!-- Tarjetas de Métricas Principales (KPIs) -->
+            <UniformGrid Columns="4" Margin="0,0,0,28">
+                <!-- Total Productos -->
+                <Border Style="{DynamicResource CardBorder}" Margin="0,0,8,0">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="🚀 ¡Hay una nueva versión de la aplicación disponible!" 
-                                       FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource ThemeAccent}" />
-                            <TextBlock Text="Se ha detectado una actualización lista para instalar desde GitHub." 
-                                       FontSize="12" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                                       Margin="0,2,0,0" />
-                        </StackPanel>
-                        <Button Grid.Column="1" 
-                                Style="{DynamicResource AccentButton}" 
-                                Command="{Binding CheckAppUpdateCommandCommand}"
-                                Content="Ver Detalles y Actualizar" 
-                                Padding="14,6" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Total Insumos / Fármacos" 
+                                   FontSize="12" 
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Row="1" 
+                                   Text="{Binding Metrics.TotalProducts}" 
+                                   FontSize="30" 
+                                   FontWeight="Bold" 
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource ThemeText}" />
+                        <TextBlock Grid.Row="2" 
+                                   Text="Artículos registrados activos" 
+                                   FontSize="11" 
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
                     </Grid>
                 </Border>
 
-                <!-- Tarjetas de Métricas Principales (KPIs) -->
-                <UniformGrid Columns="4" Margin="0,0,0,28">
-                    <!-- Total Productos -->
-                    <Border Style="{DynamicResource CardBorder}" Margin="0,0,8,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Total Insumos / Fármacos" 
-                                       FontSize="12" 
-                                       FontWeight="Medium"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Grid.Row="1" 
-                                       Text="{Binding Metrics.TotalProducts}" 
-                                       FontSize="30" 
-                                       FontWeight="Bold" 
-                                       Margin="0,8,0,0"
-                                       Foreground="{DynamicResource ThemeText}" />
-                            <TextBlock Grid.Row="2" 
-                                       Text="Artículos registrados activos" 
-                                       FontSize="11" 
-                                       Margin="0,4,0,0"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </Grid>
-                    </Border>
+                <!-- Stock Bajo -->
+                <Border Style="{DynamicResource CardBorder}" Margin="8,0,8,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Alertas de Stock Bajo" 
+                                   FontSize="12" 
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Row="1" 
+                                   Text="{Binding Metrics.LowStockCount}" 
+                                   FontSize="30" 
+                                   FontWeight="Bold" 
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource ThemeWarning}" />
+                        <TextBlock Grid.Row="2" 
+                                   Text="Requieren reabastecimiento" 
+                                   FontSize="11" 
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Grid>
+                </Border>
 
-                    <!-- Stock Bajo -->
-                    <Border Style="{DynamicResource CardBorder}" Margin="8,0,8,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Alertas de Stock Bajo" 
-                                       FontSize="12" 
-                                       FontWeight="Medium"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Grid.Row="1" 
-                                       Text="{Binding Metrics.LowStockCount}" 
-                                       FontSize="30" 
-                                       FontWeight="Bold" 
-                                       Margin="0,8,0,0"
-                                       Foreground="{DynamicResource ThemeWarning}" />
-                            <TextBlock Grid.Row="2" 
-                                       Text="Requieren reabastecimiento" 
-                                       FontSize="11" 
-                                       Margin="0,4,0,0"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </Grid>
-                    </Border>
+                <!-- Próximos a Vencer -->
+                <Border Style="{DynamicResource CardBorder}" Margin="8,0,8,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Próximos a Caducar (≤60d)" 
+                                   FontSize="12" 
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Row="1" 
+                                   Text="{Binding Metrics.ExpiringSoonCount}" 
+                                   FontSize="30" 
+                                   FontWeight="Bold" 
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource ThemeDanger}" />
+                        <TextBlock Grid.Row="2" 
+                                   Text="Lotes con vencimiento cercano" 
+                                   FontSize="11" 
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Grid>
+                </Border>
 
-                    <!-- Próximos a Vencer -->
-                    <Border Style="{DynamicResource CardBorder}" Margin="8,0,8,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Próximos a Caducar (≤60d)" 
-                                       FontSize="12" 
-                                       FontWeight="Medium"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Grid.Row="1" 
-                                       Text="{Binding Metrics.ExpiringSoonCount}" 
-                                       FontSize="30" 
-                                       FontWeight="Bold" 
-                                       Margin="0,8,0,0"
-                                       Foreground="{DynamicResource ThemeDanger}" />
-                            <TextBlock Grid.Row="2" 
-                                       Text="Lotes con vencimiento cercano" 
-                                       FontSize="11" 
-                                       Margin="0,4,0,0"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </Grid>
-                    </Border>
+                <!-- Consumo en Consulta Hoy -->
+                <Border Style="{DynamicResource CardBorder}" Margin="8,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Consumo en Consulta Hoy" 
+                                   FontSize="12" 
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Row="1" 
+                                   Text="{Binding Metrics.ConsumedInConsultationToday}" 
+                                   FontSize="30" 
+                                   FontWeight="Bold" 
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource ThemeAccent}" />
+                        <TextBlock Grid.Row="2" 
+                                   Text="Unidades utilizadas en consulta" 
+                                   FontSize="11" 
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Grid>
+                </Border>
+            </UniformGrid>
 
-                    <!-- Consumo en Consulta Hoy -->
-                    <Border Style="{DynamicResource CardBorder}" Margin="8,0,0,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Consumo en Consulta Hoy" 
-                                       FontSize="12" 
-                                       FontWeight="Medium"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Grid.Row="1" 
-                                       Text="{Binding Metrics.ConsumedInConsultationToday}" 
-                                       FontSize="30" 
-                                       FontWeight="Bold" 
-                                       Margin="0,8,0,0"
-                                       Foreground="{DynamicResource ThemeAccent}" />
-                            <TextBlock Grid.Row="2" 
-                                       Text="Unidades utilizadas en consulta" 
-                                       FontSize="11" 
-                                       Margin="0,4,0,0"
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </Grid>
-                    </Border>
-                </UniformGrid>
+            <!-- Sección de Contenido en 2 Columnas -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                <!-- Sección de Contenido en 2 Columnas -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Columna Izquierda: Alertas de Stock Bajo y Caducidades -->
-                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                        
-                        <!-- Tarjeta Alertas de Stock Bajo -->
-                        <Border Style="{DynamicResource CardBorder}" Margin="0,0,0,20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,12">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Path Data="{StaticResource IconAlert}" 
-                                              Fill="{DynamicResource ThemeWarning}" 
-                                              Width="15" Height="15" 
-                                              Stretch="Uniform" 
-                                              Margin="0,0,8,0" />
-                                        <TextBlock Text="Insumos con Stock Bajo" 
-                                                   FontSize="15" 
-                                                   FontWeight="SemiBold" 
-                                                   Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-                                    <Button HorizontalAlignment="Right" 
-                                            Style="{DynamicResource OutlineButton}"
-                                            Content="Ver Catálogo" 
-                                            Padding="10,4" 
-                                            FontSize="11"
-                                            Command="{Binding NavigateToCommand}"
-                                            CommandParameter="Inventory" />
-                                </Grid>
-
-                                <ItemsControl ItemsSource="{Binding LowStockProducts}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="{DynamicResource ThemeBorder}" 
-                                                    BorderThickness="0,0,0,1" 
-                                                    Padding="0,8">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Name}" 
-                                                                   FontWeight="SemiBold" 
-                                                                   FontSize="13" 
-                                                                   Foreground="{DynamicResource ThemeText}" />
-                                                        <TextBlock Text="{Binding Location, StringFormat='Ubicación: {0}'}" 
-                                                                   FontSize="11" 
-                                                                   Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                        <Border Background="{DynamicResource ThemeWarning}" 
-                                                                CornerRadius="4" 
-                                                                Padding="8,3">
-                                                            <TextBlock Text="{Binding CurrentStock, StringFormat='Stock: {0}'}" 
-                                                                       Foreground="White" 
-                                                                       FontWeight="Bold" 
-                                                                       FontSize="11" />
-                                                        </Border>
-                                                        <TextBlock Text="{Binding MinStock, StringFormat='Mín: {0}'}" 
-                                                                   FontSize="10" 
-                                                                   HorizontalAlignment="Right"
-                                                                   Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                                   Margin="0,2,0,0" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <TextBlock Text="No hay productos con stock bajo en este momento." 
-                                           FontSize="12" 
-                                           Foreground="{DynamicResource ThemeTextSecondary}"
-                                           Margin="0,8,0,0"
-                                           Visibility="{Binding HasNoLowStock, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Tarjeta Próximos a Vencer -->
-                        <Border Style="{DynamicResource CardBorder}">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,12">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Path Data="{StaticResource IconCalendar}" 
-                                              Fill="{DynamicResource ThemeDanger}" 
-                                              Width="15" Height="15" 
-                                              Stretch="Uniform" 
-                                              Margin="0,0,8,0" />
-                                        <TextBlock Text="Lotes con Vencimiento Cercano" 
-                                                   FontSize="15" 
-                                                   FontWeight="SemiBold" 
-                                                   Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-                                    <Button HorizontalAlignment="Right" 
-                                            Style="{DynamicResource OutlineButton}"
-                                            Content="Ver Todos los Lotes" 
-                                            Padding="10,4" 
-                                            FontSize="11"
-                                            Command="{Binding NavigateToCommand}"
-                                            CommandParameter="Batches" />
-                                </Grid>
-
-                                <ItemsControl ItemsSource="{Binding ExpiringBatches}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="{DynamicResource ThemeBorder}" 
-                                                    BorderThickness="0,0,0,1" 
-                                                    Padding="0,8">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Product.Name}" 
-                                                                   FontWeight="SemiBold" 
-                                                                   FontSize="13" 
-                                                                   Foreground="{DynamicResource ThemeText}" />
-                                                        <TextBlock Text="{Binding BatchNumber, StringFormat='Lote: {0}'}" 
-                                                                   FontSize="11" 
-                                                                   Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                    </StackPanel>
-                                                    <Border Grid.Column="1" 
-                                                            Background="{DynamicResource ThemeDanger}" 
-                                                            CornerRadius="4" 
-                                                            Padding="8,3"
-                                                            VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding StatusText}" 
-                                                                   Foreground="White" 
-                                                                   FontWeight="Bold" 
-                                                                   FontSize="11" />
-                                                    </Border>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <TextBlock Text="No hay lotes próximos a vencer registrados." 
-                                           FontSize="12" 
-                                           Foreground="{DynamicResource ThemeTextSecondary}"
-                                           Margin="0,8,0,0"
-                                           Visibility="{Binding HasNoExpiringBatches, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <!-- Columna Derecha: Movimientos y Kardex Reciente -->
-                    <Border Grid.Column="1" Style="{DynamicResource CardBorder}" Margin="12,0,0,0">
+                <!-- Columna Izquierda: Alertas de Stock Bajo y Caducidades -->
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    
+                    <!-- Tarjeta Alertas de Stock Bajo -->
+                    <Border Style="{DynamicResource CardBorder}" Margin="0,0,0,20">
                         <StackPanel>
                             <Grid Margin="0,0,0,12">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Path Data="{StaticResource IconHistory}" 
-                                          Fill="{DynamicResource ThemeAccent}" 
+                                    <Path Data="{StaticResource IconAlert}" 
+                                          Fill="{DynamicResource ThemeWarning}" 
                                           Width="15" Height="15" 
                                           Stretch="Uniform" 
                                           Margin="0,0,8,0" />
-                                <TextBlock Text="Movimientos Recientes del Consultorio" 
-                                           FontSize="15" 
-                                           FontWeight="SemiBold" 
-                                           Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Text="Insumos con Stock Bajo" 
+                                               FontSize="15" 
+                                               FontWeight="SemiBold" 
+                                               Foreground="{DynamicResource ThemeText}" />
                                 </StackPanel>
                                 <Button HorizontalAlignment="Right" 
                                         Style="{DynamicResource OutlineButton}"
-                                        Content="Ver Historial Completo" 
+                                        Content="Ver Catálogo" 
                                         Padding="10,4" 
                                         FontSize="11"
                                         Command="{Binding NavigateToCommand}"
-                                        CommandParameter="Movements" />
+                                        CommandParameter="Inventory" />
                             </Grid>
 
-                            <ItemsControl ItemsSource="{Binding RecentMovements}">
+                            <ItemsControl ItemsSource="{Binding LowStockProducts}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border BorderBrush="{DynamicResource ThemeBorder}" 
                                                 BorderThickness="0,0,0,1" 
-                                                Padding="0,10">
+                                                Padding="0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" 
+                                                               FontWeight="SemiBold" 
+                                                               FontSize="13" 
+                                                               Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding Location, StringFormat='Ubicación: {0}'}" 
+                                                               FontSize="11" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <Border Background="{DynamicResource ThemeWarning}" 
+                                                            CornerRadius="4" 
+                                                            Padding="8,3">
+                                                        <TextBlock Text="{Binding CurrentStock, StringFormat='Stock: {0}'}" 
+                                                                   Foreground="White" 
+                                                                   FontWeight="Bold" 
+                                                                   FontSize="11" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding MinStock, StringFormat='Mín: {0}'}" 
+                                                               FontSize="10" 
+                                                               HorizontalAlignment="Right"
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                               Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="No hay productos con stock bajo en este momento." 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}"
+                                       Margin="0,8,0,0"
+                                       Visibility="{Binding HasNoLowStock, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Tarjeta Próximos a Vencer -->
+                    <Border Style="{DynamicResource CardBorder}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,12">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconCalendar}" 
+                                          Fill="{DynamicResource ThemeDanger}" 
+                                          Width="15" Height="15" 
+                                          Stretch="Uniform" 
+                                          Margin="0,0,8,0" />
+                                    <TextBlock Text="Lotes con Vencimiento Cercano" 
+                                               FontSize="15" 
+                                               FontWeight="SemiBold" 
+                                               Foreground="{DynamicResource ThemeText}" />
+                                </StackPanel>
+                                <Button HorizontalAlignment="Right" 
+                                        Style="{DynamicResource OutlineButton}"
+                                        Content="Ver Todos los Lotes" 
+                                        Padding="10,4" 
+                                        FontSize="11"
+                                        Command="{Binding NavigateToCommand}"
+                                        CommandParameter="Batches" />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding ExpiringBatches}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource ThemeBorder}" 
+                                                BorderThickness="0,0,0,1" 
+                                                Padding="0,8">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -380,144 +251,108 @@
                                                                FontWeight="SemiBold" 
                                                                FontSize="13" 
                                                                Foreground="{DynamicResource ThemeText}" />
-                                                    <TextBlock Text="{Binding MovementTypeDisplay}" 
-                                                               FontSize="11" 
-                                                               Foreground="{DynamicResource ThemeAccent}" 
-                                                               Margin="0,2,0,0" />
-                                                    <TextBlock Text="{Binding Reason}" 
+                                                    <TextBlock Text="{Binding BatchNumber, StringFormat='Lote: {0}'}" 
                                                                FontSize="11" 
                                                                Foreground="{DynamicResource ThemeTextSecondary}" />
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Quantity, StringFormat='{}{0} pzas'}" 
+                                                <Border Grid.Column="1" 
+                                                        Background="{DynamicResource ThemeDanger}" 
+                                                        CornerRadius="4" 
+                                                        Padding="8,3"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusText}" 
+                                                               Foreground="White" 
                                                                FontWeight="Bold" 
-                                                               FontSize="14" 
-                                                               HorizontalAlignment="Right"
-                                                               Foreground="{DynamicResource ThemeText}" />
-                                                    <TextBlock Text="{Binding Date, StringFormat='{}{0:dd/MM hh:mm tt}'}" 
-                                                               FontSize="11" 
-                                                               HorizontalAlignment="Right"
-                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                </StackPanel>
+                                                               FontSize="11" />
+                                                </Border>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="No hay movimientos registrados recientemente." 
+                            <TextBlock Text="No hay lotes próximos a vencer registrados." 
                                        FontSize="12" 
                                        Foreground="{DynamicResource ThemeTextSecondary}"
                                        Margin="0,8,0,0"
-                                       Visibility="{Binding HasNoRecentMovements, Converter={StaticResource BoolToVis}}" />
+                                       Visibility="{Binding HasNoExpiringBatches, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Border>
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- Modal de Actualización de la Aplicación -->
-        <Border Background="#66000000"
-                Visibility="{Binding IsUpdateModalOpen, Converter={StaticResource BoolToVis}}">
-            <Border Style="{DynamicResource CardBorder}" 
-                    Width="500" 
-                    VerticalAlignment="Center" 
-                    HorizontalAlignment="Center"
-                    Padding="28">
-                <StackPanel>
-                    <!-- Título del Modal -->
-                    <Grid Margin="0,0,0,12">
-                        <TextBlock Text="{Binding UpdateModalTitle}" 
-                                   FontSize="18" 
-                                   FontWeight="Bold" 
-                                   Foreground="{DynamicResource ThemeText}" />
-                        <Button HorizontalAlignment="Right" 
-                                Style="{DynamicResource OutlineButton}" 
-                                Content="✕" 
-                                Padding="8,2" 
-                                Command="{Binding CloseUpdateModalCommand}" />
-                    </Grid>
-
-                    <!-- Mensaje de Estado -->
-                    <TextBlock Text="{Binding UpdateModalMessage}" 
-                               FontSize="13" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               TextWrapping="Wrap" 
-                               Margin="0,0,0,16" />
-
-                    <!-- Contenido cuando hay actualización disponible -->
-                    <StackPanel Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}">
-                        <!-- Comparación de Versiones -->
-                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                CornerRadius="8" 
-                                Padding="14,10" 
-                                Margin="0,0,0,14">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="Versión Actual" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
-                                    <TextBlock Text="v1.0.0" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                </StackPanel>
-                                <TextBlock Grid.Column="1" Text="➜" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
-                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                    <TextBlock Text="Nueva Versión" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding LatestVersion, StringFormat='v{0}'}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeSuccess}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <!-- Notas de la Versión -->
-                        <TextBlock Text="Notas de la versión:" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                CornerRadius="8" 
-                                Padding="12" 
-                                MaxHeight="130" 
-                                Margin="0,0,0,16">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding ReleaseNotes}" 
-                                           FontSize="12" 
-                                           TextWrapping="Wrap" 
-                                           Foreground="{DynamicResource ThemeText}" />
-                            </ScrollViewer>
-                        </Border>
-
-                        <!-- Barra de Progreso de Descarga -->
-                        <StackPanel Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVis}}" Margin="0,0,0,16">
-                            <ProgressBar Height="8" Value="{Binding DownloadProgress}" Maximum="100" />
-                            <TextBlock Text="{Binding DownloadProgress, StringFormat='Descargando actualización: {0}%'}" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                                       HorizontalAlignment="Center" 
-                                       Margin="0,4,0,0" />
-                        </StackPanel>
-
-                        <!-- Botones de Acción de Actualización -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Style="{DynamicResource OutlineButton}" 
-                                    Content="Ver en GitHub" 
-                                    Command="{Binding OpenReleasePageCommand}" 
-                                    Margin="0,0,10,0" 
-                                    Padding="14,8" />
-                            <Button Style="{DynamicResource AccentButton}" 
-                                    Content="Descargar e Instalar" 
-                                    Command="{Binding DownloadAndApplyUpdateCommand}" 
-                                    Padding="18,8" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Botón cuando está al día o buscando -->
-                    <StackPanel Visibility="{Binding IsUpdateAvailable, Converter={StaticResource InverseBoolToVis}}" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Content="Aceptar" 
-                                Command="{Binding CloseUpdateModalCommand}" 
-                                Padding="20,8" />
-                    </StackPanel>
                 </StackPanel>
-            </Border>
-        </Border>
-    </Grid>
+
+                <!-- Columna Derecha: Movimientos y Kardex Reciente -->
+                <Border Grid.Column="1" Style="{DynamicResource CardBorder}" Margin="12,0,0,0">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconHistory}" 
+                                      Fill="{DynamicResource ThemeAccent}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,8,0" />
+                                <TextBlock Text="Movimientos Recientes del Consultorio" 
+                                           FontSize="15" 
+                                           FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource ThemeText}" />
+                            </StackPanel>
+                            <Button HorizontalAlignment="Right" 
+                                    Style="{DynamicResource OutlineButton}"
+                                    Content="Ver Historial Completo" 
+                                    Padding="10,4" 
+                                    FontSize="11"
+                                    Command="{Binding NavigateToCommand}"
+                                    CommandParameter="Movements" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding RecentMovements}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="0,0,0,1" 
+                                            Padding="0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Product.Name}" 
+                                                           FontWeight="SemiBold" 
+                                                           FontSize="13" 
+                                                           Foreground="{DynamicResource ThemeText}" />
+                                                <TextBlock Text="{Binding MovementTypeDisplay}" 
+                                                           FontSize="11" 
+                                                           Foreground="{DynamicResource ThemeAccent}" 
+                                                           Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding Reason}" 
+                                                           FontSize="11" 
+                                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Quantity, StringFormat='{}{0} pzas'}" 
+                                                           FontWeight="Bold" 
+                                                           FontSize="14" 
+                                                           HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource ThemeText}" />
+                                                <TextBlock Text="{Binding Date, StringFormat='{}{0:dd/MM hh:mm tt}'}" 
+                                                           FontSize="11" 
+                                                           HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="No hay movimientos registrados recientemente." 
+                                   FontSize="12" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}"
+                                   Margin="0,8,0,0"
+                                   Visibility="{Binding HasNoRecentMovements, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
