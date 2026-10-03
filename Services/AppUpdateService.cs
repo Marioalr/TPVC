@@ -45,8 +45,8 @@ public class GitHubReleaseInfo
 public class UpdateCheckResult
 {
     public bool IsUpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = "1.1.0";
-    public string LatestVersion { get; set; } = "1.1.0";
+    public string CurrentVersion { get; set; } = "1.2.0";
+    public string LatestVersion { get; set; } = "1.2.0";
     public string ReleaseNotes { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;
@@ -69,7 +69,7 @@ public class AppUpdateService
     public string CurrentVersion => 
         Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
         typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
-        "1.1.0";
+        "1.2.0";
 
     public async Task<UpdateCheckResult> CheckForUpdatesAsync()
     {

@@ -249,5 +249,45 @@ public class InventoryTests
         posVm.CloseCatalogModal();
         Assert.IsFalse(posVm.IsCatalogModalOpen);
     }
+
+    [TestMethod]
+    public async Task PosViewModel_ArrowKeyNavigation_NavigatesAndSelectsSuggestionsCorrectly()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        // 1. Buscar una letra común para obtener múltiples sugerencias (ej. 'o' o 'a')
+        posVm.SearchText = "o";
+        Assert.IsTrue(posVm.IsSearchDropdownOpen);
+        Assert.IsGreaterThanOrEqualTo(2, posVm.SearchSuggestions.Count, "Debe haber al menos 2 sugerencias para probar navegación por flechas");
+
+        // Al iniciar la búsqueda, la primera sugerencia está seleccionada por defecto (índice 0)
+        Assert.AreEqual(0, posVm.SelectedSuggestionIndex);
+        Assert.IsNotNull(posVm.SelectedSuggestion);
+        Assert.AreEqual(posVm.SearchSuggestions[0].Id, posVm.SelectedSuggestion.Id);
+
+        // 2. Presionar flecha hacia abajo (MoveSuggestionDown) -> se selecciona el segundo elemento (índice 1)
+        posVm.MoveSuggestionDown();
+        Assert.AreEqual(1, posVm.SelectedSuggestionIndex);
+        Assert.AreEqual(posVm.SearchSuggestions[1].Id, posVm.SelectedSuggestion.Id);
+
+        // 3. Presionar flecha hacia arriba (MoveSuggestionUp) -> regresa al primer elemento (índice 0)
+        posVm.MoveSuggestionUp();
+        Assert.AreEqual(0, posVm.SelectedSuggestionIndex);
+        Assert.AreEqual(posVm.SearchSuggestions[0].Id, posVm.SelectedSuggestion.Id);
+
+        // 4. Volver a bajar para seleccionar el segundo y confirmar con Enter (ConfirmSelectedSuggestion)
+        posVm.MoveSuggestionDown();
+        var selectedProduct = posVm.SelectedSuggestion!;
+        posVm.ConfirmSelectedSuggestion();
+
+        // Verificar que el producto seleccionado con las flechas fue el agregado al ticket de venta
+        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.HasCount(1, posVm.Cart);
+        Assert.AreEqual(selectedProduct.Id, posVm.Cart[0].ProductId);
+        Assert.IsTrue(string.IsNullOrEmpty(posVm.SearchText));
+        Assert.IsFalse(posVm.IsSearchDropdownOpen);
+    }
 }
+
 

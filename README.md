@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.1.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-v1.2.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.2.0)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -32,7 +32,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 
 ### 2. Punto de Venta (POS / Farmacia)
 - **Área Central de Ticket**: Visualización principal en formato de tabla para los productos agregados a la venta actual (nombre comercial, genérico, SKU, stock disponible, precio unitario, stepper interactivo de cantidades `+`/`-`, subtotal y eliminación).
-- **Búsqueda Instantánea con Menú Desplegable**: Al teclear en la barra superior se despliega en tiempo real un menú flotante con los productos coincidentes, stock y precios para agregarlos con un solo clic o presionando `Enter`.
+- **Búsqueda Instantánea con Menú Desplegable y Navegación por Flechas**: Al teclear en la barra superior se despliega en tiempo real un menú flotante con los productos coincidentes. Permite desplazarse entre las sugerencias usando las teclas de dirección (**Flecha Abajo `↓`** y **Flecha Arriba `↑`**), resaltar el producto deseado y agregarlo de inmediato al ticket con **`Enter`** (o con un clic directo), o cerrar el menú con **`Escape` (`Esc`)** manteniendo siempre el foco de escritura.
 - **Ventana Modal de Catálogo Completo**: Botón dedicado *"Buscar en Catálogo"* que abre una ventana emergente donde se exploran todos los productos por categoría, con badges de stock, temperatura (❄️) y botones para seguir agregando.
 - **Cobro en la Esquina Inferior Derecha**:
   - Resumen de paciente/cliente, método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y contador de artículos.

@@ -4,6 +4,22 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.2.0] - 2026-10-03
+
+### Añadido
+* **Navegación por Flechas del Teclado en el Buscador del POS**:
+  * Navegación interactiva con las teclas de dirección (**Flecha Abajo `↓`** y **Flecha Arriba `↑`**) para alternar entre sugerencias de medicamentos en el menú desplegable en tiempo real.
+  * Mantenimiento continuo del foco de escritura en la caja de texto (`SearchTextBox`), permitiendo escribir y navegar sin interrupciones ni uso forzado del ratón.
+  * Resaltado visual prominente del producto activo mediante borde izquierdo de acento y fondo sutil con scroll automático (`ScrollIntoView`).
+  * Confirmación y despacho instantáneo al ticket de venta presionando la tecla **`Enter`**.
+  * Cancelación y cierre instantáneo del menú desplegable mediante la tecla **`Escape` (`Esc`)**.
+* **Actualización Global de Versión a `1.2.0`**:
+  * Sincronización completa del número de versión a `v1.2.0` en `TPVC.csproj`, `AppUpdateService`, `SettingsViewModel`, `MainViewModel`, `ConfigurationShellViewModel` y en la barra de estado inferior visible en la aplicación.
+* **Pruebas Unitarias Automatizadas**:
+  * Nueva prueba unitaria `PosViewModel_ArrowKeyNavigation_NavigatesAndSelectsSuggestionsCorrectly` para certificar la navegación hacia abajo, hacia arriba, ciclado y confirmación directa con `Enter` en el carrito (suite ampliada a 11 pruebas pasando exitosamente).
+
+---
+
 ## [1.1.0] - 2026-10-03
 
 ### Añadido

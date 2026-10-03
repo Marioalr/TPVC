@@ -49,6 +49,36 @@ public partial class PosViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSearchDropdownOpen;
 
+    [ObservableProperty]
+    private int _selectedSuggestionIndex = -1;
+
+    [ObservableProperty]
+    private Product? _selectedSuggestion;
+
+    partial void OnSelectedSuggestionIndexChanged(int value)
+    {
+        if (value >= 0 && value < SearchSuggestions.Count)
+        {
+            SelectedSuggestion = SearchSuggestions[value];
+        }
+        else
+        {
+            SelectedSuggestion = null;
+        }
+    }
+
+    partial void OnSelectedSuggestionChanged(Product? value)
+    {
+        if (value != null)
+        {
+            var idx = SearchSuggestions.IndexOf(value);
+            if (idx >= 0 && idx != SelectedSuggestionIndex)
+            {
+                SelectedSuggestionIndex = idx;
+            }
+        }
+    }
+
     // ==========================================
     // CATÁLOGO GENERAL Y MODAL DE BÚSQUEDA
     // ==========================================
@@ -153,6 +183,8 @@ public partial class PosViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(query))
         {
             SearchSuggestions.Clear();
+            SelectedSuggestionIndex = -1;
+            SelectedSuggestion = null;
             IsSearchDropdownOpen = false;
             return;
         }
@@ -171,6 +203,71 @@ public partial class PosViewModel : ObservableObject
 
         SearchSuggestions = new ObservableCollection<Product>(matches);
         IsSearchDropdownOpen = SearchSuggestions.Count > 0;
+        SelectedSuggestionIndex = SearchSuggestions.Count > 0 ? 0 : -1;
+        SelectedSuggestion = SearchSuggestions.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    public void MoveSuggestionDown()
+    {
+        if (SearchSuggestions.Count == 0)
+        {
+            SelectedSuggestionIndex = -1;
+            SelectedSuggestion = null;
+            return;
+        }
+
+        if (SelectedSuggestionIndex < 0 || SelectedSuggestionIndex >= SearchSuggestions.Count - 1)
+        {
+            SelectedSuggestionIndex = 0;
+        }
+        else
+        {
+            SelectedSuggestionIndex++;
+        }
+
+        SelectedSuggestion = SearchSuggestions[SelectedSuggestionIndex];
+    }
+
+    [RelayCommand]
+    public void MoveSuggestionUp()
+    {
+        if (SearchSuggestions.Count == 0)
+        {
+            SelectedSuggestionIndex = -1;
+            SelectedSuggestion = null;
+            return;
+        }
+
+        if (SelectedSuggestionIndex <= 0 || SelectedSuggestionIndex >= SearchSuggestions.Count)
+        {
+            SelectedSuggestionIndex = SearchSuggestions.Count - 1;
+        }
+        else
+        {
+            SelectedSuggestionIndex--;
+        }
+
+        SelectedSuggestion = SearchSuggestions[SelectedSuggestionIndex];
+    }
+
+    [RelayCommand]
+    public void ConfirmSelectedSuggestion()
+    {
+        if (!IsSearchDropdownOpen || SearchSuggestions.Count == 0)
+            return;
+
+        var target = SelectedSuggestion;
+        if (target == null && SelectedSuggestionIndex >= 0 && SelectedSuggestionIndex < SearchSuggestions.Count)
+        {
+            target = SearchSuggestions[SelectedSuggestionIndex];
+        }
+        target ??= SearchSuggestions.FirstOrDefault();
+
+        if (target != null)
+        {
+            SelectSuggestion(target);
+        }
     }
 
     [RelayCommand]
@@ -178,16 +275,16 @@ public partial class PosViewModel : ObservableObject
     {
         AddToCart(product);
         SearchText = string.Empty;
+        SearchSuggestions.Clear();
+        SelectedSuggestionIndex = -1;
+        SelectedSuggestion = null;
         IsSearchDropdownOpen = false;
     }
 
     [RelayCommand]
     public void AddFirstSuggestion()
     {
-        if (SearchSuggestions.Count > 0)
-        {
-            SelectSuggestion(SearchSuggestions[0]);
-        }
+        ConfirmSelectedSuggestion();
     }
 
     [RelayCommand]

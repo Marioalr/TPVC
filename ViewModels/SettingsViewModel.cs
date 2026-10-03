@@ -31,7 +31,7 @@ public partial class SettingsViewModel : ObservableObject
     private string _customSurfaceHex = "#FFFFFF";
 
     [ObservableProperty]
-    private string _appVersion = "1.1.0";
+    private string _appVersion = "1.2.0";
 
     [ObservableProperty]
     private string _updateStatusMessage = "Presiona 'Buscar Actualizaciones' para comprobar.";

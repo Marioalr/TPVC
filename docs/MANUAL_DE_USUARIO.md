@@ -76,7 +76,11 @@ Diseñado como un punto de venta ágil y ergonómico especializado en la dispens
 * **Buscador Reactivo Superior**:
   * Ingrese el nombre comercial, principio activo (genérico) o código SKU (ej. *Paracetamol*, *Amoxicilina*, *Gasa*).
   * Al escribir, se despliega automáticamente un **menú desplegable en tiempo real** con los productos coincidentes, mostrando nombre, genérico, stock con semáforo y precio unitario.
-  * Haga clic sobre cualquier producto sugerido (o presione `Enter`) para agregarlo de forma inmediata a la venta.
+  * **Navegación con teclado sin soltar el ratón**:
+    * Utilice las teclas **Flecha Abajo `↓`** y **Flecha Arriba `↑`** para desplazarse entre las sugerencias de medicamentos (el producto seleccionado se resalta con un borde de acento).
+    * Presione la tecla **`Enter`** para despachar de inmediato el producto seleccionado a la venta.
+    * Presione **`Escape` (`Esc`)** para cerrar el menú desplegable en cualquier momento.
+  * También puede hacer clic directo con el ratón sobre cualquier producto sugerido o en su botón `+ Agregar`.
 * **Botón "Buscar en Catálogo"**:
   * Ubicado junto a la barra de búsqueda, abre una **ventana modal con el catálogo completo**.
   * Permite filtrar por categorías médicas o texto, explorar todos los insumos disponibles con indicadores de temperatura (❄️) y stock, y agregarlos con el botón `+ Agregar`.
