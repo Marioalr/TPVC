@@ -21,7 +21,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.2.1";
+    private string _appVersion = "1.3.0";
 
     // ViewModels
     public MainHubViewModel MainHubVM { get; }
@@ -47,7 +47,8 @@ public partial class MainViewModel : ObservableObject
 
         MainHubVM = new MainHubViewModel(NavigateTo);
         PosVM = new PosViewModel(inventoryService);
-        MedicalRecordsVM = new MedicalRecordsViewModel();
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService);
+        _ = MedicalRecordsVM.LoadServicesAsync();
 
         // Enlace para volver a la Vista Principal desde el POS o Expedientes
         PosVM.OnBackToHubRequested = () => NavigateTo("MainHub");

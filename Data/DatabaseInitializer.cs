@@ -23,9 +23,44 @@ public static class DatabaseInitializer
             // Columna ya existe o base nueva
         }
 
-        // Si ya hay categorías, no sembrar
+        try
+        {
+            context.Database.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS ClinicalServices (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Code TEXT NOT NULL,
+                    Name TEXT NOT NULL,
+                    Description TEXT NOT NULL,
+                    Category TEXT NOT NULL,
+                    Price TEXT NOT NULL,
+                    EstimatedDurationMinutes INTEGER NOT NULL,
+                    IsActive INTEGER NOT NULL,
+                    CreatedAt TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS IX_ClinicalServices_Code ON ClinicalServices (Code);
+                CREATE INDEX IF NOT EXISTS IX_ClinicalServices_Name ON ClinicalServices (Name);
+
+                CREATE TABLE IF NOT EXISTS ServiceDefaultProducts (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ClinicalServiceId INTEGER NOT NULL,
+                    ProductId INTEGER NOT NULL,
+                    Quantity INTEGER NOT NULL,
+                    Instructions TEXT NULL,
+                    FOREIGN KEY (ClinicalServiceId) REFERENCES ClinicalServices (Id) ON DELETE CASCADE,
+                    FOREIGN KEY (ProductId) REFERENCES Products (Id) ON DELETE RESTRICT
+                );
+                CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ClinicalServiceId ON ServiceDefaultProducts (ClinicalServiceId);
+                CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ProductId ON ServiceDefaultProducts (ProductId);
+            ");
+        }
+        catch
+        {
+        }
+
+        // Si ya hay categorías, solo verificar si faltan los servicios clínicos
         if (context.Categories.Any())
         {
+            SeedClinicalServices(context);
             return;
         }
 
@@ -253,5 +288,109 @@ public static class DatabaseInitializer
             });
         }
         context.SaveChanges();
+
+        SeedClinicalServices(context);
+    }
+
+    public static void SeedClinicalServices(AppDbContext context)
+    {
+        if (context.ClinicalServices.Any())
+        {
+            return;
+        }
+
+        var gasa = context.Products.FirstOrDefault(p => p.Name.Contains("Gasa"));
+        var solucion = context.Products.FirstOrDefault(p => p.Name.Contains("Solución") || p.Name.Contains("Fisiológica"));
+        var venda = context.Products.FirstOrDefault(p => p.Name.Contains("Venda"));
+        var alcohol = context.Products.FirstOrDefault(p => p.Name.Contains("Alcohol"));
+        var tiras = context.Products.FirstOrDefault(p => p.Name.Contains("Tiras") || p.Name.Contains("Glucosa"));
+
+        var services = new List<ClinicalService>
+        {
+            new()
+            {
+                Code = "SERV-001",
+                Name = "Consulta Médica General",
+                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
+                Category = "Consulta",
+                Price = 300.00m,
+                EstimatedDurationMinutes = 25,
+                IsActive = true,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Code = "SERV-002",
+                Name = "Curación Menor y Asepsia",
+                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
+                Category = "Curaciones",
+                Price = 250.00m,
+                EstimatedDurationMinutes = 20,
+                IsActive = true,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Code = "SERV-003",
+                Name = "Sutura de Herida Simple",
+                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
+                Category = "Procedimientos",
+                Price = 450.00m,
+                EstimatedDurationMinutes = 35,
+                IsActive = true,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Code = "SERV-004",
+                Name = "Monitoreo de Glucemia Capilar",
+                Description = "Toma de muestra capilar y determinación cuantitativa inmediata de glucosa en sangre.",
+                Category = "Diagnóstico",
+                Price = 80.00m,
+                EstimatedDurationMinutes = 10,
+                IsActive = true,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Code = "SERV-005",
+                Name = "Certificado Médico Oficial",
+                Description = "Examen médico integral, somatometría y expedición de certificado de salud.",
+                Category = "Certificados",
+                Price = 200.00m,
+                EstimatedDurationMinutes = 20,
+                IsActive = true,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            }
+        };
+
+        // Asignar insumos por defecto a los servicios correspondientes si existen los productos
+        if (gasa != null)
+        {
+            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = gasa.Id, Quantity = 2, Instructions = "Limpieza y cobertura" });
+            services[2].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = gasa.Id, Quantity = 2, Instructions = "Campo y secado" });
+        }
+        if (solucion != null)
+        {
+            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = solucion.Id, Quantity = 1, Instructions = "Lavado de arrastre" });
+            services[2].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = solucion.Id, Quantity = 1, Instructions = "Lavado pre-sutura" });
+        }
+        if (venda != null)
+        {
+            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = venda.Id, Quantity = 1, Instructions = "Vendaje protector" });
+        }
+        if (alcohol != null)
+        {
+            services[0].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = alcohol.Id, Quantity = 1, Instructions = "Asepsia" });
+            services[3].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = alcohol.Id, Quantity = 1, Instructions = "Asepsia digital" });
+        }
+        if (tiras != null)
+        {
+            services[3].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = tiras.Id, Quantity = 1, Instructions = "Medición" });
+        }
+
+        context.ClinicalServices.AddRange(services);
+        context.SaveChanges();
     }
 }
+

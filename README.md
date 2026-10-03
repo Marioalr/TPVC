@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.2.1-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.2.1)
+[![Version](https://img.shields.io/badge/version-v1.3.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.0)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -13,6 +13,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 
 ## 📚 Documentación del Proyecto
 
+* 🩺 **[Plan de Consulta y Servicios Clínicos (docs/PLAN_DE_CONSULTA.md)](docs/PLAN_DE_CONSULTA.md)**: Hoja de ruta conforme a la norma técnica mexicana NOM-004-SSA3, catálogo de servicios médicos, paquetes con insumos por defecto y diagramas Mermaid.
 * 📖 **[Manual de Usuario (docs/MANUAL_DE_USUARIO.md)](docs/MANUAL_DE_USUARIO.md)**: Guía práctica completa para el personal del consultorio (manejo de la vista principal dividida, punto de venta con carrito, expedientes, lotes y temas).
 * 🏗️ **[Arquitectura Técnica (docs/ARQUITECTURA_TECNICA.md)](docs/ARQUITECTURA_TECNICA.md)**: Diagramas Mermaid, modelo de base de datos relacional, algoritmo de venta POS FEFO y especificaciones de ingeniería.
 * 📝 **[Historial de Versiones (CHANGELOG.md)](CHANGELOG.md)**: Registro de cambios detallado siguiendo *Semantic Versioning*.
@@ -39,11 +40,12 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
   - **TOTAL A PAGAR** destacado en tipografía de gran formato junto al botón prioritario **"Cobrar y Despachar Venta"**.
   - Deducción automática de inventario mediante la regla sanitaria **FEFO** (*First Expired, First Out*) y registro inmutable en el Kardex (`SalidaVenta`).
 
-### 3. Módulo de Expedientes Clínicos (TODO)
-- **Ficha Integral del Paciente**: Registro de folio, datos demográficos, signos vitales de la última consulta, diagnóstico médico, antecedentes y notas de evolución.
+### 3. Expedientes Clínicos y Catálogo de Servicios con Insumos (Plan de Consulta)
+- **Ficha Integral del Paciente**: Registro de folio, datos demográficos, signos vitales de la última consulta, diagnóstico médico, antecedentes y notas de evolución conforme a la NOM-004-SSA3.
+- **Catálogo de Servicios Clínicos y Paquetes de Insumos**: Pestaña dedicada para explorar y crear servicios médicos (Consultas, Curaciones, Suturas, Glucemia, Certificados) con asignación de insumos y medicamentos predeterminados del inventario (ej. gasas, vendas, antisépticos) que se consumen automáticamente al realizar el procedimiento.
+- **Creador Interactivo de Servicios**: Modal para definir nombre, folio, categoría médica, precio, duración estimada y vincular insumos con cantidades personalizadas.
 - **Alerta de Alergias**: Resalta en rojo alergias medicamentosas de alto riesgo (ej. *Penicilina*, *Sulfas*, *AINEs*).
-- **Recetas Prescritas**: Lista de fármacos y dosificación con enlace directo de despacho al carrito del POS.
-- **Avisos Informativos**: Notificaciones sobre la próxima integración con la norma oficial NOM-004-SSA3.
+- **Recetas Prescritas**: Lista de fármacos y dosificación con enlace directo de despacho al ticket del POS (*"Cargar a Venta"*).
 
 ### 4. Panel de Métricas y KPIs (Dashboard)
 - **KPIs Clínicos en Vivo**: Total de insumos registrados, alertas de stock bajo o crítico, conteo de lotes próximos a vencer y consumo en consulta.
@@ -86,6 +88,15 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - Totalmente autónomo: no requiere internet ni configuración de servidores externos.
 - Sincronización automática reactiva con indicador discreto en la barra inferior (`● Datos sincronizados`).
 
+### 10. Instalador Oficial en 3 Vistas (Experiencia de Prueba)
+- **Instalador Oficial para Windows (`TPVC-Setup-v1.3.0.exe`)**: Diseñado para una experiencia de evaluación ultra rápida y sin fricción.
+- **Flujo en 3 Pantallas**:
+  1. **Vista 1 (Inicio)**: Logotipo y **solo el botón de instalar** (`Instalar →`).
+  2. **Vista 2 (Estado)**: Barra de progreso dinámica e informe en tiempo real de operaciones de desempaquetado.
+  3. **Vista 3 (Finalización)**: Confirmación de éxito, **CheckBox `[X] Iniciar TPVC ahora` marcado por defecto** y botón de **Finalizar**.
+- **Instalación Segura por Usuario**: Se instala en `%LocalAppData%\Programs\TPVC`, sin requerir permisos elevados de administrador ni cuadros de elevación UAC.
+- **Accesos Directos Automáticos**: Genera accesos directos en el Escritorio y Menú Inicio.
+
 ---
 
 ## 🛠️ Tecnologías y Arquitectura
@@ -95,7 +106,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Patrón de Arquitectura**: MVVM con `CommunityToolkit.Mvvm`
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
-* **Pruebas Automatizadas**: MSTest v3.5 con 8 pruebas unitarias de integración
+* **Pruebas Automatizadas**: MSTest con **20 pruebas unitarias de integración al 100%**
 
 ---
 
@@ -105,28 +116,23 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * Sistema Operativo: **Windows 10** o **Windows 11** (x64)
 * Runtime / SDK: [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-### Compilación desde el Código Fuente
+### Opción A: Instalador de Experiencia de Prueba (Recomendado)
+Descargue `TPVC-Setup-v1.3.0.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.0), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
+
+### Opción B: Compilación y Empaquetado del Instalador desde el Código Fuente
 ```powershell
 # 1. Clonar el repositorio
 git clone https://github.com/Marioalr/TPVC.git
 cd TPVC
 
-# 2. Restaurar dependencias
+# 2. Restaurar dependencias y ejecutar pruebas unitarias (20 pruebas)
 dotnet restore TPVC.sln
-
-# 3. Compilar la solución
-dotnet build TPVC.sln -c Release
-
-# 4. Ejecutar las pruebas unitarias
 dotnet test TPVC.sln
 
-# 5. Iniciar la aplicación
-dotnet run --project TPVC.csproj
-```
+# 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe) y paquete .zip
+powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1
 
-### Publicar Ejecutable Independiente
-```powershell
-dotnet publish TPVC.csproj -c Release -r win-x64 --self-contained false -o ./publish/TPVC-win-x64
+# El ejecutable quedará en: publish/TPVC-Setup-v1.3.0.exe
 ```
 
 ---

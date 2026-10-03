@@ -380,4 +380,84 @@ public class InventoryService
                 .Sum(m => m.Quantity)
         };
     }
+
+    // ==========================================
+    // SERVICIOS CLÍNICOS Y PAQUETES DE INSUMOS
+    // ==========================================
+    public async Task<List<ClinicalService>> GetClinicalServicesAsync()
+    {
+        return await _context.ClinicalServices
+            .Include(s => s.DefaultProducts)
+                .ThenInclude(dp => dp.Product)
+            .OrderBy(s => s.Category)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+    }
+
+    public async Task<ClinicalService?> GetClinicalServiceByIdAsync(int id)
+    {
+        return await _context.ClinicalServices
+            .Include(s => s.DefaultProducts)
+                .ThenInclude(dp => dp.Product)
+            .FirstOrDefaultAsync(s => s.Id == id);
+    }
+
+    public async Task<ClinicalService> SaveClinicalServiceAsync(
+        ClinicalService service, 
+        IEnumerable<(int ProductId, int Quantity, string? Instructions)> defaultProducts)
+    {
+        if (service.Id == 0)
+        {
+            service.CreatedAt = DateTime.Now;
+            _context.ClinicalServices.Add(service);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            var existing = await _context.ClinicalServices
+                .Include(s => s.DefaultProducts)
+                .FirstOrDefaultAsync(s => s.Id == service.Id);
+
+            if (existing != null)
+            {
+                existing.Code = service.Code;
+                existing.Name = service.Name;
+                existing.Description = service.Description;
+                existing.Category = service.Category;
+                existing.Price = service.Price;
+                existing.EstimatedDurationMinutes = service.EstimatedDurationMinutes;
+                existing.IsActive = service.IsActive;
+
+                _context.ServiceDefaultProducts.RemoveRange(existing.DefaultProducts);
+            }
+        }
+
+        // Agregar los productos por defecto vinculados
+        foreach (var (productId, quantity, instructions) in defaultProducts)
+        {
+            _context.ServiceDefaultProducts.Add(new ServiceDefaultProduct
+            {
+                ClinicalServiceId = service.Id,
+                ProductId = productId,
+                Quantity = Math.Max(1, quantity),
+                Instructions = instructions
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
+        return service;
+    }
+
+    public async Task DeleteClinicalServiceAsync(int id)
+    {
+        var service = await _context.ClinicalServices.FindAsync(id);
+        if (service != null)
+        {
+            _context.ClinicalServices.Remove(service);
+            await _context.SaveChangesAsync();
+            OnInventoryChanged?.Invoke();
+        }
+    }
 }
+

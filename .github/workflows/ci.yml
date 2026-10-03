@@ -30,11 +30,17 @@ jobs:
       - name: Execute Unit Tests
         run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
 
-      - name: Publish Artifact
-        run: dotnet publish TPVC.csproj -c Release -r win-x64 --self-contained false -o ./publish/TPVC-win-x64
+      - name: Build Installer and Packages
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.0"
 
-      - name: Upload Build Artifact
+      - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TPVC-win-x64
-          path: ./publish/TPVC-win-x64/
+          name: TPVC-Setup-v1.3.0
+          path: ./publish/TPVC-Setup-v1.3.0.exe
+
+      - name: Upload Portable Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPVC-v1.3.0-win-x64
+          path: ./publish/TPVC-v1.3.0-win-x64.zip

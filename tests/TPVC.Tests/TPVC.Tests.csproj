@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\TPVC.csproj" />
+    <ProjectReference Include="..\..\installer\TPVC.Installer\TPVC.Installer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

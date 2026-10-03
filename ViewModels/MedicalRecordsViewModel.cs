@@ -2,14 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
+using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
 public partial class MedicalRecordsViewModel : ObservableObject
 {
+    private readonly InventoryService? _inventoryService;
+
     public Action<string, int>? OnSendPrescriptionToPos { get; set; }
     public Action? OnNavigateToPosRequested { get; set; }
     public Action? OnBackToHubRequested { get; set; }
@@ -17,6 +21,25 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
 
+    // ==========================================
+    // SECCIÓN ACTIVA: EXPEDIENTES O SERVICIOS
+    // ==========================================
+    [ObservableProperty]
+    private string _activeSection = "Expedientes"; // "Expedientes" o "Servicios"
+
+    [RelayCommand]
+    public void SwitchSection(string section)
+    {
+        ActiveSection = section;
+        if (section == "Servicios" && Services.Count == 0)
+        {
+            _ = LoadServicesAsync();
+        }
+    }
+
+    // ==========================================
+    // PACIENTES Y EXPEDIENTES
+    // ==========================================
     [ObservableProperty]
     private string _searchPatientText = string.Empty;
 
@@ -35,10 +58,237 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [ObservableProperty]
     private bool _isInfoModalVisible;
 
-    public MedicalRecordsViewModel()
+    // ==========================================
+    // CATÁLOGO DE SERVICIOS CLÍNICOS
+    // ==========================================
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _services = new();
+
+    [ObservableProperty]
+    private ClinicalService? _selectedService;
+
+    [ObservableProperty]
+    private bool _isCreateServiceModalOpen;
+
+    [ObservableProperty]
+    private string _newServiceCode = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceName = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceDescription = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceCategory = "Consulta";
+
+    [ObservableProperty]
+    private decimal _newServicePrice = 300.00m;
+
+    [ObservableProperty]
+    private int _newServiceDuration = 20;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _availableProducts = new();
+
+    [ObservableProperty]
+    private Product? _selectedProductToAdd;
+
+    [ObservableProperty]
+    private int _newProductQuantity = 1;
+
+    [ObservableProperty]
+    private ObservableCollection<ServiceDefaultProduct> _newServiceDefaultProducts = new();
+
+    public List<string> ServiceCategories { get; } = new()
     {
+        "Consulta",
+        "Curaciones",
+        "Procedimientos",
+        "Diagnóstico",
+        "Certificados"
+    };
+
+    public MedicalRecordsViewModel() : this(null)
+    {
+    }
+
+    public MedicalRecordsViewModel(InventoryService? inventoryService)
+    {
+        _inventoryService = inventoryService;
         LoadMockPatients();
     }
+
+    public async Task LoadServicesAsync()
+    {
+        if (_inventoryService != null)
+        {
+            var dbServices = await _inventoryService.GetClinicalServicesAsync();
+            Services = new ObservableCollection<ClinicalService>(dbServices);
+            SelectedService = Services.FirstOrDefault();
+
+            var prods = await _inventoryService.GetProductsAsync();
+            AvailableProducts = new ObservableCollection<Product>(prods);
+            SelectedProductToAdd = AvailableProducts.FirstOrDefault();
+        }
+        else
+        {
+            LoadFallbackServices();
+        }
+    }
+
+    private void LoadFallbackServices()
+    {
+        var services = new List<ClinicalService>
+        {
+            new()
+            {
+                Id = 1,
+                Code = "SERV-001",
+                Name = "Consulta Médica General",
+                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
+                Category = "Consulta",
+                Price = 300.00m,
+                EstimatedDurationMinutes = 25,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Abatelenguas de madera" }, Quantity = 1, Instructions = "Exploración orofaríngea" },
+                    new() { Product = new Product { Name = "Alcohol Etílico 70%" }, Quantity = 1, Instructions = "Asepsia" }
+                }
+            },
+            new()
+            {
+                Id = 2,
+                Code = "SERV-002",
+                Name = "Curación Menor y Asepsia",
+                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
+                Category = "Curaciones",
+                Price = 250.00m,
+                EstimatedDurationMinutes = 20,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Limpieza y cobertura" },
+                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Lavado de arrastre" },
+                    new() { Product = new Product { Name = "Venda Elástica 10 cm" }, Quantity = 1, Instructions = "Vendaje protector" }
+                }
+            },
+            new()
+            {
+                Id = 3,
+                Code = "SERV-003",
+                Name = "Sutura de Herida Simple",
+                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
+                Category = "Procedimientos",
+                Price = 450.00m,
+                EstimatedDurationMinutes = 35,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Secado y hemostasia" },
+                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Asepsia previa" }
+                }
+            }
+        };
+
+        Services = new ObservableCollection<ClinicalService>(services);
+        SelectedService = Services.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    public void OpenCreateServiceModal()
+    {
+        NewServiceCode = $"SERV-{(Services.Count + 1):D3}";
+        NewServiceName = string.Empty;
+        NewServiceDescription = string.Empty;
+        NewServiceCategory = "Consulta";
+        NewServicePrice = 300.00m;
+        NewServiceDuration = 20;
+        NewProductQuantity = 1;
+        NewServiceDefaultProducts.Clear();
+        SelectedProductToAdd = AvailableProducts.FirstOrDefault();
+        IsCreateServiceModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCreateServiceModal()
+    {
+        IsCreateServiceModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void AddProductToNewService()
+    {
+        if (SelectedProductToAdd == null) return;
+
+        var existing = NewServiceDefaultProducts.FirstOrDefault(dp => dp.ProductId == SelectedProductToAdd.Id);
+        if (existing != null)
+        {
+            existing.Quantity += Math.Max(1, NewProductQuantity);
+        }
+        else
+        {
+            NewServiceDefaultProducts.Add(new ServiceDefaultProduct
+            {
+                ProductId = SelectedProductToAdd.Id,
+                Product = SelectedProductToAdd,
+                Quantity = Math.Max(1, NewProductQuantity),
+                Instructions = "Insumo por defecto del procedimiento"
+            });
+        }
+
+        NewProductQuantity = 1;
+    }
+
+    [RelayCommand]
+    public void RemoveProductFromNewService(ServiceDefaultProduct item)
+    {
+        NewServiceDefaultProducts.Remove(item);
+    }
+
+    [RelayCommand]
+    public async Task SaveNewServiceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewServiceName))
+        {
+            InfoModalMessage = "El nombre del servicio clínico es obligatorio.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var newService = new ClinicalService
+        {
+            Code = string.IsNullOrWhiteSpace(NewServiceCode) ? $"SERV-{(Services.Count + 1):D3}" : NewServiceCode.Trim(),
+            Name = NewServiceName.Trim(),
+            Description = NewServiceDescription.Trim(),
+            Category = NewServiceCategory,
+            Price = NewServicePrice,
+            EstimatedDurationMinutes = NewServiceDuration,
+            IsActive = true
+        };
+
+        if (_inventoryService != null)
+        {
+            var defaultItems = NewServiceDefaultProducts
+                .Select(p => (p.ProductId, p.Quantity, p.Instructions))
+                .ToList();
+
+            var saved = await _inventoryService.SaveClinicalServiceAsync(newService, defaultItems);
+            await LoadServicesAsync();
+        }
+        else
+        {
+            foreach (var dp in NewServiceDefaultProducts)
+            {
+                newService.DefaultProducts.Add(dp);
+            }
+            Services.Add(newService);
+        }
+
+        SelectedService = newService;
+        IsCreateServiceModalOpen = false;
+        InfoModalMessage = $"¡Servicio '{newService.Name}' creado exitosamente con {newService.DefaultProducts.Count} producto(s) por defecto!";
+        IsInfoModalVisible = true;
+    }
+
 
     private void LoadMockPatients()
     {

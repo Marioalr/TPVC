@@ -123,3 +123,24 @@ public class ComparisonToBoolConverter : IValueConverter
     }
 }
 
+public class ComparisonToVisibilityConverter : IValueConverter
+{
+    public bool Invert { get; set; }
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value == null || parameter == null) 
+            return Invert ? Visibility.Visible : Visibility.Collapsed;
+
+        bool matches = string.Equals(value.ToString(), parameter.ToString(), StringComparison.OrdinalIgnoreCase);
+        if (Invert) matches = !matches;
+
+        return matches ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+

@@ -360,6 +360,102 @@ public class InventoryTests
         posVm.RemoveFromCart(posVm.Cart[0]);
         Assert.IsFalse(posVm.HasCartItems);
     }
+
+    [TestMethod]
+    public async Task DatabaseInitializer_SeedsClinicalServices_WithDefaultProducts()
+    {
+        var services = await _inventoryService.GetClinicalServicesAsync();
+        Assert.IsNotNull(services);
+        Assert.IsGreaterThanOrEqualTo(4, services.Count, "Debe sembrar al menos 4 servicios clínicos");
+
+        var curacion = services.FirstOrDefault(s => s.Code == "SERV-002");
+        Assert.IsNotNull(curacion, "Debe existir el servicio SERV-002 (Curación Menor)");
+        Assert.IsGreaterThanOrEqualTo(1, curacion.DefaultProducts.Count, "La curación debe incluir insumos por defecto");
+        Assert.IsTrue(curacion.DefaultProducts.Any(dp => dp.Product != null && dp.Quantity > 0));
+    }
+
+    [TestMethod]
+    public async Task InventoryService_SaveAndGetClinicalServices_PersistsDefaultProducts()
+    {
+        var products = await _inventoryService.GetProductsAsync();
+        var prod1 = products[0];
+        var prod2 = products[1];
+
+        var newService = new ClinicalService
+        {
+            Code = "SERV-999",
+            Name = "Infiltración Articular con Corticoide",
+            Description = "Procedimiento médico de alivio de dolor articular con anestésico local.",
+            Category = "Procedimientos",
+            Price = 650.00m,
+            EstimatedDurationMinutes = 30,
+            IsActive = true
+        };
+
+        var defaultItems = new List<(int ProductId, int Quantity, string? Instructions)>
+        {
+            (prod1.Id, 2, "Insumo de asepsia previa"),
+            (prod2.Id, 1, "Aplicación directa de fármaco")
+        };
+
+        var saved = await _inventoryService.SaveClinicalServiceAsync(newService, defaultItems);
+        Assert.IsNotNull(saved);
+        Assert.IsTrue(saved.Id > 0);
+
+        var retrieved = await _inventoryService.GetClinicalServiceByIdAsync(saved.Id);
+        Assert.IsNotNull(retrieved);
+        Assert.AreEqual("SERV-999", retrieved.Code);
+        Assert.AreEqual(2, retrieved.DefaultProducts.Count, "Debe guardar y recuperar exactamente los 2 insumos predeterminados");
+        Assert.AreEqual(2, retrieved.DefaultProducts.First(p => p.ProductId == prod1.Id).Quantity);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ServicesSection_AddsNewServiceWithDefaultProducts()
+    {
+        var mrVm = new MedicalRecordsViewModel(_inventoryService);
+        await mrVm.LoadServicesAsync();
+
+        Assert.IsNotNull(mrVm.Services);
+        int initialCount = mrVm.Services.Count;
+
+        mrVm.OpenCreateServiceModal();
+        mrVm.NewServiceCode = "SERV-TEST";
+        mrVm.NewServiceName = "Prueba de Espirometría Clínica";
+        mrVm.NewServiceCategory = "Diagnóstico";
+        mrVm.NewServicePrice = 500.00m;
+        mrVm.NewServiceDuration = 25;
+
+        Assert.IsNotNull(mrVm.AvailableProducts);
+        Assert.IsTrue(mrVm.AvailableProducts.Count > 0);
+        mrVm.SelectedProductToAdd = mrVm.AvailableProducts[0];
+        mrVm.NewProductQuantity = 3;
+        mrVm.AddProductToNewService();
+
+        Assert.AreEqual(1, mrVm.NewServiceDefaultProducts.Count);
+        Assert.AreEqual(3, mrVm.NewServiceDefaultProducts[0].Quantity);
+
+        await mrVm.SaveNewServiceAsync();
+
+        Assert.IsFalse(mrVm.IsCreateServiceModalOpen);
+        Assert.AreEqual(initialCount + 1, mrVm.Services.Count);
+        var created = mrVm.Services.FirstOrDefault(s => s.Code == "SERV-TEST");
+        Assert.IsNotNull(created);
+        Assert.AreEqual("Prueba de Espirometría Clínica", created.Name);
+        Assert.AreEqual(1, created.DefaultProducts.Count);
+    }
+
+    [TestMethod]
+    public void ComparisonToVisibilityConverter_ConvertsValuesCorrectly()
+    {
+        var converter = new ComparisonToVisibilityConverter();
+        Assert.AreEqual(Visibility.Visible, converter.Convert("Servicios", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert("Expedientes", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Collapsed, converter.Convert(null, typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
+
+        var inverseConverter = new ComparisonToVisibilityConverter { Invert = true };
+        Assert.AreEqual(Visibility.Collapsed, inverseConverter.Convert("Servicios", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Visible, inverseConverter.Convert("Expedientes", typeof(Visibility), "Servicios", CultureInfo.InvariantCulture));
+    }
 }
 
 

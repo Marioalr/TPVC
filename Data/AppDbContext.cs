@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<ProductBatch> ProductBatches => Set<ProductBatch>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
+    public DbSet<ClinicalService> ClinicalServices => Set<ClinicalService>();
+    public DbSet<ServiceDefaultProduct> ServiceDefaultProducts => Set<ServiceDefaultProduct>();
 
     public AppDbContext()
     {
@@ -77,5 +79,24 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(m => m.BatchId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ClinicalService>()
+            .HasIndex(s => s.Code);
+
+        modelBuilder.Entity<ClinicalService>()
+            .HasIndex(s => s.Name);
+
+        modelBuilder.Entity<ServiceDefaultProduct>()
+            .HasOne(sp => sp.ClinicalService)
+            .WithMany(s => s.DefaultProducts)
+            .HasForeignKey(sp => sp.ClinicalServiceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ServiceDefaultProduct>()
+            .HasOne(sp => sp.Product)
+            .WithMany()
+            .HasForeignKey(sp => sp.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
