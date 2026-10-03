@@ -12,6 +12,10 @@ public partial class MedicalRecordsViewModel : ObservableObject
 {
     public Action<string, int>? OnSendPrescriptionToPos { get; set; }
     public Action? OnNavigateToPosRequested { get; set; }
+    public Action? OnBackToHubRequested { get; set; }
+
+    [RelayCommand]
+    public void BackToHub() => OnBackToHubRequested?.Invoke();
 
     [ObservableProperty]
     private string _searchPatientText = string.Empty;

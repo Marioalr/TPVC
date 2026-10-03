@@ -49,15 +49,18 @@ La pantalla principal se organiza en tres áreas fundamentales:
 
 ---
 
-## 3. Módulo 1: Vista Principal (Expedientes y Venta POS)
+## 3. Módulo 1: Vista Principal (Nueva Venta y Nueva Consulta)
 
-Al abrir TPVC, accederá a la **Vista Principal**, la cual reúne las dos actividades fundamentales del médico:
+Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz limpia y libre de distracciones con **dos botones grandes tipo tarjeta (cards)** que canalizan las acciones prioritarias del día:
 
-### Modos de Visualización (Conmutador Superior)
-En la parte superior derecha de la Vista Principal encontrará tres modos de visualización:
-* ◫ **Vista Dividida**: Muestra simultáneamente los **Expedientes Clínicos (TODO)** a la izquierda y el **Punto de Venta con Carrito** a la derecha, facilitando la atención y venta simultánea.
-* 🛒 **Venta / Carrito (POS)**: Amplía el punto de venta a todo el ancho de la pantalla para una experiencia de caja y despacho más cómoda.
-* 📋 **Expedientes (TODO)**: Amplía el expediente clínico a pantalla completa para una consulta médica exhaustiva.
+1. **Card 🛒 "Nueva Venta"**:
+   * Dirige directamente al **Punto de Venta (POS con Carrito)**.
+   * Permite realizar la búsqueda de productos, agregar medicamentos al carrito de compra, ajustar cantidades, seleccionar el método de pago y procesar el cobro con deducción automática FEFO.
+2. **Card 📋 "Nueva Consulta"**:
+   * Dirige directamente al módulo de **Expedientes Clínicos (TODO)**.
+   * Permite consultar la historia clínica del paciente, revisar antecedentes y alergias, consultar signos vitales y transferir recetas directamente al punto de venta.
+
+> Ambas vistas incluyen en su cabecera un botón **"← Volver a Inicio"** para regresar a la pantalla de las dos tarjetas en cualquier momento, además del acceso constante disponible en el menú lateral.
 
 ---
 

@@ -22,11 +22,11 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 
 ## 🌟 Características Principales
 
-### 1. Nueva Vista Principal Dividida: Expedientes y Punto de Venta (POS)
-- **Flujo de Trabajo Médico Integrado**: La vista principal se divide en los dos ejes prioritarios del consultorio:
-  - **Expedientes Clínicos (TODO)** en el panel izquierdo.
-  - **Punto de Venta con Carrito (POS)** en el panel derecho.
-- **Conmutador de Pantalla**: Alterne con un solo clic entre *Vista Dividida*, *Solo Venta / Carrito (POS)* y *Solo Expedientes (TODO)* en pantalla completa.
+### 1. Nueva Vista Principal: Acceso Directo por Tarjetas (Cards)
+- **Flujo de Trabajo Médico Limpio y Enfocado**: La vista principal presenta una interfaz despejada con dos accesos directos de gran tamaño tipo tarjeta (*cards*):
+  - **Card 🛒 "Nueva Venta"**: Acceso inmediato al **Punto de Venta con Carrito (POS)** para búsqueda, dispensación y cobro de medicamentos.
+  - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos (TODO)** para historial médico, signos vitales y prescripción.
+- **Navegación Intuitiva**: Ambas vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*) además de la barra lateral permanente.
 - **Interconexión Clínica**: Despache las recetas de los pacientes directamente al carrito de compras con el botón *"Cargar a Venta (POS)"*.
 
 ### 2. Punto de Venta (POS) con Carrito de Compra Interactivo

@@ -54,6 +54,16 @@
                 <!-- Botones Rápidos de Módulo -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{DynamicResource OutlineButton}" 
+                            Command="{Binding BackToHubCommand}" 
+                            Margin="0,0,8,0" 
+                            Padding="10,6">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="←" FontWeight="Bold" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Volver a Inicio" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding NewConsultationCommand}" 
                             Margin="0,0,8,0" 
                             Padding="12,6">

@@ -31,6 +31,10 @@ public partial class CartItem : ObservableObject
 public partial class PosViewModel : ObservableObject
 {
     private readonly InventoryService _inventoryService;
+    public Action? OnBackToHubRequested { get; set; }
+
+    [RelayCommand]
+    public void BackToHub() => OnBackToHubRequested?.Invoke();
 
     [ObservableProperty]
     private string _searchText = string.Empty;

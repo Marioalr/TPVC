@@ -4,140 +4,247 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             xmlns:views="clr-namespace:TPVC.Views"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:MainHubViewModel}"
              d:DesignHeight="750" d:DesignWidth="1100">
 
-    <Grid>
+    <UserControl.Resources>
+        <!-- Estilo interactivo para las Tarjetas Grandes de Acción Principal -->
+        <Style x:Key="BigActionCardStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource ThemeCard}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="32" />
+            <Setter Property="MinHeight" Value="360" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="cardBorder" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="18" 
+                                Padding="{TemplateBinding Padding}" 
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="cardBorder" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                <Setter TargetName="cardBorder" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                <Setter TargetName="cardBorder" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="cardBorder" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Contenedor Centralizado de la Vista Principal -->
+    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Barra Superior de Conmutación de Modo de la Vista Principal -->
-        <Border Grid.Row="0" 
-                Background="{DynamicResource ThemeSurface}" 
-                BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="0,0,0,1" 
-                Padding="16,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <!-- Cabecera de Bienvenida -->
+        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,36">
+            <TextBlock Text="Consultorio Médico General" 
+                       FontWeight="Bold" 
+                       FontSize="28" 
+                       Foreground="{DynamicResource ThemeText}" 
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="Seleccione una acción principal para comenzar la jornada clínica" 
+                       FontSize="14" 
+                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                       HorizontalAlignment="Center" 
+                       Margin="0,8,0,0" />
+        </StackPanel>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Vista Principal del Consultorio" 
-                               FontWeight="Bold" 
-                               FontSize="14" 
-                               Foreground="{DynamicResource ThemeText}" 
-                               VerticalAlignment="Center" 
-                               Margin="0,0,12,0" />
-                    <Border Background="{DynamicResource ThemeBorder}" 
-                            CornerRadius="4" 
-                            Padding="8,2" 
-                            VerticalAlignment="Center">
-                        <TextBlock Text="Expedientes Clínicos + Punto de Venta" 
-                                   FontSize="11" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+        <!-- Los Dos Botones Grandes (Tipo Cards) -->
+        <Grid Grid.Row="1" MaxWidth="920">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="420" />
+                <ColumnDefinition Width="32" />
+                <ColumnDefinition Width="420" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ============================================ -->
+            <!-- CARD 1: NUEVA VENTA (Punto de Venta / Carrito POS) -->
+            <!-- ============================================ -->
+            <Button Grid.Column="0" 
+                    Style="{StaticResource BigActionCardStyle}" 
+                    Command="{Binding OpenNewSaleCommand}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Ícono de Carrito en Círculo con Acento -->
+                    <Border Grid.Row="0" 
+                            Background="{DynamicResource ThemeAccent}" 
+                            CornerRadius="36" 
+                            Width="72" Height="72" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,0,0,18">
+                        <Path Data="{StaticResource IconCart}" 
+                              Fill="{DynamicResource ThemeAccentText}" 
+                              Width="32" Height="32" 
+                              Stretch="Uniform" 
+                              HorizontalAlignment="Center" 
+                              VerticalAlignment="Center" />
                     </Border>
-                </StackPanel>
 
-                <!-- Selector de Modo de Pantalla: Dividida, Solo Venta, Solo Expedientes -->
-                <Border Grid.Column="1" 
-                        Background="{DynamicResource ThemeCard}" 
-                        BorderBrush="{DynamicResource ThemeBorder}" 
-                        BorderThickness="1" 
-                        CornerRadius="8" 
-                        Padding="3">
-                    <StackPanel Orientation="Horizontal">
-                        <!-- Botón Vista Dividida -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="HubViewMode" 
-                                     IsChecked="{Binding IsDividedMode}" 
-                                     Command="{Binding SetModeCommand}" 
-                                     CommandParameter="Divided" 
-                                     Padding="10,5" 
-                                     Margin="0,0,4,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconColumns}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Vista Dividida" FontSize="11" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </RadioButton>
+                    <!-- Título de la Card -->
+                    <TextBlock Grid.Row="1" 
+                               Text="Nueva Venta" 
+                               FontWeight="Bold" 
+                               FontSize="23" 
+                               Foreground="{DynamicResource ThemeText}" 
+                               HorizontalAlignment="Center" />
 
-                        <!-- Botón Solo Venta (POS) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="HubViewMode" 
-                                     IsChecked="{Binding IsPosOnlyMode}" 
-                                     Command="{Binding SetModeCommand}" 
-                                     CommandParameter="Pos" 
-                                     Padding="10,5" 
-                                     Margin="0,0,4,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconCart}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Venta / Carrito (POS)" FontSize="11" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </RadioButton>
+                    <!-- Subtítulo -->
+                    <TextBlock Grid.Row="2" 
+                               Text="Punto de Venta / Farmacia" 
+                               FontWeight="SemiBold" 
+                               FontSize="13" 
+                               Foreground="{DynamicResource ThemeAccent}" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,4,0,12" />
 
-                        <!-- Botón Solo Expedientes (TODO) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="HubViewMode" 
-                                     IsChecked="{Binding IsRecordsOnlyMode}" 
-                                     Command="{Binding SetModeCommand}" 
-                                     CommandParameter="Records" 
-                                     Padding="10,5">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconFileMedical}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Expedientes (TODO)" FontSize="11" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </RadioButton>
+                    <!-- Descripción Explicativa -->
+                    <TextBlock Grid.Row="3" 
+                               Text="Dispensación y venta de medicamentos, curación e insumos con carrito interactivo, cálculo de totales y descuento automático por caducidad (FEFO)." 
+                               TextWrapping="Wrap" 
+                               TextAlignment="Center" 
+                               FontSize="12" 
+                               LineHeight="18" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,0,0,24" />
+
+                    <!-- Botón / Indicador CTA -->
+                    <Border Grid.Row="4" 
+                            Background="{DynamicResource ThemeAccent}" 
+                            CornerRadius="8" 
+                            Padding="20,10" 
+                            HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Iniciar Venta" 
+                                       FontWeight="Bold" 
+                                       FontSize="13" 
+                                       Foreground="{DynamicResource ThemeAccentText}" 
+                                       Margin="0,0,8,0" />
+                            <TextBlock Text="→" 
+                                       FontWeight="Bold" 
+                                       FontSize="14" 
+                                       Foreground="{DynamicResource ThemeAccentText}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Button>
+
+            <!-- ============================================ -->
+            <!-- CARD 2: NUEVA CONSULTA (Expedientes Clínicos - TODO) -->
+            <!-- ============================================ -->
+            <Button Grid.Column="2" 
+                    Style="{StaticResource BigActionCardStyle}" 
+                    Command="{Binding OpenNewConsultationCommand}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Ícono de Expediente Médico en Círculo -->
+                    <Border Grid.Row="0" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeAccent}" 
+                            BorderThickness="1.5" 
+                            CornerRadius="36" 
+                            Width="72" Height="72" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,0,0,18">
+                        <Path Data="{StaticResource IconFileMedical}" 
+                              Fill="{DynamicResource ThemeAccent}" 
+                              Width="32" Height="32" 
+                              Stretch="Uniform" 
+                              HorizontalAlignment="Center" 
+                              VerticalAlignment="Center" />
+                    </Border>
+
+                    <!-- Título de la Card -->
+                    <TextBlock Grid.Row="1" 
+                               Text="Nueva Consulta" 
+                               FontWeight="Bold" 
+                               FontSize="23" 
+                               Foreground="{DynamicResource ThemeText}" 
+                               HorizontalAlignment="Center" />
+
+                    <!-- Subtítulo y Badge TODO -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,12">
+                        <TextBlock Text="Expedientes Clínicos" 
+                                   FontWeight="SemiBold" 
+                                   FontSize="13" 
+                                   Foreground="{DynamicResource ThemeAccent}" 
+                                   VerticalAlignment="Center" />
+                        <Border Background="{DynamicResource ThemeBorder}" 
+                                CornerRadius="4" 
+                                Padding="6,2" 
+                                Margin="8,0,0,0" 
+                                VerticalAlignment="Center">
+                            <TextBlock Text="TODO" 
+                                       FontSize="10" 
+                                       FontWeight="Bold" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Border>
                     </StackPanel>
-                </Border>
-            </Grid>
-        </Border>
 
-        <!-- Área de Contenido Según el Modo Activo -->
-        <Grid Grid.Row="1">
-            <!-- Modo 1: VISTA DIVIDIDA (Expedientes a la izquierda, Venta POS a la derecha) -->
-            <Grid Visibility="{Binding IsDividedMode, Converter={StaticResource BoolToVis}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="4*" MinWidth="380" />
-                    <ColumnDefinition Width="1" />
-                    <ColumnDefinition Width="5*" MinWidth="480" />
-                </Grid.ColumnDefinitions>
+                    <!-- Descripción Explicativa -->
+                    <TextBlock Grid.Row="3" 
+                               Text="Consulta de expedientes de pacientes, historial clínico, signos vitales, notas médicas de evolución y prescripción de recetas médicas." 
+                               TextWrapping="Wrap" 
+                               TextAlignment="Center" 
+                               FontSize="12" 
+                               LineHeight="18" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,0,0,24" />
 
-                <!-- Panel Izquierdo: Expedientes Clínicos (TODO) -->
-                <views:MedicalRecordsView Grid.Column="0" DataContext="{Binding MedicalRecordsVM}" />
-
-                <!-- Divisor Visual -->
-                <Rectangle Grid.Column="1" Fill="{DynamicResource ThemeBorder}" />
-
-                <!-- Panel Derecho: Punto de Venta con Carrito -->
-                <views:PosView Grid.Column="2" DataContext="{Binding PosVM}" />
-            </Grid>
-
-            <!-- Modo 2: SOLO VENTA / POS (Pantalla Completa) -->
-            <Grid Visibility="{Binding IsPosOnlyMode, Converter={StaticResource BoolToVis}}">
-                <views:PosView DataContext="{Binding PosVM}" />
-            </Grid>
-
-            <!-- Modo 3: SOLO EXPEDIENTES (Pantalla Completa) -->
-            <Grid Visibility="{Binding IsRecordsOnlyMode, Converter={StaticResource BoolToVis}}">
-                <views:MedicalRecordsView DataContext="{Binding MedicalRecordsVM}" />
-            </Grid>
+                    <!-- Botón / Indicador CTA -->
+                    <Border Grid.Row="4" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="20,10" 
+                            HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Abrir Expedientes" 
+                                       FontWeight="Bold" 
+                                       FontSize="13" 
+                                       Foreground="{DynamicResource ThemeText}" 
+                                       Margin="0,0,8,0" />
+                            <TextBlock Text="→" 
+                                       FontWeight="Bold" 
+                                       FontSize="14" 
+                                       Foreground="{DynamicResource ThemeAccent}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Button>
         </Grid>
     </Grid>
 </UserControl>

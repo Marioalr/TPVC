@@ -7,9 +7,9 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 ## [1.1.0] - 2026-10-03
 
 ### Añadido
-* **Nueva Vista Principal Dividida**:
-  * Transformación de la vista principal en dos pilares clínicos clave: **Expedientes Clínicos (TODO)** y **Venta / Farmacia (Punto de Venta con Carrito)**.
-  * Selector de modos de visualización integrado en la cabecera: *Vista Dividida (ambos paneles)*, *Solo Venta (pantalla completa)* y *Solo Expedientes (pantalla completa)*.
+* **Nueva Vista Principal Enfocada (Tarjetas de Acción Directa)**:
+  * Diseño limpio y centrado con **dos tarjetas de gran formato (cards)** para canalizar el trabajo diario: **Nueva Venta** (Punto de Venta con Carrito) y **Nueva Consulta** (Expedientes Clínicos TODO).
+  * Botón de navegación **"← Volver a Inicio"** integrado en las cabeceras de POS y Expedientes para un flujo fluido sin distracciones.
 * **Módulo de Punto de Venta (POS con Carrito)**:
   * Catálogo de productos interactivo con buscador instantáneo, filtrado por categorías y badges de stock.
   * Carrito de compra reactivo con ajuste de cantidades (`+`/`-`), eliminación de partidas, subtotal por renglón y total a pagar destacado.

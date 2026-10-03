@@ -21,10 +21,12 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.0.0";
+    private string _appVersion = "1.1.0";
 
     // ViewModels
     public MainHubViewModel MainHubVM { get; }
+    public PosViewModel PosVM { get; }
+    public MedicalRecordsViewModel MedicalRecordsVM { get; }
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
@@ -42,14 +44,33 @@ public partial class MainViewModel : ObservableObject
 
         AppVersion = $"v{_updateService.CurrentVersion}";
 
-        MainHubVM = new MainHubViewModel(inventoryService);
+        MainHubVM = new MainHubViewModel(NavigateTo);
+        PosVM = new PosViewModel(inventoryService);
+        MedicalRecordsVM = new MedicalRecordsViewModel();
+
+        // Enlace para volver a la Vista Principal desde el POS o Expedientes
+        PosVM.OnBackToHubRequested = () => NavigateTo("MainHub");
+        MedicalRecordsVM.OnBackToHubRequested = () => NavigateTo("MainHub");
+
+        // Enlace para enviar receta médica directamente al carrito de venta del POS
+        MedicalRecordsVM.OnSendPrescriptionToPos = (medicine, qty) =>
+        {
+            PosVM.PatientName = MedicalRecordsVM.SelectedPatient?.FullName ?? "Paciente de Consulta";
+            PosVM.AddPrescriptionItem(medicine, qty);
+        };
+
+        MedicalRecordsVM.OnNavigateToPosRequested = () =>
+        {
+            NavigateTo("Pos");
+        };
+
         DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
         InventoryVM = new InventoryViewModel(inventoryService);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
         SettingsVM = new SettingsViewModel(themeService, updateService);
 
-        // Iniciar en la nueva Vista Principal (Expedientes y Venta POS)
+        // Iniciar en la Vista Principal (las dos cards principales: Nueva Venta y Nueva Consulta)
         NavigateTo("MainHub");
     }
 
@@ -62,17 +83,13 @@ public partial class MainViewModel : ObservableObject
         {
             case "MainHub":
                 CurrentView = MainHubVM;
-                MainHubVM.SetMode("Divided");
-                _ = MainHubVM.InitializeAsync();
                 break;
             case "Pos":
-                CurrentView = MainHubVM;
-                MainHubVM.SetMode("Pos");
-                _ = MainHubVM.InitializeAsync();
+                CurrentView = PosVM;
+                _ = PosVM.InitializeAsync();
                 break;
             case "Records":
-                CurrentView = MainHubVM;
-                MainHubVM.SetMode("Records");
+                CurrentView = MedicalRecordsVM;
                 break;
             case "Dashboard":
                 CurrentView = DashboardVM;

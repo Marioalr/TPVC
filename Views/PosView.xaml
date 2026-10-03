@@ -46,6 +46,18 @@
                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                Margin="36,2,0,0" />
                 </StackPanel>
+
+                <!-- Botón Volver a Inicio -->
+                <Button Grid.Column="1" 
+                        Style="{DynamicResource OutlineButton}" 
+                        Command="{Binding BackToHubCommand}" 
+                        VerticalAlignment="Center" 
+                        Padding="12,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="←" FontWeight="Bold" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Volver a Inicio" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 

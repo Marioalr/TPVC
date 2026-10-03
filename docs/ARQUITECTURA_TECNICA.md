@@ -128,16 +128,19 @@ flowchart TD
 
 ---
 
-## 4. Arquitectura de la Vista Principal Dividida
+## 4. Arquitectura de la Vista Principal (Hub Central de Dos Cards)
 
-La Vista Principal (`MainHubView`) actúa como un contenedor orquestador de alto nivel:
-* **`MainHubViewModel`**:
-  * Contiene instancias de `PosViewModel` y `MedicalRecordsViewModel`.
-  * Gestiona la propiedad `ActiveMode`:
-    * `"Divided"`: Despliega `MedicalRecordsView` (40%) y `PosView` (60%) en columnas paralelas.
-    * `"Pos"`: Despliega `PosView` a ancho completo.
-    * `"Records"`: Despliega `MedicalRecordsView` a ancho completo.
-  * **Interconexión Clínica**: Implementa el delegado `OnSendPrescriptionToPos`, permitiendo que el botón *"Cargar a Venta (POS)"* en el expediente del paciente envíe automáticamente los medicamentos recetados al carrito de compras del POS prellenando el nombre del paciente.
+La Vista Principal (`MainHubView`) actúa como pantalla de bienvenida enfocada y libre de distracciones con **dos tarjetas interactivas de gran formato** (`BigActionCardStyle`):
+* **Card 1: "Nueva Venta"**:
+  * Ejecuta `OpenNewSaleCommand` en `MainHubViewModel`, delegando la navegación a `PosView` a través de `MainViewModel.NavigateTo("Pos")`.
+  * Abre el flujo completo del Punto de Venta con catálogo reactivo, control de carrito, selección de método de pago y despacho FEFO.
+* **Card 2: "Nueva Consulta"**:
+  * Ejecuta `OpenNewConsultationCommand` en `MainHubViewModel`, delegando la navegación a `MedicalRecordsView` a través de `MainViewModel.NavigateTo("Records")`.
+  * Abre el visualizador maestro-detalle de expedientes clínicos, signos vitales, notas médicas y prescripciones.
+* **Navegación de Retorno Rápido**:
+  * Tanto `PosView` como `MedicalRecordsView` cuentan con el botón **"← Volver a Inicio"** (`BackToHubCommand`), permitiendo al médico o asistente regresar inmediatamente a la pantalla de las dos tarjetas sin perder el estado de la sesión.
+* **Interconexión Clínica**:
+  * `MainViewModel` implementa el delegado `OnSendPrescriptionToPos`, permitiendo que el botón *"Cargar a Venta (POS)"* en el expediente del paciente envíe automáticamente los medicamentos recetados al carrito de compras del POS prellenando el nombre del paciente y navegando fluidamente al POS.
 
 ---
 
