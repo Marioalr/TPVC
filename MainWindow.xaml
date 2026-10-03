@@ -1,0 +1,221 @@
+<Window x:Class="TPVC.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:TPVC.ViewModels"
+        xmlns:views="clr-namespace:TPVC.Views"
+        mc:Ignorable="d"
+        Title="TPVC - Control de Inventario para Consultorio Médico" 
+        Height="800" Width="1280"
+        MinHeight="680" MinWidth="1024"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ThemeBackground}">
+
+    <Window.Resources>
+        <!-- DataTemplates para resolución automática de Vistas según el ViewModel -->
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+            <views:DashboardView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
+            <views:InventoryView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BatchesViewModel}">
+            <views:BatchesView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MovementsViewModel}">
+            <views:MovementsView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Barra Lateral de Navegación -->
+        <Border Grid.Column="0" 
+                Background="{DynamicResource ThemeSurface}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="0,0,1,0">
+            <Grid Margin="18,22,18,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Logo y Título -->
+                <StackPanel Grid.Row="0" Margin="4,0,4,28">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource ThemeAccent}" 
+                                CornerRadius="8" 
+                                Width="34" Height="34" 
+                                Margin="0,0,10,0">
+                            <TextBlock Text="+" 
+                                       FontWeight="Bold" 
+                                       FontSize="22" 
+                                       Foreground="{DynamicResource ThemeAccentText}" 
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,-2,0,0" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="TPVC" 
+                                       FontWeight="Bold" 
+                                       FontSize="17" 
+                                       Foreground="{DynamicResource ThemeText}" />
+                            <TextBlock Text="Consultorio Médico" 
+                                       FontSize="11" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Menú de Navegación -->
+                <StackPanel Grid.Row="1">
+                    <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                 GroupName="MainNav"
+                                 IsChecked="True"
+                                 Command="{Binding NavigateToCommand}" 
+                                 CommandParameter="Dashboard">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconDashboard}" 
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                  Width="15" Height="15" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Inicio / Resumen" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                 GroupName="MainNav"
+                                 Command="{Binding NavigateToCommand}" 
+                                 CommandParameter="Inventory">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPill}" 
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                  Width="15" Height="15" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Inventario e Insumos" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                 GroupName="MainNav"
+                                 Command="{Binding NavigateToCommand}" 
+                                 CommandParameter="Batches">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconCalendar}" 
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                  Width="15" Height="15" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Lotes y Caducidades" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                 GroupName="MainNav"
+                                 Command="{Binding NavigateToCommand}" 
+                                 CommandParameter="Movements">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconHistory}" 
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                  Width="15" Height="15" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Kardex de Movimientos" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                 GroupName="MainNav"
+                                 Command="{Binding NavigateToCommand}" 
+                                 CommandParameter="Settings">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconSettings}" 
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                  Width="15" Height="15" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,10,0" />
+                            <TextBlock Text="Temas y Ajustes" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+
+                <!-- Pie de Barra Lateral -->
+                <StackPanel Grid.Row="2" Margin="4,0,4,4">
+                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Sistema de Consultorio" 
+                                       FontSize="11" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Text="{Binding AppVersion}" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{DynamicResource ThemeAccent}" 
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Área Principal de Contenido -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="56" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Barra Superior Global con Botón de Actualizar Rápido -->
+            <Border Grid.Row="0" 
+                    Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="0,0,0,1" 
+                    Padding="28,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Título de sección activa -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding AppTitle}" 
+                                   FontWeight="SemiBold" 
+                                   FontSize="14" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </StackPanel>
+
+                    <!-- Botón Global Actualizar en la cabecera -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding GlobalRefreshCommand}" 
+                                Padding="12,6" 
+                                ToolTip="Actualizar datos en tiempo real">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconRefresh}" 
+                                      Fill="{DynamicResource ThemeAccent}" 
+                                      Width="13" Height="13" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,6,0" />
+                                <TextBlock Text="Actualizar" FontWeight="Medium" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Contenido Dinámico de la Vista Seleccionada -->
+            <ContentControl Grid.Row="1" Content="{Binding CurrentView}" />
+        </Grid>
+    </Grid>
+</Window>

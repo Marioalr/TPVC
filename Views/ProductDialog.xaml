@@ -1,0 +1,152 @@
+<Window x:Class="TPVC.Views.ProductDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:TPVC.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:ProductDialogViewModel}"
+        Title="Ficha de Insumo / Medicamento" 
+        Height="620" Width="580"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource ThemeBackground}">
+    <Border Padding="28">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Encabezado -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                <TextBlock Text="Ficha de Insumo Médico" 
+                           FontSize="20" 
+                           FontWeight="Bold" 
+                           Foreground="{DynamicResource ThemeText}" />
+                <TextBlock Text="Registro y control de existencias para consultorio general" 
+                           FontSize="12" 
+                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                           Margin="0,4,0,0" />
+            </StackPanel>
+
+            <!-- Formulario Scrollable -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16">
+                <StackPanel Margin="0,0,8,0">
+                    
+                    <!-- Fila 1: Código y Categoría -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Código / SKU" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Categoría *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <ComboBox Style="{DynamicResource ModernComboBox}" 
+                                      ItemsSource="{Binding Categories}" 
+                                      SelectedItem="{Binding SelectedCategory}" 
+                                      DisplayMemberPath="Name" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Fila 2: Nombre Comercial -->
+                    <StackPanel Margin="0,0,0,14">
+                        <TextBlock Text="Nombre Comercial del Artículo *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                        <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <!-- Fila 3: Principio Activo y Presentación -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Principio Activo (Genérico)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding GenericName, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Presentación" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Presentation, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Fila 4: Unidad y Stocks -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Unidad" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <ComboBox Style="{DynamicResource ModernComboBox}" 
+                                      ItemsSource="{Binding CommonUnits}" 
+                                      SelectedItem="{Binding Unit}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Stock Actual" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding CurrentStock, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="Stock Mínimo (Alerta)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding MinStock, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Fila 5: Ubicación Física y Check de Refrigeración -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Ubicación en Consultorio" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="2" 
+                                  IsChecked="{Binding RequiresRefrigeration}" 
+                                  Content="Requiere Refrigeración ❄️" 
+                                  VerticalAlignment="Bottom" 
+                                  Margin="0,0,0,8"
+                                  FontSize="12" 
+                                  Foreground="{DynamicResource ThemeText}" />
+                    </Grid>
+
+                    <!-- Fila 6: Notas -->
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="Notas o Indicaciones" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                        <TextBox Style="{DynamicResource ModernTextBox}" 
+                                 Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" 
+                                 Height="55" 
+                                 AcceptsReturn="True" 
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Botones de Acción -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{DynamicResource OutlineButton}" 
+                        Content="Cancelar" 
+                        Click="Cancel_Click" 
+                        Margin="0,0,10,0" 
+                        Padding="16,8" />
+                <Button Style="{DynamicResource AccentButton}" 
+                        Content="Guardar Insumo" 
+                        Command="{Binding SaveCommand}" 
+                        Padding="20,8" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
