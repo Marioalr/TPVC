@@ -140,7 +140,7 @@
                                     <TextBlock Text="{Binding Unit}" 
                                                FontSize="11" 
                                                Foreground="{DynamicResource ThemeTextSecondary}" 
-                                               Margin="0,0,8,0"
+                                               Margin="0,0,8,0" 
                                                VerticalAlignment="Center" />
                                     <Border Background="{DynamicResource ThemeWarning}" 
                                             CornerRadius="4" 
@@ -149,6 +149,20 @@
                                         <TextBlock Text="Bajo" Foreground="White" FontSize="10" FontWeight="Bold" />
                                     </Border>
                                 </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Precio de Venta -->
+                    <DataGridTemplateColumn Header="Precio" Width="95">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Price, StringFormat='${0:N2}'}" 
+                                           FontWeight="SemiBold" 
+                                           VerticalAlignment="Center" 
+                                           HorizontalAlignment="Right" 
+                                           Margin="0,0,8,0" 
+                                           Foreground="{DynamicResource ThemeAccent}" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

@@ -244,6 +244,76 @@ public class InventoryService
         OnInventoryChanged?.Invoke();
     }
 
+    // Registro de venta en Punto de Venta (POS) con carrito
+    public async Task RegisterSaleAsync(
+        IEnumerable<(int ProductId, int Quantity, decimal UnitPrice)> items, 
+        string? patientName, 
+        string? paymentMethod, 
+        string? responsible = "Dr. / Farmacia")
+    {
+        var itemsList = items.ToList();
+        if (itemsList.Count == 0) return;
+
+        foreach (var item in itemsList)
+        {
+            var product = await _context.Products
+                .Include(p => p.Batches)
+                .FirstOrDefaultAsync(p => p.Id == item.ProductId);
+
+            if (product == null) continue;
+
+            int stockBefore = product.CurrentStock;
+            int stockAfter = Math.Max(0, stockBefore - item.Quantity);
+            product.CurrentStock = stockAfter;
+            product.UpdatedAt = DateTime.Now;
+
+            // Descontar por FEFO (First Expired, First Out)
+            int remainingToDeduct = item.Quantity;
+            var activeBatches = product.Batches
+                .Where(b => !b.IsDepleted && b.Quantity > 0)
+                .OrderBy(b => b.ExpirationDate)
+                .ToList();
+
+            int? primaryBatchId = null;
+            foreach (var batch in activeBatches)
+            {
+                if (remainingToDeduct <= 0) break;
+                primaryBatchId ??= batch.Id;
+
+                if (batch.Quantity <= remainingToDeduct)
+                {
+                    remainingToDeduct -= batch.Quantity;
+                    batch.Quantity = 0;
+                    batch.IsDepleted = true;
+                }
+                else
+                {
+                    batch.Quantity -= remainingToDeduct;
+                    remainingToDeduct = 0;
+                }
+            }
+
+            string clientText = string.IsNullOrWhiteSpace(patientName) ? "Público General" : patientName.Trim();
+            string methodText = string.IsNullOrWhiteSpace(paymentMethod) ? "Efectivo" : paymentMethod.Trim();
+
+            _context.InventoryMovements.Add(new InventoryMovement
+            {
+                ProductId = product.Id,
+                BatchId = primaryBatchId,
+                MovementType = MovementType.SalidaVenta,
+                Quantity = item.Quantity,
+                StockBefore = stockBefore,
+                StockAfter = stockAfter,
+                Date = DateTime.Now,
+                Reason = $"Venta POS - Paciente/Cliente: {clientText} ({methodText})",
+                Responsible = responsible ?? "Dr. / Farmacia"
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
+    }
+
     // Registro genérico de movimiento
     public async Task RegisterMovementAsync(InventoryMovement movement)
     {

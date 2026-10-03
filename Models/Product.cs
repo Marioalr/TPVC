@@ -16,6 +16,7 @@ public class Product
     public Category? Category { get; set; }
 
     public string Unit { get; set; } = "Piezas"; // Piezas, Cajas, Frascos, Ampolletas, Tabletas, etc.
+    public decimal Price { get; set; } = 0.0m; // Precio de venta unitario
     public int CurrentStock { get; set; }
     public int MinStock { get; set; } = 5;
     public int OptimalStock { get; set; } = 20;

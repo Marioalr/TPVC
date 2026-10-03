@@ -9,7 +9,8 @@ public enum MovementType
     SalidaConsulta,
     SalidaCaducidad,
     SalidaMerma,
-    AjusteInventario
+    AjusteInventario,
+    SalidaVenta
 }
 
 public class InventoryMovement
@@ -41,6 +42,7 @@ public class InventoryMovement
         MovementType.SalidaCaducidad => "Baja por caducidad",
         MovementType.SalidaMerma => "Baja por daño/merma",
         MovementType.AjusteInventario => "Ajuste de inventario",
+        MovementType.SalidaVenta => "Venta en farmacia / POS",
         _ => MovementType.ToString()
     };
 }

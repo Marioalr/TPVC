@@ -4,6 +4,30 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.1.0] - 2026-10-03
+
+### Añadido
+* **Nueva Vista Principal Dividida**:
+  * Transformación de la vista principal en dos pilares clínicos clave: **Expedientes Clínicos (TODO)** y **Venta / Farmacia (Punto de Venta con Carrito)**.
+  * Selector de modos de visualización integrado en la cabecera: *Vista Dividida (ambos paneles)*, *Solo Venta (pantalla completa)* y *Solo Expedientes (pantalla completa)*.
+* **Módulo de Punto de Venta (POS con Carrito)**:
+  * Catálogo de productos interactivo con buscador instantáneo, filtrado por categorías y badges de stock.
+  * Carrito de compra reactivo con ajuste de cantidades (`+`/`-`), eliminación de partidas, subtotal por renglón y total a pagar destacado.
+  * Soporte de precios de venta unitarios (`Price`) en la base de datos SQLite y formularios de producto.
+  * Despacho y cobro con selector de método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y registro de paciente/cliente.
+  * Deducción de existencias en tiempo real mediante el algoritmo sanitario **FEFO** (*First Expired, First Out*).
+  * Registro automático en el Kardex como `SalidaVenta` ("Venta en farmacia / POS").
+* **Módulo de Expedientes Clínicos (TODO)**:
+  * Visualizador maestro-detalle de expedientes médicos de pacientes con datos demográficos, signos vitales, antecedentes y alertas de alergias.
+  * Botón interactivo *"Cargar a Venta (POS)"* que transfiere los medicamentos de la receta activa del paciente directamente al carrito del punto de venta.
+  * Modales informativos para las acciones en desarrollo (alta de expedientes bajo NOM-004-SSA3, notas de evolución y recetas con QR).
+* **Navegación Lateral Optimizada**:
+  * Acceso directo a *Vista Principal*, *Venta / Carrito (POS)* y *Expedientes (TODO)*, manteniendo íntegramente las herramientas existentes (*Panel y Métricas*, *Inventario*, *Lotes*, *Kardex* y *Ajustes*).
+* **Suite de Pruebas Unitarias Ampliada**:
+  * Cobertura expandida a 8 pruebas unitarias automatizadas (validación de ventas POS, cálculos reactivos del carrito y despacho de recetas).
+
+---
+
 ## [1.0.0] - 2026-10-03
 
 ### Añadido

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using TPVC.Models;
 
 namespace TPVC.Data;
@@ -11,6 +12,16 @@ public static class DatabaseInitializer
     {
         // Asegura que las tablas existan
         context.Database.EnsureCreated();
+
+        // Migración preventiva segura para SQLite en caso de bases de datos preexistentes
+        try
+        {
+            context.Database.ExecuteSqlRaw("ALTER TABLE Products ADD COLUMN Price TEXT NOT NULL DEFAULT '0';");
+        }
+        catch
+        {
+            // Columna ya existe o base nueva
+        }
 
         // Si ya hay categorías, no sembrar
         if (context.Categories.Any())
@@ -64,6 +75,7 @@ public static class DatabaseInitializer
                 Presentation = "Caja con 20 tabletas",
                 Category = catMedicamentos,
                 Unit = "Cajas",
+                Price = 45.00m,
                 CurrentStock = 12,
                 MinStock = 5,
                 OptimalStock = 25,
@@ -88,6 +100,7 @@ public static class DatabaseInitializer
                 Presentation = "Caja con 14 tabletas",
                 Category = catMedicamentos,
                 Unit = "Cajas",
+                Price = 160.00m,
                 CurrentStock = 3,
                 MinStock = 5,
                 OptimalStock = 15,
@@ -112,6 +125,7 @@ public static class DatabaseInitializer
                 Presentation = "Paquete con 10 piezas",
                 Category = catCuracion,
                 Unit = "Paquetes",
+                Price = 35.00m,
                 CurrentStock = 24,
                 MinStock = 10,
                 OptimalStock = 40,
@@ -126,6 +140,7 @@ public static class DatabaseInitializer
                 Presentation = "Pieza individual sellada",
                 Category = catCuracion,
                 Unit = "Piezas",
+                Price = 28.00m,
                 CurrentStock = 4,
                 MinStock = 6, // Stock bajo para probar alerta
                 OptimalStock = 15,
@@ -140,6 +155,7 @@ public static class DatabaseInitializer
                 Presentation = "Caja con 100 piezas",
                 Category = catInsumos,
                 Unit = "Cajas",
+                Price = 140.00m,
                 CurrentStock = 5,
                 MinStock = 2,
                 OptimalStock = 10,
@@ -154,6 +170,7 @@ public static class DatabaseInitializer
                 Presentation = "Caja con 100 piezas",
                 Category = catInsumos,
                 Unit = "Cajas",
+                Price = 120.00m,
                 CurrentStock = 2,
                 MinStock = 3, // Stock bajo
                 OptimalStock = 8,
@@ -168,6 +185,7 @@ public static class DatabaseInitializer
                 Presentation = "Botella de 1000 ml",
                 Category = catAntisepticos,
                 Unit = "Frascos",
+                Price = 50.00m,
                 CurrentStock = 6,
                 MinStock = 2,
                 OptimalStock = 8,
@@ -182,6 +200,7 @@ public static class DatabaseInitializer
                 Presentation = "Matraz / Bolsa 250 ml",
                 Category = catAntisepticos,
                 Unit = "Frascos",
+                Price = 38.00m,
                 CurrentStock = 8,
                 MinStock = 3,
                 OptimalStock = 12,
@@ -196,6 +215,7 @@ public static class DatabaseInitializer
                 Presentation = "Frasco con 50 tiras",
                 Category = catDiagnostico,
                 Unit = "Frascos",
+                Price = 295.00m,
                 CurrentStock = 3,
                 MinStock = 2,
                 OptimalStock = 6,

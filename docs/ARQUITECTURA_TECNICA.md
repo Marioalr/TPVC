@@ -1,6 +1,6 @@
 # Arquitectura Técnica - Sistema TPVC
 
-Documentación técnica de arquitectura, diseño de software y decisiones de ingeniería para el sistema **TPVC (Inventario para Consultorio de Médico General)**.
+Documentación técnica de arquitectura, diseño de software y decisiones de ingeniería para el sistema **TPVC (Inventario y Consultorio de Médico General)**.
 
 ---
 
@@ -10,8 +10,8 @@ TPVC es una aplicación de escritorio nativa para **Windows** desarrollada bajo 
 
 ```mermaid
 graph TD
-    UI[Vistas WPF / XAML] <--> VM[ViewModels CommunityToolkit.Mvvm]
-    VM <--> Services[Servicios de Dominio / Core]
+    UI[Vistas WPF / XAML: MainHub, Pos, MedicalRecords, etc.] <--> VM[ViewModels CommunityToolkit.Mvvm]
+    VM <--> Services[Servicios de Dominio: InventoryService, ThemeService, AppUpdateService]
     Services <--> EF[Entity Framework Core 10]
     EF <--> DB[(SQLite: consultorio.db)]
     Services <--> IO[(Archivos Locales: theme.json)]
@@ -19,16 +19,16 @@ graph TD
 ```
 
 ### Principios de Diseño
-1. **Desacoplamiento Estricto**: Las vistas no contienen lógica de negocio; interactúan con los ViewModels exclusivamente mediante *Data Binding* y comandos (`IRelayCommand`).
-2. **Reactividad Automática sin Botones Manuales**: El `InventoryService` expone un bus de eventos en memoria (`OnInventoryChanged`) que notifica a todos los ViewModels activos ante cualquier mutación de datos (creación, edición, eliminación o consumo de insumos), refrescando el estado del sistema en tiempo real.
+1. **Vista Principal Dividida Operativa**: La vista inicial integra los dos pilares del flujo de trabajo clínico: **Expedientes Clínicos (TODO)** y **Punto de Venta (POS con Carrito)**, permitiendo conmutar entre vista dividida y vistas de pantalla completa.
+2. **Reactividad Automática sin Botones Manuales**: El `InventoryService` expone un bus de eventos en memoria (`OnInventoryChanged`) que notifica a todos los ViewModels activos ante cualquier mutación de datos (compras, consumos, ventas o ajustes), refrescando el estado del sistema en tiempo real.
 3. **Persistencia Autónoma y Portabilidad**: Cero dependencias de servicios en la nube para la operación clínica cotidiana. La base de datos es un archivo único `.db` alojado en el directorio de datos locales del usuario (`%LocalAppData%\TPVC\consultorio.db`).
-4. **Seguridad Sanitaria Garantizada (FEFO)**: Todo consumo médico prioriza automáticamente la deducción de los lotes con fecha de caducidad más próxima.
+4. **Seguridad Sanitaria Garantizada (FEFO)**: Tanto el consumo en consulta como las ventas en el POS priorizan automáticamente la deducción de los lotes con fecha de caducidad más próxima.
 
 ---
 
 ## 2. Diagrama Entidad - Relación (Modelo de Datos)
 
-El modelo de datos relacional está optimizado para garantizar trazabilidad histórica y auditoría clínica inmutable:
+El modelo de datos relacional está optimizado para garantizar trazabilidad histórica, auditoría inmutable y soporte de venta comercial / interna:
 
 ```mermaid
 erDiagram
@@ -52,6 +52,7 @@ erDiagram
         int CategoryId FK
         string Presentation
         string UnitOfMeasure
+        decimal Price
         int CurrentStock
         int MinimumStock
         int OptimumStock
@@ -88,11 +89,12 @@ erDiagram
 ### Enumeraciones de Dominio
 * **`MovementType`**:
   * `0`: `EntradaCompra` (Ingreso por factura de compra)
-  * `1`: `EntradaReposicion` (Resurtido interno)
+  * `1`: `EntradaAjuste` (Resurtido / donación)
   * `2`: `SalidaConsulta` (Material aplicado o consumido en consulta médica)
   * `3`: `SalidaCaducidad` (Baja de insumo por vencimiento)
   * `4`: `SalidaMerma` (Material dañado o rotura de esterilidad)
   * `5`: `AjusteInventario` (Alineación con conteo físico)
+  * `6`: `SalidaVenta` (Venta en farmacia / Punto de Venta POS)
 * **`ExpirationStatus`** (Calculado en tiempo de ejecución):
   * `Vigente`: Expiración a más de 60 días naturales.
   * `ProximoAVencer`: Expiración dentro de los próximos 60 días naturales.
@@ -100,30 +102,46 @@ erDiagram
 
 ---
 
-## 3. Algoritmo de Consumo FEFO (*First Expired, First Out*)
+## 3. Algoritmo de Venta y Despacho en Punto de Venta (POS)
 
-Cuando un profesional registra un consumo rápido en consulta médica, el `InventoryService` ejecuta la siguiente secuencia atómica:
+Cuando el personal procesa una venta en el Punto de Venta con Carrito, se ejecuta una transacción atómica que implementa **FEFO** sobre cada partida:
 
 ```mermaid
 flowchart TD
-    Start([Inicio: Registrar Consumo]) --> GetProduct[Obtener Producto por Id]
-    GetProduct --> ValidateStock{Stock Actual >= Cantidad Requerida?}
-    ValidateStock -- No --> ThrowError[Lanzar InvalidOperationException]
-    ValidateStock -- Sí --> GetBatches[Consultar Lotes con Quantity > 0 ordenados por ExpirationDate ASC]
-    GetBatches --> LoopBatches{¿Queda cantidad por descontar?}
-    LoopBatches -- Sí --> DeductBatch[Descontar de lote más próximo a vencer]
-    DeductBatch --> LoopBatches
-    LoopBatches -- No --> UpdateProductStock[Actualizar CurrentStock de Producto]
-    UpdateProductStock --> CreateMovement[Crear registro en InventoryMovement]
-    CreateMovement --> SaveChanges[Guardar cambios atómicamente en SQLite]
-    SaveChanges --> DispatchEvent[Disparar evento OnInventoryChanged]
-    DispatchEvent --> RefreshUI[Actualización instantánea de ViewModels]
-    RefreshUI --> End([Fin])
+    Start([Usuario presiona 'Cobrar y Despachar Venta']) --> ValidateCart{¿Carrito tiene artículos?}
+    ValidateCart -- No --> ShowEmptyError[Mostrar error de carrito vacío]
+    ValidateCart -- Sí --> IterateItems[Iterar cada CartItem]
+    IterateItems --> CheckStock{Stock Actual >= Cantidad Requerida?}
+    CheckStock -- No --> AbortSale[Cancelar transacción y alertar falta de stock]
+    CheckStock -- Sí --> GetBatches[Obtener lotes activos ordenados por ExpirationDate ASC]
+    GetBatches --> DeductFEFO[Deducir cantidades de lotes más próximos a caducar]
+    DeductFEFO --> UpdateStock[Actualizar CurrentStock de Producto]
+    UpdateStock --> CreateMovement[Crear InventoryMovement tipo SalidaVenta]
+    CreateMovement --> MoreItems{¿Quedan más artículos?}
+    MoreItems -- Sí --> IterateItems
+    MoreItems -- No --> SaveDB[Guardar cambios atómicamente en SQLite]
+    SaveDB --> ClearCart[Vaciar Carrito y resetear formulario]
+    ClearCart --> FireEvent[Disparar evento OnInventoryChanged]
+    FireEvent --> RefreshViews[Actualización instantánea de Catálogos y KPIs]
+    RefreshViews --> End([Fin de Transacción])
 ```
 
 ---
 
-## 4. Motor de Temas y Estilos Dinámicos
+## 4. Arquitectura de la Vista Principal Dividida
+
+La Vista Principal (`MainHubView`) actúa como un contenedor orquestador de alto nivel:
+* **`MainHubViewModel`**:
+  * Contiene instancias de `PosViewModel` y `MedicalRecordsViewModel`.
+  * Gestiona la propiedad `ActiveMode`:
+    * `"Divided"`: Despliega `MedicalRecordsView` (40%) y `PosView` (60%) en columnas paralelas.
+    * `"Pos"`: Despliega `PosView` a ancho completo.
+    * `"Records"`: Despliega `MedicalRecordsView` a ancho completo.
+  * **Interconexión Clínica**: Implementa el delegado `OnSendPrescriptionToPos`, permitiendo que el botón *"Cargar a Venta (POS)"* en el expediente del paciente envíe automáticamente los medicamentos recetados al carrito de compras del POS prellenando el nombre del paciente.
+
+---
+
+## 5. Motor de Temas y Estilos Dinámicos
 
 La personalización de la interfaz se implementa a nivel del `ResourceDictionary` raíz de la aplicación mediante el servicio `ThemeService`:
 
@@ -133,28 +151,6 @@ La personalización de la interfaz se implementa a nivel del `ResourceDictionary
 * `TextPrimaryBrush` / `TextSecondaryBrush`: Pinceles para textos de alta y media legibilidad.
 * `PrimaryAccentBrush`: Pincel de marca aplicado a botones de acción, tabs activas y resaltados.
 * `BorderBrush`: Pincel para divisores y bordes de tablas.
-
-### Flujo de Inicialización y Persistencia:
-1. Al iniciar `App.xaml.cs`, el `ThemeService` verifica la existencia de `%LocalAppData%\TPVC\theme.json`.
-2. Si existe, deserializa `ThemeSettings` y aplica en caliente las variables de color sobre `Application.Current.Resources`.
-3. Si no existe, genera el tema por defecto (*Modo Claro Clínico* con acento *Cian Médico* `#0284C7`).
-4. Cada cambio en el selector de temas de `SettingsViewModel` invoca `themeService.ApplyTheme(settings)` y persiste inmediatamente los cambios en el disco.
-
----
-
-## 5. Arquitectura del Módulo de Actualización
-
-El servicio `AppUpdateService` proporciona verificación de versiones directas con GitHub Releases:
-
-* **Endpoint**: `https://api.github.com/repos/Marioalr/TPVC/releases/latest`
-* **Comparación Semántica**:
-  ```csharp
-  Version current = Version.Parse(CurrentVersion); // ej. 1.0.0
-  Version latest = Version.Parse(releaseTag.TrimStart('v')); // ej. 1.1.0
-  bool isUpdateAvailable = latest > current;
-  ```
-* **Descarga Segura**: Descarga el archivo de distribución empaquetado (`.zip` o `.exe`) hacia la carpeta temporal del usuario y ofrece apertura asistida.
-* **Aislamiento**: El componente reside de manera limpia y exclusiva en la pantalla de **Ajustes**, eliminando dependencias de interfaces de usuario externas.
 
 ---
 
@@ -170,28 +166,35 @@ TPVC/
 │   └── ARQUITECTURA_TECNICA.md  # Este documento de ingeniería
 ├── Data/
 │   ├── AppDbContext.cs          # Contexto EF Core SQLite
-│   └── DatabaseInitializer.cs   # Migración y sembrado clínico inicial
+│   └── DatabaseInitializer.cs   # Migración preventiva y sembrado clínico
 ├── Models/
 │   ├── Category.cs              # Entidad categoría médica
-│   ├── Product.cs               # Entidad insumo / fármaco
+│   ├── Product.cs               # Entidad insumo / fármaco (con Price)
 │   ├── ProductBatch.cs          # Entidad lote y control de vencimiento
-│   ├── InventoryMovement.cs     # Entidad movimiento de Kardex
+│   ├── InventoryMovement.cs     # Entidad movimiento de Kardex (con SalidaVenta)
+│   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente
 │   └── ThemeSettings.cs         # Modelo de configuración visual
 ├── Services/
-│   ├── InventoryService.cs      # Lógica de negocio e inventario (FEFO)
+│   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
 │   └── AppUpdateService.cs      # Cliente de actualización vía GitHub Releases
 ├── ViewModels/
 │   ├── MainViewModel.cs         # Orquestación de navegación y status bar
-│   ├── DashboardViewModel.cs    # Métricas clínicas y consumo rápido
+│   ├── MainHubViewModel.cs      # Orquestador de Vista Principal (Dividida / Full)
+│   ├── PosViewModel.cs          # Punto de Venta, catálogo y Carrito de compras
+│   ├── MedicalRecordsViewModel.cs # Expedientes clínicos y recetas (TODO)
+│   ├── DashboardViewModel.cs    # Métricas clínicas y KPIs
 │   ├── InventoryViewModel.cs    # Catálogo, búsquedas y filtros
 │   ├── BatchesViewModel.cs      # Control de lotes y semáforos
 │   ├── MovementsViewModel.cs    # Auditoría de Kardex
 │   ├── SettingsViewModel.cs     # Configuración de temas y actualizador
-│   └── ProductDialogViewModel.cs # Formulario de alta y edición
+│   └── ProductDialogViewModel.cs # Formulario de alta y edición con precio
 ├── Views/
 │   ├── MainWindow.xaml          # Ventana principal y barra de estado inferior
-│   ├── DashboardView.xaml       # Panel de control
+│   ├── MainHubView.xaml         # Vista principal dividida
+│   ├── PosView.xaml             # Vista de Punto de Venta con Carrito
+│   ├── MedicalRecordsView.xaml  # Vista de Expedientes Clínicos (TODO)
+│   ├── DashboardView.xaml       # Panel de control y métricas
 │   ├── InventoryView.xaml       # Vista de catálogo
 │   ├── BatchesView.xaml         # Vista de lotes
 │   ├── MovementsView.xaml       # Vista de movimientos
@@ -199,7 +202,7 @@ TPVC/
 │   └── ProductDialog.xaml       # Diálogo modal de producto
 ├── tests/
 │   └── TPVC.Tests/
-│       ├── InventoryTests.cs    # Suite de pruebas unitarias
+│       ├── InventoryTests.cs    # Suite de 8 pruebas unitarias
 │       └── TPVC.Tests.csproj    # Proyecto de pruebas MSTest
 ├── TPVC.csproj                  # Archivo de proyecto principal WPF .NET 10
 ├── TPVC.sln                     # Solución Visual Studio
@@ -212,9 +215,12 @@ TPVC/
 
 ## 7. Estrategia de Pruebas Automatizadas
 
-El proyecto incluye pruebas automatizadas en `tests/TPVC.Tests` utilizando **MSTest v3.5**:
-1. **`DatabaseInitializer_SeedsGeneralMedicineCategoriesAndProducts`**: Valida que la base de datos cree e inserte correctamente las 5 categorías esenciales y los insumos iniciales de medicina general.
-2. **`RegisterQuickConsultationUsage_DecreasesStockAndCreatesKardexMovement`**: Valida que el consumo en consulta descuente el stock del producto y genere el movimiento correspondiente en el Kardex con su responsable y motivo.
-3. **`ProductBatch_ComputesExpirationStatusCorrectly`**: Valida la lógica de semáforo temporal (`Vigente`, `ProximoAVencer`, `Vencido`) en función de los días restantes.
-4. **`DashboardMetrics_CalculatesCorrectTotals`**: Valida el cómputo de métricas agregadas en tiempo real.
-5. **`AppUpdateService_HasValidCurrentVersion`**: Valida que la versión ensamblada esté disponible para el actualizador.
+El proyecto incluye 8 pruebas unitarias automatizadas en `tests/TPVC.Tests` utilizando **MSTest v3.5**:
+1. **`DatabaseInitializer_SeedsGeneralMedicineCategoriesAndProducts`**: Valida el sembrado clínico inicial.
+2. **`RegisterQuickConsultationUsage_DecreasesStockAndCreatesKardexMovement`**: Valida consumo en consulta con FEFO.
+3. **`ProductBatch_ComputesExpirationStatusCorrectly`**: Valida la lógica de semáforo temporal.
+4. **`DashboardMetrics_CalculatesCorrectTotals`**: Valida cómputo de KPIs agregados.
+5. **`AppUpdateService_HasValidCurrentVersion`**: Valida el ensamblado de versiones.
+6. **`RegisterSaleAsync_DecreasesStockAndCreatesSalidaVentaMovement`**: Valida la transacción de venta POS, deducción de existencias y registro en Kardex de tipo `SalidaVenta`.
+7. **`PosViewModel_CartCalculationsAndLimitsWorkCorrectly`**: Valida operaciones del carrito de compra (agregar, incrementar sin exceder existencias, decrementar, vaciar y totales).
+8. **`MedicalRecordsViewModel_LoadsPatientsAndDispatchesPrescriptions`**: Valida la carga de expedientes y el despacho de recetas al carrito del POS.

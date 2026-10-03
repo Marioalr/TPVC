@@ -14,6 +14,15 @@
 
     <Window.Resources>
         <!-- DataTemplates para resolución automática de Vistas según el ViewModel -->
+        <DataTemplate DataType="{x:Type vm:MainHubViewModel}">
+            <views:MainHubView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:PosViewModel}">
+            <views:PosView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MedicalRecordsViewModel}">
+            <views:MedicalRecordsView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView />
         </DataTemplate>
@@ -50,7 +59,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Logo y Título -->
-                <StackPanel Grid.Row="0" Margin="4,0,4,28">
+                <StackPanel Grid.Row="0" Margin="4,0,4,24">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="{DynamicResource ThemeAccent}" 
                                 CornerRadius="8" 
@@ -76,79 +85,134 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Menú de Navegación -->
-                <StackPanel Grid.Row="1">
-                    <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                 GroupName="MainNav"
-                                 IsChecked="True"
-                                 Command="{Binding NavigateToCommand}" 
-                                 CommandParameter="Dashboard">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconDashboard}" 
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                  Width="15" Height="15" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,10,0" />
-                            <TextBlock Text="Inicio / Resumen" />
-                        </StackPanel>
-                    </RadioButton>
+                <!-- Menú de Navegación con Scroll -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,-6,0" Padding="0,0,6,0">
+                    <StackPanel>
+                        <!-- 1. Vista Principal (Expedientes y Venta POS) -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     IsChecked="True"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="MainHub">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconHome}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Vista Principal" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                 GroupName="MainNav"
-                                 Command="{Binding NavigateToCommand}" 
-                                 CommandParameter="Inventory">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPill}" 
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                  Width="15" Height="15" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,10,0" />
-                            <TextBlock Text="Inventario e Insumos" />
-                        </StackPanel>
-                    </RadioButton>
+                        <!-- 2. Venta (Carrito POS) -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Pos">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconCart}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Venta / Carrito (POS)" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                 GroupName="MainNav"
-                                 Command="{Binding NavigateToCommand}" 
-                                 CommandParameter="Batches">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconCalendar}" 
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                  Width="15" Height="15" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,10,0" />
-                            <TextBlock Text="Lotes y Caducidades" />
-                        </StackPanel>
-                    </RadioButton>
+                        <!-- 3. Expedientes Clínicos (TODO) -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Records">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconFileMedical}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Expedientes (TODO)" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                 GroupName="MainNav"
-                                 Command="{Binding NavigateToCommand}" 
-                                 CommandParameter="Movements">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconHistory}" 
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                  Width="15" Height="15" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,10,0" />
-                            <TextBlock Text="Kardex de Movimientos" />
-                        </StackPanel>
-                    </RadioButton>
+                        <!-- Separador de Sección -->
+                        <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="4,8,4,8" />
 
-                    <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                 GroupName="MainNav"
-                                 Command="{Binding NavigateToCommand}" 
-                                 CommandParameter="Settings">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconSettings}" 
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                  Width="15" Height="15" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,10,0" />
-                            <TextBlock Text="Temas y Ajustes" />
-                        </StackPanel>
-                    </RadioButton>
-                </StackPanel>
+                        <!-- 4. Resumen / Métricas (Dashboard) -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Dashboard">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconDashboard}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Panel y Métricas" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 5. Inventario e Insumos -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Inventory">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconPill}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Inventario e Insumos" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 6. Lotes y Caducidades -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Batches">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconCalendar}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Lotes y Caducidades" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 7. Kardex de Movimientos -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Movements">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconHistory}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Kardex de Movimientos" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 8. Temas y Ajustes -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="MainNav"
+                                     Command="{Binding NavigateToCommand}" 
+                                     CommandParameter="Settings">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconSettings}" 
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
+                                      Width="15" Height="15" 
+                                      Stretch="Uniform" 
+                                      Margin="0,0,10,0" />
+                                <TextBlock Text="Temas y Ajustes" />
+                            </StackPanel>
+                        </RadioButton>
+                    </StackPanel>
+                </ScrollViewer>
 
                 <!-- Pie de Barra Lateral -->
                 <StackPanel Grid.Row="2" Margin="4,0,4,4">

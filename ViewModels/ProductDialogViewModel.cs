@@ -36,6 +36,9 @@ public partial class ProductDialogViewModel : ObservableObject
     private string _unit = "Piezas";
 
     [ObservableProperty]
+    private decimal _price = 0.0m;
+
+    [ObservableProperty]
     private int _currentStock = 0;
 
     [ObservableProperty]
@@ -93,6 +96,7 @@ public partial class ProductDialogViewModel : ObservableObject
             CurrentStock = 10;
             MinStock = 5;
             OptimalStock = 25;
+            Price = 0.0m;
             SelectedCategory = Categories.FirstOrDefault();
         }
         else
@@ -104,6 +108,7 @@ public partial class ProductDialogViewModel : ObservableObject
             GenericName = existing.GenericName ?? string.Empty;
             Presentation = existing.Presentation ?? string.Empty;
             Unit = existing.Unit;
+            Price = existing.Price;
             CurrentStock = existing.CurrentStock;
             MinStock = existing.MinStock;
             OptimalStock = existing.OptimalStock;
@@ -131,6 +136,7 @@ public partial class ProductDialogViewModel : ObservableObject
             Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
             CategoryId = SelectedCategory.Id,
             Unit = Unit,
+            Price = Price,
             CurrentStock = CurrentStock,
             MinStock = MinStock,
             OptimalStock = OptimalStock,

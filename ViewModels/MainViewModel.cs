@@ -15,7 +15,7 @@ public partial class MainViewModel : ObservableObject
     private object? _currentView;
 
     [ObservableProperty]
-    private string _activeViewName = "Dashboard";
+    private string _activeViewName = "MainHub";
 
     [ObservableProperty]
     private string _appTitle = "TPVC - Consultorio Médico";
@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject
     private string _appVersion = "1.0.0";
 
     // ViewModels
+    public MainHubViewModel MainHubVM { get; }
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
@@ -41,14 +42,15 @@ public partial class MainViewModel : ObservableObject
 
         AppVersion = $"v{_updateService.CurrentVersion}";
 
+        MainHubVM = new MainHubViewModel(inventoryService);
         DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
         InventoryVM = new InventoryViewModel(inventoryService);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
         SettingsVM = new SettingsViewModel(themeService, updateService);
 
-        // Iniciar en el Dashboard
-        NavigateTo("Dashboard");
+        // Iniciar en la nueva Vista Principal (Expedientes y Venta POS)
+        NavigateTo("MainHub");
     }
 
     [RelayCommand]
@@ -58,6 +60,20 @@ public partial class MainViewModel : ObservableObject
 
         switch (viewName)
         {
+            case "MainHub":
+                CurrentView = MainHubVM;
+                MainHubVM.SetMode("Divided");
+                _ = MainHubVM.InitializeAsync();
+                break;
+            case "Pos":
+                CurrentView = MainHubVM;
+                MainHubVM.SetMode("Pos");
+                _ = MainHubVM.InitializeAsync();
+                break;
+            case "Records":
+                CurrentView = MainHubVM;
+                MainHubVM.SetMode("Records");
+                break;
             case "Dashboard":
                 CurrentView = DashboardVM;
                 _ = DashboardVM.RefreshAsync();

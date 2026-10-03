@@ -78,9 +78,11 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Fila 4: Unidad y Stocks -->
+                    <!-- Fila 4: Unidad, Precio y Stocks -->
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="10" />
                             <ColumnDefinition Width="*" />
@@ -94,11 +96,15 @@
                                       SelectedItem="{Binding Unit}" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
+                            <TextBlock Text="Precio ($ MXN)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Price, UpdateSourceTrigger=PropertyChanged, StringFormat='{}{0:N2}'}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
                             <TextBlock Text="Stock Actual" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
                             <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding CurrentStock, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                        <StackPanel Grid.Column="4">
-                            <TextBlock Text="Stock Mínimo (Alerta)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="Stock Mínimo" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
                             <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding MinStock, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </Grid>

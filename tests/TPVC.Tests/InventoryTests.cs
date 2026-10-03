@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels;
 
 namespace TPVC.Tests;
 
@@ -122,5 +123,82 @@ public class InventoryTests
     {
         var service = new AppUpdateService();
         Assert.IsFalse(string.IsNullOrWhiteSpace(service.CurrentVersion));
+    }
+
+    [TestMethod]
+    public async Task RegisterSaleAsync_DecreasesStockAndCreatesSalidaVentaMovement()
+    {
+        var product = (await _inventoryService.GetProductsAsync()).First(p => p.CurrentStock > 5);
+        int initialStock = product.CurrentStock;
+        int qtyToSell = 3;
+
+        await _inventoryService.RegisterSaleAsync(
+            new[] { (product.Id, qtyToSell, product.Price) },
+            "Paciente Prueba",
+            "Efectivo"
+        );
+
+        var updated = await _inventoryService.GetProductByIdAsync(product.Id);
+        Assert.IsNotNull(updated);
+        Assert.AreEqual(initialStock - qtyToSell, updated.CurrentStock);
+
+        var movements = await _inventoryService.GetRecentMovementsAsync(5);
+        var saleMovement = movements.FirstOrDefault(m => m.ProductId == product.Id && m.MovementType == MovementType.SalidaVenta);
+        Assert.IsNotNull(saleMovement);
+        Assert.AreEqual(qtyToSell, saleMovement.Quantity);
+        Assert.AreEqual(initialStock, saleMovement.StockBefore);
+        Assert.AreEqual(initialStock - qtyToSell, saleMovement.StockAfter);
+        StringAssert.Contains(saleMovement.Reason, "Paciente Prueba");
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_CartCalculationsAndLimitsWorkCorrectly()
+    {
+        var posVm = new PosViewModel(_inventoryService);
+        await posVm.InitializeAsync();
+
+        var product = posVm.Products.First(p => p.CurrentStock > 2);
+        posVm.AddToCart(product);
+
+        Assert.HasCount(1, posVm.Cart);
+        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(product.Price, posVm.TotalCartAmount);
+
+        var item = posVm.Cart[0];
+        posVm.IncreaseQuantity(item);
+        Assert.AreEqual(2, posVm.TotalCartItems);
+        Assert.AreEqual(product.Price * 2, posVm.TotalCartAmount);
+
+        posVm.DecreaseQuantity(item);
+        Assert.AreEqual(1, posVm.TotalCartItems);
+
+        posVm.ClearCart();
+        Assert.IsEmpty(posVm.Cart);
+        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0m, posVm.TotalCartAmount);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_LoadsPatientsAndDispatchesPrescriptions()
+    {
+        var medVm = new MedicalRecordsViewModel();
+        Assert.IsGreaterThanOrEqualTo(1, medVm.Patients.Count);
+        Assert.IsNotNull(medVm.SelectedPatient);
+
+        bool prescriptionSent = false;
+        string medicineName = string.Empty;
+        int qty = 0;
+
+        medVm.OnSendPrescriptionToPos = (med, q) =>
+        {
+            prescriptionSent = true;
+            medicineName = med;
+            qty = q;
+        };
+
+        medVm.SendPrescriptionToPos();
+        Assert.IsTrue(prescriptionSent);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(medicineName));
+        Assert.IsGreaterThanOrEqualTo(1, qty);
     }
 }
