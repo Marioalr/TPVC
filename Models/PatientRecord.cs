@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using System.Text.Json;
 
 namespace TPVC.Models;
@@ -78,6 +79,23 @@ public class PatientRecord
     public string ChronicDiseases { get; set; } = "Ninguna";
     public string EmergencyContactName { get; set; } = string.Empty;
     public string EmergencyContactPhone { get; set; } = string.Empty;
+
+    [NotMapped]
+    public string FormattedPhone => FormatPhoneNumber(Phone);
+
+    [NotMapped]
+    public string FormattedEmergencyContactPhone => FormatPhoneNumber(EmergencyContactPhone);
+
+    public static string FormatPhoneNumber(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.Length > 10) digits = digits.Substring(0, 10);
+
+        if (digits.Length <= 3) return digits;
+        if (digits.Length <= 6) return $"{digits.Substring(0, 3)}-{digits.Substring(3)}";
+        return $"{digits.Substring(0, 3)}-{digits.Substring(3, 3)}-{digits.Substring(6)}";
+    }
     public DateTime LastVisit { get; set; } = DateTime.Today;
     public string LastDiagnosis { get; set; } = string.Empty;
     public string VitalSigns { get; set; } = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";

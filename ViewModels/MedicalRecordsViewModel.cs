@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -221,10 +222,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     partial void OnFormPhoneChanged(string value)
     {
-        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
-        if (digitsOnly != value)
+        var formatted = FormatPhoneNumber(value);
+        if (formatted != value)
         {
-            FormPhone = digitsOnly;
+            FormPhone = formatted;
         }
     }
 
@@ -251,10 +252,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     partial void OnFormEmergencyContactPhoneChanged(string value)
     {
-        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
-        if (digitsOnly != value)
+        var formatted = FormatPhoneNumber(value);
+        if (formatted != value)
         {
-            FormEmergencyContactPhone = digitsOnly;
+            FormEmergencyContactPhone = formatted;
         }
     }
 
@@ -263,6 +264,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // ==========================================
     [ObservableProperty]
     private string _formVitalTA = "120/80";
+
+    partial void OnFormVitalTAChanged(string value)
+    {
+        var formatted = FormatTA(value);
+        if (formatted != value)
+        {
+            FormVitalTA = formatted;
+        }
+    }
 
     [ObservableProperty]
     private string _formVitalFC = "75";
@@ -305,6 +315,77 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             FormVitalIMC = "Valores no disponibles";
         }
+    }
+
+    public static string FormatPhoneNumber(string? phone) => PatientRecord.FormatPhoneNumber(phone);
+
+    public static bool IsValidEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return true; // Permite vacío
+        var trimmed = email.Trim();
+        try
+        {
+            return Regex.IsMatch(
+                trimmed, 
+                @"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$", 
+                RegexOptions.IgnoreCase, 
+                TimeSpan.FromMilliseconds(250));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string FormatTA(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+        var text = input.Trim().Replace('-', '/').Replace(' ', '/');
+
+        if (text.Contains('/'))
+        {
+            var parts = text.Split(new[] { '/' }, 2);
+            var leftDigits = new string(parts[0].Where(char.IsDigit).Take(3).ToArray());
+            var rightDigits = parts.Length > 1 
+                ? new string(parts[1].Where(char.IsDigit).Take(3).ToArray()) 
+                : string.Empty;
+
+            if (string.IsNullOrEmpty(leftDigits))
+            {
+                return rightDigits;
+            }
+
+            if (string.IsNullOrEmpty(rightDigits))
+            {
+                return $"{leftDigits}/";
+            }
+
+            return $"{leftDigits}/{rightDigits}";
+        }
+
+        var digits = new string(text.Where(char.IsDigit).Take(6).ToArray());
+
+        if (digits.Length <= 3)
+        {
+            return digits;
+        }
+
+        if (digits.Length == 4)
+        {
+            if (digits.StartsWith("1") || digits.StartsWith("2"))
+            {
+                return $"{digits.Substring(0, 3)}/{digits.Substring(3)}";
+            }
+            return $"{digits.Substring(0, 2)}/{digits.Substring(2)}";
+        }
+
+        if (digits.Length == 5)
+        {
+            return $"{digits.Substring(0, 3)}/{digits.Substring(3)}";
+        }
+
+        return $"{digits.Substring(0, 3)}/{digits.Substring(3, 3)}";
     }
 
     private static void ParseFullName(string? fullName, out string firstName, out string lastName, out string maternalLastName)
@@ -450,6 +531,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _consultationTA = "120/80";
+
+    partial void OnConsultationTAChanged(string value)
+    {
+        var formatted = FormatTA(value);
+        if (formatted != value)
+        {
+            ConsultationTA = formatted;
+        }
+    }
 
     [ObservableProperty]
     private string _consultationFC = "75";
@@ -803,14 +893,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 FullName = "García Morales, Juan Carlos",
                 Age = 42,
                 Gender = "Masculino",
-                Phone = "55 4123 8890",
+                Phone = "5541238890",
                 Email = "juan.garcia@email.com",
                 Address = "Av. Insurgentes Sur 450, Col. Roma Sur, CDMX",
                 BloodType = "O+",
                 Allergies = "Penicilina (Reacción alérgica severa)",
                 ChronicDiseases = "Ninguna relevante",
                 EmergencyContactName = "Laura Morales (Esposa)",
-                EmergencyContactPhone = "55 4123 8899",
+                EmergencyContactPhone = "5541238899",
                 LastVisit = DateTime.Today.AddDays(-2),
                 LastDiagnosis = "Faringoamigdalitis aguda bacteriana + Cefalea tensional",
                 VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | Temp: 37.8 °C | Peso: 78 kg",
@@ -828,14 +918,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 FullName = "Rodríguez Silva, María Elena",
                 Age = 63,
                 Gender = "Femenino",
-                Phone = "55 9876 1234",
+                Phone = "5598761234",
                 Email = "maria.elena@email.com",
                 Address = "Calle Durango 128, Col. Condesa, CDMX",
                 BloodType = "A+",
                 Allergies = "Ninguna conocida",
                 ChronicDiseases = "Diabetes Mellitus Tipo 2, Hipertensión Arterial",
                 EmergencyContactName = "Carlos Rodríguez (Hijo)",
-                EmergencyContactPhone = "55 9876 1235",
+                EmergencyContactPhone = "5598761235",
                 LastVisit = DateTime.Today.AddDays(-6),
                 LastDiagnosis = "Control periódico de Hipertensión Arterial y Glucemia",
                 VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | Temp: 36.4 °C | Glucosa: 134 mg/dL",
@@ -853,14 +943,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 FullName = "Hernández López, Sofía",
                 Age = 27,
                 Gender = "Femenino",
-                Phone = "55 3344 5566",
+                Phone = "5533445566",
                 Email = "sofia.hernandez@email.com",
                 Address = "Calzada de Tlalpan 1890, CDMX",
                 BloodType = "B+",
                 Allergies = "Sulfas",
                 ChronicDiseases = "Rinitis alérgica estacional",
                 EmergencyContactName = "Patricia López (Madre)",
-                EmergencyContactPhone = "55 3344 5560",
+                EmergencyContactPhone = "5533445560",
                 LastVisit = DateTime.Today.AddDays(-14),
                 LastDiagnosis = "Traumatismo menor en tobillo derecho (Esguince Grado I)",
                 VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | Temp: 36.6 °C | Peso: 56 kg",
@@ -878,14 +968,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 FullName = "Martínez Castro, Roberto",
                 Age = 35,
                 Gender = "Masculino",
-                Phone = "55 7788 9900",
+                Phone = "5577889900",
                 Email = "roberto.martinez@email.com",
                 Address = "Eje Central Lázaro Cárdenas 55, CDMX",
                 BloodType = "O+",
                 Allergies = "Ninguna",
                 ChronicDiseases = "Ninguna",
                 EmergencyContactName = "Mariana Castro (Hermana)",
-                EmergencyContactPhone = "55 7788 9911",
+                EmergencyContactPhone = "5577889911",
                 LastVisit = DateTime.Today.AddDays(-21),
                 LastDiagnosis = "Curación de herida contuso-cortante en antebrazo izquierdo",
                 VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | Temp: 36.5 °C | Peso: 82 kg",
@@ -922,6 +1012,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     p.FullName.ToLowerInvariant().Contains(q) ||
                     p.RecordNumber.ToLowerInvariant().Contains(q) ||
                     p.Phone.Contains(q) ||
+                    p.FormattedPhone.Contains(q) ||
                     p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
                     (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q))
                 )
@@ -948,6 +1039,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     p.FullName.ToLowerInvariant().Contains(q) ||
                     p.RecordNumber.ToLowerInvariant().Contains(q) ||
                     p.Phone.Contains(q) ||
+                    p.FormattedPhone.Contains(q) ||
                     p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
                     (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
                     (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
@@ -1012,6 +1104,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     p.FullName.ToLowerInvariant().Contains(q) ||
                     p.RecordNumber.ToLowerInvariant().Contains(q) ||
                     p.Phone.Contains(q) ||
+                    p.FormattedPhone.Contains(q) ||
                     p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
                     (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
                     (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
@@ -1165,14 +1258,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormAge = SelectedPatient.Age;
         FormAgeText = SelectedPatient.Age.ToString();
         FormGender = SelectedPatient.Gender;
-        FormPhone = new string((SelectedPatient.Phone ?? "").Where(char.IsDigit).ToArray());
+        FormPhone = FormatPhoneNumber(SelectedPatient.Phone);
         FormEmail = SelectedPatient.Email;
         FormAddress = SelectedPatient.Address;
         FormBloodType = SelectedPatient.BloodType;
         FormAllergies = SelectedPatient.Allergies;
         FormChronicDiseases = SelectedPatient.ChronicDiseases;
         FormEmergencyContactName = SelectedPatient.EmergencyContactName;
-        FormEmergencyContactPhone = new string((SelectedPatient.EmergencyContactPhone ?? "").Where(char.IsDigit).ToArray());
+        FormEmergencyContactPhone = FormatPhoneNumber(SelectedPatient.EmergencyContactPhone);
 
         ParseVitalSigns(SelectedPatient.VitalSigns);
         FormInitialVitalSigns = SelectedPatient.VitalSigns;
@@ -1223,6 +1316,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!IsValidEmail(FormEmail))
+        {
+            FormErrorMessage = "El correo electrónico no tiene un formato válido (ejemplo: usuario@correo.com).";
+            return;
+        }
+
         FormFullName = string.IsNullOrWhiteSpace(FormMaternalLastName)
             ? $"{FormFirstName.Trim()} {FormLastName.Trim()}"
             : $"{FormFirstName.Trim()} {FormLastName.Trim()} {FormMaternalLastName.Trim()}";
@@ -1255,17 +1354,18 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         patient.FullName = FormFullName.Trim();
         patient.Age = parsedAge;
         patient.Gender = FormGender;
-        patient.Phone = FormPhone.Trim();
-        patient.Email = FormEmail.Trim();
-        patient.Address = FormAddress.Trim();
+        patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        patient.Email = FormEmail?.Trim() ?? string.Empty;
+        patient.Address = FormAddress?.Trim() ?? string.Empty;
         patient.BloodType = FormBloodType;
         patient.Allergies = string.IsNullOrWhiteSpace(FormAllergies) ? "Ninguna conocida" : FormAllergies.Trim();
         patient.ChronicDiseases = string.IsNullOrWhiteSpace(FormChronicDiseases) ? "Ninguna" : FormChronicDiseases.Trim();
-        patient.EmergencyContactName = FormEmergencyContactName.Trim();
-        patient.EmergencyContactPhone = FormEmergencyContactPhone.Trim();
+        patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
+        patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
 
+        var cleanTA = (FormVitalTA ?? string.Empty).Trim().TrimEnd('/');
         var vitalsParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(FormVitalTA)) vitalsParts.Add($"TA: {FormVitalTA.Trim()} mmHg");
+        if (!string.IsNullOrWhiteSpace(cleanTA)) vitalsParts.Add($"TA: {cleanTA} mmHg");
         if (!string.IsNullOrWhiteSpace(FormVitalFC)) vitalsParts.Add($"FC: {FormVitalFC.Trim()} lpm");
         if (!string.IsNullOrWhiteSpace(FormVitalFR)) vitalsParts.Add($"FR: {FormVitalFR.Trim()} rpm");
         if (!string.IsNullOrWhiteSpace(FormVitalTemp)) vitalsParts.Add($"Temp: {FormVitalTemp.Trim()} °C");
@@ -1429,7 +1529,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var vitalSignsFormatted = $"TA: {ConsultationTA.Trim()} mmHg | FC: {ConsultationFC.Trim()} lpm | FR: {ConsultationFR.Trim()} rpm | Temp: {ConsultationTemp.Trim()} °C | Peso: {ConsultationWeight.Trim()} kg | Talla: {ConsultationHeight.Trim()} m | IMC: {ConsultationIMC.Trim()}";
+        var cleanConsultationTA = ConsultationTA.Trim().TrimEnd('/');
+        var vitalSignsFormatted = $"TA: {cleanConsultationTA} mmHg | FC: {ConsultationFC.Trim()} lpm | FR: {ConsultationFR.Trim()} rpm | Temp: {ConsultationTemp.Trim()} °C | Peso: {ConsultationWeight.Trim()} kg | Talla: {ConsultationHeight.Trim()} m | IMC: {ConsultationIMC.Trim()}";
 
         var consultation = new PatientConsultation
         {

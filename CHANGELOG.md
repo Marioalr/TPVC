@@ -4,6 +4,30 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.11] - 2026-10-04
+
+### Añadido
+* **Validación de Formato de Correo Electrónico**:
+  * Implementación de regla de validación de formato RFC/estándar (`^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$`) para el campo `Correo Electrónico` (`FormEmail`).
+  * Permite explícitamente campos vacíos o con espacios en blanco sin bloquear el guardado cuando el paciente no dispone de email.
+  * Notifica con mensaje descriptivo y bloquea el guardado si el usuario introduce un formato incorrecto (ejemplo: falta `@`, sin dominio o TLD menor a 2 caracteres).
+* **Formateo Automático de Números Telefónicos (`xxx-xxx-xxxx`)**:
+  * Formateo dinámico en tiempo real para `Teléfono de Contacto` (`FormPhone`) y `Teléfono de Emergencia` (`FormEmergencyContactPhone`).
+  * Inserción y eliminación interactiva y fluida de guiones (`551-234-5678`) tanto al teclear, pegar como al borrar con la tecla de retroceso (`Backspace`), sin trabarse.
+  * **Almacenamiento Estricto como Números**: En la base de datos SQLite y modelo `PatientRecord`, los teléfonos se persisten puramente como dígitos (`5512345678`), desacoplando la capa de presentación de la capa de datos.
+  * Propiedades de lectura calculadas `FormattedPhone` y `FormattedEmergencyContactPhone` para visualización uniforme en todas las tarjetas de información, listados de selección y visor completo de expedientes.
+* **Manejo Dinámico e Inteligente de Tensión Arterial (T.A.)**:
+  * Función predictiva `FormatTA` conectada reactivamente a `FormVitalTA` (alta/edición de expediente) y `ConsultationTA` (nota médica en consulta activa).
+  * Inserción automática del separador `/` al teclear cifras continuas (ej. `12080` se formatea automáticamente como `120/80`, y cifras de 4 dígitos como `9060` se formatean a `90/60`).
+  * Supresión limpia del separador al retroceder con `Backspace`, permitiendo al médico borrar o corregir la cifra sistólica sin que el sistema vuelva a forzar la barra de inmediato.
+  * Recorte de barras colgantes al momento de guardar (ej. `120/` se almacena limpiamente como `120 mmHg`).
+* **Pruebas Unitarias Automatizadas**:
+  * Nuevos tests específicos en `TPVC.Tests`:
+    * Formateo automático de teléfonos, borrado hacia atrás de guiones y almacenamiento exclusivo de dígitos numéricos en SQLite.
+    * Validación exhaustiva de correo electrónico (permite nulo/vacío, rechaza formatos inválidos con mensaje, aprueba dominios válidos).
+    * Algoritmo de Tensión Arterial `FormatTA` (autoinserción de `/`, retroceso limpio, normalización de separadores).
+  * 62 de 62 pruebas unitarias superadas exitosamente (100% aprobadas).
+
 ## [1.3.10] - 2026-10-04
 
 ### Añadido

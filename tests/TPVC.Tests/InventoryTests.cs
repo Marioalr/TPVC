@@ -1523,13 +1523,103 @@ public class InventoryTests
         recordsVm.FormAgeText = "28";
         Assert.AreEqual(28, recordsVm.FormAge);
 
-        // Filtro de teléfono de contacto: solo dígitos
+        // Formato automático de teléfono: xxx-xxx-xxxx
         recordsVm.FormPhone = "(55) 1234-5678";
-        Assert.AreEqual("5512345678", recordsVm.FormPhone);
+        Assert.AreEqual("551-234-5678", recordsVm.FormPhone);
 
-        // Filtro de teléfono de emergencia: solo dígitos
+        // Borrado y actualización de guiones en tiempo real
+        recordsVm.FormPhone = "5512";
+        Assert.AreEqual("551-2", recordsVm.FormPhone);
+
+        recordsVm.FormPhone = "551";
+        Assert.AreEqual("551", recordsVm.FormPhone);
+
+        // Filtro de teléfono de emergencia: xxx-xxx-xxxx (máximo 10 dígitos estándar)
         recordsVm.FormEmergencyContactPhone = "+52-55-9876-5432 ext 10";
-        Assert.AreEqual("52559876543210", recordsVm.FormEmergencyContactPhone);
+        Assert.AreEqual("525-598-7654", recordsVm.FormEmergencyContactPhone);
+
+        // Almacenamiento como puros dígitos en el modelo y display con formato
+        var patient = new PatientRecord { Phone = "5512345678", EmergencyContactPhone = "5598765432" };
+        Assert.AreEqual("5512345678", patient.Phone);
+        Assert.AreEqual("551-234-5678", patient.FormattedPhone);
+        Assert.AreEqual("559-876-5432", patient.FormattedEmergencyContactPhone);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_EmailValidation_AllowsEmptyAndValidatesFormat()
+    {
+        // Validación estática de formato
+        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail(null));
+        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail(""));
+        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("   "));
+        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("paciente@clinica.com"));
+        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("dr.morales@hospital-general.org.mx"));
+
+        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("correo-invalido"));
+        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@"));
+        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@dominio"));
+        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@dominio."));
+        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario @dominio.com"));
+
+        // Validación en el modal de guardado
+        var recordsVm = new MedicalRecordsViewModel();
+        await recordsVm.NewPatientAsync();
+        recordsVm.FormFirstName = "Laura";
+        recordsVm.FormLastName = "Mora";
+        recordsVm.FormEmail = "correo-invalido";
+
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.IsPatientModalOpen);
+        Assert.IsNotNull(recordsVm.FormErrorMessage);
+        Assert.IsTrue(recordsVm.FormErrorMessage.Contains("correo electrónico no tiene un formato válido"));
+
+        // Con correo vacío debe permitir guardar sin problemas
+        recordsVm.FormEmail = "   ";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        Assert.IsNull(recordsVm.FormErrorMessage);
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        Assert.AreEqual(string.Empty, recordsVm.SelectedPatient.Email);
+
+        // Con correo válido
+        await recordsVm.NewPatientAsync();
+        recordsVm.FormFirstName = "Laura";
+        recordsVm.FormLastName = "Mora";
+        recordsVm.FormRecordNumber = "EXP-2026-999";
+        recordsVm.FormEmail = "laura.mora@correo.com";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        Assert.AreEqual("laura.mora@correo.com", recordsVm.SelectedPatient.Email);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_BloodPressureTA_FormatsAndCleansSlashes()
+    {
+        // Autoinserción de barra '/' al teclear números continuos
+        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("12080"));
+        Assert.AreEqual("90/60", MedicalRecordsViewModel.FormatTA("9060"));
+        Assert.AreEqual("135/85", MedicalRecordsViewModel.FormatTA("13585"));
+
+        // Respeto de barra existente y separadores comunes
+        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120-80"));
+        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120 80"));
+        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120/80"));
+        Assert.AreEqual("120/", MedicalRecordsViewModel.FormatTA("120/"));
+        Assert.AreEqual("120/8", MedicalRecordsViewModel.FormatTA("120/8"));
+
+        // Al borrar hacia atrás (retroceso de la barra): no la vuelve a insertar
+        Assert.AreEqual("120", MedicalRecordsViewModel.FormatTA("120"));
+        Assert.AreEqual("12", MedicalRecordsViewModel.FormatTA("12"));
+        Assert.AreEqual("1", MedicalRecordsViewModel.FormatTA("1"));
+        Assert.AreEqual("", MedicalRecordsViewModel.FormatTA(""));
+
+        // Comprobación de reactividad en el ViewModel
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.FormVitalTA = "14090";
+        Assert.AreEqual("140/90", recordsVm.FormVitalTA);
+
+        recordsVm.ConsultationTA = "11070";
+        Assert.AreEqual("110/70", recordsVm.ConsultationTA);
     }
 
     [TestMethod]
