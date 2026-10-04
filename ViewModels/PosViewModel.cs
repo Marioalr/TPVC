@@ -21,6 +21,7 @@ public partial class CartItem : ObservableObject
     public int AvailableStock { get; set; }
     public decimal UnitPrice { get; set; }
     public bool RequiresRefrigeration { get; set; }
+    public bool IsService { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Subtotal))]
@@ -100,6 +101,74 @@ public partial class PosViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<Product> _catalogFilteredProducts = new();
+
+    // ==========================================
+    // CATÁLOGO DE SERVICIOS CLÍNICOS E INSUMOS (POS)
+    // ==========================================
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _services = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _filteredServices = new();
+
+    [ObservableProperty]
+    private ClinicalService? _selectedService;
+
+    [ObservableProperty]
+    private bool _isServicesModalOpen;
+
+    [ObservableProperty]
+    private string _serviceCategoryFilter = "Todos";
+
+    [ObservableProperty]
+    private string _serviceSearchText = string.Empty;
+
+    public List<string> ServiceCategories { get; } = new()
+    {
+        "Todos",
+        "Consulta",
+        "Curaciones",
+        "Procedimientos",
+        "Diagnóstico",
+        "Certificados"
+    };
+
+    // Modal de creación de servicio desde POS
+    [ObservableProperty]
+    private bool _isCreateServiceModalOpen;
+
+    [ObservableProperty]
+    private string _newServiceCode = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceName = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceDescription = string.Empty;
+
+    [ObservableProperty]
+    private string _newServiceCategory = "Consulta";
+
+    [ObservableProperty]
+    private decimal _newServicePrice = 300.00m;
+
+    [ObservableProperty]
+    private int _newServiceDuration = 20;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _availableProductsForService = new();
+
+    [ObservableProperty]
+    private Product? _selectedProductForService;
+
+    [ObservableProperty]
+    private int _newProductQuantity = 1;
+
+    [ObservableProperty]
+    private string _newProductInstructions = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<ServiceDefaultProduct> _newServiceDefaultProducts = new();
 
     // ==========================================
     // VENTA ACTUAL / CARRITO PRINCIPAL
@@ -195,6 +264,8 @@ public partial class PosViewModel : ObservableObject
         AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
         SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
         SyncActiveConsultation();
+
+        _ = LoadServicesAsync();
     }
 
     public void SyncActiveConsultation()
@@ -211,11 +282,13 @@ public partial class PosViewModel : ObservableObject
     private void OnInventoryChangedHandler()
     {
         _ = LoadCatalogAsync();
+        _ = LoadServicesAsync();
     }
 
     public async Task InitializeAsync()
     {
         await LoadCatalogAsync();
+        await LoadServicesAsync();
     }
 
     public async Task LoadCatalogAsync()
@@ -451,7 +524,7 @@ public partial class PosViewModel : ObservableObject
     [RelayCommand]
     public void IncreaseQuantity(CartItem item)
     {
-        if (item.Quantity < item.AvailableStock)
+        if (item.IsService || item.Quantity < item.AvailableStock)
         {
             item.Quantity++;
             RecalculateTotals();
@@ -706,7 +779,8 @@ public partial class PosViewModel : ObservableObject
                     AvailableStock = prod?.CurrentStock ?? 999,
                     UnitPrice = cItem.UnitPrice,
                     Quantity = cItem.Quantity,
-                    RequiresRefrigeration = prod?.RequiresRefrigeration ?? false
+                    RequiresRefrigeration = prod?.RequiresRefrigeration ?? false,
+                    IsService = cItem.ProductId <= 0
                 });
             }
         }
@@ -726,6 +800,428 @@ public partial class PosViewModel : ObservableObject
             _consultationService.CloseActiveConsultation();
             SyncActiveConsultation();
             ShowAlert($"La consulta médica activa de {patient} ha sido finalizada/cerrada.", true);
+        }
+    }
+
+    // ==========================================
+    // OPERACIONES DE SERVICIOS CLÍNICOS E INSUMOS
+    // ==========================================
+    [RelayCommand]
+    public async Task OpenServicesModalAsync()
+    {
+        await LoadServicesAsync();
+        IsServicesModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseServicesModal()
+    {
+        IsServicesModalOpen = false;
+    }
+
+    public async Task LoadServicesAsync()
+    {
+        try
+        {
+            var dbServices = await _inventoryService.GetClinicalServicesAsync();
+            if (dbServices != null && dbServices.Count > 0)
+            {
+                Services = new ObservableCollection<ClinicalService>(dbServices);
+            }
+            else
+            {
+                LoadFallbackServices();
+            }
+        }
+        catch
+        {
+            if (Services.Count == 0)
+            {
+                LoadFallbackServices();
+            }
+        }
+
+        ApplyServicesFilter();
+        if (SelectedService == null || !Services.Contains(SelectedService))
+        {
+            SelectedService = FilteredServices.FirstOrDefault() ?? Services.FirstOrDefault();
+        }
+    }
+
+    private void LoadFallbackServices()
+    {
+        var services = new List<ClinicalService>
+        {
+            new()
+            {
+                Id = 1,
+                Code = "SERV-001",
+                Name = "Consulta Médica General",
+                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
+                Category = "Consulta",
+                Price = 300.00m,
+                EstimatedDurationMinutes = 25,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Id = 2,
+                Code = "SERV-002",
+                Name = "Curación Menor y Asepsia",
+                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
+                Category = "Curaciones",
+                Price = 250.00m,
+                EstimatedDurationMinutes = 20,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Id = 3,
+                Code = "SERV-003",
+                Name = "Sutura de Herida Simple",
+                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
+                Category = "Procedimientos",
+                Price = 450.00m,
+                EstimatedDurationMinutes = 35,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Id = 4,
+                Code = "SERV-004",
+                Name = "Monitoreo de Glucemia Capilar",
+                Description = "Toma de muestra capilar y determinación cuantitativa inmediata de glucosa en sangre.",
+                Category = "Diagnóstico",
+                Price = 80.00m,
+                EstimatedDurationMinutes = 10,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            },
+            new()
+            {
+                Id = 5,
+                Code = "SERV-005",
+                Name = "Certificado Médico Oficial",
+                Description = "Examen médico integral, somatometría y expedición de certificado de salud.",
+                Category = "Certificados",
+                Price = 200.00m,
+                EstimatedDurationMinutes = 20,
+                DefaultProducts = new List<ServiceDefaultProduct>()
+            }
+        };
+
+        Services = new ObservableCollection<ClinicalService>(services);
+    }
+
+    partial void OnServiceCategoryFilterChanged(string value) => ApplyServicesFilter();
+    partial void OnServiceSearchTextChanged(string value) => ApplyServicesFilter();
+
+    [RelayCommand]
+    public void FilterServiceCategory(string category)
+    {
+        ServiceCategoryFilter = category;
+    }
+
+    private void ApplyServicesFilter()
+    {
+        var query = Services.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(ServiceCategoryFilter) && ServiceCategoryFilter != "Todos")
+        {
+            query = query.Where(s => s.Category.Equals(ServiceCategoryFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(ServiceSearchText))
+        {
+            var search = ServiceSearchText.Trim();
+            query = query.Where(s => 
+                s.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                s.Code.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                s.Category.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(s.Description) && s.Description.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        FilteredServices = new ObservableCollection<ClinicalService>(query.OrderBy(s => s.Category).ThenBy(s => s.Name));
+        if (SelectedService == null || !FilteredServices.Contains(SelectedService))
+        {
+            SelectedService = FilteredServices.FirstOrDefault();
+        }
+    }
+
+    [RelayCommand]
+    public void SelectService(ClinicalService? service)
+    {
+        SelectedService = service;
+    }
+
+    [RelayCommand]
+    public void AddServiceToCart(ClinicalService? service)
+    {
+        AddServiceToCartInternal(service, includeDefaultSupplies: true);
+    }
+
+    [RelayCommand]
+    public void AddServiceOnlyToCart(ClinicalService? service)
+    {
+        AddServiceToCartInternal(service, includeDefaultSupplies: false);
+    }
+
+    private void AddServiceToCartInternal(ClinicalService? service, bool includeDefaultSupplies)
+    {
+        service ??= SelectedService;
+        if (service == null)
+        {
+            ShowAlert("Por favor seleccione un servicio clínico para agregar.", false);
+            return;
+        }
+
+        var serviceId = -service.Id;
+        var existingService = Cart.FirstOrDefault(c => c.ProductId == serviceId || (c.IsService && c.Code == service.Code));
+        if (existingService != null)
+        {
+            existingService.Quantity++;
+        }
+        else
+        {
+            Cart.Add(new CartItem
+            {
+                ProductId = serviceId,
+                Code = service.Code,
+                Name = service.Name,
+                GenericName = $"Servicio Clínico • {service.Category}",
+                Presentation = $"Honorario • {service.EstimatedDurationMinutes} min",
+                Unit = "Servicio",
+                AvailableStock = 999,
+                UnitPrice = service.Price,
+                RequiresRefrigeration = false,
+                Quantity = 1,
+                IsService = true
+            });
+        }
+
+        int addedSuppliesCount = 0;
+        int failedSuppliesCount = 0;
+
+        if (includeDefaultSupplies && service.DefaultProducts != null && service.DefaultProducts.Count > 0)
+        {
+            foreach (var dp in service.DefaultProducts)
+            {
+                var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
+                if (prod != null)
+                {
+                    if (prod.CurrentStock > 0)
+                    {
+                        var existingProd = Cart.FirstOrDefault(c => c.ProductId == prod.Id);
+                        int qtyToAdd = dp.Quantity;
+                        if (existingProd != null)
+                        {
+                            int allowed = Math.Min(existingProd.Quantity + qtyToAdd, prod.CurrentStock);
+                            existingProd.Quantity = allowed;
+                        }
+                        else
+                        {
+                            int allowed = Math.Min(qtyToAdd, prod.CurrentStock);
+                            Cart.Add(new CartItem
+                            {
+                                ProductId = prod.Id,
+                                Code = prod.Code,
+                                Name = prod.Name,
+                                GenericName = prod.GenericName,
+                                Presentation = prod.Presentation,
+                                Unit = prod.Unit,
+                                AvailableStock = prod.CurrentStock,
+                                UnitPrice = prod.Price,
+                                RequiresRefrigeration = prod.RequiresRefrigeration,
+                                Quantity = allowed,
+                                IsService = false
+                            });
+                        }
+                        addedSuppliesCount++;
+                    }
+                    else
+                    {
+                        failedSuppliesCount++;
+                    }
+                }
+            }
+        }
+
+        RecalculateTotals();
+
+        string msg = includeDefaultSupplies && addedSuppliesCount > 0
+            ? $"¡Servicio '{service.Name}' y {addedSuppliesCount} insumos cargados a la venta!"
+            : $"¡Servicio '{service.Name}' cargado a la venta!";
+
+        if (failedSuppliesCount > 0)
+        {
+            msg += $" ({failedSuppliesCount} insumos sin stock fueron omitidos)";
+        }
+
+        ShowAlert(msg, true);
+        IsServicesModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void AddServiceToActiveConsultation(ClinicalService? service)
+    {
+        service ??= SelectedService;
+        if (service == null)
+        {
+            ShowAlert("Por favor seleccione un servicio clínico para agregar.", false);
+            return;
+        }
+
+        if (!_consultationService.HasActiveConsultation)
+        {
+            AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+            if (SelectedPatientForConsultation == null || !AvailablePatientsForConsultation.Contains(SelectedPatientForConsultation))
+            {
+                SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+            }
+            NewConsultationChiefComplaint = $"Atención: {service.Name}";
+            IsSelectPatientModalOpen = true;
+            ShowAlert("Debe haber una consulta activa para transferir servicios. Seleccione el paciente para iniciarla.", false);
+            return;
+        }
+
+        // Agregar honorario a la consulta activa
+        _consultationService.AddCartItemToActiveConsultation(
+            -service.Id,
+            service.Code,
+            service.Name,
+            $"Servicio Clínico • {service.Category}",
+            $"Honorario • {service.EstimatedDurationMinutes} min",
+            "Servicio",
+            service.Price,
+            1
+        );
+
+        int addedSupplies = 0;
+        if (service.DefaultProducts != null)
+        {
+            foreach (var dp in service.DefaultProducts)
+            {
+                var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
+                if (prod != null)
+                {
+                    _consultationService.AddCartItemToActiveConsultation(
+                        prod.Id,
+                        prod.Code,
+                        prod.Name,
+                        prod.GenericName,
+                        prod.Presentation,
+                        prod.Unit,
+                        prod.Price,
+                        dp.Quantity
+                    );
+                    addedSupplies++;
+                }
+            }
+        }
+
+        ShowAlert($"¡Servicio '{service.Name}' ({addedSupplies} insumos) guardado en la consulta activa de {_consultationService.CurrentConsultation?.PatientName}!", true);
+        IsServicesModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void OpenCreateServiceModal()
+    {
+        NewServiceCode = $"SERV-{Services.Count + 1:D3}";
+        NewServiceName = string.Empty;
+        NewServiceDescription = string.Empty;
+        NewServiceCategory = "Consulta";
+        NewServicePrice = 300.00m;
+        NewServiceDuration = 20;
+        NewProductQuantity = 1;
+        NewProductInstructions = string.Empty;
+        NewServiceDefaultProducts.Clear();
+
+        AvailableProductsForService = new ObservableCollection<Product>(Products.OrderBy(p => p.Name));
+        SelectedProductForService = AvailableProductsForService.FirstOrDefault();
+
+        IsCreateServiceModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCreateServiceModal()
+    {
+        IsCreateServiceModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void AddProductToNewService()
+    {
+        if (SelectedProductForService == null) return;
+
+        var existing = NewServiceDefaultProducts.FirstOrDefault(dp => dp.ProductId == SelectedProductForService.Id);
+        if (existing != null)
+        {
+            existing.Quantity += Math.Max(1, NewProductQuantity);
+            if (!string.IsNullOrWhiteSpace(NewProductInstructions))
+            {
+                existing.Instructions = NewProductInstructions.Trim();
+            }
+        }
+        else
+        {
+            NewServiceDefaultProducts.Add(new ServiceDefaultProduct
+            {
+                ProductId = SelectedProductForService.Id,
+                Product = SelectedProductForService,
+                Quantity = Math.Max(1, NewProductQuantity),
+                Instructions = string.IsNullOrWhiteSpace(NewProductInstructions) ? null : NewProductInstructions.Trim()
+            });
+        }
+
+        NewProductQuantity = 1;
+        NewProductInstructions = string.Empty;
+    }
+
+    [RelayCommand]
+    public void RemoveProductFromNewService(ServiceDefaultProduct item)
+    {
+        NewServiceDefaultProducts.Remove(item);
+    }
+
+    [RelayCommand]
+    public async Task SaveNewServiceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewServiceName))
+        {
+            ShowAlert("El nombre del servicio clínico es obligatorio.", false);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(NewServiceCode))
+        {
+            NewServiceCode = $"SERV-{Services.Count + 1:D3}";
+        }
+
+        var newService = new ClinicalService
+        {
+            Code = NewServiceCode.Trim().ToUpper(),
+            Name = NewServiceName.Trim(),
+            Description = NewServiceDescription.Trim(),
+            Category = NewServiceCategory,
+            Price = NewServicePrice,
+            EstimatedDurationMinutes = NewServiceDuration,
+            IsActive = true
+        };
+
+        var defaultItems = NewServiceDefaultProducts
+            .Select(p => (p.ProductId, p.Quantity, p.Instructions))
+            .ToList();
+
+        try
+        {
+            var saved = await _inventoryService.SaveClinicalServiceAsync(newService, defaultItems);
+            await LoadServicesAsync();
+            SelectedService = Services.FirstOrDefault(s => s.Id == saved.Id) ?? saved;
+            IsCreateServiceModalOpen = false;
+            ShowAlert($"¡Servicio '{saved.Name}' guardado exitosamente!", true);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Error al guardar el servicio: {ex.Message}", false);
         }
     }
 

@@ -4,6 +4,31 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.6] - 2026-10-04
+
+### Añadido
+* **Catálogo de Servicios Clínicos e Insumos Integrado en el Punto de Venta (POS)**:
+  * **Botón Independiente y Dedicado en POS**: Incorporación del botón de acceso directo `[ 🩺 Servicios e Insumos ]` en la barra de acciones del POS (junto a `[ 📦 Buscar en Catálogo ]` y `[ 🗑️ Vaciar Venta ]`).
+  * **Modal Maestro-Detalle de Servicios e Insumos (`IsServicesModalOpen`)**:
+    * Filtro ágil por categorías clínicas (`Todos`, `Consulta`, `Curaciones`, `Procedimientos`, `Diagnóstico`, `Certificados`).
+    * Búsqueda en tiempo real por nombre de servicio o código/folio.
+    * Panel de detalle con descripción clínica, tarifa oficial, duración estimada e insumos predeterminados vinculados con indicador de stock en tiempo real.
+    * **Tres Modalidades de Carga y Despacho**:
+      1. `[ 🛒 Cargar a Venta (Servicio + Insumos) ]`: Agrega el honorario médico como ítem del carrito y añade en bulto todos los insumos y materiales requeridos por defecto para su consumo FEFO al cobrar.
+      2. `[ 📋 Cargar Solo Honorario ]`: Agrega exclusivamente la tarifa del servicio a la venta actual.
+      3. `[ 🩺 Cargar a Consulta Activa ]`: Transfiere el servicio y sus materiales directamente al expediente/consulta en curso del paciente.
+  * **Creación de Servicios desde el POS (`IsCreateServiceModalOpen`)**:
+    * Modal emergente para registrar nuevos servicios clínicos, definir código, categoría, precio, duración y asociar múltiples insumos de inventario con cantidades e instrucciones.
+  * **Soporte de Ítems de Servicio en Carrito**:
+    * Identificador `IsService` en `CartItem` que permite incrementar cantidad sin bloqueos por stock físico y evita movimientos de lote en falso al procesar la venta.
+    * Distintivo visual `🩺 Servicio` en la columna de stock de la tabla de venta.
+* **Desacoplamiento y Limpieza de Expedientes Clínicos (`MedicalRecordsView`)**:
+  * Eliminación de la barra de pestañas redundante y dedicación al 100% de la vista a la gestión de Expedientes y Consultas Clínicas conforme a la NOM-004-SSA3.
+* **Cobertura de Pruebas Unitarias**:
+  * Adición de 5 nuevas pruebas unitarias en `TPVC.Tests` cubriendo apertura, filtros, carga de paquetes, carga de honorarios, transferencia a consulta activa y creación de servicios (45/45 pruebas pasando exitosamente).
+
+---
+
 ## [1.3.5] - 2026-10-04
 
 ### Añadido

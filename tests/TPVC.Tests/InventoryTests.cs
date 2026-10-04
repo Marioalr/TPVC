@@ -1007,7 +1007,162 @@ public class InventoryTests
         Assert.IsTrue(consultService.HasActiveConsultation, "Debió activar consulta en ConsultationService");
         Assert.AreEqual(recordsVm.SelectedPatient.FullName, consultService.CurrentConsultation?.PatientName);
     }
+
+    [TestMethod]
+    public async Task PosViewModel_ServicesModal_OpensLoadsAndFiltersByCategoryAndText()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        // 1. Abrir modal de servicios
+        await posVm.OpenServicesModalAsync();
+        Assert.IsTrue(posVm.IsServicesModalOpen, "El modal de servicios e insumos debe abrirse");
+        Assert.IsNotEmpty(posVm.Services, "Debe cargar servicios predeterminados");
+        Assert.HasCount(posVm.Services.Count, posVm.FilteredServices);
+        Assert.IsNotNull(posVm.SelectedService);
+
+        // 2. Filtrar por categoría 'Consulta'
+        posVm.FilterServiceCategory("Consulta");
+        Assert.AreEqual("Consulta", posVm.ServiceCategoryFilter);
+        Assert.IsTrue(posVm.FilteredServices.All(s => s.Category == "Consulta"));
+
+        // 3. Filtrar por texto
+        posVm.ServiceSearchText = "Especialista";
+        Assert.IsTrue(posVm.FilteredServices.All(s => s.Name.Contains("Especialista", StringComparison.OrdinalIgnoreCase) || s.Code.Contains("Especialista", StringComparison.OrdinalIgnoreCase)));
+
+        // 4. Limpiar filtros volviendo a 'Todos'
+        posVm.ServiceSearchText = string.Empty;
+        posVm.FilterServiceCategory("Todos");
+        Assert.AreEqual("Todos", posVm.ServiceCategoryFilter);
+        Assert.HasCount(posVm.Services.Count, posVm.FilteredServices);
+
+        // 5. Cerrar modal
+        posVm.CloseServicesModal();
+        Assert.IsFalse(posVm.IsServicesModalOpen);
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddServiceToCart_AddsServiceAndBundledSupplies()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        await posVm.OpenServicesModalAsync();
+        // Buscar un servicio que tenga insumos por defecto (ej. Curación Mayor o Sutura)
+        var srvWithProducts = posVm.Services.FirstOrDefault(s => s.DefaultProducts.Count > 0);
+        Assert.IsNotNull(srvWithProducts, "Debe existir al menos un servicio con insumos predeterminados");
+
+        posVm.AddServiceToCart(srvWithProducts);
+
+        Assert.IsFalse(posVm.IsServicesModalOpen, "El modal debe cerrarse tras agregar");
+        Assert.IsGreaterThanOrEqualTo(posVm.Cart.Count, 2, "Debe incluir el honorario del servicio + sus insumos predeterminados");
+
+        // Validar el honorario del servicio
+        var serviceItem = posVm.Cart.FirstOrDefault(c => c.IsService);
+        Assert.IsNotNull(serviceItem, "Debe haber una línea marcada como servicio");
+        Assert.AreEqual(-srvWithProducts.Id, serviceItem.ProductId);
+        Assert.AreEqual(srvWithProducts.Price, serviceItem.UnitPrice);
+
+        // Validar que un servicio puede incrementar cantidad sin bloqueo de stock físico
+        var initialQty = serviceItem.Quantity;
+        posVm.IncreaseQuantity(serviceItem);
+        Assert.AreEqual(initialQty + 1, serviceItem.Quantity);
+
+        // Validar que los insumos requeridos fueron agregados
+        foreach (var dp in srvWithProducts.DefaultProducts)
+        {
+            var pItem = posVm.Cart.FirstOrDefault(c => c.ProductId == dp.ProductId);
+            Assert.IsNotNull(pItem, $"El insumo {dp.Product?.Name} debió agregarse al carrito");
+            Assert.AreEqual(dp.Quantity, pItem.Quantity);
+        }
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddServiceOnlyToCart_AddsOnlyServiceFee()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        await posVm.OpenServicesModalAsync();
+        var srvWithProducts = posVm.Services.FirstOrDefault(s => s.DefaultProducts.Count > 0);
+        Assert.IsNotNull(srvWithProducts);
+
+        posVm.AddServiceOnlyToCart(srvWithProducts);
+
+        Assert.IsFalse(posVm.IsServicesModalOpen);
+        Assert.HasCount(1, posVm.Cart, "Solo debe agregarse 1 ítem correspondiente al servicio");
+        Assert.IsTrue(posVm.Cart[0].IsService);
+        Assert.AreEqual(srvWithProducts.Price, posVm.TotalCartAmount);
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddServiceToActiveConsultation_TransfersToConsultationService()
+    {
+        var consultService = new ConsultationService();
+        var patient = new PatientRecord { FullName = "María López", RecordNumber = "EXP-002" };
+        consultService.StartConsultation(patient);
+
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+        Assert.IsTrue(posVm.HasActiveConsultation);
+
+        await posVm.OpenServicesModalAsync();
+        var srvWithProducts = posVm.Services.FirstOrDefault(s => s.DefaultProducts.Count > 0);
+        Assert.IsNotNull(srvWithProducts);
+
+        posVm.AddServiceToActiveConsultation(srvWithProducts);
+
+        Assert.IsFalse(posVm.IsServicesModalOpen);
+        var activeItems = consultService.CurrentConsultation?.Items;
+        Assert.IsNotNull(activeItems);
+        Assert.IsTrue(activeItems.Any(i => i.ProductId == -srvWithProducts.Id), "El servicio debe transferirse a la consulta activa");
+        Assert.HasCount(posVm.ActiveConsultationItemsCount, activeItems);
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_CreateNewService_SavesAndRefreshesCatalog()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        await posVm.OpenServicesModalAsync();
+        posVm.OpenCreateServiceModal();
+        Assert.IsTrue(posVm.IsCreateServiceModalOpen);
+
+        posVm.NewServiceCode = "SRV-TEST99";
+        posVm.NewServiceName = "Nebulización Especializada";
+        posVm.NewServiceCategory = "Procedimientos";
+        posVm.NewServicePrice = 450.00m;
+        posVm.NewServiceDuration = 30;
+        posVm.NewServiceDescription = "Tratamiento de vía aérea con broncodilatador";
+
+        // Vincular un producto por defecto
+        Assert.IsNotEmpty(posVm.AvailableProductsForService);
+        posVm.SelectedProductForService = posVm.AvailableProductsForService.First();
+        posVm.NewProductQuantity = 2;
+        posVm.NewProductInstructions = "Usar mascarilla estéril";
+        posVm.AddProductToNewService();
+
+        Assert.HasCount(1, posVm.NewServiceDefaultProducts);
+
+        // Guardar
+        await posVm.SaveNewServiceAsync();
+
+        Assert.IsFalse(posVm.IsCreateServiceModalOpen);
+        Assert.IsTrue(posVm.Services.Any(s => s.Code == "SRV-TEST99"), "El nuevo servicio debe listarse en PosViewModel");
+        Assert.IsTrue(posVm.FilteredServices.Any(s => s.Code == "SRV-TEST99"));
+
+        var savedService = posVm.Services.First(s => s.Code == "SRV-TEST99");
+        Assert.AreEqual("Nebulización Especializada", savedService.Name);
+        Assert.AreEqual(450.00m, savedService.Price);
+        Assert.HasCount(1, savedService.DefaultProducts);
+    }
 }
+
 
 
 
