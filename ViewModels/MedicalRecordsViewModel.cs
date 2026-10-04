@@ -64,6 +64,21 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [ObservableProperty]
     private string _patientDetailTab = "Resumen"; // "Resumen" o "Historial"
 
+    public string PatientActionButtonText => SelectedPatient == null ? "Agregar Paciente" : "Cambiar Paciente";
+    public bool HasSelectedPatient => SelectedPatient != null;
+
+    // ==========================================
+    // MODAL DE SELECCIÓN / CAMBIO DE PACIENTE
+    // ==========================================
+    [ObservableProperty]
+    private bool _isSelectPatientModalOpen;
+
+    [ObservableProperty]
+    private string _selectPatientSearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientRecord> _selectablePatients = new();
+
     [RelayCommand]
     public void SwitchPatientDetailTab(string tab)
     {
@@ -293,7 +308,15 @@ public partial class MedicalRecordsViewModel : ObservableObject
         {
             Patients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
             FilteredPatients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-            SelectedPatient = Patients.FirstOrDefault();
+            if (_consultationService.HasActiveConsultation)
+            {
+                var activeName = _consultationService.CurrentConsultation?.PatientName;
+                SelectedPatient = Patients.FirstOrDefault(p => p.FullName == activeName);
+            }
+            else
+            {
+                SelectedPatient = null;
+            }
         }
         else
         {
@@ -323,17 +346,20 @@ public partial class MedicalRecordsViewModel : ObservableObject
 
             if (prevSelectedId > 0)
             {
-                SelectedPatient = Patients.FirstOrDefault(p => p.Id == prevSelectedId) ?? FilteredPatients.FirstOrDefault();
+                SelectedPatient = Patients.FirstOrDefault(p => p.Id == prevSelectedId);
             }
-            else if (SelectedPatient == null)
+            else if (_consultationService != null && _consultationService.HasActiveConsultation)
             {
-                SelectedPatient = FilteredPatients.FirstOrDefault();
+                var activeName = _consultationService.CurrentConsultation?.PatientName;
+                SelectedPatient = Patients.FirstOrDefault(p => p.FullName == activeName);
             }
         }
     }
 
     partial void OnSelectedPatientChanged(PatientRecord? value)
     {
+        OnPropertyChanged(nameof(PatientActionButtonText));
+        OnPropertyChanged(nameof(HasSelectedPatient));
         if (value != null)
         {
             var list = value.Consultations.OrderByDescending(c => c.Date).ToList();
@@ -539,7 +565,7 @@ public partial class MedicalRecordsViewModel : ObservableObject
 
         Patients = new ObservableCollection<PatientRecord>(list);
         FilteredPatients = new ObservableCollection<PatientRecord>(list);
-        SelectedPatient = list.FirstOrDefault();
+        SelectedPatient = null;
     }
 
     partial void OnSearchPatientTextChanged(string value)
@@ -566,15 +592,71 @@ public partial class MedicalRecordsViewModel : ObservableObject
                 )
             );
         }
+    }
 
-        if (SelectedPatient != null && !FilteredPatients.Contains(SelectedPatient))
+    partial void OnSelectPatientSearchTextChanged(string value)
+    {
+        ApplySelectablePatientsFilter();
+    }
+
+    public void ApplySelectablePatientsFilter()
+    {
+        if (string.IsNullOrWhiteSpace(SelectPatientSearchText))
         {
-            SelectedPatient = FilteredPatients.FirstOrDefault();
+            SelectablePatients = new ObservableCollection<PatientRecord>(Patients);
         }
-        else if (SelectedPatient == null && FilteredPatients.Count > 0)
+        else
         {
-            SelectedPatient = FilteredPatients.FirstOrDefault();
+            var q = SelectPatientSearchText.Trim().ToLowerInvariant();
+            SelectablePatients = new ObservableCollection<PatientRecord>(
+                Patients.Where(p =>
+                    p.FullName.ToLowerInvariant().Contains(q) ||
+                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
+                    p.Phone.Contains(q) ||
+                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
+                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
+                    (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
+                )
+            );
         }
+    }
+
+    [RelayCommand]
+    public void OpenSelectPatientModal()
+    {
+        SelectPatientSearchText = string.Empty;
+        ApplySelectablePatientsFilter();
+        IsSelectPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseSelectPatientModal()
+    {
+        IsSelectPatientModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void SelectPatient(PatientRecord? patient)
+    {
+        if (patient != null)
+        {
+            SelectedPatient = patient;
+            IsSelectPatientModalOpen = false;
+        }
+    }
+
+    [RelayCommand]
+    public void DeselectPatient()
+    {
+        SelectedPatient = null;
+        IsSelectPatientModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task NewPatientFromSelectorAsync()
+    {
+        IsSelectPatientModalOpen = false;
+        await NewPatientAsync();
     }
 
     // ==========================================
@@ -748,8 +830,7 @@ public partial class MedicalRecordsViewModel : ObservableObject
     {
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione un paciente de la lista para registrar su consulta médica.";
-            IsInfoModalVisible = true;
+            OpenSelectPatientModal();
             return;
         }
 
@@ -933,8 +1014,7 @@ public partial class MedicalRecordsViewModel : ObservableObject
     {
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione un paciente para iniciar la consulta médica activa.";
-            IsInfoModalVisible = true;
+            OpenSelectPatientModal();
             return;
         }
 

@@ -4,6 +4,29 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.8] - 2026-10-04
+
+### Modificado y Rediseñado
+* **Retiro del Panel Lateral de Pacientes en Expedientes Clínicos (`MedicalRecordsView`)**:
+  * Eliminación de la columna lateral izquierda fija de 340px con la lista de pacientes registrados.
+  * Expansión al 100% del ancho de pantalla para la ficha clínica detallada, signos vitales, somatometría (IMC), notas de evolución y recetas médicas.
+* **Botón Dinámico "Agregar Paciente" / "Cambiar Paciente"**:
+  * **Comportamiento Reactivo (`PatientActionButtonText`)**:
+    * Cuando no hay ningún paciente seleccionado (`SelectedPatient == null`): El botón muestra **`[ 👤 Agregar Paciente ]`** en estilo destacado.
+    * Una vez seleccionado un paciente (`SelectedPatient != null`): El botón cambia automáticamente a **`[ 🔄 Cambiar Paciente ]`**.
+  * Accesible tanto en la barra superior de acciones del módulo como en la cabecera de la ficha clínica del paciente.
+  * Al hacer clic en "Nueva Consulta" o "Iniciar Consulta Activa" sin tener paciente seleccionado, el sistema abre directamente el selector de paciente de forma proactiva.
+* **Nueva Ventana Modal de Selección de Paciente (`IsSelectPatientModalOpen`)**:
+  * Overlay modal con tarjeta flotante centrada que permite buscar rápidamente pacientes por nombre, folio, teléfono o diagnóstico.
+  * Opción integrada **`[ + Nuevo Paciente ]`** que enlaza al formulario completo de alta de expediente conforme a la NOM-004-SSA3.
+  * Botón **`[ ✕ Quitar Selección de Paciente ]`** para deseleccionar y volver al estado inicial del consultorio.
+* **Estado Inicial y Pantalla Vacía Mejorada**:
+  * Vista central estilizada con tarjeta informativa y acceso directo para agregar paciente o crear nuevo expediente.
+* **Cobertura de Pruebas Unitarias**:
+  * 3 nuevas pruebas unitarias en `TPVC.Tests` cubriendo el ciclo de apertura del selector, filtrado, selección, alternancia de texto "Agregar Paciente" a "Cambiar Paciente", deselección y apertura de selector ante acciones clínicas sin paciente (51/51 pruebas pasando exitosamente).
+
+---
+
 ## [1.3.7] - 2026-10-04
 
 ### Añadido

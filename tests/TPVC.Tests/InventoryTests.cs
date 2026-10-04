@@ -189,7 +189,12 @@ public class InventoryTests
     {
         var medVm = new MedicalRecordsViewModel();
         Assert.IsGreaterThanOrEqualTo(1, medVm.Patients.Count);
+        Assert.IsNull(medVm.SelectedPatient);
+        Assert.AreEqual("Agregar Paciente", medVm.PatientActionButtonText);
+
+        medVm.SelectedPatient = medVm.Patients.First();
         Assert.IsNotNull(medVm.SelectedPatient);
+        Assert.AreEqual("Cambiar Paciente", medVm.PatientActionButtonText);
 
         bool prescriptionSent = false;
         string medicineName = string.Empty;
@@ -1244,6 +1249,76 @@ public class InventoryTests
         posVm.CloseModal();
         Assert.IsFalse(recordsVm.IsPosModalOpen);
         Assert.AreEqual(consultService.CurrentConsultation?.TotalItems, recordsVm.ActiveConsultationItemsCount);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_SelectPatientModal_OpenFilterSelectAndDeselect()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        Assert.IsNull(recordsVm.SelectedPatient);
+        Assert.AreEqual("Agregar Paciente", recordsVm.PatientActionButtonText);
+        Assert.IsFalse(recordsVm.HasSelectedPatient);
+
+        // 1. Abrir modal
+        recordsVm.OpenSelectPatientModal();
+        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
+        Assert.HasCount(recordsVm.Patients.Count, recordsVm.SelectablePatients);
+
+        // 2. Filtrar por término de búsqueda
+        recordsVm.SelectPatientSearchText = "Hernández";
+        Assert.IsGreaterThanOrEqualTo(1, recordsVm.SelectablePatients.Count);
+        var targetPatient = recordsVm.SelectablePatients.First();
+        Assert.Contains("Hernández", targetPatient.FullName);
+
+        // 3. Seleccionar paciente
+        recordsVm.SelectPatient(targetPatient);
+        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        Assert.AreEqual("Hernández López, Sofía", recordsVm.SelectedPatient.FullName);
+        Assert.AreEqual("Cambiar Paciente", recordsVm.PatientActionButtonText);
+        Assert.IsTrue(recordsVm.HasSelectedPatient);
+
+        // 4. Quitar selección (Deseleccionar)
+        recordsVm.DeselectPatient();
+        Assert.IsNull(recordsVm.SelectedPatient);
+        Assert.AreEqual("Agregar Paciente", recordsVm.PatientActionButtonText);
+        Assert.IsFalse(recordsVm.HasSelectedPatient);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_NewPatientFromSelector_OpensPatientModal()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.OpenSelectPatientModal();
+        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+
+        await recordsVm.NewPatientFromSelectorAsync();
+
+        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen, "Debe cerrar el modal selector");
+        Assert.IsTrue(recordsVm.IsPatientModalOpen, "Debe abrir el modal de nuevo paciente");
+        Assert.AreEqual(0, recordsVm.FormPatientId);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_WhenNoPatientSelected_NewAndActiveConsultationOpenSelector()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+
+        Assert.IsNull(recordsVm.SelectedPatient);
+
+        // Al presionar Nueva Consulta sin paciente, debe abrir el selector de paciente
+        recordsVm.NewConsultation();
+        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
+        recordsVm.CloseSelectPatientModal();
+        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
+
+        // Al presionar Iniciar Consulta Activa sin paciente, debe abrir el selector de paciente
+        recordsVm.StartActiveConsultation();
+        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
+        recordsVm.CloseSelectPatientModal();
+        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
     }
 }
 
