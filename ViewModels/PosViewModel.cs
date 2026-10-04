@@ -642,7 +642,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         RecalculateTotals();
     }
 
-    private void RecalculateTotals()
+    public void RecalculateTotals()
     {
         TotalCartItems = Cart.Sum(c => c.Quantity);
         TotalCartAmount = Cart.Sum(c => c.Subtotal);

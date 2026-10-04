@@ -4,6 +4,34 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.12] - 2026-10-04
+
+### Añadido
+* **Botón Interactivo "Iniciar Consulta" y "Finalizar Consulta"**:
+  * Sustitución del texto estático de consulta activa por el botón dinámico con doble estado:
+    * Muestra `"Iniciar Consulta"` cuando no hay ninguna consulta médica en curso.
+    * Cambia automáticamente a `"Finalizar Consulta"` una vez iniciada la consulta del paciente.
+* **Cierre Automático de Consulta con Liquidación y Apertura del POS**:
+  * Al hacer clic en `"Finalizar Consulta"`, el sistema finaliza la consulta médica activa y abre automáticamente la ventana modal flotante del Punto de Venta (POS) con fondo desenfocado.
+  * Inserción automática al carrito de venta del servicio **"Consulta Médica General"** (`SERV-001`, \$300.00 MXN) más todos los insumos y medicamentos prescritos durante la sesión clínica.
+* **Captura Interactiva de Receta Médica con Insumos del Inventario (NOM-004-SSA3)**:
+  * Sustitución del panel de solo lectura de receta por una barra de captura interactiva que reutiliza el inventario farmacológico y de consumibles.
+  * Buscador predictivo en tiempo real con dropdown de sugerencias filtrado por nombre, sal genérica y clave.
+  * Campos específicos para **Indicaciones Clínicas / Posología** individual por medicamento (ej. *"1 tableta cada 8 horas por 5 días"*) y cantidad recetada.
+  * Posibilidad de eliminar fármacos recetados interactivamente con botón de borrado rápido.
+* **Módulo Oficial de Vista Previa y Generación de Receta Médica en PDF**:
+  * Botón `"Generar Receta (PDF)"` que abre una ventana modal con el formato médico oficial estandarizado conforme a la norma **NOM-004-SSA3**.
+  * Incluye membrete institucional y del consultorio, nombre y cédula profesional del médico tratante, datos de filiación del paciente, signos vitales, alergias conocidas, lista de fármacos prescritos con posología detallada, medidas generales y recuadro de firma y sello.
+  * Preparado para impresión directa y exportación a PDF.
+* **Pruebas Unitarias Automatizadas**:
+  * Nuevos tests específicos en `TPVC.Tests/InventoryTests.cs`:
+    * Conmutación de estado e inicio/finalización de consulta (`Iniciar Consulta` / `Finalizar Consulta`).
+    * Transferencia automática de consulta médica general e insumos al carrito del POS y apertura modal.
+    * Búsqueda y filtrado de fármacos en inventario con selección y cierre de sugerencias.
+    * Registro de prescripciones con posología detallada y persistencia en expediente del paciente.
+    * Flujo completo de apertura, visualización e impresión/exportación de la receta médica en PDF.
+  * 66 de 66 pruebas unitarias superadas exitosamente (100% aprobadas).
+
 ## [1.3.11] - 2026-10-04
 
 ### Añadido

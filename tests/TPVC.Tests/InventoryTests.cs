@@ -1673,7 +1673,139 @@ public class InventoryTests
         Assert.AreEqual("85.0", recordsVm.FormVitalWeight);
         Assert.AreEqual("1.75", recordsVm.FormVitalHeight);
     }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ConsultationActionButtonText_TogglesAndFinalizesToPOS()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService, posVm);
+
+        // Paciente de prueba
+        recordsVm.SelectedPatient = new PatientRecord
+        {
+            Id = 1,
+            FullName = "María Elena Soto",
+            RecordNumber = "EXP-TEST-001"
+        };
+
+        // Estado inicial sin consulta activa
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
+
+        // Click en Iniciar Consulta
+        await recordsVm.ToggleActiveConsultationAsync();
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.AreEqual("Finalizar Consulta", recordsVm.ConsultationActionButtonText);
+        Assert.AreEqual("María Elena Soto", consultService.CurrentConsultation?.PatientName);
+
+        // Click en Finalizar Consulta -> debe transferir al POS, agregar Consulta General y abrir modal
+        await recordsVm.ToggleActiveConsultationAsync();
+
+        Assert.IsFalse(recordsVm.HasActiveConsultation, "La consulta debe haber finalizado");
+        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
+        Assert.IsTrue(recordsVm.IsPosModalOpen, "Debe abrir la modal del POS");
+        Assert.IsNotNull(posVm.Cart);
+        Assert.IsTrue(posVm.Cart.Count >= 1, "Debe tener items en el carrito");
+        Assert.IsTrue(posVm.Cart.Any(i => i.Code == "SERV-001" || i.Name.Contains("Consulta")), 
+            "Debe incluir la Consulta Médica General en el carrito de venta");
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_PrescriptionInventorySearch_FiltersSuggestionsAndSelects()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+
+        // Buscar producto existente en sugerencias de inventario
+        recordsVm.PrescriptionSearchText = "Paracetamol";
+        Assert.IsTrue(recordsVm.IsPrescriptionDropdownOpen);
+        Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Count > 0);
+        Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Any(p => p.Name.Contains("Paracetamol")));
+
+        // Seleccionar una sugerencia
+        var suggestion = recordsVm.PrescriptionProductSuggestions.First();
+        recordsVm.SelectPrescriptionProduct(suggestion);
+
+        Assert.AreEqual(suggestion, recordsVm.SelectedPrescriptionProduct);
+        Assert.IsFalse(recordsVm.IsPrescriptionDropdownOpen, "El dropdown debe cerrarse al seleccionar");
+        Assert.IsTrue(recordsVm.PrescriptionMedicineName.Contains(suggestion.Name));
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_PrescriptionAddAndRemoveItems_WithIndications()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(null, consultService);
+        recordsVm.SelectedPatient = new PatientRecord
+        {
+            Id = 2,
+            FullName = "Roberto Morales",
+            RecordNumber = "EXP-TEST-002"
+        };
+
+        // Iniciar consulta activa
+        recordsVm.StartActiveConsultation();
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+
+        // Configurar medicamento con posología/indicaciones personalizadas
+        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días vía oral después de los alimentos";
+        recordsVm.PrescriptionQuantity = 2;
+
+        await recordsVm.AddPrescriptionItemToPatientAsync();
+
+        // Verificar que se añadió a la receta activa del paciente
+        Assert.AreEqual(1, recordsVm.SelectedPatient.ActivePrescription.Count);
+        var addedItem = recordsVm.SelectedPatient.ActivePrescription.First();
+        Assert.AreEqual("Amoxicilina 500mg", addedItem.MedicineName);
+        Assert.AreEqual("1 cápsula cada 8 horas por 7 días vía oral después de los alimentos", addedItem.Dosage);
+        Assert.AreEqual(2, addedItem.RecommendedQuantity);
+
+        // Verificar que los campos de captura se limpian tras recetar
+        Assert.AreEqual(string.Empty, recordsVm.PrescriptionSearchText);
+        Assert.AreEqual(string.Empty, recordsVm.PrescriptionDosage);
+        Assert.AreEqual(1, recordsVm.PrescriptionQuantity);
+
+        // Eliminar el medicamento prescrito
+        await recordsVm.RemovePrescriptionItemFromPatientAsync(addedItem);
+        Assert.AreEqual(0, recordsVm.SelectedPatient.ActivePrescription.Count);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_PrescriptionPdfModal_PreviewFlow()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.SelectedPatient = new PatientRecord
+        {
+            Id = 3,
+            FullName = "Laura Vázquez",
+            RecordNumber = "EXP-TEST-003",
+            ActivePrescription = new List<PatientPrescriptionItem>
+            {
+                new() { MedicineName = "Ibuprofeno 400mg", Dosage = "1 tableta cada 8 hrs", RecommendedQuantity = 1 }
+            }
+        };
+
+        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+
+        // Abrir vista previa de la receta PDF NOM-004-SSA3
+        recordsVm.OpenPrescriptionPdfPreview();
+        Assert.IsTrue(recordsVm.IsPrescriptionPdfModalOpen);
+
+        // Cerrar vista previa
+        recordsVm.ClosePrescriptionPdfPreview();
+        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+
+        // Abrir e imprimir / exportar
+        recordsVm.OpenPrescriptionPdfPreview();
+        Assert.IsTrue(recordsVm.IsPrescriptionPdfModalOpen);
+        recordsVm.PrintOrExportPrescriptionPdf();
+        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+        Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("PDF") == true);
+    }
 }
+
 
 
 

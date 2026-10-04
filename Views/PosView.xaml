@@ -780,33 +780,34 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Botón Agregar a Consulta Activa (Modo Modal Embebido - Destacado) -->
-                    <Button Style="{DynamicResource AccentButton}" 
+                    <!-- Botón Agregar a Consulta Activa (Modo Modal Embebido) -->
+                    <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding AddToActiveConsultationCommand}" 
-                            Padding="22,14" 
+                            Padding="16,14" 
                             FontSize="14" 
-                            FontWeight="Bold" 
+                            FontWeight="SemiBold" 
                             VerticalAlignment="Center" 
+                            Margin="0,0,12,0" 
                             Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}}"
-                            ToolTip="Guarda los insumos y servicios de esta venta en la consulta activa del paciente">
+                            ToolTip="Guarda los insumos y servicios de esta venta en la consulta activa del paciente sin cobrar aún">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconFileMedical}" 
-                                  Fill="{DynamicResource ThemeAccentText}" 
-                                  Width="16" Height="16" 
+                                  Fill="{DynamicResource ThemeAccent}" 
+                                  Width="15" Height="15" 
                                   Stretch="Uniform" 
                                   Margin="0,0,8,0" />
-                            <TextBlock Text="🩺 Guardar en Consulta Activa" />
+                            <TextBlock Text="Guardar en Consulta" />
                         </StackPanel>
                     </Button>
 
-                    <!-- Botón Destacado de Cobro en la Esquina Inferior Derecha (Oculto en Modo Modal) -->
+                    <!-- Botón Destacado de Cobro en la Esquina Inferior Derecha (Siempre disponible) -->
                     <Button Style="{DynamicResource AccentButton}" 
                             Command="{Binding ProcessSaleCommand}" 
                             Padding="24,14" 
                             FontSize="15" 
                             FontWeight="Bold" 
-                            VerticalAlignment="Center"
-                            Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                            VerticalAlignment="Center" 
+                            ToolTip="Cobrar los medicamentos, insumos y consultas cargadas en el ticket">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconCheck}" 
                                   Fill="{DynamicResource ThemeAccentText}" 
