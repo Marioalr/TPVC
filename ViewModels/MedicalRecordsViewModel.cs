@@ -151,16 +151,82 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string _formRecordNumber = string.Empty;
 
     [ObservableProperty]
+    private string _formFirstName = string.Empty;
+
+    [ObservableProperty]
+    private string _formLastName = string.Empty;
+
+    [ObservableProperty]
+    private string _formMaternalLastName = string.Empty;
+
+    [ObservableProperty]
     private string _formFullName = string.Empty;
+
+    partial void OnFormFullNameChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            FormFirstName = string.Empty;
+            FormLastName = string.Empty;
+            FormMaternalLastName = string.Empty;
+        }
+        else if (string.IsNullOrWhiteSpace(FormFirstName) && string.IsNullOrWhiteSpace(FormLastName))
+        {
+            ParseFullName(value, out var f, out var l, out var m);
+            FormFirstName = f;
+            FormLastName = l;
+            FormMaternalLastName = m;
+        }
+    }
+
+    [ObservableProperty]
+    private string _formAgeText = "30";
 
     [ObservableProperty]
     private int _formAge = 30;
+
+    partial void OnFormAgeTextChanged(string value)
+    {
+        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
+        if (digitsOnly != value)
+        {
+            FormAgeText = digitsOnly;
+            return;
+        }
+
+        if (int.TryParse(digitsOnly, out var age))
+        {
+            FormAge = age;
+        }
+        else if (string.IsNullOrEmpty(digitsOnly))
+        {
+            FormAge = 0;
+        }
+    }
+
+    partial void OnFormAgeChanged(int value)
+    {
+        var str = value.ToString();
+        if (FormAgeText != str)
+        {
+            FormAgeText = str;
+        }
+    }
 
     [ObservableProperty]
     private string _formGender = "Masculino";
 
     [ObservableProperty]
     private string _formPhone = string.Empty;
+
+    partial void OnFormPhoneChanged(string value)
+    {
+        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
+        if (digitsOnly != value)
+        {
+            FormPhone = digitsOnly;
+        }
+    }
 
     [ObservableProperty]
     private string _formEmail = string.Empty;
@@ -182,6 +248,181 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _formEmergencyContactPhone = string.Empty;
+
+    partial void OnFormEmergencyContactPhoneChanged(string value)
+    {
+        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
+        if (digitsOnly != value)
+        {
+            FormEmergencyContactPhone = digitsOnly;
+        }
+    }
+
+    // ==========================================
+    // SIGNOS VITALES INDIVIDUALES (FORMULARIO DE EXPEDIENTE)
+    // ==========================================
+    [ObservableProperty]
+    private string _formVitalTA = "120/80";
+
+    [ObservableProperty]
+    private string _formVitalFC = "75";
+
+    [ObservableProperty]
+    private string _formVitalFR = "18";
+
+    [ObservableProperty]
+    private string _formVitalTemp = "36.5";
+
+    [ObservableProperty]
+    private string _formVitalWeight = "70.0";
+
+    [ObservableProperty]
+    private string _formVitalHeight = "1.70";
+
+    [ObservableProperty]
+    private string _formVitalIMC = "24.2 kg/m² (Peso normal)";
+
+    partial void OnFormVitalWeightChanged(string value) => RecalculateFormIMC();
+    partial void OnFormVitalHeightChanged(string value) => RecalculateFormIMC();
+
+    public void RecalculateFormIMC()
+    {
+        if (decimal.TryParse(FormVitalWeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
+            decimal.TryParse(FormVitalHeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
+            height > 0)
+        {
+            var imc = weight / (height * height);
+            string category;
+            if (imc < 18.5m) category = "Bajo peso";
+            else if (imc < 25.0m) category = "Peso normal";
+            else if (imc < 30.0m) category = "Sobrepeso";
+            else if (imc < 35.0m) category = "Obesidad Grado I";
+            else category = "Obesidad Grado II+";
+
+            FormVitalIMC = $"{imc:F1} kg/m² ({category})";
+        }
+        else
+        {
+            FormVitalIMC = "Valores no disponibles";
+        }
+    }
+
+    private static void ParseFullName(string? fullName, out string firstName, out string lastName, out string maternalLastName)
+    {
+        firstName = string.Empty;
+        lastName = string.Empty;
+        maternalLastName = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(fullName))
+            return;
+
+        var trimmed = fullName.Trim();
+
+        // Formato con coma: "Apellidos, Nombre(s)"
+        if (trimmed.Contains(','))
+        {
+            var commaParts = trimmed.Split(new[] { ',' }, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (commaParts.Length == 2)
+            {
+                firstName = commaParts[1].Trim();
+                var surnameTokens = commaParts[0].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (surnameTokens.Length == 1)
+                {
+                    lastName = surnameTokens[0];
+                }
+                else if (surnameTokens.Length >= 2)
+                {
+                    lastName = surnameTokens[0];
+                    maternalLastName = string.Join(" ", surnameTokens.Skip(1));
+                }
+                return;
+            }
+        }
+
+        // Formato regular: "Nombre(s) Paterno Materno"
+        var tokens = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 1)
+        {
+            firstName = tokens[0];
+        }
+        else if (tokens.Length == 2)
+        {
+            firstName = tokens[0];
+            lastName = tokens[1];
+        }
+        else if (tokens.Length == 3)
+        {
+            firstName = tokens[0];
+            lastName = tokens[1];
+            maternalLastName = tokens[2];
+        }
+        else
+        {
+            lastName = tokens[^2];
+            maternalLastName = tokens[^1];
+            firstName = string.Join(" ", tokens.Take(tokens.Length - 2));
+        }
+    }
+
+    private void ParseVitalSigns(string? vitalsString)
+    {
+        FormVitalTA = "120/80";
+        FormVitalFC = "75";
+        FormVitalFR = "18";
+        FormVitalTemp = "36.5";
+        FormVitalWeight = "70.0";
+        FormVitalHeight = "1.70";
+
+        if (string.IsNullOrWhiteSpace(vitalsString))
+        {
+            RecalculateFormIMC();
+            return;
+        }
+
+        var segments = vitalsString.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var seg in segments)
+        {
+            var part = seg.Trim();
+            if (part.StartsWith("TA:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(3).Trim();
+                val = val.Replace("mmHg", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalTA = val;
+            }
+            else if (part.StartsWith("FC:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(3).Trim();
+                val = val.Replace("lpm", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalFC = val;
+            }
+            else if (part.StartsWith("FR:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(3).Trim();
+                val = val.Replace("rpm", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalFR = val;
+            }
+            else if (part.StartsWith("Temp:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(5).Trim();
+                val = val.Replace("°C", "", StringComparison.OrdinalIgnoreCase).Replace("C", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalTemp = val;
+            }
+            else if (part.StartsWith("Peso:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(5).Trim();
+                val = val.Replace("kg", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalWeight = val;
+            }
+            else if (part.StartsWith("Talla:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = part.Substring(6).Trim();
+                val = val.Replace("m", "", StringComparison.OrdinalIgnoreCase).Trim();
+                if (!string.IsNullOrEmpty(val)) FormVitalHeight = val;
+            }
+        }
+
+        RecalculateFormIMC();
+    }
 
     [ObservableProperty]
     private string _formInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
@@ -794,6 +1035,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void CloseRecordsViewerModal()
     {
+        if (ViewingRecordPatient != null)
+        {
+            BackToRecordsList();
+            return;
+        }
+
         IsRecordsViewerModalOpen = false;
         ViewingRecordPatient = null;
         ViewingPatientConsultations.Clear();
@@ -834,7 +1081,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (target != null)
         {
             SelectedPatient = target;
-            CloseRecordsViewerModal();
+            IsRecordsViewerModalOpen = false;
+            ViewingRecordPatient = null;
+            ViewingPatientConsultations.Clear();
+            SelectedViewingConsultation = null;
             InfoModalMessage = $"Expediente de '{target.FullName}' ({target.RecordNumber}) cargado en la pantalla principal.";
             IsInfoModalVisible = true;
         }
@@ -860,8 +1110,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             FormRecordNumber = $"EXP-{DateTime.Today.Year}-{(Patients.Count + 1):D3}";
         }
 
+        FormFirstName = string.Empty;
+        FormLastName = string.Empty;
+        FormMaternalLastName = string.Empty;
         FormFullName = string.Empty;
         FormAge = 30;
+        FormAgeText = "30";
         FormGender = "Masculino";
         FormPhone = string.Empty;
         FormEmail = string.Empty;
@@ -871,6 +1125,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormChronicDiseases = "Ninguna";
         FormEmergencyContactName = string.Empty;
         FormEmergencyContactPhone = string.Empty;
+
+        FormVitalTA = "120/80";
+        FormVitalFC = "75";
+        FormVitalFR = "18";
+        FormVitalTemp = "36.5";
+        FormVitalWeight = "70.0";
+        FormVitalHeight = "1.70";
+        RecalculateFormIMC();
+
         FormInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
         FormClinicalNotes = string.Empty;
 
@@ -893,16 +1156,25 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         FormRecordNumber = SelectedPatient.RecordNumber;
         FormFullName = SelectedPatient.FullName;
+
+        ParseFullName(SelectedPatient.FullName, out var first, out var last, out var maternal);
+        FormFirstName = first;
+        FormLastName = last;
+        FormMaternalLastName = maternal;
+
         FormAge = SelectedPatient.Age;
+        FormAgeText = SelectedPatient.Age.ToString();
         FormGender = SelectedPatient.Gender;
-        FormPhone = SelectedPatient.Phone;
+        FormPhone = new string((SelectedPatient.Phone ?? "").Where(char.IsDigit).ToArray());
         FormEmail = SelectedPatient.Email;
         FormAddress = SelectedPatient.Address;
         FormBloodType = SelectedPatient.BloodType;
         FormAllergies = SelectedPatient.Allergies;
         FormChronicDiseases = SelectedPatient.ChronicDiseases;
         FormEmergencyContactName = SelectedPatient.EmergencyContactName;
-        FormEmergencyContactPhone = SelectedPatient.EmergencyContactPhone;
+        FormEmergencyContactPhone = new string((SelectedPatient.EmergencyContactPhone ?? "").Where(char.IsDigit).ToArray());
+
+        ParseVitalSigns(SelectedPatient.VitalSigns);
         FormInitialVitalSigns = SelectedPatient.VitalSigns;
         FormClinicalNotes = SelectedPatient.ClinicalNotes;
 
@@ -919,9 +1191,23 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SavePatientModalAsync()
     {
-        if (string.IsNullOrWhiteSpace(FormFullName))
+        if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
         {
-            FormErrorMessage = "El nombre completo del paciente es obligatorio.";
+            ParseFullName(FormFullName, out var f, out var l, out var m);
+            FormFirstName = f;
+            FormLastName = l;
+            FormMaternalLastName = m;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormFirstName))
+        {
+            FormErrorMessage = "El nombre(s) del paciente es obligatorio.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormLastName))
+        {
+            FormErrorMessage = "El apellido paterno del paciente es obligatorio.";
             return;
         }
 
@@ -930,6 +1216,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             FormErrorMessage = "El folio del expediente es obligatorio.";
             return;
         }
+
+        if (!int.TryParse(FormAgeText, out var parsedAge) || parsedAge < 0 || parsedAge > 130)
+        {
+            FormErrorMessage = "La edad debe ser un número válido entre 0 y 130 años.";
+            return;
+        }
+
+        FormFullName = string.IsNullOrWhiteSpace(FormMaternalLastName)
+            ? $"{FormFirstName.Trim()} {FormLastName.Trim()}"
+            : $"{FormFirstName.Trim()} {FormLastName.Trim()} {FormMaternalLastName.Trim()}";
 
         var normalizedFolio = FormRecordNumber.Trim();
         if (_inventoryService != null)
@@ -957,7 +1253,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         patient.RecordNumber = normalizedFolio;
         patient.FullName = FormFullName.Trim();
-        patient.Age = Math.Max(0, FormAge);
+        patient.Age = parsedAge;
         patient.Gender = FormGender;
         patient.Phone = FormPhone.Trim();
         patient.Email = FormEmail.Trim();
@@ -967,7 +1263,21 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         patient.ChronicDiseases = string.IsNullOrWhiteSpace(FormChronicDiseases) ? "Ninguna" : FormChronicDiseases.Trim();
         patient.EmergencyContactName = FormEmergencyContactName.Trim();
         patient.EmergencyContactPhone = FormEmergencyContactPhone.Trim();
-        patient.VitalSigns = string.IsNullOrWhiteSpace(FormInitialVitalSigns) ? "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C" : FormInitialVitalSigns.Trim();
+
+        var vitalsParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(FormVitalTA)) vitalsParts.Add($"TA: {FormVitalTA.Trim()} mmHg");
+        if (!string.IsNullOrWhiteSpace(FormVitalFC)) vitalsParts.Add($"FC: {FormVitalFC.Trim()} lpm");
+        if (!string.IsNullOrWhiteSpace(FormVitalFR)) vitalsParts.Add($"FR: {FormVitalFR.Trim()} rpm");
+        if (!string.IsNullOrWhiteSpace(FormVitalTemp)) vitalsParts.Add($"Temp: {FormVitalTemp.Trim()} °C");
+        if (!string.IsNullOrWhiteSpace(FormVitalWeight)) vitalsParts.Add($"Peso: {FormVitalWeight.Trim()} kg");
+        if (!string.IsNullOrWhiteSpace(FormVitalHeight)) vitalsParts.Add($"Talla: {FormVitalHeight.Trim()} m");
+        if (!string.IsNullOrWhiteSpace(FormVitalIMC) && !FormVitalIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {FormVitalIMC.Trim()}");
+
+        patient.VitalSigns = vitalsParts.Count > 0 
+            ? string.Join(" | ", vitalsParts) 
+            : (string.IsNullOrWhiteSpace(FormInitialVitalSigns) ? "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C" : FormInitialVitalSigns.Trim());
+
+        FormInitialVitalSigns = patient.VitalSigns;
         patient.ClinicalNotes = FormClinicalNotes.Trim();
 
         if (_inventoryService != null)

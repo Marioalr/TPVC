@@ -812,11 +812,33 @@
                                              Padding="10,6" 
                                              Margin="0,0,0,10" />
 
-                                    <TextBlock Text="Nombre Completo con Apellidos *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormFullName, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBlock Text="Nombre(s) *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding FormFirstName, UpdateSourceTrigger=PropertyChanged}" 
                                              Style="{DynamicResource ModernTextBox}" 
                                              Padding="10,6" 
                                              Margin="0,0,0,10" />
+
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Apellido Paterno *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                            <TextBox Text="{Binding FormLastName, UpdateSourceTrigger=PropertyChanged}" 
+                                                     Style="{DynamicResource ModernTextBox}" 
+                                                     Padding="10,6" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Apellido Materno (Opcional)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                            <TextBox Text="{Binding FormMaternalLastName, UpdateSourceTrigger=PropertyChanged}" 
+                                                     Style="{DynamicResource ModernTextBox}" 
+                                                     Padding="10,6" />
+                                        </StackPanel>
+                                    </Grid>
 
                                     <Grid Margin="0,0,0,10">
                                         <Grid.ColumnDefinitions>
@@ -827,7 +849,7 @@
 
                                         <StackPanel Grid.Column="0">
                                             <TextBlock Text="Edad (Años)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormAge, UpdateSourceTrigger=PropertyChanged}" 
+                                            <TextBox Text="{Binding FormAgeText, UpdateSourceTrigger=PropertyChanged}" 
                                                      Style="{DynamicResource ModernTextBox}" 
                                                      Padding="10,6" />
                                         </StackPanel>
@@ -913,11 +935,77 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <TextBlock Text="Signos Vitales Base / Somatometría" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormInitialVitalSigns, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                    <!-- Signos Vitales Base / Somatometría Individuales -->
+                                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="10,8" 
+                                            Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="📊 Somatometría y Signos Vitales Base" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                                                <Border Grid.Column="1" 
+                                                        Background="{DynamicResource ThemeAccent}" 
+                                                        CornerRadius="4" 
+                                                        Padding="6,2">
+                                                    <TextBlock Text="{Binding FormVitalIMC, StringFormat='IMC: {0}'}" 
+                                                               FontWeight="Bold" 
+                                                               FontSize="10" 
+                                                               Foreground="{DynamicResource ThemeAccentText}" />
+                                                </Border>
+                                            </Grid>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="6" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                                    <TextBlock Text="T.A. (mmHg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalTA, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                                    <TextBlock Text="F.C. (lpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalFC, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Row="0" Grid.Column="4">
+                                                    <TextBlock Text="F.R. (rpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalFR, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Row="2" Grid.Column="0">
+                                                    <TextBlock Text="Temp (°C)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalTemp, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Row="2" Grid.Column="2">
+                                                    <TextBlock Text="Peso (kg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalWeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Row="2" Grid.Column="4">
+                                                    <TextBlock Text="Talla (m)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding FormVitalHeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
 
                                     <TextBlock Text="Notas Clínicas Iniciales / Antecedentes Relevantes" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding FormClinicalNotes, UpdateSourceTrigger=PropertyChanged}" 

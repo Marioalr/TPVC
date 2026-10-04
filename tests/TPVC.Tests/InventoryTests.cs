@@ -1450,6 +1450,139 @@ public class InventoryTests
         Assert.AreEqual(targetPatient.FullName, recordsVm.SelectedPatient.FullName);
         Assert.IsTrue(recordsVm.IsInfoModalVisible);
     }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_RecordsViewerModal_CloseInDetailView_ReturnsToRecordsList()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.OpenRecordsViewerModal();
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen);
+
+        var targetPatient = recordsVm.RecordsViewerPatients.First();
+        recordsVm.ViewPatientRecordDetail(targetPatient);
+        Assert.IsNotNull(recordsVm.ViewingRecordPatient);
+
+        // Al dar en cerrar mientras se visualiza el expediente, debe volver a la vista de ver expedientes (no cerrar la modal)
+        recordsVm.CloseRecordsViewerModal();
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe permanecer abierta");
+        Assert.IsNull(recordsVm.ViewingRecordPatient, "Debe volver al estado de listado de expedientes");
+
+        // Al dar en cerrar desde la lista de expedientes, ahora sí debe cerrar la modal
+        recordsVm.CloseRecordsViewerModal();
+        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Al estar en la lista, cerrar debe cerrar la modal completa");
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_PatientModal_SeparatedNames_ValidatesAndFormats()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        await recordsVm.NewPatientAsync();
+
+        // 1. Falta nombre(s)
+        recordsVm.FormFirstName = "";
+        recordsVm.FormLastName = "Pérez";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.IsPatientModalOpen);
+        Assert.AreEqual("El nombre(s) del paciente es obligatorio.", recordsVm.FormErrorMessage);
+
+        // 2. Falta apellido paterno
+        recordsVm.FormFirstName = "Juan";
+        recordsVm.FormLastName = "";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.IsPatientModalOpen);
+        Assert.AreEqual("El apellido paterno del paciente es obligatorio.", recordsVm.FormErrorMessage);
+
+        // 3. Solo nombre y apellido paterno (materno opcional)
+        recordsVm.FormFirstName = "Juan";
+        recordsVm.FormLastName = "Pérez";
+        recordsVm.FormMaternalLastName = "";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        Assert.AreEqual("Juan Pérez", recordsVm.SelectedPatient.FullName);
+
+        // 4. Con apellido materno
+        await recordsVm.NewPatientAsync();
+        recordsVm.FormFirstName = "María del Carmen";
+        recordsVm.FormLastName = "González";
+        recordsVm.FormMaternalLastName = "Trejo";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        Assert.AreEqual("María del Carmen González Trejo", recordsVm.SelectedPatient.FullName);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_PhoneAndAge_RestrictedToNumbersOnly()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+
+        // Filtro de edad: solo dígitos
+        recordsVm.FormAgeText = "45abc$%1";
+        Assert.AreEqual("451", recordsVm.FormAgeText);
+
+        recordsVm.FormAgeText = "28";
+        Assert.AreEqual(28, recordsVm.FormAge);
+
+        // Filtro de teléfono de contacto: solo dígitos
+        recordsVm.FormPhone = "(55) 1234-5678";
+        Assert.AreEqual("5512345678", recordsVm.FormPhone);
+
+        // Filtro de teléfono de emergencia: solo dígitos
+        recordsVm.FormEmergencyContactPhone = "+52-55-9876-5432 ext 10";
+        Assert.AreEqual("52559876543210", recordsVm.FormEmergencyContactPhone);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_IndividualVitalSigns_CalculatesIMCAndFormats()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        await recordsVm.NewPatientAsync();
+
+        // Verificar valores por defecto
+        Assert.AreEqual("120/80", recordsVm.FormVitalTA);
+        Assert.AreEqual("75", recordsVm.FormVitalFC);
+        Assert.AreEqual("18", recordsVm.FormVitalFR);
+        Assert.AreEqual("36.5", recordsVm.FormVitalTemp);
+        Assert.AreEqual("70.0", recordsVm.FormVitalWeight);
+        Assert.AreEqual("1.70", recordsVm.FormVitalHeight);
+        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("24.2"));
+
+        // Modificar peso y talla para recalcular IMC
+        recordsVm.FormVitalWeight = "85.0";
+        recordsVm.FormVitalHeight = "1.75";
+        // IMC = 85 / (1.75 * 1.75) = 27.75 (Sobrepeso)
+        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("27.8"));
+        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("Sobrepeso"));
+
+        // Guardar paciente con signos individuales
+        recordsVm.FormFirstName = "Carlos";
+        recordsVm.FormLastName = "Hernández";
+        recordsVm.FormVitalTA = "130/85";
+        recordsVm.FormVitalFC = "80";
+        recordsVm.FormVitalFR = "20";
+        recordsVm.FormVitalTemp = "37.0";
+        await recordsVm.SavePatientModalAsync();
+
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        var vitals = recordsVm.SelectedPatient.VitalSigns;
+        Assert.IsTrue(vitals.Contains("TA: 130/85 mmHg"));
+        Assert.IsTrue(vitals.Contains("FC: 80 lpm"));
+        Assert.IsTrue(vitals.Contains("FR: 20 rpm"));
+        Assert.IsTrue(vitals.Contains("Temp: 37.0 °C"));
+        Assert.IsTrue(vitals.Contains("Peso: 85.0 kg"));
+        Assert.IsTrue(vitals.Contains("Talla: 1.75 m"));
+
+        // Editar paciente y verificar que parsea los signos vitales y nombres
+        recordsVm.EditPatient();
+        Assert.AreEqual("Carlos", recordsVm.FormFirstName);
+        Assert.AreEqual("Hernández", recordsVm.FormLastName);
+        Assert.AreEqual("130/85", recordsVm.FormVitalTA);
+        Assert.AreEqual("80", recordsVm.FormVitalFC);
+        Assert.AreEqual("20", recordsVm.FormVitalFR);
+        Assert.AreEqual("37.0", recordsVm.FormVitalTemp);
+        Assert.AreEqual("85.0", recordsVm.FormVitalWeight);
+        Assert.AreEqual("1.75", recordsVm.FormVitalHeight);
+    }
 }
 
 

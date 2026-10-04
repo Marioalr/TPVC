@@ -4,6 +4,43 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.10] - 2026-10-04
+
+### Añadido
+* **Navegación Modal "Cerrar" en Visor de Expedientes**:
+  * Al consultar el detalle completo de un expediente dentro de la ventana modal flotante (`ViewingRecordPatient != null`), hacer clic en el botón `[ Cerrar ]` o en el botón `[ ✕ ]` regresa automáticamente a la lista y buscador de expedientes (`ViewingRecordPatient = null`), manteniendo la ventana modal abierta con fondo desenfocado tal como lo solicitó el usuario.
+  * Al hacer clic en `[ Cerrar ]` o `[ ✕ ]` estando en el listado de expedientes, se cierra la ventana modal completa.
+* **Separación de Nombres y Apellidos en Formulario de Paciente / Nuevo Expediente**:
+  * Sustitución del campo único de nombre completo por tres campos dedicados:
+    * `Nombre(s) *` (`FormFirstName` - Obligatorio).
+    * `Apellido Paterno *` (`FormLastName` - Obligatorio).
+    * `Apellido Materno (Opcional)` (`FormMaternalLastName` - Opcional).
+  * Reglas de validación precisas: solo el nombre y el apellido paterno son requeridos para el guardado.
+  * Composición automática del nombre completo para almacenamiento e histórico (`FormFullName = $"{Nombre} {Paterno} [{Materno}]"`).
+  * Algoritmo inteligente de descomposición hacia atrás (`ParseFullName`) al editar expedientes preexistentes o formatos oficiales con coma (`"Apellidos, Nombre(s)"`).
+* **Restricción Estricta a Números en Edad y Teléfonos**:
+  * En `Edad` (`FormAgeText`), solo se permite la captura de dígitos numéricos en tiempo real, bloqueando letras o caracteres especiales tanto al teclear como al pegar texto, validando rango de 0 a 130 años.
+  * En `Teléfono de Contacto` (`FormPhone`) y `Teléfono de Emergencia` (`FormEmergencyContactPhone`), filtrado estricto a caracteres puramente numéricos.
+* **Signos Vitales y Somatometría Base en Campos Individuales**:
+  * Desglose del campo de texto de signos vitales en campos individuales dentro del formulario de alta y edición de expedientes clínicos:
+    * Tensión Arterial: `T.A. (mmHg)` (`FormVitalTA`, e.g. "120/80").
+    * Frecuencia Cardíaca: `F.C. (lpm)` (`FormVitalFC`, e.g. "75").
+    * Frecuencia Respiratoria: `F.R. (rpm)` (`FormVitalFR`, e.g. "18").
+    * Temperatura Corporal: `Temp (°C)` (`FormVitalTemp`, e.g. "36.5").
+    * Peso Corporal: `Peso (kg)` (`FormVitalWeight`, e.g. "70.0").
+    * Talla / Estatura: `Talla (m)` (`FormVitalHeight`, e.g. "1.70").
+  * Tarjeta visual organizada con distintivo dinámico de **Índice de Masa Corporal (IMC)** calculado en tiempo real con clasificación clínica (Bajo peso, Peso normal, Sobrepeso, Obesidad).
+  * Empaquetado estandarizado compatible con NOM-004-SSA3 (`TA: ... mmHg | FC: ... lpm | Temp: ... °C | Peso: ... kg | Talla: ... m | IMC: ...`).
+  * Desempaquetado bidireccional (`ParseVitalSigns`) al abrir la edición de pacientes existentes.
+* **Pruebas Unitarias**:
+  * Incorporación de 4 nuevas pruebas unitarias en `TPVC.Tests`:
+    * Navegación modal de retorno a la lista de expedientes al cerrar detalle.
+    * Validación de campos separados de nombre y apellido paterno obligatorio con materno opcional.
+    * Filtrado numérico estricto en edad y teléfonos.
+    * Cálculo en vivo de IMC y formateo/desformateo de signos vitales individuales (60/60 pruebas aprobadas).
+
+---
+
 ## [1.3.9] - 2026-10-04
 
 ### Añadido
