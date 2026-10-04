@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.6-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.6)
+[![Version](https://img.shields.io/badge/version-v1.3.7-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.7)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)

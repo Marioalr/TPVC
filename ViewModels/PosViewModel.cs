@@ -253,6 +253,20 @@ public partial class PosViewModel : ObservableObject
     [ObservableProperty]
     private string _newConsultationChiefComplaint = "Consulta Médica General";
 
+    // ==========================================
+    // MODO MODAL EMBEBIDO (DESDE EXPEDIENTES CLÍNICOS)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isEmbeddedInModal;
+
+    public Action? OnCloseModalRequested { get; set; }
+
+    [RelayCommand]
+    public void CloseModal()
+    {
+        OnCloseModalRequested?.Invoke();
+    }
+
     public PosViewModel(InventoryService inventoryService, ConsultationService? consultationService = null)
     {
         _inventoryService = inventoryService;
@@ -668,6 +682,12 @@ public partial class PosViewModel : ObservableObject
 
         if (!_consultationService.HasActiveConsultation)
         {
+            if (IsEmbeddedInModal)
+            {
+                ShowAlert("Solo se puede agregar insumos si existe una consulta médica activa.", false);
+                return;
+            }
+
             AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
             if (SelectedPatientForConsultation == null || !AvailablePatientsForConsultation.Contains(SelectedPatientForConsultation))
             {

@@ -22,7 +22,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.3.6";
+    private string _appVersion = "1.3.7";
 
     // ViewModels
     public MainHubViewModel MainHubVM { get; }
@@ -50,11 +50,12 @@ public partial class MainViewModel : ObservableObject
 
         MainHubVM = new MainHubViewModel(NavigateTo);
         PosVM = new PosViewModel(inventoryService, consultationService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM);
         _ = MedicalRecordsVM.LoadServicesAsync();
 
         // Enlace para volver a la Vista Principal desde el POS o Expedientes
         PosVM.OnBackToHubRequested = () => NavigateTo("MainHub");
+        PosVM.OnCloseModalRequested = () => MedicalRecordsVM.ClosePosModal();
         MedicalRecordsVM.OnBackToHubRequested = () => NavigateTo("MainHub");
 
         // Enlace para enviar receta médica directamente al carrito de venta del POS

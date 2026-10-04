@@ -260,14 +260,21 @@ public partial class MedicalRecordsViewModel : ObservableObject
         "Certificados"
     };
 
-    public MedicalRecordsViewModel() : this(null, null)
+    [ObservableProperty]
+    private PosViewModel? _posVM;
+
+    [ObservableProperty]
+    private bool _isPosModalOpen;
+
+    public MedicalRecordsViewModel() : this(null, null, null)
     {
     }
 
-    public MedicalRecordsViewModel(InventoryService? inventoryService, ConsultationService? consultationService = null)
+    public MedicalRecordsViewModel(InventoryService? inventoryService, ConsultationService? consultationService = null, PosViewModel? posViewModel = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
+        PosVM = posViewModel;
 
         if (_consultationService != null)
         {
@@ -938,6 +945,36 @@ public partial class MedicalRecordsViewModel : ObservableObject
             InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede acudir al Punto de Venta (POS) y presionar 'Agregar a Consulta Activa' para acumular insumos y medicamentos utilizados durante la atención médica.";
             IsInfoModalVisible = true;
         }
+    }
+
+    [RelayCommand]
+    public async Task OpenPosModalAsync()
+    {
+        if (_consultationService == null || !_consultationService.HasActiveConsultation)
+        {
+            InfoModalMessage = "Solo se pueden agregar medicamentos y servicios desde el Punto de Venta si existe una consulta médica activa.\n\nInicie una consulta médica con un paciente primero.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        if (PosVM != null)
+        {
+            PosVM.IsEmbeddedInModal = true;
+            await PosVM.InitializeAsync();
+        }
+
+        IsPosModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void ClosePosModal()
+    {
+        IsPosModalOpen = false;
+        if (PosVM != null)
+        {
+            PosVM.IsEmbeddedInModal = false;
+        }
+        SyncActiveConsultation();
     }
 
     [RelayCommand]

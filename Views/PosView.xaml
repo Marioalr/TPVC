@@ -20,7 +20,8 @@
         <!-- ============================================ -->
         <!-- FILA 0: CABECERA DE PUNTO DE VENTA -->
         <!-- ============================================ -->
-        <Border Grid.Row="0" Margin="0,0,0,14">
+        <Border Grid.Row="0" Margin="0,0,0,14"
+                Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -752,7 +753,7 @@
                                    HorizontalAlignment="Right" />
                     </StackPanel>
 
-                    <!-- Botón Agregar a Consulta Activa (No cobra de inmediato, guarda para el final) -->
+                    <!-- Botón Agregar a Consulta Activa (Modo Estándar) -->
                     <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding AddToActiveConsultationCommand}" 
                             Padding="18,14" 
@@ -760,6 +761,7 @@
                             FontWeight="SemiBold" 
                             VerticalAlignment="Center" 
                             Margin="0,0,12,0" 
+                            Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"
                             ToolTip="Guarda los insumos de esta venta en la consulta activa del paciente para liquidarse al terminar">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconFileMedical}" 
@@ -771,13 +773,33 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Botón Destacado de Cobro en la Esquina Inferior Derecha -->
+                    <!-- Botón Agregar a Consulta Activa (Modo Modal Embebido - Destacado) -->
+                    <Button Style="{DynamicResource AccentButton}" 
+                            Command="{Binding AddToActiveConsultationCommand}" 
+                            Padding="22,14" 
+                            FontSize="14" 
+                            FontWeight="Bold" 
+                            VerticalAlignment="Center" 
+                            Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Guarda los insumos y servicios de esta venta en la consulta activa del paciente">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconFileMedical}" 
+                                  Fill="{DynamicResource ThemeAccentText}" 
+                                  Width="16" Height="16" 
+                                  Stretch="Uniform" 
+                                  Margin="0,0,8,0" />
+                            <TextBlock Text="🩺 Guardar en Consulta Activa" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Botón Destacado de Cobro en la Esquina Inferior Derecha (Oculto en Modo Modal) -->
                     <Button Style="{DynamicResource AccentButton}" 
                             Command="{Binding ProcessSaleCommand}" 
                             Padding="24,14" 
                             FontSize="15" 
                             FontWeight="Bold" 
-                            VerticalAlignment="Center">
+                            VerticalAlignment="Center"
+                            Visibility="{Binding IsEmbeddedInModal, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconCheck}" 
                                   Fill="{DynamicResource ThemeAccentText}" 

@@ -1161,6 +1161,90 @@ public class InventoryTests
         Assert.AreEqual(450.00m, savedService.Price);
         Assert.HasCount(1, savedService.DefaultProducts);
     }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_OpenPosModal_WhenNoActiveConsultation_EnforcesRuleAndAlerts()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService, posVm);
+
+        // Sin consulta activa
+        Assert.IsFalse(consultService.HasActiveConsultation);
+
+        await recordsVm.OpenPosModalAsync();
+
+        Assert.IsFalse(recordsVm.IsPosModalOpen, "No debe abrir el modal de POS si no hay consulta activa");
+        Assert.IsTrue(recordsVm.IsInfoModalVisible, "Debe alertar al usuario");
+        Assert.IsNotNull(recordsVm.InfoModalMessage);
+        Assert.Contains("consulta médica activa", recordsVm.InfoModalMessage);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_OpenPosModal_WhenActiveConsultation_OpensModalAndInitializesPos()
+    {
+        var consultService = new ConsultationService();
+        var patient = new PatientRecord { FullName = "Laura Gómez", RecordNumber = "EXP-003" };
+        consultService.StartConsultation(patient, "Control de hipertensión");
+
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService, posVm);
+        posVm.OnCloseModalRequested = () => recordsVm.ClosePosModal();
+
+        Assert.IsTrue(consultService.HasActiveConsultation);
+
+        // Abrir modal de POS
+        await recordsVm.OpenPosModalAsync();
+
+        Assert.IsTrue(recordsVm.IsPosModalOpen, "Debe abrir el modal de POS integrado");
+        Assert.IsTrue(posVm.IsEmbeddedInModal, "PosViewModel debe estar marcado como embebido");
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.AreEqual("Laura Gómez", recordsVm.ActiveConsultationPatientName);
+
+        // Cerrar modal
+        recordsVm.ClosePosModal();
+        Assert.IsFalse(recordsVm.IsPosModalOpen);
+        Assert.IsFalse(posVm.IsEmbeddedInModal);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_PosModal_AddItemsAndServices_TransfersToActiveConsultation()
+    {
+        var consultService = new ConsultationService();
+        var patient = new PatientRecord { FullName = "Carlos Sánchez", RecordNumber = "EXP-004" };
+        consultService.StartConsultation(patient, "Infección de garganta");
+
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService, posVm);
+        posVm.OnCloseModalRequested = () => recordsVm.ClosePosModal();
+
+        await recordsVm.OpenPosModalAsync();
+        Assert.IsTrue(recordsVm.IsPosModalOpen);
+
+        // 1. Agregar un medicamento al carrito del POS
+        var products = await _inventoryService.GetProductsAsync();
+        var med = products.First();
+        posVm.AddToCart(med);
+
+        // 2. Agregar un servicio al carrito del POS
+        var service = posVm.Services.First();
+        posVm.AddServiceOnlyToCart(service);
+
+        Assert.HasCount(2, posVm.Cart);
+
+        // 3. Ejecutar Agregar a Consulta Activa (botón principal en modo modal)
+        posVm.AddToActiveConsultation();
+
+        Assert.IsEmpty(posVm.Cart, "El carrito debe vaciarse al transferir");
+        Assert.IsGreaterThanOrEqualTo(consultService.CurrentConsultation?.Items.Count ?? 0, 2);
+        Assert.IsGreaterThanOrEqualTo(recordsVm.ActiveConsultationItemsCount, 2);
+        Assert.IsGreaterThan(0m, recordsVm.ActiveConsultationTotalAmount);
+
+        // 4. Cerrar modal y verificar sincronización en ficha de expediente
+        posVm.CloseModal();
+        Assert.IsFalse(recordsVm.IsPosModalOpen);
+        Assert.AreEqual(consultService.CurrentConsultation?.TotalItems, recordsVm.ActiveConsultationItemsCount);
+    }
 }
 
 

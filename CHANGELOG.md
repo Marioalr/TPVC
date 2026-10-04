@@ -4,6 +4,30 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.7] - 2026-10-04
+
+### Añadido
+* **Modal Reutilizado de Punto de Venta (POS) en Consulta Activa ("Agregar en POS")**:
+  * **Reemplazo de Acción**: Sustitución del botón `[ 💳 Liquidar en POS ]` en el banner de consulta activa de `MedicalRecordsView` por `[ 🛒 Agregar en POS ]`.
+  * **Ventana Modal Embebida del POS (`IsPosModalOpen` / `IsEmbeddedInModal`)**:
+    * Al presionar `[ 🛒 Agregar en POS ]`, se despliega un overlay modal oscuro con tarjeta flotante que reutiliza integralmente el componente `PosView`.
+    * Permite la búsqueda en tiempo real de fármacos, selección con teclado/ratón, acceso al catálogo completo de medicamentos (`Buscar en Catálogo`) y catálogo de servicios médicos (`Servicios e Insumos`).
+    * Permite agregar servicios clínicos con sus insumos predeterminados para vincularlos a la consulta en curso.
+  * **Regla Estricta de Negocio Clínico**:
+    * Solo es posible abrir el POS embebido si existe una consulta médica activa (`HasActiveConsultation == true`). En caso contrario, se notifica al médico con una alerta clínica informativa.
+  * **Adaptación de Interfaz para Modo Consulta Embebido**:
+    * Ocultamiento automático de la barra superior del POS (evita duplicidad con el encabezado modal).
+    * Ocultamiento del botón de despacho inmediato `[ Cobrar y Despachar Venta ]` para prevenir cierres prematuros de venta mientras la consulta sigue en desarrollo.
+    * Resaltado visual del botón `[ 🩺 Guardar en Consulta Activa ]` con estilo `AccentButton` para enviar los ítems directamente al expediente del paciente.
+    * Botón de cierre `[ ✕ Cerrar y Volver al Expediente ]` para regresar inmediatamente a la vista clínica sincronizando totales e insumos asignados.
+* **Cobertura de Pruebas Unitarias**:
+  * 3 nuevas pruebas unitarias en `TPVC.Tests` validando:
+    1. Bloqueo y validación de seguridad si no hay consulta médica activa.
+    2. Inicialización correcta de la modal embebida con consulta en curso.
+    3. Carga combinada de fármacos y servicios desde el POS modal embebido, transferencia a la consulta activa y sincronización de totales y conteos (48/48 pruebas pasando exitosamente).
+
+---
+
 ## [1.3.6] - 2026-10-04
 
 ### Añadido
