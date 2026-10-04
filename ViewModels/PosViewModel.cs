@@ -32,6 +32,7 @@ public partial class CartItem : ObservableObject
 public partial class PosViewModel : ObservableObject
 {
     private readonly InventoryService _inventoryService;
+    private readonly ConsultationService _consultationService;
     public Action? OnBackToHubRequested { get; set; }
 
     [RelayCommand]
@@ -161,11 +162,49 @@ public partial class PosViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSuccessAlert;
 
-    public PosViewModel(InventoryService inventoryService)
+    // ==========================================
+    // ESTADO DE CONSULTA MÉDICA ACTIVA
+    // ==========================================
+    public bool HasActiveConsultation => _consultationService.HasActiveConsultation;
+    public ActiveConsultation? ActiveConsultation => _consultationService.CurrentConsultation;
+    public string ActiveConsultationFolio => _consultationService.CurrentConsultation?.Folio ?? string.Empty;
+    public string ActiveConsultationPatientName => _consultationService.CurrentConsultation?.PatientName ?? string.Empty;
+    public int ActiveConsultationItemsCount => _consultationService.CurrentConsultation?.TotalItems ?? 0;
+    public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
+
+    [ObservableProperty]
+    private bool _isSelectPatientModalOpen;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientRecord> _availablePatientsForConsultation = new();
+
+    [ObservableProperty]
+    private PatientRecord? _selectedPatientForConsultation;
+
+    [ObservableProperty]
+    private string _newConsultationChiefComplaint = "Consulta Médica General";
+
+    public PosViewModel(InventoryService inventoryService, ConsultationService? consultationService = null)
     {
         _inventoryService = inventoryService;
+        _consultationService = consultationService ?? new ConsultationService();
         _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
+        _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
         _cart.CollectionChanged += (s, e) => RecalculateTotals();
+
+        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+        SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+        SyncActiveConsultation();
+    }
+
+    public void SyncActiveConsultation()
+    {
+        OnPropertyChanged(nameof(HasActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultationFolio));
+        OnPropertyChanged(nameof(ActiveConsultationPatientName));
+        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
+        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
     }
 
 
@@ -539,6 +578,154 @@ public partial class PosViewModel : ObservableObject
         if (product != null)
         {
             AddToCart(product);
+        }
+    }
+
+    // ==========================================
+    // INTEGRACIÓN CON CONSULTA MÉDICA ACTIVA
+    // ==========================================
+    [RelayCommand]
+    public void AddToActiveConsultation()
+    {
+        if (Cart.Count == 0)
+        {
+            ShowAlert("La venta no contiene ningún producto para agregar a la consulta activa.", false);
+            return;
+        }
+
+        if (!_consultationService.HasActiveConsultation)
+        {
+            AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+            if (SelectedPatientForConsultation == null || !AvailablePatientsForConsultation.Contains(SelectedPatientForConsultation))
+            {
+                SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+            }
+            NewConsultationChiefComplaint = "Consulta Médica General";
+            IsSelectPatientModalOpen = true;
+            ShowAlert("Debe haber una consulta activa para agregar insumos. Seleccione el paciente para iniciarla.", false);
+            return;
+        }
+
+        ExecuteAddCartToActiveConsultation();
+    }
+
+    private void ExecuteAddCartToActiveConsultation()
+    {
+        if (!_consultationService.HasActiveConsultation) return;
+
+        int totalAdded = 0;
+        foreach (var item in Cart)
+        {
+            _consultationService.AddCartItemToActiveConsultation(
+                item.ProductId,
+                item.Code,
+                item.Name,
+                item.GenericName,
+                item.Presentation,
+                item.Unit,
+                item.UnitPrice,
+                item.Quantity
+            );
+            totalAdded += item.Quantity;
+        }
+
+        var folio = _consultationService.CurrentConsultation?.Folio;
+        var patientName = _consultationService.CurrentConsultation?.PatientName;
+
+        Cart.Clear();
+        RecalculateTotals();
+        SyncActiveConsultation();
+
+        ShowAlert($"¡Se agregaron {totalAdded} insumo(s) a la consulta médica de {patientName} ({folio})! Quedan guardados para liquidarse al terminar.", true);
+    }
+
+    [RelayCommand]
+    public void OpenSelectPatientModal()
+    {
+        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+        SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+        IsSelectPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseSelectPatientModal()
+    {
+        IsSelectPatientModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void ConfirmStartConsultationAndAddItems()
+    {
+        if (SelectedPatientForConsultation == null)
+        {
+            ShowAlert("Seleccione un paciente de la lista para iniciar la consulta.", false);
+            return;
+        }
+
+        _consultationService.StartConsultation(SelectedPatientForConsultation, NewConsultationChiefComplaint);
+        IsSelectPatientModalOpen = false;
+
+        ExecuteAddCartToActiveConsultation();
+    }
+
+    [RelayCommand]
+    public void CheckoutActiveConsultation()
+    {
+        if (!_consultationService.HasActiveConsultation || _consultationService.CurrentConsultation == null)
+        {
+            ShowAlert("No hay ninguna consulta médica activa para cobrar.", false);
+            return;
+        }
+
+        var consult = _consultationService.CurrentConsultation;
+        if (consult.Items.Count == 0)
+        {
+            ShowAlert($"La consulta activa de {consult.PatientName} no tiene insumos guardados.", false);
+            return;
+        }
+
+        PatientName = consult.PatientName;
+        foreach (var cItem in consult.Items)
+        {
+            var prod = Products.FirstOrDefault(p => p.Id == cItem.ProductId);
+            var existing = Cart.FirstOrDefault(c => c.ProductId == cItem.ProductId);
+            if (existing != null)
+            {
+                existing.Quantity += cItem.Quantity;
+            }
+            else
+            {
+                Cart.Add(new CartItem
+                {
+                    ProductId = cItem.ProductId,
+                    Code = cItem.Code,
+                    Name = cItem.Name,
+                    GenericName = cItem.GenericName,
+                    Presentation = cItem.Presentation,
+                    Unit = cItem.Unit,
+                    AvailableStock = prod?.CurrentStock ?? 999,
+                    UnitPrice = cItem.UnitPrice,
+                    Quantity = cItem.Quantity,
+                    RequiresRefrigeration = prod?.RequiresRefrigeration ?? false
+                });
+            }
+        }
+
+        _consultationService.CloseActiveConsultation();
+        RecalculateTotals();
+        SyncActiveConsultation();
+        ShowAlert($"Insumos de la consulta de {consult.PatientName} transferidos al carrito. Listos para cobro y ticket.", true);
+    }
+
+    [RelayCommand]
+    public void CancelActiveConsultation()
+    {
+        if (_consultationService.HasActiveConsultation)
+        {
+            var patient = _consultationService.CurrentConsultation?.PatientName;
+            _consultationService.CloseActiveConsultation();
+            SyncActiveConsultation();
+            ShowAlert($"La consulta médica activa de {patient} ha sido finalizada/cerrada.", true);
         }
     }
 

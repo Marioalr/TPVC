@@ -26,6 +26,7 @@ public partial class App : Application
         // Servicios Core
         services.AddSingleton<ThemeService>();
         services.AddSingleton<InventoryService>();
+        services.AddSingleton<ConsultationService>();
         services.AddSingleton<AppUpdateService>();
 
         // ViewModels

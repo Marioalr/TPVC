@@ -1,0 +1,46 @@
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace TPVC.Models;
+
+public partial class ConsultationProductItem : ObservableObject
+{
+    public int ProductId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? GenericName { get; set; }
+    public string? Presentation { get; set; }
+    public string Unit { get; set; } = "Piezas";
+    public decimal UnitPrice { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Subtotal))]
+    private int _quantity = 1;
+
+    public decimal Subtotal => Quantity * UnitPrice;
+    public DateTime AddedAt { get; set; } = DateTime.Now;
+}
+
+public partial class ActiveConsultation : ObservableObject
+{
+    public string Folio { get; set; } = $"CONS-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+    public int PatientId { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string PatientRecordNumber { get; set; } = string.Empty;
+    public string ChiefComplaint { get; set; } = "Consulta Médica General";
+    public DateTime StartedAt { get; set; } = DateTime.Now;
+
+    [ObservableProperty]
+    private ObservableCollection<ConsultationProductItem> _items = new();
+
+    public int TotalItems => Items.Sum(i => i.Quantity);
+    public decimal TotalAmount => Items.Sum(i => i.Subtotal);
+
+    public void NotifyItemsChanged()
+    {
+        OnPropertyChanged(nameof(TotalItems));
+        OnPropertyChanged(nameof(TotalAmount));
+    }
+}

@@ -8,6 +8,7 @@ namespace TPVC.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly InventoryService _inventoryService;
+    private readonly ConsultationService _consultationService;
     private readonly ThemeService _themeService;
     private readonly AppUpdateService _updateService;
 
@@ -21,7 +22,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.3.3";
+    private string _appVersion = "1.3.4";
 
     // ViewModels
     public MainHubViewModel MainHubVM { get; }
@@ -36,18 +37,20 @@ public partial class MainViewModel : ObservableObject
 
     public MainViewModel(
         InventoryService inventoryService, 
+        ConsultationService consultationService,
         ThemeService themeService, 
         AppUpdateService updateService)
     {
         _inventoryService = inventoryService;
+        _consultationService = consultationService;
         _themeService = themeService;
         _updateService = updateService;
 
         AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
         MainHubVM = new MainHubViewModel(NavigateTo);
-        PosVM = new PosViewModel(inventoryService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService);
+        PosVM = new PosViewModel(inventoryService, consultationService);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService);
         _ = MedicalRecordsVM.LoadServicesAsync();
 
         // Enlace para volver a la Vista Principal desde el POS o Expedientes
@@ -59,6 +62,13 @@ public partial class MainViewModel : ObservableObject
         {
             PosVM.PatientName = MedicalRecordsVM.SelectedPatient?.FullName ?? "Paciente de Consulta";
             PosVM.AddPrescriptionItem(medicine, qty);
+        };
+
+        // Enlace para liquidar consulta activa en POS
+        MedicalRecordsVM.OnCheckoutConsultationRequested = (consultation) =>
+        {
+            PosVM.CheckoutActiveConsultation();
+            NavigateTo("Pos");
         };
 
         MedicalRecordsVM.OnNavigateToPosRequested = () =>

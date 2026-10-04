@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.3-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.3)
+[![Version](https://img.shields.io/badge/version-v1.3.4-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.4)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -118,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * Runtime / SDK: [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Opción A: Instalador de Experiencia de Prueba (Recomendado)
-Descargue `TPVC-Setup-v1.3.3.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.3), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
+Descargue `TPVC-Setup-v1.3.4.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.4), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
 
 ### Opción B: Compilación y Empaquetado del Instalador desde el Código Fuente
 ```powershell
@@ -126,14 +126,14 @@ Descargue `TPVC-Setup-v1.3.3.exe` desde [Releases](https://github.com/Marioalr/T
 git clone https://github.com/Marioalr/TPVC.git
 cd TPVC
 
-# 2. Restaurar dependencias y ejecutar pruebas unitarias (28 pruebas)
+# 2. Restaurar dependencias y ejecutar pruebas unitarias (32 pruebas)
 dotnet restore TPVC.sln
 dotnet test TPVC.sln
 
 # 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe) y paquete .zip
-powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.3"
+powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.4"
 
-# El ejecutable quedará en: publish/TPVC-Setup-v1.3.3.exe
+# El ejecutable quedará en: publish/TPVC-Setup-v1.3.4.exe
 ```
 
 ---

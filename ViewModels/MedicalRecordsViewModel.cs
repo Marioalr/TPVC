@@ -13,8 +13,10 @@ namespace TPVC.ViewModels;
 public partial class MedicalRecordsViewModel : ObservableObject
 {
     private readonly InventoryService? _inventoryService;
+    private readonly ConsultationService? _consultationService;
 
     public Action<string, int>? OnSendPrescriptionToPos { get; set; }
+    public Action<ActiveConsultation>? OnCheckoutConsultationRequested { get; set; }
     public Action? OnNavigateToPosRequested { get; set; }
     public Action? OnBackToHubRequested { get; set; }
 
@@ -51,6 +53,16 @@ public partial class MedicalRecordsViewModel : ObservableObject
 
     [ObservableProperty]
     private PatientRecord? _selectedPatient;
+
+    // ==========================================
+    // ESTADO DE CONSULTA MÉDICA ACTIVA
+    // ==========================================
+    public bool HasActiveConsultation => _consultationService?.HasActiveConsultation ?? false;
+    public ActiveConsultation? ActiveConsultation => _consultationService?.CurrentConsultation;
+    public string ActiveConsultationFolio => _consultationService?.CurrentConsultation?.Folio ?? string.Empty;
+    public string ActiveConsultationPatientName => _consultationService?.CurrentConsultation?.PatientName ?? string.Empty;
+    public int ActiveConsultationItemsCount => _consultationService?.CurrentConsultation?.TotalItems ?? 0;
+    public decimal ActiveConsultationTotalAmount => _consultationService?.CurrentConsultation?.TotalAmount ?? 0m;
 
     [ObservableProperty]
     private string? _infoModalMessage;
@@ -109,14 +121,38 @@ public partial class MedicalRecordsViewModel : ObservableObject
         "Certificados"
     };
 
-    public MedicalRecordsViewModel() : this(null)
+    public MedicalRecordsViewModel() : this(null, null)
     {
     }
 
-    public MedicalRecordsViewModel(InventoryService? inventoryService)
+    public MedicalRecordsViewModel(InventoryService? inventoryService, ConsultationService? consultationService = null)
     {
         _inventoryService = inventoryService;
-        LoadMockPatients();
+        _consultationService = consultationService;
+
+        if (_consultationService != null)
+        {
+            _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
+            Patients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+            FilteredPatients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+            SelectedPatient = Patients.FirstOrDefault();
+        }
+        else
+        {
+            LoadMockPatients();
+        }
+
+        SyncActiveConsultation();
+    }
+
+    public void SyncActiveConsultation()
+    {
+        OnPropertyChanged(nameof(HasActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultationFolio));
+        OnPropertyChanged(nameof(ActiveConsultationPatientName));
+        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
+        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
     }
 
     public async Task LoadServicesAsync()
@@ -440,6 +476,52 @@ public partial class MedicalRecordsViewModel : ObservableObject
         }
 
         OnNavigateToPosRequested?.Invoke();
+    }
+
+    [RelayCommand]
+    public void StartActiveConsultation()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione un paciente para iniciar la consulta médica activa.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        if (_consultationService != null)
+        {
+            _consultationService.StartConsultation(SelectedPatient);
+            SyncActiveConsultation();
+            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede acudir al Punto de Venta (POS) y presionar 'Agregar a Consulta Activa' para acumular insumos y medicamentos utilizados durante la atención médica.";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public void CheckoutActiveConsultation()
+    {
+        if (_consultationService?.CurrentConsultation == null)
+        {
+            InfoModalMessage = "No hay ninguna consulta médica activa para liquidar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var consultation = _consultationService.CurrentConsultation;
+        OnCheckoutConsultationRequested?.Invoke(consultation);
+    }
+
+    [RelayCommand]
+    public void CancelActiveConsultation()
+    {
+        if (_consultationService != null && _consultationService.HasActiveConsultation)
+        {
+            var patient = _consultationService.CurrentConsultation?.PatientName;
+            _consultationService.CloseActiveConsultation();
+            SyncActiveConsultation();
+            InfoModalMessage = $"La consulta médica activa de {patient} ha sido finalizada/cerrada.";
+            IsInfoModalVisible = true;
+        }
     }
 
     [RelayCommand]

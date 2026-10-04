@@ -674,6 +674,122 @@ public class InventoryTests
         Assert.AreEqual(0.0m, dialogVm.Price, "El precio debe reiniciarse a 0");
         Assert.AreEqual(0, dialogVm.CurrentStock, "El stock debe reiniciarse a 0");
     }
+
+    [TestMethod]
+    public async Task PosViewModel_AddToActiveConsultation_WhenEmptyCart_AlertsUser()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        posVm.AddToActiveConsultation();
+
+        Assert.IsTrue(posVm.IsAlertVisible);
+        Assert.IsFalse(posVm.IsSuccessAlert);
+        StringAssert.Contains(posVm.AlertMessage, "La venta no contiene ningún producto");
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddToActiveConsultation_WhenNoActiveConsultation_OpensModalAndAlerts()
+    {
+        var consultService = new ConsultationService();
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        var product = posVm.Products.First(p => p.CurrentStock > 0);
+        posVm.AddToCart(product);
+
+        Assert.HasCount(1, posVm.Cart);
+        Assert.IsFalse(posVm.HasActiveConsultation);
+
+        posVm.AddToActiveConsultation();
+
+        // Debe avisar que debe haber una activa y abrir el modal
+        Assert.IsTrue(posVm.IsSelectPatientModalOpen);
+        Assert.IsTrue(posVm.IsAlertVisible);
+        Assert.IsFalse(posVm.IsSuccessAlert);
+        StringAssert.Contains(posVm.AlertMessage, "Debe haber una consulta activa");
+        Assert.HasCount(1, posVm.Cart, "El carrito no debe perderse si aún no se inicia la consulta");
+
+        // Al confirmar desde el modal con un paciente seleccionado:
+        posVm.SelectedPatientForConsultation = posVm.AvailablePatientsForConsultation.First();
+        posVm.ConfirmStartConsultationAndAddItems();
+
+        Assert.IsFalse(posVm.IsSelectPatientModalOpen);
+        Assert.IsTrue(posVm.HasActiveConsultation);
+        Assert.IsEmpty(posVm.Cart, "El carrito se limpia para guardar en la consulta");
+        Assert.AreEqual(1, posVm.ActiveConsultationItemsCount);
+        Assert.IsTrue(posVm.IsSuccessAlert);
+        StringAssert.Contains(posVm.AlertMessage, "Se agregaron");
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddToActiveConsultation_SavesItemsWithoutImmediateChargingAndAllowsFinalCheckout()
+    {
+        var consultService = new ConsultationService();
+        var patient = consultService.Patients.First();
+        consultService.StartConsultation(patient, "Evaluación médica de prueba");
+
+        var posVm = new PosViewModel(_inventoryService, consultService);
+        await posVm.InitializeAsync();
+
+        Assert.IsTrue(posVm.HasActiveConsultation);
+        Assert.AreEqual(patient.FullName, posVm.ActiveConsultationPatientName);
+
+        var prod1 = posVm.Products.First(p => p.CurrentStock >= 2);
+        posVm.AddToCart(prod1);
+        posVm.IncreaseQuantity(posVm.Cart.First()); // Qty = 2
+
+        var initialCartTotal = posVm.TotalCartAmount;
+        Assert.AreEqual(2, posVm.TotalCartItems);
+
+        // Agregar a la consulta activa
+        posVm.AddToActiveConsultation();
+
+        // No se cobra de inmediato: se vacía el carrito del mostrador para seguir atendiendo
+        Assert.IsEmpty(posVm.Cart);
+        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0m, posVm.TotalCartAmount);
+
+        // Pero la consulta activa acumula los insumos guardados
+        Assert.AreEqual(2, posVm.ActiveConsultationItemsCount);
+        Assert.AreEqual(initialCartTotal, posVm.ActiveConsultationTotalAmount);
+
+        // Al finalizar la consulta médica, transferir de vuelta a POS para cobrar y liquidar
+        posVm.CheckoutActiveConsultation();
+
+        Assert.HasCount(1, posVm.Cart);
+        Assert.AreEqual(2, posVm.TotalCartItems);
+        Assert.AreEqual(initialCartTotal, posVm.TotalCartAmount);
+        Assert.AreEqual(patient.FullName, posVm.PatientName);
+        Assert.IsFalse(posVm.HasActiveConsultation, "La consulta activa se cierra para cobro final");
+
+        // Procesar la venta final genera el comprobante
+        await posVm.ProcessSaleAsync();
+        Assert.IsTrue(posVm.IsTicketModalOpen);
+        Assert.IsNotNull(posVm.CurrentReceipt);
+        Assert.AreEqual(patient.FullName, posVm.CurrentReceipt.PatientName);
+        Assert.AreEqual(initialCartTotal, posVm.CurrentReceipt.TotalAmount);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_ActiveConsultationLifecycle_WorksSynchronouslyWithConsultationService()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+
+        recordsVm.SelectedPatient = recordsVm.Patients.First();
+        recordsVm.StartActiveConsultation();
+
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.AreEqual(recordsVm.SelectedPatient.FullName, recordsVm.ActiveConsultationPatientName);
+
+        // Cancelar consulta
+        recordsVm.CancelActiveConsultation();
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+    }
 }
 
 

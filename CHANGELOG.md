@@ -4,6 +4,28 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.4] - 2026-10-03
+
+### Añadido
+* **Integración Directa del Punto de Venta con Consulta Médica Activa ("Agregar a Consulta Activa")**:
+  * **Nuevo Botón en Barra de Cobro de POS**: Botón dedicado `[ 📋 Agregar a Consulta Activa ]` posicionado junto al cobro directo en la esquina inferior derecha.
+  * **Diferimiento de Cobro Inmediato**: Al presionar el botón con artículos en la venta, los insumos y medicamentos no se cobran de inmediato en mostrador, sino que se acumulan y preservan dentro del expediente de la consulta médica activa.
+  * **Verificación de Consulta Activa y Modal Rápido de Inicio**:
+    * Valida estrictamente que exista una consulta médica activa (`HasActiveConsultation`).
+    * Si no hay ninguna consulta activa en curso, despliega una alerta explicativa y abre de forma asistida el modal de selección de paciente para iniciar la consulta al instante y transferir los insumos sin perder lo acumulado en el mostrador.
+  * **Reinicio Automático del Carrito**: Tras agregar a la consulta activa, el carrito del mostrador se vacía para permitir continuar con la venta independiente de farmacia y dispensación regular a otros clientes.
+  * **Banner Informativo en Tiempo Real**: En la parte superior del Punto de Venta y de Expedientes Clínicos se despliega una barra de estado con distintivo verde que muestra el paciente en consulta, folio clínico, contador de insumos acumulados y total acumulado.
+  * **Liquidación Consolidada al Concluir la Consulta**: Botón `[ 💳 Liquidar Consulta en POS ]` para traer de vuelta todos los insumos acumulados durante la consulta al carrito con el nombre del paciente precargado, listos para cobrar, despachar inventario FEFO y generar el comprobante/ticket.
+  * **Botón en Ficha Médica**: Opción `[ Iniciar Consulta Activa ]` desde el detalle del expediente clínico del paciente.
+* **Servicio Centralizado `ConsultationService`**:
+  * Servicio Singleton que sincroniza en tiempo real el ciclo de vida de la consulta médica activa entre los módulos de POS y Expedientes Clínicos.
+* **Pruebas Automatizadas de Consulta Activa**:
+  * 4 nuevas pruebas unitarias cubriendo alertas con carrito vacío, verificación y modal de consulta activa, preservación de insumos sin cobro inmediato y ciclo de liquidación/cancelación (suite ampliada a **32 pruebas unitarias al 100%**).
+* **Actualización Global de Versión**:
+  * Sincronización a **`1.3.4`** en la solución, instalador, vistas y documentación.
+
+---
+
 ## [1.3.3] - 2026-10-03
 
 ### Corregido
