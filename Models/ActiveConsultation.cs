@@ -20,6 +20,7 @@ public partial class ConsultationProductItem : ObservableObject
     private int _quantity = 1;
 
     public decimal Subtotal => Quantity * UnitPrice;
+    public string ProductName => Name;
     public DateTime AddedAt { get; set; } = DateTime.Now;
 }
 
@@ -33,10 +34,20 @@ public partial class ActiveConsultation : ObservableObject
     public DateTime StartedAt { get; set; } = DateTime.Now;
 
     [ObservableProperty]
+    private string _vitalSigns = string.Empty;
+
+    [ObservableProperty]
+    private string _generalIndications = string.Empty;
+
+    [ObservableProperty]
     private ObservableCollection<ConsultationProductItem> _items = new();
 
     public int TotalItems => Items.Sum(i => i.Quantity);
+    public int ItemsCount => Items.Count;
     public decimal TotalAmount => Items.Sum(i => i.Subtotal);
+    public decimal Subtotal => TotalAmount;
+    public decimal Tax => Math.Round(TotalAmount * 0.16m, 2);
+    public decimal Total => TotalAmount;
 
     public TimeSpan ElapsedTime => DateTime.Now - StartedAt;
 

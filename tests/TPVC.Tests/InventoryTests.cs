@@ -1804,6 +1804,207 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.IsInfoModalVisible);
         Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("PDF") == true);
     }
+
+    [TestMethod]
+    public async Task MedicalRecords_VitalSignsModal_AnyFieldCanBeEntered_NoneMandatory()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
+
+        var patient = new PatientRecord
+        {
+            Id = 10,
+            FullName = "Carlos Santana",
+            RecordNumber = "EXP-TEST-010",
+            VitalSigns = "Sin signos vitales registrados"
+        };
+
+        recordsVm.SelectedPatient = patient;
+
+        // Iniciar consulta activa
+        recordsVm.StartActiveConsultation();
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+
+        // Abrir modal de signos vitales
+        recordsVm.OpenVitalSignsModal();
+        Assert.IsTrue(recordsVm.IsVitalSignsModalOpen);
+
+        // Caso 1: Llenar solo algunos campos (ninguno es obligatorio)
+        recordsVm.VitalSignTA = "13085"; // Autoformatea a 130/85
+        Assert.AreEqual("130/85", recordsVm.VitalSignTA);
+        recordsVm.VitalSignTemp = "37.1";
+        recordsVm.VitalSignSpO2 = "99";
+        // Dejar FC, FR, Peso, Talla, Glucosa, Cintura vacíos
+
+        await recordsVm.SaveVitalSignsAsync();
+
+        Assert.IsFalse(recordsVm.IsVitalSignsModalOpen);
+        Assert.IsTrue(patient.VitalSigns.Contains("TA: 130/85 mmHg"));
+        Assert.IsTrue(patient.VitalSigns.Contains("Temp: 37.1 °C"));
+        Assert.IsTrue(patient.VitalSigns.Contains("SpO2: 99%"));
+        Assert.IsFalse(patient.VitalSigns.Contains("FC:"));
+        Assert.IsFalse(patient.VitalSigns.Contains("Peso:"));
+        Assert.AreEqual(patient.VitalSigns, consultationService.CurrentConsultation?.VitalSigns);
+
+        // Caso 2: Abrir y llenar todos los campos
+        recordsVm.OpenVitalSignsModal();
+        recordsVm.VitalSignFC = "78";
+        recordsVm.VitalSignFR = "19";
+        recordsVm.VitalSignWeight = "75.0";
+        recordsVm.VitalSignHeight = "1.75";
+        recordsVm.VitalSignGlucose = "92";
+        recordsVm.VitalSignWaist = "88";
+
+        Assert.IsTrue(recordsVm.VitalSignIMC.Contains("24.5")); // Auto-recalculado
+
+        await recordsVm.SaveVitalSignsAsync();
+
+        Assert.IsTrue(patient.VitalSigns.Contains("FC: 78 lpm"));
+        Assert.IsTrue(patient.VitalSigns.Contains("FR: 19 rpm"));
+        Assert.IsTrue(patient.VitalSigns.Contains("Peso: 75.0 kg"));
+        Assert.IsTrue(patient.VitalSigns.Contains("Talla: 1.75 m"));
+        Assert.IsTrue(patient.VitalSigns.Contains("Glucosa: 92 mg/dL"));
+        Assert.IsTrue(patient.VitalSigns.Contains("Cintura: 88 cm"));
+    }
+
+    [TestMethod]
+    public void MedicalRecords_GeneralIndications_CanBeLinkedToPrescriptionAndConsultation()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
+
+        var patient = new PatientRecord
+        {
+            Id = 11,
+            FullName = "Elena Ramos",
+            RecordNumber = "EXP-TEST-011"
+        };
+        recordsVm.SelectedPatient = patient;
+        recordsVm.StartActiveConsultation();
+
+        // Modificar indicaciones y añadir presets
+        recordsVm.ConsultationGeneralIndications = "Guardar reposo absoluto por 3 días.";
+        recordsVm.AppendGeneralIndicationPreset("Hidratación con electrolitos orales.");
+
+        Assert.IsTrue(recordsVm.ConsultationGeneralIndications.Contains("Guardar reposo absoluto"));
+        Assert.IsTrue(recordsVm.ConsultationGeneralIndications.Contains("electrolitos orales"));
+
+        // Vincular a receta
+        recordsVm.AddGeneralIndicationsToPrescription();
+
+        Assert.IsTrue(recordsVm.HasCustomGeneralIndications);
+        Assert.AreEqual(recordsVm.ConsultationGeneralIndications, recordsVm.PrescriptionGeneralInstructions);
+        Assert.AreEqual(recordsVm.PrescriptionGeneralInstructions, patient.GeneralIndications);
+        Assert.AreEqual(recordsVm.PrescriptionGeneralInstructions, consultationService.CurrentConsultation?.GeneralIndications);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecords_Prescription_AddPrescriptionItemDoesNotAutoAddToPos_AddPrescriptionItemToPosWorks()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
+
+        var patient = new PatientRecord
+        {
+            Id = 12,
+            FullName = "Marta Gómez",
+            RecordNumber = "EXP-TEST-012",
+            ActivePrescription = new List<PatientPrescriptionItem>()
+        };
+        recordsVm.SelectedPatient = patient;
+        recordsVm.StartActiveConsultation();
+
+        Assert.AreEqual(0, consultationService.CurrentConsultation?.Items.Count);
+
+        // 1. Agregar medicamento a la receta ("+ Recetar")
+        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
+        recordsVm.PrescriptionQuantity = 2;
+
+        await recordsVm.AddPrescriptionItemToPatientAsync();
+
+        // Verificamos que se agregó a la receta del paciente
+        Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.AreEqual("Amoxicilina 500mg", patient.ActivePrescription[0].MedicineName);
+
+        // REGLA CRÍTICA: NO se agrega automáticamente al POS/cuenta de consulta
+        Assert.AreEqual(0, consultationService.CurrentConsultation?.Items.Count);
+
+        // 2. Usar el botón explícito "Agregar al POS" para este medicamento
+        recordsVm.AddPrescriptionItemToPos(patient.ActivePrescription[0]);
+
+        // Ahora sí debe estar en la cuenta de la consulta activa
+        Assert.AreEqual(1, consultationService.CurrentConsultation?.Items.Count);
+        var consultationItem = consultationService.CurrentConsultation!.Items[0];
+        Assert.AreEqual("Amoxicilina 500mg", consultationItem.ProductName);
+        Assert.AreEqual(2, consultationItem.Quantity);
+    }
+
+    [TestMethod]
+    public void MedicalRecords_ServiciosTab_AddServiceToConsultation_CalculatesTotalsAndRemovesItem()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
+
+        var patient = new PatientRecord
+        {
+            Id = 13,
+            FullName = "Roberto Morales",
+            RecordNumber = "EXP-TEST-013"
+        };
+        recordsVm.SelectedPatient = patient;
+        recordsVm.StartActiveConsultation();
+
+        // Crear servicio clínico con 1 insumo por defecto
+        var productInsumo = new Product
+        {
+            Id = 101,
+            Code = "INS-001",
+            Name = "Gasa Estéril 10x10",
+            Price = 25.00m,
+            CurrentStock = 50,
+            Unit = "Piezas"
+        };
+
+        var service = new ClinicalService
+        {
+            Id = 1,
+            Code = "SERV-001",
+            Name = "Curación Menor",
+            Category = "Curaciones",
+            Price = 200.00m,
+            EstimatedDurationMinutes = 15,
+            DefaultProducts = new List<ServiceDefaultProduct>
+            {
+                new() { ProductId = 101, Product = productInsumo, Quantity = 2 }
+            }
+        };
+
+        recordsVm.Services.Add(service);
+
+        // Cambiar a la pestaña Servicios
+        recordsVm.SwitchPatientDetailTab("Servicios");
+        Assert.AreEqual("Servicios", recordsVm.PatientDetailTab);
+
+        // Agregar servicio a la consulta activa
+        recordsVm.AddServiceToActiveConsultation(service);
+
+        // Debe haber 2 ítems en la cuenta: el servicio + las 2 gasas
+        var items = consultationService.CurrentConsultation!.Items;
+        Assert.AreEqual(2, items.Count);
+        Assert.IsTrue(items.Any(i => i.ProductName == "Curación Menor" && i.UnitPrice == 200.00m));
+        Assert.IsTrue(items.Any(i => i.ProductName == "Gasa Estéril 10x10" && i.Quantity == 2));
+
+        // Subtotal = 200 + (25 * 2) = 250.00
+        Assert.AreEqual(250.00m, consultationService.CurrentConsultation.Subtotal);
+
+        // Quitar el insumo de la cuenta
+        var insumoItem = items.First(i => i.ProductName == "Gasa Estéril 10x10");
+        recordsVm.RemoveItemFromActiveConsultation(insumoItem);
+
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(200.00m, consultationService.CurrentConsultation.Subtotal);
+    }
 }
 
 

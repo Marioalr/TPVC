@@ -4,6 +4,38 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.13] - 2026-10-04
+
+### Añadido
+* **Módulo Completo de Registro Rápido de Signos Vitales y Somatometría**:
+  * Botón `"🩺 Agregar Signos Vitales"` integrado en la tarjeta de signos vitales de la consulta médica.
+  * Ventana modal flotante con acceso a todos los 10 signos vitales y parámetros somatométricos (NOM-004-SSA3):
+    * Tensión Arterial (TA) con formato automático `xxx/xxx`.
+    * Frecuencia Cardíaca (FC, lpm) y Frecuencia Respiratoria (FR, rpm).
+    * Temperatura Corporal (°C), Peso (kg) y Talla (m).
+    * Cálculo automático del Índice de Masa Corporal (IMC) con clasificación clínica en tiempo real.
+    * Saturación de Oxígeno (SpO2, %), Glucosa Capilar (mg/dL) y Perímetro de Cintura (cm).
+  * **Regla clínica**: Ningún signo vital es obligatorio, permitiendo al médico registrar únicamente los parámetros evaluados en la sesión.
+* **Sección de Indicaciones Generales y Cuidados**:
+  * Tarjeta dedicada para el registro de recomendaciones clínicas, cuidados, hidratación, dieta, reposo y signos de alarma.
+  * Botones de plantillas rápidas (`+ Hidratación`, `+ Reposo`, `+ Dieta blanda`, `+ Datos de alarma`).
+  * Botón opcional `"📋 Agregar a la Receta"` que vincula automáticamente estas medidas para que aparezcan de forma destacada en la receta médica oficial y en el documento PDF/impreso.
+* **Separación de Flujos: Receta Médica (PDF) vs Servicios y Cobro (POS)**:
+  * Eliminación del botón deprecado `"Cargar a Venta (POS)"` en la cabecera de la receta médica, desacoplando la prescripción clínica de la liquidación en caja.
+  * Inclusión de botón individual `[ 🛒 Agregar al POS ]` por cada fármaco prescrito en la lista, permitiendo al médico o asistente enviar a la cuenta de la consulta únicamente aquellos medicamentos surtidos directamente en la farmacia de la clínica.
+  * Botón `"🛒 Cargar Receta a POS"` en la ventana de vista previa oficial de la receta PDF.
+* **Nueva Pestaña de "🩺 Servicios y Cobro (POS)"**:
+  * Tercera pestaña en la ficha clínica del paciente (`Resumen`, `Historial`, `Servicios`).
+  * Panel izquierdo: Catálogo completo de procedimientos y servicios clínicos disponibles (Consultas, Curaciones, Suturas, Certificados, Inyecciones) con botón rápido para agregar a la cuenta de la consulta activa y botón para dar de alta nuevos servicios con sus insumos por defecto.
+  * Panel derecho: Resumen contable de la consulta activa con desglose de ítems, cantidades, precios unitarios, subtotales, IVA y total a cobrar.
+  * Botones de acción directa: `"🛒 Finalizar y Cobrar en POS"` y `"🔍 Abrir POS para Insumos Extras"`.
+
+### Modificado
+* Actualización de `ActiveConsultation` y `ConsultationProductItem` con alias y propiedades contables de sincronización fluida (`ProductName`, `ItemsCount`, `Subtotal`, `Tax`, `Total`).
+* Cobertura de pruebas unitarias al 100% (70 pruebas superadas con 0 errores).
+
+---
+
 ## [1.3.12] - 2026-10-04
 
 ### Añadido

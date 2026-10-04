@@ -113,6 +113,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void SwitchPatientDetailTab(string tab)
     {
         PatientDetailTab = tab;
+        if (tab == "Servicios" && Services.Count == 0)
+        {
+            _ = LoadServicesAsync();
+        }
     }
 
     // ==========================================
@@ -686,6 +690,95 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _clinicName = "CONSULTORIO MÉDICO GENERAL Y FARMACIA";
+
+    // ==========================================
+    // MODAL DE REGISTRO RÁPIDO DE SIGNOS VITALES
+    // ==========================================
+    [ObservableProperty]
+    private bool _isVitalSignsModalOpen;
+
+    [ObservableProperty]
+    private string _vitalSignTA = string.Empty;
+
+    partial void OnVitalSignTAChanged(string value)
+    {
+        var formatted = FormatTA(value);
+        if (formatted != value)
+        {
+            VitalSignTA = formatted;
+        }
+    }
+
+    [ObservableProperty]
+    private string _vitalSignFC = string.Empty;
+
+    [ObservableProperty]
+    private string _vitalSignFR = string.Empty;
+
+    [ObservableProperty]
+    private string _vitalSignTemp = string.Empty;
+
+    [ObservableProperty]
+    private string _vitalSignWeight = string.Empty;
+
+    partial void OnVitalSignWeightChanged(string value)
+    {
+        RecalculateVitalSignsIMC();
+    }
+
+    [ObservableProperty]
+    private string _vitalSignHeight = string.Empty;
+
+    partial void OnVitalSignHeightChanged(string value)
+    {
+        RecalculateVitalSignsIMC();
+    }
+
+    [ObservableProperty]
+    private string _vitalSignIMC = "No calculado";
+
+    [ObservableProperty]
+    private string _vitalSignSpO2 = string.Empty;
+
+    [ObservableProperty]
+    private string _vitalSignGlucose = string.Empty;
+
+    [ObservableProperty]
+    private string _vitalSignWaist = string.Empty;
+
+    private void RecalculateVitalSignsIMC()
+    {
+        if (decimal.TryParse((VitalSignWeight ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
+            decimal.TryParse((VitalSignHeight ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
+            height > 0)
+        {
+            var imc = weight / (height * height);
+            string category;
+            if (imc < 18.5m) category = "Bajo peso";
+            else if (imc < 25.0m) category = "Peso normal";
+            else if (imc < 30.0m) category = "Sobrepeso";
+            else if (imc < 35.0m) category = "Obesidad Grado I";
+            else category = "Obesidad Grado II+";
+
+            VitalSignIMC = $"{imc:F1} ({category})";
+        }
+        else
+        {
+            VitalSignIMC = "Valores no disponibles";
+        }
+    }
+
+    // ==========================================
+    // INDICACIONES GENERALES EN CONSULTA ACTIVA
+    // ==========================================
+    [ObservableProperty]
+    private string _consultationGeneralIndications = "Tomar abundantes líquidos, mantener reposo relativo y acudir a urgencias en caso de presentar datos de alarma.";
+
+    [ObservableProperty]
+    private string _prescriptionGeneralInstructions = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasCustomGeneralIndications;
 
     partial void OnPrescriptionSearchTextChanged(string value)
     {
@@ -1932,31 +2025,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SelectedPatient.ActivePrescription = currentList;
         SelectedPatient.SyncPrescriptionJson();
 
-        // Si hay consulta médica activa, también registramos el insumo/fármaco en la consulta
-        if (HasActiveConsultation && _consultationService?.CurrentConsultation != null)
-        {
-            var matchedProduct = AvailableProducts.FirstOrDefault(p => 
-                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || 
-                $"{p.Name} ({p.Presentation})".Equals(name, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ) ?? SelectedPrescriptionProduct;
-
-            if (matchedProduct != null)
-            {
-                _consultationService.AddCartItemToActiveConsultation(
-                    matchedProduct.Id,
-                    matchedProduct.Code,
-                    matchedProduct.Name,
-                    matchedProduct.GenericName,
-                    matchedProduct.Presentation,
-                    matchedProduct.Unit,
-                    matchedProduct.Price,
-                    qty
-                );
-                SyncActiveConsultation();
-            }
-        }
-
         if (_inventoryService != null)
         {
             try
@@ -1976,6 +2044,257 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsPrescriptionDropdownOpen = false;
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public void AddPrescriptionItemToPos(PatientPrescriptionItem? item)
+    {
+        if (item == null) return;
+
+        var name = item.MedicineName;
+        var qty = Math.Max(1, item.RecommendedQuantity);
+
+        var matchedProduct = AvailableProducts.FirstOrDefault(p => 
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || 
+            $"{p.Name} ({p.Presentation})".Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(name, StringComparison.OrdinalIgnoreCase))
+        );
+
+        int prodId = matchedProduct?.Id ?? -Random.Shared.Next(100, 9999);
+        string code = matchedProduct?.Code ?? "MED-001";
+        decimal price = matchedProduct?.Price ?? 85.00m;
+        string? gen = matchedProduct?.GenericName;
+        string? pres = matchedProduct?.Presentation ?? "Caja / Frasco";
+        string unit = matchedProduct?.Unit ?? "Piezas";
+
+        if (HasActiveConsultation && _consultationService?.CurrentConsultation != null)
+        {
+            _consultationService.AddCartItemToActiveConsultation(
+                prodId, code, name, gen, pres, unit, price, qty
+            );
+            SyncActiveConsultation();
+        }
+
+        if (PosVM != null)
+        {
+            var existing = PosVM.Cart.FirstOrDefault(c => c.ProductId == prodId);
+            if (existing != null)
+            {
+                existing.Quantity += qty;
+            }
+            else
+            {
+                PosVM.Cart.Add(new CartItem
+                {
+                    ProductId = prodId,
+                    Code = code,
+                    Name = name,
+                    GenericName = gen,
+                    Presentation = pres,
+                    Unit = unit,
+                    AvailableStock = matchedProduct?.CurrentStock ?? 999,
+                    UnitPrice = price,
+                    Quantity = qty
+                });
+            }
+            PosVM.RecalculateTotals();
+        }
+
+        InfoModalMessage = $"Medicamento '{name}' (Cant: {qty}) agregado a la cuenta de la consulta para cobro en el POS.";
+        IsInfoModalVisible = true;
+    }
+
+    [RelayCommand]
+    public void AddServiceToActiveConsultation(ClinicalService? service)
+    {
+        if (service == null) return;
+
+        if (!HasActiveConsultation)
+        {
+            StartActiveConsultation();
+        }
+
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            _consultationService.AddCartItemToActiveConsultation(
+                -service.Id,
+                service.Code,
+                service.Name,
+                $"Servicio Clínico • {service.Category}",
+                $"Duración: {service.EstimatedDurationMinutes} min",
+                "Servicio",
+                service.Price,
+                1
+            );
+
+            // Agregar también los insumos por defecto del servicio si existen
+            foreach (var dp in service.DefaultProducts)
+            {
+                if (dp.Product != null)
+                {
+                    _consultationService.AddCartItemToActiveConsultation(
+                        dp.Product.Id,
+                        dp.Product.Code,
+                        dp.Product.Name,
+                        dp.Product.GenericName,
+                        dp.Product.Presentation,
+                        dp.Product.Unit,
+                        dp.Product.Price,
+                        Math.Max(1, dp.Quantity)
+                    );
+                }
+            }
+
+            SyncActiveConsultation();
+            InfoModalMessage = $"Servicio '{service.Name}' (${service.Price:N2}) agregado a la cuenta de la consulta para cobro en POS.";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public void RemoveItemFromActiveConsultation(ConsultationProductItem? item)
+    {
+        if (_consultationService?.CurrentConsultation == null || item == null) return;
+
+        _consultationService.CurrentConsultation.Items.Remove(item);
+        _consultationService.CurrentConsultation.NotifyItemsChanged();
+        SyncActiveConsultation();
+    }
+
+    [RelayCommand]
+    public void OpenVitalSignsModal()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione un paciente antes de registrar signos vitales.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        ParseQuickVitalSigns(SelectedPatient.VitalSigns);
+        IsVitalSignsModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseVitalSignsModal()
+    {
+        IsVitalSignsModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task SaveVitalSignsAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        var parts = new List<string>();
+        var cleanTA = (VitalSignTA ?? string.Empty).Trim().TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(cleanTA)) parts.Add($"TA: {cleanTA} mmHg");
+        if (!string.IsNullOrWhiteSpace(VitalSignFC)) parts.Add($"FC: {VitalSignFC.Trim()} lpm");
+        if (!string.IsNullOrWhiteSpace(VitalSignFR)) parts.Add($"FR: {VitalSignFR.Trim()} rpm");
+        if (!string.IsNullOrWhiteSpace(VitalSignTemp)) parts.Add($"Temp: {VitalSignTemp.Trim()} °C");
+        if (!string.IsNullOrWhiteSpace(VitalSignWeight)) parts.Add($"Peso: {VitalSignWeight.Trim()} kg");
+        if (!string.IsNullOrWhiteSpace(VitalSignHeight)) parts.Add($"Talla: {VitalSignHeight.Trim()} m");
+        if (!string.IsNullOrWhiteSpace(VitalSignIMC) && !VitalSignIMC.Contains("no disponibles")) parts.Add($"IMC: {VitalSignIMC.Trim()}");
+        if (!string.IsNullOrWhiteSpace(VitalSignSpO2)) parts.Add($"SpO2: {VitalSignSpO2.Trim()}%");
+        if (!string.IsNullOrWhiteSpace(VitalSignGlucose)) parts.Add($"Glucosa: {VitalSignGlucose.Trim()} mg/dL");
+        if (!string.IsNullOrWhiteSpace(VitalSignWaist)) parts.Add($"Cintura: {VitalSignWaist.Trim()} cm");
+
+        SelectedPatient.VitalSigns = parts.Count > 0 
+            ? string.Join(" | ", parts) 
+            : "Sin signos vitales registrados";
+
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            _consultationService.CurrentConsultation.VitalSigns = SelectedPatient.VitalSigns;
+        }
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        IsVitalSignsModalOpen = false;
+        OnPropertyChanged(nameof(SelectedPatient));
+        InfoModalMessage = "¡Signos vitales guardados exitosamente en el expediente!";
+        IsInfoModalVisible = true;
+    }
+
+    private void ParseQuickVitalSigns(string? vitalsString)
+    {
+        VitalSignTA = string.Empty;
+        VitalSignFC = string.Empty;
+        VitalSignFR = string.Empty;
+        VitalSignTemp = string.Empty;
+        VitalSignWeight = string.Empty;
+        VitalSignHeight = string.Empty;
+        VitalSignSpO2 = string.Empty;
+        VitalSignGlucose = string.Empty;
+        VitalSignWaist = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(vitalsString)) return;
+
+        var segments = vitalsString.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var seg in segments)
+        {
+            var part = seg.Trim();
+            if (part.StartsWith("TA:", StringComparison.OrdinalIgnoreCase))
+                VitalSignTA = part.Substring(3).Replace("mmHg", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("FC:", StringComparison.OrdinalIgnoreCase))
+                VitalSignFC = part.Substring(3).Replace("lpm", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("FR:", StringComparison.OrdinalIgnoreCase))
+                VitalSignFR = part.Substring(3).Replace("rpm", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("Temp:", StringComparison.OrdinalIgnoreCase))
+                VitalSignTemp = part.Substring(5).Replace("°C", "", StringComparison.OrdinalIgnoreCase).Replace("C", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("Peso:", StringComparison.OrdinalIgnoreCase))
+                VitalSignWeight = part.Substring(5).Replace("kg", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("Talla:", StringComparison.OrdinalIgnoreCase))
+                VitalSignHeight = part.Substring(6).Replace("m", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("SpO2:", StringComparison.OrdinalIgnoreCase))
+                VitalSignSpO2 = part.Substring(5).Replace("%", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("Glucosa:", StringComparison.OrdinalIgnoreCase))
+                VitalSignGlucose = part.Substring(8).Replace("mg/dL", "", StringComparison.OrdinalIgnoreCase).Trim();
+            else if (part.StartsWith("Cintura:", StringComparison.OrdinalIgnoreCase))
+                VitalSignWaist = part.Substring(8).Replace("cm", "", StringComparison.OrdinalIgnoreCase).Trim();
+        }
+        RecalculateVitalSignsIMC();
+    }
+
+    [RelayCommand]
+    public void AddGeneralIndicationsToPrescription()
+    {
+        if (string.IsNullOrWhiteSpace(ConsultationGeneralIndications))
+        {
+            InfoModalMessage = "Escriba las indicaciones generales del paciente antes de vincularlas a la receta.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        PrescriptionGeneralInstructions = ConsultationGeneralIndications.Trim();
+        HasCustomGeneralIndications = true;
+        if (SelectedPatient != null)
+        {
+            SelectedPatient.GeneralIndications = PrescriptionGeneralInstructions;
+        }
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            _consultationService.CurrentConsultation.GeneralIndications = PrescriptionGeneralInstructions;
+        }
+
+        InfoModalMessage = "¡Indicaciones generales vinculadas exitosamente a la receta médica!\n\nSe incluirán de forma destacada en la receta oficial NOM-004-SSA3 para impresión y PDF.";
+        IsInfoModalVisible = true;
+    }
+
+    [RelayCommand]
+    public void AppendGeneralIndicationPreset(string text)
+    {
+        if (string.IsNullOrWhiteSpace(ConsultationGeneralIndications))
+            ConsultationGeneralIndications = text;
+        else
+            ConsultationGeneralIndications = ConsultationGeneralIndications.Trim() + " " + text;
     }
 
     [RelayCommand]

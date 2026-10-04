@@ -149,4 +149,7 @@ public class PatientRecord
     public bool HasAllergies => !string.IsNullOrWhiteSpace(Allergies) && 
                                 !Allergies.Equals("Ninguna", StringComparison.OrdinalIgnoreCase) && 
                                 !Allergies.Equals("Ninguna conocida", StringComparison.OrdinalIgnoreCase);
+
+    [NotMapped]
+    public string GeneralIndications { get; set; } = string.Empty;
 }

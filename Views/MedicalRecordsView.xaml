@@ -379,7 +379,7 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Pestañas de Ficha Clínica: Resumen vs Historial -->
+                                <!-- Pestañas de Ficha Clínica: Resumen vs Historial vs Servicios (POS) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                     <Button Command="{Binding SwitchPatientDetailTabCommand}" 
                                             CommandParameter="Resumen" 
@@ -401,6 +401,7 @@
 
                                     <Button Command="{Binding SwitchPatientDetailTabCommand}" 
                                             CommandParameter="Historial" 
+                                            Margin="0,0,8,0" 
                                             Padding="14,6">
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
@@ -414,6 +415,23 @@
                                             </Style>
                                         </Button.Style>
                                         <TextBlock Text="{Binding ConsultationsHistory.Count, StringFormat='📜 Historial Clínico ({0})'}" FontSize="12" FontWeight="SemiBold" />
+                                    </Button>
+
+                                    <Button Command="{Binding SwitchPatientDetailTabCommand}" 
+                                            CommandParameter="Servicios" 
+                                            Padding="14,6">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PatientDetailTab}" Value="Servicios">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                        <Setter Property="BorderThickness" Value="0" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="🩺 Servicios y Cobro (POS)" FontSize="12" FontWeight="SemiBold" />
                                     </Button>
                                 </StackPanel>
 
@@ -467,7 +485,7 @@
                                         </Grid>
                                     </Border>
 
-                                    <!-- Signos Vitales de Última Consulta -->
+                                    <!-- Signos Vitales de Última Consulta con Botón para Agregar/Actualizar -->
                                     <Border Background="{DynamicResource ThemeSurface}" 
                                             BorderBrush="{DynamicResource ThemeBorder}" 
                                             BorderThickness="1" 
@@ -475,15 +493,33 @@
                                             Padding="14" 
                                             Margin="0,0,0,12">
                                         <StackPanel>
-                                            <TextBlock Text="📊 Signos Vitales y Somatometría (Última Consulta)" 
-                                                       FontWeight="Bold" 
-                                                       FontSize="13" 
-                                                       Foreground="{DynamicResource ThemeText}" 
-                                                       Margin="0,0,0,6" />
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" 
+                                                           Text="📊 Signos Vitales y Somatometría" 
+                                                           FontWeight="Bold" 
+                                                           FontSize="13" 
+                                                           Foreground="{DynamicResource ThemeText}" 
+                                                           VerticalAlignment="Center" />
+                                                <Button Grid.Column="1" 
+                                                        Style="{DynamicResource AccentButton}" 
+                                                        Command="{Binding OpenVitalSignsModalCommand}" 
+                                                        Padding="10,4" 
+                                                        ToolTip="Abrir captura completa de signos vitales (todos opcionales)">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="🩺" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Agregar Signos Vitales" FontSize="11" FontWeight="Bold" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
                                             <TextBlock Text="{Binding SelectedPatient.VitalSigns}" 
                                                        FontSize="13" 
                                                        FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource ThemeAccent}" />
+                                                       Foreground="{DynamicResource ThemeAccent}" 
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
@@ -509,6 +545,84 @@
                                                        FontSize="12" 
                                                        Foreground="{DynamicResource ThemeTextSecondary}" 
                                                        TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Indicaciones Generales y Cuidados (NOM-004-SSA3) -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14" 
+                                            Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="📋 Indicaciones Generales y Cuidados" 
+                                                               FontWeight="Bold" 
+                                                               FontSize="13" 
+                                                               Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="Recomendaciones generales de salud, dieta, reposo y signos de alarma." 
+                                                               FontSize="11" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                               Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1" 
+                                                        Style="{DynamicResource AccentButton}" 
+                                                        Command="{Binding AddGeneralIndicationsToPrescriptionCommand}" 
+                                                        Padding="10,5" 
+                                                        ToolTip="Vincular estas indicaciones para que aparezcan en la receta médica oficial impresa o en PDF">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="📋" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Agregar a la Receta" FontSize="11" FontWeight="Bold" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
+
+                                            <TextBox Text="{Binding ConsultationGeneralIndications, UpdateSourceTrigger=PropertyChanged}" 
+                                                     FontSize="12" 
+                                                     Padding="10,8" 
+                                                     AcceptsReturn="True" 
+                                                     TextWrapping="Wrap" 
+                                                     MinHeight="55" 
+                                                     MaxHeight="90" 
+                                                     Background="{DynamicResource ThemeBackground}" 
+                                                     BorderBrush="{DynamicResource ThemeBorder}" 
+                                                     Foreground="{DynamicResource ThemeText}" 
+                                                     Margin="0,0,0,8" />
+
+                                            <!-- Botones de sugerencias rápidas -->
+                                            <WrapPanel Orientation="Horizontal">
+                                                <TextBlock Text="Plantillas rápidas: " FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
+                                                        CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." 
+                                                        Padding="6,3" Margin="0,0,4,4">
+                                                    <TextBlock Text="+ Hidratación" FontSize="10" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
+                                                        CommandParameter="Reposo relativo por 48 horas, evitar esfuerzos físicos pesados." 
+                                                        Padding="6,3" Margin="0,0,4,4">
+                                                    <TextBlock Text="+ Reposo" FontSize="10" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
+                                                        CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." 
+                                                        Padding="6,3" Margin="0,0,4,4">
+                                                    <TextBlock Text="+ Dieta blanda" FontSize="10" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
+                                                        CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." 
+                                                        Padding="6,3" Margin="0,0,4,4">
+                                                    <TextBlock Text="+ Datos de alarma" FontSize="10" />
+                                                </Button>
+                                            </WrapPanel>
                                         </StackPanel>
                                     </Border>
 
@@ -565,20 +679,7 @@
                                                         </StackPanel>
                                                     </Button>
 
-                                                    <!-- Botón Enlazar con Carrito de Venta (POS) -->
-                                                    <Button Style="{DynamicResource AccentButton}" 
-                                                            Command="{Binding SendPrescriptionToPosCommand}" 
-                                                            Padding="12,6" 
-                                                            ToolTip="Carga automáticamente estos medicamentos al carrito del Punto de Venta">
-                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Path Data="{StaticResource IconCart}" 
-                                                                  Fill="{DynamicResource ThemeAccentText}" 
-                                                                  Width="13" Height="13" 
-                                                                  Stretch="Uniform" 
-                                                                  Margin="0,0,6,0" />
-                                                            <TextBlock Text="Cargar a Venta (POS)" FontSize="12" FontWeight="Bold" />
-                                                        </StackPanel>
-                                                    </Button>
+                                                    
                                                 </StackPanel>
                                             </Grid>
 
@@ -737,17 +838,27 @@
                                                                                Margin="0,2,0,0" 
                                                                                TextWrapping="Wrap" />
                                                                 </StackPanel>
-                                                                <Border Grid.Column="1" 
-                                                                        Background="{DynamicResource ThemeBorder}" 
-                                                                        CornerRadius="4" 
-                                                                        Padding="8,4" 
-                                                                        VerticalAlignment="Center" 
-                                                                        Margin="10,0,10,0">
-                                                                    <TextBlock Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" 
-                                                                               FontSize="11" 
-                                                                               FontWeight="SemiBold" 
-                                                                               Foreground="{DynamicResource ThemeText}" />
-                                                                </Border>
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,10,0">
+                                                                    <Border Background="{DynamicResource ThemeBorder}" 
+                                                                            CornerRadius="4" 
+                                                                            Padding="8,4" 
+                                                                            Margin="0,0,8,0">
+                                                                        <TextBlock Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" 
+                                                                                   FontSize="11" 
+                                                                                   FontWeight="SemiBold" 
+                                                                                   Foreground="{DynamicResource ThemeText}" />
+                                                                    </Border>
+                                                                    <Button Style="{DynamicResource OutlineButton}" 
+                                                                            Command="{Binding DataContext.AddPrescriptionItemToPosCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                            CommandParameter="{Binding}" 
+                                                                            Padding="8,4" 
+                                                                            ToolTip="Agregar este medicamento a la cuenta de la consulta activa para cobro en el POS">
+                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <TextBlock Text="🛒" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                                            <TextBlock Text="Agregar al POS" FontSize="10.5" FontWeight="SemiBold" />
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                </StackPanel>
                                                                 <Button Grid.Column="2" 
                                                                         Style="{DynamicResource OutlineButton}" 
                                                                         Command="{Binding DataContext.RemovePrescriptionItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
@@ -897,12 +1008,275 @@
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
                                                             </StackPanel>
+
+
+                                
                                                         </Border>
                                                     </StackPanel>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                </StackPanel>
+
+                                <!-- VISTA DE PESTAÑA 3: SERVICIOS Y PROCEDIMIENTOS (POS) -->
+                                <StackPanel Visibility="{Binding PatientDetailTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Servicios}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.2*" />
+                                            <ColumnDefinition Width="18" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Columna Izquierda: Catálogo de Servicios y Procedimientos -->
+                                        <StackPanel Grid.Column="0">
+                                            <Border Background="{DynamicResource ThemeSurface}" 
+                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="8" 
+                                                    Padding="14" 
+                                                    Margin="0,0,0,12">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="🩺 Catálogo de Servicios y Procedimientos" 
+                                                                   FontWeight="Bold" 
+                                                                   FontSize="14" 
+                                                                   Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Text="Seleccione los servicios realizados al paciente para agregarlos a la cuenta." 
+                                                                   FontSize="11" 
+                                                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                   Margin="0,2,0,0" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" 
+                                                            Style="{DynamicResource OutlineButton}" 
+                                                            Command="{Binding OpenCreateServiceModalCommand}" 
+                                                            Padding="10,5">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="+" FontWeight="Bold" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                            <TextBlock Text="Nuevo Servicio" FontSize="11" FontWeight="SemiBold" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- Lista de Servicios Disponibles -->
+                                            <ItemsControl ItemsSource="{Binding Services}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource ThemeSurface}" 
+                                                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                                                BorderThickness="1" 
+                                                                CornerRadius="8" 
+                                                                Padding="12,10" 
+                                                                Margin="0,0,0,8">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <StackPanel Grid.Column="0">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <Border Background="{DynamicResource ThemeAccent}" 
+                                                                                CornerRadius="4" 
+                                                                                Padding="5,2" 
+                                                                                Margin="0,0,6,0">
+                                                                            <TextBlock Text="{Binding Code}" 
+                                                                                       FontWeight="Bold" 
+                                                                                       FontSize="10" 
+                                                                                       Foreground="{DynamicResource ThemeAccentText}" />
+                                                                        </Border>
+                                                                        <TextBlock Text="{Binding Name}" 
+                                                                                   FontWeight="Bold" 
+                                                                                   FontSize="12" 
+                                                                                   Foreground="{DynamicResource ThemeText}" 
+                                                                                   VerticalAlignment="Center" />
+                                                                    </StackPanel>
+                                                                    <TextBlock Text="{Binding Category, StringFormat='Categoría: {0}'}" 
+                                                                               FontSize="11" 
+                                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                               Margin="0,2,0,0" />
+                                                                    <TextBlock Text="{Binding EstimatedDurationMinutes, StringFormat='⏱️ Duración estimada: {0} min'}" 
+                                                                               FontSize="10" 
+                                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                </StackPanel>
+
+                                                                <TextBlock Grid.Column="1" 
+                                                                           Text="{Binding Price, StringFormat='{}{0:C}'}" 
+                                                                           FontWeight="Bold" 
+                                                                           FontSize="14" 
+                                                                           Foreground="{DynamicResource ThemeAccent}" 
+                                                                           VerticalAlignment="Center" 
+                                                                           Margin="12,0" />
+
+                                                                <Button Grid.Column="2" 
+                                                                        Style="{DynamicResource AccentButton}" 
+                                                                        Command="{Binding DataContext.AddServiceToActiveConsultationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                        CommandParameter="{Binding}" 
+                                                                        Padding="12,6" 
+                                                                        VerticalAlignment="Center" 
+                                                                        ToolTip="Agregar este servicio a la cuenta de la consulta">
+                                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <TextBlock Text="+" FontWeight="Bold" FontSize="12" Margin="0,0,4,0" />
+                                                                        <TextBlock Text="Agregar a Cuenta" FontSize="11" FontWeight="Bold" />
+                                                                    </StackPanel>
+                                                                </Button>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- Columna Derecha: Resumen de Cuenta para POS -->
+                                        <Border Grid.Column="2" 
+                                                Background="{DynamicResource ThemeSurface}" 
+                                                BorderBrush="{DynamicResource ThemeAccent}" 
+                                                BorderThickness="1.5" 
+                                                CornerRadius="10" 
+                                                Padding="14" 
+                                                VerticalAlignment="Top">
+                                            <StackPanel>
+                                                <Grid Margin="0,0,0,10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="💳 Cuenta de la Consulta (POS)" 
+                                                                   FontWeight="Bold" 
+                                                                   FontSize="14" 
+                                                                   Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Text="{Binding ActiveConsultation.ItemsCount, StringFormat='{}{0} concepto(s) registrados'}" 
+                                                                   FontSize="11" 
+                                                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                   Margin="0,2,0,0" />
+                                                    </StackPanel>
+                                                    <Border Grid.Column="1" 
+                                                            Background="{DynamicResource ThemeAccent}" 
+                                                            CornerRadius="4" 
+                                                            Padding="6,2">
+                                                        <TextBlock Text="POS ACTIVO" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccentText}" />
+                                                    </Border>
+                                                </Grid>
+
+                                                <!-- Lista de Conceptos a Cobrar -->
+                                                <Border Background="{DynamicResource ThemeBackground}" 
+                                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                                        BorderThickness="1" 
+                                                        CornerRadius="6" 
+                                                        Padding="8" 
+                                                        MaxHeight="260" 
+                                                        Margin="0,0,0,12">
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                        <StackPanel>
+                                                            <ItemsControl ItemsSource="{Binding ActiveConsultation.Items}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border BorderBrush="{DynamicResource ThemeBorder}" 
+                                                                                BorderThickness="0,0,0,1" 
+                                                                                Padding="4,6" 
+                                                                                Margin="0,0,0,2">
+                                                                            <Grid>
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                </Grid.ColumnDefinitions>
+
+                                                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding ProductName}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                                                    <TextBlock Text="{Binding Code}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                                </StackPanel>
+
+                                                                                <TextBlock Grid.Column="1" 
+                                                                                           Text="{Binding Quantity, StringFormat='x{0}'}" 
+                                                                                           FontSize="11" 
+                                                                                           FontWeight="SemiBold" 
+                                                                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                                           VerticalAlignment="Center" 
+                                                                                           Margin="8,0" />
+
+                                                                                <TextBlock Grid.Column="2" 
+                                                                                           Text="{Binding Subtotal, StringFormat='{}{0:C}'}" 
+                                                                                           FontWeight="Bold" 
+                                                                                           FontSize="11" 
+                                                                                           Foreground="{DynamicResource ThemeAccent}" 
+                                                                                           VerticalAlignment="Center" 
+                                                                                           Margin="4,0,8,0" />
+
+                                                                                <Button Grid.Column="3" 
+                                                                                        Style="{DynamicResource OutlineButton}" 
+                                                                                        Command="{Binding DataContext.RemoveItemFromActiveConsultationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                                        CommandParameter="{Binding}" 
+                                                                                        Padding="4,2" 
+                                                                                        VerticalAlignment="Center" 
+                                                                                        ToolTip="Quitar este concepto de la cuenta">
+                                                                                    <TextBlock Text="✕" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                                                </Button>
+                                                                            </Grid>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <TextBlock Text="No hay servicios ni medicamentos agregados a la cuenta aún." 
+                                                                       FontStyle="Italic" 
+                                                                       FontSize="11" 
+                                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                       HorizontalAlignment="Center" 
+                                                                       Margin="0,12" 
+                                                                       Visibility="{Binding ActiveConsultation.ItemsCount, Converter={StaticResource InverseBoolToVis}}" />
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+
+                                                <!-- Totales -->
+                                                <Grid Margin="0,0,0,4">
+                                                    <TextBlock Text="Subtotal:" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding ActiveConsultation.Subtotal, StringFormat='{}{0:C}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Right" />
+                                                </Grid>
+                                                <Grid Margin="0,0,0,8">
+                                                    <TextBlock Text="IVA (16%):" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding ActiveConsultation.Tax, StringFormat='{}{0:C}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Right" />
+                                                </Grid>
+                                                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,6,0,12">
+                                                    <Grid>
+                                                        <TextBlock Text="TOTAL A COBRAR:" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Text="{Binding ActiveConsultation.Total, StringFormat='{}{0:C}'}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Right" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Botones de Acción de Cobro -->
+                                                <Button Style="{DynamicResource AccentButton}" 
+                                                        Command="{Binding FinalizeConsultationAndOpenPosCommand}" 
+                                                        Padding="14,9" 
+                                                        Margin="0,0,0,8" 
+                                                        ToolTip="Finalizar la consulta y abrir la ventana del POS para liquidar la cuenta">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <TextBlock Text="🛒" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Finalizar y Cobrar en POS" FontSize="12" FontWeight="Bold" />
+                                                    </StackPanel>
+                                                </Button>
+
+                                                <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding OpenPosModalAsyncCommand}" 
+                                                        Padding="12,6" 
+                                                        ToolTip="Abrir la ventana completa del POS para agregar insumos o medicamentos adicionales">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <TextBlock Text="🔍" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Abrir POS para Insumos Extras" FontSize="11" FontWeight="SemiBold" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -2686,7 +3060,8 @@
                                 <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="12,8" Margin="0,0,0,20">
                                     <StackPanel>
                                         <TextBlock Text="⚠️ MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas." FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding PrescriptionGeneralInstructions}" Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource BoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                        <TextBlock Text="Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas." Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource InverseBoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
@@ -2728,6 +3103,17 @@
                                 <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
                             </Button>
 
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding SendPrescriptionToPosCommand}" 
+                                    Padding="14,7" 
+                                    Margin="0,0,10,0" 
+                                    ToolTip="Cargar estos medicamentos al carrito del POS">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🛒" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Cargar Receta a POS" FontSize="12" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Button>
+
                             <Button Style="{DynamicResource AccentButton}" 
                                     Command="{Binding PrintOrExportPrescriptionPdfCommand}" 
                                     Padding="18,7">
@@ -2737,6 +3123,415 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+    
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: REGISTRO RÁPIDO DE SIGNOS VITALES Y SOMATOMETRÍA (TODOS OPCIONALES) -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#99000000" 
+                Visibility="{Binding IsVitalSignsModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Panel.ZIndex="350">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="{DynamicResource ThemeAccent}" 
+                    BorderThickness="2" 
+                    CornerRadius="16" 
+                    Padding="26,22" 
+                    MaxWidth="720" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                            <Border Background="{DynamicResource ThemeAccent}" 
+                                    CornerRadius="6" 
+                                    Padding="8,3" 
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="🩺 SIGNOS VITALES" 
+                                           FontWeight="Bold" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeAccentText}" />
+                            </Border>
+                            <TextBlock Text="Registro de Signos Vitales y Somatometría" 
+                                       FontWeight="Bold" 
+                                       FontSize="17" 
+                                       Foreground="{DynamicResource ThemeText}" />
+                        </StackPanel>
+                        <TextBlock Text="NOM-004-SSA3-2012 • Ningún campo es obligatorio. Registre únicamente los signos evaluados." 
+                                   FontSize="12" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </StackPanel>
+
+                    <!-- Formulario de 10 Signos Vitales Disponibles -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16" MaxHeight="450">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Columna 1 -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Tensión Arterial (TA)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignTA, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Ej: 120/80 (formato automático con /)" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Frecuencia Cardíaca (FC)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignFC, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Latidos por minuto (lpm)" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Frecuencia Respiratoria (FR)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignFR, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Respiraciones por minuto (rpm)" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Temperatura Corporal (°C)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignTemp, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Grados Celsius (°C), ej: 36.5" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Saturación de Oxígeno (SpO2)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignSpO2, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Porcentaje (%), ej: 98" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+                            </StackPanel>
+
+                            <!-- Columna 2 -->
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Peso Corporal (kg)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignWeight, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Kilogramos (kg), ej: 70.5" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Talla / Estatura (m)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignHeight, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Metros (m), ej: 1.70" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Índice de Masa Corporal (IMC)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="6" 
+                                        Padding="10,8" 
+                                        Margin="0,0,0,10">
+                                    <TextBlock Text="{Binding VitalSignIMC}" 
+                                               FontWeight="SemiBold" 
+                                               FontSize="12" 
+                                               Foreground="{DynamicResource ThemeAccent}" />
+                                </Border>
+
+                                <TextBlock Text="Glucosa Capilar (mg/dL)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignGlucose, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Miligramos por decilitro (mg/dL)" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+
+                                <TextBlock Text="Perímetro de Cintura (cm)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding VitalSignWaist, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Padding="10,6" 
+                                         Margin="0,0,0,10" />
+                                <TextBlock Text="Centímetros (cm)" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,-8,0,8" />
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+
+                    <!-- Acciones -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CloseVitalSignsModalCommand}" 
+                                Padding="16,8" 
+                                Margin="0,0,10,0">
+                            <TextBlock Text="Cancelar" FontWeight="SemiBold" FontSize="12" />
+                        </Button>
+                        <Button Style="{DynamicResource AccentButton}" 
+                                Command="{Binding SaveVitalSignsAsyncCommand}" 
+                                Padding="18,8">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="💾" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Guardar Signos Vitales" FontSize="12" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: CREAR SERVICIO CLÍNICO Y ASIGNAR INSUMOS                            -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#CC000000" 
+                Visibility="{Binding IsCreateServiceModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Panel.ZIndex="360">
+            <Border Background="{DynamicResource ThemeCard}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="14" 
+                    MaxWidth="720" 
+                    MaxHeight="650" 
+                    Margin="24" 
+                    HorizontalAlignment="Stretch" 
+                    VerticalAlignment="Center">
+                <Grid Margin="22">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera del Modal -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                            <Border Background="{DynamicResource ThemeAccent}" 
+                                    CornerRadius="6" 
+                                    Padding="8,3" 
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="🩺 NUEVO SERVICIO" 
+                                           FontWeight="Bold" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeAccentText}" />
+                            </Border>
+                            <TextBlock Text="Crear Servicio Clínico y Asignar Insumos" 
+                                       FontWeight="Bold" 
+                                       FontSize="17" 
+                                       Foreground="{DynamicResource ThemeText}" />
+                        </StackPanel>
+                        <TextBlock Text="Ingresa los datos generales del servicio médico e incluye los productos e insumos de inventario que se consumirán por defecto." 
+                                   FontSize="12" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </StackPanel>
+
+                    <!-- Formulario con Scroll -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16">
+                        <StackPanel Margin="0,0,8,0">
+                            <!-- Código y Nombre -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Código / Folio *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding NewServiceCode, UpdateSourceTrigger=PropertyChanged}" 
+                                             Style="{DynamicResource ModernTextBox}" 
+                                             Padding="10,6" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Nombre del Servicio Clínico *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding NewServiceName, UpdateSourceTrigger=PropertyChanged}" 
+                                             Style="{DynamicResource ModernTextBox}" 
+                                             Padding="10,6" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Categoría, Precio y Duración -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="120" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Categoría" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <ComboBox Style="{DynamicResource ModernComboBox}" 
+                                              ItemsSource="{Binding ServiceCategories}" 
+                                              SelectedItem="{Binding NewServiceCategory}" 
+                                              Height="36" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Precio ($ MXN)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding NewServicePrice, UpdateSourceTrigger=PropertyChanged}" 
+                                             Style="{DynamicResource ModernTextBox}" 
+                                             Padding="10,6" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="Duración (min)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding NewServiceDuration, UpdateSourceTrigger=PropertyChanged}" 
+                                             Style="{DynamicResource ModernTextBox}" 
+                                             Padding="10,6" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Descripción -->
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Descripción y Alcance Clínico" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding NewServiceDescription, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         Height="60" 
+                                         TextWrapping="Wrap" 
+                                         AcceptsReturn="True" 
+                                         VerticalScrollBarVisibility="Auto" 
+                                         Padding="10,6" />
+                            </StackPanel>
+
+                            <!-- Sección: Asociar Insumos por Defecto -->
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="8" 
+                                    Padding="14" 
+                                    Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="📦 Paquete de Insumos Predeterminados para este Servicio" 
+                                               FontWeight="Bold" 
+                                               FontSize="13" 
+                                               Foreground="{DynamicResource ThemeText}" 
+                                               Margin="0,0,0,4" />
+                                    <TextBlock Text="Selecciona insumos del inventario que se consumirán con este procedimiento:" 
+                                               FontSize="11" 
+                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                               Margin="0,0,0,10" />
+
+                                    <!-- Selector para agregar nuevo insumo al servicio -->
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Producto -->
+                                        <ComboBox Grid.Column="0" 
+                                                  Style="{DynamicResource ModernComboBox}" 
+                                                  ItemsSource="{Binding AvailableProducts}" 
+                                                  SelectedItem="{Binding SelectedProductToAdd}" 
+                                                  DisplayMemberPath="Name" 
+                                                  Height="36" />
+
+                                        <!-- Cantidad -->
+                                        <TextBox Grid.Column="2" 
+                                                 Text="{Binding NewProductQuantity, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 HorizontalContentAlignment="Center" 
+                                                 Padding="6,6" 
+                                                 ToolTip="Cantidad de unidades requeridas" />
+
+                                        <!-- Botón Agregar Insumo -->
+                                        <Button Grid.Column="4" 
+                                                Style="{DynamicResource AccentButton}" 
+                                                Command="{Binding AddProductToNewServiceCommand}" 
+                                                Padding="12,6">
+                                            <TextBlock Text="+ Agregar" FontSize="12" FontWeight="SemiBold" />
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Lista de insumos vinculados -->
+                                    <ItemsControl ItemsSource="{Binding NewServiceDefaultProducts}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource ThemeSurface}" 
+                                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                                        BorderThickness="1" 
+                                                        CornerRadius="6" 
+                                                        Padding="8,6" 
+                                                        Margin="0,0,0,6">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="{Binding Product.Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                            <TextBlock Text="{Binding Product.Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        </StackPanel>
+
+                                                        <TextBlock Grid.Column="1" 
+                                                                   Text="{Binding Quantity, StringFormat='Cant: {0}'}" 
+                                                                   FontWeight="Bold" 
+                                                                   FontSize="11" 
+                                                                   Foreground="{DynamicResource ThemeAccent}" 
+                                                                   VerticalAlignment="Center" 
+                                                                   Margin="12,0" />
+
+                                                        <Button Grid.Column="2" 
+                                                                Style="{DynamicResource OutlineButton}" 
+                                                                Command="{Binding DataContext.RemoveProductFromNewServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="6,3" 
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="✕" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                        </Button>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Botones de Acción -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0" 
+                                Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CloseCreateServiceModalCommand}" 
+                                HorizontalAlignment="Left" 
+                                Padding="16,7">
+                            <TextBlock Text="Cancelar" FontWeight="SemiBold" FontSize="12" />
+                        </Button>
+
+                        <Button Grid.Column="1" 
+                                Style="{DynamicResource AccentButton}" 
+                                Command="{Binding SaveNewServiceAsyncCommand}" 
+                                Padding="18,7">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="💾" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Guardar Servicio" FontSize="12" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Grid>
             </Border>
