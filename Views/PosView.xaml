@@ -95,6 +95,13 @@
                         <TextBlock Text="{Binding ActiveConsultationPatientName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
                         <TextBlock Text=" • Folio: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
                         <TextBlock Text="{Binding ActiveConsultationFolio}" FontSize="12" FontFamily="Consolas" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <!-- Cronómetro activo de consulta -->
+                        <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="8,0,6,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="⏱️" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text=" • Insumos guardados: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
                         <TextBlock Text="{Binding ActiveConsultationItemsCount}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" />
                         <TextBlock Text=" ($" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />

@@ -80,25 +80,20 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Botón Dinámico: Agregar Paciente / Cambiar Paciente -->
+                    <!-- Botón Ver Expedientes -->
                     <Button Style="{DynamicResource AccentButton}" 
-                            Command="{Binding OpenSelectPatientModalCommand}" 
+                            Command="{Binding OpenRecordsViewerModalCommand}" 
                             Margin="0,0,10,0" 
                             Padding="14,8"
-                            ToolTip="Seleccionar o cambiar el paciente del expediente clínico">
+                            ToolTip="Ver listado y expediente clínico completo de cualquier paciente">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconUser}" 
-                                  Fill="{DynamicResource ThemeAccentText}" 
-                                  Width="13" Height="13" 
-                                  Stretch="Uniform" 
-                                  Margin="0,0,8,0" />
-                            <TextBlock Text="{Binding PatientActionButtonText}" FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="📁" FontSize="13" Margin="0,0,7,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Ver Expedientes" FontSize="13" FontWeight="Bold" />
                         </StackPanel>
                     </Button>
 
                     <Button Style="{DynamicResource OutlineButton}" 
                             Command="{Binding NewConsultationCommand}" 
-                            Margin="0,0,10,0" 
                             Padding="12,8">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" 
@@ -107,14 +102,6 @@
                                   Stretch="Uniform" 
                                   Margin="0,0,8,0" />
                             <TextBlock Text="Nueva Consulta" FontSize="13" FontWeight="SemiBold" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding NewPatientCommand}" 
-                            Padding="12,8">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="+ Nuevo Expediente" FontSize="13" FontWeight="SemiBold" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -155,6 +142,13 @@
                         <TextBlock Text="{Binding ActiveConsultationPatientName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
                         <TextBlock Text=" • Folio: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
                         <TextBlock Text="{Binding ActiveConsultationFolio}" FontSize="12" FontFamily="Consolas" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <!-- Cronómetro activo de consulta -->
+                        <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="8,0,6,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="⏱️" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text=" • Insumos acumulados desde POS: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
                         <TextBlock Text="{Binding ActiveConsultationItemsCount}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" />
                         <TextBlock Text=" ($" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
@@ -1632,6 +1626,630 @@
                                 Padding="16,7">
                             <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
                         </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: VISOR DE EXPEDIENTES CLÍNICOS COMPLETOS                          -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#AA000000" 
+                Visibility="{Binding IsRecordsViewerModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Panel.ZIndex="270">
+            <Border Background="{DynamicResource ThemeCard}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="14" 
+                    MaxWidth="980" 
+                    MaxHeight="700" 
+                    Margin="20" 
+                    Padding="22">
+                <Grid>
+                    <!-- ===================================================== -->
+                    <!-- ESTADO 1: LISTADO DE EXPEDIENTES / BÚSQUEDA            -->
+                    <!-- ===================================================== -->
+                    <Grid Visibility="{Binding ViewingRecordPatient, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Cabecera de la Modal (Lista de Pacientes) -->
+                        <Grid Grid.Row="0" Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="{DynamicResource ThemeAccent}" 
+                                            CornerRadius="6" 
+                                            Width="28" Height="28" 
+                                            Margin="0,0,10,0">
+                                        <TextBlock Text="📁" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Expedientes Clínicos de Pacientes" 
+                                               FontSize="18" 
+                                               FontWeight="Bold" 
+                                               Foreground="{DynamicResource ThemeText}" />
+                                </StackPanel>
+                                <TextBlock Text="Consulte el expediente médico completo de cualquier paciente registrado o busque por nombre, folio, teléfono o diagnóstico." 
+                                           FontSize="12" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                           Margin="38,4,0,0" />
+                            </StackPanel>
+
+                            <Button Grid.Column="1" 
+                                    Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding CloseRecordsViewerModalCommand}" 
+                                    Padding="8,5" 
+                                    VerticalAlignment="Top">
+                                <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
+                            </Button>
+                        </Grid>
+
+                        <!-- Buscador en Tiempo Real -->
+                        <Grid Grid.Row="1" Margin="0,0,0,14">
+                            <Border Background="{DynamicResource ThemeSurface}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="8" 
+                                    Padding="10,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Path Grid.Column="0" 
+                                          Data="{StaticResource IconSearch}" 
+                                          Fill="{DynamicResource ThemeTextSecondary}" 
+                                          Width="14" Height="14" 
+                                          Stretch="Uniform" 
+                                          Margin="4,0,10,0" 
+                                          VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" 
+                                             Text="{Binding RecordsViewerSearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                             Background="Transparent" 
+                                             BorderThickness="0" 
+                                             FontSize="13" 
+                                             VerticalAlignment="Center" 
+                                             Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Grid.Column="1" 
+                                               Text="Buscar paciente por nombre, folio, teléfono o diagnóstico..." 
+                                               FontSize="12" 
+                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                               VerticalAlignment="Center" 
+                                               IsHitTestVisible="False" 
+                                               Margin="4,0,0,0"
+                                               Visibility="{Binding RecordsViewerSearchText, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- Lista de Expedientes de Pacientes -->
+                        <Border Grid.Row="2" 
+                                Background="{DynamicResource ThemeSurface}" 
+                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                BorderThickness="1" 
+                                CornerRadius="10" 
+                                Padding="8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding RecordsViewerPatients}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource ThemeCard}" 
+                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="8" 
+                                                    Padding="14,10" 
+                                                    Margin="4,4,4,6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Información del Paciente -->
+                                                    <StackPanel Grid.Column="0">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding FullName}" 
+                                                                       FontWeight="Bold" 
+                                                                       FontSize="14" 
+                                                                       Foreground="{DynamicResource ThemeText}" />
+                                                            <Border Background="{DynamicResource ThemeBorder}" 
+                                                                    CornerRadius="4" 
+                                                                    Padding="6,2" 
+                                                                    Margin="8,0,0,0">
+                                                                <TextBlock Text="{Binding RecordNumber}" FontSize="11" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                                            </Border>
+                                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}"
+                                                                    BorderBrush="{DynamicResource ThemeBorder}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="4"
+                                                                    Padding="6,2"
+                                                                    Margin="6,0,0,0">
+                                                                <TextBlock Text="{Binding Consultations.Count, StringFormat='{}{0} consulta(s)'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
+                                                            <TextBlock Text="{Binding Age, StringFormat='{}{0} años'}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text=" • " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text="{Binding Gender}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text=" • Grupo: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text="{Binding BloodType}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text=" • Tel: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <TextBlock Text="{Binding Phone}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                            <TextBlock Text="{Binding LastDiagnosis, StringFormat='Último diagnóstico: {0}'}" 
+                                                                       FontSize="11" 
+                                                                       FontStyle="Italic" 
+                                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                                       TextTrimming="CharacterEllipsis" 
+                                                                       MaxWidth="500" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+
+                                                    <!-- Botón Ver (en lugar de Seleccionar) -->
+                                                    <Button Grid.Column="1" 
+                                                            Style="{DynamicResource AccentButton}" 
+                                                            Command="{Binding DataContext.ViewPatientRecordDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                            CommandParameter="{Binding}" 
+                                                            Padding="18,8" 
+                                                            VerticalAlignment="Center"
+                                                            ToolTip="Abrir y ver el expediente clínico completo">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Path Data="{StaticResource IconEye}" 
+                                                                  Fill="{DynamicResource ThemeAccentText}" 
+                                                                  Width="14" Height="14" 
+                                                                  Stretch="Uniform" 
+                                                                  Margin="0,0,6,0" />
+                                                            <TextBlock Text="Ver" FontWeight="Bold" FontSize="13" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Pie de la Lista -->
+                        <Grid Grid.Row="3" Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" 
+                                       Text="{Binding RecordsViewerPatients.Count, StringFormat='Total de expedientes: {0}'}" 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       VerticalAlignment="Center" />
+
+                            <Button Grid.Column="1" 
+                                    Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding CloseRecordsViewerModalCommand}" 
+                                    Padding="16,7">
+                                <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    <!-- ===================================================== -->
+                    <!-- ESTADO 2: EXPEDIENTE COMPLETO DETALLADO DENTRO DE MODAL-->
+                    <!-- ===================================================== -->
+                    <Grid Visibility="{Binding ViewingRecordPatient, Converter={StaticResource BoolToVis}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Cabecera de Ficha en Modal -->
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Botón Volver a la Lista -->
+                            <Button Grid.Column="0" 
+                                    Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding BackToRecordsListCommand}" 
+                                    Padding="10,6" 
+                                    Margin="0,0,12,0" 
+                                    VerticalAlignment="Center"
+                                    ToolTip="Regresar al listado de expedientes">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="←" FontWeight="Bold" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Volver a la Lista" FontSize="12" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Título y Datos Clave del Paciente -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ViewingRecordPatient.FullName}" 
+                                               FontWeight="Bold" 
+                                               FontSize="17" 
+                                               Foreground="{DynamicResource ThemeText}" />
+                                    <Border Background="{DynamicResource ThemeAccent}" 
+                                            CornerRadius="4" 
+                                            Padding="6,2" 
+                                            Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding ViewingRecordPatient.RecordNumber}" FontSize="11" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
+                                    </Border>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding ViewingRecordPatient.Age, StringFormat='{}{0} años'}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text=" • " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="{Binding ViewingRecordPatient.Gender}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text=" • Grupo: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="{Binding ViewingRecordPatient.BloodType}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text=" • Tel: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="{Binding ViewingRecordPatient.Phone}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Botones Superiores de Acción -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{DynamicResource AccentButton}" 
+                                        Command="{Binding SelectViewingPatientForConsultationCommand}" 
+                                        Margin="0,0,8,0" 
+                                        Padding="12,6" 
+                                        ToolTip="Cargar este expediente en la pantalla principal">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="🩺" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Cargar en Consulta" FontSize="11" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{DynamicResource OutlineButton}" 
+                                        Command="{Binding CloseRecordsViewerModalCommand}" 
+                                        Padding="8,5" 
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Pestañas del Expediente dentro de la Modal -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Command="{Binding SwitchViewingRecordTabCommand}" 
+                                    CommandParameter="Resumen" 
+                                    Margin="0,0,8,0" 
+                                    Padding="14,6">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ViewingRecordTab}" Value="Resumen">
+                                                <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="📋 Resumen y Antecedentes" FontSize="12" FontWeight="SemiBold" />
+                            </Button>
+
+                            <Button Command="{Binding SwitchViewingRecordTabCommand}" 
+                                    CommandParameter="Historial" 
+                                    Padding="14,6">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ViewingRecordTab}" Value="Historial">
+                                                <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="{Binding ViewingPatientConsultations.Count, StringFormat='📜 Historial de Consultas ({0})'}" FontSize="12" FontWeight="SemiBold" />
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Contenido Scrolleable del Expediente Completo -->
+                        <Border Grid.Row="2" 
+                                Background="{DynamicResource ThemeSurface}" 
+                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                BorderThickness="1" 
+                                CornerRadius="10" 
+                                Padding="12">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <Grid>
+                                    <!-- PESTAÑA RESUMEN Y ANTECEDENTES -->
+                                    <StackPanel Visibility="{Binding ViewingRecordTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Resumen}">
+                                        <!-- Alerta de Alergias y Datos Críticos -->
+                                        <Border CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ViewingRecordPatient.HasAllergies}" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource ThemeError}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock FontSize="12" FontWeight="Bold" Foreground="White">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="✓ Sin alergias reportadas conocidas" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding ViewingRecordPatient.HasAllergies}" Value="True">
+                                                                    <Setter Property="Text" Value="{Binding ViewingRecordPatient.Allergies, StringFormat='⚠️ ALERGIAS REPORTADAS: {0}'}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Información de Contacto y Antecedentes -->
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Contacto y Domicilio -->
+                                            <Border Grid.Column="0" 
+                                                    Background="{DynamicResource ThemeCard}" 
+                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="8" 
+                                                    Padding="12" 
+                                                    Margin="0,0,6,0">
+                                                <StackPanel>
+                                                    <TextBlock Text="📞 Contacto y Localización" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Teléfono: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.Phone}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Correo: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.Email}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Dirección: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.Address}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Contacto de Emergencia: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.EmergencyContactName}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Teléfono Emergencia: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.EmergencyContactPhone}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Antecedentes y Patologías -->
+                                            <Border Grid.Column="1" 
+                                                    Background="{DynamicResource ThemeCard}" 
+                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                    BorderThickness="1" 
+                                                    CornerRadius="8" 
+                                                    Padding="12" 
+                                                    Margin="6,0,0,0">
+                                                <StackPanel>
+                                                    <TextBlock Text="🩺 Antecedentes Clínicos (NOM-004)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Enfermedades Crónicas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.ChronicDiseases}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Signos Vitales Registrados: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.VitalSigns}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Último Diagnóstico: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.LastDiagnosis}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Última Visita: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding ViewingRecordPatient.LastVisit, StringFormat='{}{0:dd/MM/yyyy}'}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Notas Clínicas Generales del Expediente -->
+                                        <Border Background="{DynamicResource ThemeCard}" 
+                                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                                BorderThickness="1" 
+                                                CornerRadius="8" 
+                                                Padding="12" 
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="📝 Notas Clínicas del Expediente" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,4" />
+                                                <TextBlock Text="{Binding ViewingRecordPatient.ClinicalNotes}" 
+                                                           FontSize="12" 
+                                                           LineHeight="17" 
+                                                           TextWrapping="Wrap" 
+                                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Receta Médica Activa -->
+                                        <Border Background="{DynamicResource ThemeCard}" 
+                                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                                BorderThickness="1" 
+                                                CornerRadius="8" 
+                                                Padding="12">
+                                            <StackPanel>
+                                                <TextBlock Text="💊 Receta Médica Activa" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                                <ItemsControl ItemsSource="{Binding ViewingRecordPatient.ActivePrescription}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="{DynamicResource ThemeSurface}" 
+                                                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                                                    BorderThickness="1" 
+                                                                    CornerRadius="6" 
+                                                                    Padding="10,6" 
+                                                                    Margin="0,0,0,4">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel Grid.Column="0">
+                                                                        <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                                        <TextBlock Text="{Binding Dosage, StringFormat='Posología: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                    </StackPanel>
+                                                                    <Border Grid.Column="1" Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- PESTAÑA HISTORIAL DE CONSULTAS MÉDICAS -->
+                                    <StackPanel Visibility="{Binding ViewingRecordTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Historial}">
+                                        <ItemsControl ItemsSource="{Binding ViewingPatientConsultations}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{DynamicResource ThemeCard}" 
+                                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                                            BorderThickness="1" 
+                                                            CornerRadius="8" 
+                                                            Padding="14,10" 
+                                                            Margin="0,0,0,8">
+                                                        <StackPanel>
+                                                            <!-- Encabezado de la Consulta -->
+                                                            <Grid Margin="0,0,0,6">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Date, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                                                    <Border Background="{DynamicResource ThemeBorder}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                                        <TextBlock Text="{Binding Folio}" FontSize="11" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                                                    </Border>
+                                                                </StackPanel>
+                                                            </Grid>
+
+                                                            <!-- Motivo de Consulta y Signos Vitales -->
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                <TextBlock Text="Motivo: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                <TextBlock Text="{Binding ChiefComplaint}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                <TextBlock Text="Signos Vitales: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                <TextBlock Text="{Binding VitalSigns}" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource ThemeAccent}" TextWrapping="Wrap" />
+                                                            </StackPanel>
+
+                                                            <!-- Diagnóstico Clínico -->
+                                                            <Border Background="{DynamicResource ThemeSurface}" CornerRadius="4" Padding="8,4" Margin="0,2,0,4">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="Diagnóstico: " FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                    <TextBlock Text="{Binding Diagnosis}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <!-- Plan de Tratamiento e Indicaciones -->
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                <TextBlock Text="Tratamiento: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                <TextBlock Text="{Binding TreatmentPlan}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                            </StackPanel>
+
+                                                            <!-- Notas de Evolución -->
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                <TextBlock Text="Notas: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                <TextBlock Text="{Binding Notes}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
+                                                            </StackPanel>
+
+                                                            <!-- Prescripciones Recetadas -->
+                                                            <ItemsControl ItemsSource="{Binding Prescriptions}" Margin="0,4,0,0">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="4" Padding="8,4" Margin="0,0,0,3">
+                                                                            <Grid>
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                                                    <TextBlock Text="💊 " FontSize="10" VerticalAlignment="Center" />
+                                                                                    <TextBlock Text="{Binding MedicineName}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                                                    <TextBlock Text=" • " FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                                    <TextBlock Text="{Binding Dosage}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                                </StackPanel>
+                                                                                <TextBlock Grid.Column="1" Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                                                            </Grid>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Grid>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Pie del Detalle de Expediente -->
+                        <Grid Grid.Row="3" Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0" 
+                                    Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding BackToRecordsListCommand}" 
+                                    Padding="14,7">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="←" FontWeight="Bold" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Volver a la Lista" FontSize="12" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Button>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                <Button Style="{DynamicResource AccentButton}" 
+                                        Command="{Binding SelectViewingPatientForConsultationCommand}" 
+                                        Padding="14,7" 
+                                        Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="🩺" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Cargar este Paciente en Pantalla Principal" FontSize="12" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{DynamicResource OutlineButton}" 
+                                        Command="{Binding CloseRecordsViewerModalCommand}" 
+                                        Padding="16,7">
+                                    <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Grid>
             </Border>

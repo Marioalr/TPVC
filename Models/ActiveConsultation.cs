@@ -38,6 +38,19 @@ public partial class ActiveConsultation : ObservableObject
     public int TotalItems => Items.Sum(i => i.Quantity);
     public decimal TotalAmount => Items.Sum(i => i.Subtotal);
 
+    public TimeSpan ElapsedTime => DateTime.Now - StartedAt;
+
+    public string FormattedElapsedTime => GetFormattedElapsedTime();
+
+    public string GetFormattedElapsedTime(DateTime? asOf = null)
+    {
+        var elapsed = (asOf ?? DateTime.Now) - StartedAt;
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+        return elapsed.TotalHours >= 1
+            ? $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}"
+            : $"{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+    }
+
     public void NotifyItemsChanged()
     {
         OnPropertyChanged(nameof(TotalItems));

@@ -11,7 +11,7 @@ using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
-public partial class MedicalRecordsViewModel : ObservableObject
+public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 {
     private readonly InventoryService? _inventoryService;
     private readonly ConsultationService? _consultationService;
@@ -79,6 +79,35 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<PatientRecord> _selectablePatients = new();
 
+    // ==========================================
+    // MODAL DE VISOR DE EXPEDIENTES (VER EXPEDIENTES)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isRecordsViewerModalOpen;
+
+    [ObservableProperty]
+    private string _recordsViewerSearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientRecord> _recordsViewerPatients = new();
+
+    [ObservableProperty]
+    private PatientRecord? _viewingRecordPatient;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientConsultation> _viewingPatientConsultations = new();
+
+    [ObservableProperty]
+    private PatientConsultation? _selectedViewingConsultation;
+
+    [ObservableProperty]
+    private string _viewingRecordTab = "Resumen"; // "Resumen" o "Historial"
+
+    partial void OnRecordsViewerSearchTextChanged(string value)
+    {
+        ApplyRecordsViewerFilter();
+    }
+
     [RelayCommand]
     public void SwitchPatientDetailTab(string tab)
     {
@@ -94,6 +123,11 @@ public partial class MedicalRecordsViewModel : ObservableObject
     public string ActiveConsultationPatientName => _consultationService?.CurrentConsultation?.PatientName ?? string.Empty;
     public int ActiveConsultationItemsCount => _consultationService?.CurrentConsultation?.TotalItems ?? 0;
     public decimal ActiveConsultationTotalAmount => _consultationService?.CurrentConsultation?.TotalAmount ?? 0m;
+
+    [ObservableProperty]
+    private string _activeConsultationElapsedTime = "00:00";
+
+    private System.Threading.Timer? _consultationTimer;
 
     [ObservableProperty]
     private string? _infoModalMessage;
@@ -341,6 +375,7 @@ public partial class MedicalRecordsViewModel : ObservableObject
 
             Patients = new ObservableCollection<PatientRecord>(dbPatients);
             ApplyPatientFilter();
+            ApplyRecordsViewerFilter();
 
             _consultationService?.LoadPatientsFromDatabase(dbPatients);
 
@@ -381,6 +416,65 @@ public partial class MedicalRecordsViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveConsultationPatientName));
         OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
+
+        if (HasActiveConsultation)
+        {
+            StartConsultationTimer();
+        }
+        else
+        {
+            StopConsultationTimer();
+        }
+    }
+
+    private void StartConsultationTimer()
+    {
+        _consultationTimer?.Dispose();
+        UpdateActiveConsultationTimer();
+        _consultationTimer = new System.Threading.Timer(_ =>
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(() => UpdateActiveConsultationTimer());
+                }
+                else
+                {
+                    UpdateActiveConsultationTimer();
+                }
+            }
+            catch
+            {
+                // Ignored if app is terminating or in test runner
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopConsultationTimer()
+    {
+        _consultationTimer?.Dispose();
+        _consultationTimer = null;
+        ActiveConsultationElapsedTime = "00:00";
+    }
+
+    public void UpdateActiveConsultationTimer(DateTime? asOf = null)
+    {
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            ActiveConsultationElapsedTime = _consultationService.CurrentConsultation.GetFormattedElapsedTime(asOf);
+        }
+        else
+        {
+            ActiveConsultationElapsedTime = "00:00";
+        }
+    }
+
+    public void Dispose()
+    {
+        StopConsultationTimer();
+        GC.SuppressFinalize(this);
     }
 
     public async Task LoadServicesAsync()
@@ -657,6 +751,93 @@ public partial class MedicalRecordsViewModel : ObservableObject
     {
         IsSelectPatientModalOpen = false;
         await NewPatientAsync();
+    }
+
+    // ==========================================
+    // OPERACIONES DE VISOR DE EXPEDIENTES (VER EXPEDIENTES)
+    // ==========================================
+
+    public void ApplyRecordsViewerFilter()
+    {
+        if (string.IsNullOrWhiteSpace(RecordsViewerSearchText))
+        {
+            RecordsViewerPatients = new ObservableCollection<PatientRecord>(Patients);
+        }
+        else
+        {
+            var q = RecordsViewerSearchText.Trim().ToLowerInvariant();
+            RecordsViewerPatients = new ObservableCollection<PatientRecord>(
+                Patients.Where(p =>
+                    p.FullName.ToLowerInvariant().Contains(q) ||
+                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
+                    p.Phone.Contains(q) ||
+                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
+                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
+                    (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
+                )
+            );
+        }
+    }
+
+    [RelayCommand]
+    public void OpenRecordsViewerModal()
+    {
+        RecordsViewerSearchText = string.Empty;
+        ViewingRecordPatient = null;
+        ViewingPatientConsultations.Clear();
+        SelectedViewingConsultation = null;
+        ViewingRecordTab = "Resumen";
+        ApplyRecordsViewerFilter();
+        IsRecordsViewerModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseRecordsViewerModal()
+    {
+        IsRecordsViewerModalOpen = false;
+        ViewingRecordPatient = null;
+        ViewingPatientConsultations.Clear();
+        SelectedViewingConsultation = null;
+    }
+
+    [RelayCommand]
+    public void ViewPatientRecordDetail(PatientRecord? patient)
+    {
+        if (patient == null) return;
+
+        ViewingRecordPatient = patient;
+        var consultations = patient.Consultations.OrderByDescending(c => c.Date).ToList();
+        ViewingPatientConsultations = new ObservableCollection<PatientConsultation>(consultations);
+        SelectedViewingConsultation = ViewingPatientConsultations.FirstOrDefault();
+        ViewingRecordTab = "Resumen";
+    }
+
+    [RelayCommand]
+    public void BackToRecordsList()
+    {
+        ViewingRecordPatient = null;
+        ViewingPatientConsultations.Clear();
+        SelectedViewingConsultation = null;
+        ApplyRecordsViewerFilter();
+    }
+
+    [RelayCommand]
+    public void SwitchViewingRecordTab(string tab)
+    {
+        ViewingRecordTab = tab;
+    }
+
+    [RelayCommand]
+    public void SelectViewingPatientForConsultation(PatientRecord? patient)
+    {
+        var target = patient ?? ViewingRecordPatient;
+        if (target != null)
+        {
+            SelectedPatient = target;
+            CloseRecordsViewerModal();
+            InfoModalMessage = $"Expediente de '{target.FullName}' ({target.RecordNumber}) cargado en la pantalla principal.";
+            IsInfoModalVisible = true;
+        }
     }
 
     // ==========================================

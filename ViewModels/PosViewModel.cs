@@ -30,7 +30,7 @@ public partial class CartItem : ObservableObject
     public decimal Subtotal => Quantity * UnitPrice;
 }
 
-public partial class PosViewModel : ObservableObject
+public partial class PosViewModel : ObservableObject, IDisposable
 {
     private readonly InventoryService _inventoryService;
     private readonly ConsultationService _consultationService;
@@ -242,6 +242,11 @@ public partial class PosViewModel : ObservableObject
     public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
 
     [ObservableProperty]
+    private string _activeConsultationElapsedTime = "00:00";
+
+    private System.Threading.Timer? _consultationTimer;
+
+    [ObservableProperty]
     private bool _isSelectPatientModalOpen;
 
     [ObservableProperty]
@@ -290,6 +295,65 @@ public partial class PosViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveConsultationPatientName));
         OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
+
+        if (HasActiveConsultation)
+        {
+            StartConsultationTimer();
+        }
+        else
+        {
+            StopConsultationTimer();
+        }
+    }
+
+    private void StartConsultationTimer()
+    {
+        _consultationTimer?.Dispose();
+        UpdateActiveConsultationTimer();
+        _consultationTimer = new System.Threading.Timer(_ =>
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(() => UpdateActiveConsultationTimer());
+                }
+                else
+                {
+                    UpdateActiveConsultationTimer();
+                }
+            }
+            catch
+            {
+                // Ignored
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopConsultationTimer()
+    {
+        _consultationTimer?.Dispose();
+        _consultationTimer = null;
+        ActiveConsultationElapsedTime = "00:00";
+    }
+
+    public void UpdateActiveConsultationTimer(DateTime? asOf = null)
+    {
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            ActiveConsultationElapsedTime = _consultationService.CurrentConsultation.GetFormattedElapsedTime(asOf);
+        }
+        else
+        {
+            ActiveConsultationElapsedTime = "00:00";
+        }
+    }
+
+    public void Dispose()
+    {
+        StopConsultationTimer();
+        GC.SuppressFinalize(this);
     }
 
 

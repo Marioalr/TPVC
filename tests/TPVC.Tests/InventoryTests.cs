@@ -1320,6 +1320,136 @@ public class InventoryTests
         recordsVm.CloseSelectPatientModal();
         Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
     }
+
+    [TestMethod]
+    public void ActiveConsultation_TimerAndElapsedTime_FormattedCorrectly()
+    {
+        var startTime = new DateTime(2026, 4, 4, 10, 0, 0);
+        var consultation = new ActiveConsultation
+        {
+            Folio = "CNS-TEST-001",
+            PatientName = "Carlos Mendoza",
+            StartedAt = startTime
+        };
+
+        // Tiempo exacto de inicio: 00:00
+        Assert.AreEqual("00:00", consultation.GetFormattedElapsedTime(startTime));
+
+        // 5 minutos y 23 segundos: 05:23
+        var fiveMinLater = startTime.AddMinutes(5).AddSeconds(23);
+        Assert.AreEqual("05:23", consultation.GetFormattedElapsedTime(fiveMinLater));
+
+        // 1 hora, 14 minutos y 9 segundos: 01:14:09
+        var oneHourLater = startTime.AddHours(1).AddMinutes(14).AddSeconds(9);
+        Assert.AreEqual("01:14:09", consultation.GetFormattedElapsedTime(oneHourLater));
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_ConsultationTimer_UpdatesElapsedTimeAndStopsOnCancel()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+        var patient = new PatientRecord { Id = 1, FullName = "Laura Pausini", RecordNumber = "EXP-001" };
+
+        // Sin consulta activa, tiempo es 00:00
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+        Assert.AreEqual("00:00", recordsVm.ActiveConsultationElapsedTime);
+
+        // Iniciar consulta activa
+        consultService.StartConsultation(patient, "Evaluación general");
+        recordsVm.SyncActiveConsultation();
+
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.IsNotNull(recordsVm.ActiveConsultation);
+
+        // Simular paso de 12 minutos y 45 segundos
+        var asOf = recordsVm.ActiveConsultation.StartedAt.AddMinutes(12).AddSeconds(45);
+        recordsVm.UpdateActiveConsultationTimer(asOf);
+        Assert.AreEqual("12:45", recordsVm.ActiveConsultationElapsedTime);
+
+        // Cancelar o finalizar consulta
+        recordsVm.CancelActiveConsultation();
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+        Assert.AreEqual("00:00", recordsVm.ActiveConsultationElapsedTime);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_RecordsViewerModal_OpensAndFiltersPatients()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen);
+
+        // Abrir visor modal de expedientes
+        recordsVm.OpenRecordsViewerModal();
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen);
+        Assert.IsNull(recordsVm.ViewingRecordPatient);
+        Assert.AreEqual(string.Empty, recordsVm.RecordsViewerSearchText);
+        Assert.IsTrue(recordsVm.RecordsViewerPatients.Count > 0);
+
+        // Filtrar por nombre de paciente
+        var firstPatient = recordsVm.RecordsViewerPatients.First();
+        recordsVm.RecordsViewerSearchText = firstPatient.FullName.Substring(0, 3);
+        Assert.IsTrue(recordsVm.RecordsViewerPatients.Any(p => p.FullName == firstPatient.FullName));
+
+        // Cerrar visor modal
+        recordsVm.CloseRecordsViewerModal();
+        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_RecordsViewerModal_ViewPatientDetail_ShowsFullRecordWithoutClosingModal()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.OpenRecordsViewerModal();
+
+        var patientToInspect = recordsVm.RecordsViewerPatients.First();
+        // Agregar consulta previa al paciente para comprobar visualización de historial
+        patientToInspect.Consultations.Add(new PatientConsultation
+        {
+            Folio = "CNS-HIST-001",
+            Date = DateTime.Now.AddDays(-10),
+            ChiefComplaint = "Cefalea tensional",
+            Diagnosis = "Cefalea (G44.2)",
+            TreatmentPlan = "Reposo e hidratación"
+        });
+
+        // Al hacer click en "Ver", no pasa a pantalla completa; se queda dentro de la modal
+        recordsVm.ViewPatientRecordDetail(patientToInspect);
+
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe permanecer abierta");
+        Assert.IsNotNull(recordsVm.ViewingRecordPatient);
+        Assert.AreEqual(patientToInspect.FullName, recordsVm.ViewingRecordPatient.FullName);
+        Assert.AreEqual("Resumen", recordsVm.ViewingRecordTab);
+        Assert.IsTrue(recordsVm.ViewingPatientConsultations.Count >= 1);
+
+        // Cambiar de pestaña dentro del expediente en la modal
+        recordsVm.SwitchViewingRecordTab("Historial");
+        Assert.AreEqual("Historial", recordsVm.ViewingRecordTab);
+
+        // Volver a la lista dentro de la modal
+        recordsVm.BackToRecordsList();
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe continuar abierta al volver a la lista");
+        Assert.IsNull(recordsVm.ViewingRecordPatient, "Debe limpiar el paciente en visualización");
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_RecordsViewerModal_SelectForConsultation_SetsSelectedPatientAndClosesModal()
+    {
+        var recordsVm = new MedicalRecordsViewModel();
+        recordsVm.SelectedPatient = null;
+        recordsVm.OpenRecordsViewerModal();
+
+        var targetPatient = recordsVm.RecordsViewerPatients.First();
+        recordsVm.ViewPatientRecordDetail(targetPatient);
+
+        // Cargar en la pantalla principal
+        recordsVm.SelectViewingPatientForConsultation(targetPatient);
+
+        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Debe cerrar la modal al cargar en consulta");
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        Assert.AreEqual(targetPatient.FullName, recordsVm.SelectedPatient.FullName);
+        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+    }
 }
 
 

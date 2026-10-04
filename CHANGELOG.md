@@ -4,6 +4,33 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.9] - 2026-10-04
+
+### Añadido
+* **Cronómetro y Timer Activo de Consulta Médica**:
+  * Implementación de cálculo de tiempo transcurrido en tiempo real (`ActiveConsultation.ElapsedTime`, `FormattedElapsedTime`, `GetFormattedElapsedTime`) desde el momento exacto en que se inició la consulta médica (`StartedAt`).
+  * Distintivo visual en vivo (`⏱️ {ActiveConsultationElapsedTime}`) integrado en los banners informativos de consulta médica activa tanto en el módulo de **Expedientes Clínicos (`MedicalRecordsView`)** como en el **Punto de Venta (`PosView`)**.
+  * Actualización en segundo plano con control de hilo UI y liberación controlada mediante `IDisposable`.
+* **Nuevo Botón y Flujo "Ver Expedientes" (`OpenRecordsViewerModalCommand`)**:
+  * En la barra superior de acciones de Expedientes Clínicos, se retiraron los botones redundantes "Agregar Paciente / Cambiar Paciente" y "+ Nuevo Expediente".
+  * Incorporación del botón prominente **`[ 📁 Ver Expedientes ]`** junto a `[ Volver a Inicio ]` y `[ Nueva Consulta ]`.
+* **Visor Modal de Expediente Completo con Fondo Desenfocado (`IsRecordsViewerModalOpen`)**:
+  * Ventana modal flotante con fondo atenuado/desenfocado (`#AA000000`) similar a la ventana de agregar paciente.
+  * **Listado Inicial y Buscador**:
+    * Buscador en tiempo real por nombre, folio, teléfono o diagnóstico.
+    * Tarjetas de resumen de paciente con distintivos de alergias, número de consultas y datos demográficos.
+    * Botón de acción **`[ 👁️ Ver ]`** (en sustitución del botón "Seleccionar").
+  * **Visualización del Expediente Completo dentro de la Modal**:
+    * Al presionar **`[ 👁️ Ver ]`**, la vista **no pasa a pantalla completa**; se mantiene dentro de la ventana emergente con el fondo desenfocado.
+    * Muestra los datos demográficos completos, información de contacto, contacto de emergencia, antecedentes patológicos (NOM-004-SSA3), signos vitales, último diagnóstico y notas clínicas generales.
+    * Pestaña interactiva de **Resumen y Antecedentes** con alerta visual de alergias y recetas médicas activas.
+    * Pestaña de **Historial de Consultas Médicas** desplegando todas las consultas previas registradas con fecha, folio, motivo de consulta, signos vitales, exploración física, diagnóstico, tratamiento, notas y recetas dispensadas.
+    * Botones integrados: `[ ← Volver a la Lista ]` para regresar al buscador sin cerrar la modal, `[ 🩺 Cargar en Consulta ]` para asignar el paciente a la pantalla principal, y `[ ✕ Cerrar ]`.
+* **Pruebas Unitarias**:
+  * 5 nuevas pruebas unitarias en `TPVC.Tests` verificando el formateo del timer de consulta (00:00, mm:ss, hh:mm:ss), inicio y detención del timer, apertura y filtrado en el visor modal de expedientes, visualización detallada del expediente sin perder el contexto modal, y carga del paciente a la consulta principal (56/56 pruebas aprobadas).
+
+---
+
 ## [1.3.8] - 2026-10-04
 
 ### Modificado y Rediseñado
