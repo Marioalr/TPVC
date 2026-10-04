@@ -2256,6 +2256,55 @@ public class InventoryTests
         Assert.IsTrue(patient.ActiveServicesJson.Contains("Toma de Glucosa Capilar"));
         Assert.IsFalse(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
     }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ScheduleAppointmentModal_SaveAndCancelWorksCorrectly()
+    {
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        await recordsVm.LoadInitialDataAsync();
+
+        var patient = new PatientRecord
+        {
+            FullName = "Roberto Gómez",
+            RecordNumber = "EXP-TEST-APT",
+            Age = 42
+        };
+        recordsVm.SelectedPatient = patient;
+
+        // 1. Abrir modal de agendar consulta
+        recordsVm.OpenScheduleAppointmentModal();
+        Assert.IsTrue(recordsVm.IsScheduleAppointmentModalOpen);
+
+        // 2. Configurar datos de la cita
+        var targetDate = DateTime.Today.AddDays(10);
+        recordsVm.AppointmentDate = targetDate;
+        recordsVm.AppointmentTime = "11:30 AM";
+        recordsVm.SetAppointmentReasonPreset("Revisión de Estudios de Laboratorio");
+        recordsVm.AppointmentNotes = "Presentarse con 8 horas de ayuno";
+
+        // 3. Guardar la cita
+        await recordsVm.SaveScheduledAppointmentAsync();
+        Assert.IsFalse(recordsVm.IsScheduleAppointmentModalOpen);
+        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+
+        // 4. Validar persistencia en el paciente
+        Assert.IsTrue(patient.HasScheduledAppointment);
+        Assert.AreEqual(targetDate.Date, patient.NextAppointmentDate?.Date);
+        Assert.AreEqual("11:30 AM", patient.NextAppointmentTime);
+        Assert.AreEqual("Revisión de Estudios de Laboratorio", patient.NextAppointmentReason);
+        Assert.AreEqual("Presentarse con 8 horas de ayuno", patient.NextAppointmentNotes);
+        Assert.IsTrue(patient.FormattedNextAppointment.Contains("11:30 AM"));
+
+        // 5. Reabrir modal y cancelar la cita
+        recordsVm.OpenScheduleAppointmentModal();
+        Assert.IsTrue(recordsVm.IsScheduleAppointmentModalOpen);
+
+        await recordsVm.CancelScheduledAppointmentAsync();
+        Assert.IsFalse(recordsVm.IsScheduleAppointmentModalOpen);
+        Assert.IsFalse(patient.HasScheduledAppointment);
+        Assert.IsNull(patient.NextAppointmentDate);
+        Assert.AreEqual(string.Empty, patient.NextAppointmentTime);
+    }
 }
 
 

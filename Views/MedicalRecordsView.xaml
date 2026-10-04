@@ -158,26 +158,14 @@
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding OpenPosModalCommand}" 
+                                Command="{Binding FinalizeConsultationCommand}" 
                                 Padding="14,6" 
                                 FontSize="11" 
-                                Margin="0,0,8,0" 
-                                ToolTip="Abre el Punto de Venta en ventana emergente para agregar medicamentos, insumos y servicios a esta consulta activa">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Data="{StaticResource IconCart}" 
-                                      Fill="{DynamicResource ThemeAccentText}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="🛒 Agregar en POS" FontSize="11" FontWeight="Bold" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding FinalizeConsultationCommand}" 
-                                Padding="12,5" 
-                                FontSize="11" 
                                 ToolTip="Finalizar la consulta y abrir el Punto de Venta (POS) con la Consulta General cargada">
-                            <TextBlock Text="🏁 Finalizar Consulta" FontSize="11" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🏁" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Finalizar Consulta" FontSize="11" FontWeight="Bold" />
+                            </StackPanel>
                         </Button>
                     </StackPanel>
                 </Grid>
@@ -324,6 +312,19 @@
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                 </Border>
+
+                                                <!-- Badge Próxima Consulta Agendada -->
+                                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                        BorderBrush="{DynamicResource ThemeAccent}" 
+                                                        BorderThickness="1" 
+                                                        CornerRadius="4" 
+                                                        Padding="6,2" 
+                                                        Visibility="{Binding SelectedPatient.HasScheduledAppointment, Converter={StaticResource BoolToVis}}">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="📅 Cita: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                                        <TextBlock Text="{Binding SelectedPatient.FormattedNextAppointment}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                </Border>
                                             </StackPanel>
                                         </StackPanel>
 
@@ -354,13 +355,13 @@
                                                 </Button>
 
                                                 <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding NewConsultationCommand}" 
+                                                        Command="{Binding OpenScheduleAppointmentModalCommand}" 
                                                         Padding="10,6" 
                                                         Margin="0,0,8,0" 
-                                                        ToolTip="Registrar una nueva consulta médica y nota de evolución NOM-004-SSA3">
+                                                        ToolTip="Agendar una próxima consulta o cita médica de seguimiento para este paciente">
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="🩺" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                                        <TextBlock Text="Nueva Consulta" FontSize="11" FontWeight="SemiBold" />
+                                                        <TextBlock Text="📅" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Agendar Nueva Consulta" FontSize="11" FontWeight="SemiBold" />
                                                     </StackPanel>
                                                 </Button>
 
@@ -3020,6 +3021,254 @@
                                           Stretch="Uniform" 
                                           Margin="0,0,6,0" />
                                     <TextBlock Text="Guardar" FontWeight="Bold" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: AGENDAR NUEVA CONSULTA / CITA MÉDICA                               -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#AA000000" 
+                Visibility="{Binding IsScheduleAppointmentModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Panel.ZIndex="260">
+            <Border Background="{DynamicResource ThemeCard}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="14" 
+                    MaxWidth="640" 
+                    MaxHeight="600" 
+                    Margin="24" 
+                    Padding="22">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de la Modal -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeAccent}" 
+                                        CornerRadius="6" 
+                                        Width="28" Height="28" 
+                                        Margin="0,0,10,0">
+                                    <TextBlock Text="📅" 
+                                               FontSize="15" 
+                                               HorizontalAlignment="Center" 
+                                               VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="Agendar Nueva Consulta" 
+                                           FontSize="18" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource ThemeText}" />
+                            </StackPanel>
+                            <TextBlock Text="Programación de próxima cita o consulta de seguimiento médico del paciente." 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       Margin="38,4,0,0" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1" 
+                                Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CloseScheduleAppointmentModalCommand}" 
+                                Padding="8,5" 
+                                VerticalAlignment="Top">
+                            <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Formulario de Agendamiento -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,0,6,0">
+                            <!-- Datos del Paciente -->
+                            <Border Background="{DynamicResource ThemeSurface}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="8" 
+                                    Padding="14,10" 
+                                    Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding SelectedPatient.FullName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Text="{Binding SelectedPatient.RecordNumber, StringFormat='Expediente: {0}'}" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SelectedPatient.FormattedPhone, StringFormat='Tel: {0}'}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" />
+                                        <TextBlock Text="{Binding SelectedPatient.Age, StringFormat='Edad: {0} años'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Fecha y Hora de la Cita -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.4*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Selector de Fecha -->
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="Fecha de la Consulta *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <DatePicker SelectedDate="{Binding AppointmentDate, Mode=TwoWay}" 
+                                                FontSize="12" 
+                                                Padding="6,4" 
+                                                Background="{DynamicResource ThemeBackground}" 
+                                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                                Foreground="{DynamicResource ThemeText}" />
+                                </StackPanel>
+
+                                <!-- Horario / Hora Sugerida -->
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Horario / Hora *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding AppointmentTime, UpdateSourceTrigger=PropertyChanged}" 
+                                             FontSize="12" 
+                                             Padding="8,6" 
+                                             Background="{DynamicResource ThemeBackground}" 
+                                             BorderBrush="{DynamicResource ThemeBorder}" 
+                                             Foreground="{DynamicResource ThemeText}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Motivo de la Cita -->
+                            <StackPanel Margin="0,0,0,12">
+                                <TextBlock Text="Motivo de la Consulta *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding AppointmentReason, UpdateSourceTrigger=PropertyChanged}" 
+                                         FontSize="12" 
+                                         Padding="8,6" 
+                                         Background="{DynamicResource ThemeBackground}" 
+                                         BorderBrush="{DynamicResource ThemeBorder}" 
+                                         Foreground="{DynamicResource ThemeText}" />
+                                
+                                <!-- Plantillas rápidas de motivo -->
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding SetAppointmentReasonPresetCommand}" 
+                                            CommandParameter="Consulta de Seguimiento y Control" 
+                                            Padding="6,3" 
+                                            Margin="0,0,6,4">
+                                        <TextBlock Text="+ Seguimiento" FontSize="10.5" />
+                                    </Button>
+                                    <Button Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding SetAppointmentReasonPresetCommand}" 
+                                            CommandParameter="Revisión de Estudios de Laboratorio" 
+                                            Padding="6,3" 
+                                            Margin="0,0,6,4">
+                                        <TextBlock Text="+ Revisión de Estudios" FontSize="10.5" />
+                                    </Button>
+                                    <Button Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding SetAppointmentReasonPresetCommand}" 
+                                            CommandParameter="Valoración Post-Tratamiento" 
+                                            Padding="6,3" 
+                                            Margin="0,0,6,4">
+                                        <TextBlock Text="+ Post-Tratamiento" FontSize="10.5" />
+                                    </Button>
+                                    <Button Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding SetAppointmentReasonPresetCommand}" 
+                                            CommandParameter="Curación o Retiro de Puntos" 
+                                            Padding="6,3" 
+                                            Margin="0,0,6,4">
+                                        <TextBlock Text="+ Curación / Puntos" FontSize="10.5" />
+                                    </Button>
+                                </WrapPanel>
+                            </StackPanel>
+
+                            <!-- Notas e Instrucciones para el Paciente -->
+                            <StackPanel Margin="0,0,0,12">
+                                <TextBlock Text="Notas / Preparación previa para el Paciente" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                <Grid>
+                                    <TextBox Text="{Binding AppointmentNotes, UpdateSourceTrigger=PropertyChanged}" 
+                                             FontSize="12" 
+                                             Padding="8,6" 
+                                             Height="65" 
+                                             TextWrapping="Wrap" 
+                                             AcceptsReturn="True" 
+                                             VerticalScrollBarVisibility="Auto" 
+                                             Background="{DynamicResource ThemeBackground}" 
+                                             BorderBrush="{DynamicResource ThemeBorder}" 
+                                             Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Text="Ej: Presentarse en ayunas de 8 horas con resultados de biometría hemática..." 
+                                               FontSize="11" 
+                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                               VerticalAlignment="Top" 
+                                               Margin="9,8,0,0" 
+                                               IsHitTestVisible="False" 
+                                               Visibility="{Binding AppointmentNotes, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- Cita existente (si aplica) -->
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="6" 
+                                    Padding="10,8" 
+                                    Margin="0,0,0,4" 
+                                    Visibility="{Binding SelectedPatient.HasScheduledAppointment, Converter={StaticResource BoolToVis}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="⚠️ Cita actualmente agendada:" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                        <TextBlock Text="{Binding SelectedPatient.FormattedNextAppointment}" FontSize="11" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" 
+                                            Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding CancelScheduledAppointmentCommand}" 
+                                            Padding="8,4" 
+                                            VerticalAlignment="Center" 
+                                            ToolTip="Cancelar la cita agendada de este paciente">
+                                        <TextBlock Text="✕ Cancelar Cita" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource ThemeError}" />
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Pie de la Modal -->
+                    <Grid Grid.Row="2" Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding CloseScheduleAppointmentModalCommand}" 
+                                    Padding="16,7" 
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
+                            </Button>
+
+                            <Button Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding SaveScheduledAppointmentCommand}" 
+                                    Padding="18,7">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconCheck}" 
+                                          Fill="{DynamicResource ThemeAccentText}" 
+                                          Width="12" Height="12" 
+                                          Stretch="Uniform" 
+                                          Margin="0,0,6,0" />
+                                    <TextBlock Text="Agendar Cita" FontWeight="Bold" FontSize="12" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>

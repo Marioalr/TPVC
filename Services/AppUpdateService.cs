@@ -57,8 +57,8 @@ public class UpdateConfig
 public class UpdateCheckResult
 {
     public bool IsUpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = "1.3.15";
-    public string LatestVersion { get; set; } = "1.3.15";
+    public string CurrentVersion { get; set; } = "1.3.16";
+    public string LatestVersion { get; set; } = "1.3.16";
     public string ReleaseNotes { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;
@@ -91,7 +91,7 @@ public class AppUpdateService
         get => _currentVersion ?? 
                Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
                typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
-               "1.3.15";
+               "1.3.16";
         set => _currentVersion = value;
     }
 

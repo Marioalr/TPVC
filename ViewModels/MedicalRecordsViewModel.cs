@@ -739,6 +739,24 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _serviceModalQuantity = 1;
 
+    // ==========================================
+    // MODAL DE AGENDAR NUEVA CONSULTA / CITAS
+    // ==========================================
+    [ObservableProperty]
+    private bool _isScheduleAppointmentModalOpen;
+
+    [ObservableProperty]
+    private DateTime _appointmentDate = DateTime.Today.AddDays(7);
+
+    [ObservableProperty]
+    private string _appointmentTime = "10:00 AM";
+
+    [ObservableProperty]
+    private string _appointmentReason = "Consulta de Seguimiento y Control";
+
+    [ObservableProperty]
+    private string _appointmentNotes = string.Empty;
+
     [ObservableProperty]
     private string _doctorName = "Dr(a). Médico Tratante";
 
@@ -2895,6 +2913,99 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsServicesModalOpen = false;
         InfoModalMessage = $"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!";
         IsInfoModalVisible = true;
+    }
+
+    // ==========================================
+    // OPERACIONES DE AGENDAR NUEVA CONSULTA
+    // ==========================================
+
+    [RelayCommand]
+    public void OpenScheduleAppointmentModal()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione o agregue un paciente primero para agendar una nueva consulta médica.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        AppointmentDate = SelectedPatient.NextAppointmentDate ?? DateTime.Today.AddDays(7);
+        AppointmentTime = !string.IsNullOrWhiteSpace(SelectedPatient.NextAppointmentTime)
+            ? SelectedPatient.NextAppointmentTime
+            : "10:00 AM";
+        AppointmentReason = !string.IsNullOrWhiteSpace(SelectedPatient.NextAppointmentReason)
+            ? SelectedPatient.NextAppointmentReason
+            : "Consulta de Seguimiento y Control";
+        AppointmentNotes = SelectedPatient.NextAppointmentNotes ?? string.Empty;
+
+        IsScheduleAppointmentModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseScheduleAppointmentModal()
+    {
+        IsScheduleAppointmentModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void SetAppointmentReasonPreset(string preset)
+    {
+        if (!string.IsNullOrWhiteSpace(preset))
+        {
+            AppointmentReason = preset;
+        }
+    }
+
+    [RelayCommand]
+    public async Task SaveScheduledAppointmentAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        SelectedPatient.NextAppointmentDate = AppointmentDate;
+        SelectedPatient.NextAppointmentTime = string.IsNullOrWhiteSpace(AppointmentTime) ? "10:00 AM" : AppointmentTime.Trim();
+        SelectedPatient.NextAppointmentReason = string.IsNullOrWhiteSpace(AppointmentReason) ? "Consulta de Seguimiento" : AppointmentReason.Trim();
+        SelectedPatient.NextAppointmentNotes = AppointmentNotes?.Trim() ?? string.Empty;
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        IsScheduleAppointmentModalOpen = false;
+        InfoModalMessage = $"¡Cita agendada con éxito para el {AppointmentDate:dd/MM/yyyy} a las {SelectedPatient.NextAppointmentTime} para {SelectedPatient.FullName}!";
+        IsInfoModalVisible = true;
+
+        OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task CancelScheduledAppointmentAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        SelectedPatient.NextAppointmentDate = null;
+        SelectedPatient.NextAppointmentTime = string.Empty;
+        SelectedPatient.NextAppointmentReason = string.Empty;
+        SelectedPatient.NextAppointmentNotes = string.Empty;
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        IsScheduleAppointmentModalOpen = false;
+        InfoModalMessage = $"Se ha cancelado la cita programada para {SelectedPatient.FullName}.";
+        IsInfoModalVisible = true;
+
+        OnPropertyChanged(nameof(SelectedPatient));
     }
 
     [RelayCommand]

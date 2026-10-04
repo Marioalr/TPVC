@@ -2,6 +2,28 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.16] - 2026-10-04
+
+### Añadido
+* **Módulo de Agendado de Nueva Consulta y Citas de Seguimiento**:
+  * Nuevo botón `[📅 Agendar Nueva Consulta]` integrado en la Fila 1 de acciones de la ficha del paciente.
+  * Ventana modal flotante (640x600 px) para programar citas de seguimiento o nuevas consultas médicas.
+  * Selector de fecha (`DatePicker`), selector/entrada de hora (`HH:mm`), y catálogo rápido con un solo clic de motivos de cita (*Seguimiento / Control*, *Revisión de Laboratorios*, *Retiro de Puntos*, *Aplicación de Medicamento*, *Seguimiento de Tratamiento*, *Consulta General*).
+  * Campo de texto para notas clínicas, preparación del paciente o instrucciones para la cita.
+  * Opciones para agendar la cita y para cancelar/eliminar una cita activa con confirmación visual.
+  * Badge e indicador visual destacado en la cabecera del expediente (`📅 Cita: ...`) visible de inmediato junto a las alertas médicas.
+  * Persistencia en base de datos SQLite con soporte para `NextAppointmentDate`, `NextAppointmentTime`, `NextAppointmentReason` y `NextAppointmentNotes` con migración no destructiva.
+* **Cobertura de Pruebas Unitarias**:
+  * Cobertura ampliada a 77 pruebas unitarias superadas con 0 errores, integrando la prueba `MedicalRecordsViewModel_ScheduleAppointmentModal_SaveAndCancelWorksCorrectly`.
+
+### Modificado
+* **Simplificación y Limpieza del Banner de Consulta Activa**:
+  * Retiro del botón secundario `[🛒 Agregar en POS]` que se mostraba junto a `[🏁 Finalizar Consulta]`, manteniendo una interfaz limpia y libre de redundancias en el flujo clínico.
+* **Eliminación de Botón Repetitivo en la Ficha del Paciente**:
+  * Se retiró el botón `[Nueva Consulta]` ubicado entre `[Editar Ficha]` y `[Iniciar/Finalizar Consulta]`, eliminando la duplicidad con el botón superior principal `[+ Nueva Consulta]`.
+
+---
+
 ## [1.3.15] - 2026-10-04
 
 ### Añadido

@@ -121,6 +121,19 @@ public class PatientRecord
     public string VitalSigns { get; set; } = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
     public string ClinicalNotes { get; set; } = string.Empty;
     public string ActivePrescriptionJson { get; set; } = string.Empty;
+    public DateTime? NextAppointmentDate { get; set; }
+    public string NextAppointmentTime { get; set; } = string.Empty;
+    public string NextAppointmentReason { get; set; } = string.Empty;
+    public string NextAppointmentNotes { get; set; } = string.Empty;
+
+    [NotMapped]
+    public bool HasScheduledAppointment => NextAppointmentDate.HasValue && NextAppointmentDate.Value.Date >= DateTime.Today;
+
+    [NotMapped]
+    public string FormattedNextAppointment => HasScheduledAppointment 
+        ? $"{NextAppointmentDate:dd/MM/yyyy} {NextAppointmentTime} • {NextAppointmentReason}" 
+        : string.Empty;
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
