@@ -9,11 +9,17 @@ public partial class ProductDialog : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        viewModel.RequestClose += () =>
+        {
+            DialogResult = viewModel.DialogResult;
+            Close();
+        };
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        DialogResult = (DataContext as ProductDialogViewModel)?.DialogResult ?? false;
         Close();
     }
 }

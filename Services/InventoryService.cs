@@ -83,8 +83,24 @@ public class InventoryService
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
+    public async Task<bool> IsProductCodeTakenAsync(string code, int excludeProductId = 0)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var normalized = code.Trim().ToUpper();
+        return await _context.Products
+            .AnyAsync(p => p.IsActive && p.Id != excludeProductId && p.Code.ToUpper() == normalized);
+    }
+
     public async Task SaveProductAsync(Product product)
     {
+        product.Code = product.Code.Trim();
+        product.Name = product.Name.Trim();
+
+        if (await IsProductCodeTakenAsync(product.Code, product.Id))
+        {
+            throw new InvalidOperationException($"El código '{product.Code}' ya está registrado en el inventario. Debe ser único.");
+        }
+
         product.UpdatedAt = DateTime.Now;
 
         if (product.Id == 0)

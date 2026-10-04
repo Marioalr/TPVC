@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:ProductDialogViewModel}"
         Title="Ficha de Insumo / Medicamento" 
-        Height="620" Width="580"
+        Height="650" Width="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource ThemeBackground}">
@@ -19,8 +19,8 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Encabezado -->
-            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <!-- Encabezado y Avisos -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,14">
                 <TextBlock Text="Ficha de Insumo Médico" 
                            FontSize="20" 
                            FontWeight="Bold" 
@@ -28,7 +28,35 @@
                 <TextBlock Text="Registro y control de existencias para consultorio general" 
                            FontSize="12" 
                            Foreground="{DynamicResource ThemeTextSecondary}" 
-                           Margin="0,4,0,0" />
+                           Margin="0,4,0,12" />
+
+                <!-- Mensaje de éxito al guardar -->
+                <Border Background="#ECFDF5" 
+                        BorderBrush="#10B981" 
+                        BorderThickness="1" 
+                        CornerRadius="6" 
+                        Padding="12,8" 
+                        Margin="0,0,0,8"
+                        Visibility="{Binding SuccessMessage, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✓ " FontWeight="Bold" Foreground="#059669" FontSize="12" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding SuccessMessage}" Foreground="#059669" FontSize="11.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Mensaje de error de validación -->
+                <Border Background="#FEF2F2" 
+                        BorderBrush="#EF4444" 
+                        BorderThickness="1" 
+                        CornerRadius="6" 
+                        Padding="12,8" 
+                        Margin="0,0,0,8"
+                        Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⚠️ " FontWeight="Bold" Foreground="#DC2626" FontSize="12" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" FontSize="11.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Formulario Scrollable -->
@@ -43,8 +71,10 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Código / SKU" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Código / SKU (Único) *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" 
+                                     Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" 
+                                     Tag="Código único ej. MED-001..." />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="Categoría *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
@@ -58,7 +88,9 @@
                     <!-- Fila 2: Nombre Comercial -->
                     <StackPanel Margin="0,0,0,14">
                         <TextBlock Text="Nombre Comercial del Artículo *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                        <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Style="{DynamicResource ModernTextBox}" 
+                                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
+                                 Tag="Nombre comercial ej. Paracetamol 500mg..." />
                     </StackPanel>
 
                     <!-- Fila 3: Principio Activo y Presentación -->
@@ -70,11 +102,15 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Principio Activo (Genérico)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding GenericName, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" 
+                                     Text="{Binding GenericName, UpdateSourceTrigger=PropertyChanged}" 
+                                     Tag="Fórmula o sustancia activa..." />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="Presentación" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Presentation, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" 
+                                     Text="{Binding Presentation, UpdateSourceTrigger=PropertyChanged}" 
+                                     Tag="Ej. Caja con 20 tabletas..." />
                         </StackPanel>
                     </Grid>
 
@@ -118,7 +154,9 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Ubicación en Consultorio" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Style="{DynamicResource ModernTextBox}" 
+                                     Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" 
+                                     Tag="Ej. Vitrina 2, Estante B..." />
                         </StackPanel>
                         <CheckBox Grid.Column="2" 
                                   IsChecked="{Binding RequiresRefrigeration}" 
@@ -136,7 +174,8 @@
                                  Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" 
                                  Height="55" 
                                  AcceptsReturn="True" 
-                                 TextWrapping="Wrap" />
+                                 TextWrapping="Wrap" 
+                                 Tag="Observaciones clínicas o administrativas..." />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
@@ -144,7 +183,7 @@
             <!-- Botones de Acción -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Style="{DynamicResource OutlineButton}" 
-                        Content="Cancelar" 
+                        Content="Cerrar" 
                         Click="Cancel_Click" 
                         Margin="0,0,10,0" 
                         Padding="16,8" />

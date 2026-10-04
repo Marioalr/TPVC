@@ -21,7 +21,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.3.2";
+    private string _appVersion = "1.3.3";
 
     // ViewModels
     public MainHubViewModel MainHubVM { get; }

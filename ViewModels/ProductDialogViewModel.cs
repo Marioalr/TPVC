@@ -62,6 +62,17 @@ public partial class ProductDialogViewModel : ObservableObject
     [ObservableProperty]
     private Category? _selectedCategory;
 
+    [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _successMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _isSaving;
+
+    public event Action? RequestClose;
+
     public ObservableCollection<string> CommonUnits { get; } = new()
     {
         "Piezas",
@@ -87,16 +98,13 @@ public partial class ProductDialogViewModel : ObservableObject
     {
         var cats = await _inventoryService.GetCategoriesAsync();
         Categories = new ObservableCollection<Category>(cats);
+        ErrorMessage = string.Empty;
+        SuccessMessage = string.Empty;
 
         if (existing == null)
         {
             IsNew = true;
-            Code = $"MED-{new Random().Next(100, 999)}";
-            Unit = "Piezas";
-            CurrentStock = 10;
-            MinStock = 5;
-            OptimalStock = 25;
-            Price = 0.0m;
+            ResetFields();
             SelectedCategory = Categories.FirstOrDefault();
         }
         else
@@ -119,41 +127,109 @@ public partial class ProductDialogViewModel : ObservableObject
         }
     }
 
+    public void ResetFields()
+    {
+        Id = 0;
+        Code = string.Empty;
+        Name = string.Empty;
+        GenericName = string.Empty;
+        Presentation = string.Empty;
+        Unit = "Piezas";
+        Price = 0.0m;
+        CurrentStock = 0;
+        MinStock = 5;
+        OptimalStock = 20;
+        Location = string.Empty;
+        RequiresRefrigeration = false;
+        Notes = string.Empty;
+    }
+
     [RelayCommand]
     public async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(Name) || SelectedCategory == null)
+        ErrorMessage = string.Empty;
+        SuccessMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(Code))
         {
+            ErrorMessage = "Debe ingresar un Código o SKU para el insumo.";
             return;
         }
 
-        var product = new Product
+        if (string.IsNullOrWhiteSpace(Name))
         {
-            Id = Id,
-            Code = string.IsNullOrWhiteSpace(Code) ? $"ART-{DateTime.Now:MMddHHmm}" : Code.Trim(),
-            Name = Name.Trim(),
-            GenericName = string.IsNullOrWhiteSpace(GenericName) ? null : GenericName.Trim(),
-            Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
-            CategoryId = SelectedCategory.Id,
-            Unit = Unit,
-            Price = Price,
-            CurrentStock = CurrentStock,
-            MinStock = MinStock,
-            OptimalStock = OptimalStock,
-            Location = string.IsNullOrWhiteSpace(Location) ? null : Location.Trim(),
-            RequiresRefrigeration = RequiresRefrigeration,
-            Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()
-        };
+            ErrorMessage = "El Nombre Comercial del insumo es obligatorio.";
+            return;
+        }
 
-        await _inventoryService.SaveProductAsync(product);
-        DialogResult = true;
-        _onClose?.Invoke();
+        if (SelectedCategory == null)
+        {
+            ErrorMessage = "Debe seleccionar una categoría para el insumo.";
+            return;
+        }
+
+        string trimmedCode = Code.Trim();
+
+        // 1. Validar que no se repita el código en el inventario
+        bool isTaken = await _inventoryService.IsProductCodeTakenAsync(trimmedCode, Id);
+        if (isTaken)
+        {
+            ErrorMessage = $"El código '{trimmedCode}' ya está registrado en el inventario. Debe ingresar un código diferente.";
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            string savedName = Name.Trim();
+
+            var product = new Product
+            {
+                Id = Id,
+                Code = trimmedCode,
+                Name = savedName,
+                GenericName = string.IsNullOrWhiteSpace(GenericName) ? null : GenericName.Trim(),
+                Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
+                CategoryId = SelectedCategory.Id,
+                Unit = Unit,
+                Price = Price,
+                CurrentStock = CurrentStock,
+                MinStock = MinStock,
+                OptimalStock = OptimalStock,
+                Location = string.IsNullOrWhiteSpace(Location) ? null : Location.Trim(),
+                RequiresRefrigeration = RequiresRefrigeration,
+                Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()
+            };
+
+            await _inventoryService.SaveProductAsync(product);
+            DialogResult = true;
+
+            if (IsNew)
+            {
+                // Limpiar lo agregado para permitir registrar el siguiente insumo sin duplicados
+                ResetFields();
+                SuccessMessage = $"✓ Insumo \"{savedName}\" guardado correctamente. Formulario limpio para registrar el siguiente.";
+            }
+            else
+            {
+                RequestClose?.Invoke();
+                _onClose?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error al guardar el insumo: {ex.Message}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
     }
 
     [RelayCommand]
     public void Cancel()
     {
-        DialogResult = false;
+        RequestClose?.Invoke();
         _onClose?.Invoke();
     }
 }

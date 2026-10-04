@@ -4,6 +4,25 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.3] - 2026-10-03
+
+### Corregido
+* **Prevención de Insumos y Códigos Duplicados en Inventario**:
+  * **Validación Estricta de Código / SKU Único**: Se implementó tanto a nivel servicio (`InventoryService.IsProductCodeTakenAsync`) como en la capa ViewModel (`ProductDialogViewModel`) una verificación insensible a mayúsculas/minúsculas que bloquea el registro o modificación de insumos si su código ya está asignado a otro artículo activo.
+  * **Alertas Visuales de Validación**: Si se intenta registrar un código existente o campos obligatorios vacíos, se muestra una alerta visual destacada en color rojo con el detalle exacto de la duplicidad sin cerrar la ventana.
+* **Limpieza Automática del Formulario de Alta ("Borrar lo Agregado")**:
+  * Al pulsar **"Guardar Insumo"** en un nuevo registro, todos los campos capturados (código, nombre comercial, genérico, presentación, precio, existencias, ubicación y notas) se limpian automáticamente a su estado en blanco/cero.
+  * Se despliega un distintivo verde de confirmación con el nombre del insumo recién guardado, permitiendo capturar de forma continua y limpia múltiples insumos sin duplicar involuntariamente los datos del anterior.
+  * Botón de cierre explícito (**"Cerrar"**) con preservación del resultado para sincronizar la lista de inventario en tiempo real.
+
+### Añadido
+* **Pruebas Automatizadas de Unicidad y Reseteo**:
+  * 4 nuevas pruebas unitarias: `InventoryService_IsProductCodeTakenAsync_DetectsExistingCodeCaseInsensitive`, `InventoryService_SaveProduct_PreventsDuplicateCode`, `ProductDialogViewModel_SaveAsync_PreventsDuplicateCodeAndSetsErrorMessage` y `ProductDialogViewModel_SaveAsync_ClearsFieldsOnSuccessfulSave` (suite ampliada a **28 pruebas unitarias al 100%**).
+* **Actualización Global de Versión**:
+  * Sincronización a **`1.3.3`** en la solución, instalador, vistas y documentación.
+
+---
+
 ## [1.3.2] - 2026-10-03
 
 ### Corregido

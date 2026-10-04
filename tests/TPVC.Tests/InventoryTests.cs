@@ -549,7 +549,133 @@ public class InventoryTests
         service.SaveToken(null);
         Assert.IsNull(service.GitHubToken);
     }
+
+    [TestMethod]
+    public async Task InventoryService_IsProductCodeTakenAsync_DetectsExistingCodeCaseInsensitive()
+    {
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var cat = categories.First();
+
+        var p = new Product
+        {
+            Code = "TEST-DUP-01",
+            Name = "Producto de Prueba",
+            CategoryId = cat.Id,
+            Price = 50.0m
+        };
+        await _inventoryService.SaveProductAsync(p);
+
+        // Mismo código en mayúsculas
+        Assert.IsTrue(await _inventoryService.IsProductCodeTakenAsync("TEST-DUP-01"));
+        // Mismo código en minúsculas
+        Assert.IsTrue(await _inventoryService.IsProductCodeTakenAsync("test-dup-01"));
+        // Mismo código con espacios
+        Assert.IsTrue(await _inventoryService.IsProductCodeTakenAsync("  TEST-DUP-01  "));
+        // Mismo código excluyendo su propio Id (al editar) no debe dar tomado
+        Assert.IsFalse(await _inventoryService.IsProductCodeTakenAsync("TEST-DUP-01", excludeProductId: p.Id));
+        // Código diferente
+        Assert.IsFalse(await _inventoryService.IsProductCodeTakenAsync("CODIGO-NUEVO-99"));
+    }
+
+    [TestMethod]
+    public async Task InventoryService_SaveProduct_PreventsDuplicateCode()
+    {
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var cat = categories.First();
+
+        var p1 = new Product
+        {
+            Code = "MED-UNICO-100",
+            Name = "Medicamento Base",
+            CategoryId = cat.Id,
+            Price = 20.0m
+        };
+        await _inventoryService.SaveProductAsync(p1);
+
+        var p2 = new Product
+        {
+            Code = "med-unico-100", // Mismo código
+            Name = "Medicamento Duplicado Intento",
+            CategoryId = cat.Id,
+            Price = 30.0m
+        };
+
+        bool threw = false;
+        try
+        {
+            await _inventoryService.SaveProductAsync(p2);
+        }
+        catch (InvalidOperationException)
+        {
+            threw = true;
+        }
+
+        Assert.IsTrue(threw, "Debe lanzar InvalidOperationException si el código ya existe");
+    }
+
+    [TestMethod]
+    public async Task ProductDialogViewModel_SaveAsync_PreventsDuplicateCodeAndSetsErrorMessage()
+    {
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var cat = categories.First();
+
+        var p1 = new Product
+        {
+            Code = "SKU-BLOQUEADO-01",
+            Name = "Insumo Existente",
+            CategoryId = cat.Id,
+            Price = 15.0m
+        };
+        await _inventoryService.SaveProductAsync(p1);
+
+        var dialogVm = new ProductDialogViewModel(_inventoryService);
+        await dialogVm.InitializeAsync(null);
+
+        dialogVm.Code = "sku-bloqueado-01"; // Intento con el mismo código
+        dialogVm.Name = "Insumo Nuevo con Código Repetido";
+        dialogVm.SelectedCategory = cat;
+
+        await dialogVm.SaveAsync();
+
+        Assert.IsFalse(string.IsNullOrWhiteSpace(dialogVm.ErrorMessage));
+        Assert.IsTrue(dialogVm.ErrorMessage.Contains("ya está registrado"), "Debe notificar que el código está repetido");
+        Assert.IsFalse(dialogVm.DialogResult);
+    }
+
+    [TestMethod]
+    public async Task ProductDialogViewModel_SaveAsync_ClearsFieldsOnSuccessfulSave()
+    {
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var cat = categories.First();
+
+        var dialogVm = new ProductDialogViewModel(_inventoryService);
+        await dialogVm.InitializeAsync(null);
+
+        dialogVm.Code = "NUEVO-INSUMO-OK";
+        dialogVm.Name = "Gasas Estériles Premium";
+        dialogVm.GenericName = "Gasa Quirúrgica";
+        dialogVm.Presentation = "Paquete con 10 piezas";
+        dialogVm.SelectedCategory = cat;
+        dialogVm.Price = 45.0m;
+        dialogVm.CurrentStock = 12;
+
+        await dialogVm.SaveAsync();
+
+        Assert.IsTrue(dialogVm.DialogResult, "Debe ser exitoso");
+        Assert.IsTrue(string.IsNullOrWhiteSpace(dialogVm.ErrorMessage));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(dialogVm.SuccessMessage));
+        Assert.IsTrue(dialogVm.SuccessMessage.Contains("Gasas Estériles Premium"));
+
+        // Verificar que los campos agregados se borraron (formulario limpio)
+        Assert.AreEqual(string.Empty, dialogVm.Code, "El código debe borrarse al guardar");
+        Assert.AreEqual(string.Empty, dialogVm.Name, "El nombre debe borrarse al guardar");
+        Assert.AreEqual(string.Empty, dialogVm.GenericName, "El genérico debe borrarse");
+        Assert.AreEqual(string.Empty, dialogVm.Presentation, "La presentación debe borrarse");
+        Assert.AreEqual(0.0m, dialogVm.Price, "El precio debe reiniciarse a 0");
+        Assert.AreEqual(0, dialogVm.CurrentStock, "El stock debe reiniciarse a 0");
+    }
 }
+
 
 
 

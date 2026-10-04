@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.2-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.2)
+[![Version](https://img.shields.io/badge/version-v1.3.3-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.3)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -107,7 +107,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Patrón de Arquitectura**: MVVM con `CommunityToolkit.Mvvm`
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
-* **Pruebas Automatizadas**: MSTest con **24 pruebas unitarias de integración al 100%**
+* **Pruebas Automatizadas**: MSTest con **28 pruebas unitarias de integración al 100%**
 
 ---
 
@@ -118,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * Runtime / SDK: [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Opción A: Instalador de Experiencia de Prueba (Recomendado)
-Descargue `TPVC-Setup-v1.3.2.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.2), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
+Descargue `TPVC-Setup-v1.3.3.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.3), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
 
 ### Opción B: Compilación y Empaquetado del Instalador desde el Código Fuente
 ```powershell
@@ -126,14 +126,14 @@ Descargue `TPVC-Setup-v1.3.2.exe` desde [Releases](https://github.com/Marioalr/T
 git clone https://github.com/Marioalr/TPVC.git
 cd TPVC
 
-# 2. Restaurar dependencias y ejecutar pruebas unitarias (24 pruebas)
+# 2. Restaurar dependencias y ejecutar pruebas unitarias (28 pruebas)
 dotnet restore TPVC.sln
 dotnet test TPVC.sln
 
 # 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe) y paquete .zip
-powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.2"
+powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.3"
 
-# El ejecutable quedará en: publish/TPVC-Setup-v1.3.2.exe
+# El ejecutable quedará en: publish/TPVC-Setup-v1.3.3.exe
 ```
 
 ---

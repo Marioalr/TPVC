@@ -45,11 +45,11 @@ public class InstallerTests
         string publishDir = Path.Combine(rootDir, "publish");
 
         string setupExe = Directory.Exists(publishDir) 
-            ? Directory.GetFiles(publishDir, "TPVC-Setup*.exe").OrderByDescending(f => f).FirstOrDefault() ?? Path.Combine(publishDir, "TPVC-Setup-v1.3.2.exe")
-            : Path.Combine(publishDir, "TPVC-Setup-v1.3.2.exe");
+            ? Directory.GetFiles(publishDir, "TPVC-Setup*.exe").OrderByDescending(f => f).FirstOrDefault() ?? Path.Combine(publishDir, "TPVC-Setup-v1.3.3.exe")
+            : Path.Combine(publishDir, "TPVC-Setup-v1.3.3.exe");
         string zipArchive = Directory.Exists(publishDir)
-            ? Directory.GetFiles(publishDir, "TPVC-*-win-x64.zip").OrderByDescending(f => f).FirstOrDefault() ?? Path.Combine(publishDir, "TPVC-v1.3.2-win-x64.zip")
-            : Path.Combine(publishDir, "TPVC-v1.3.2-win-x64.zip");
+            ? Directory.GetFiles(publishDir, "TPVC-*-win-x64.zip").OrderByDescending(f => f).FirstOrDefault() ?? Path.Combine(publishDir, "TPVC-v1.3.3-win-x64.zip")
+            : Path.Combine(publishDir, "TPVC-v1.3.3-win-x64.zip");
 
         if (File.Exists(setupExe))
         {
