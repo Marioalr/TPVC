@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
@@ -14,8 +15,14 @@ namespace TPVC.Services;
 
 public class GitHubReleaseAsset
 {
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
 
     [JsonPropertyName("browser_download_url")]
     public string BrowserDownloadUrl { get; set; } = string.Empty;
@@ -42,14 +49,20 @@ public class GitHubReleaseInfo
     public List<GitHubReleaseAsset> Assets { get; set; } = new();
 }
 
+public class UpdateConfig
+{
+    public string? GitHubToken { get; set; }
+}
+
 public class UpdateCheckResult
 {
     public bool IsUpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = "1.3.1";
-    public string LatestVersion { get; set; } = "1.3.1";
+    public string CurrentVersion { get; set; } = "1.3.2";
+    public string LatestVersion { get; set; } = "1.3.2";
     public string ReleaseNotes { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;
+    public string AssetApiUrl { get; set; } = string.Empty;
     public string DownloadFileName { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
 }
@@ -58,18 +71,89 @@ public class AppUpdateService
 {
     private static readonly HttpClient HttpClient = new()
     {
-        Timeout = TimeSpan.FromSeconds(12)
+        Timeout = TimeSpan.FromSeconds(15)
     };
+
+    private static readonly string ConfigPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TPVC",
+        "update_config.json"
+    );
 
     static AppUpdateService()
     {
         HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("TPVC-Inventory-App");
     }
 
-    public string CurrentVersion => 
-        Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
-        typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
-        "1.3.1";
+    private string? _currentVersion;
+    public string CurrentVersion
+    {
+        get => _currentVersion ?? 
+               Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
+               typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
+               "1.3.2";
+        set => _currentVersion = value;
+    }
+
+    public string? GitHubToken { get; set; }
+
+    public AppUpdateService()
+    {
+        LoadConfig();
+    }
+
+    public void LoadConfig()
+    {
+        try
+        {
+            if (File.Exists(ConfigPath))
+            {
+                var json = File.ReadAllText(ConfigPath);
+                var config = JsonSerializer.Deserialize<UpdateConfig>(json);
+                if (config != null && !string.IsNullOrWhiteSpace(config.GitHubToken))
+                {
+                    GitHubToken = config.GitHubToken.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // Omitir fallos de lectura de configuración
+        }
+    }
+
+    public void SaveToken(string? token)
+    {
+        GitHubToken = string.IsNullOrWhiteSpace(token) ? null : token.Trim();
+        try
+        {
+            var dir = Path.GetDirectoryName(ConfigPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var config = new UpdateConfig { GitHubToken = GitHubToken };
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(ConfigPath, json);
+        }
+        catch
+        {
+            // Omitir fallos de escritura de configuración
+        }
+    }
+
+    public string? GetEffectiveToken()
+    {
+        if (!string.IsNullOrWhiteSpace(GitHubToken))
+            return GitHubToken;
+
+        var envToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? Environment.GetEnvironmentVariable("GH_TOKEN");
+        if (!string.IsNullOrWhiteSpace(envToken))
+            return envToken.Trim();
+
+        return null;
+    }
 
     public async Task<UpdateCheckResult> CheckForUpdatesAsync()
     {
@@ -80,9 +164,16 @@ public class AppUpdateService
 
         try
         {
-            // Consultar el repositorio GitHub oficial
             var url = "https://api.github.com/repos/Marioalr/TPVC/releases/latest";
-            var response = await HttpClient.GetAsync(url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+
+            var token = GetEffectiveToken();
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            using var response = await HttpClient.SendAsync(request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -98,6 +189,7 @@ public class AppUpdateService
                     if (asset != null)
                     {
                         result.DirectDownloadUrl = asset.BrowserDownloadUrl;
+                        result.AssetApiUrl = asset.Url;
                         result.DownloadFileName = asset.Name;
                     }
 
@@ -108,14 +200,45 @@ public class AppUpdateService
                         {
                             result.IsUpdateAvailable = true;
                             result.Message = $"¡Nueva versión disponible: v{result.LatestVersion}!";
-                            return result;
                         }
+                        else
+                        {
+                            result.IsUpdateAvailable = false;
+                            result.Message = $"La aplicación está actualizada (v{result.CurrentVersion}).";
+                        }
+                        return result;
+                    }
+                    else
+                    {
+                        result.IsUpdateAvailable = false;
+                        result.Message = $"Versión detectada: v{result.LatestVersion} (actual: v{result.CurrentVersion}).";
+                        return result;
                     }
                 }
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                result.Message = "El sistema está en su versión actual (sin releases pendientes en GitHub).";
+                result.IsUpdateAvailable = false;
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    result.Message = "El repositorio es privado o no tiene releases públicas. Configure un Personal Access Token (PAT) de GitHub en Ajustes para consultar actualizaciones.";
+                }
+                else
+                {
+                    result.Message = "No se encontraron releases en el repositorio con el token configurado (verifique permiso 'repo').";
+                }
+                return result;
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                result.IsUpdateAvailable = false;
+                result.Message = "Acceso no autorizado o límite de peticiones de GitHub alcanzado. Verifique el token configurado.";
+                return result;
+            }
+            else
+            {
+                result.IsUpdateAvailable = false;
+                result.Message = $"No se pudo consultar el servidor de actualizaciones (Error HTTP {(int)response.StatusCode}: {response.ReasonPhrase}).";
                 return result;
             }
 
@@ -129,13 +252,31 @@ public class AppUpdateService
         return result;
     }
 
-    public async Task<bool> DownloadAndInstallUpdateAsync(string downloadUrl, string fileName, IProgress<double>? progress = null)
+    public async Task<bool> DownloadAndInstallUpdateAsync(string downloadUrl, string fileName, string? assetApiUrl = null, IProgress<double>? progress = null)
     {
         try
         {
             var destination = Path.Combine(Path.GetTempPath(), fileName);
+            var token = GetEffectiveToken();
 
-            using var response = await HttpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            // Para repositorios privados con token, descargar directamente del endpoint de asset con Accept: application/octet-stream
+            string targetUrl = (!string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(assetApiUrl))
+                ? assetApiUrl
+                : downloadUrl;
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                if (!string.IsNullOrWhiteSpace(assetApiUrl))
+                {
+                    request.Headers.Accept.Clear();
+                    request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                }
+            }
+
+            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? -1L;

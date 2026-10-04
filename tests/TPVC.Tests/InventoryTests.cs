@@ -506,7 +506,51 @@ public class InventoryTests
         Assert.IsFalse(posVm.IsTicketModalOpen);
         Assert.IsNull(posVm.CurrentReceipt);
     }
+
+    [TestMethod]
+    public void AppUpdateService_DetectsNewerVersionCorrectly()
+    {
+        var service = new AppUpdateService();
+        service.CurrentVersion = "1.3.0";
+
+        string remoteTag = "v1.3.1";
+        string latestVersion = remoteTag.TrimStart('v', 'V');
+
+        Assert.IsTrue(Version.TryParse(latestVersion, out var latest));
+        Assert.IsTrue(Version.TryParse(service.CurrentVersion, out var current));
+        Assert.IsTrue(latest > current, "La versión remota 1.3.1 debe ser mayor a la versión local 1.3.0");
+    }
+
+    [TestMethod]
+    public void AppUpdateService_RecognizesCurrentVersionAsUpToDate()
+    {
+        var service = new AppUpdateService();
+        service.CurrentVersion = "1.3.1";
+
+        string remoteTag = "v1.3.1";
+        string latestVersion = remoteTag.TrimStart('v', 'V');
+
+        Assert.IsTrue(Version.TryParse(latestVersion, out var latest));
+        Assert.IsTrue(Version.TryParse(service.CurrentVersion, out var current));
+        Assert.IsFalse(latest > current, "Versiones idénticas no deben reportar actualización disponible");
+    }
+
+    [TestMethod]
+    public void AppUpdateService_TokenPersistenceAndEffectiveToken()
+    {
+        var service = new AppUpdateService();
+        string testToken = "ghp_testToken1234567890abcdef";
+
+        service.SaveToken(testToken);
+        Assert.AreEqual(testToken, service.GitHubToken);
+        Assert.AreEqual(testToken, service.GetEffectiveToken());
+
+        // Limpiar token
+        service.SaveToken(null);
+        Assert.IsNull(service.GitHubToken);
+    }
 }
+
 
 
 

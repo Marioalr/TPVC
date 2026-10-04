@@ -52,6 +52,9 @@ public partial class SettingsViewModel : ObservableObject
     private string _directDownloadUrl = string.Empty;
 
     [ObservableProperty]
+    private string _assetApiUrl = string.Empty;
+
+    [ObservableProperty]
     private string _downloadFileName = string.Empty;
 
     [ObservableProperty]
@@ -59,6 +62,12 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private double _downloadProgress;
+
+    [ObservableProperty]
+    private string _gitHubToken = string.Empty;
+
+    [ObservableProperty]
+    private string _tokenStatusMessage = string.Empty;
 
     public ObservableCollection<AccentPaletteOption> PaletteOptions { get; } = new()
     {
@@ -78,6 +87,7 @@ public partial class SettingsViewModel : ObservableObject
         _updateService = updateService;
 
         AppVersion = _updateService.CurrentVersion.TrimStart('v', 'V');
+        GitHubToken = _updateService.GitHubToken ?? string.Empty;
         LoadCurrentThemeSettings();
     }
 
@@ -116,6 +126,15 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public void SaveGitHubToken()
+    {
+        _updateService.SaveToken(GitHubToken);
+        TokenStatusMessage = string.IsNullOrWhiteSpace(GitHubToken)
+            ? "✓ Configuración guardada (modo público sin token)."
+            : "✓ Token de GitHub guardado exitosamente para este equipo.";
+    }
+
+    [RelayCommand]
     public async Task CheckUpdatesAsync()
     {
         IsCheckingUpdates = true;
@@ -128,6 +147,7 @@ public partial class SettingsViewModel : ObservableObject
             LatestVersion = result.LatestVersion;
             ReleaseNotes = result.ReleaseNotes;
             DirectDownloadUrl = result.DirectDownloadUrl;
+            AssetApiUrl = result.AssetApiUrl;
             DownloadFileName = result.DownloadFileName;
         }
         catch (Exception ex)
@@ -143,7 +163,7 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     public async Task DownloadAndInstallUpdateAsync()
     {
-        if (string.IsNullOrWhiteSpace(DirectDownloadUrl))
+        if (string.IsNullOrWhiteSpace(DirectDownloadUrl) && string.IsNullOrWhiteSpace(AssetApiUrl))
         {
             UpdateStatusMessage = "No se encontró paquete directo de actualización en la versión.";
             return;
@@ -153,12 +173,12 @@ public partial class SettingsViewModel : ObservableObject
         DownloadProgress = 0;
         var progress = new Progress<double>(p => DownloadProgress = Math.Round(p, 1));
 
-        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, progress);
+        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, AssetApiUrl, progress);
         IsDownloading = false;
 
         if (!success)
         {
-            UpdateStatusMessage = "Hubo un error al descargar e instalar el archivo de actualización.";
+            UpdateStatusMessage = "Hubo un error al descargar e instalar el archivo de actualización. Verifique permisos o el token configurado.";
         }
     }
 }

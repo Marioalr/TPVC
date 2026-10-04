@@ -249,6 +249,50 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+
+                    <!-- Configuración de Token para Despliegues Privados (Producción) -->
+                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="12,10" 
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="🔒 Autenticación para Repositorio Privado en Producción" 
+                                       FontWeight="SemiBold" 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeText}" 
+                                       Margin="0,0,0,3" />
+                            <TextBlock Text="Nota para producción: Si el repositorio es privado, configure un Personal Access Token (PAT) de GitHub con permiso 'repo' para que este equipo pueda consultar y descargar nuevas versiones automáticamente. En repositorios públicos este campo no es requerido." 
+                                       FontSize="11" 
+                                       TextWrapping="Wrap" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" 
+                                         Text="{Binding GitHubToken, UpdateSourceTrigger=PropertyChanged}" 
+                                         Style="{DynamicResource ModernTextBox}" 
+                                         FontFamily="Consolas" 
+                                         FontSize="12" 
+                                         Padding="10,6" />
+                                <Button Grid.Column="2" 
+                                        Style="{DynamicResource OutlineButton}" 
+                                        Command="{Binding SaveGitHubTokenCommand}" 
+                                        Content="Guardar Token" 
+                                        Padding="14,6" />
+                            </Grid>
+                            <TextBlock Text="{Binding TokenStatusMessage}" 
+                                       FontSize="11" 
+                                       Foreground="{DynamicResource ThemeAccent}" 
+                                       Margin="0,5,0,0" 
+                                       Visibility="{Binding TokenStatusMessage, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

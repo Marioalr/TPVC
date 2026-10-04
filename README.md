@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.1-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.1)
+[![Version](https://img.shields.io/badge/version-v1.3.2-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.2)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -107,7 +107,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Patrón de Arquitectura**: MVVM con `CommunityToolkit.Mvvm`
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
-* **Pruebas Automatizadas**: MSTest con **20 pruebas unitarias de integración al 100%**
+* **Pruebas Automatizadas**: MSTest con **24 pruebas unitarias de integración al 100%**
 
 ---
 
@@ -118,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * Runtime / SDK: [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Opción A: Instalador de Experiencia de Prueba (Recomendado)
-Descargue `TPVC-Setup-v1.3.0.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.0), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
+Descargue `TPVC-Setup-v1.3.2.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.2), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
 
 ### Opción B: Compilación y Empaquetado del Instalador desde el Código Fuente
 ```powershell
@@ -126,15 +126,33 @@ Descargue `TPVC-Setup-v1.3.0.exe` desde [Releases](https://github.com/Marioalr/T
 git clone https://github.com/Marioalr/TPVC.git
 cd TPVC
 
-# 2. Restaurar dependencias y ejecutar pruebas unitarias (20 pruebas)
+# 2. Restaurar dependencias y ejecutar pruebas unitarias (24 pruebas)
 dotnet restore TPVC.sln
 dotnet test TPVC.sln
 
 # 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe) y paquete .zip
-powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1
+powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.2"
 
-# El ejecutable quedará en: publish/TPVC-Setup-v1.3.0.exe
+# El ejecutable quedará en: publish/TPVC-Setup-v1.3.2.exe
 ```
+
+---
+
+## 🔒 Actualizaciones en Producción (Repositorio Privado con Token)
+
+Por políticas de seguridad de GitHub, cuando el repositorio de código fuente y releases está configurado como **Privado**, las consultas públicas de actualización devuelven un código `HTTP 404 No Encontrado` para no revelar la existencia del proyecto a terceros.
+
+Para habilitar la comprobación y descarga automática de versiones en los equipos del consultorio:
+
+1. **Generar un Personal Access Token (PAT) en GitHub**:
+   - Vaya a GitHub: `Settings` → `Developer Settings` → `Personal access tokens` → `Tokens (classic)` (o Fine-grained).
+   - Genere un nuevo token con permiso/alcance **`repo`** (o `read:packages`).
+2. **Configuración en la Aplicación**:
+   - **Desde la Interfaz Gráfica**: Abra TPVC → **Configuración** → **Ajustes** → Sección *"🔒 Autenticación para Repositorio Privado en Producción"*, pegue el token y haga clic en **"Guardar Token"**. Se guardará de forma persistente y local en `%LocalAppData%\TPVC\update_config.json`.
+   - **Mediante Variable de Entorno**: En despliegues desatendidos o automatizados, declare la variable de entorno del sistema `GITHUB_TOKEN` o `GH_TOKEN` con el valor del token.
+3. **Descarga Segura de Paquetes**:
+   - La aplicación detecta el token y descarga automáticamente los instaladores `.exe` autenticados mediante el endpoint de assets de la API de GitHub (`Accept: application/octet-stream`).
+   - *(En caso de que el repositorio se configure como Público en el futuro, no se requiere ningún token y las actualizaciones funcionarán abiertamente para todos los usuarios).*
 
 ---
 

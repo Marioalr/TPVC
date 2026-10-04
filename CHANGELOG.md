@@ -4,6 +4,25 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.2] - 2026-10-03
+
+### Corregido
+* **Diagnóstico y Corrección de Verificación de Actualizaciones en Repositorios Privados**:
+  * **Causa Raíz Identificada**: Por políticas de seguridad de la API de GitHub, las consultas no autenticadas a repositorios privados devuelven un código `HTTP 404 Not Found`. Anteriormente, el servicio de actualización interpretaba erróneamente cualquier `404` como *"El sistema está en su versión actual"*, enmascarando que el repositorio requería credenciales y reportando erróneamente que no había actualizaciones disponibles.
+  * **Mensajes Precisos y Transparentes**: Ahora el servicio reporta con claridad si el repositorio es privado o si se alcanzó el límite de peticiones anónimas, guiando al usuario o administrador a ingresar su token.
+
+### Añadido
+* **Soporte de Autenticación con Token (GitHub PAT) para Producción Privada**:
+  * Nuevo panel en `Ajustes` (**"🔒 Autenticación para Repositorio Privado en Producción"**) con campo de entrada para Personal Access Token (PAT con alcance `repo`) y botón de guardado con persistencia local en `%LocalAppData%\TPVC\update_config.json`.
+  * Detección automática en cascada de tokens desde la configuración local persistida y desde las variables de entorno `GITHUB_TOKEN` o `GH_TOKEN`.
+  * **Descarga Autenticada de Releases Privadas**: Implementación del flujo de descarga a través del endpoint de assets de la API de GitHub (`/releases/assets/{id}`) con cabecera `Accept: application/octet-stream` y redirección a URL firmada temporal de S3.
+* **Pruebas Unitarias Ampliadas**:
+  * Nuevas pruebas `AppUpdateService_DetectsNewerVersionCorrectly`, `AppUpdateService_RecognizesCurrentVersionAsUpToDate` y `AppUpdateService_TokenPersistenceAndEffectiveToken` (suite ampliada a **24 pruebas unitarias al 100%**).
+* **Actualización Global de Versión**:
+  * Sincronización de versión a **`1.3.2`** en proyectos, instaladores, workflows, vistas y documentación.
+
+---
+
 ## [1.3.1] - 2026-10-03
 
 ### Añadido
