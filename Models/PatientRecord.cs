@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace TPVC.Models;
@@ -11,6 +12,25 @@ public class PatientPrescriptionItem
     public string MedicineName { get; set; } = string.Empty;
     public string Dosage { get; set; } = string.Empty;
     public int RecommendedQuantity { get; set; } = 1;
+}
+
+public class PatientSupplyItem
+{
+    public string SupplyName { get; set; } = string.Empty;
+    public string Instructions { get; set; } = string.Empty;
+    public int Quantity { get; set; } = 1;
+    public decimal UnitPrice { get; set; } = 0m;
+}
+
+public class PatientServiceItem
+{
+    public int ServiceId { get; set; }
+    public string ServiceCode { get; set; } = string.Empty;
+    public string ServiceName { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public decimal Price { get; set; } = 0m;
+    public int Quantity { get; set; } = 1;
 }
 
 public class PatientConsultation
@@ -109,6 +129,12 @@ public class PatientRecord
     [NotMapped]
     private List<PatientPrescriptionItem>? _activePrescription;
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        PropertyNameCaseInsensitive = true
+    };
+
     [NotMapped]
     public List<PatientPrescriptionItem> ActivePrescription
     {
@@ -124,7 +150,7 @@ public class PatientRecord
                 {
                     try
                     {
-                        _activePrescription = JsonSerializer.Deserialize<List<PatientPrescriptionItem>>(ActivePrescriptionJson) ?? new();
+                        _activePrescription = JsonSerializer.Deserialize<List<PatientPrescriptionItem>>(ActivePrescriptionJson, _jsonOptions) ?? new();
                     }
                     catch
                     {
@@ -137,13 +163,97 @@ public class PatientRecord
         set
         {
             _activePrescription = value ?? new();
-            ActivePrescriptionJson = JsonSerializer.Serialize(_activePrescription);
+            ActivePrescriptionJson = JsonSerializer.Serialize(_activePrescription, _jsonOptions);
         }
     }
 
     public void SyncPrescriptionJson()
     {
-        ActivePrescriptionJson = JsonSerializer.Serialize(ActivePrescription);
+        ActivePrescriptionJson = JsonSerializer.Serialize(ActivePrescription, _jsonOptions);
+    }
+
+    public string ActiveSuppliesJson { get; set; } = string.Empty;
+
+    [NotMapped]
+    private List<PatientSupplyItem>? _activeSupplies;
+
+    [NotMapped]
+    public List<PatientSupplyItem> ActiveSupplies
+    {
+        get
+        {
+            if (_activeSupplies == null)
+            {
+                if (string.IsNullOrWhiteSpace(ActiveSuppliesJson))
+                {
+                    _activeSupplies = new List<PatientSupplyItem>();
+                }
+                else
+                {
+                    try
+                    {
+                        _activeSupplies = JsonSerializer.Deserialize<List<PatientSupplyItem>>(ActiveSuppliesJson, _jsonOptions) ?? new();
+                    }
+                    catch
+                    {
+                        _activeSupplies = new List<PatientSupplyItem>();
+                    }
+                }
+            }
+            return _activeSupplies;
+        }
+        set
+        {
+            _activeSupplies = value ?? new();
+            ActiveSuppliesJson = JsonSerializer.Serialize(_activeSupplies, _jsonOptions);
+        }
+    }
+
+    public void SyncSuppliesJson()
+    {
+        ActiveSuppliesJson = JsonSerializer.Serialize(ActiveSupplies, _jsonOptions);
+    }
+
+    public string ActiveServicesJson { get; set; } = string.Empty;
+
+    [NotMapped]
+    private List<PatientServiceItem>? _activeServices;
+
+    [NotMapped]
+    public List<PatientServiceItem> ActiveServices
+    {
+        get
+        {
+            if (_activeServices == null)
+            {
+                if (string.IsNullOrWhiteSpace(ActiveServicesJson))
+                {
+                    _activeServices = new List<PatientServiceItem>();
+                }
+                else
+                {
+                    try
+                    {
+                        _activeServices = JsonSerializer.Deserialize<List<PatientServiceItem>>(ActiveServicesJson, _jsonOptions) ?? new();
+                    }
+                    catch
+                    {
+                        _activeServices = new List<PatientServiceItem>();
+                    }
+                }
+            }
+            return _activeServices;
+        }
+        set
+        {
+            _activeServices = value ?? new();
+            ActiveServicesJson = JsonSerializer.Serialize(_activeServices, _jsonOptions);
+        }
+    }
+
+    public void SyncServicesJson()
+    {
+        ActiveServicesJson = JsonSerializer.Serialize(ActiveServices, _jsonOptions);
     }
 
     public bool HasAllergies => !string.IsNullOrWhiteSpace(Allergies) && 

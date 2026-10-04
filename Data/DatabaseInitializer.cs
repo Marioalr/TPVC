@@ -25,6 +25,22 @@ public static class DatabaseInitializer
 
         try
         {
+            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN ActiveSuppliesJson TEXT NOT NULL DEFAULT '';");
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN ActiveServicesJson TEXT NOT NULL DEFAULT '';");
+        }
+        catch
+        {
+        }
+
+        try
+        {
             context.Database.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ClinicalServices (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +87,8 @@ public static class DatabaseInitializer
                     VitalSigns TEXT NOT NULL,
                     ClinicalNotes TEXT NOT NULL,
                     ActivePrescriptionJson TEXT NOT NULL,
+                    ActiveSuppliesJson TEXT NOT NULL DEFAULT '',
+                    ActiveServicesJson TEXT NOT NULL DEFAULT '',
                     IsActive INTEGER NOT NULL,
                     CreatedAt TEXT NOT NULL
                 );

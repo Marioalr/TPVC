@@ -685,6 +685,60 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isPrescriptionModalOpen;
 
+    // ==========================================
+    // MODAL DE INSUMOS Y MATERIAL CLÍNICO
+    // ==========================================
+    [ObservableProperty]
+    private bool _isSuppliesModalOpen;
+
+    [ObservableProperty]
+    private string _supplySearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _supplyProductSuggestions = new();
+
+    [ObservableProperty]
+    private bool _isSupplyDropdownOpen;
+
+    [ObservableProperty]
+    private Product? _selectedSupplyProduct;
+
+    [ObservableProperty]
+    private string _supplyName = string.Empty;
+
+    [ObservableProperty]
+    private string _supplyInstructions = string.Empty;
+
+    [ObservableProperty]
+    private int _supplyQuantity = 1;
+
+    // ==========================================
+    // MODAL DE SERVICIOS Y PROCEDIMIENTOS CLÍNICOS
+    // ==========================================
+    [ObservableProperty]
+    private bool _isServicesModalOpen;
+
+    [ObservableProperty]
+    private string _serviceModalSearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _serviceModalSuggestions = new();
+
+    [ObservableProperty]
+    private bool _isServiceModalDropdownOpen;
+
+    [ObservableProperty]
+    private ClinicalService? _selectedServiceModalItem;
+
+    [ObservableProperty]
+    private string _serviceModalName = string.Empty;
+
+    [ObservableProperty]
+    private string _serviceModalNotes = string.Empty;
+
+    [ObservableProperty]
+    private int _serviceModalQuantity = 1;
+
     [ObservableProperty]
     private string _doctorName = "Dr(a). Médico Tratante";
 
@@ -783,6 +837,33 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _hasCustomGeneralIndications;
 
+    public static bool IsProductMedication(Product p)
+    {
+        if (p.Category != null && (p.Category.Name.Contains("Medicamento", StringComparison.OrdinalIgnoreCase) || p.Category.Name.Contains("Fármaco", StringComparison.OrdinalIgnoreCase)))
+            return true;
+        if (!string.IsNullOrEmpty(p.Code) && p.Code.StartsWith("MED", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (p.Category != null && (
+            p.Category.Name.Contains("Curación", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Insumo", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Antiséptico", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Diagnóstico", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        if (!string.IsNullOrEmpty(p.Code) && (
+            p.Code.StartsWith("CUR", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("INS", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("ANT", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("DIA", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        return true;
+    }
+
+    public static bool IsProductSupply(Product p)
+    {
+        return !IsProductMedication(p);
+    }
+
     partial void OnPrescriptionSearchTextChanged(string value)
     {
         ApplyPrescriptionSuggestions(value);
@@ -799,6 +880,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         var q = query.Trim().ToLowerInvariant();
         var matches = AvailableProducts
+            .Where(p => IsProductMedication(p))
             .Where(p => 
                 p.Name.ToLowerInvariant().Contains(q) ||
                 (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.ToLowerInvariant().Contains(q)) ||
@@ -809,6 +891,63 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         PrescriptionProductSuggestions = new ObservableCollection<Product>(matches);
         IsPrescriptionDropdownOpen = PrescriptionProductSuggestions.Count > 0;
+    }
+
+    partial void OnSupplySearchTextChanged(string value)
+    {
+        ApplySupplySuggestions(value);
+    }
+
+    public void ApplySupplySuggestions(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            SupplyProductSuggestions.Clear();
+            IsSupplyDropdownOpen = false;
+            return;
+        }
+
+        var q = query.Trim().ToLowerInvariant();
+        var matches = AvailableProducts
+            .Where(p => IsProductSupply(p))
+            .Where(p =>
+                p.Name.ToLowerInvariant().Contains(q) ||
+                (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.ToLowerInvariant().Contains(q)) ||
+                p.Code.ToLowerInvariant().Contains(q)
+            )
+            .Take(8)
+            .ToList();
+
+        SupplyProductSuggestions = new ObservableCollection<Product>(matches);
+        IsSupplyDropdownOpen = SupplyProductSuggestions.Count > 0;
+    }
+
+    partial void OnServiceModalSearchTextChanged(string value)
+    {
+        ApplyServiceModalSuggestions(value);
+    }
+
+    public void ApplyServiceModalSuggestions(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            ServiceModalSuggestions.Clear();
+            IsServiceModalDropdownOpen = false;
+            return;
+        }
+
+        var q = query.Trim().ToLowerInvariant();
+        var matches = Services
+            .Where(s =>
+                s.Name.ToLowerInvariant().Contains(q) ||
+                s.Code.ToLowerInvariant().Contains(q) ||
+                s.Category.ToLowerInvariant().Contains(q)
+            )
+            .Take(8)
+            .ToList();
+
+        ServiceModalSuggestions = new ObservableCollection<ClinicalService>(matches);
+        IsServiceModalDropdownOpen = ServiceModalSuggestions.Count > 0;
     }
 
     public MedicalRecordsViewModel() : this(null, null, null)
@@ -2070,7 +2209,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         string? pres = matchedProduct?.Presentation ?? "Caja / Frasco";
         string unit = matchedProduct?.Unit ?? "Piezas";
 
-        if (HasActiveConsultation && _consultationService?.CurrentConsultation != null)
+        if (!HasActiveConsultation)
+        {
+            StartActiveConsultation();
+        }
+
+        if (_consultationService?.CurrentConsultation != null)
         {
             _consultationService.AddCartItemToActiveConsultation(
                 prodId, code, name, gen, pres, unit, price, qty
@@ -2370,6 +2514,386 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         IsPrescriptionModalOpen = false;
         InfoModalMessage = $"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!";
+        IsInfoModalVisible = true;
+    }
+
+    // ==========================================
+    // OPERACIONES DE MODAL DE INSUMOS CLÍNICOS
+    // ==========================================
+
+    [RelayCommand]
+    public void OpenSuppliesModal()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar sus insumos y material clínico.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        SupplySearchText = string.Empty;
+        SupplyName = string.Empty;
+        SupplyInstructions = string.Empty;
+        SupplyQuantity = 1;
+        SelectedSupplyProduct = null;
+        IsSupplyDropdownOpen = false;
+        IsSuppliesModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseSuppliesModal()
+    {
+        IsSuppliesModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void SelectSupplyProduct(Product? product)
+    {
+        if (product == null) return;
+        SelectedSupplyProduct = product;
+        SupplyName = $"{product.Name} ({product.Presentation})";
+        SupplySearchText = product.Name;
+        IsSupplyDropdownOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task AddSupplyItemToPatientAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        var name = !string.IsNullOrWhiteSpace(SupplyName)
+            ? SupplyName.Trim()
+            : SupplySearchText.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            InfoModalMessage = "Especifique el nombre del insumo o material de curación a agregar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var instructions = string.IsNullOrWhiteSpace(SupplyInstructions)
+            ? "Uso clínico en consulta"
+            : SupplyInstructions.Trim();
+
+        var qty = SupplyQuantity > 0 ? SupplyQuantity : 1;
+        var unitPrice = SelectedSupplyProduct?.Price ?? 35.00m;
+
+        var newItem = new PatientSupplyItem
+        {
+            SupplyName = name,
+            Instructions = instructions,
+            Quantity = qty,
+            UnitPrice = unitPrice
+        };
+
+        var list = new List<PatientSupplyItem>(SelectedPatient.ActiveSupplies) { newItem };
+        SelectedPatient.ActiveSupplies = list;
+        SelectedPatient.SyncSuppliesJson();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        SupplySearchText = string.Empty;
+        SupplyName = string.Empty;
+        SupplyInstructions = string.Empty;
+        SupplyQuantity = 1;
+        SelectedSupplyProduct = null;
+        IsSupplyDropdownOpen = false;
+
+        OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task RemoveSupplyItemFromPatientAsync(PatientSupplyItem? item)
+    {
+        if (SelectedPatient == null || item == null) return;
+
+        var list = new List<PatientSupplyItem>(SelectedPatient.ActiveSupplies);
+        list.Remove(item);
+        SelectedPatient.ActiveSupplies = list;
+        SelectedPatient.SyncSuppliesJson();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public void AddSupplyItemToPos(PatientSupplyItem? item)
+    {
+        if (item == null) return;
+
+        var name = item.SupplyName;
+        var qty = Math.Max(1, item.Quantity);
+
+        var matchedProduct = AvailableProducts.FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            $"{p.Name} ({p.Presentation})".Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(name, StringComparison.OrdinalIgnoreCase))
+        );
+
+        int prodId = matchedProduct?.Id ?? -Random.Shared.Next(100, 9999);
+        string code = matchedProduct?.Code ?? "INS-001";
+        decimal price = matchedProduct?.Price ?? (item.UnitPrice > 0 ? item.UnitPrice : 35.00m);
+        string? gen = matchedProduct?.GenericName ?? "Material Clínico";
+        string? pres = matchedProduct?.Presentation ?? "Pieza / Paquete";
+        string unit = matchedProduct?.Unit ?? "Piezas";
+
+        if (!HasActiveConsultation)
+        {
+            StartActiveConsultation();
+        }
+
+        if (_consultationService?.CurrentConsultation != null)
+        {
+            _consultationService.AddCartItemToActiveConsultation(
+                prodId, code, name, gen, pres, unit, price, qty
+            );
+            SyncActiveConsultation();
+        }
+
+        if (PosVM != null)
+        {
+            var existing = PosVM.Cart.FirstOrDefault(c => c.ProductId == prodId);
+            if (existing != null)
+            {
+                existing.Quantity += qty;
+            }
+            else
+            {
+                PosVM.Cart.Add(new CartItem
+                {
+                    ProductId = prodId,
+                    Code = code,
+                    Name = name,
+                    GenericName = gen,
+                    Presentation = pres,
+                    Unit = unit,
+                    AvailableStock = matchedProduct?.CurrentStock ?? 999,
+                    UnitPrice = price,
+                    Quantity = qty
+                });
+            }
+            PosVM.RecalculateTotals();
+        }
+
+        InfoModalMessage = $"Insumo '{name}' (Cant: {qty}) agregado a la cuenta de la consulta para cobro en el POS.";
+        IsInfoModalVisible = true;
+    }
+
+    [RelayCommand]
+    public async Task SaveSuppliesModalAsync()
+    {
+        if (SelectedPatient != null)
+        {
+            SelectedPatient.SyncSuppliesJson();
+            if (_inventoryService != null)
+            {
+                try
+                {
+                    await _inventoryService.SavePatientAsync(SelectedPatient);
+                }
+                catch { }
+            }
+            OnPropertyChanged(nameof(SelectedPatient));
+        }
+
+        IsSuppliesModalOpen = false;
+        InfoModalMessage = $"¡Insumos y materiales clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!";
+        IsInfoModalVisible = true;
+    }
+
+    // ==========================================
+    // OPERACIONES DE MODAL DE SERVICIOS CLÍNICOS
+    // ==========================================
+
+    [RelayCommand]
+    public void OpenServicesModal()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar los servicios y procedimientos clínicos.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        ServiceModalSearchText = string.Empty;
+        ServiceModalName = string.Empty;
+        ServiceModalNotes = string.Empty;
+        ServiceModalQuantity = 1;
+        SelectedServiceModalItem = null;
+        IsServiceModalDropdownOpen = false;
+        IsServicesModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseServicesModal()
+    {
+        IsServicesModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void SelectServiceModalSuggestion(ClinicalService? service)
+    {
+        if (service == null) return;
+        SelectedServiceModalItem = service;
+        ServiceModalName = service.Name;
+        ServiceModalSearchText = service.Name;
+        IsServiceModalDropdownOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task AddServiceItemToPatientAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        var name = !string.IsNullOrWhiteSpace(ServiceModalName)
+            ? ServiceModalName.Trim()
+            : ServiceModalSearchText.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            InfoModalMessage = "Especifique el servicio clínico o procedimiento médico a agregar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var notes = string.IsNullOrWhiteSpace(ServiceModalNotes)
+            ? "Procedimiento clínico en consulta"
+            : ServiceModalNotes.Trim();
+
+        var qty = ServiceModalQuantity > 0 ? ServiceModalQuantity : 1;
+        var serviceObj = SelectedServiceModalItem ?? Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var price = serviceObj?.Price ?? 200.00m;
+        var category = serviceObj?.Category ?? "Consulta";
+        var code = serviceObj?.Code ?? "SERV-001";
+        var serviceId = serviceObj?.Id ?? 0;
+
+        var newItem = new PatientServiceItem
+        {
+            ServiceId = serviceId,
+            ServiceCode = code,
+            ServiceName = name,
+            Category = category,
+            Notes = notes,
+            Price = price,
+            Quantity = qty
+        };
+
+        var list = new List<PatientServiceItem>(SelectedPatient.ActiveServices) { newItem };
+        SelectedPatient.ActiveServices = list;
+        SelectedPatient.SyncServicesJson();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        ServiceModalSearchText = string.Empty;
+        ServiceModalName = string.Empty;
+        ServiceModalNotes = string.Empty;
+        ServiceModalQuantity = 1;
+        SelectedServiceModalItem = null;
+        IsServiceModalDropdownOpen = false;
+
+        OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task RemoveServiceItemFromPatientAsync(PatientServiceItem? item)
+    {
+        if (SelectedPatient == null || item == null) return;
+
+        var list = new List<PatientServiceItem>(SelectedPatient.ActiveServices);
+        list.Remove(item);
+        SelectedPatient.ActiveServices = list;
+        SelectedPatient.SyncServicesJson();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(SelectedPatient);
+            }
+            catch { }
+        }
+
+        OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public void AddServiceItemToPos(PatientServiceItem? item)
+    {
+        if (item == null) return;
+
+        var serviceObj = Services.FirstOrDefault(s => s.Id == item.ServiceId || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        if (serviceObj != null)
+        {
+            AddServiceToActiveConsultation(serviceObj);
+        }
+        else
+        {
+            if (!HasActiveConsultation)
+            {
+                StartActiveConsultation();
+            }
+
+            if (_consultationService?.CurrentConsultation != null)
+            {
+                _consultationService.AddCartItemToActiveConsultation(
+                    -Random.Shared.Next(100, 9999),
+                    item.ServiceCode,
+                    item.ServiceName,
+                    $"Servicio Clínico • {item.Category}",
+                    item.Notes,
+                    "Servicio",
+                    item.Price,
+                    item.Quantity
+                );
+                SyncActiveConsultation();
+                InfoModalMessage = $"Servicio '{item.ServiceName}' agregado a la cuenta de la consulta para cobro en POS.";
+                IsInfoModalVisible = true;
+            }
+        }
+    }
+
+    [RelayCommand]
+    public async Task SaveServicesModalAsync()
+    {
+        if (SelectedPatient != null)
+        {
+            SelectedPatient.SyncServicesJson();
+            if (_inventoryService != null)
+            {
+                try
+                {
+                    await _inventoryService.SavePatientAsync(SelectedPatient);
+                }
+                catch { }
+            }
+            OnPropertyChanged(nameof(SelectedPatient));
+        }
+
+        IsServicesModalOpen = false;
+        InfoModalMessage = $"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!";
         IsInfoModalVisible = true;
     }
 

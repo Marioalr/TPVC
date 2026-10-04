@@ -2,6 +2,36 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.15] - 2026-10-04
+
+### Añadido
+* **Organización en 2 Filas de Acciones Clínicas en la Ficha del Paciente**:
+  * Fila 1 (Gestión General y Flujo de Consulta): `[🔄 Cambiar Paciente]`, `[✏️ Editar Ficha]`, `[🩺 Nueva Consulta]`, e `[Iniciar / Finalizar Consulta]`.
+  * Fila 2 (Órdenes y Catálogos Clínicos): `[💊 Receta Médica]`, `[📦 Insumos]`, y `[🩺 Servicios]`.
+* **Ventana Modal de Insumos y Material de Curación**:
+  * Botón `[📦 Insumos]` en la segunda fila de acciones de la ficha clínica.
+  * Ventana modal de formato estándar (800x680 px, fondo desenfocado oscuro) con búsqueda en vivo de insumos y material de curación del inventario.
+  * Formulario de captura con indicaciones o uso clínico, selector de cantidad y botón `+ Insumo`.
+  * Lista interactiva con botón `[🛒 Agregar al POS]` para cargar insumos a la cuenta activa de la consulta (iniciando consulta automáticamente si no estaba activa) y botón para eliminar (`✕`).
+  * Botón `Guardar` en el pie de la ventana: guarda en SQLite y regresa a la ventana principal, con soporte completo de reedición continua.
+* **Ventana Modal de Servicios Clínicos y Procedimientos**:
+  * Botón `[🩺 Servicios]` en la segunda fila de acciones de la ficha clínica.
+  * Ventana modal de formato estándar con búsqueda y sugerencias del catálogo de procedimientos y servicios médicos (`ClinicalService`).
+  * Formulario con notas/observaciones clínicas del procedimiento realizado, cantidad y botón `+ Servicio`.
+  * Lista interactiva con botón `[🛒 Agregar al POS]` para cobro directo en consulta y botón para eliminar (`✕`).
+  * Botón `Guardar` en el pie de la ventana: persiste en SQLite y regresa a la ventana principal, permitiendo continuar agregando o modificando servicios al reabrir la modal.
+* **Persistencia en SQLite para Insumos y Servicios Activos**:
+  * Nuevas columnas `ActiveSuppliesJson` y `ActiveServicesJson` en la tabla `Patients` con migración automática no destructiva.
+  * Entidades `PatientSupplyItem` y `PatientServiceItem` con serialización JSON limpia y soporte de caracteres en español.
+
+### Modificado
+* **Exclusividad Farmacológica en Receta Médica**:
+  * Se separaron los insumos de la receta médica: la receta ahora se enfoca estrictamente en medicamentos y fármacos con posología.
+  * El buscador de sugerencias de la receta filtra únicamente productos farmacológicos, excluyendo gasas, suturas, jeringas y apósitos que ahora pertenecen a Insumos.
+* Cobertura de pruebas unitarias ampliada a 76 pruebas superadas con 0 errores (clasificación de productos, filtrado de medicamentos vs insumos, ciclo de apertura, guardado, reedición y cargo al POS).
+
+---
+
 ## [1.3.14] - 2026-10-04
 
 ### Añadido

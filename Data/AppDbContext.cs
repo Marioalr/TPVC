@@ -110,6 +110,8 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<PatientRecord>()
             .Ignore(p => p.ActivePrescription)
+            .Ignore(p => p.ActiveSupplies)
+            .Ignore(p => p.ActiveServices)
             .Ignore(p => p.HasAllergies);
 
         modelBuilder.Entity<PatientConsultation>()

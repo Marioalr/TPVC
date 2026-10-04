@@ -2093,6 +2093,169 @@ public class InventoryTests
         Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Ibuprofeno 400mg"));
         Assert.IsFalse(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
     }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ProductClassification_SeparatesMedicationsAndSupplies()
+    {
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService);
+        await recordsVm.LoadInitialDataAsync();
+
+        var medProduct = new Product
+        {
+            Code = "MED-001",
+            Name = "Paracetamol 500mg",
+            Category = new Category { Name = "Medicamentos" },
+            Price = 45m
+        };
+
+        var supplyProduct = new Product
+        {
+            Code = "CUR-001",
+            Name = "Gasa Estéril 10x10",
+            Category = new Category { Name = "Material de Curación" },
+            Price = 20m
+        };
+
+        // Verificación de métodos de clasificación
+        Assert.IsTrue(MedicalRecordsViewModel.IsProductMedication(medProduct));
+        Assert.IsFalse(MedicalRecordsViewModel.IsProductSupply(medProduct));
+
+        Assert.IsTrue(MedicalRecordsViewModel.IsProductSupply(supplyProduct));
+        Assert.IsFalse(MedicalRecordsViewModel.IsProductMedication(supplyProduct));
+
+        // Verificación de sugerencias en receta (solo medicamentos)
+        recordsVm.ApplyPrescriptionSuggestions("Gasa");
+        Assert.AreEqual(0, recordsVm.PrescriptionProductSuggestions.Count, "La receta no debe sugerir insumos ni material de curación");
+
+        // Verificación de sugerencias en insumos (solo insumos clínicos)
+        recordsVm.ApplySupplySuggestions("Paracetamol");
+        Assert.AreEqual(0, recordsVm.SupplyProductSuggestions.Count, "El catálogo de insumos no debe sugerir medicamentos");
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_SuppliesModal_AddSaveReeditAndPosWorksCorrectly()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultationService);
+        await recordsVm.LoadInitialDataAsync();
+
+        var patient = new PatientRecord
+        {
+            FullName = "Pedro Ramírez",
+            RecordNumber = "EXP-TEST-SUP",
+            Age = 35
+        };
+        recordsVm.SelectedPatient = patient;
+
+        // 1. Abrir modal de insumos
+        recordsVm.OpenSuppliesModal();
+        Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
+
+        // 2. Agregar un insumo clínico
+        recordsVm.SupplyName = "Guantes de Látex Quirúrgicos";
+        recordsVm.SupplyInstructions = "Uso en curación de herida";
+        recordsVm.SupplyQuantity = 2;
+        await recordsVm.AddSupplyItemToPatientAsync();
+
+        Assert.AreEqual(1, patient.ActiveSupplies.Count);
+        Assert.AreEqual("Guantes de Látex Quirúrgicos", patient.ActiveSupplies[0].SupplyName);
+        Assert.AreEqual(2, patient.ActiveSupplies[0].Quantity);
+
+        // 3. Probar agregar al POS
+        recordsVm.AddSupplyItemToPos(patient.ActiveSupplies[0]);
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.IsTrue(recordsVm.ActiveConsultationItemsCount > 0);
+
+        // 4. Guardar insumos -> Cierra modal y persiste JSON
+        await recordsVm.SaveSuppliesModalAsync();
+        Assert.IsFalse(recordsVm.IsSuppliesModalOpen);
+        Assert.IsTrue(patient.ActiveSuppliesJson.Contains("Guantes de Látex Quirúrgicos"));
+
+        // 5. Reabrir modal para continuar editando
+        recordsVm.OpenSuppliesModal();
+        Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
+
+        // 6. Agregar un segundo insumo
+        recordsVm.SupplyName = "Venda Elástica 10cm";
+        recordsVm.SupplyInstructions = "Vendaje compresivo en tobillo";
+        recordsVm.SupplyQuantity = 1;
+        await recordsVm.AddSupplyItemToPatientAsync();
+
+        Assert.AreEqual(2, patient.ActiveSupplies.Count);
+
+        // 7. Eliminar el primer insumo
+        await recordsVm.RemoveSupplyItemFromPatientAsync(patient.ActiveSupplies[0]);
+        Assert.AreEqual(1, patient.ActiveSupplies.Count);
+        Assert.AreEqual("Venda Elástica 10cm", patient.ActiveSupplies[0].SupplyName);
+
+        // 8. Guardar de nuevo
+        await recordsVm.SaveSuppliesModalAsync();
+        Assert.IsFalse(recordsVm.IsSuppliesModalOpen);
+        Assert.IsTrue(patient.ActiveSuppliesJson.Contains("Venda Elástica 10cm"));
+        Assert.IsFalse(patient.ActiveSuppliesJson.Contains("Guantes de Látex Quirúrgicos"));
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ServicesModal_AddSaveReeditAndPosWorksCorrectly()
+    {
+        var consultationService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultationService);
+        await recordsVm.LoadInitialDataAsync();
+
+        var patient = new PatientRecord
+        {
+            FullName = "Lucía Vázquez",
+            RecordNumber = "EXP-TEST-SRV",
+            Age = 28
+        };
+        recordsVm.SelectedPatient = patient;
+
+        // 1. Abrir modal de servicios
+        recordsVm.OpenServicesModal();
+        Assert.IsTrue(recordsVm.IsServicesModalOpen);
+
+        // 2. Agregar un servicio clínico
+        recordsVm.ServiceModalName = "Sutura de Herida Menor";
+        recordsVm.ServiceModalNotes = "3 puntos de sutura sin complicaciones";
+        recordsVm.ServiceModalQuantity = 1;
+        await recordsVm.AddServiceItemToPatientAsync();
+
+        Assert.AreEqual(1, patient.ActiveServices.Count);
+        Assert.AreEqual("Sutura de Herida Menor", patient.ActiveServices[0].ServiceName);
+
+        // 3. Probar agregar al POS
+        recordsVm.AddServiceItemToPos(patient.ActiveServices[0]);
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.IsTrue(recordsVm.ActiveConsultationItemsCount > 0);
+
+        // 4. Guardar servicios -> Cierra modal y persiste JSON
+        await recordsVm.SaveServicesModalAsync();
+        Assert.IsFalse(recordsVm.IsServicesModalOpen);
+        Assert.IsTrue(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
+
+        // 5. Reabrir modal para continuar editando
+        recordsVm.OpenServicesModal();
+        Assert.IsTrue(recordsVm.IsServicesModalOpen);
+
+        // 6. Agregar un segundo servicio
+        recordsVm.ServiceModalName = "Toma de Glucosa Capilar";
+        recordsVm.ServiceModalNotes = "Glucemia postprandial";
+        recordsVm.ServiceModalQuantity = 1;
+        await recordsVm.AddServiceItemToPatientAsync();
+
+        Assert.AreEqual(2, patient.ActiveServices.Count);
+
+        // 7. Eliminar el primer servicio
+        await recordsVm.RemoveServiceItemFromPatientAsync(patient.ActiveServices[0]);
+        Assert.AreEqual(1, patient.ActiveServices.Count);
+        Assert.AreEqual("Toma de Glucosa Capilar", patient.ActiveServices[0].ServiceName);
+
+        // 8. Guardar de nuevo
+        await recordsVm.SaveServicesModalAsync();
+        Assert.IsFalse(recordsVm.IsServicesModalOpen);
+        Assert.IsTrue(patient.ActiveServicesJson.Contains("Toma de Glucosa Capilar"));
+        Assert.IsFalse(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
+    }
 }
 
 
