@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<ClinicalService> ClinicalServices => Set<ClinicalService>();
     public DbSet<ServiceDefaultProduct> ServiceDefaultProducts => Set<ServiceDefaultProduct>();
+    public DbSet<PatientRecord> Patients => Set<PatientRecord>();
+    public DbSet<PatientConsultation> PatientConsultations => Set<PatientConsultation>();
 
     public AppDbContext()
     {
@@ -97,6 +99,32 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(sp => sp.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Expedientes Clínicos y Consultas (NOM-004-SSA3)
+        modelBuilder.Entity<PatientRecord>()
+            .HasIndex(p => p.RecordNumber)
+            .IsUnique();
+
+        modelBuilder.Entity<PatientRecord>()
+            .HasIndex(p => p.FullName);
+
+        modelBuilder.Entity<PatientRecord>()
+            .Ignore(p => p.ActivePrescription)
+            .Ignore(p => p.HasAllergies);
+
+        modelBuilder.Entity<PatientConsultation>()
+            .HasIndex(c => c.Folio);
+
+        modelBuilder.Entity<PatientConsultation>()
+            .HasIndex(c => c.Date);
+
+        modelBuilder.Entity<PatientConsultation>()
+            .HasOne(c => c.PatientRecord)
+            .WithMany(p => p.Consultations)
+            .HasForeignKey(c => c.PatientRecordId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PatientConsultation>()
+            .Ignore(c => c.Prescriptions);
     }
 }
-

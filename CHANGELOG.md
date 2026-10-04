@@ -4,6 +4,50 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ---
 
+## [1.3.5] - 2026-10-04
+
+### Añadido
+* **Módulo Integral y Operativo de Expedientes Clínicos y Consultas Médicas (NOM-004-SSA3-2012)**:
+  * **Persistencia Permanente en Base de Datos Local SQLite**:
+    * Creación de las entidades `PatientRecord` y `PatientConsultation` en `AppDbContext` con migración automática y semilla con 4 expedientes y consultas clínicas de ejemplo.
+    * Generación automática y secuencial de folio clínico único (`EXP-YYYY-NNN`) con verificación estricta contra duplicados.
+    * Índices optimizados en SQLite para búsqueda instantánea por folio, nombre completo o teléfono.
+  * **Ficha Integral del Paciente y Alertas Sanitarias**:
+    * Registro de datos demográficos completos: Nombre, edad, sexo, fecha de nacimiento, teléfono, correo electrónico, dirección, tipo de sangre y contacto de emergencia (nombre y teléfono).
+    * Antecedentes médicos: Heredofamiliares, patológicos (hipertensión, diabetes, etc.) y no patológicos.
+    * **Alerta Roja de Alergias Medicamentosas**: Resalte visual destacado e intransigente para pacientes con hipersensibilidad o alergias a fármacos (ej. *Penicilina*, *Sulfamidas*, *AINEs*).
+  * **Modal de Registro y Edición de Expedientes**:
+    * Interfaz en dos columnas con validaciones en tiempo real para alta y edición de datos del paciente sin recargar la aplicación.
+  * **Registro de Consultas Médicas y Notas de Evolución**:
+    * Captura de motivo de consulta / padecimiento actual.
+    * **Somatometría y Cálculo Dinámico de IMC**: Monitoreo de peso (kg) y talla (cm) con cálculo reactivo inmediato del Índice de Masa Corporal (IMC) y semáforo nutricional (Bajo peso, Normal, Sobrepeso, Obesidad I, II, III).
+    * Registro de signos vitales: Presión arterial (sistólica/diastólica), frecuencia cardíaca (lpm), frecuencia respiratoria (rpm) y temperatura corporal (°C).
+    * Exploración física cefalocaudal, diagnóstico / impresión clínica CIE-10, plan de tratamiento y recomendaciones.
+  * **Prescripción Farmacológica Integrada**:
+    * Constructor interactivo de recetas médicas que permite seleccionar medicamentos del inventario, especificar dosis/vía/frecuencia/duración e incorporarlos a la nota médica.
+    * Interconexión directa con el Punto de Venta (POS) para dispensar de inmediato la receta o acumularla en la consulta activa.
+  * **Navegación por Pestañas e Historial Clínico Cronológico**:
+    * Pestaña *"📋 Resumen y Nota de Evolución"*: Muestra el resumen demográfico, la última evolución registrada, signos vitales actuales y la prescripción activa.
+    * Pestaña *"📜 Historial Clínico ({Count})"*: Lista cronológica de todas las notas médicas anteriores registradas para el paciente con fecha, folio, diagnóstico y detalle expandible.
+  * **Retiro Definitivo de Distintivos "(TODO)"**:
+    * Actualización de Card 2 en el Hub Principal (`MainHubView`) a *"Expedientes Clínicos - NOM-004-SSA3"* y botón *"Abrir Consulta y Expedientes"*.
+    * Reemplazo del banner de desarrollo en `MedicalRecordsView` por el distintivo operativo oficial: `● SISTEMA CLÍNICO OPERATIVO (NOM-004-SSA3)`.
+  * **Sincronización en Vivo**:
+    * Comunicación bidireccional entre `MedicalRecordsViewModel`, `ConsultationService` y `PosViewModel` para reflejar nuevos pacientes de inmediato en el POS sin reiniciar la app.
+* **Ampliación de Pruebas Unitarias Automatizadas**:
+  * 8 nuevas pruebas unitarias en `InventoryTests.cs`:
+    * Semilla de base de datos con expedientes iniciales.
+    * Guardado y persistencia en SQLite de pacientes.
+    * Prevención de folios clínicos duplicados (`IsRecordNumberTakenAsync`).
+    * Registro persistente de notas de consulta (`AddConsultationNoteAsync`).
+    * Filtrado y búsqueda rápida insensible a mayúsculas/minúsculas.
+    * Cálculo en vivo y clasificación clínica de IMC en el ViewModel.
+    * Ciclo de apertura, validación y guardado del modal de expedientes.
+    * Ciclo de alta de consulta médica y registro en el historial clínico.
+  * Suite ampliada a **40 pruebas unitarias con 100% de éxito**.
+
+---
+
 ## [1.3.4] - 2026-10-03
 
 ### Añadido

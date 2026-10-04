@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.4-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.4)
+[![Version](https://img.shields.io/badge/version-v1.3.5-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.5)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -26,7 +26,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 ### 1. Nueva Vista Principal: Hub Central de Tres Tarjetas (Cards)
 - **Flujo de Trabajo Médico Limpio y Enfocado**: La vista principal presenta una interfaz despejada a pantalla completa con tres accesos directos de gran tamaño tipo tarjeta (*cards*):
   - **Card 🛒 "Nueva Venta"**: Acceso inmediato al **Punto de Venta con Carrito (POS)** para búsqueda, dispensación y cobro de medicamentos a pantalla completa.
-  - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos con distintivo TODO en gran formato**, visualizador interactivo y hoja de ruta de la norma NOM-004-SSA3.
+  - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos y Consultas Médicas Operativo (NOM-004-SSA3)** para gestión de fichas, registro de signos vitales, somatometría y notas de evolución.
   - **Card ⚙️ "Configuración"**: Acceso al centro de gestión y administración que **alberga el panel lateral** con Métricas, Inventario, Lotes (FEFO), Kardex y Temas/Ajustes.
 - **Navegación Intuitiva**: Todas las vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*).
 - **Interconexión Clínica**: Despache las recetas de los pacientes directamente al carrito de compras con el botón *"Cargar a Venta (POS)"*.
@@ -41,12 +41,13 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
   - Deducción automática de inventario mediante la regla sanitaria **FEFO** (*First Expired, First Out*) y registro inmutable en el Kardex (`SalidaVenta`).
 - **Simulador de Ticket de Compra al Despachar**: Al presionar *"Cobrar y Despachar Venta"*, se despliega automáticamente una ventana que simula un **ticket térmico de consultorio y farmacia** con encabezado oficial, RFC, cédula profesional, folio secuencial, fecha/hora, desglose de medicamentos con presentación y cantidades, subtotal, IVA tasa 0%, total cobrado, código de barras simulado y opciones interactivas para **Imprimir Ticket** o **Finalizar / Nueva Venta**.
 
-### 3. Expedientes Clínicos y Catálogo de Servicios con Insumos (Plan de Consulta)
-- **Ficha Integral del Paciente**: Registro de folio, datos demográficos, signos vitales de la última consulta, diagnóstico médico, antecedentes y notas de evolución conforme a la NOM-004-SSA3.
-- **Catálogo de Servicios Clínicos y Paquetes de Insumos**: Pestaña dedicada para explorar y crear servicios médicos (Consultas, Curaciones, Suturas, Glucemia, Certificados) con asignación de insumos y medicamentos predeterminados del inventario (ej. gasas, vendas, antisépticos) que se consumen automáticamente al realizar el procedimiento.
-- **Creador Interactivo de Servicios**: Modal para definir nombre, folio, categoría médica, precio, duración estimada y vincular insumos con cantidades personalizadas.
-- **Alerta de Alergias**: Resalta en rojo alergias medicamentosas de alto riesgo (ej. *Penicilina*, *Sulfas*, *AINEs*).
-- **Recetas Prescritas**: Lista de fármacos y dosificación con enlace directo de despacho al ticket del POS (*"Cargar a Venta"*).
+### 3. Expedientes Clínicos y Consultas Médicas (NOM-004-SSA3-2012)
+- **Gestión Completa de Expedientes en SQLite**: Alta y edición de fichas de pacientes con generación automática de folio (`EXP-YYYY-NNN`), datos demográficos completos, tipo de sangre, contactos de emergencia y antecedentes heredofamiliares/patológicos.
+- **Alerta Roja de Alergias Medicamentosas**: Resalta prominentemente en el expediente cualquier hipersensibilidad o alergia a fármacos para prevenir prescripciones de riesgo.
+- **Registro de Consultas y Notas de Evolución**: Captura de motivo de consulta, signos vitales completos y somatometría con cálculo instantáneo de **Índice de Masa Corporal (IMC)** y semáforo nutricional.
+- **Historial Cronológico de Consultas**: Pestaña dedicada para revisar todas las evoluciones y notas clínicas previas del paciente.
+- **Prescripción y Envío a POS**: Generación de recetas farmacológicas integradas con despacho directo al Punto de Venta o preservación en la consulta médica activa.
+- **Catálogo de Servicios Clínicos y Paquetes de Insumos**: Pestaña dedicada para explorar y crear servicios médicos (Consultas, Curaciones, Suturas, Glucemia, Certificados) con insumos predeterminados vinculados.
 
 ### 4. Panel de Métricas y KPIs (Dashboard)
 - **KPIs Clínicos en Vivo**: Total de insumos registrados, alertas de stock bajo o crítico, conteo de lotes próximos a vencer y consumo en consulta.

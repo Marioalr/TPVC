@@ -475,5 +475,187 @@ public class InventoryService
             OnInventoryChanged?.Invoke();
         }
     }
+
+    // =========================================================================
+    // EXPEDIENTES CLÍNICOS Y NOTAS DE EVOLUCIÓN (NOM-004-SSA3)
+    // =========================================================================
+
+    public async Task<List<PatientRecord>> GetPatientsAsync(string? searchText = null, bool activeOnly = true)
+    {
+        var query = _context.Patients
+            .Include(p => p.Consultations)
+            .AsQueryable();
+
+        if (activeOnly)
+        {
+            query = query.Where(p => p.IsActive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var search = searchText.Trim().ToLower();
+            query = query.Where(p =>
+                p.FullName.ToLower().Contains(search) ||
+                p.RecordNumber.ToLower().Contains(search) ||
+                p.Phone.ToLower().Contains(search) ||
+                p.LastDiagnosis.ToLower().Contains(search) ||
+                (p.Email != null && p.Email.ToLower().Contains(search))
+            );
+        }
+
+        return await query.OrderBy(p => p.FullName).ToListAsync();
+    }
+
+    public async Task<PatientRecord?> GetPatientByIdAsync(int id)
+    {
+        return await _context.Patients
+            .Include(p => p.Consultations.OrderByDescending(c => c.Date))
+            .FirstOrDefaultAsync(p => p.Id == id);
+    }
+
+    public async Task<bool> IsRecordNumberTakenAsync(string recordNumber, int excludePatientId = 0)
+    {
+        if (string.IsNullOrWhiteSpace(recordNumber)) return false;
+        var normalized = recordNumber.Trim().ToUpper();
+        return await _context.Patients
+            .AnyAsync(p => p.IsActive && p.Id != excludePatientId && p.RecordNumber.ToUpper() == normalized);
+    }
+
+    public async Task<string> GenerateNextRecordNumberAsync()
+    {
+        var year = DateTime.Today.Year;
+        var prefix = $"EXP-{year}-";
+        
+        var existingRecords = await _context.Patients
+            .Where(p => p.RecordNumber.StartsWith(prefix))
+            .Select(p => p.RecordNumber)
+            .ToListAsync();
+
+        int maxNum = 0;
+        foreach (var rec in existingRecords)
+        {
+            var suffix = rec.Substring(prefix.Length);
+            if (int.TryParse(suffix, out int parsed) && parsed > maxNum)
+            {
+                maxNum = parsed;
+            }
+        }
+
+        return $"{prefix}{(maxNum + 1):D3}";
+    }
+
+    public async Task<PatientRecord> SavePatientAsync(PatientRecord patient)
+    {
+        patient.RecordNumber = patient.RecordNumber.Trim();
+        patient.FullName = patient.FullName.Trim();
+
+        if (string.IsNullOrWhiteSpace(patient.RecordNumber))
+        {
+            patient.RecordNumber = await GenerateNextRecordNumberAsync();
+        }
+
+        if (await IsRecordNumberTakenAsync(patient.RecordNumber, patient.Id))
+        {
+            throw new InvalidOperationException($"El folio de expediente '{patient.RecordNumber}' ya está registrado.");
+        }
+
+        patient.SyncPrescriptionJson();
+
+        if (patient.Id == 0)
+        {
+            patient.CreatedAt = DateTime.Now;
+            _context.Patients.Add(patient);
+        }
+        else
+        {
+            var existing = await _context.Patients
+                .Include(p => p.Consultations)
+                .FirstOrDefaultAsync(p => p.Id == patient.Id);
+
+            if (existing != null)
+            {
+                existing.RecordNumber = patient.RecordNumber;
+                existing.FullName = patient.FullName;
+                existing.Age = patient.Age;
+                existing.Gender = patient.Gender;
+                existing.Phone = patient.Phone;
+                existing.Email = patient.Email;
+                existing.Address = patient.Address;
+                existing.BloodType = patient.BloodType;
+                existing.Allergies = patient.Allergies;
+                existing.ChronicDiseases = patient.ChronicDiseases;
+                existing.EmergencyContactName = patient.EmergencyContactName;
+                existing.EmergencyContactPhone = patient.EmergencyContactPhone;
+                existing.LastVisit = patient.LastVisit;
+                existing.LastDiagnosis = patient.LastDiagnosis;
+                existing.VitalSigns = patient.VitalSigns;
+                existing.ClinicalNotes = patient.ClinicalNotes;
+                existing.ActivePrescriptionJson = patient.ActivePrescriptionJson;
+                existing.IsActive = patient.IsActive;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        OnInventoryChanged?.Invoke();
+        return patient;
+    }
+
+    public async Task DeletePatientAsync(int id)
+    {
+        var patient = await _context.Patients.FindAsync(id);
+        if (patient != null)
+        {
+            patient.IsActive = false; // Borrado lógico
+            await _context.SaveChangesAsync();
+            OnInventoryChanged?.Invoke();
+        }
+    }
+
+    public async Task<PatientConsultation> AddConsultationNoteAsync(int patientId, PatientConsultation consultation)
+    {
+        var patient = await _context.Patients
+            .Include(p => p.Consultations)
+            .FirstOrDefaultAsync(p => p.Id == patientId);
+
+        if (patient == null)
+        {
+            throw new InvalidOperationException($"No se encontró el paciente con ID {patientId}");
+        }
+
+        if (string.IsNullOrWhiteSpace(consultation.Folio))
+        {
+            var count = await _context.PatientConsultations.CountAsync(c => c.Date.Date == consultation.Date.Date);
+            consultation.Folio = $"CNS-{consultation.Date:yyyyMMdd}-{(count + 1):D3}";
+        }
+
+        consultation.PatientRecordId = patientId;
+        consultation.PrescriptionsJson = System.Text.Json.JsonSerializer.Serialize(consultation.Prescriptions);
+
+        // Actualizar datos del paciente con esta última consulta
+        patient.LastVisit = consultation.Date;
+        if (!string.IsNullOrWhiteSpace(consultation.Diagnosis))
+        {
+            patient.LastDiagnosis = consultation.Diagnosis;
+        }
+        if (!string.IsNullOrWhiteSpace(consultation.VitalSigns))
+        {
+            patient.VitalSigns = consultation.VitalSigns;
+        }
+        if (!string.IsNullOrWhiteSpace(consultation.Notes) || !string.IsNullOrWhiteSpace(consultation.TreatmentPlan))
+        {
+            patient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
+        }
+        if (consultation.Prescriptions != null && consultation.Prescriptions.Any())
+        {
+            patient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
+            patient.SyncPrescriptionJson();
+        }
+
+        _context.PatientConsultations.Add(consultation);
+        await _context.SaveChangesAsync();
+
+        OnInventoryChanged?.Invoke();
+        return consultation;
+    }
 }
 

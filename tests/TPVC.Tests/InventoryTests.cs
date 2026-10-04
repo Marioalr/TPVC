@@ -16,6 +16,7 @@ using TPVC.ViewModels;
 namespace TPVC.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public class InventoryTests
 {
     private string _testDbPath = string.Empty;
@@ -38,9 +39,10 @@ public class InventoryTests
     [TestCleanup]
     public void Cleanup()
     {
-        _context.Database.EnsureDeleted();
-        _context.Dispose();
-        if (File.Exists(_testDbPath))
+        try { _context?.Database.EnsureDeleted(); } catch { }
+        _context?.Dispose();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        if (!string.IsNullOrEmpty(_testDbPath) && File.Exists(_testDbPath))
         {
             try { File.Delete(_testDbPath); } catch { }
         }
@@ -789,6 +791,221 @@ public class InventoryTests
         // Cancelar consulta
         recordsVm.CancelActiveConsultation();
         Assert.IsFalse(recordsVm.HasActiveConsultation);
+    }
+
+    [TestMethod]
+    public async Task DatabaseInitializer_SeedsPatientsWithHistoryAndPrescriptions()
+    {
+        var patients = await _inventoryService.GetPatientsAsync();
+        Assert.IsGreaterThanOrEqualTo(4, patients.Count, "Debe tener al menos 4 pacientes sembrados");
+        Assert.IsTrue(patients.Any(p => p.FullName.Contains("García")), "Debe existir paciente García");
+        
+        var garcia = patients.First(p => p.FullName.Contains("García"));
+        Assert.IsTrue(garcia.HasAllergies);
+        Assert.IsTrue(garcia.Allergies.Contains("Penicilina"));
+        Assert.IsNotEmpty(garcia.ActivePrescription);
+        Assert.IsNotEmpty(garcia.Consultations);
+    }
+
+    [TestMethod]
+    public async Task SavePatientAsync_GeneratesFolioAndSavesInDatabase()
+    {
+        var nextFolio = await _inventoryService.GenerateNextRecordNumberAsync();
+        Assert.IsTrue(nextFolio.StartsWith("EXP-"), "El folio debe comenzar con EXP-");
+
+        var newPatient = new PatientRecord
+        {
+            RecordNumber = nextFolio,
+            FullName = "López Obrador, Andrés",
+            Age = 55,
+            Gender = "Masculino",
+            Phone = "55 9988 7766",
+            Email = "andres.lopez@ejemplo.com",
+            Address = "Calle Pino Suárez 10, Centro, CDMX",
+            BloodType = "O+",
+            Allergies = "Ninguna conocida",
+            ChronicDiseases = "Hipertensión controlada",
+            EmergencyContactName = "Beatriz Gutiérrez",
+            EmergencyContactPhone = "55 9988 7760",
+            VitalSigns = "TA: 120/80 mmHg | FC: 72 lpm | Temp: 36.5 °C",
+            ClinicalNotes = "Paciente acude a chequeo preventivo general.",
+            IsActive = true
+        };
+
+        var saved = await _inventoryService.SavePatientAsync(newPatient);
+        Assert.IsTrue(saved.Id > 0);
+
+        var retrieved = await _inventoryService.GetPatientByIdAsync(saved.Id);
+        Assert.IsNotNull(retrieved);
+        Assert.AreEqual("López Obrador, Andrés", retrieved.FullName);
+        Assert.AreEqual(nextFolio, retrieved.RecordNumber);
+    }
+
+    [TestMethod]
+    public async Task SavePatientAsync_RejectsDuplicateRecordNumber()
+    {
+        var duplicate = new PatientRecord
+        {
+            RecordNumber = "EXP-2026-001", // Ya existe por el seeder
+            FullName = "Persona Duplicada",
+            Age = 30
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await _inventoryService.SavePatientAsync(duplicate);
+        });
+    }
+
+    [TestMethod]
+    public async Task AddConsultationNoteAsync_RecordsEvolutionNoteAndUpdatesPatient()
+    {
+        var patient = (await _inventoryService.GetPatientsAsync()).First();
+        int initialConsultations = patient.Consultations.Count;
+
+        var note = new PatientConsultation
+        {
+            ChiefComplaint = "Cefalea intensa y dolor ocular",
+            VitalSigns = "TA: 130/85 mmHg | FC: 80 lpm | FR: 18 rpm | Temp: 36.8 °C | Peso: 75 kg | Talla: 1.70 m | IMC: 26.0 kg/m² (Sobrepeso)",
+            PhysicalExamination = "Agudeza visual conservada, fondo de ojo normal, tensión muscular cervical.",
+            Diagnosis = "Cefalea tensional episódica frecuente (G44.2)",
+            TreatmentPlan = "Reposo, corrección postural, termoterapia local y analgésicos.",
+            Notes = "Se indican medidas higiénico-dietéticas.",
+            Prescriptions = new List<PatientPrescriptionItem>
+            {
+                new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas si hay dolor", RecommendedQuantity = 1 }
+            }
+        };
+
+        var savedNote = await _inventoryService.AddConsultationNoteAsync(patient.Id, note);
+        Assert.IsNotNull(savedNote);
+        Assert.IsTrue(savedNote.Folio.StartsWith("CNS-"));
+
+        var updatedPatient = await _inventoryService.GetPatientByIdAsync(patient.Id);
+        Assert.IsNotNull(updatedPatient);
+        Assert.AreEqual(initialConsultations + 1, updatedPatient.Consultations.Count);
+        Assert.AreEqual("Cefalea tensional episódica frecuente (G44.2)", updatedPatient.LastDiagnosis);
+        Assert.AreEqual(note.VitalSigns, updatedPatient.VitalSigns);
+        Assert.IsNotEmpty(updatedPatient.ActivePrescription);
+        Assert.AreEqual("Paracetamol 500 mg", updatedPatient.ActivePrescription.First().MedicineName);
+    }
+
+    [TestMethod]
+    public async Task GetPatientsAsync_SearchFiltersWorkAccurately()
+    {
+        var all = await _inventoryService.GetPatientsAsync();
+        Assert.IsGreaterThanOrEqualTo(4, all.Count);
+
+        // Búsqueda por nombre
+        var byName = await _inventoryService.GetPatientsAsync("María Elena");
+        Assert.IsNotEmpty(byName);
+        Assert.IsTrue(byName.All(p => p.FullName.Contains("María Elena")));
+
+        // Búsqueda por folio
+        var byFolio = await _inventoryService.GetPatientsAsync("EXP-2026-003");
+        Assert.HasCount(1, byFolio);
+        Assert.AreEqual("EXP-2026-003", byFolio.First().RecordNumber);
+
+        // Búsqueda por teléfono
+        var byPhone = await _inventoryService.GetPatientsAsync("4123");
+        Assert.IsNotEmpty(byPhone);
+
+        // Búsqueda por diagnóstico
+        var byDiagnosis = await _inventoryService.GetPatientsAsync("Faringoamigdalitis");
+        Assert.IsNotEmpty(byDiagnosis);
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_RecalculateIMC_ComputesCorrectly()
+    {
+        var vm = new MedicalRecordsViewModel();
+
+        // 70 kg, 1.70 m -> IMC = 70 / 2.89 = 24.22 (Peso normal)
+        vm.ConsultationWeight = "70.0";
+        vm.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.ConsultationIMC.Contains("24.2"));
+        Assert.IsTrue(vm.ConsultationIMC.Contains("Peso normal"));
+
+        // 85 kg, 1.70 m -> IMC = 85 / 2.89 = 29.41 (Sobrepeso)
+        vm.ConsultationWeight = "85.0";
+        vm.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.ConsultationIMC.Contains("29.4"));
+        Assert.IsTrue(vm.ConsultationIMC.Contains("Sobrepeso"));
+
+        // 100 kg, 1.70 m -> IMC = 100 / 2.89 = 34.60 (Obesidad Grado I)
+        vm.ConsultationWeight = "100.0";
+        vm.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.ConsultationIMC.Contains("34.6"));
+        Assert.IsTrue(vm.ConsultationIMC.Contains("Obesidad Grado I"));
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_PatientModalSave_ValidatesAndSaves()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+        await recordsVm.LoadPatientsAsync();
+
+        // Abrir modal de nuevo paciente
+        await recordsVm.NewPatientAsync();
+        Assert.IsTrue(recordsVm.IsPatientModalOpen);
+        Assert.IsTrue(recordsVm.FormRecordNumber.StartsWith("EXP-"));
+
+        // Intentar guardar con nombre vacío
+        recordsVm.FormFullName = "";
+        await recordsVm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.IsPatientModalOpen, "Debe permanecer abierto si hay error de validación");
+        Assert.IsNotNull(recordsVm.FormErrorMessage);
+
+        // Guardar con datos válidos
+        recordsVm.FormFullName = "Test Paciente Nuevo";
+        recordsVm.FormPhone = "55 0011 2233";
+        recordsVm.FormBloodType = "A+";
+        recordsVm.FormAllergies = "Ninguna";
+        await recordsVm.SavePatientModalAsync();
+
+        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        Assert.IsNull(recordsVm.FormErrorMessage);
+        Assert.IsNotNull(recordsVm.SelectedPatient);
+        Assert.AreEqual("Test Paciente Nuevo", recordsVm.SelectedPatient.FullName);
+
+        // Verificar que se haya sincronizado con el servicio de consulta
+        Assert.IsTrue(consultService.Patients.Any(p => p.FullName == "Test Paciente Nuevo"));
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_ConsultationModal_RegistersNoteAndPrescription()
+    {
+        var consultService = new ConsultationService();
+        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+        await recordsVm.LoadPatientsAsync();
+
+        recordsVm.SelectedPatient = recordsVm.Patients.First();
+        recordsVm.NewConsultation();
+
+        Assert.IsTrue(recordsVm.IsConsultationModalOpen);
+        Assert.IsTrue(recordsVm.ConsultationFolio.StartsWith("CNS-"));
+
+        recordsVm.ConsultationChiefComplaint = "Chequeo de rutina";
+        recordsVm.ConsultationDiagnosis = "Paciente clínicamente sano (Z00.0)";
+        recordsVm.ConsultationTreatmentPlan = "Continuar hábitos saludables y dieta balanceada.";
+
+        // Agregar medicamento a la receta en el modal
+        recordsVm.NewPrescriptionMedicine = "Complejo B Cápsulas";
+        recordsVm.NewPrescriptionDosage = "1 cápsula diaria con alimentos por 30 días";
+        recordsVm.NewPrescriptionQuantity = 1;
+        recordsVm.AddPrescriptionItem();
+
+        Assert.HasCount(1, recordsVm.ConsultationPrescriptions);
+
+        // Guardar consulta
+        await recordsVm.SaveConsultationModalAsync();
+
+        Assert.IsFalse(recordsVm.IsConsultationModalOpen);
+        Assert.IsNull(recordsVm.ConsultationErrorMessage);
+        Assert.AreEqual("Paciente clínicamente sano (Z00.0)", recordsVm.SelectedPatient.LastDiagnosis);
+        Assert.IsTrue(consultService.HasActiveConsultation, "Debió activar consulta en ConsultationService");
+        Assert.AreEqual(recordsVm.SelectedPatient.FullName, consultService.CurrentConsultation?.PatientName);
     }
 }
 

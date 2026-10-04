@@ -51,16 +51,60 @@ public static class DatabaseInitializer
                 );
                 CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ClinicalServiceId ON ServiceDefaultProducts (ClinicalServiceId);
                 CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ProductId ON ServiceDefaultProducts (ProductId);
+
+                CREATE TABLE IF NOT EXISTS Patients (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    RecordNumber TEXT NOT NULL,
+                    FullName TEXT NOT NULL,
+                    Age INTEGER NOT NULL,
+                    Gender TEXT NOT NULL,
+                    Phone TEXT NOT NULL,
+                    Email TEXT NOT NULL,
+                    Address TEXT NOT NULL,
+                    BloodType TEXT NOT NULL,
+                    Allergies TEXT NOT NULL,
+                    ChronicDiseases TEXT NOT NULL,
+                    EmergencyContactName TEXT NOT NULL,
+                    EmergencyContactPhone TEXT NOT NULL,
+                    LastVisit TEXT NOT NULL,
+                    LastDiagnosis TEXT NOT NULL,
+                    VitalSigns TEXT NOT NULL,
+                    ClinicalNotes TEXT NOT NULL,
+                    ActivePrescriptionJson TEXT NOT NULL,
+                    IsActive INTEGER NOT NULL,
+                    CreatedAt TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS IX_Patients_RecordNumber ON Patients (RecordNumber);
+                CREATE INDEX IF NOT EXISTS IX_Patients_FullName ON Patients (FullName);
+
+                CREATE TABLE IF NOT EXISTS PatientConsultations (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    PatientRecordId INTEGER NOT NULL,
+                    Folio TEXT NOT NULL,
+                    Date TEXT NOT NULL,
+                    ChiefComplaint TEXT NOT NULL,
+                    VitalSigns TEXT NOT NULL,
+                    PhysicalExamination TEXT NOT NULL,
+                    Diagnosis TEXT NOT NULL,
+                    TreatmentPlan TEXT NOT NULL,
+                    Notes TEXT NOT NULL,
+                    PrescriptionsJson TEXT NOT NULL,
+                    FOREIGN KEY (PatientRecordId) REFERENCES Patients (Id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_Folio ON PatientConsultations (Folio);
+                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_Date ON PatientConsultations (Date);
+                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_PatientRecordId ON PatientConsultations (PatientRecordId);
             ");
         }
         catch
         {
         }
 
-        // Si ya hay categorías, solo verificar si faltan los servicios clínicos
+        // Si ya hay categorías, solo verificar si faltan los servicios clínicos o pacientes
         if (context.Categories.Any())
         {
             SeedClinicalServices(context);
+            SeedPatients(context);
             return;
         }
 
@@ -290,6 +334,7 @@ public static class DatabaseInitializer
         context.SaveChanges();
 
         SeedClinicalServices(context);
+        SeedPatients(context);
     }
 
     public static void SeedClinicalServices(AppDbContext context)
@@ -390,6 +435,210 @@ public static class DatabaseInitializer
         }
 
         context.ClinicalServices.AddRange(services);
+        context.SaveChanges();
+    }
+
+    public static void SeedPatients(AppDbContext context)
+    {
+        if (context.Patients.Any())
+        {
+            return;
+        }
+
+        var patients = new List<PatientRecord>
+        {
+            new()
+            {
+                RecordNumber = "EXP-2026-001",
+                FullName = "García Morales, Juan Carlos",
+                Age = 42,
+                Gender = "Masculino",
+                Phone = "55 4123 8890",
+                Email = "juan.garcia@email.com",
+                Address = "Av. Insurgentes Sur 450, Col. Roma Sur, CDMX",
+                BloodType = "O+",
+                Allergies = "Penicilina (Reacción alérgica severa)",
+                ChronicDiseases = "Ninguna relevante",
+                EmergencyContactName = "Laura Morales (Esposa)",
+                EmergencyContactPhone = "55 4123 8899",
+                LastVisit = DateTime.Today.AddDays(-2),
+                LastDiagnosis = "Faringoamigdalitis aguda bacteriana + Cefalea tensional",
+                VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | Temp: 37.8 °C | Peso: 78 kg",
+                ClinicalNotes = "Paciente masculino acude por odinofagia de 3 días de evolución, hipertermia cuantificada y adenomegalias cervicales dolorosas. Faringe congestiva con placas blanquecinas.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas por 5 días", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Curación y aseo bucofaríngeo", RecommendedQuantity = 1 }
+                },
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-60),
+                Consultations = new List<PatientConsultation>
+                {
+                    new()
+                    {
+                        Folio = "CNS-20260402-001",
+                        Date = DateTime.Today.AddDays(-2),
+                        ChiefComplaint = "Dolor de garganta intenso y fiebre",
+                        VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | FR: 18 rpm | Temp: 37.8 °C | Peso: 78 kg | Talla: 1.74 m | IMC: 25.8 (Sobrepeso leve)",
+                        PhysicalExamination = "Orofaringe hiperémica, hipertrofia amigdalina grado III con exudado blanquecino en criptas. Adenopatías submandibulares palpables dolorosas.",
+                        Diagnosis = "Faringoamigdalitis aguda bacteriana exudativa (J03.9)",
+                        TreatmentPlan = "Reposo relativo, hidratación abundante, antibioticoterapia oral, analgésico antipirético.",
+                        Notes = "Se explican signos de alarma y acudir a revaloración en 72 hrs.",
+                        Prescriptions = new List<PatientPrescriptionItem>
+                        {
+                            new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas por 5 días", RecommendedQuantity = 1 },
+                            new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Curación y aseo bucofaríngeo", RecommendedQuantity = 1 }
+                        }
+                    }
+                }
+            },
+            new()
+            {
+                RecordNumber = "EXP-2026-002",
+                FullName = "Rodríguez Silva, María Elena",
+                Age = 63,
+                Gender = "Femenino",
+                Phone = "55 9876 1234",
+                Email = "maria.elena@email.com",
+                Address = "Calle Durango 128, Col. Condesa, CDMX",
+                BloodType = "A+",
+                Allergies = "Ninguna conocida",
+                ChronicDiseases = "Diabetes Mellitus Tipo 2, Hipertensión Arterial",
+                EmergencyContactName = "Carlos Rodríguez (Hijo)",
+                EmergencyContactPhone = "55 9876 1235",
+                LastVisit = DateTime.Today.AddDays(-6),
+                LastDiagnosis = "Control periódico de Hipertensión Arterial y Glucemia",
+                VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | Temp: 36.4 °C | Glucosa: 134 mg/dL",
+                ClinicalNotes = "Acude a control mensual. Refiere buena tolerancia al tratamiento actual. Sin sintomatología cardiovascular ni edema en miembros inferiores.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Tiras Reactivas para Glucosa Capilar", Dosage = "Monitoreo matutino en ayunas 3 veces por semana", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Alcohol Etílico Desnaturalizado 70%", Dosage = "Asepsia para toma de glucosa", RecommendedQuantity = 1 }
+                },
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-120),
+                Consultations = new List<PatientConsultation>
+                {
+                    new()
+                    {
+                        Folio = "CNS-20260329-002",
+                        Date = DateTime.Today.AddDays(-6),
+                        ChiefComplaint = "Control mensual de enfermedades crónicas",
+                        VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | FR: 16 rpm | Temp: 36.4 °C | Peso: 65 kg | Talla: 1.58 m | IMC: 26.0 (Sobrepeso)",
+                        PhysicalExamination = "Paciente orientada, ruidos cardíacos rítmicos sin soplos, campos pulmonares limpios, pulsos periféricos presentes y simétricos.",
+                        Diagnosis = "Diabetes mellitus tipo 2 sin complicaciones (E11.9) + Hipertensión esencial (I10)",
+                        TreatmentPlan = "Mantener dieta baja en sodio y azúcares refinados, caminata diaria 30 min, monitoreo de glucosa.",
+                        Notes = "Cita de seguimiento con estudios de laboratorio en 30 días.",
+                        Prescriptions = new List<PatientPrescriptionItem>
+                        {
+                            new() { MedicineName = "Tiras Reactivas para Glucosa Capilar", Dosage = "Monitoreo matutino en ayunas 3 veces por semana", RecommendedQuantity = 1 },
+                            new() { MedicineName = "Alcohol Etílico Desnaturalizado 70%", Dosage = "Asepsia para toma de glucosa", RecommendedQuantity = 1 }
+                        }
+                    }
+                }
+            },
+            new()
+            {
+                RecordNumber = "EXP-2026-003",
+                FullName = "Hernández López, Sofía",
+                Age = 27,
+                Gender = "Femenino",
+                Phone = "55 3344 5566",
+                Email = "sofia.hernandez@email.com",
+                Address = "Calzada de Tlalpan 1890, CDMX",
+                BloodType = "B+",
+                Allergies = "Sulfas",
+                ChronicDiseases = "Rinitis alérgica estacional",
+                EmergencyContactName = "Patricia López (Madre)",
+                EmergencyContactPhone = "55 3344 5560",
+                LastVisit = DateTime.Today.AddDays(-14),
+                LastDiagnosis = "Traumatismo menor en tobillo derecho (Esguince Grado I)",
+                VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | Temp: 36.6 °C | Peso: 56 kg",
+                ClinicalNotes = "Presenta dolor e inflamación leve tras inversión forzada al bajar escalón. Sin deformidad ni pérdida de continuidad ósea a la palpación.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Venda Elástica 10 cm", Dosage = "Vendaje compresivo en ocho por 7 días", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas si hay dolor", RecommendedQuantity = 1 }
+                },
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-90),
+                Consultations = new List<PatientConsultation>
+                {
+                    new()
+                    {
+                        Folio = "CNS-20260321-003",
+                        Date = DateTime.Today.AddDays(-14),
+                        ChiefComplaint = "Torcedura y dolor en tobillo derecho al bajar escalones",
+                        VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | FR: 16 rpm | Temp: 36.6 °C | Peso: 56 kg | Talla: 1.62 m | IMC: 21.3 (Peso normal)",
+                        PhysicalExamination = "Edema leve en maléolo externo derecho, dolor a la inversión forzada, sin crepitación ósea, llenado capilar distal < 2 segundos.",
+                        Diagnosis = "Esguince de ligamento lateral de tobillo derecho Grado I (S93.4)",
+                        TreatmentPlan = "Reposo, hielo local por 15 min 3 veces al día, vendaje compresivo, elevación de extremidad.",
+                        Notes = "Evolución favorable esperada en 7 a 10 días.",
+                        Prescriptions = new List<PatientPrescriptionItem>
+                        {
+                            new() { MedicineName = "Venda Elástica 10 cm", Dosage = "Vendaje compresivo en ocho por 7 días", RecommendedQuantity = 1 },
+                            new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas si hay dolor", RecommendedQuantity = 1 }
+                        }
+                    }
+                }
+            },
+            new()
+            {
+                RecordNumber = "EXP-2026-004",
+                FullName = "Martínez Castro, Roberto",
+                Age = 35,
+                Gender = "Masculino",
+                Phone = "55 7788 9900",
+                Email = "roberto.martinez@email.com",
+                Address = "Eje Central Lázaro Cárdenas 55, CDMX",
+                BloodType = "O+",
+                Allergies = "Ninguna",
+                ChronicDiseases = "Ninguna",
+                EmergencyContactName = "Mariana Castro (Hermana)",
+                EmergencyContactPhone = "55 7788 9911",
+                LastVisit = DateTime.Today.AddDays(-21),
+                LastDiagnosis = "Curación de herida contuso-cortante en antebrazo izquierdo",
+                VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | Temp: 36.5 °C | Peso: 82 kg",
+                ClinicalNotes = "Herida limpia de 3 cm afrontada previamente. Retiro de puntos satisfactorio. Cicatrización de primera intención sin signos de infección.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Solución Fisiológica 0.9%", Dosage = "Lavado de herida diario", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Protección de herida", RecommendedQuantity = 1 }
+                },
+                IsActive = true,
+                CreatedAt = DateTime.Now.AddDays(-45),
+                Consultations = new List<PatientConsultation>
+                {
+                    new()
+                    {
+                        Folio = "CNS-20260314-004",
+                        Date = DateTime.Today.AddDays(-21),
+                        ChiefComplaint = "Revisión y retiro de puntos de herida en brazo",
+                        VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | FR: 17 rpm | Temp: 36.5 °C | Peso: 82 kg | Talla: 1.78 m | IMC: 25.9 (Sobrepeso leve)",
+                        PhysicalExamination = "Herida de 3 cm en cara anterior de tercio medio de antebrazo izquierdo, bordes afrontados, sin secreción ni eritema circundante.",
+                        Diagnosis = "Herida de antebrazo en fase resolutiva (S51.9)",
+                        TreatmentPlan = "Retiro de suturas con técnica aséptica, curación tópica y vendaje oclusivo ligero por 48 horas.",
+                        Notes = "Alta del procedimiento de sutura con adecuada evolución clínica.",
+                        Prescriptions = new List<PatientPrescriptionItem>
+                        {
+                            new() { MedicineName = "Solución Fisiológica 0.9%", Dosage = "Lavado de herida diario", RecommendedQuantity = 1 },
+                            new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Protección de herida", RecommendedQuantity = 1 }
+                        }
+                    }
+                }
+            }
+        };
+
+        foreach (var p in patients)
+        {
+            p.SyncPrescriptionJson();
+            foreach (var c in p.Consultations)
+            {
+                c.PrescriptionsJson = System.Text.Json.JsonSerializer.Serialize(c.Prescriptions);
+            }
+        }
+
+        context.Patients.AddRange(patients);
         context.SaveChanges();
     }
 }

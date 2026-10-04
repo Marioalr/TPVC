@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -54,6 +55,21 @@ public partial class MedicalRecordsViewModel : ObservableObject
     [ObservableProperty]
     private PatientRecord? _selectedPatient;
 
+    [ObservableProperty]
+    private ObservableCollection<PatientConsultation> _consultationsHistory = new();
+
+    [ObservableProperty]
+    private PatientConsultation? _selectedHistoryConsultation;
+
+    [ObservableProperty]
+    private string _patientDetailTab = "Resumen"; // "Resumen" o "Historial"
+
+    [RelayCommand]
+    public void SwitchPatientDetailTab(string tab)
+    {
+        PatientDetailTab = tab;
+    }
+
     // ==========================================
     // ESTADO DE CONSULTA MÉDICA ACTIVA
     // ==========================================
@@ -69,6 +85,129 @@ public partial class MedicalRecordsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isInfoModalVisible;
+
+    // ==========================================
+    // MODAL DE ALTA / EDICIÓN DE EXPEDIENTE (NOM-004-SSA3)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isPatientModalOpen;
+
+    [ObservableProperty]
+    private string _patientModalTitle = "Nuevo Expediente Clínico";
+
+    [ObservableProperty]
+    private int _formPatientId;
+
+    [ObservableProperty]
+    private string _formRecordNumber = string.Empty;
+
+    [ObservableProperty]
+    private string _formFullName = string.Empty;
+
+    [ObservableProperty]
+    private int _formAge = 30;
+
+    [ObservableProperty]
+    private string _formGender = "Masculino";
+
+    [ObservableProperty]
+    private string _formPhone = string.Empty;
+
+    [ObservableProperty]
+    private string _formEmail = string.Empty;
+
+    [ObservableProperty]
+    private string _formAddress = string.Empty;
+
+    [ObservableProperty]
+    private string _formBloodType = "O+";
+
+    [ObservableProperty]
+    private string _formAllergies = "Ninguna conocida";
+
+    [ObservableProperty]
+    private string _formChronicDiseases = "Ninguna";
+
+    [ObservableProperty]
+    private string _formEmergencyContactName = string.Empty;
+
+    [ObservableProperty]
+    private string _formEmergencyContactPhone = string.Empty;
+
+    [ObservableProperty]
+    private string _formInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
+
+    [ObservableProperty]
+    private string _formClinicalNotes = string.Empty;
+
+    [ObservableProperty]
+    private string? _formErrorMessage;
+
+    public List<string> GenderOptions { get; } = new() { "Masculino", "Femenino", "Otro / No especificado" };
+    public List<string> BloodTypeOptions { get; } = new() { "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
+
+    // ==========================================
+    // MODAL DE NUEVA CONSULTA / NOTA MÉDICA (NOM-004-SSA3)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isConsultationModalOpen;
+
+    [ObservableProperty]
+    private string _consultationFolio = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationChiefComplaint = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationTA = "120/80";
+
+    [ObservableProperty]
+    private string _consultationFC = "75";
+
+    [ObservableProperty]
+    private string _consultationFR = "18";
+
+    [ObservableProperty]
+    private string _consultationTemp = "36.5";
+
+    [ObservableProperty]
+    private string _consultationWeight = "70.0";
+
+    [ObservableProperty]
+    private string _consultationHeight = "1.70";
+
+    [ObservableProperty]
+    private string _consultationIMC = "24.2 kg/m² (Peso normal)";
+
+    [ObservableProperty]
+    private string _consultationPhysicalExam = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationDiagnosis = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationTreatmentPlan = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationNotes = string.Empty;
+
+    [ObservableProperty]
+    private bool _consultationStartActivePos = true;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientPrescriptionItem> _consultationPrescriptions = new();
+
+    [ObservableProperty]
+    private string _newPrescriptionMedicine = string.Empty;
+
+    [ObservableProperty]
+    private string _newPrescriptionDosage = string.Empty;
+
+    [ObservableProperty]
+    private int _newPrescriptionQuantity = 1;
+
+    [ObservableProperty]
+    private string? _consultationErrorMessage;
 
     // ==========================================
     // CATÁLOGO DE SERVICIOS CLÍNICOS
@@ -133,6 +272,18 @@ public partial class MedicalRecordsViewModel : ObservableObject
         if (_consultationService != null)
         {
             _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
+        }
+
+        if (_inventoryService != null)
+        {
+            _inventoryService.OnInventoryChanged += () =>
+            {
+                _ = LoadPatientsAsync();
+            };
+            _ = LoadInitialDataAsync();
+        }
+        else if (_consultationService != null && _consultationService.Patients.Count > 0)
+        {
             Patients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
             FilteredPatients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
             SelectedPatient = Patients.FirstOrDefault();
@@ -143,6 +294,50 @@ public partial class MedicalRecordsViewModel : ObservableObject
         }
 
         SyncActiveConsultation();
+    }
+
+    public async Task LoadInitialDataAsync()
+    {
+        await LoadPatientsAsync();
+        await LoadServicesAsync();
+    }
+
+    public async Task LoadPatientsAsync()
+    {
+        if (_inventoryService != null)
+        {
+            var dbPatients = await _inventoryService.GetPatientsAsync();
+            var prevSelectedId = SelectedPatient?.Id ?? 0;
+
+            Patients = new ObservableCollection<PatientRecord>(dbPatients);
+            ApplyPatientFilter();
+
+            _consultationService?.LoadPatientsFromDatabase(dbPatients);
+
+            if (prevSelectedId > 0)
+            {
+                SelectedPatient = Patients.FirstOrDefault(p => p.Id == prevSelectedId) ?? FilteredPatients.FirstOrDefault();
+            }
+            else if (SelectedPatient == null)
+            {
+                SelectedPatient = FilteredPatients.FirstOrDefault();
+            }
+        }
+    }
+
+    partial void OnSelectedPatientChanged(PatientRecord? value)
+    {
+        if (value != null)
+        {
+            var list = value.Consultations.OrderByDescending(c => c.Date).ToList();
+            ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
+            SelectedHistoryConsultation = ConsultationsHistory.FirstOrDefault();
+        }
+        else
+        {
+            ConsultationsHistory.Clear();
+            SelectedHistoryConsultation = null;
+        }
     }
 
     public void SyncActiveConsultation()
@@ -228,6 +423,560 @@ public partial class MedicalRecordsViewModel : ObservableObject
         Services = new ObservableCollection<ClinicalService>(services);
         SelectedService = Services.FirstOrDefault();
     }
+
+    private void LoadMockPatients()
+    {
+        var list = new List<PatientRecord>
+        {
+            new()
+            {
+                Id = 1,
+                RecordNumber = "EXP-2026-001",
+                FullName = "García Morales, Juan Carlos",
+                Age = 42,
+                Gender = "Masculino",
+                Phone = "55 4123 8890",
+                Email = "juan.garcia@email.com",
+                Address = "Av. Insurgentes Sur 450, Col. Roma Sur, CDMX",
+                BloodType = "O+",
+                Allergies = "Penicilina (Reacción alérgica severa)",
+                ChronicDiseases = "Ninguna relevante",
+                EmergencyContactName = "Laura Morales (Esposa)",
+                EmergencyContactPhone = "55 4123 8899",
+                LastVisit = DateTime.Today.AddDays(-2),
+                LastDiagnosis = "Faringoamigdalitis aguda bacteriana + Cefalea tensional",
+                VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | Temp: 37.8 °C | Peso: 78 kg",
+                ClinicalNotes = "Paciente masculino acude por odinofagia de 3 días de evolución, hipertermia cuantificada y adenomegalias cervicales dolorosas. Faringe congestiva con placas blanquecinas.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas por 5 días", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Curación y aseo bucofaríngeo", RecommendedQuantity = 1 }
+                }
+            },
+            new()
+            {
+                Id = 2,
+                RecordNumber = "EXP-2026-002",
+                FullName = "Rodríguez Silva, María Elena",
+                Age = 63,
+                Gender = "Femenino",
+                Phone = "55 9876 1234",
+                Email = "maria.elena@email.com",
+                Address = "Calle Durango 128, Col. Condesa, CDMX",
+                BloodType = "A+",
+                Allergies = "Ninguna conocida",
+                ChronicDiseases = "Diabetes Mellitus Tipo 2, Hipertensión Arterial",
+                EmergencyContactName = "Carlos Rodríguez (Hijo)",
+                EmergencyContactPhone = "55 9876 1235",
+                LastVisit = DateTime.Today.AddDays(-6),
+                LastDiagnosis = "Control periódico de Hipertensión Arterial y Glucemia",
+                VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | Temp: 36.4 °C | Glucosa: 134 mg/dL",
+                ClinicalNotes = "Acude a control mensual. Refiere buena tolerancia al tratamiento actual. Sin sintomatología cardiovascular ni edema en miembros inferiores.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Tiras Reactivas para Glucosa Capilar", Dosage = "Monitoreo matutino en ayunas 3 veces por semana", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Alcohol Etílico Desnaturalizado 70%", Dosage = "Asepsia para toma de glucosa", RecommendedQuantity = 1 }
+                }
+            },
+            new()
+            {
+                Id = 3,
+                RecordNumber = "EXP-2026-003",
+                FullName = "Hernández López, Sofía",
+                Age = 27,
+                Gender = "Femenino",
+                Phone = "55 3344 5566",
+                Email = "sofia.hernandez@email.com",
+                Address = "Calzada de Tlalpan 1890, CDMX",
+                BloodType = "B+",
+                Allergies = "Sulfas",
+                ChronicDiseases = "Rinitis alérgica estacional",
+                EmergencyContactName = "Patricia López (Madre)",
+                EmergencyContactPhone = "55 3344 5560",
+                LastVisit = DateTime.Today.AddDays(-14),
+                LastDiagnosis = "Traumatismo menor en tobillo derecho (Esguince Grado I)",
+                VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | Temp: 36.6 °C | Peso: 56 kg",
+                ClinicalNotes = "Presenta dolor e inflamación leve tras inversión forzada al bajar escalón. Sin deformidad ni pérdida de continuidad ósea a la palpación.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Venda Elástica 10 cm", Dosage = "Vendaje compresivo en ocho por 7 días", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas si hay dolor", RecommendedQuantity = 1 }
+                }
+            },
+            new()
+            {
+                Id = 4,
+                RecordNumber = "EXP-2026-004",
+                FullName = "Martínez Castro, Roberto",
+                Age = 35,
+                Gender = "Masculino",
+                Phone = "55 7788 9900",
+                Email = "roberto.martinez@email.com",
+                Address = "Eje Central Lázaro Cárdenas 55, CDMX",
+                BloodType = "O+",
+                Allergies = "Ninguna",
+                ChronicDiseases = "Ninguna",
+                EmergencyContactName = "Mariana Castro (Hermana)",
+                EmergencyContactPhone = "55 7788 9911",
+                LastVisit = DateTime.Today.AddDays(-21),
+                LastDiagnosis = "Curación de herida contuso-cortante en antebrazo izquierdo",
+                VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | Temp: 36.5 °C | Peso: 82 kg",
+                ClinicalNotes = "Herida limpia de 3 cm afrontada previamente. Retiro de puntos satisfactorio. Cicatrización de primera intención sin signos de infección.",
+                ActivePrescription = new List<PatientPrescriptionItem>
+                {
+                    new() { MedicineName = "Solución Fisiológica 0.9%", Dosage = "Lavado de herida diario", RecommendedQuantity = 1 },
+                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Protección de herida", RecommendedQuantity = 1 }
+                }
+            }
+        };
+
+        Patients = new ObservableCollection<PatientRecord>(list);
+        FilteredPatients = new ObservableCollection<PatientRecord>(list);
+        SelectedPatient = list.FirstOrDefault();
+    }
+
+    partial void OnSearchPatientTextChanged(string value)
+    {
+        ApplyPatientFilter();
+    }
+
+    private void ApplyPatientFilter()
+    {
+        if (string.IsNullOrWhiteSpace(SearchPatientText))
+        {
+            FilteredPatients = new ObservableCollection<PatientRecord>(Patients);
+        }
+        else
+        {
+            var q = SearchPatientText.Trim().ToLowerInvariant();
+            FilteredPatients = new ObservableCollection<PatientRecord>(
+                Patients.Where(p => 
+                    p.FullName.ToLowerInvariant().Contains(q) ||
+                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
+                    p.Phone.Contains(q) ||
+                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
+                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q))
+                )
+            );
+        }
+
+        if (SelectedPatient != null && !FilteredPatients.Contains(SelectedPatient))
+        {
+            SelectedPatient = FilteredPatients.FirstOrDefault();
+        }
+        else if (SelectedPatient == null && FilteredPatients.Count > 0)
+        {
+            SelectedPatient = FilteredPatients.FirstOrDefault();
+        }
+    }
+
+    // ==========================================
+    // OPERACIONES DE EXPEDIENTE CLÍNICO
+    // ==========================================
+
+    [RelayCommand]
+    public async Task NewPatientAsync()
+    {
+        FormPatientId = 0;
+        FormErrorMessage = null;
+        PatientModalTitle = "Nuevo Expediente Clínico (NOM-004-SSA3)";
+
+        if (_inventoryService != null)
+        {
+            FormRecordNumber = await _inventoryService.GenerateNextRecordNumberAsync();
+        }
+        else
+        {
+            FormRecordNumber = $"EXP-{DateTime.Today.Year}-{(Patients.Count + 1):D3}";
+        }
+
+        FormFullName = string.Empty;
+        FormAge = 30;
+        FormGender = "Masculino";
+        FormPhone = string.Empty;
+        FormEmail = string.Empty;
+        FormAddress = string.Empty;
+        FormBloodType = "O+";
+        FormAllergies = "Ninguna conocida";
+        FormChronicDiseases = "Ninguna";
+        FormEmergencyContactName = string.Empty;
+        FormEmergencyContactPhone = string.Empty;
+        FormInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
+        FormClinicalNotes = string.Empty;
+
+        IsPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void EditPatient()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        FormPatientId = SelectedPatient.Id;
+        FormErrorMessage = null;
+        PatientModalTitle = $"Editar Expediente Clínico • {SelectedPatient.RecordNumber}";
+
+        FormRecordNumber = SelectedPatient.RecordNumber;
+        FormFullName = SelectedPatient.FullName;
+        FormAge = SelectedPatient.Age;
+        FormGender = SelectedPatient.Gender;
+        FormPhone = SelectedPatient.Phone;
+        FormEmail = SelectedPatient.Email;
+        FormAddress = SelectedPatient.Address;
+        FormBloodType = SelectedPatient.BloodType;
+        FormAllergies = SelectedPatient.Allergies;
+        FormChronicDiseases = SelectedPatient.ChronicDiseases;
+        FormEmergencyContactName = SelectedPatient.EmergencyContactName;
+        FormEmergencyContactPhone = SelectedPatient.EmergencyContactPhone;
+        FormInitialVitalSigns = SelectedPatient.VitalSigns;
+        FormClinicalNotes = SelectedPatient.ClinicalNotes;
+
+        IsPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void ClosePatientModal()
+    {
+        IsPatientModalOpen = false;
+        FormErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public async Task SavePatientModalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FormFullName))
+        {
+            FormErrorMessage = "El nombre completo del paciente es obligatorio.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormRecordNumber))
+        {
+            FormErrorMessage = "El folio del expediente es obligatorio.";
+            return;
+        }
+
+        var normalizedFolio = FormRecordNumber.Trim();
+        if (_inventoryService != null)
+        {
+            var isTaken = await _inventoryService.IsRecordNumberTakenAsync(normalizedFolio, FormPatientId);
+            if (isTaken)
+            {
+                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya está en uso por otro paciente.";
+                return;
+            }
+        }
+        else
+        {
+            var duplicate = Patients.Any(p => p.Id != FormPatientId && p.RecordNumber.Equals(normalizedFolio, StringComparison.OrdinalIgnoreCase));
+            if (duplicate)
+            {
+                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya existe.";
+                return;
+            }
+        }
+
+        var patient = FormPatientId > 0 && SelectedPatient != null && SelectedPatient.Id == FormPatientId 
+            ? SelectedPatient 
+            : new PatientRecord();
+
+        patient.RecordNumber = normalizedFolio;
+        patient.FullName = FormFullName.Trim();
+        patient.Age = Math.Max(0, FormAge);
+        patient.Gender = FormGender;
+        patient.Phone = FormPhone.Trim();
+        patient.Email = FormEmail.Trim();
+        patient.Address = FormAddress.Trim();
+        patient.BloodType = FormBloodType;
+        patient.Allergies = string.IsNullOrWhiteSpace(FormAllergies) ? "Ninguna conocida" : FormAllergies.Trim();
+        patient.ChronicDiseases = string.IsNullOrWhiteSpace(FormChronicDiseases) ? "Ninguna" : FormChronicDiseases.Trim();
+        patient.EmergencyContactName = FormEmergencyContactName.Trim();
+        patient.EmergencyContactPhone = FormEmergencyContactPhone.Trim();
+        patient.VitalSigns = string.IsNullOrWhiteSpace(FormInitialVitalSigns) ? "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C" : FormInitialVitalSigns.Trim();
+        patient.ClinicalNotes = FormClinicalNotes.Trim();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                var saved = await _inventoryService.SavePatientAsync(patient);
+                await LoadPatientsAsync();
+                SelectedPatient = Patients.FirstOrDefault(p => p.Id == saved.Id) ?? saved;
+            }
+            catch (Exception ex)
+            {
+                FormErrorMessage = $"Error al guardar en base de datos: {ex.Message}";
+                return;
+            }
+        }
+        else
+        {
+            if (patient.Id == 0)
+            {
+                patient.Id = Patients.Count > 0 ? Patients.Max(p => p.Id) + 1 : 1;
+                Patients.Insert(0, patient);
+            }
+            _consultationService?.UpsertPatient(patient);
+            ApplyPatientFilter();
+            SelectedPatient = patient;
+        }
+
+        IsPatientModalOpen = false;
+        FormErrorMessage = null;
+        InfoModalMessage = $"¡Expediente '{patient.FullName}' ({patient.RecordNumber}) guardado exitosamente!";
+        IsInfoModalVisible = true;
+    }
+
+    // ==========================================
+    // OPERACIONES DE CONSULTA MÉDICA (NOM-004-SSA3)
+    // ==========================================
+
+    [RelayCommand]
+    public void NewConsultation()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione un paciente de la lista para registrar su consulta médica.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        ConsultationErrorMessage = null;
+        ConsultationFolio = $"CNS-{DateTime.Today:yyyyMMdd}-{(SelectedPatient.Consultations.Count + 1):D3}";
+        ConsultationChiefComplaint = string.Empty;
+
+        // Extraer valores o inicializar
+        ConsultationTA = "120/80";
+        ConsultationFC = "75";
+        ConsultationFR = "18";
+        ConsultationTemp = "36.5";
+        ConsultationWeight = "70.0";
+        ConsultationHeight = "1.70";
+        RecalculateIMC();
+
+        ConsultationPhysicalExam = string.Empty;
+        ConsultationDiagnosis = string.Empty;
+        ConsultationTreatmentPlan = string.Empty;
+        ConsultationNotes = string.Empty;
+        ConsultationStartActivePos = true;
+
+        ConsultationPrescriptions.Clear();
+        NewPrescriptionMedicine = string.Empty;
+        NewPrescriptionDosage = string.Empty;
+        NewPrescriptionQuantity = 1;
+
+        IsConsultationModalOpen = true;
+    }
+
+    partial void OnConsultationWeightChanged(string value) => RecalculateIMC();
+    partial void OnConsultationHeightChanged(string value) => RecalculateIMC();
+
+    public void RecalculateIMC()
+    {
+        if (decimal.TryParse(ConsultationWeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
+            decimal.TryParse(ConsultationHeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
+            height > 0)
+        {
+            var imc = weight / (height * height);
+            string category;
+            if (imc < 18.5m) category = "Bajo peso";
+            else if (imc < 25.0m) category = "Peso normal";
+            else if (imc < 30.0m) category = "Sobrepeso";
+            else if (imc < 35.0m) category = "Obesidad Grado I";
+            else category = "Obesidad Grado II+";
+
+            ConsultationIMC = $"{imc:F1} kg/m² ({category})";
+        }
+        else
+        {
+            ConsultationIMC = "Valores no disponibles";
+        }
+    }
+
+    [RelayCommand]
+    public void AddPrescriptionItem()
+    {
+        if (string.IsNullOrWhiteSpace(NewPrescriptionMedicine))
+        {
+            ConsultationErrorMessage = "Especifique el nombre del medicamento o insumo a recetar.";
+            return;
+        }
+
+        ConsultationPrescriptions.Add(new PatientPrescriptionItem
+        {
+            MedicineName = NewPrescriptionMedicine.Trim(),
+            Dosage = string.IsNullOrWhiteSpace(NewPrescriptionDosage) ? "Según indicación médica" : NewPrescriptionDosage.Trim(),
+            RecommendedQuantity = Math.Max(1, NewPrescriptionQuantity)
+        });
+
+        NewPrescriptionMedicine = string.Empty;
+        NewPrescriptionDosage = string.Empty;
+        NewPrescriptionQuantity = 1;
+        ConsultationErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public void RemovePrescriptionItem(PatientPrescriptionItem item)
+    {
+        ConsultationPrescriptions.Remove(item);
+    }
+
+    [RelayCommand]
+    public void CloseConsultationModal()
+    {
+        IsConsultationModalOpen = false;
+        ConsultationErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public async Task SaveConsultationModalAsync()
+    {
+        if (SelectedPatient == null) return;
+
+        if (string.IsNullOrWhiteSpace(ConsultationChiefComplaint))
+        {
+            ConsultationErrorMessage = "El motivo de consulta es obligatorio (NOM-004-SSA3).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ConsultationDiagnosis))
+        {
+            ConsultationErrorMessage = "El diagnóstico clínico es obligatorio (NOM-004-SSA3).";
+            return;
+        }
+
+        var vitalSignsFormatted = $"TA: {ConsultationTA.Trim()} mmHg | FC: {ConsultationFC.Trim()} lpm | FR: {ConsultationFR.Trim()} rpm | Temp: {ConsultationTemp.Trim()} °C | Peso: {ConsultationWeight.Trim()} kg | Talla: {ConsultationHeight.Trim()} m | IMC: {ConsultationIMC.Trim()}";
+
+        var consultation = new PatientConsultation
+        {
+            PatientRecordId = SelectedPatient.Id,
+            Folio = string.IsNullOrWhiteSpace(ConsultationFolio) ? $"CNS-{DateTime.Today:yyyyMMdd}-001" : ConsultationFolio.Trim(),
+            Date = DateTime.Now,
+            ChiefComplaint = ConsultationChiefComplaint.Trim(),
+            VitalSigns = vitalSignsFormatted,
+            PhysicalExamination = ConsultationPhysicalExam.Trim(),
+            Diagnosis = ConsultationDiagnosis.Trim(),
+            TreatmentPlan = ConsultationTreatmentPlan.Trim(),
+            Notes = ConsultationNotes.Trim(),
+            Prescriptions = new List<PatientPrescriptionItem>(ConsultationPrescriptions)
+        };
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.AddConsultationNoteAsync(SelectedPatient.Id, consultation);
+                await LoadPatientsAsync();
+            }
+            catch (Exception ex)
+            {
+                ConsultationErrorMessage = $"Error al registrar la consulta: {ex.Message}";
+                return;
+            }
+        }
+        else
+        {
+            SelectedPatient.LastVisit = consultation.Date;
+            SelectedPatient.LastDiagnosis = consultation.Diagnosis;
+            SelectedPatient.VitalSigns = consultation.VitalSigns;
+            SelectedPatient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
+            SelectedPatient.ActivePrescription = new List<PatientPrescriptionItem>(ConsultationPrescriptions);
+            SelectedPatient.Consultations.Insert(0, consultation);
+            ConsultationsHistory.Insert(0, consultation);
+            SelectedHistoryConsultation = consultation;
+        }
+
+        if (ConsultationStartActivePos && _consultationService != null)
+        {
+            _consultationService.StartConsultation(SelectedPatient, consultation.ChiefComplaint);
+            SyncActiveConsultation();
+        }
+
+        IsConsultationModalOpen = false;
+        ConsultationErrorMessage = null;
+        InfoModalMessage = $"¡Consulta médica registrada exitosamente para {SelectedPatient.FullName}!\nFolio: {consultation.Folio}\nDiagnóstico: {consultation.Diagnosis}\n\nLos signos vitales y la receta activa han sido actualizados en su expediente.";
+        IsInfoModalVisible = true;
+    }
+
+    [RelayCommand]
+    public void SendPrescriptionToPos()
+    {
+        if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
+        {
+            InfoModalMessage = "El paciente no tiene medicamentos activos en su receta para despachar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        foreach (var item in SelectedPatient.ActivePrescription)
+        {
+            OnSendPrescriptionToPos?.Invoke(item.MedicineName, item.RecommendedQuantity);
+        }
+
+        OnNavigateToPosRequested?.Invoke();
+    }
+
+    [RelayCommand]
+    public void StartActiveConsultation()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione un paciente para iniciar la consulta médica activa.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        if (_consultationService != null)
+        {
+            _consultationService.StartConsultation(SelectedPatient);
+            SyncActiveConsultation();
+            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede acudir al Punto de Venta (POS) y presionar 'Agregar a Consulta Activa' para acumular insumos y medicamentos utilizados durante la atención médica.";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public void CheckoutActiveConsultation()
+    {
+        if (_consultationService?.CurrentConsultation == null)
+        {
+            InfoModalMessage = "No hay ninguna consulta médica activa para liquidar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var consultation = _consultationService.CurrentConsultation;
+        OnCheckoutConsultationRequested?.Invoke(consultation);
+    }
+
+    [RelayCommand]
+    public void CancelActiveConsultation()
+    {
+        if (_consultationService != null && _consultationService.HasActiveConsultation)
+        {
+            var patient = _consultationService.CurrentConsultation?.PatientName;
+            _consultationService.CloseActiveConsultation();
+            SyncActiveConsultation();
+            InfoModalMessage = $"La consulta médica activa de {patient} ha sido finalizada/cerrada.";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public void DismissInfoModal()
+    {
+        IsInfoModalVisible = false;
+        InfoModalMessage = null;
+    }
+
+    // ==========================================
+    // MÉTODOS DE CATÁLOGO DE SERVICIOS
+    // ==========================================
 
     [RelayCommand]
     public void OpenCreateServiceModal()
@@ -323,211 +1072,5 @@ public partial class MedicalRecordsViewModel : ObservableObject
         IsCreateServiceModalOpen = false;
         InfoModalMessage = $"¡Servicio '{newService.Name}' creado exitosamente con {newService.DefaultProducts.Count} producto(s) por defecto!";
         IsInfoModalVisible = true;
-    }
-
-
-    private void LoadMockPatients()
-    {
-        var list = new List<PatientRecord>
-        {
-            new()
-            {
-                Id = 1,
-                RecordNumber = "EXP-2026-001",
-                FullName = "García Morales, Juan Carlos",
-                Age = 42,
-                Gender = "Masculino",
-                Phone = "55 4123 8890",
-                BloodType = "O+",
-                Allergies = "Penicilina (Reacción alérgica severa)",
-                ChronicDiseases = "Ninguna relevante",
-                LastVisit = DateTime.Today.AddDays(-2),
-                LastDiagnosis = "Faringoamigdalitis aguda bacteriana + Cefalea tensional",
-                VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | Temp: 37.8 °C | Peso: 78 kg",
-                ClinicalNotes = "Paciente masculino acude por odinofagia de 3 días de evolución, hipertermia cuantificada y adenomegalias cervicales dolorosas. Faringe congestiva con placas blanquecinas.",
-                ActivePrescription = new List<PatientPrescriptionItem>
-                {
-                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas por 5 días", RecommendedQuantity = 1 },
-                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Curación y aseo bucofaríngeo", RecommendedQuantity = 1 }
-                }
-            },
-            new()
-            {
-                Id = 2,
-                RecordNumber = "EXP-2026-002",
-                FullName = "Rodríguez Silva, María Elena",
-                Age = 63,
-                Gender = "Femenino",
-                Phone = "55 9876 1234",
-                BloodType = "A+",
-                Allergies = "Ninguna conocida",
-                ChronicDiseases = "Diabetes Mellitus Tipo 2, Hipertensión Arterial",
-                LastVisit = DateTime.Today.AddDays(-6),
-                LastDiagnosis = "Control periódico de Hipertensión Arterial y Glucemia",
-                VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | Temp: 36.4 °C | Glucosa: 134 mg/dL",
-                ClinicalNotes = "Acude a control mensual. Refiere buena tolerancia al tratamiento actual. Sin sintomatología cardiovascular ni edema en miembros inferiores.",
-                ActivePrescription = new List<PatientPrescriptionItem>
-                {
-                    new() { MedicineName = "Tiras Reactivas para Glucosa Capilar", Dosage = "Monitoreo matutino en ayunas 3 veces por semana", RecommendedQuantity = 1 },
-                    new() { MedicineName = "Alcohol Etílico Desnaturalizado 70%", Dosage = "Asepsia para toma de glucosa", RecommendedQuantity = 1 }
-                }
-            },
-            new()
-            {
-                Id = 3,
-                RecordNumber = "EXP-2026-003",
-                FullName = "Hernández López, Sofía",
-                Age = 27,
-                Gender = "Femenino",
-                Phone = "55 3344 5566",
-                BloodType = "B+",
-                Allergies = "Sulfas",
-                ChronicDiseases = "Rinitis alérgica estacional",
-                LastVisit = DateTime.Today.AddDays(-14),
-                LastDiagnosis = "Traumatismo menor en tobillo derecho (Esguince Grado I)",
-                VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | Temp: 36.6 °C | Peso: 56 kg",
-                ClinicalNotes = "Presenta dolor e inflamación leve tras inversión forzada al bajar escalón. Sin deformidad ni pérdida de continuidad ósea a la palpación.",
-                ActivePrescription = new List<PatientPrescriptionItem>
-                {
-                    new() { MedicineName = "Venda Elástica 10 cm", Dosage = "Vendaje compresivo en ocho por 7 días", RecommendedQuantity = 1 },
-                    new() { MedicineName = "Paracetamol 500 mg", Dosage = "1 tableta cada 8 horas si hay dolor", RecommendedQuantity = 1 }
-                }
-            },
-            new()
-            {
-                Id = 4,
-                RecordNumber = "EXP-2026-004",
-                FullName = "Martínez Castro, Roberto",
-                Age = 35,
-                Gender = "Masculino",
-                Phone = "55 7788 9900",
-                BloodType = "O+",
-                Allergies = "Ninguna",
-                ChronicDiseases = "Ninguna",
-                LastVisit = DateTime.Today.AddDays(-21),
-                LastDiagnosis = "Curación de herida contuso-cortante en antebrazo izquierdo",
-                VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | Temp: 36.5 °C | Peso: 82 kg",
-                ClinicalNotes = "Herida limpia de 3 cm afrontada previamente. Retiro de puntos satisfactorio. Cicatrización de primera intención sin signos de infección.",
-                ActivePrescription = new List<PatientPrescriptionItem>
-                {
-                    new() { MedicineName = "Solución Fisiológica 0.9%", Dosage = "Lavado de herida diario", RecommendedQuantity = 1 },
-                    new() { MedicineName = "Gasa Estéril 10x10 cm", Dosage = "Protección de herida", RecommendedQuantity = 1 }
-                }
-            }
-        };
-
-        Patients = new ObservableCollection<PatientRecord>(list);
-        FilteredPatients = new ObservableCollection<PatientRecord>(list);
-        SelectedPatient = list.FirstOrDefault();
-    }
-
-    partial void OnSearchPatientTextChanged(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            FilteredPatients = new ObservableCollection<PatientRecord>(Patients);
-        }
-        else
-        {
-            var q = value.Trim().ToLowerInvariant();
-            FilteredPatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p => 
-                    p.FullName.ToLowerInvariant().Contains(q) ||
-                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
-                    p.Phone.Contains(q) ||
-                    p.LastDiagnosis.ToLowerInvariant().Contains(q)
-                )
-            );
-        }
-
-        if (SelectedPatient != null && !FilteredPatients.Contains(SelectedPatient))
-        {
-            SelectedPatient = FilteredPatients.FirstOrDefault();
-        }
-    }
-
-    [RelayCommand]
-    public void NewPatient()
-    {
-        InfoModalMessage = "El módulo de apertura de expedientes clínicos normados integrará:\n\n• Cumplimiento integral con la norma técnica NOM-004-SSA3.\n• Captura de antecedentes heredo-familiares y patológicos.\n• Formatos de consentimiento informado y firma digital.\n• Alertas sanitarias y semáforo de alergias medicamentosas.";
-        IsInfoModalVisible = true;
-    }
-
-    [RelayCommand]
-    public void NewConsultation()
-    {
-        InfoModalMessage = "El flujo integral de Nueva Consulta Médica integrará:\n\n• Registro en vivo de signos vitales (TA, FC, FR, Temp, Peso, IMC).\n• Notas médicas de evolución conforme a la NOM-004-SSA3.\n• Catálogo internacional de diagnósticos clínicos CIE-10.\n• Emisión de recetas médicas digitales con código QR.\n• Despacho y deducción inmediata en el inventario/POS.";
-        IsInfoModalVisible = true;
-    }
-
-    [RelayCommand]
-    public void SendPrescriptionToPos()
-    {
-        if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
-        {
-            InfoModalMessage = "El paciente no tiene medicamentos activos en su receta para despachar.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        foreach (var item in SelectedPatient.ActivePrescription)
-        {
-            OnSendPrescriptionToPos?.Invoke(item.MedicineName, item.RecommendedQuantity);
-        }
-
-        OnNavigateToPosRequested?.Invoke();
-    }
-
-    [RelayCommand]
-    public void StartActiveConsultation()
-    {
-        if (SelectedPatient == null)
-        {
-            InfoModalMessage = "Seleccione un paciente para iniciar la consulta médica activa.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        if (_consultationService != null)
-        {
-            _consultationService.StartConsultation(SelectedPatient);
-            SyncActiveConsultation();
-            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede acudir al Punto de Venta (POS) y presionar 'Agregar a Consulta Activa' para acumular insumos y medicamentos utilizados durante la atención médica.";
-            IsInfoModalVisible = true;
-        }
-    }
-
-    [RelayCommand]
-    public void CheckoutActiveConsultation()
-    {
-        if (_consultationService?.CurrentConsultation == null)
-        {
-            InfoModalMessage = "No hay ninguna consulta médica activa para liquidar.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        var consultation = _consultationService.CurrentConsultation;
-        OnCheckoutConsultationRequested?.Invoke(consultation);
-    }
-
-    [RelayCommand]
-    public void CancelActiveConsultation()
-    {
-        if (_consultationService != null && _consultationService.HasActiveConsultation)
-        {
-            var patient = _consultationService.CurrentConsultation?.PatientName;
-            _consultationService.CloseActiveConsultation();
-            SyncActiveConsultation();
-            InfoModalMessage = $"La consulta médica activa de {patient} ha sido finalizada/cerrada.";
-            IsInfoModalVisible = true;
-        }
-    }
-
-    [RelayCommand]
-    public void DismissInfoModal()
-    {
-        IsInfoModalVisible = false;
-        InfoModalMessage = null;
     }
 }

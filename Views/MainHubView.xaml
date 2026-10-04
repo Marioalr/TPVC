@@ -195,28 +195,28 @@
                                Foreground="{DynamicResource ThemeText}" 
                                HorizontalAlignment="Center" />
 
-                    <!-- Subtítulo y Badge TODO -->
+                    <!-- Subtítulo y Badge Activo -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,12">
                         <TextBlock Text="Expedientes Clínicos" 
                                    FontWeight="SemiBold" 
                                    FontSize="13" 
                                    Foreground="{DynamicResource ThemeAccent}" 
                                    VerticalAlignment="Center" />
-                        <Border Background="{DynamicResource ThemeBorder}" 
+                        <Border Background="{DynamicResource ThemeAccent}" 
                                 CornerRadius="4" 
                                 Padding="6,2" 
                                 Margin="8,0,0,0" 
                                 VerticalAlignment="Center">
-                            <TextBlock Text="TODO" 
+                            <TextBlock Text="NOM-004-SSA3" 
                                        FontSize="10" 
                                        FontWeight="Bold" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
+                                       Foreground="{DynamicResource ThemeAccentText}" />
                         </Border>
                     </StackPanel>
 
                     <!-- Descripción Explicativa -->
                     <TextBlock Grid.Row="3" 
-                               Text="Consulta de expedientes de pacientes, historial clínico, signos vitales, notas médicas de evolución y prescripción de recetas médicas." 
+                               Text="Expedientes clínicos de pacientes, somatometría, notas médicas de evolución, recetas con código y enlace al punto de venta." 
                                TextWrapping="Wrap" 
                                TextAlignment="Center" 
                                FontSize="12" 
@@ -227,22 +227,20 @@
 
                     <!-- Botón / Indicador CTA -->
                     <Border Grid.Row="4" 
-                            Background="{DynamicResource ThemeSurfaceSubtle}" 
-                            BorderBrush="{DynamicResource ThemeBorder}" 
-                            BorderThickness="1" 
+                            Background="{DynamicResource ThemeAccent}" 
                             CornerRadius="8" 
                             Padding="18,10" 
                             HorizontalAlignment="Center">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Abrir Consulta (TODO)" 
+                            <TextBlock Text="Abrir Consulta y Expedientes" 
                                        FontWeight="Bold" 
                                        FontSize="13" 
-                                       Foreground="{DynamicResource ThemeText}" 
+                                       Foreground="{DynamicResource ThemeAccentText}" 
                                        Margin="0,0,8,0" />
                             <TextBlock Text="→" 
                                        FontWeight="Bold" 
                                        FontSize="14" 
-                                       Foreground="{DynamicResource ThemeAccent}" />
+                                       Foreground="{DynamicResource ThemeAccentText}" />
                         </StackPanel>
                     </Border>
                 </Grid>

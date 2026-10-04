@@ -21,6 +21,29 @@ public class ConsultationService
         InitializeDefaultPatients();
     }
 
+    public void LoadPatientsFromDatabase(IEnumerable<PatientRecord> patients)
+    {
+        Patients.Clear();
+        foreach (var p in patients)
+        {
+            Patients.Add(p);
+        }
+    }
+
+    public void UpsertPatient(PatientRecord patient)
+    {
+        var existing = Patients.FirstOrDefault(p => (p.Id > 0 && p.Id == patient.Id) || (!string.IsNullOrWhiteSpace(p.RecordNumber) && p.RecordNumber.Equals(patient.RecordNumber, StringComparison.OrdinalIgnoreCase)));
+        if (existing != null)
+        {
+            var index = Patients.IndexOf(existing);
+            Patients[index] = patient;
+        }
+        else
+        {
+            Patients.Insert(0, patient);
+        }
+    }
+
     private void InitializeDefaultPatients()
     {
         Patients.Add(new PatientRecord
