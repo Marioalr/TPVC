@@ -683,6 +683,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private bool _isPrescriptionPdfModalOpen;
 
     [ObservableProperty]
+    private bool _isPrescriptionModalOpen;
+
+    [ObservableProperty]
     private string _doctorName = "Dr(a). Médico Tratante";
 
     [ObservableProperty]
@@ -2319,6 +2322,55 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public void OpenPrescriptionModal()
+    {
+        if (SelectedPatient == null)
+        {
+            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar su receta médica.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        PrescriptionSearchText = string.Empty;
+        PrescriptionMedicineName = string.Empty;
+        PrescriptionDosage = string.Empty;
+        PrescriptionQuantity = 1;
+        SelectedPrescriptionProduct = null;
+        IsPrescriptionDropdownOpen = false;
+        IsPrescriptionModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void ClosePrescriptionModal()
+    {
+        IsPrescriptionModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task SavePrescriptionModalAsync()
+    {
+        if (SelectedPatient != null)
+        {
+            SelectedPatient.SyncPrescriptionJson();
+            if (_inventoryService != null)
+            {
+                try
+                {
+                    await _inventoryService.SavePatientAsync(SelectedPatient);
+                }
+                catch
+                {
+                }
+            }
+            OnPropertyChanged(nameof(SelectedPatient));
+        }
+
+        IsPrescriptionModalOpen = false;
+        InfoModalMessage = $"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!";
+        IsInfoModalVisible = true;
     }
 
     [RelayCommand]

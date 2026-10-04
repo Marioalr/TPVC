@@ -2,6 +2,24 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.14] - 2026-10-04
+
+### Añadido
+* **Botón de "💊 Receta Médica" en Cabecera de Ficha de Paciente**:
+  * Ubicado al lado de `"Cambiar Paciente"` en la barra de acciones superior de la ficha clínica.
+  * Permite abrir de manera directa la gestión interactiva de la receta médica en cualquier momento durante la consulta o revisión de expediente.
+* **Ventana Modal de Receta Médica y Prescripción**:
+  * Diseño homogéneo con el mismo formato, dimensiones (800x680 px), bordes redondeados y fondo desenfocado oscuro que la ventana de *"Cambiar Paciente"*.
+  * Formulario de captura rápida con autocompletado y catálogo dinámico de medicamentos e insumos clínicos del inventario.
+  * Lista interactiva de medicamentos prescritos con posología, cantidades recomendadas, botón individual para enviar al POS (`[🛒 Agregar al POS]`) y botón para eliminar prescripciones (`✕`).
+  * Botón directo para generar la vista previa e impresión oficial de la Receta Médica en PDF.
+  * Botón `"Guardar"` en el pie de la ventana: guarda los cambios y la receta activa en la base de datos local y regresa a la ventana principal, permitiendo volver a editar o agregar medicamentos en cualquier momento reabriendo la receta.
+
+### Modificado
+* **Retiro de la Sección Inferior de Receta**:
+  * Eliminación del bloque de receta que se encontraba en la parte inferior de la pestaña *Resumen*, manteniendo la ficha limpia y enfocada en antecedentes, diagnóstico y notas de evolución.
+* Cobertura de pruebas unitarias ampliada a 73 pruebas superadas con 0 errores (validación de apertura, cierre, guardado, persistencia en BD y reedición continua de recetas).
+
 ---
 
 ## [1.3.13] - 2026-10-04

@@ -2005,6 +2005,94 @@ public class InventoryTests
         Assert.AreEqual(1, items.Count);
         Assert.AreEqual(200.00m, consultationService.CurrentConsultation.Subtotal);
     }
+
+    [TestMethod]
+    public void MedicalRecords_PrescriptionModal_OpenWithoutPatient_ShowsInfoModal()
+    {
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, new ConsultationService());
+        recordsVm.SelectedPatient = null;
+
+        recordsVm.OpenPrescriptionModal();
+
+        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+        Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("Seleccione o agregue un paciente") ?? false);
+    }
+
+    [TestMethod]
+    public void MedicalRecords_PrescriptionModal_OpenAndClose_TogglesVisibility()
+    {
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, new ConsultationService());
+        var patient = new PatientRecord
+        {
+            Id = 20,
+            FullName = "Patricia Alarcón",
+            RecordNumber = "EXP-TEST-020"
+        };
+        recordsVm.SelectedPatient = patient;
+
+        recordsVm.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+
+        recordsVm.ClosePrescriptionModal();
+        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecords_PrescriptionModal_Save_PersistsAndReturnsToMainView_CanReEdit()
+    {
+        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, new ConsultationService());
+        var patient = new PatientRecord
+        {
+            Id = 21,
+            FullName = "Carlos Santana",
+            RecordNumber = "EXP-TEST-021"
+        };
+        recordsVm.SelectedPatient = patient;
+
+        // 1. Abrir modal de receta
+        recordsVm.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+
+        // 2. Prescribir un medicamento
+        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
+        recordsVm.PrescriptionQuantity = 2;
+        await recordsVm.AddPrescriptionItemToPatientAsync();
+
+        Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.AreEqual("Amoxicilina 500mg", patient.ActivePrescription[0].MedicineName);
+
+        // 3. Guardar receta -> Cierra modal y regresa a la ventana principal
+        await recordsVm.SavePrescriptionModalAsync();
+        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+        Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
+
+        // 4. Volver a abrir la receta para continuar editando
+        recordsVm.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+
+        // 5. Agregar un segundo medicamento
+        recordsVm.PrescriptionMedicineName = "Ibuprofeno 400mg";
+        recordsVm.PrescriptionDosage = "1 tableta cada 8 horas si hay dolor";
+        recordsVm.PrescriptionQuantity = 1;
+        await recordsVm.AddPrescriptionItemToPatientAsync();
+
+        Assert.AreEqual(2, patient.ActivePrescription.Count);
+        Assert.AreEqual("Ibuprofeno 400mg", patient.ActivePrescription[1].MedicineName);
+
+        // 6. Quitar el primer medicamento
+        await recordsVm.RemovePrescriptionItemFromPatientAsync(patient.ActivePrescription[0]);
+        Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.AreEqual("Ibuprofeno 400mg", patient.ActivePrescription[0].MedicineName);
+
+        // 7. Guardar nuevamente
+        await recordsVm.SavePrescriptionModalAsync();
+        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Ibuprofeno 400mg"));
+        Assert.IsFalse(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
+    }
 }
 
 
