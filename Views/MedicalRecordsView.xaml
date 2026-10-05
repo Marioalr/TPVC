@@ -212,13 +212,34 @@
                                        Foreground="{DynamicResource ThemeText}" 
                                        HorizontalAlignment="Center" 
                                        Margin="0,0,0,8" />
-                            <TextBlock Text="Para iniciar una consulta médica, registrar notas de evolución o emitir recetas, seleccione un paciente. Haga clic en esta tarjeta o en '+ Nueva Consulta' para abrir el catálogo de pacientes." 
+                            <TextBlock Text="Para iniciar una consulta médica, registrar notas de evolución o emitir recetas, seleccione un paciente del catálogo. Presione el botón a continuación para abrir la búsqueda." 
                                        FontSize="13" 
                                        Foreground="{DynamicResource ThemeTextSecondary}" 
                                        TextAlignment="Center" 
                                        TextWrapping="Wrap" 
                                        LineHeight="19" 
                                        HorizontalAlignment="Center" />
+
+                            <Button Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding OpenSelectPatientModalCommand}" 
+                                    HorizontalAlignment="Center" 
+                                    Margin="0,20,0,0" 
+                                    Padding="24,10" 
+                                    Cursor="Hand"
+                                    ToolTip="Abrir el catálogo de pacientes para buscar, seleccionar o registrar">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconUser}" 
+                                          Fill="{DynamicResource ThemeAccentText}" 
+                                          Width="16" Height="16" 
+                                          Stretch="Uniform" 
+                                          Margin="0,0,8,0" 
+                                          VerticalAlignment="Center" />
+                                    <TextBlock Text="Seleccionar Paciente" 
+                                               FontWeight="Bold" 
+                                               FontSize="13" 
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Border>
 
@@ -701,11 +722,27 @@
                                                                                    FontFamily="Consolas" 
                                                                                    Foreground="{DynamicResource ThemeAccentText}" />
                                                                     </Border>
-                                                                    <TextBlock Text="{Binding Date, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" 
+                                                                    <TextBlock Text="{Binding Date, StringFormat='{}{0:dd/MM/yyyy}'}" 
                                                                                FontWeight="SemiBold" 
                                                                                FontSize="12" 
                                                                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                                                                VerticalAlignment="Center" />
+                                                                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                                                            BorderThickness="1" 
+                                                                            CornerRadius="4" 
+                                                                            Padding="6,1.5" 
+                                                                            Margin="8,0,0,0" 
+                                                                            VerticalAlignment="Center">
+                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <TextBlock Text="⏱️ " FontSize="10" VerticalAlignment="Center" />
+                                                                            <TextBlock Text="{Binding FormattedScheduleTime}" 
+                                                                                       FontSize="11" 
+                                                                                       FontWeight="SemiBold" 
+                                                                                       Foreground="{DynamicResource ThemeAccent}" 
+                                                                                       VerticalAlignment="Center" />
+                                                                        </StackPanel>
+                                                                    </Border>
                                                                 </StackPanel>
                                                                 <TextBlock Text="{Binding ChiefComplaint, StringFormat='Motivo: {0}'}" 
                                                                            FontWeight="Bold" 

@@ -2,6 +2,26 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.19] - 2026-10-04
+
+### Añadido
+* **Botón 'Seleccionar Paciente' en Tarjeta de Estado sin Paciente**:
+  * Integración de un botón interactivo y visible con estilo de acento (`AccentButton`) e icono de usuario (`IconUser`) dentro de la tarjeta central cuando no hay paciente seleccionado (`SelectedPatient == null`).
+  * Facilita al usuario volver a desplegar la ventana de selección de pacientes de manera intuitiva y sin depender únicamente del clic en el fondo de la tarjeta.
+* **Persistencia de Fecha y Hora de Inicio y Final de Consulta en SQLite**:
+  * Nuevos campos `StartedAt` y `EndedAt` (`DateTime?`) en el modelo de consulta clínica `PatientConsultation` y entidad `ActiveConsultation`.
+  * Migraciones automáticas DDL en `DatabaseInitializer` (`ALTER TABLE PatientConsultations ADD COLUMN StartedAt...` y `ADD COLUMN EndedAt...`) para bases de datos existentes sin pérdida de información.
+  * Lógica de guardado en `SaveActiveConsultationToDbAsync`: reúne automáticamente el motivo de consulta, signos vitales, exploración física, diagnóstico, tratamiento, indicaciones generales y recetas, registrando las marcas de tiempo de inicio y fin de la atención médica.
+  * Invocación automática en `FinalizeConsultationAsync` y `HandleSaleCompletedFromConsultation` garantizando que toda consulta médica finalizada quede registrada en la base de datos aun si el médico no abrió el modal manual de guardado.
+* **Indicador Visual de Horario y Duración en Historial de Consultas**:
+  * Badge visual `⏱️` con horario (`HH:mm - HH:mm`) y duración calculada en minutos y segundos (`FormattedScheduleTime` y `FormattedDuration`) en cada nota del historial de consultas del paciente y en sus tooltips.
+* **Cobertura de Pruebas Unitarias Ampliada a 86 Pruebas**:
+  * Incorporación de pruebas unitarias específicas:
+    * `MedicalRecords_FinalizeConsultation_SavesConsultationWithStartedAtAndEndedAtInDatabase`: comprueba el inicio, finalización y persistencia con `StartedAt` y `EndedAt` en base de datos SQLite.
+    * `PatientConsultation_DurationAndFormattedScheduleTime_CalculatesCorrectly`: valida el cálculo exacto de la duración y formateo del rango de horas.
+
+---
+
 ## [1.3.18] - 2026-10-04
 
 ### Añadido

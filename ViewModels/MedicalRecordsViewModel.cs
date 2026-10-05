@@ -1098,6 +1098,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedPatientChanged(PatientRecord? value)
     {
+        _isCurrentConsultationSaved = false;
         OnPropertyChanged(nameof(PatientActionButtonText));
         OnPropertyChanged(nameof(HasSelectedPatient));
         if (value != null)
@@ -1932,11 +1933,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var cleanConsultationTA = ConsultationTA.Trim().TrimEnd('/');
         var vitalSignsFormatted = $"TA: {cleanConsultationTA} mmHg | FC: {ConsultationFC.Trim()} lpm | FR: {ConsultationFR.Trim()} rpm | Temp: {ConsultationTemp.Trim()} °C | Peso: {ConsultationWeight.Trim()} kg | Talla: {ConsultationHeight.Trim()} m | IMC: {ConsultationIMC.Trim()}";
 
+        var startAt = _consultationService?.CurrentConsultation?.StartedAt ?? DateTime.Now;
+        var endAt = DateTime.Now;
+
         var consultation = new PatientConsultation
         {
             PatientRecordId = SelectedPatient.Id,
             Folio = string.IsNullOrWhiteSpace(ConsultationFolio) ? $"CNS-{DateTime.Today:yyyyMMdd}-001" : ConsultationFolio.Trim(),
             Date = DateTime.Now,
+            StartedAt = startAt,
+            EndedAt = endAt,
             ChiefComplaint = ConsultationChiefComplaint.Trim(),
             VitalSigns = vitalSignsFormatted,
             PhysicalExamination = ConsultationPhysicalExam.Trim(),
@@ -1945,6 +1951,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             Notes = ConsultationNotes.Trim(),
             Prescriptions = new List<PatientPrescriptionItem>(ConsultationPrescriptions)
         };
+
+        _isCurrentConsultationSaved = true;
 
         if (_inventoryService != null)
         {
@@ -2014,6 +2022,93 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private bool _isCurrentConsultationSaved;
+
+    public async Task<PatientConsultation?> SaveActiveConsultationToDbAsync(DateTime? endedAt = null)
+    {
+        if (SelectedPatient == null) return null;
+        if (_isCurrentConsultationSaved) return null;
+
+        var end = endedAt ?? DateTime.Now;
+        var active = _consultationService?.CurrentConsultation;
+        var start = active?.StartedAt ?? DateTime.Now;
+
+        var cleanConsultationTA = (ConsultationTA ?? string.Empty).Trim().TrimEnd('/');
+        var vitalSignsFormatted = !string.IsNullOrWhiteSpace(cleanConsultationTA) || !string.IsNullOrWhiteSpace(ConsultationFC)
+            ? $"TA: {cleanConsultationTA} mmHg | FC: {ConsultationFC?.Trim()} lpm | FR: {ConsultationFR?.Trim()} rpm | Temp: {ConsultationTemp?.Trim()} °C | Peso: {ConsultationWeight?.Trim()} kg | Talla: {ConsultationHeight?.Trim()} m | IMC: {ConsultationIMC?.Trim()}"
+            : (SelectedPatient.VitalSigns ?? string.Empty);
+
+        var chiefComplaint = !string.IsNullOrWhiteSpace(ConsultationChiefComplaint)
+            ? ConsultationChiefComplaint.Trim()
+            : (!string.IsNullOrWhiteSpace(active?.ChiefComplaint) ? active.ChiefComplaint : "Consulta Médica General");
+
+        var diagnosis = !string.IsNullOrWhiteSpace(ConsultationDiagnosis)
+            ? ConsultationDiagnosis.Trim()
+            : "Consulta Médica General";
+
+        var treatmentPlan = !string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
+            ? ConsultationTreatmentPlan.Trim()
+            : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : "Tratamiento e indicaciones médicas según receta.");
+
+        var folio = !string.IsNullOrWhiteSpace(active?.Folio)
+            ? active.Folio
+            : (!string.IsNullOrWhiteSpace(ConsultationFolio) ? ConsultationFolio.Trim() : $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}");
+
+        var prescriptions = ConsultationPrescriptions.Count > 0
+            ? new List<PatientPrescriptionItem>(ConsultationPrescriptions)
+            : (SelectedPatient.ActivePrescription ?? new List<PatientPrescriptionItem>());
+
+        var consultation = new PatientConsultation
+        {
+            PatientRecordId = SelectedPatient.Id,
+            Folio = folio,
+            Date = DateTime.Now,
+            StartedAt = start,
+            EndedAt = end,
+            ChiefComplaint = chiefComplaint,
+            VitalSigns = vitalSignsFormatted,
+            PhysicalExamination = ConsultationPhysicalExam?.Trim() ?? string.Empty,
+            Diagnosis = diagnosis,
+            TreatmentPlan = treatmentPlan,
+            Notes = ConsultationNotes?.Trim() ?? string.Empty,
+            Prescriptions = prescriptions
+        };
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.AddConsultationNoteAsync(SelectedPatient.Id, consultation);
+                _isCurrentConsultationSaved = true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error al guardar nota de consulta en BD: {ex.Message}");
+            }
+        }
+        else
+        {
+            SelectedPatient.LastVisit = consultation.Date;
+            SelectedPatient.LastDiagnosis = consultation.Diagnosis;
+            SelectedPatient.VitalSigns = consultation.VitalSigns;
+            SelectedPatient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
+            SelectedPatient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
+            _isCurrentConsultationSaved = true;
+        }
+
+        if (!SelectedPatient.Consultations.Any(c => c.Folio == consultation.Folio))
+        {
+            SelectedPatient.Consultations.Insert(0, consultation);
+        }
+        if (!ConsultationsHistory.Any(c => c.Folio == consultation.Folio))
+        {
+            ConsultationsHistory.Insert(0, consultation);
+            SelectedHistoryConsultation = consultation;
+        }
+
+        return consultation;
+    }
+
     [RelayCommand]
     public void StartActiveConsultation()
     {
@@ -2022,6 +2117,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             OpenSelectPatientModal();
             return;
         }
+
+        _isCurrentConsultationSaved = false;
 
         if (_consultationService != null)
         {
@@ -2048,6 +2145,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             IsInfoModalVisible = true;
             return;
         }
+
+        // Registrar la fecha y hora final de la consulta y guardarla en BD si aún no se ha guardado
+        var endedAt = DateTime.Now;
+        if (_consultationService.CurrentConsultation != null)
+        {
+            _consultationService.CurrentConsultation.EndedAt = endedAt;
+        }
+        await SaveActiveConsultationToDbAsync(endedAt);
 
         PosVM ??= new PosViewModel(_inventoryService, _consultationService);
         PosVM.IsEmbeddedInModal = true;
@@ -2168,8 +2273,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SyncActiveConsultation();
     }
 
-    public void HandleSaleCompletedFromConsultation()
+    public async void HandleSaleCompletedFromConsultation()
     {
+        // 0. Si por alguna razón no se guardó la nota de consulta en BD, asegurarse de persistirla
+        if (!_isCurrentConsultationSaved && SelectedPatient != null)
+        {
+            await SaveActiveConsultationToDbAsync(DateTime.Now);
+        }
+        _isCurrentConsultationSaved = false;
+
         // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
         ClosePosModal();
         IsPrescriptionModalOpen = false;

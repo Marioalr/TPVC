@@ -39,7 +39,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.3.18";
+    private string _appVersion = "1.3.19";
 
     // ==========================================
     // PALETA GLOBAL DE COMANDOS (Ctrl + K / Ctrl + P)

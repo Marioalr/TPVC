@@ -73,6 +73,22 @@ public static class DatabaseInitializer
 
         try
         {
+            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN StartedAt TEXT NULL;");
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN EndedAt TEXT NULL;");
+        }
+        catch
+        {
+        }
+
+        try
+        {
             context.Database.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ClinicalServices (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,6 +152,8 @@ public static class DatabaseInitializer
                     PatientRecordId INTEGER NOT NULL,
                     Folio TEXT NOT NULL,
                     Date TEXT NOT NULL,
+                    StartedAt TEXT NULL,
+                    EndedAt TEXT NULL,
                     ChiefComplaint TEXT NOT NULL,
                     VitalSigns TEXT NOT NULL,
                     PhysicalExamination TEXT NOT NULL,
@@ -532,6 +550,8 @@ public static class DatabaseInitializer
                     {
                         Folio = "CNS-20260402-001",
                         Date = DateTime.Today.AddDays(-2),
+                        StartedAt = DateTime.Today.AddDays(-2).AddHours(10).AddMinutes(15),
+                        EndedAt = DateTime.Today.AddDays(-2).AddHours(10).AddMinutes(40),
                         ChiefComplaint = "Dolor de garganta intenso y fiebre",
                         VitalSigns = "TA: 120/80 mmHg | FC: 76 lpm | FR: 18 rpm | Temp: 37.8 °C | Peso: 78 kg | Talla: 1.74 m | IMC: 25.8 (Sobrepeso leve)",
                         PhysicalExamination = "Orofaringe hiperémica, hipertrofia amigdalina grado III con exudado blanquecino en criptas. Adenopatías submandibulares palpables dolorosas.",
@@ -577,6 +597,8 @@ public static class DatabaseInitializer
                     {
                         Folio = "CNS-20260329-002",
                         Date = DateTime.Today.AddDays(-6),
+                        StartedAt = DateTime.Today.AddDays(-6).AddHours(11).AddMinutes(0),
+                        EndedAt = DateTime.Today.AddDays(-6).AddHours(11).AddMinutes(28),
                         ChiefComplaint = "Control mensual de enfermedades crónicas",
                         VitalSigns = "TA: 135/85 mmHg | FC: 68 lpm | FR: 16 rpm | Temp: 36.4 °C | Peso: 65 kg | Talla: 1.58 m | IMC: 26.0 (Sobrepeso)",
                         PhysicalExamination = "Paciente orientada, ruidos cardíacos rítmicos sin soplos, campos pulmonares limpios, pulsos periféricos presentes y simétricos.",
@@ -622,6 +644,8 @@ public static class DatabaseInitializer
                     {
                         Folio = "CNS-20260321-003",
                         Date = DateTime.Today.AddDays(-14),
+                        StartedAt = DateTime.Today.AddDays(-14).AddHours(16).AddMinutes(20),
+                        EndedAt = DateTime.Today.AddDays(-14).AddHours(16).AddMinutes(45),
                         ChiefComplaint = "Torcedura y dolor en tobillo derecho al bajar escalones",
                         VitalSigns = "TA: 110/70 mmHg | FC: 72 lpm | FR: 16 rpm | Temp: 36.6 °C | Peso: 56 kg | Talla: 1.62 m | IMC: 21.3 (Peso normal)",
                         PhysicalExamination = "Edema leve en maléolo externo derecho, dolor a la inversión forzada, sin crepitación ósea, llenado capilar distal < 2 segundos.",
@@ -667,6 +691,8 @@ public static class DatabaseInitializer
                     {
                         Folio = "CNS-20260314-004",
                         Date = DateTime.Today.AddDays(-21),
+                        StartedAt = DateTime.Today.AddDays(-21).AddHours(9).AddMinutes(10),
+                        EndedAt = DateTime.Today.AddDays(-21).AddHours(9).AddMinutes(35),
                         ChiefComplaint = "Revisión y retiro de puntos de herida en brazo",
                         VitalSigns = "TA: 125/80 mmHg | FC: 78 lpm | FR: 17 rpm | Temp: 36.5 °C | Peso: 82 kg | Talla: 1.78 m | IMC: 25.9 (Sobrepeso leve)",
                         PhysicalExamination = "Herida de 3 cm en cara anterior de tercio medio de antebrazo izquierdo, bordes afrontados, sin secreción ni eritema circundante.",

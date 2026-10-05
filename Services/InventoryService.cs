@@ -681,6 +681,15 @@ public class InventoryService
         consultation.PatientRecordId = patientId;
         consultation.PrescriptionsJson = System.Text.Json.JsonSerializer.Serialize(consultation.Prescriptions);
 
+        if (!consultation.StartedAt.HasValue)
+        {
+            consultation.StartedAt = consultation.Date;
+        }
+        if (!consultation.EndedAt.HasValue)
+        {
+            consultation.EndedAt = DateTime.Now;
+        }
+
         // Actualizar datos del paciente con esta última consulta
         patient.LastVisit = consultation.Date;
         if (!string.IsNullOrWhiteSpace(consultation.Diagnosis))

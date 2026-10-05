@@ -40,6 +40,8 @@ public class PatientConsultation
     public PatientRecord? PatientRecord { get; set; }
     public string Folio { get; set; } = string.Empty; // ej. CNS-20260404-001
     public DateTime Date { get; set; } = DateTime.Now;
+    public DateTime? StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
     public string ChiefComplaint { get; set; } = string.Empty; // Motivo de consulta
     public string VitalSigns { get; set; } = string.Empty; // TA, FC, FR, Temp, Peso, Talla, IMC
     public string PhysicalExamination { get; set; } = string.Empty; // Exploración física
@@ -80,6 +82,35 @@ public class PatientConsultation
         {
             _prescriptions = value ?? new();
             PrescriptionsJson = JsonSerializer.Serialize(_prescriptions);
+        }
+    }
+
+    [NotMapped]
+    public TimeSpan? Duration => (StartedAt.HasValue && EndedAt.HasValue && EndedAt.Value >= StartedAt.Value)
+        ? (EndedAt.Value - StartedAt.Value)
+        : null;
+
+    [NotMapped]
+    public string FormattedDuration => Duration.HasValue
+        ? (Duration.Value.TotalHours >= 1
+            ? $"{(int)Duration.Value.TotalHours}h {Duration.Value.Minutes}m {Duration.Value.Seconds}s"
+            : $"{(int)Duration.Value.TotalMinutes} min {Duration.Value.Seconds} s")
+        : string.Empty;
+
+    [NotMapped]
+    public string FormattedScheduleTime
+    {
+        get
+        {
+            if (StartedAt.HasValue && EndedAt.HasValue)
+            {
+                return $"{StartedAt.Value:HH:mm} - {EndedAt.Value:HH:mm} ({FormattedDuration})";
+            }
+            if (StartedAt.HasValue)
+            {
+                return $"Inicio: {StartedAt.Value:HH:mm}";
+            }
+            return Date.ToString("HH:mm");
         }
     }
 }

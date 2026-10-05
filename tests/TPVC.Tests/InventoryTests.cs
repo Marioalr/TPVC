@@ -2530,6 +2530,67 @@ public class InventoryTests
     }
 
     [TestMethod]
+    public async Task MedicalRecords_FinalizeConsultation_SavesConsultationWithStartedAtAndEndedAtInDatabase()
+    {
+        var consultService = new ConsultationService();
+        var mainVm = new MainViewModel(_inventoryService, consultService, new ThemeService(), new AppUpdateService());
+        await mainVm.MedicalRecordsVM.LoadPatientsAsync();
+
+        var patient = mainVm.MedicalRecordsVM.Patients.First();
+        mainVm.MedicalRecordsVM.SelectPatient(patient);
+
+        var startTime = DateTime.Now.AddMinutes(-20);
+        mainVm.MedicalRecordsVM.StartActiveConsultation();
+        Assert.IsTrue(consultService.HasActiveConsultation);
+        Assert.IsNotNull(consultService.CurrentConsultation);
+
+        // Ajustar hora de inicio simulada
+        consultService.CurrentConsultation.StartedAt = startTime;
+        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Cefalea tensional recurrente";
+        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
+        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Reposo, hidratación y analgésico según necesidad";
+
+        // Finalizar consulta: debe guardar la consulta en base de datos con StartedAt y EndedAt
+        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+
+        // Verificar en base de datos
+        var dbPatients = await _inventoryService.GetPatientsAsync();
+        var updatedPatient = dbPatients.First(p => p.Id == patient.Id);
+
+        var savedConsultation = updatedPatient.Consultations.FirstOrDefault(c => c.ChiefComplaint == "Cefalea tensional recurrente");
+        Assert.IsNotNull(savedConsultation, "La consulta debe haberse guardado en la base de datos");
+        Assert.IsNotNull(savedConsultation.StartedAt, "StartedAt debe estar registrado en BD");
+        Assert.IsNotNull(savedConsultation.EndedAt, "EndedAt debe estar registrado en BD");
+        Assert.AreEqual(startTime.Minute, savedConsultation.StartedAt.Value.Minute);
+        Assert.IsTrue(savedConsultation.EndedAt.Value >= savedConsultation.StartedAt.Value);
+        Assert.IsTrue(savedConsultation.Duration.HasValue);
+        Assert.IsTrue(savedConsultation.Duration.Value.TotalMinutes >= 19.9);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(savedConsultation.FormattedScheduleTime));
+    }
+
+    [TestMethod]
+    public void PatientConsultation_DurationAndFormattedScheduleTime_CalculatesCorrectly()
+    {
+        var start = new DateTime(2026, 10, 4, 10, 0, 0);
+        var end = new DateTime(2026, 10, 4, 10, 25, 30);
+
+        var consult = new PatientConsultation
+        {
+            Folio = "CNS-20261004-001",
+            Date = start.Date,
+            StartedAt = start,
+            EndedAt = end,
+            ChiefComplaint = "Control general"
+        };
+
+        Assert.IsNotNull(consult.Duration);
+        Assert.AreEqual(25, (int)consult.Duration.Value.TotalMinutes);
+        Assert.AreEqual(30, consult.Duration.Value.Seconds);
+        Assert.IsTrue(consult.FormattedDuration.Contains("25 min 30 s"));
+        Assert.IsTrue(consult.FormattedScheduleTime.Contains("10:00 - 10:25"));
+    }
+
+    [TestMethod]
     public void MainViewModel_NavigateToRecords_WithoutPatient_OpensSelectPatientModalImmediately()
     {
         var mainVm = new MainViewModel(_inventoryService, new ConsultationService(), new ThemeService(), new AppUpdateService());

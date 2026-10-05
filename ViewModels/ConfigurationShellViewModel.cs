@@ -15,7 +15,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = "Dashboard";
 
     [ObservableProperty]
-    private string _appVersion = "v1.3.18";
+    private string _appVersion = "v1.3.19";
 
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }

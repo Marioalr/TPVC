@@ -32,6 +32,9 @@ public partial class ActiveConsultation : ObservableObject
     public string PatientRecordNumber { get; set; } = string.Empty;
     public string ChiefComplaint { get; set; } = "Consulta Médica General";
     public DateTime StartedAt { get; set; } = DateTime.Now;
+    
+    [ObservableProperty]
+    private DateTime? _endedAt;
 
     [ObservableProperty]
     private string _vitalSigns = string.Empty;
