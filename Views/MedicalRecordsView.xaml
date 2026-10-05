@@ -2902,24 +2902,25 @@
                             Padding="12" 
                             Margin="0,0,0,14">
                         <StackPanel>
-                            <Grid Margin="0,0,0,8">
+                            <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="2.2*" />
+                                    <ColumnDefinition Width="2.5*" />
                                     <ColumnDefinition Width="3*" />
                                     <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Búsqueda / Nombre de Medicamento -->
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="Medicamento *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding PrescriptionSearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="PrescriptionSearchTextBox"
+                                                 Text="{Binding PrescriptionSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="PrescriptionSearchTextBox_PreviewKeyDown" />
                                         <TextBlock Text="Escriba o busque medicamento..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -2932,14 +2933,16 @@
 
                                 <!-- Indicaciones / Posología -->
                                 <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                    <TextBlock Text="Indicaciones / Posología *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBlock Text="Indicaciones / Posología" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding PrescriptionDosage, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="PrescriptionDosageTextBox"
+                                                 Text="{Binding PrescriptionDosage, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="PrescriptionAuxInput_PreviewKeyDown" />
                                         <TextBlock Text="Ej: 1 tableta c/8h por 5 días..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -2951,73 +2954,99 @@
                                 </StackPanel>
 
                                 <!-- Cantidad -->
-                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                <StackPanel Grid.Column="2">
                                     <TextBlock Text="Cantidad" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding PrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBox x:Name="PrescriptionQuantityTextBox"
+                                             Text="{Binding PrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}" 
                                              FontSize="12" 
                                              Padding="6,6" 
                                              HorizontalContentAlignment="Center" 
                                              Background="{DynamicResource ThemeBackground}" 
                                              BorderBrush="{DynamicResource ThemeBorder}" 
-                                             Foreground="{DynamicResource ThemeText}" />
-                                </StackPanel>
-
-                                <!-- Botón Agregar -->
-                                <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
-                                    <Button Style="{DynamicResource AccentButton}" 
-                                            Command="{Binding AddPrescriptionItemToPatientCommand}" 
-                                            Padding="14,6" 
-                                            ToolTip="Agregar medicamento a la receta">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource IconPlus}" 
-                                                  Fill="{DynamicResource ThemeAccentText}" 
-                                                  Width="11" Height="11" 
-                                                  Stretch="Uniform" 
-                                                  Margin="0,0,6,0" />
-                                            <TextBlock Text="+ Recetar" FontSize="12" FontWeight="Bold" />
-                                        </StackPanel>
-                                    </Button>
+                                             Foreground="{DynamicResource ThemeText}"
+                                             PreviewKeyDown="PrescriptionAuxInput_PreviewKeyDown" />
                                 </StackPanel>
                             </Grid>
 
-                            <!-- Dropdown de Sugerencias de Inventario -->
+                            <!-- Indicador de atajos de teclado -->
+                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="6" 
+                                    Padding="8,5" 
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="💡 Flechas ↑ ↓ para navegar en la lista, Enter o clic para agregar a la receta, Esc para salir" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </Border>
+
+                            <!-- Lista de Sugerencias de Inventario -->
                             <Border Visibility="{Binding IsPrescriptionDropdownOpen, Converter={StaticResource BoolToVis}}" 
                                     Background="{DynamicResource ThemeBackground}" 
                                     BorderBrush="{DynamicResource ThemeAccent}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 
-                                    Margin="0,4,0,0" 
-                                    Padding="4" 
-                                    MaxHeight="140">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding PrescriptionProductSuggestions}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding DataContext.SelectPrescriptionProductCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                        CommandParameter="{Binding}" 
-                                                        HorizontalContentAlignment="Left" 
-                                                        Padding="8,5" 
-                                                        Margin="0,0,0,2" 
-                                                        BorderThickness="0">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0">
-                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                            <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Stock, StringFormat='Stock: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
-                                                        <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                    Padding="2" 
+                                    MaxHeight="160">
+                                <ListBox x:Name="PrescriptionSuggestionsListBox"
+                                         ItemsSource="{Binding PrescriptionProductSuggestions}"
+                                         SelectedItem="{Binding SelectedPrescriptionProduct, Mode=TwoWay}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PreviewKeyDown="PrescriptionSuggestionsListBox_PreviewKeyDown"
+                                         PreviewMouseLeftButtonUp="PrescriptionSuggestionsListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="8,6" />
+                                            <Setter Property="Margin" Value="0,0,0,2" />
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" 
+                                                                Background="{TemplateBinding Background}" 
+                                                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                                                BorderThickness="1" 
+                                                                CornerRadius="6" 
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceHighlight}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryTransparent}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemePrimary}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Stock, StringFormat='Stock: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </Border>
                         </StackPanel>
                     </Border>
@@ -3242,24 +3271,25 @@
                             Padding="12" 
                             Margin="0,0,0,14">
                         <StackPanel>
-                            <Grid Margin="0,0,0,8">
+                            <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="2.2*" />
+                                    <ColumnDefinition Width="2.5*" />
                                     <ColumnDefinition Width="3*" />
                                     <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Búsqueda / Nombre de Insumo -->
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="Insumo / Material *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding SupplySearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="SupplySearchTextBox"
+                                                 Text="{Binding SupplySearchText, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="SupplySearchTextBox_PreviewKeyDown" />
                                         <TextBlock Text="Escriba o busque insumo..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -3274,12 +3304,14 @@
                                 <StackPanel Grid.Column="1" Margin="0,0,8,0">
                                     <TextBlock Text="Indicaciones / Uso Clínico" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding SupplyInstructions, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="SupplyInstructionsTextBox"
+                                                 Text="{Binding SupplyInstructions, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="SupplyAuxInput_PreviewKeyDown" />
                                         <TextBlock Text="Ej: Aplicar en herida limpia c/12h..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -3291,34 +3323,31 @@
                                 </StackPanel>
 
                                 <!-- Cantidad -->
-                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                <StackPanel Grid.Column="2">
                                     <TextBlock Text="Cantidad" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding SupplyQuantity, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBox x:Name="SupplyQuantityTextBox"
+                                             Text="{Binding SupplyQuantity, UpdateSourceTrigger=PropertyChanged}" 
                                              FontSize="12" 
                                              Padding="6,6" 
                                              HorizontalContentAlignment="Center" 
                                              Background="{DynamicResource ThemeBackground}" 
                                              BorderBrush="{DynamicResource ThemeBorder}" 
-                                             Foreground="{DynamicResource ThemeText}" />
-                                </StackPanel>
-
-                                <!-- Botón Agregar -->
-                                <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
-                                    <Button Style="{DynamicResource AccentButton}" 
-                                            Command="{Binding AddSupplyItemToPatientCommand}" 
-                                            Padding="14,6" 
-                                            ToolTip="Agregar insumo clínico a la lista">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource IconPlus}" 
-                                                  Fill="{DynamicResource ThemeAccentText}" 
-                                                  Width="11" Height="11" 
-                                                  Stretch="Uniform" 
-                                                  Margin="0,0,6,0" />
-                                            <TextBlock Text="+ Insumo" FontSize="12" FontWeight="Bold" />
-                                        </StackPanel>
-                                    </Button>
+                                             Foreground="{DynamicResource ThemeText}"
+                                             PreviewKeyDown="SupplyAuxInput_PreviewKeyDown" />
                                 </StackPanel>
                             </Grid>
+
+                            <!-- Indicador de atajos de teclado -->
+                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="6" 
+                                    Padding="8,5" 
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="💡 Flechas ↑ ↓ para navegar en la lista, Enter o clic para agregar insumo, Esc para salir" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </Border>
 
                             <!-- Dropdown de Sugerencias de Inventario para Insumos -->
                             <Border Visibility="{Binding IsSupplyDropdownOpen, Converter={StaticResource BoolToVis}}" 
@@ -3326,38 +3355,67 @@
                                     BorderBrush="{DynamicResource ThemeAccent}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 
-                                    Margin="0,4,0,0" 
-                                    Padding="4" 
-                                    MaxHeight="140">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding SupplyProductSuggestions}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding DataContext.SelectSupplyProductCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                        CommandParameter="{Binding}" 
-                                                        HorizontalContentAlignment="Left" 
-                                                        Padding="8,5" 
-                                                        Margin="0,0,0,2" 
-                                                        BorderThickness="0">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0">
-                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                            <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Stock, StringFormat='Stock: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
-                                                        <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                    Padding="2" 
+                                    MaxHeight="160">
+                                <ListBox x:Name="SupplySuggestionsListBox"
+                                         ItemsSource="{Binding SupplyProductSuggestions}"
+                                         SelectedItem="{Binding SelectedSupplyProduct, Mode=TwoWay}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PreviewKeyDown="SupplySuggestionsListBox_PreviewKeyDown"
+                                         PreviewMouseLeftButtonUp="SupplySuggestionsListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="8,6" />
+                                            <Setter Property="Margin" Value="0,0,0,2" />
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" 
+                                                                Background="{TemplateBinding Background}" 
+                                                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                                                BorderThickness="1" 
+                                                                CornerRadius="6" 
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceHighlight}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryTransparent}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemePrimary}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Stock, StringFormat='Stock: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </Border>
                         </StackPanel>
                     </Border>
@@ -3563,24 +3621,25 @@
                             Padding="12" 
                             Margin="0,0,0,14">
                         <StackPanel>
-                            <Grid Margin="0,0,0,8">
+                            <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="2.2*" />
+                                    <ColumnDefinition Width="2.5*" />
                                     <ColumnDefinition Width="3*" />
                                     <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Búsqueda / Nombre de Servicio -->
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="Servicio / Procedimiento *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding ServiceModalSearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="ServiceModalSearchTextBox"
+                                                 Text="{Binding ServiceModalSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="ServiceModalSearchTextBox_PreviewKeyDown" />
                                         <TextBlock Text="Escriba o busque servicio..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -3595,12 +3654,14 @@
                                 <StackPanel Grid.Column="1" Margin="0,0,8,0">
                                     <TextBlock Text="Notas / Observaciones" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                     <Grid>
-                                        <TextBox Text="{Binding ServiceModalNotes, UpdateSourceTrigger=PropertyChanged}" 
+                                        <TextBox x:Name="ServiceModalNotesTextBox"
+                                                 Text="{Binding ServiceModalNotes, UpdateSourceTrigger=PropertyChanged}" 
                                                  FontSize="12" 
                                                  Padding="8,6" 
                                                  Background="{DynamicResource ThemeBackground}" 
                                                  BorderBrush="{DynamicResource ThemeBorder}" 
-                                                 Foreground="{DynamicResource ThemeText}" />
+                                                 Foreground="{DynamicResource ThemeText}"
+                                                 PreviewKeyDown="ServiceModalAuxInput_PreviewKeyDown" />
                                         <TextBlock Text="Ej: Sutura en brazo, curación menor..." 
                                                    FontSize="11" 
                                                    Foreground="{DynamicResource ThemeTextSecondary}" 
@@ -3612,34 +3673,31 @@
                                 </StackPanel>
 
                                 <!-- Cantidad -->
-                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                <StackPanel Grid.Column="2">
                                     <TextBlock Text="Cantidad" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding ServiceModalQuantity, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBox x:Name="ServiceModalQuantityTextBox"
+                                             Text="{Binding ServiceModalQuantity, UpdateSourceTrigger=PropertyChanged}" 
                                              FontSize="12" 
                                              Padding="6,6" 
                                              HorizontalContentAlignment="Center" 
                                              Background="{DynamicResource ThemeBackground}" 
                                              BorderBrush="{DynamicResource ThemeBorder}" 
-                                             Foreground="{DynamicResource ThemeText}" />
-                                </StackPanel>
-
-                                <!-- Botón Agregar -->
-                                <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
-                                    <Button Style="{DynamicResource AccentButton}" 
-                                            Command="{Binding AddServiceItemToPatientCommand}" 
-                                            Padding="14,6" 
-                                            ToolTip="Agregar servicio clínico a la lista">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource IconPlus}" 
-                                                  Fill="{DynamicResource ThemeAccentText}" 
-                                                  Width="11" Height="11" 
-                                                  Stretch="Uniform" 
-                                                  Margin="0,0,6,0" />
-                                            <TextBlock Text="+ Servicio" FontSize="12" FontWeight="Bold" />
-                                        </StackPanel>
-                                    </Button>
+                                             Foreground="{DynamicResource ThemeText}"
+                                             PreviewKeyDown="ServiceModalAuxInput_PreviewKeyDown" />
                                 </StackPanel>
                             </Grid>
+
+                            <!-- Indicador de atajos de teclado -->
+                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="6" 
+                                    Padding="8,5" 
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="💡 Flechas ↑ ↓ para navegar en la lista, Enter o clic para agregar el servicio, Esc para salir" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </Border>
 
                             <!-- Dropdown de Sugerencias del Catálogo de Servicios -->
                             <Border Visibility="{Binding IsServiceModalDropdownOpen, Converter={StaticResource BoolToVis}}" 
@@ -3647,38 +3705,67 @@
                                     BorderBrush="{DynamicResource ThemeAccent}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 
-                                    Margin="0,4,0,0" 
-                                    Padding="4" 
-                                    MaxHeight="140">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding ServiceModalSuggestions}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding DataContext.SelectServiceModalSuggestionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                        CommandParameter="{Binding}" 
-                                                        HorizontalContentAlignment="Left" 
-                                                        Padding="8,5" 
-                                                        Margin="0,0,0,2" 
-                                                        BorderThickness="0">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0">
-                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                            <TextBlock Text="{Binding Category, StringFormat='Categoría: {0}'}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Code}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
-                                                        <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                    Padding="2" 
+                                    MaxHeight="160">
+                                <ListBox x:Name="ServiceSuggestionsListBox"
+                                         ItemsSource="{Binding ServiceModalSuggestions}"
+                                         SelectedItem="{Binding SelectedServiceModalItem, Mode=TwoWay}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PreviewKeyDown="ServiceSuggestionsListBox_PreviewKeyDown"
+                                         PreviewMouseLeftButtonUp="ServiceSuggestionsListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="8,6" />
+                                            <Setter Property="Margin" Value="0,0,0,2" />
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" 
+                                                                Background="{TemplateBinding Background}" 
+                                                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                                                BorderThickness="1" 
+                                                                CornerRadius="6" 
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceHighlight}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryTransparent}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemePrimary}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding Category, StringFormat='Categoría: {0}'}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Code}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </Border>
                         </StackPanel>
                     </Border>

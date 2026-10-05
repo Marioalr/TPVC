@@ -2,6 +2,20 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.6.1] - 2026-10-05
+
+### Corregido
+* **Persistencia continua de la consulta activa ("Guardar Nota")**:
+  * Se corrigió el bug que finalizaba la consulta médica al pulsar el botón "Guardar Nota". Ahora "Guardar Nota" persiste el avance clínico y la receta directamente en la base de datos de manera atómica, manteniendo la consulta activa, los campos de captura editables y el temporizador en ejecución para continuar el trabajo clínico sin interrupciones.
+  * Soporte para múltiples guardados sucesivos del mismo folio sin generar registros duplicados ni violaciones de integridad referencial.
+
+### Mejorado
+* **Flujo ágil y navegación por teclado en ventanas modales de captura**:
+  * **Eliminación de botones de agregar**: Se retiraron los botones redundantes (+ Recetar, + Insumo, + Servicio) en las ventanas modales de Receta Médica, Insumos Clínicos y Servicios/Procedimientos Médicos.
+  * **Navegación con flechas (↑ / ↓)**: Desplazamiento fluido entre las sugerencias de medicamentos, insumos o servicios directamente desde la caja de búsqueda o la lista.
+  * **Agregar con Enter o Clic**: Al pulsar `Enter` o hacer clic sobre cualquier medicamento, insumo o servicio, se añade inmediatamente a la lista del paciente, se limpian los campos y se mantiene el foco listo para capturar el siguiente elemento.
+  * **Cierre con tecla Escape (Esc)**: Las ventanas modales de receta médica, insumos, servicios y expedientes ahora se cierran instantáneamente pulsando `Esc`.
+
 ## [1.6.0] - 2026-10-05
 
 ### Añadido

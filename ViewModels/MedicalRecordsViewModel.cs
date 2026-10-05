@@ -1070,21 +1070,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void ApplyPrescriptionSuggestions(string query)
     {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            PrescriptionProductSuggestions.Clear();
-            IsPrescriptionDropdownOpen = false;
-            return;
-        }
-
-        var q = TextSearch.Normalize(query);
-        var matches = AvailableProducts
-            .Where(p => IsProductMedication(p))
-            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code))
-            .Take(8)
-            .ToList();
+        var matches = string.IsNullOrWhiteSpace(query)
+            ? AvailableProducts.Where(IsProductMedication).Take(20).ToList()
+            : AvailableProducts
+                .Where(IsProductMedication)
+                .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
+                .Take(20)
+                .ToList();
 
         PrescriptionProductSuggestions = new ObservableCollection<Product>(matches);
+        SelectedPrescriptionProduct = PrescriptionProductSuggestions.FirstOrDefault();
         IsPrescriptionDropdownOpen = PrescriptionProductSuggestions.Count > 0;
     }
 
@@ -1095,21 +1090,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void ApplySupplySuggestions(string query)
     {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            SupplyProductSuggestions.Clear();
-            IsSupplyDropdownOpen = false;
-            return;
-        }
-
-        var q = TextSearch.Normalize(query);
-        var matches = AvailableProducts
-            .Where(p => IsProductSupply(p))
-            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code))
-            .Take(8)
-            .ToList();
+        var matches = string.IsNullOrWhiteSpace(query)
+            ? AvailableProducts.Where(IsProductSupply).Take(20).ToList()
+            : AvailableProducts
+                .Where(IsProductSupply)
+                .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
+                .Take(20)
+                .ToList();
 
         SupplyProductSuggestions = new ObservableCollection<Product>(matches);
+        SelectedSupplyProduct = SupplyProductSuggestions.FirstOrDefault();
         IsSupplyDropdownOpen = SupplyProductSuggestions.Count > 0;
     }
 
@@ -1120,20 +1110,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void ApplyServiceModalSuggestions(string query)
     {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            ServiceModalSuggestions.Clear();
-            IsServiceModalDropdownOpen = false;
-            return;
-        }
-
-        var q = TextSearch.Normalize(query);
-        var matches = Services
-            .Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category))
-            .Take(8)
-            .ToList();
+        var matches = string.IsNullOrWhiteSpace(query)
+            ? Services.Take(20).ToList()
+            : Services
+                .Where(s => TextSearch.Matches(TextSearch.Normalize(query), s.Name, s.Code, s.Category))
+                .Take(20)
+                .ToList();
 
         ServiceModalSuggestions = new ObservableCollection<ClinicalService>(matches);
+        SelectedServiceModalItem = ServiceModalSuggestions.FirstOrDefault();
         IsServiceModalDropdownOpen = ServiceModalSuggestions.Count > 0;
     }
 
@@ -2312,7 +2297,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task<PatientConsultation?> SaveActiveConsultationToDbAsync(DateTime? endedAt = null)
     {
         if (SelectedPatient == null) return null;
-        if (_isCurrentConsultationSaved) return null;
 
         var end = endedAt ?? DateTime.Now;
         var active = _consultationService?.CurrentConsultation;
@@ -2349,9 +2333,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ? ConsultationSystemsReview.Trim()
             : string.Empty;
 
-        var folio = !string.IsNullOrWhiteSpace(active?.Folio)
-            ? active.Folio
-            : (!string.IsNullOrWhiteSpace(ConsultationFolio) ? ConsultationFolio.Trim() : $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}");
+        var folio = !string.IsNullOrWhiteSpace(ConsultationFolio)
+            ? ConsultationFolio.Trim()
+            : (!string.IsNullOrWhiteSpace(active?.Folio)
+                ? active.Folio
+                : $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}");
+        ConsultationFolio = folio;
+        if (active != null) active.Folio = folio;
 
         var prescriptions = ConsultationPrescriptions.Count > 0
             ? new List<PatientPrescriptionItem>(ConsultationPrescriptions)
@@ -2400,11 +2388,25 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _isCurrentConsultationSaved = true;
         }
 
-        if (!SelectedPatient.Consultations.Any(c => c.Folio == consultation.Folio))
+        var existingInPatient = SelectedPatient.Consultations.FirstOrDefault(c => c.Folio == consultation.Folio);
+        if (existingInPatient != null)
+        {
+            var idx = SelectedPatient.Consultations.IndexOf(existingInPatient);
+            SelectedPatient.Consultations[idx] = consultation;
+        }
+        else
         {
             SelectedPatient.Consultations.Insert(0, consultation);
         }
-        if (!ConsultationsHistory.Any(c => c.Folio == consultation.Folio))
+
+        var existingInHistory = ConsultationsHistory.FirstOrDefault(c => c.Folio == consultation.Folio);
+        if (existingInHistory != null)
+        {
+            var idx = ConsultationsHistory.IndexOf(existingInHistory);
+            ConsultationsHistory[idx] = consultation;
+            SelectedHistoryConsultation = consultation;
+        }
+        else
         {
             ConsultationsHistory.Insert(0, consultation);
             SelectedHistoryConsultation = consultation;
@@ -2474,19 +2476,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var consultation = await SaveActiveConsultationToDbAsync(DateTime.Now);
         if (consultation != null)
         {
-            _consultationService?.CloseActiveConsultation();
-            SyncActiveConsultation();
-            StopConsultationTimer();
-
-            ConsultationChiefComplaint = string.Empty;
-            ConsultationPhysicalExam = string.Empty;
-            ConsultationSystemsReview = string.Empty;
-            ConsultationDiagnosis = string.Empty;
-            ConsultationTreatmentPlan = string.Empty;
-            ConsultationNotes = string.Empty;
+            // OJO: La consulta continúa activa para seguir trabajando en ella.
+            // Guardar nota es para persistir los datos en el expediente sin finalizar la consulta.
+            _isCurrentConsultationSaved = true;
             ConsultationErrorMessage = null;
 
-            InfoModalMessage = $"Nota médica guardada exitosamente en el expediente de {SelectedPatient.FullName}.\nFolio: {consultation.Folio}";
+            InfoModalMessage = $"✓ Avance de nota médica guardado exitosamente en el expediente de {SelectedPatient.FullName}.\nFolio: {consultation.Folio}\n\nLos datos han sido respaldados en la base de datos. La consulta continúa activa.";
             IsInfoModalVisible = true;
         }
     }
@@ -2739,28 +2734,32 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task AddPrescriptionItemToPatientAsync()
+    public async Task SelectAndAddPrescriptionProductAsync(Product? product)
     {
-        if (SelectedPatient == null)
+        if (SelectedPatient == null) return;
+
+        string name;
+        if (!string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
-            InfoModalMessage = "Seleccione un paciente para agregar medicamentos o insumos a la receta.";
-            IsInfoModalVisible = true;
+            name = PrescriptionMedicineName.Trim();
+        }
+        else if (product != null)
+        {
+            name = string.IsNullOrWhiteSpace(product.Presentation)
+                ? product.Name
+                : $"{product.Name} ({product.Presentation})";
+        }
+        else if (!string.IsNullOrWhiteSpace(PrescriptionSearchText))
+        {
+            name = PrescriptionSearchText.Trim();
+        }
+        else
+        {
             return;
         }
 
-        var name = !string.IsNullOrWhiteSpace(PrescriptionMedicineName) 
-            ? PrescriptionMedicineName.Trim() 
-            : PrescriptionSearchText.Trim();
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            InfoModalMessage = "Especifique el nombre del medicamento o consumible a prescribir.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        var dosage = string.IsNullOrWhiteSpace(PrescriptionDosage) 
-            ? "Según indicación médica" 
+        var dosage = string.IsNullOrWhiteSpace(PrescriptionDosage)
+            ? "Según indicación médica"
             : PrescriptionDosage.Trim();
 
         var qty = PrescriptionQuantity > 0 ? PrescriptionQuantity : 1;
@@ -2772,10 +2771,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             RecommendedQuantity = qty
         };
 
-        var currentList = new List<PatientPrescriptionItem>(SelectedPatient.ActivePrescription);
-        currentList.Add(newItem);
+        var currentList = new List<PatientPrescriptionItem>(SelectedPatient.ActivePrescription) { newItem };
         SelectedPatient.ActivePrescription = currentList;
         SelectedPatient.SyncPrescriptionJson();
+
+        if (ConsultationPrescriptions != null && !ConsultationPrescriptions.Any(p => p.MedicineName == newItem.MedicineName && p.Dosage == newItem.Dosage))
+        {
+            ConsultationPrescriptions.Add(newItem);
+        }
 
         if (_inventoryService != null)
         {
@@ -2783,9 +2786,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             {
                 await _inventoryService.SavePatientAsync(SelectedPatient);
             }
-            catch
-            {
-            }
+            catch { }
         }
 
         PrescriptionSearchText = string.Empty;
@@ -2793,9 +2794,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
         SelectedPrescriptionProduct = null;
-        IsPrescriptionDropdownOpen = false;
+        ApplyPrescriptionSuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task AddPrescriptionItemToPatientAsync()
+    {
+        await SelectAndAddPrescriptionProductAsync(SelectedPrescriptionProduct);
     }
 
     [RelayCommand]
@@ -3092,8 +3099,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PrescriptionMedicineName = string.Empty;
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
-        SelectedPrescriptionProduct = null;
-        IsPrescriptionDropdownOpen = false;
+        ApplyPrescriptionSuggestions(string.Empty);
         IsPrescriptionModalOpen = true;
     }
 
@@ -3145,8 +3151,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SupplyName = string.Empty;
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
-        SelectedSupplyProduct = null;
-        IsSupplyDropdownOpen = false;
+        ApplySupplySuggestions(string.Empty);
         IsSuppliesModalOpen = true;
     }
 
@@ -3167,18 +3172,31 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task AddSupplyItemToPatientAsync()
+    public async Task SelectAndAddSupplyProductAsync(Product? product)
     {
         if (SelectedPatient == null) return;
 
-        var name = !string.IsNullOrWhiteSpace(SupplyName)
-            ? SupplyName.Trim()
-            : SupplySearchText.Trim();
-
-        if (string.IsNullOrWhiteSpace(name))
+        string name;
+        decimal unitPrice;
+        if (!string.IsNullOrWhiteSpace(SupplyName))
         {
-            InfoModalMessage = "Especifique el nombre del insumo o material de curación a agregar.";
-            IsInfoModalVisible = true;
+            name = SupplyName.Trim();
+            unitPrice = 35.00m;
+        }
+        else if (product != null)
+        {
+            name = string.IsNullOrWhiteSpace(product.Presentation)
+                ? product.Name
+                : $"{product.Name} ({product.Presentation})";
+            unitPrice = product.Price;
+        }
+        else if (!string.IsNullOrWhiteSpace(SupplySearchText))
+        {
+            name = SupplySearchText.Trim();
+            unitPrice = 35.00m;
+        }
+        else
+        {
             return;
         }
 
@@ -3187,7 +3205,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             : SupplyInstructions.Trim();
 
         var qty = SupplyQuantity > 0 ? SupplyQuantity : 1;
-        var unitPrice = SelectedSupplyProduct?.Price ?? 35.00m;
 
         var newItem = new PatientSupplyItem
         {
@@ -3215,9 +3232,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
         SelectedSupplyProduct = null;
-        IsSupplyDropdownOpen = false;
+        ApplySupplySuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task AddSupplyItemToPatientAsync()
+    {
+        await SelectAndAddSupplyProductAsync(SelectedSupplyProduct);
     }
 
     [RelayCommand]
@@ -3345,8 +3368,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ServiceModalName = string.Empty;
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
-        SelectedServiceModalItem = null;
-        IsServiceModalDropdownOpen = false;
+        ApplyServiceModalSuggestions(string.Empty);
         IsServicesModalOpen = true;
     }
 
@@ -3367,18 +3389,44 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task AddServiceItemToPatientAsync()
+    public async Task SelectAndAddServiceModalSuggestionAsync(ClinicalService? service)
     {
         if (SelectedPatient == null) return;
 
-        var name = !string.IsNullOrWhiteSpace(ServiceModalName)
-            ? ServiceModalName.Trim()
-            : ServiceModalSearchText.Trim();
+        string name;
+        decimal price;
+        string category;
+        string code;
+        int serviceId;
 
-        if (string.IsNullOrWhiteSpace(name))
+        if (!string.IsNullOrWhiteSpace(ServiceModalName))
         {
-            InfoModalMessage = "Especifique el servicio clínico o procedimiento médico a agregar.";
-            IsInfoModalVisible = true;
+            name = ServiceModalName.Trim();
+            var serviceObj = Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            price = serviceObj?.Price ?? 200.00m;
+            category = serviceObj?.Category ?? "Consulta";
+            code = serviceObj?.Code ?? "SERV-001";
+            serviceId = serviceObj?.Id ?? 0;
+        }
+        else if (service != null)
+        {
+            name = service.Name;
+            price = service.Price;
+            category = service.Category;
+            code = service.Code;
+            serviceId = service.Id;
+        }
+        else if (!string.IsNullOrWhiteSpace(ServiceModalSearchText))
+        {
+            name = ServiceModalSearchText.Trim();
+            var serviceObj = Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            price = serviceObj?.Price ?? 200.00m;
+            category = serviceObj?.Category ?? "Consulta";
+            code = serviceObj?.Code ?? "SERV-001";
+            serviceId = serviceObj?.Id ?? 0;
+        }
+        else
+        {
             return;
         }
 
@@ -3387,11 +3435,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             : ServiceModalNotes.Trim();
 
         var qty = ServiceModalQuantity > 0 ? ServiceModalQuantity : 1;
-        var serviceObj = SelectedServiceModalItem ?? Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-        var price = serviceObj?.Price ?? 200.00m;
-        var category = serviceObj?.Category ?? "Consulta";
-        var code = serviceObj?.Code ?? "SERV-001";
-        var serviceId = serviceObj?.Id ?? 0;
 
         var newItem = new PatientServiceItem
         {
@@ -3422,9 +3465,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
         SelectedServiceModalItem = null;
-        IsServiceModalDropdownOpen = false;
+        ApplyServiceModalSuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    [RelayCommand]
+    public async Task AddServiceItemToPatientAsync()
+    {
+        await SelectAndAddServiceModalSuggestionAsync(SelectedServiceModalItem);
     }
 
     [RelayCommand]

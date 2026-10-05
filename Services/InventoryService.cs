@@ -1259,7 +1259,29 @@ public class InventoryService
             patient.SyncPrescriptionJson();
         }
 
-        db.Entry(consultation).State = EntityState.Added;
+        var existing = !string.IsNullOrWhiteSpace(consultation.Folio)
+            ? await db.PatientConsultations.FirstOrDefaultAsync(c => c.Folio == consultation.Folio)
+            : null;
+
+        if (existing != null)
+        {
+            existing.EndedAt = consultation.EndedAt;
+            existing.ChiefComplaint = consultation.ChiefComplaint;
+            existing.VitalSigns = consultation.VitalSigns;
+            existing.PhysicalExamination = consultation.PhysicalExamination;
+            existing.SystemsReview = consultation.SystemsReview;
+            existing.Diagnosis = consultation.Diagnosis;
+            existing.TreatmentPlan = consultation.TreatmentPlan;
+            existing.Notes = consultation.Notes;
+            existing.PrescriptionsJson = consultation.PrescriptionsJson;
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+            consultation.Id = existing.Id;
+        }
+        else
+        {
+            db.Entry(consultation).State = EntityState.Added;
+        }
+
         await db.SaveChangesAsync();
 
         NotifyPatientsChanged();

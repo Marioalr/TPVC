@@ -2811,8 +2811,8 @@ public class InventoryTests
         // Guardar nota directa (sin cobrar en POS)
         await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
 
-        // Se cierra la consulta activa sin abrir el POS
-        Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta activa debe cerrarse tras guardar la nota");
+        // La consulta activa se mantiene abierta para seguir trabajando, persistiendo los datos sin abrir el POS
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta activa debe permanecer abierta tras guardar la nota");
         Assert.IsFalse(mainVm.MedicalRecordsVM.IsPosModalOpen, "No debe abrirse el POS cuando solo se guarda la nota médica");
 
         // Verificar en base de datos
@@ -2825,6 +2825,103 @@ public class InventoryTests
         Assert.IsTrue(savedNote.PhysicalExamination.Contains("contractura"));
         Assert.IsTrue(savedNote.Diagnosis.Contains("G44.2"));
         Assert.IsTrue(savedNote.TreatmentPlan.Contains("Ibuprofeno"));
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_SaveActiveConsultationNote_DoesNotEndConsultation_AllowsIncrementalEditsWithoutDuplication()
+    {
+        var consultationService = new ConsultationService();
+        var mainVm = new MainViewModel(_inventoryService, consultationService, new ThemeService(), new AppUpdateService());
+        await mainVm.MedicalRecordsVM.LoadPatientsAsync();
+        var patient = mainVm.MedicalRecordsVM.Patients.First();
+        mainVm.MedicalRecordsVM.SelectPatient(patient);
+
+        mainVm.MedicalRecordsVM.StartActiveConsultation();
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
+
+        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Dolor lumbar agudo";
+        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Lumbalgia mecánica (M54.5)";
+        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Reposo relativo por 48 horas";
+
+        // Primer guardado de nota
+        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+
+        // La consulta debe permanecer activa y con los campos intactos para continuar trabajando
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta debe mantenerse activa");
+        Assert.AreEqual("Dolor lumbar agudo", mainVm.MedicalRecordsVM.ConsultationChiefComplaint);
+        Assert.AreEqual("Lumbalgia mecánica (M54.5)", mainVm.MedicalRecordsVM.ConsultationDiagnosis);
+
+        // Modificar plan y agregar indicaciones adicionales
+        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan += " + Paracetamol 500mg cada 8 horas";
+
+        // Segundo guardado de nota (mismo folio)
+        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta continúa activa tras el segundo guardado");
+
+        // Verificar en BD que se actualizó en lugar de duplicarse
+        var patients = await _inventoryService.GetPatientsAsync();
+        var updated = patients.First(p => p.Id == patient.Id);
+        var lumbarNotes = updated.Consultations.Where(c => c.ChiefComplaint == "Dolor lumbar agudo").ToList();
+
+        Assert.AreEqual(1, lumbarNotes.Count, "No debe duplicarse la nota con el mismo folio al guardar avance");
+        Assert.IsTrue(lumbarNotes[0].TreatmentPlan.Contains("Paracetamol 500mg"), "El plan debe reflejar la actualización guardada");
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_SelectAndAddDirectly_AddsItemsAndResetsFormProperly()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        await vm.LoadPatientsAsync();
+        var patient = vm.Patients.First();
+        patient.ActivePrescription = new List<PatientPrescriptionItem>();
+        patient.ActiveSupplies = new List<PatientSupplyItem>();
+        patient.ActiveServices = new List<PatientServiceItem>();
+        vm.SelectPatient(patient);
+
+        // 1. Receta médica: seleccionar producto y agregar
+        vm.OpenPrescriptionModal();
+        Assert.IsTrue(vm.IsPrescriptionModalOpen);
+        Assert.IsNotNull(vm.SelectedPrescriptionProduct);
+        var chosenMedicine = vm.SelectedPrescriptionProduct;
+        vm.PrescriptionDosage = "1 cada 12 horas por 3 días";
+        vm.PrescriptionQuantity = 1;
+
+        await vm.SelectAndAddPrescriptionProductAsync(chosenMedicine);
+
+        Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMedicine.Name));
+        Assert.AreEqual(string.Empty, vm.PrescriptionSearchText);
+        Assert.AreEqual(string.Empty, vm.PrescriptionDosage);
+
+        // 2. Insumos: seleccionar producto y agregar
+        vm.OpenSuppliesModal();
+        Assert.IsTrue(vm.IsSuppliesModalOpen);
+        Assert.IsNotNull(vm.SelectedSupplyProduct);
+        var chosenSupply = vm.SelectedSupplyProduct;
+        vm.SupplyInstructions = "Uso durante curación";
+        vm.SupplyQuantity = 3;
+
+        await vm.SelectAndAddSupplyProductAsync(chosenSupply);
+
+        Assert.AreEqual(1, patient.ActiveSupplies.Count);
+        Assert.IsTrue(patient.ActiveSupplies[0].SupplyName.Contains(chosenSupply.Name));
+        Assert.AreEqual(3, patient.ActiveSupplies[0].Quantity);
+        Assert.AreEqual(string.Empty, vm.SupplySearchText);
+
+        // 3. Servicios: seleccionar servicio y agregar
+        vm.OpenServicesModal();
+        Assert.IsTrue(vm.IsServicesModalOpen);
+        Assert.IsNotNull(vm.SelectedServiceModalItem);
+        var chosenService = vm.SelectedServiceModalItem;
+        vm.ServiceModalNotes = "Aplicación inmediata";
+        vm.ServiceModalQuantity = 1;
+
+        await vm.SelectAndAddServiceModalSuggestionAsync(chosenService);
+
+        Assert.AreEqual(1, patient.ActiveServices.Count);
+        Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
+        Assert.AreEqual(string.Empty, vm.ServiceModalSearchText);
     }
 
     [TestMethod]
