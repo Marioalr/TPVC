@@ -31,7 +31,15 @@ public partial class MovementsViewModel : ObservableObject
 
         _inventoryService.OnInventoryChanged += () =>
         {
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = LoadMovementsAsync());
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(async () => await LoadMovementsAsync());
+            }
+            else
+            {
+                _ = LoadMovementsAsync();
+            }
         };
     }
 

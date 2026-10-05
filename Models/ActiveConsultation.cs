@@ -65,6 +65,10 @@ public partial class ActiveConsultation : ObservableObject
     public void NotifyItemsChanged()
     {
         OnPropertyChanged(nameof(TotalItems));
+        OnPropertyChanged(nameof(ItemsCount));
         OnPropertyChanged(nameof(TotalAmount));
+        OnPropertyChanged(nameof(Subtotal));
+        OnPropertyChanged(nameof(Tax));
+        OnPropertyChanged(nameof(Total));
     }
 }

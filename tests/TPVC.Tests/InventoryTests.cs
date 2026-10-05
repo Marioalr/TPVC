@@ -2305,7 +2305,195 @@ public class InventoryTests
         Assert.IsNull(patient.NextAppointmentDate);
         Assert.AreEqual(string.Empty, patient.NextAppointmentTime);
     }
+
+    [TestMethod]
+    public async Task SavePatientAsync_PreservesAppointmentsSuppliesAndServices_AcrossDatabaseReloads()
+    {
+        var patient = new PatientRecord
+        {
+            FullName = "Carlos Santana",
+            RecordNumber = "EXP-TEST-PERSIST",
+            Age = 45,
+            NextAppointmentDate = DateTime.Today.AddDays(5),
+            NextAppointmentTime = "09:00 AM",
+            NextAppointmentReason = "Retiro de puntos",
+            NextAppointmentNotes = "Verificar cicatrización",
+            ActiveSupplies = new List<PatientSupplyItem>
+            {
+                new PatientSupplyItem { SupplyName = "Gasas Estériles", Quantity = 4, UnitPrice = 15m }
+            },
+            ActiveServices = new List<PatientServiceItem>
+            {
+                new PatientServiceItem { ServiceName = "Curación Básica", Price = 150m }
+            }
+        };
+
+        var saved = await _inventoryService.SavePatientAsync(patient);
+        Assert.IsTrue(saved.Id > 0);
+
+        var retrieved = await _inventoryService.GetPatientByIdAsync(saved.Id);
+        Assert.IsNotNull(retrieved);
+        Assert.AreEqual(DateTime.Today.AddDays(5).Date, retrieved.NextAppointmentDate?.Date);
+        Assert.AreEqual("09:00 AM", retrieved.NextAppointmentTime);
+        Assert.AreEqual("Retiro de puntos", retrieved.NextAppointmentReason);
+        Assert.AreEqual("Verificar cicatrización", retrieved.NextAppointmentNotes);
+        Assert.HasCount(1, retrieved.ActiveSupplies);
+        Assert.AreEqual("Gasas Estériles", retrieved.ActiveSupplies[0].SupplyName);
+        Assert.AreEqual(4, retrieved.ActiveSupplies[0].Quantity);
+        Assert.HasCount(1, retrieved.ActiveServices);
+        Assert.AreEqual("Curación Básica", retrieved.ActiveServices[0].ServiceName);
+
+        // Actualizar y verificar que la persistencia se actualiza
+        retrieved.NextAppointmentTime = "10:30 AM";
+        retrieved.ActiveSupplies.Add(new PatientSupplyItem { SupplyName = "Venda Elástica", Quantity = 2 });
+        await _inventoryService.SavePatientAsync(retrieved);
+
+        var retrievedAgain = await _inventoryService.GetPatientByIdAsync(saved.Id);
+        Assert.IsNotNull(retrievedAgain);
+        Assert.AreEqual("10:30 AM", retrievedAgain.NextAppointmentTime);
+        Assert.HasCount(2, retrievedAgain.ActiveSupplies);
+        Assert.IsTrue(retrievedAgain.ActiveSupplies.Any(s => s.SupplyName == "Venda Elástica"));
+    }
+
+    [TestMethod]
+    public async Task RegisterQuickConsultationUsageAsync_MultiBatchFefo_DeductsAcrossMultipleBatchesCorrectly()
+    {
+        var category = (await _inventoryService.GetCategoriesAsync()).First();
+        var product = new Product
+        {
+            Code = "PRD-FEFO-MULTI",
+            Name = "Solución Antiséptica FEFO",
+            CategoryId = category.Id,
+            Price = 45m,
+            Unit = "pza",
+            CurrentStock = 15,
+            IsActive = true
+        };
+        await _inventoryService.SaveProductAsync(product);
+
+        var batch1 = new ProductBatch
+        {
+            ProductId = product.Id,
+            BatchNumber = "LOT-FEFO-01",
+            ExpirationDate = DateTime.Today.AddDays(5),
+            Quantity = 5
+        };
+        var batch2 = new ProductBatch
+        {
+            ProductId = product.Id,
+            BatchNumber = "LOT-FEFO-02",
+            ExpirationDate = DateTime.Today.AddDays(25),
+            Quantity = 10
+        };
+        await _inventoryService.SaveBatchAsync(batch1);
+        await _inventoryService.SaveBatchAsync(batch2);
+
+        // Descontar 8 unidades: debe agotar batch1 (5) y tomar 3 de batch2
+        await _inventoryService.RegisterQuickConsultationUsageAsync(
+            product.Id,
+            8,
+            "Desinfección quirúrgica de paciente",
+            "Dr. Especialista"
+        );
+
+        var updatedProduct = await _inventoryService.GetProductByIdAsync(product.Id);
+        Assert.IsNotNull(updatedProduct);
+        Assert.AreEqual(7, updatedProduct.CurrentStock, "Stock restante debe ser 15 - 8 = 7");
+
+        var batches = await _inventoryService.GetBatchesAsync(product.Id);
+        var b1 = batches.FirstOrDefault(b => b.BatchNumber == "LOT-FEFO-01");
+        var b2 = batches.FirstOrDefault(b => b.BatchNumber == "LOT-FEFO-02");
+
+        Assert.IsNotNull(b1);
+        Assert.AreEqual(0, b1.Quantity, "El lote más próximo a vencer debe agotarse primero (0)");
+        Assert.IsNotNull(b2);
+        Assert.AreEqual(7, b2.Quantity, "El segundo lote debe tener 10 - 3 = 7 unidades");
+
+        var movements = await _inventoryService.GetRecentMovementsAsync(5);
+        var mov = movements.FirstOrDefault(m => m.ProductId == product.Id);
+        Assert.IsNotNull(mov);
+        Assert.AreEqual(MovementType.SalidaConsulta, mov.MovementType);
+        Assert.AreEqual(8, mov.Quantity);
+    }
+
+    [TestMethod]
+    public async Task PosViewModel_AddPrescriptionItem_WithQuantityGreaterThanOne_AddsCorrectQuantityToCart()
+    {
+        var posVm = new PosViewModel(_inventoryService, new ConsultationService());
+        await posVm.InitializeAsync();
+
+        var med = posVm.Products.First(p => p.CurrentStock >= 10);
+        posVm.AddPrescriptionItem(med.Name, 4);
+
+        Assert.HasCount(1, posVm.Cart);
+        Assert.AreEqual(med.Id, posVm.Cart[0].ProductId);
+        Assert.AreEqual(4, posVm.Cart[0].Quantity);
+
+        // Agregar 2 más de la misma receta
+        posVm.AddPrescriptionItem(med.Name, 2);
+        Assert.HasCount(1, posVm.Cart);
+        Assert.AreEqual(6, posVm.Cart[0].Quantity);
+    }
+
+    [TestMethod]
+    public void MainViewModel_CommandPalette_OpensAndClosesAndFiltersCorrectly()
+    {
+        var mainVm = new MainViewModel(_inventoryService, new ConsultationService(), new ThemeService(), new AppUpdateService());
+        
+        Assert.IsFalse(mainVm.IsCommandPaletteOpen);
+        Assert.IsTrue(mainVm.PaletteResults.Count > 0, "Default navigation commands should be pre-populated");
+
+        mainVm.OpenCommandPalette();
+        Assert.IsTrue(mainVm.IsCommandPaletteOpen);
+        Assert.AreEqual(string.Empty, mainVm.PaletteSearchText);
+
+        // Filtrar comando de navegación
+        mainVm.PaletteSearchText = "POS";
+        Assert.IsTrue(mainVm.PaletteResults.Any(r => r.Title.Contains("POS")));
+
+        // Ciclar con flechas arriba y abajo
+        var initialItem = mainVm.SelectedPaletteItem;
+        mainVm.MovePaletteDown();
+        Assert.AreNotEqual(initialItem, mainVm.SelectedPaletteItem);
+        mainVm.MovePaletteUp();
+        Assert.AreEqual(initialItem, mainVm.SelectedPaletteItem);
+
+        // Ejecutar acción
+        mainVm.SelectedPaletteItem = mainVm.PaletteResults.First(r => r.Title.Contains("POS"));
+        mainVm.ExecuteSelectedPaletteItem();
+        Assert.IsFalse(mainVm.IsCommandPaletteOpen);
+        Assert.AreEqual("Pos", mainVm.ActiveViewName);
+    }
+
+    [TestMethod]
+    public async Task MainViewModel_CommandPalette_SearchesPatientsAndNavigates()
+    {
+        var patient = new PatientRecord
+        {
+            FullName = "Guillermo Del Toro",
+            RecordNumber = "EXP-PALETTE-01",
+            Age = 58,
+            Allergies = "Penicilina"
+        };
+        await _inventoryService.SavePatientAsync(patient);
+
+        var mainVm = new MainViewModel(_inventoryService, new ConsultationService(), new ThemeService(), new AppUpdateService());
+        await mainVm.MedicalRecordsVM.LoadPatientsAsync();
+
+        mainVm.OpenCommandPalette();
+        mainVm.PaletteSearchText = "Guillermo";
+
+        var patientMatch = mainVm.PaletteResults.FirstOrDefault(r => r.Category == "Pacientes" && r.Title.Contains("Guillermo"));
+        Assert.IsNotNull(patientMatch, "Debe encontrar el paciente por nombre en la Paleta de Comandos");
+        Assert.AreEqual("⚠️ Alergias", patientMatch.Badge);
+
+        mainVm.SelectPaletteItem(patientMatch);
+        Assert.IsFalse(mainVm.IsCommandPaletteOpen);
+        Assert.AreEqual("Records", mainVm.ActiveViewName);
+        Assert.AreEqual(patient.Id, mainVm.MedicalRecordsVM.SelectedPatient?.Id);
+    }
 }
+
 
 
 

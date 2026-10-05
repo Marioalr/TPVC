@@ -59,11 +59,25 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Campo de búsqueda -->
-                <TextBox Grid.Column="0" 
-                         Style="{DynamicResource ModernTextBox}" 
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         Tag="Buscar por nombre, código o genérico..." />
+                <!-- Campo de búsqueda con botón de limpiar -->
+                <Grid Grid.Column="0">
+                    <TextBox Style="{DynamicResource ModernTextBox}" 
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="Buscar por nombre, código o genérico..." 
+                             Padding="10,6,28,6" />
+                    <Button Command="{Binding ClearSearchCommand}" 
+                            Visibility="{Binding SearchText, Converter={StaticResource BoolToVis}}" 
+                            HorizontalAlignment="Right" 
+                            VerticalAlignment="Center" 
+                            Margin="0,0,8,0"
+                            Background="Transparent" 
+                            BorderThickness="0" 
+                            Cursor="Hand"
+                            Padding="4"
+                            ToolTip="Limpiar búsqueda">
+                        <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Button>
+                </Grid>
 
                 <!-- Combo de Categorías -->
                 <ComboBox Grid.Column="2" 

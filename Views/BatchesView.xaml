@@ -62,23 +62,85 @@
                            Margin="0,0,16,0" />
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <RadioButton Content="Todos los Lotes" 
-                                 GroupName="BatchFilter" 
-                                 IsChecked="True" 
-                                 Margin="0,0,16,0"
-                                 Command="{Binding LoadBatchesCommand}" />
-                    <RadioButton Content="Próximos a Vencer (≤60 días) ⏳" 
-                                 GroupName="BatchFilter" 
-                                 Margin="0,0,16,0"
-                                 Foreground="{DynamicResource ThemeWarning}"
-                                 FontWeight="SemiBold"
-                                 IsChecked="{Binding SelectedFilter, ConverterParameter=Proximos, Mode=OneWayToSource}" />
-                    <RadioButton Content="Vencidos 🛑" 
-                                 GroupName="BatchFilter" 
-                                 Margin="0,0,16,0"
-                                 Foreground="{DynamicResource ThemeDanger}"
-                                 FontWeight="SemiBold"
-                                 IsChecked="{Binding SelectedFilter, ConverterParameter=Vencidos, Mode=OneWayToSource}" />
+                    <!-- Tab: Todos -->
+                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Todos" 
+                            Padding="14,6" Margin="0,0,8,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Todos">
+                                        <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Todos los Lotes" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{Binding CountTodos, StringFormat=' ({0})'}" FontSize="11" Opacity="0.8" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Tab: Próximos a Vencer -->
+                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Proximos" 
+                            Padding="14,6" Margin="0,0,8,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Proximos">
+                                        <Setter Property="Background" Value="{DynamicResource ThemeWarning}" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="⏳ Próximos a Vencer (≤60d)" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{Binding CountProximos, StringFormat=' ({0})'}" FontWeight="Bold" FontSize="11" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Tab: Vencidos -->
+                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Vencidos" 
+                            Padding="14,6" Margin="0,0,8,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Vencidos">
+                                        <Setter Property="Background" Value="{DynamicResource ThemeError}" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🛑 Vencidos" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{Binding CountVencidos, StringFormat=' ({0})'}" FontWeight="Bold" FontSize="11" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Tab: Vigentes -->
+                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Vigentes" 
+                            Padding="14,6">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Vigentes">
+                                        <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="✅ Vigentes" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{Binding CountVigentes, StringFormat=' ({0})'}" FontSize="11" Opacity="0.8" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -154,7 +216,20 @@
                     </Grid>
 
                     <TextBlock Text="Fecha de Caducidad *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <DatePicker SelectedDate="{Binding NewBatchExpirationDate}" Margin="0,0,0,14" />
+                    <DatePicker SelectedDate="{Binding NewBatchExpirationDate}" Margin="0,0,0,10" />
+
+                    <!-- Alerta preventiva si vence en <= 30 días o ya venció -->
+                    <Border Background="{DynamicResource ThemeWarning}" 
+                            CornerRadius="6" 
+                            Padding="12,8" 
+                            Margin="0,0,0,14" 
+                            Visibility="{Binding IsExpirationWarningVisible, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding ExpirationWarningMessage}" 
+                                   Foreground="White" 
+                                   FontSize="11" 
+                                   FontWeight="SemiBold" 
+                                   TextWrapping="Wrap" />
+                    </Border>
 
                     <TextBlock Text="Notas del Lote" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
                     <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding NewBatchNotes, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,20" />

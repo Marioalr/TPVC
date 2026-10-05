@@ -128,7 +128,29 @@ public class InventoryService
         }
         else
         {
-            _context.Products.Update(product);
+            var existing = await _context.Products.FirstOrDefaultAsync(p => p.Id == product.Id);
+            if (existing != null)
+            {
+                existing.Code = product.Code;
+                existing.Name = product.Name;
+                existing.GenericName = product.GenericName;
+                existing.Presentation = product.Presentation;
+                existing.CategoryId = product.CategoryId;
+                existing.Unit = product.Unit;
+                existing.Price = product.Price;
+                existing.CurrentStock = product.CurrentStock;
+                existing.MinStock = product.MinStock;
+                existing.OptimalStock = product.OptimalStock;
+                existing.Location = product.Location;
+                existing.RequiresRefrigeration = product.RequiresRefrigeration;
+                existing.Notes = product.Notes;
+                existing.UpdatedAt = DateTime.Now;
+                existing.IsActive = product.IsActive;
+            }
+            else
+            {
+                _context.Products.Update(product);
+            }
             await _context.SaveChangesAsync();
         }
 
@@ -171,6 +193,7 @@ public class InventoryService
     {
         var query = _context.ProductBatches
             .Include(b => b.Product)
+            .Where(b => b.Product == null || b.Product.IsActive)
             .AsQueryable();
 
         if (productId.HasValue)
@@ -191,7 +214,20 @@ public class InventoryService
         }
         else
         {
-            _context.ProductBatches.Update(batch);
+            var existing = await _context.ProductBatches.FindAsync(batch.Id);
+            if (existing != null)
+            {
+                existing.BatchNumber = batch.BatchNumber;
+                existing.Quantity = batch.Quantity;
+                existing.ExpirationDate = batch.ExpirationDate;
+                existing.ReceivedDate = batch.ReceivedDate;
+                existing.Notes = batch.Notes;
+                existing.IsDepleted = batch.IsDepleted;
+            }
+            else
+            {
+                _context.ProductBatches.Update(batch);
+            }
         }
         await _context.SaveChangesAsync();
         OnInventoryChanged?.Invoke();
@@ -222,31 +258,36 @@ public class InventoryService
         product.CurrentStock = stockAfter;
         product.UpdatedAt = DateTime.Now;
 
-        // Descontar del lote más próximo a vencer primero (sistema FEFO: First Expired, First Out)
-        var activeBatch = product.Batches
+        // Descontar por FEFO (First Expired, First Out)
+        int remainingToDeduct = quantity;
+        var activeBatches = product.Batches
             .Where(b => !b.IsDepleted && b.Quantity > 0)
             .OrderBy(b => b.ExpirationDate)
-            .FirstOrDefault();
+            .ToList();
 
-        int? batchId = null;
-        if (activeBatch != null)
+        int? primaryBatchId = null;
+        foreach (var batch in activeBatches)
         {
-            batchId = activeBatch.Id;
-            if (activeBatch.Quantity <= quantity)
+            if (remainingToDeduct <= 0) break;
+            primaryBatchId ??= batch.Id;
+
+            if (batch.Quantity <= remainingToDeduct)
             {
-                activeBatch.Quantity = 0;
-                activeBatch.IsDepleted = true;
+                remainingToDeduct -= batch.Quantity;
+                batch.Quantity = 0;
+                batch.IsDepleted = true;
             }
             else
             {
-                activeBatch.Quantity -= quantity;
+                batch.Quantity -= remainingToDeduct;
+                remainingToDeduct = 0;
             }
         }
 
         _context.InventoryMovements.Add(new InventoryMovement
         {
             ProductId = product.Id,
-            BatchId = batchId,
+            BatchId = primaryBatchId,
             MovementType = MovementType.SalidaConsulta,
             Quantity = quantity,
             StockBefore = stockBefore,
@@ -381,7 +422,8 @@ public class InventoryService
             .ToListAsync();
 
         var batches = await _context.ProductBatches
-            .Where(b => !b.IsDepleted && b.Quantity > 0)
+            .Include(b => b.Product)
+            .Where(b => !b.IsDepleted && b.Quantity > 0 && (b.Product == null || b.Product.IsActive))
             .ToListAsync();
 
         return new DashboardMetrics
@@ -560,6 +602,8 @@ public class InventoryService
         }
 
         patient.SyncPrescriptionJson();
+        patient.SyncSuppliesJson();
+        patient.SyncServicesJson();
 
         if (patient.Id == 0)
         {
@@ -591,6 +635,12 @@ public class InventoryService
                 existing.VitalSigns = patient.VitalSigns;
                 existing.ClinicalNotes = patient.ClinicalNotes;
                 existing.ActivePrescriptionJson = patient.ActivePrescriptionJson;
+                existing.ActiveSuppliesJson = patient.ActiveSuppliesJson;
+                existing.ActiveServicesJson = patient.ActiveServicesJson;
+                existing.NextAppointmentDate = patient.NextAppointmentDate;
+                existing.NextAppointmentTime = patient.NextAppointmentTime;
+                existing.NextAppointmentReason = patient.NextAppointmentReason;
+                existing.NextAppointmentNotes = patient.NextAppointmentNotes;
                 existing.IsActive = patient.IsActive;
             }
         }

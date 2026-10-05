@@ -31,6 +31,10 @@ public partial class App : Application
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
+        services.AddTransient<MainHubViewModel>();
+        services.AddTransient<PosViewModel>();
+        services.AddTransient<MedicalRecordsViewModel>();
+        services.AddTransient<ConfigurationShellViewModel>();
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<BatchesViewModel>();

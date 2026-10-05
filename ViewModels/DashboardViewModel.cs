@@ -44,7 +44,15 @@ public partial class DashboardViewModel : ObservableObject
         // Auto-actualización reactiva en tiempo real al detectar cualquier cambio
         _inventoryService.OnInventoryChanged += () =>
         {
-            Application.Current?.Dispatcher?.Invoke(() => _ = RefreshAsync());
+            var app = Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(async () => await RefreshAsync());
+            }
+            else
+            {
+                _ = RefreshAsync();
+            }
         };
     }
 

@@ -12,6 +12,11 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ThemeBackground}">
 
+    <Window.InputBindings>
+        <KeyBinding Key="K" Modifiers="Control" Command="{Binding ToggleCommandPaletteCommand}" />
+        <KeyBinding Key="P" Modifiers="Control" Command="{Binding ToggleCommandPaletteCommand}" />
+    </Window.InputBindings>
+
     <Window.Resources>
         <!-- DataTemplates para resolución automática de Vistas según el ViewModel -->
         <DataTemplate DataType="{x:Type vm:MainHubViewModel}">
@@ -62,6 +67,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Identificador del Sistema y Versión Exacta -->
@@ -78,12 +84,311 @@
                                Foreground="{DynamicResource ThemeAccent}" />
                 </StackPanel>
 
+                <!-- Acceso rápido a Paleta de Comandos (Ctrl + K) -->
+                <Button Grid.Column="1"
+                        Command="{Binding ToggleCommandPaletteCommand}"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource ThemeBorder}"
+                        BorderThickness="1"
+                        Padding="10,3"
+                        Margin="0,0,16,0"
+                        VerticalAlignment="Center">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                    <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="🔍 Búsqueda rápida" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="4,1">
+                            <TextBlock Text="Ctrl + K" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
+
                 <!-- Indicador discreto de sincronización de datos -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" VerticalAlignment="Center" />
                     <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- ============================================ -->
+        <!-- OVERLAY: PALETA GLOBAL DE COMANDOS (Ctrl + K) -->
+        <!-- ============================================ -->
+        <Grid Grid.Row="0" Grid.RowSpan="2" 
+              Panel.ZIndex="999"
+              Visibility="{Binding IsCommandPaletteOpen, Converter={StaticResource BoolToVis}}">
+            <!-- Fondo oscuro translúcido con desenfoque / click para cerrar -->
+            <Border Background="#66000000">
+                <Border.InputBindings>
+                    <MouseBinding Gesture="LeftClick" Command="{Binding CloseCommandPaletteCommand}" />
+                </Border.InputBindings>
+            </Border>
+
+            <!-- Contenedor flotante de la paleta -->
+            <Border Width="650" 
+                    MaxHeight="520"
+                    VerticalAlignment="Top" 
+                    Margin="0,70,0,0"
+                    Background="{DynamicResource ThemeSurface}"
+                    BorderBrush="{DynamicResource ThemeBorder}"
+                    BorderThickness="1"
+                    CornerRadius="14">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="10" Opacity="0.3" Direction="270" Color="#000000" />
+                </Border.Effect>
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de búsqueda -->
+                    <Border Grid.Row="0" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="0,0,0,1" 
+                            Padding="16,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" 
+                                       Text="🔍" 
+                                       FontSize="16" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,12,0" />
+
+                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <TextBox x:Name="PaletteSearchTextBox" 
+                                         Text="{Binding PaletteSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="14"
+                                         Foreground="{DynamicResource ThemeText}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         VerticalAlignment="Center"
+                                         PreviewKeyDown="PaletteSearchTextBox_PreviewKeyDown" />
+
+                                <!-- Placeholder cuando el texto está vacío -->
+                                <TextBlock Text="Buscar comando, paciente, medicamento o vista..."
+                                           FontSize="14"
+                                           Foreground="{DynamicResource ThemeTextSecondary}"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False"
+                                           Opacity="0.55">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding PaletteSearchText}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <!-- Botón Esc para cerrar -->
+                            <Button Grid.Column="2" 
+                                    Command="{Binding CloseCommandPaletteCommand}"
+                                    Cursor="Hand"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="4"
+                                    VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="5" 
+                                        Padding="6,2">
+                                    <TextBlock Text="Esc" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                </Border>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Lista de Resultados -->
+                    <Grid Grid.Row="1">
+                        <!-- Mensaje si no hay resultados -->
+                        <Border Visibility="{Binding PaletteResults.Count, Converter={StaticResource ComparisonToVis}, ConverterParameter=0}"
+                                Padding="32,28" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="🔍" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,8" Opacity="0.5" />
+                                <TextBlock Text="No se encontraron coincidencias" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Center" />
+                                <TextBlock Text="Intenta con otro término (ej. paciente, medicamento, lote, consulta)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <ListBox x:Name="PaletteResultsListBox"
+                                 ItemsSource="{Binding PaletteResults}"
+                                 SelectedItem="{Binding SelectedPaletteItem, Mode=TwoWay}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 MaxHeight="360"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="6,2" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="itemBorder" 
+                                                        Background="{TemplateBinding Background}" 
+                                                        CornerRadius="8" 
+                                                        Padding="12,8"
+                                                        BorderThickness="1"
+                                                        BorderBrush="Transparent">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                        <Setter TargetName="itemBorder" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Background="Transparent">
+                                        <Grid.InputBindings>
+                                            <MouseBinding Gesture="LeftClick" 
+                                                          Command="{Binding DataContext.SelectPaletteItemCommand, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                                          CommandParameter="{Binding}" />
+                                        </Grid.InputBindings>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Icono de categoría -->
+                                        <Border Grid.Column="0" 
+                                                Width="34" Height="34" 
+                                                CornerRadius="8" 
+                                                Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                Margin="0,0,12,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Icon}" 
+                                                       FontSize="15" 
+                                                       HorizontalAlignment="Center" 
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <!-- Título y subtítulo -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Title}" 
+                                                           FontWeight="SemiBold" 
+                                                           FontSize="13" 
+                                                           Foreground="{DynamicResource ThemeText}" />
+                                                <Border Margin="8,0,0,0" 
+                                                        Padding="6,1" 
+                                                        CornerRadius="4" 
+                                                        Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                                        BorderThickness="1"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Category}" 
+                                                               FontSize="10" 
+                                                               FontWeight="Medium" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Subtitle}" 
+                                                       FontSize="11" 
+                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                       Margin="0,2,0,0" 
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+
+                                        <!-- Badge opcional -->
+                                        <Border Grid.Column="2" 
+                                                Visibility="{Binding Badge, Converter={StaticResource BoolToVis}}"
+                                                Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                BorderBrush="{DynamicResource ThemeAccent}" 
+                                                BorderThickness="1" 
+                                                CornerRadius="6" 
+                                                Padding="7,2" 
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Badge}" 
+                                                       FontSize="11" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource ThemeAccent}" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <!-- Pie con atajos y guía de teclado -->
+                    <Border Grid.Row="2" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="0,1,0,0" 
+                            CornerRadius="0,0,14,14"
+                            Padding="16,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Navegar" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,4,0" />
+                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="3" Padding="4,1" Margin="0,0,8,0">
+                                    <TextBlock Text="↑ / ↓" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                </Border>
+
+                                <TextBlock Text="Seleccionar" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,4,0" />
+                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="3" Padding="4,1" Margin="0,0,8,0">
+                                    <TextBlock Text="Enter" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                </Border>
+
+                                <TextBlock Text="Cerrar" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,4,0" />
+                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="3" Padding="4,1">
+                                    <TextBlock Text="Esc" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                </Border>
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="1" 
+                                       Text="{Binding PaletteResults.Count, StringFormat='{}{0} resultado(s)'}" 
+                                       FontSize="11" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

@@ -16,6 +16,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 {
     private readonly InventoryService? _inventoryService;
     private readonly ConsultationService? _consultationService;
+    private readonly Action? _onInventoryChangedHandler;
 
     public Action<string, int>? OnSendPrescriptionToPos { get; set; }
     public Action<ActiveConsultation>? OnCheckoutConsultationRequested { get; set; }
@@ -139,6 +140,43 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isInfoModalVisible;
+
+    private System.Threading.CancellationTokenSource? _infoModalCts;
+
+    partial void OnIsInfoModalVisibleChanged(bool value)
+    {
+        if (value)
+        {
+            _infoModalCts?.Cancel();
+            _infoModalCts = new System.Threading.CancellationTokenSource();
+            var token = _infoModalCts.Token;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(4000, token);
+                    if (!token.IsCancellationRequested)
+                    {
+                        var app = System.Windows.Application.Current;
+                        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                        {
+                            await app.Dispatcher.InvokeAsync(() => DismissInfoModal());
+                        }
+                        else
+                        {
+                            DismissInfoModal();
+                        }
+                    }
+                }
+                catch (System.OperationCanceledException) { }
+            }, token);
+        }
+        else
+        {
+            _infoModalCts?.Cancel();
+        }
+    }
 
     // ==========================================
     // MODAL DE ALTA / EDICIÓN DE EXPEDIENTE (NOM-004-SSA3)
@@ -985,10 +1023,19 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         if (_inventoryService != null)
         {
-            _inventoryService.OnInventoryChanged += () =>
+            _onInventoryChangedHandler = () =>
             {
-                _ = LoadPatientsAsync();
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(async () => await LoadPatientsAsync());
+                }
+                else
+                {
+                    _ = LoadPatientsAsync();
+                }
             };
+            _inventoryService.OnInventoryChanged += _onInventoryChangedHandler;
             _ = LoadInitialDataAsync();
         }
         else
@@ -1131,6 +1178,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_consultationService != null)
+        {
+            _consultationService.OnActiveConsultationChanged -= SyncActiveConsultation;
+        }
+        if (_inventoryService != null && _onInventoryChangedHandler != null)
+        {
+            _inventoryService.OnInventoryChanged -= _onInventoryChangedHandler;
+        }
         StopConsultationTimer();
         GC.SuppressFinalize(this);
     }
@@ -1691,7 +1746,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         var patient = FormPatientId > 0 && SelectedPatient != null && SelectedPatient.Id == FormPatientId 
             ? SelectedPatient 
-            : new PatientRecord();
+            : (FormPatientId > 0 ? Patients.FirstOrDefault(p => p.Id == FormPatientId) ?? new PatientRecord() : new PatientRecord());
+        patient.Id = FormPatientId;
 
         patient.RecordNumber = normalizedFolio;
         patient.FullName = FormFullName.Trim();
@@ -3045,6 +3101,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void DismissInfoModal()
     {
+        _infoModalCts?.Cancel();
         IsInfoModalVisible = false;
         InfoModalMessage = null;
     }

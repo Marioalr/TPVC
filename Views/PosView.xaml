@@ -6,7 +6,9 @@
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:PosViewModel}"
-             d:DesignHeight="750" d:DesignWidth="1100">
+             d:DesignHeight="750" d:DesignWidth="1100"
+             PreviewKeyDown="PosView_PreviewKeyDown"
+             Focusable="True">
 
     <Grid Margin="18,16,18,16">
         <Grid.RowDefinitions>
@@ -181,7 +183,7 @@
                         </TextBox>
 
                         <TextBlock Grid.Column="1" 
-                                   Text="Buscar producto por nombre, principio activo o SKU... (ej. Paracetamol)" 
+                                   Text="Buscar producto por nombre, principio activo o SKU... (F1)" 
                                    FontSize="13" 
                                    Foreground="{DynamicResource ThemeTextSecondary}" 
                                    VerticalAlignment="Center" 
@@ -399,7 +401,7 @@
                           Width="13" Height="13" 
                           Stretch="Uniform" 
                           Margin="0,0,8,0" />
-                    <TextBlock Text="Buscar en Catálogo" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="Buscar en Catálogo (F2)" FontSize="12" FontWeight="SemiBold" />
                 </StackPanel>
             </Button>
 
@@ -420,22 +422,35 @@
                 </StackPanel>
             </Button>
 
-            <!-- Botón Vaciar Venta -->
-            <Button Grid.Column="6" 
-                    Style="{DynamicResource OutlineButton}" 
-                    Command="{Binding ClearCartCommand}" 
-                    Padding="14,8" 
-                    VerticalAlignment="Center"
-                    ToolTip="Vaciar todos los artículos de la venta actual">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Path Data="{StaticResource IconTrash}" 
-                          Fill="{DynamicResource ThemeError}" 
-                          Width="12" Height="12" 
-                          Stretch="Uniform" 
-                          Margin="0,0,6,0" />
-                    <TextBlock Text="Vaciar Venta" FontSize="12" />
-                </StackPanel>
-            </Button>
+            <!-- Botones Vaciar Venta y Deshacer -->
+            <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{DynamicResource OutlineButton}" 
+                        Command="{Binding UndoClearCartCommand}" 
+                        Visibility="{Binding CanUndoClearCart, Converter={StaticResource BoolToVis}}"
+                        Padding="12,8" 
+                        Margin="0,0,8,0"
+                        ToolTip="Restaurar los productos eliminados de la venta">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="↩️" FontSize="12" Margin="0,0,6,0" />
+                        <TextBlock Text="Deshacer" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" />
+                    </StackPanel>
+                </Button>
+
+                <Button Style="{DynamicResource OutlineButton}" 
+                        Command="{Binding ClearCartCommand}" 
+                        Padding="14,8" 
+                        VerticalAlignment="Center"
+                        ToolTip="Vaciar todos los artículos de la venta actual">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconTrash}" 
+                              Fill="{DynamicResource ThemeError}" 
+                              Width="12" Height="12" 
+                              Stretch="Uniform" 
+                              Margin="0,0,6,0" />
+                        <TextBlock Text="Vaciar Venta" FontSize="12" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
         </StackPanel>
 
@@ -717,7 +732,7 @@
                     </StackPanel>
 
                     <!-- Método de Pago -->
-                    <StackPanel Margin="0,0,24,0">
+                    <StackPanel Margin="0,0,16,0">
                         <TextBlock Text="Método de Pago:" 
                                    FontSize="11" 
                                    FontWeight="SemiBold" 
@@ -726,8 +741,32 @@
                         <ComboBox Style="{DynamicResource ModernComboBox}" 
                                   ItemsSource="{Binding PaymentMethods}" 
                                   SelectedItem="{Binding SelectedPaymentMethod}" 
-                                  Width="180" 
+                                  Width="160" 
                                   FontSize="12" />
+                    </StackPanel>
+
+                    <!-- Efectivo Recibido y Cambio Calculado (Solo si Efectivo) -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0"
+                                Visibility="{Binding SelectedPaymentMethod, Converter={StaticResource ComparisonToVis}, ConverterParameter=Efectivo}">
+                        <StackPanel Margin="0,0,8,0">
+                            <TextBlock Text="Efectivo Recibido:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                            <TextBox Style="{DynamicResource ModernTextBox}"
+                                     Text="{Binding CashReceived, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                     Width="105" 
+                                     Padding="8,5"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
+                        </StackPanel>
+                        <Border Background="{DynamicResource ThemeSuccess}" 
+                                CornerRadius="6" 
+                                Padding="10,6" 
+                                VerticalAlignment="Bottom"
+                                Visibility="{Binding HasChange, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Cambio: " FontSize="11" Foreground="White" />
+                                <TextBlock Text="{Binding ChangeDue, StringFormat='${0:N2}'}" FontSize="12" FontWeight="Bold" Foreground="White" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- Contador de Artículos en Venta -->
@@ -814,7 +853,7 @@
                                   Width="16" Height="16" 
                                   Stretch="Uniform" 
                                   Margin="0,0,10,0" />
-                            <TextBlock Text="Cobrar y Despachar Venta" />
+                            <TextBlock Text="Cobrar y Despachar Venta (F5)" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -958,6 +997,7 @@
                                       Margin="4,0,8,0" 
                                       VerticalAlignment="Center" />
                                 <TextBox Grid.Column="1" 
+                                         x:Name="CatalogSearchTextBox"
                                          Text="{Binding CatalogSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                          Background="Transparent" 
                                          BorderThickness="0" 
@@ -1230,6 +1270,7 @@
                                       Margin="4,0,8,0" 
                                       VerticalAlignment="Center" />
                                 <TextBox Grid.Column="1" 
+                                         x:Name="ServiceSearchTextBox"
                                          Text="{Binding ServiceSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                          Background="Transparent" 
                                          BorderThickness="0" 

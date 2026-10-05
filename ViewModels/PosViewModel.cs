@@ -191,6 +191,19 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _selectedPaymentMethod = "Efectivo";
 
+    [ObservableProperty]
+    private decimal _cashReceived = 0m;
+
+    public decimal ChangeDue => Math.Max(0m, CashReceived - TotalCartAmount);
+
+    public bool HasChange => CashReceived >= TotalCartAmount && TotalCartAmount > 0;
+
+    partial void OnCashReceivedChanged(decimal value)
+    {
+        OnPropertyChanged(nameof(ChangeDue));
+        OnPropertyChanged(nameof(HasChange));
+    }
+
     public List<string> PaymentMethods { get; } = new()
     {
         "Efectivo",
@@ -352,15 +365,28 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _inventoryService.OnInventoryChanged -= OnInventoryChangedHandler;
+        _consultationService.OnActiveConsultationChanged -= SyncActiveConsultation;
         StopConsultationTimer();
         GC.SuppressFinalize(this);
     }
 
-
     private void OnInventoryChangedHandler()
     {
-        _ = LoadCatalogAsync();
-        _ = LoadServicesAsync();
+        var app = System.Windows.Application.Current;
+        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+        {
+            app.Dispatcher.InvokeAsync(async () =>
+            {
+                await LoadCatalogAsync();
+                await LoadServicesAsync();
+            });
+        }
+        else
+        {
+            _ = LoadCatalogAsync();
+            _ = LoadServicesAsync();
+        }
     }
 
     public async Task InitializeAsync()
@@ -559,20 +585,28 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddToCart(Product product)
     {
+        AddToCartWithQuantity(product, 1);
+    }
+
+    public void AddToCartWithQuantity(Product product, int quantity)
+    {
         if (product.CurrentStock <= 0)
         {
             ShowAlert($"El producto '{product.Name}' no tiene existencias disponibles.", false);
             return;
         }
 
+        int requestedQty = Math.Max(1, quantity);
         var existing = Cart.FirstOrDefault(c => c.ProductId == product.Id);
         if (existing != null)
         {
-            if (existing.Quantity < product.CurrentStock)
+            int allowed = Math.Min(existing.Quantity + requestedQty, product.CurrentStock);
+            if (allowed > existing.Quantity)
             {
-                existing.Quantity++;
+                int added = allowed - existing.Quantity;
+                existing.Quantity = allowed;
                 RecalculateTotals();
-                ShowAlert($"Se aumentó la cantidad de '{product.Name}' en la venta.", true);
+                ShowAlert($"Se aumentó la cantidad de '{product.Name}' en la venta (+{added}, total: {allowed}).", true);
             }
             else
             {
@@ -581,6 +615,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         }
         else
         {
+            int initialQty = Math.Min(requestedQty, product.CurrentStock);
             Cart.Add(new CartItem
             {
                 ProductId = product.Id,
@@ -592,10 +627,10 @@ public partial class PosViewModel : ObservableObject, IDisposable
                 AvailableStock = product.CurrentStock,
                 UnitPrice = product.Price,
                 RequiresRefrigeration = product.RequiresRefrigeration,
-                Quantity = 1
+                Quantity = initialQty
             });
             RecalculateTotals();
-            ShowAlert($"'{product.Name}' agregado a la venta.", true);
+            ShowAlert($"'{product.Name}' ({initialQty} {product.Unit}) agregado a la venta.", true);
         }
     }
 
@@ -635,11 +670,34 @@ public partial class PosViewModel : ObservableObject, IDisposable
         ShowAlert($"'{item.Name}' removido de la venta.", true);
     }
 
+    private List<CartItem>? _lastClearedCart;
+
+    [ObservableProperty]
+    private bool _canUndoClearCart;
+
     [RelayCommand]
     public void ClearCart()
     {
+        if (Cart.Count == 0) return;
+        _lastClearedCart = Cart.ToList();
+        CanUndoClearCart = true;
         Cart.Clear();
         RecalculateTotals();
+        ShowAlert("Se vació la venta. Puede presionar 'Deshacer' para restaurarla.", true);
+    }
+
+    [RelayCommand]
+    public void UndoClearCart()
+    {
+        if (_lastClearedCart == null || _lastClearedCart.Count == 0) return;
+        foreach (var item in _lastClearedCart)
+        {
+            Cart.Add(item);
+        }
+        _lastClearedCart = null;
+        CanUndoClearCart = false;
+        RecalculateTotals();
+        ShowAlert("Se restauraron los productos de la venta.", true);
     }
 
     public void RecalculateTotals()
@@ -647,6 +705,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
         TotalCartItems = Cart.Sum(c => c.Quantity);
         TotalCartAmount = Cart.Sum(c => c.Subtotal);
         HasCartItems = Cart.Count > 0;
+        OnPropertyChanged(nameof(ChangeDue));
+        OnPropertyChanged(nameof(HasChange));
     }
 
 
@@ -722,13 +782,17 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
     public void AddPrescriptionItem(string medicineName, int qty = 1)
     {
+        if (string.IsNullOrWhiteSpace(medicineName)) return;
+        var cleanMed = medicineName.Trim();
+
         var product = Products.FirstOrDefault(p => 
-            p.Name.Contains(medicineName, StringComparison.OrdinalIgnoreCase) || 
-            (p.GenericName != null && p.GenericName.Contains(medicineName, StringComparison.OrdinalIgnoreCase)));
+            p.Name.Contains(cleanMed, StringComparison.OrdinalIgnoreCase) || 
+            cleanMed.Contains(p.Name, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(p.GenericName) && (p.GenericName.Contains(cleanMed, StringComparison.OrdinalIgnoreCase) || cleanMed.Contains(p.GenericName, StringComparison.OrdinalIgnoreCase))));
 
         if (product != null)
         {
-            AddToCart(product);
+            AddToCartWithQuantity(product, Math.Max(1, qty));
         }
     }
 

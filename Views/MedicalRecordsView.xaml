@@ -690,6 +690,25 @@
                                                         CornerRadius="10" 
                                                         Padding="14" 
                                                         Margin="0,0,0,12">
+                                                    <Border.ToolTip>
+                                                        <ToolTip Background="{DynamicResource ThemeSurface}" 
+                                                                 BorderBrush="{DynamicResource ThemeAccent}" 
+                                                                 BorderThickness="1.5">
+                                                            <StackPanel MaxWidth="360" Margin="4">
+                                                                <TextBlock Text="{Binding Date, StringFormat='📅 Consulta del {0:dd/MM/yyyy HH:mm}'}" 
+                                                                           FontWeight="Bold" FontSize="12" 
+                                                                           Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,6"/>
+                                                                <TextBlock Text="{Binding ChiefComplaint, StringFormat='Motivo: {0}'}" 
+                                                                           FontSize="11" Foreground="{DynamicResource ThemeText}" 
+                                                                           TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                                <TextBlock Text="{Binding Diagnosis, StringFormat='Diagnóstico: {0}'}" 
+                                                                           FontWeight="SemiBold" FontSize="11" 
+                                                                           Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                                <TextBlock Text="{Binding TreatmentPlan, StringFormat='Plan / Indicaciones: {0}'}" 
+                                                                           FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap"/>
+                                                            </StackPanel>
+                                                        </ToolTip>
+                                                    </Border.ToolTip>
                                                     <StackPanel>
                                                         <!-- Cabecera de la Consulta -->
                                                         <Grid Margin="0,0,0,8">
@@ -1988,6 +2007,31 @@
                                                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                                                TextTrimming="CharacterEllipsis" 
                                                                Margin="0,2,0,0" />
+
+                                                    <!-- Badges de Alergias y Próxima Cita -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                        <Border Background="{DynamicResource ThemeError}" 
+                                                                CornerRadius="4" 
+                                                                Padding="6,2" 
+                                                                Margin="0,0,6,0"
+                                                                Visibility="{Binding HasAllergies, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding Allergies, StringFormat='⚠️ ALERGIAS: {0}'}" 
+                                                                       FontSize="10" 
+                                                                       FontWeight="Bold" 
+                                                                       Foreground="White"/>
+                                                        </Border>
+                                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                                BorderBrush="{DynamicResource ThemeAccent}" 
+                                                                BorderThickness="1" 
+                                                                CornerRadius="4" 
+                                                                Padding="6,2"
+                                                                Visibility="{Binding HasScheduledAppointment, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding FormattedNextAppointment, StringFormat='📅 {0}'}" 
+                                                                       FontSize="10" 
+                                                                       FontWeight="SemiBold" 
+                                                                       Foreground="{DynamicResource ThemeAccent}"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </StackPanel>
 
                                                 <!-- Botón Seleccionar -->
@@ -3443,6 +3487,31 @@
                                                                        TextTrimming="CharacterEllipsis" 
                                                                        MaxWidth="500" />
                                                         </StackPanel>
+
+                                                        <!-- Badges de Alergias y Próxima Cita -->
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                            <Border Background="{DynamicResource ThemeError}" 
+                                                                    CornerRadius="4" 
+                                                                    Padding="6,2" 
+                                                                    Margin="0,0,6,0"
+                                                                    Visibility="{Binding HasAllergies, Converter={StaticResource BoolToVis}}">
+                                                                <TextBlock Text="{Binding Allergies, StringFormat='⚠️ ALERGIAS: {0}'}" 
+                                                                           FontSize="10" 
+                                                                           FontWeight="Bold" 
+                                                                           Foreground="White"/>
+                                                            </Border>
+                                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                                                    BorderBrush="{DynamicResource ThemeAccent}" 
+                                                                    BorderThickness="1" 
+                                                                    CornerRadius="4" 
+                                                                    Padding="6,2"
+                                                                    Visibility="{Binding HasScheduledAppointment, Converter={StaticResource BoolToVis}}">
+                                                                <TextBlock Text="{Binding FormattedNextAppointment, StringFormat='📅 {0}'}" 
+                                                                           FontSize="10" 
+                                                                           FontWeight="SemiBold" 
+                                                                           Foreground="{DynamicResource ThemeAccent}"/>
+                                                            </Border>
+                                                        </StackPanel>
                                                     </StackPanel>
 
                                                     <!-- Botón Ver (en lugar de Seleccionar) -->
@@ -3784,6 +3853,25 @@
                                                             CornerRadius="8" 
                                                             Padding="14,10" 
                                                             Margin="0,0,0,8">
+                                                        <Border.ToolTip>
+                                                            <ToolTip Background="{DynamicResource ThemeSurface}" 
+                                                                     BorderBrush="{DynamicResource ThemeAccent}" 
+                                                                     BorderThickness="1.5">
+                                                                <StackPanel MaxWidth="360" Margin="4">
+                                                                    <TextBlock Text="{Binding Date, StringFormat='📅 Consulta del {0:dd/MM/yyyy HH:mm}'}" 
+                                                                               FontWeight="Bold" FontSize="12" 
+                                                                               Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,6"/>
+                                                                    <TextBlock Text="{Binding ChiefComplaint, StringFormat='Motivo: {0}'}" 
+                                                                               FontSize="11" Foreground="{DynamicResource ThemeText}" 
+                                                                               TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                                    <TextBlock Text="{Binding Diagnosis, StringFormat='Diagnóstico: {0}'}" 
+                                                                               FontWeight="SemiBold" FontSize="11" 
+                                                                               Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                                    <TextBlock Text="{Binding TreatmentPlan, StringFormat='Plan / Indicaciones: {0}'}" 
+                                                                               FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                            </ToolTip>
+                                                        </Border.ToolTip>
                                                         <StackPanel>
                                                             <!-- Encabezado de la Consulta -->
                                                             <Grid Margin="0,0,0,6">

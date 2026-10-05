@@ -2,6 +2,55 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.17] - 2026-10-04
+
+### Añadido
+* **Paleta Global de Comandos (Quick Open / Command Palette)**:
+  * Invocación global mediante atajo de teclado **`Ctrl + K`** o **`Ctrl + P`** desde cualquier pantalla del sistema.
+  * Ventana modal flotante centralizada con búsqueda predictiva en tiempo real sobre:
+    * Módulos principales y de configuración (*POS*, *Expedientes*, *Dashboard*, *Inventario*, *Lotes*, *Kardex*, *Ajustes*, *Hub*).
+    * Acciones clínicas inmediatas (*Nueva Consulta Médica*, *Registrar Paciente*, *Servicios Médicos*, *Lotes próximos a vencer*, *Lotes vencidos*).
+    * Búsqueda en vivo de pacientes con folio, edad, teléfono, diagnóstico y badges destacados de alergias (`⚠️ Alergias`).
+    * Búsqueda de fármacos y productos con SKU, stock, precio y refrigeración (`❄️`/`💊`).
+  * Navegación por teclado completa con **`↑` / `↓`**, selección con **`Enter`** y cierre con **`Esc`**.
+* **Calculadora de Efectivo y Cambio en Punto de Venta (POS)**:
+  * Nuevos campos integrados en la barra de cobro: captura de *Efectivo Recibido* y cálculo automático de *Cambio* en tiempo real con badge verde visible al cubrir el total.
+* **Atajos de Teclado Operativos en Punto de Venta**:
+  * **`F1`**: Enfoque inmediato y selección en la barra de búsqueda rápida de medicamentos.
+  * **`F2`**: Alternar / abrir ventana de Catálogo Completo con enfoque automático al buscador.
+  * **`F5` o `Ctrl + Enter`**: Cobrar y despachar venta directamente si hay artículos en el carrito.
+  * **`Esc`**: Cierre en cascada de modales (Ticket, Catálogo, Servicios, Pacientes o sugerencias).
+* **Acción de Vaciar Carrito en POS**:
+  * Botón **`[🗑️ Vaciar Venta]`** en el encabezado del carrito para reiniciar la venta en un solo clic con confirmación segura.
+* **Filtro de Lotes Vigentes y Alerta de Caducidad Inmediata**:
+  * Pestaña interactiva **`[✅ Vigentes]`** en el módulo de Lotes, junto con contadores numéricos en tiempo real en cada botón de filtro (`Todos`, `Próximos`, `Vencidos`, `Vigentes`).
+  * Alerta preventiva visual (`Border` ámbar) en el formulario de alta de lote si la fecha de caducidad es `≤ 30 días` o si ya está vencida.
+* **Mejoras en Expedientes Clínicos**:
+  * Badges visibles de **Alergias** y **Próxima Cita** integrados en los listados modales de selección de paciente (*Cambiar Paciente* y *Ver Expedientes*).
+  * Tooltip enriquecido al pasar el cursor sobre las tarjetas del historial de consultas del paciente (fecha, motivo de consulta, diagnóstico y plan de tratamiento).
+  * Temporizador de auto-cierre (4 segundos) en el modal informativo/notificaciones de expedientes.
+* **Limpieza Rápida de Búsqueda en Inventario**:
+  * Botón interactivo `✕` dentro del cuadro de búsqueda del módulo de inventario.
+* **Cobertura de Pruebas Unitarias Ampliada a 82 Pruebas**:
+  * Incorporación de pruebas para:
+    * Persistencia completa de pacientes en SQLite con insumos, servicios y citas programadas.
+    * Algoritmo FEFO multillote (deducción secuencial cuando el consumo supera el stock de un único lote).
+    * Prescripción médica enviada a POS con cantidades mayores a 1 y acumulación.
+    * Apertura, filtrado y navegación de la Paleta Global de Comandos.
+    * Búsqueda de pacientes y redirección interactiva desde la Paleta Global de Comandos.
+
+### Modificado
+* **Deducción de Inventario FEFO Multi-Lote**:
+  * `RegisterConsultationConsumptionAsync` y `RegisterQuickConsultationUsageAsync` ahora recorren de manera ordenada todos los lotes activos disponibles hasta satisfacer la cantidad total solicitada.
+* **Manejo Seguro de Concurrencia e Hilos de UI**:
+  * Los eventos reactivos `OnInventoryChanged` invocan al `Dispatcher` de forma asíncrona segura (`CheckAccess()`), previniendo excepciones de acceso cruzado entre hilos.
+* **Prevención de Conflictos de Tracking en Entity Framework Core**:
+  * En `SaveProductAsync` y `SaveBatchAsync`, se busca la entidad existente en el contexto antes de actualizar propiedades, evitando errores de seguimiento de instancias duplicadas en SQLite.
+* **Sincronización de Versión Global**:
+  * Unificación de cadenas de versión a **v1.3.17** en todos los ViewModels (`ConfigurationShellViewModel`, `SettingsViewModel`, `MainViewModel`) y tolerancia a prefijos `'v'` en `AppUpdateService`.
+
+---
+
 ## [1.3.16] - 2026-10-04
 
 ### Añadido

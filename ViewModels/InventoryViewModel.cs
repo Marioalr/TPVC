@@ -62,7 +62,15 @@ public partial class InventoryViewModel : ObservableObject
 
         _inventoryService.OnInventoryChanged += () =>
         {
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = FilterProductsAsync());
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(async () => await FilterProductsAsync());
+            }
+            else
+            {
+                _ = FilterProductsAsync();
+            }
         };
     }
 
@@ -116,6 +124,12 @@ public partial class InventoryViewModel : ObservableObject
     partial void OnSearchTextChanged(string value)
     {
         _ = FilterProductsAsync();
+    }
+
+    [RelayCommand]
+    public void ClearSearch()
+    {
+        SearchText = string.Empty;
     }
 
     partial void OnSelectedCategoryChanged(Category? value)

@@ -23,6 +23,18 @@ public partial class BatchesViewModel : ObservableObject
     private string _selectedFilter = "Todos"; // Todos, Proximos, Vencidos, Vigentes
 
     [ObservableProperty]
+    private int _countTodos;
+
+    [ObservableProperty]
+    private int _countProximos;
+
+    [ObservableProperty]
+    private int _countVencidos;
+
+    [ObservableProperty]
+    private int _countVigentes;
+
+    [ObservableProperty]
     private bool _isLoading;
 
     // Nuevo Lote Modal State
@@ -44,14 +56,59 @@ public partial class BatchesViewModel : ObservableObject
     [ObservableProperty]
     private string _newBatchNotes = string.Empty;
 
+    [ObservableProperty]
+    private bool _isExpirationWarningVisible;
+
+    [ObservableProperty]
+    private string _expirationWarningMessage = string.Empty;
+
     public BatchesViewModel(InventoryService inventoryService)
     {
         _inventoryService = inventoryService;
 
         _inventoryService.OnInventoryChanged += () =>
         {
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() => _ = LoadBatchesAsync());
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(async () => await LoadBatchesAsync());
+            }
+            else
+            {
+                _ = LoadBatchesAsync();
+            }
         };
+    }
+
+    [RelayCommand]
+    public void SetFilter(string filter)
+    {
+        SelectedFilter = filter;
+    }
+
+    partial void OnNewBatchExpirationDateChanged(DateTime value)
+    {
+        ValidateExpirationDate(value);
+    }
+
+    private void ValidateExpirationDate(DateTime value)
+    {
+        if (value.Date < DateTime.Today)
+        {
+            IsExpirationWarningVisible = true;
+            ExpirationWarningMessage = "⚠️ Atención: La fecha de caducidad ingresada ya venció.";
+        }
+        else if ((value.Date - DateTime.Today).TotalDays <= 30)
+        {
+            int days = (int)(value.Date - DateTime.Today).TotalDays;
+            IsExpirationWarningVisible = true;
+            ExpirationWarningMessage = $"⚠️ Advertencia: Este lote vencerá en {days} días ({value:dd/MM/yyyy}). Confirme que la fecha sea correcta.";
+        }
+        else
+        {
+            IsExpirationWarningVisible = false;
+            ExpirationWarningMessage = string.Empty;
+        }
     }
 
     [RelayCommand]
@@ -60,19 +117,26 @@ public partial class BatchesViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            var list = await _inventoryService.GetBatchesAsync();
+            var allBatches = await _inventoryService.GetBatchesAsync();
+            var active = allBatches.Where(b => !b.IsDepleted).ToList();
 
+            CountTodos = active.Count;
+            CountProximos = active.Count(b => b.Status == ExpirationStatus.ProximoAVencer);
+            CountVencidos = active.Count(b => b.Status == ExpirationStatus.Vencido);
+            CountVigentes = active.Count(b => b.Status == ExpirationStatus.Vigente);
+
+            var list = active;
             if (SelectedFilter == "Proximos")
             {
-                list = list.Where(b => !b.IsDepleted && b.Status == ExpirationStatus.ProximoAVencer).ToList();
+                list = active.Where(b => b.Status == ExpirationStatus.ProximoAVencer).ToList();
             }
             else if (SelectedFilter == "Vencidos")
             {
-                list = list.Where(b => !b.IsDepleted && b.Status == ExpirationStatus.Vencido).ToList();
+                list = active.Where(b => b.Status == ExpirationStatus.Vencido).ToList();
             }
             else if (SelectedFilter == "Vigentes")
             {
-                list = list.Where(b => !b.IsDepleted && b.Status == ExpirationStatus.Vigente).ToList();
+                list = active.Where(b => b.Status == ExpirationStatus.Vigente).ToList();
             }
 
             Batches = new ObservableCollection<ProductBatch>(list);
@@ -98,8 +162,9 @@ public partial class BatchesViewModel : ObservableObject
     [RelayCommand]
     public void OpenNewBatchModal()
     {
-        NewBatchNumber = $"LOT-{DateTime.Now:yyyyMMdd}-{new Random().Next(10, 99)}";
+        NewBatchNumber = $"LOT-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(10, 99)}";
         NewBatchExpirationDate = DateTime.Today.AddMonths(12);
+        ValidateExpirationDate(NewBatchExpirationDate);
         NewBatchQuantity = 10;
         NewBatchNotes = string.Empty;
         IsNewBatchModalOpen = true;
