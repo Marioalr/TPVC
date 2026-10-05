@@ -17,4 +17,9 @@
     <SolidColorBrush x:Key="ThemeWarning" Color="#F59E0B" />
     <SolidColorBrush x:Key="ThemeDanger" Color="#EF4444" />
 
+    <!-- Compatibilidad y resaltado de selección -->
+    <SolidColorBrush x:Key="ThemePrimary" Color="#0284C7" />
+    <SolidColorBrush x:Key="ThemePrimaryTransparent" Color="#150284C7" />
+    <SolidColorBrush x:Key="ThemeSelectionBackground" Color="#E0F2FE" />
+
 </ResourceDictionary>

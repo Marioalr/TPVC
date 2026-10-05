@@ -3175,6 +3175,96 @@ public class InventoryTests
             }
         }
     }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_Modals_InitialSuggestionsImmediatelyVisible()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        await vm.LoadInitialDataAsync();
+
+        var patient = vm.Patients.First();
+        vm.SelectedPatient = patient;
+
+        // 1. Receta médica: las sugerencias deben estar visibles inmediatamente sin teclear
+        await vm.OpenPrescriptionModalAsync();
+        Assert.IsTrue(vm.IsPrescriptionModalOpen);
+        Assert.IsTrue(vm.IsPrescriptionDropdownOpen, "El menú de sugerencias debe desplegarse inmediatamente al abrir");
+        Assert.IsTrue(vm.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias iniciales de medicamentos");
+        Assert.IsTrue(vm.PrescriptionProductSuggestions.All(MedicalRecordsViewModel.IsProductMedication), "Solo debe tener medicamentos");
+        vm.ClosePrescriptionModal();
+
+        // 2. Insumos: las sugerencias deben estar visibles inmediatamente sin teclear
+        await vm.OpenSuppliesModalAsync();
+        Assert.IsTrue(vm.IsSuppliesModalOpen);
+        Assert.IsTrue(vm.IsSupplyDropdownOpen, "El menú de insumos debe desplegarse inmediatamente al abrir");
+        Assert.IsTrue(vm.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias iniciales de insumos");
+        Assert.IsTrue(vm.SupplyProductSuggestions.All(MedicalRecordsViewModel.IsProductSupply), "Solo debe tener insumos");
+        vm.CloseSuppliesModal();
+
+        // 3. Servicios: las sugerencias deben estar visibles inmediatamente sin teclear
+        await vm.OpenServicesModalAsync();
+        Assert.IsTrue(vm.IsServicesModalOpen);
+        Assert.IsTrue(vm.IsServiceModalDropdownOpen, "El menú de servicios debe desplegarse inmediatamente al abrir");
+        Assert.IsTrue(vm.ServiceModalSuggestions.Count > 0, "Debe tener sugerencias iniciales de servicios");
+        vm.CloseServicesModal();
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_CatalogBrowser_OpensFilteredCatalogsAndAddsItemsDirectly()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        await vm.LoadInitialDataAsync();
+
+        var patient = vm.Patients.First();
+        patient.ActivePrescription = new List<PatientPrescriptionItem>();
+        patient.ActiveSupplies = new List<PatientSupplyItem>();
+        patient.ActiveServices = new List<PatientServiceItem>();
+        vm.SelectedPatient = patient;
+
+        // 1. Catálogo desde Receta Médica -> Sólo Medicamentos
+        await vm.OpenPrescriptionCatalogAsync();
+        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Medications", vm.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Medicamentos"));
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(MedicalRecordsViewModel.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
+
+        // Agregar medicamento desde catálogo
+        var chosenMed = vm.CatalogBrowserFilteredProducts.First();
+        await vm.AddProductFromCatalogBrowserAsync(chosenMed);
+        Assert.IsFalse(vm.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras agregar");
+        Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMed.Name));
+
+        // 2. Catálogo desde Insumos -> Sólo Insumos
+        await vm.OpenSupplyCatalogAsync();
+        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Supplies", vm.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Insumos"));
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(MedicalRecordsViewModel.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");
+
+        // Agregar insumo desde catálogo
+        var chosenSupply = vm.CatalogBrowserFilteredProducts.First();
+        await vm.AddProductFromCatalogBrowserAsync(chosenSupply);
+        Assert.IsFalse(vm.IsCatalogBrowserModalOpen);
+        Assert.AreEqual(1, patient.ActiveSupplies.Count);
+        Assert.IsTrue(patient.ActiveSupplies[0].SupplyName.Contains(chosenSupply.Name));
+
+        // 3. Catálogo desde Servicios -> Procedimientos clínicos
+        await vm.OpenServiceCatalogAsync();
+        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Services", vm.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Servicios"));
+        Assert.IsTrue(vm.CatalogBrowserFilteredServices.Count > 0);
+
+        // Agregar servicio desde catálogo
+        var chosenService = vm.CatalogBrowserFilteredServices.First();
+        await vm.AddServiceFromCatalogBrowserAsync(chosenService);
+        Assert.IsFalse(vm.IsCatalogBrowserModalOpen);
+        Assert.AreEqual(1, patient.ActiveServices.Count);
+        Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
+    }
 }
 
 

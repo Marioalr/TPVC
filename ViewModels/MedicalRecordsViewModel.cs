@@ -1122,6 +1122,68 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsServiceModalDropdownOpen = ServiceModalSuggestions.Count > 0;
     }
 
+    // ==========================================
+    // EXPLORADOR DE CATÁLOGO (MEDICAMENTOS, INSUMOS, SERVICIOS)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isCatalogBrowserModalOpen;
+
+    [ObservableProperty]
+    private string _catalogBrowserTitle = "Catálogo";
+
+    [ObservableProperty]
+    private string _catalogBrowserSubtitle = "Explore y seleccione un elemento del catálogo";
+
+    [ObservableProperty]
+    private string _catalogBrowserMode = "Medications"; // "Medications", "Supplies", "Services"
+
+    [ObservableProperty]
+    private string _catalogBrowserSearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _catalogBrowserFilteredProducts = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _catalogBrowserFilteredServices = new();
+
+    partial void OnCatalogBrowserSearchTextChanged(string value)
+    {
+        ApplyCatalogBrowserFilter();
+    }
+
+    public void ApplyCatalogBrowserFilter()
+    {
+        var q = TextSearch.Normalize(CatalogBrowserSearchText ?? string.Empty);
+
+        if (CatalogBrowserMode == "Medications")
+        {
+            var list = AvailableProducts.Where(IsProductMedication);
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
+            }
+            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+        }
+        else if (CatalogBrowserMode == "Supplies")
+        {
+            var list = AvailableProducts.Where(IsProductSupply);
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
+            }
+            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+        }
+        else if (CatalogBrowserMode == "Services")
+        {
+            var list = Services.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                list = list.Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category, s.Description));
+            }
+            CatalogBrowserFilteredServices = new ObservableCollection<ClinicalService>(list.OrderBy(s => s.Name));
+        }
+    }
+
     public MedicalRecordsViewModel() : this(null, null, null, null, null)
     {
     }
@@ -1416,6 +1478,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             LoadFallbackServices();
         }
+
+        ApplyPrescriptionSuggestions(PrescriptionSearchText ?? string.Empty);
+        ApplySupplySuggestions(SupplySearchText ?? string.Empty);
+        ApplyServiceModalSuggestions(ServiceModalSearchText ?? string.Empty);
+        ApplyCatalogBrowserFilter();
     }
 
     private void LoadFallbackServices()
@@ -2655,6 +2722,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsVitalSignsModalOpen = false;
         IsRecordsViewerModalOpen = false;
         IsPatientModalOpen = false;
+        IsCatalogBrowserModalOpen = false;
         DismissInfoModal();
 
         // 2. Finalizar y cerrar la consulta médica en el servicio y detener cronómetro
@@ -3086,6 +3154,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    public async Task OpenPrescriptionModalAsync()
+    {
+        OpenPrescriptionModal();
+        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+            ApplyPrescriptionSuggestions(string.Empty);
+            IsPrescriptionDropdownOpen = true;
+        }
+    }
+
     public void OpenPrescriptionModal()
     {
         if (SelectedPatient == null)
@@ -3100,7 +3179,23 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
         ApplyPrescriptionSuggestions(string.Empty);
+        IsPrescriptionDropdownOpen = true;
         IsPrescriptionModalOpen = true;
+    }
+
+    [RelayCommand]
+    public async Task OpenPrescriptionCatalogAsync()
+    {
+        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+        }
+        CatalogBrowserMode = "Medications";
+        CatalogBrowserTitle = "Catálogo de Medicamentos";
+        CatalogBrowserSubtitle = "Explore todos los fármacos registrados y agregue el medicamento a la receta médica del paciente.";
+        CatalogBrowserSearchText = string.Empty;
+        ApplyCatalogBrowserFilter();
+        IsCatalogBrowserModalOpen = true;
     }
 
     [RelayCommand]
@@ -3138,6 +3233,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // ==========================================
 
     [RelayCommand]
+    public async Task OpenSuppliesModalAsync()
+    {
+        OpenSuppliesModal();
+        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+            ApplySupplySuggestions(string.Empty);
+            IsSupplyDropdownOpen = true;
+        }
+    }
+
     public void OpenSuppliesModal()
     {
         if (SelectedPatient == null)
@@ -3152,7 +3258,23 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
         ApplySupplySuggestions(string.Empty);
+        IsSupplyDropdownOpen = true;
         IsSuppliesModalOpen = true;
+    }
+
+    [RelayCommand]
+    public async Task OpenSupplyCatalogAsync()
+    {
+        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+        }
+        CatalogBrowserMode = "Supplies";
+        CatalogBrowserTitle = "Catálogo de Insumos y Material de Curación";
+        CatalogBrowserSubtitle = "Explore todos los insumos clínicos disponibles y agregue el material utilizado al expediente.";
+        CatalogBrowserSearchText = string.Empty;
+        ApplyCatalogBrowserFilter();
+        IsCatalogBrowserModalOpen = true;
     }
 
     [RelayCommand]
@@ -3355,6 +3477,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // ==========================================
 
     [RelayCommand]
+    public async Task OpenServicesModalAsync()
+    {
+        OpenServicesModal();
+        if (Services.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+            ApplyServiceModalSuggestions(string.Empty);
+            IsServiceModalDropdownOpen = true;
+        }
+    }
+
     public void OpenServicesModal()
     {
         if (SelectedPatient == null)
@@ -3369,7 +3502,54 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
         ApplyServiceModalSuggestions(string.Empty);
+        IsServiceModalDropdownOpen = true;
         IsServicesModalOpen = true;
+    }
+
+    [RelayCommand]
+    public async Task OpenServiceCatalogAsync()
+    {
+        if (Services.Count == 0 && _inventoryService != null)
+        {
+            await LoadServicesAsync();
+        }
+        CatalogBrowserMode = "Services";
+        CatalogBrowserTitle = "Catálogo de Servicios y Procedimientos Clínicos";
+        CatalogBrowserSubtitle = "Explore el catálogo oficial de servicios clínicos y agregue el procedimiento realizado al expediente.";
+        CatalogBrowserSearchText = string.Empty;
+        ApplyCatalogBrowserFilter();
+        IsCatalogBrowserModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCatalogBrowser()
+    {
+        IsCatalogBrowserModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task AddProductFromCatalogBrowserAsync(Product? product)
+    {
+        if (product == null) return;
+
+        if (CatalogBrowserMode == "Medications")
+        {
+            await SelectAndAddPrescriptionProductAsync(product);
+            IsCatalogBrowserModalOpen = false;
+        }
+        else if (CatalogBrowserMode == "Supplies")
+        {
+            await SelectAndAddSupplyProductAsync(product);
+            IsCatalogBrowserModalOpen = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task AddServiceFromCatalogBrowserAsync(ClinicalService? service)
+    {
+        if (service == null) return;
+        await SelectAndAddServiceModalSuggestionAsync(service);
+        IsCatalogBrowserModalOpen = false;
     }
 
     [RelayCommand]

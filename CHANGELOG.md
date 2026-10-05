@@ -2,6 +2,27 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.6.2] - 2026-10-05
+
+### Añadido
+* **Búsqueda en Catálogo dedicada por categoría en consulta médica**:
+  * Se integró el botón "**Buscar en Catálogo**" en los encabezados de las tres ventanas modales de consulta:
+    * *Receta Médica*: Explora el catálogo filtrado estrictamente a Medicamentos y fármacos.
+    * *Insumos Clínicos*: Explora el catálogo filtrado exclusivamente a Insumos y material de curación.
+    * *Servicios Médicos*: Explora el catálogo completo de Procedimientos y Servicios Clínicos.
+  * Nueva vista modal de exploración de catálogo con buscador en tiempo real y botón de inserción directa (`+ Agregar`) a la consulta activa.
+  * Soporte completo para cierre instantáneo mediante la tecla `Escape` (`Esc`).
+
+### Corregido
+* **Despliegue inmediato de sugerencias en ventanas modales**:
+  * Se corrigió el comportamiento donde la lista desplegable de sugerencias no aparecía hasta que el usuario comenzaba a teclear. Ahora las sugerencias iniciales se encuentran desplegadas y visibles de forma instantánea al abrir las ventanas de Receta Médica, Insumos y Servicios.
+  * Carga asíncrona garantizada con la base de datos local SQLite para asegurar disponibilidad inmediata de productos y servicios.
+
+### Mejorado
+* **Navegación interactiva por teclado con flechas (↑ / ↓)**:
+  * Desplazamiento reactivo con flechas direccionales desde la caja de búsqueda, campos auxiliares (dosis, cantidad, notas) y la lista de sugerencias.
+  * Realce visual de alto contraste en el elemento seleccionado (fondo de resalte `#E0F2FE`, borde de 2px en color de acento y glifo indicador `▶`) con auto-desplazamiento (`ScrollIntoView`) para mantener el elemento enfocado siempre a la vista.
+
 ## [1.6.1] - 2026-10-05
 
 ### Corregido

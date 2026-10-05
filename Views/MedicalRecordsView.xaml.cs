@@ -72,6 +72,14 @@ public partial class MedicalRecordsView : UserControl
                 ServiceModalSearchTextBox?.SelectAll();
             }, DispatcherPriority.Input);
         }
+        else if (e.PropertyName == nameof(MedicalRecordsViewModel.IsCatalogBrowserModalOpen) && vm.IsCatalogBrowserModalOpen)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                CatalogBrowserSearchTextBox?.Focus();
+                CatalogBrowserSearchTextBox?.SelectAll();
+            }, DispatcherPriority.Input);
+        }
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -82,6 +90,12 @@ public partial class MedicalRecordsView : UserControl
         {
             if (DataContext is MedicalRecordsViewModel vm)
             {
+                if (vm.IsCatalogBrowserModalOpen)
+                {
+                    vm.CloseCatalogBrowser();
+                    e.Handled = true;
+                    return;
+                }
                 if (vm.IsPrescriptionModalOpen)
                 {
                     vm.ClosePrescriptionModal();
@@ -134,11 +148,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (PrescriptionSuggestionsListBox?.Items.Count > 0)
             {
-                var nextIndex = PrescriptionSuggestionsListBox.SelectedIndex + 1;
-                if (nextIndex >= PrescriptionSuggestionsListBox.Items.Count)
+                var cur = PrescriptionSuggestionsListBox.SelectedIndex;
+                var nextIndex = cur + 1;
+                if (nextIndex >= PrescriptionSuggestionsListBox.Items.Count || nextIndex < 0)
                     nextIndex = 0;
                 PrescriptionSuggestionsListBox.SelectedIndex = nextIndex;
-                PrescriptionSuggestionsListBox.ScrollIntoView(PrescriptionSuggestionsListBox.SelectedItem);
+                var item = PrescriptionSuggestionsListBox.Items[nextIndex];
+                PrescriptionSuggestionsListBox.ScrollIntoView(item);
+                if (item is Product p)
+                {
+                    vm.SelectedPrescriptionProduct = p;
+                }
             }
             e.Handled = true;
         }
@@ -146,11 +166,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (PrescriptionSuggestionsListBox?.Items.Count > 0)
             {
-                var prevIndex = PrescriptionSuggestionsListBox.SelectedIndex - 1;
-                if (prevIndex < 0)
+                var cur = PrescriptionSuggestionsListBox.SelectedIndex;
+                var prevIndex = cur - 1;
+                if (prevIndex < 0 || prevIndex >= PrescriptionSuggestionsListBox.Items.Count)
                     prevIndex = PrescriptionSuggestionsListBox.Items.Count - 1;
                 PrescriptionSuggestionsListBox.SelectedIndex = prevIndex;
-                PrescriptionSuggestionsListBox.ScrollIntoView(PrescriptionSuggestionsListBox.SelectedItem);
+                var item = PrescriptionSuggestionsListBox.Items[prevIndex];
+                PrescriptionSuggestionsListBox.ScrollIntoView(item);
+                if (item is Product p)
+                {
+                    vm.SelectedPrescriptionProduct = p;
+                }
             }
             e.Handled = true;
         }
@@ -165,7 +191,15 @@ public partial class MedicalRecordsView : UserControl
 
     private async void PrescriptionAuxInput_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && DataContext is MedicalRecordsViewModel vm)
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            PrescriptionSearchTextBox_PreviewKeyDown(sender, e);
+            return;
+        }
+
+        if (e.Key == Key.Enter)
         {
             var product = PrescriptionSuggestionsListBox?.SelectedItem as Product;
             await vm.SelectAndAddPrescriptionProductAsync(product);
@@ -186,6 +220,16 @@ public partial class MedicalRecordsView : UserControl
                 PrescriptionSearchTextBox?.Focus();
                 e.Handled = true;
             }
+        }
+        else if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (PrescriptionSuggestionsListBox?.SelectedItem is Product p)
+                {
+                    vm.SelectedPrescriptionProduct = p;
+                }
+            }, DispatcherPriority.Input);
         }
     }
 
@@ -220,11 +264,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (SupplySuggestionsListBox?.Items.Count > 0)
             {
-                var nextIndex = SupplySuggestionsListBox.SelectedIndex + 1;
-                if (nextIndex >= SupplySuggestionsListBox.Items.Count)
+                var cur = SupplySuggestionsListBox.SelectedIndex;
+                var nextIndex = cur + 1;
+                if (nextIndex >= SupplySuggestionsListBox.Items.Count || nextIndex < 0)
                     nextIndex = 0;
                 SupplySuggestionsListBox.SelectedIndex = nextIndex;
-                SupplySuggestionsListBox.ScrollIntoView(SupplySuggestionsListBox.SelectedItem);
+                var item = SupplySuggestionsListBox.Items[nextIndex];
+                SupplySuggestionsListBox.ScrollIntoView(item);
+                if (item is Product p)
+                {
+                    vm.SelectedSupplyProduct = p;
+                }
             }
             e.Handled = true;
         }
@@ -232,11 +282,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (SupplySuggestionsListBox?.Items.Count > 0)
             {
-                var prevIndex = SupplySuggestionsListBox.SelectedIndex - 1;
-                if (prevIndex < 0)
+                var cur = SupplySuggestionsListBox.SelectedIndex;
+                var prevIndex = cur - 1;
+                if (prevIndex < 0 || prevIndex >= SupplySuggestionsListBox.Items.Count)
                     prevIndex = SupplySuggestionsListBox.Items.Count - 1;
                 SupplySuggestionsListBox.SelectedIndex = prevIndex;
-                SupplySuggestionsListBox.ScrollIntoView(SupplySuggestionsListBox.SelectedItem);
+                var item = SupplySuggestionsListBox.Items[prevIndex];
+                SupplySuggestionsListBox.ScrollIntoView(item);
+                if (item is Product p)
+                {
+                    vm.SelectedSupplyProduct = p;
+                }
             }
             e.Handled = true;
         }
@@ -251,7 +307,15 @@ public partial class MedicalRecordsView : UserControl
 
     private async void SupplyAuxInput_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && DataContext is MedicalRecordsViewModel vm)
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            SupplySearchTextBox_PreviewKeyDown(sender, e);
+            return;
+        }
+
+        if (e.Key == Key.Enter)
         {
             var product = SupplySuggestionsListBox?.SelectedItem as Product;
             await vm.SelectAndAddSupplyProductAsync(product);
@@ -272,6 +336,16 @@ public partial class MedicalRecordsView : UserControl
                 SupplySearchTextBox?.Focus();
                 e.Handled = true;
             }
+        }
+        else if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (SupplySuggestionsListBox?.SelectedItem is Product p)
+                {
+                    vm.SelectedSupplyProduct = p;
+                }
+            }, DispatcherPriority.Input);
         }
     }
 
@@ -306,11 +380,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (ServiceSuggestionsListBox?.Items.Count > 0)
             {
-                var nextIndex = ServiceSuggestionsListBox.SelectedIndex + 1;
-                if (nextIndex >= ServiceSuggestionsListBox.Items.Count)
+                var cur = ServiceSuggestionsListBox.SelectedIndex;
+                var nextIndex = cur + 1;
+                if (nextIndex >= ServiceSuggestionsListBox.Items.Count || nextIndex < 0)
                     nextIndex = 0;
                 ServiceSuggestionsListBox.SelectedIndex = nextIndex;
-                ServiceSuggestionsListBox.ScrollIntoView(ServiceSuggestionsListBox.SelectedItem);
+                var item = ServiceSuggestionsListBox.Items[nextIndex];
+                ServiceSuggestionsListBox.ScrollIntoView(item);
+                if (item is ClinicalService s)
+                {
+                    vm.SelectedServiceModalItem = s;
+                }
             }
             e.Handled = true;
         }
@@ -318,11 +398,17 @@ public partial class MedicalRecordsView : UserControl
         {
             if (ServiceSuggestionsListBox?.Items.Count > 0)
             {
-                var prevIndex = ServiceSuggestionsListBox.SelectedIndex - 1;
-                if (prevIndex < 0)
+                var cur = ServiceSuggestionsListBox.SelectedIndex;
+                var prevIndex = cur - 1;
+                if (prevIndex < 0 || prevIndex >= ServiceSuggestionsListBox.Items.Count)
                     prevIndex = ServiceSuggestionsListBox.Items.Count - 1;
                 ServiceSuggestionsListBox.SelectedIndex = prevIndex;
-                ServiceSuggestionsListBox.ScrollIntoView(ServiceSuggestionsListBox.SelectedItem);
+                var item = ServiceSuggestionsListBox.Items[prevIndex];
+                ServiceSuggestionsListBox.ScrollIntoView(item);
+                if (item is ClinicalService s)
+                {
+                    vm.SelectedServiceModalItem = s;
+                }
             }
             e.Handled = true;
         }
@@ -337,7 +423,15 @@ public partial class MedicalRecordsView : UserControl
 
     private async void ServiceModalAuxInput_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && DataContext is MedicalRecordsViewModel vm)
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            ServiceModalSearchTextBox_PreviewKeyDown(sender, e);
+            return;
+        }
+
+        if (e.Key == Key.Enter)
         {
             var service = ServiceSuggestionsListBox?.SelectedItem as ClinicalService;
             await vm.SelectAndAddServiceModalSuggestionAsync(service);
@@ -358,6 +452,16 @@ public partial class MedicalRecordsView : UserControl
                 ServiceModalSearchTextBox?.Focus();
                 e.Handled = true;
             }
+        }
+        else if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (ServiceSuggestionsListBox?.SelectedItem is ClinicalService s)
+                {
+                    vm.SelectedServiceModalItem = s;
+                }
+            }, DispatcherPriority.Input);
         }
     }
 
