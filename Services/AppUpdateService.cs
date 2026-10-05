@@ -57,8 +57,8 @@ public class UpdateConfig
 public class UpdateCheckResult
 {
     public bool IsUpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = "1.3.19";
-    public string LatestVersion { get; set; } = "1.3.19";
+    public string CurrentVersion { get; set; } = "1.4.0";
+    public string LatestVersion { get; set; } = "1.4.0";
     public string ReleaseNotes { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;

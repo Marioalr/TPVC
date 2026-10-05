@@ -89,6 +89,53 @@ public static class DatabaseInitializer
 
         try
         {
+            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN SystemsReview TEXT NOT NULL DEFAULT '';");
+        }
+        catch
+        {
+        }
+
+        // Migraciones de historia clínica completa (NOM-004-SSA3)
+        string[] newPatientColumns = new[]
+        {
+            "BirthDate TEXT NULL",
+            "Occupation TEXT NOT NULL DEFAULT ''",
+            "Religion TEXT NOT NULL DEFAULT ''",
+            "FamilyHistory TEXT NOT NULL DEFAULT ''",
+            "Surgeries TEXT NOT NULL DEFAULT ''",
+            "Transfusions TEXT NOT NULL DEFAULT ''",
+            "Hospitalizations TEXT NOT NULL DEFAULT ''",
+            "ImmunizationSchedule TEXT NOT NULL DEFAULT ''",
+            "MenarcheAge TEXT NOT NULL DEFAULT ''",
+            "SexualOnsetAge TEXT NOT NULL DEFAULT ''",
+            "SexualPartnersCount TEXT NOT NULL DEFAULT ''",
+            "PeriodDuration TEXT NOT NULL DEFAULT ''",
+            "IsPeriodHeavy TEXT NOT NULL DEFAULT ''",
+            "PapSmear TEXT NOT NULL DEFAULT ''",
+            "PregnanciesCount INTEGER NOT NULL DEFAULT 0",
+            "CesareansCount INTEGER NOT NULL DEFAULT 0",
+            "AbortionsCount INTEGER NOT NULL DEFAULT 0",
+            "IsCurrentlyPregnant INTEGER NOT NULL DEFAULT 0",
+            "GestationalWeeks TEXT NOT NULL DEFAULT ''",
+            "DevelopmentalMilestones TEXT NOT NULL DEFAULT ''",
+            "Diet TEXT NOT NULL DEFAULT ''",
+            "HousingConditions TEXT NOT NULL DEFAULT ''",
+            "Zoonosis TEXT NOT NULL DEFAULT ''"
+        };
+
+        foreach (var colDef in newPatientColumns)
+        {
+            try
+            {
+                context.Database.ExecuteSqlRaw($"ALTER TABLE Patients ADD COLUMN {colDef};");
+            }
+            catch
+            {
+            }
+        }
+
+        try
+        {
             context.Database.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ClinicalServices (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,6 +177,29 @@ public static class DatabaseInitializer
                     ChronicDiseases TEXT NOT NULL,
                     EmergencyContactName TEXT NOT NULL,
                     EmergencyContactPhone TEXT NOT NULL,
+                    BirthDate TEXT NULL,
+                    Occupation TEXT NOT NULL DEFAULT '',
+                    Religion TEXT NOT NULL DEFAULT '',
+                    FamilyHistory TEXT NOT NULL DEFAULT '',
+                    Surgeries TEXT NOT NULL DEFAULT '',
+                    Transfusions TEXT NOT NULL DEFAULT '',
+                    Hospitalizations TEXT NOT NULL DEFAULT '',
+                    ImmunizationSchedule TEXT NOT NULL DEFAULT '',
+                    MenarcheAge TEXT NOT NULL DEFAULT '',
+                    SexualOnsetAge TEXT NOT NULL DEFAULT '',
+                    SexualPartnersCount TEXT NOT NULL DEFAULT '',
+                    PeriodDuration TEXT NOT NULL DEFAULT '',
+                    IsPeriodHeavy TEXT NOT NULL DEFAULT '',
+                    PapSmear TEXT NOT NULL DEFAULT '',
+                    PregnanciesCount INTEGER NOT NULL DEFAULT 0,
+                    CesareansCount INTEGER NOT NULL DEFAULT 0,
+                    AbortionsCount INTEGER NOT NULL DEFAULT 0,
+                    IsCurrentlyPregnant INTEGER NOT NULL DEFAULT 0,
+                    GestationalWeeks TEXT NOT NULL DEFAULT '',
+                    DevelopmentalMilestones TEXT NOT NULL DEFAULT '',
+                    Diet TEXT NOT NULL DEFAULT '',
+                    HousingConditions TEXT NOT NULL DEFAULT '',
+                    Zoonosis TEXT NOT NULL DEFAULT '',
                     LastVisit TEXT NOT NULL,
                     LastDiagnosis TEXT NOT NULL,
                     VitalSigns TEXT NOT NULL,
@@ -157,6 +227,7 @@ public static class DatabaseInitializer
                     ChiefComplaint TEXT NOT NULL,
                     VitalSigns TEXT NOT NULL,
                     PhysicalExamination TEXT NOT NULL,
+                    SystemsReview TEXT NOT NULL DEFAULT '',
                     Diagnosis TEXT NOT NULL,
                     TreatmentPlan TEXT NOT NULL,
                     Notes TEXT NOT NULL,

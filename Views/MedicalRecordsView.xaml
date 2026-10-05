@@ -92,16 +92,17 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding NewConsultationCommand}" 
-                            Padding="12,8">
+                    <Button Style="{DynamicResource AccentButton}" 
+                            Command="{Binding NewPatientCommand}" 
+                            Padding="12,8"
+                            ToolTip="Dar de alta un nuevo paciente y su historia clínica completa (NOM-004-SSA3)">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" 
-                                  Fill="{DynamicResource ThemeText}" 
+                                  Fill="{DynamicResource ThemeAccentText}" 
                                   Width="12" Height="12" 
                                   Stretch="Uniform" 
                                   Margin="0,0,8,0" />
-                            <TextBlock Text="Nueva Consulta" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="Nuevo Paciente" FontSize="13" FontWeight="Bold" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -467,8 +468,319 @@
                                     </Button>
                                 </StackPanel>
 
-                                <!-- VISTA DE PESTAÑA 1: RESUMEN Y NOTA DE EVOLUCIÓN -->
+                                <!-- VISTA DE PESTAÑA 1: RESUMEN Y CONSULTA MÉDICA (NOM-004-SSA3) -->
                                 <StackPanel Visibility="{Binding PatientDetailTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Resumen}">
+                                    
+                                    <!-- ================================================================= -->
+                                    <!-- 1. PANEL DE CONSULTA MÉDICA EN CURSO (LLENADO EN TIEMPO REAL)     -->
+                                    <!-- ================================================================= -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeAccent}" 
+                                            BorderThickness="2" 
+                                            CornerRadius="12" 
+                                            Padding="16" 
+                                            Margin="0,0,0,14" 
+                                            Visibility="{Binding HasActiveConsultation, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel>
+                                            <!-- Encabezado de la Consulta Activa -->
+                                            <Grid Margin="0,0,0,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Border Background="{DynamicResource ThemeSuccess}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                                            <TextBlock Text="● CONSULTA ACTIVA EN VIVO" FontSize="11" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                        <TextBlock Text="{Binding ActiveConsultationFolio, StringFormat='Folio: {0}'}" FontWeight="Bold" FontSize="14" FontFamily="Consolas" Foreground="{DynamicResource ThemeAccent}" />
+                                                        <TextBlock Text=" • Duración: " FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="8,0,0,0" />
+                                                        <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontWeight="Bold" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="Complete los datos de la nota médica conforme a la NOM-004-SSA3. Puede guardar avances o finalizar directamente." FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SaveActiveConsultationNoteCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Guardar los avances de la nota clínica en el expediente sin finalizar la consulta">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="💾" FontSize="12" Margin="0,0,5,0" />
+                                                            <TextBlock Text="Guardar Nota" FontSize="11" FontWeight="SemiBold" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Style="{DynamicResource AccentButton}" Command="{Binding FinalizeConsultationAndOpenPosCommand}" Padding="12,6" ToolTip="Finalizar la consulta médica y enviar las recetas y servicios a cobrar en caja">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="🛒" FontSize="12" Margin="0,0,5,0" />
+                                                            <TextBlock Text="Finalizar y Cobrar" FontSize="11" FontWeight="Bold" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Motivo de la Consulta -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <TextBlock Text="Motivo de la Consulta (Chief Complaint) *" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,4" />
+                                                    <TextBox Text="{Binding ConsultationChiefComplaint, UpdateSourceTrigger=PropertyChanged}" 
+                                                             Style="{DynamicResource ModernTextBox}" 
+                                                             Padding="8,6" 
+                                                             ToolTip="Motivo principal por el que el paciente acude a la consulta médica." />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Signos Vitales y Somatometría con Cálculo Automático de IMC -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <Grid Margin="0,0,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="📊 Somatometría y Signos Vitales (Cálculo Automático de IMC)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                                                        <Border Grid.Column="1" Background="{DynamicResource ThemeAccent}" CornerRadius="5" Padding="8,3">
+                                                            <TextBlock Text="{Binding ConsultationIMC, StringFormat='IMC: {0}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccentText}" />
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="6" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="T.A. (mmHg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationTA, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Tensión Arterial (ej. 120/80)" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="F.C. (lpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationFC, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Frecuencia Cardíaca en lpm" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="4">
+                                                            <TextBlock Text="F.R. (rpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationFR, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Frecuencia Respiratoria en rpm" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="6">
+                                                            <TextBlock Text="Temp (°C)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationTemp, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Temperatura corporal en °C" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="8">
+                                                            <TextBlock Text="Glucosa (mg/dL)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationGlucose, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Glucosa capilar o sérica (mg/dL)" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="10">
+                                                            <TextBlock Text="Peso (kg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationWeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Peso del paciente en kilogramos" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="12">
+                                                            <TextBlock Text="Talla (m)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <TextBox Text="{Binding ConsultationHeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" ToolTip="Estatura en metros (ej. 1.70)" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Exploración por Aparatos y Sistemas -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <TextBlock Text="🩺 Interrogatorio y Exploración por Aparatos y Sistemas (NOM-004-SSA3)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,3" />
+                                                    <TextBlock Text="Respiratorio, cardiovascular, digestivo, urinario, neurológico, músculo-esquelético y tegumentario." FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,6" />
+                                                    <TextBox Text="{Binding ConsultationSystemsReview, UpdateSourceTrigger=PropertyChanged}" 
+                                                             Style="{DynamicResource ModernTextBox}" 
+                                                             AcceptsReturn="True" 
+                                                             TextWrapping="Wrap" 
+                                                             MinHeight="55" 
+                                                             Padding="8,6" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Exploración Física General y Habitus Exterior -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <TextBlock Text="🩺 Exploración Física General y Habitus Exterior" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,3" />
+                                                    <TextBlock Text="Cabeza, cuello, tórax, abdomen, extremidades, estado neurológico y marcha." FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,6" />
+                                                    <TextBox Text="{Binding ConsultationPhysicalExam, UpdateSourceTrigger=PropertyChanged}" 
+                                                             Style="{DynamicResource ModernTextBox}" 
+                                                             AcceptsReturn="True" 
+                                                             TextWrapping="Wrap" 
+                                                             MinHeight="50" 
+                                                             Padding="8,6" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Diagnóstico Clínico -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <TextBlock Text="🩺 Diagnóstico Clínico (CIE-10 / Impresión Diagnóstica) *" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,4" />
+                                                    <TextBox Text="{Binding ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}" 
+                                                             Style="{DynamicResource ModernTextBox}" 
+                                                             Padding="8,6" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Plan Terapéutico e Indicaciones Médicas -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <Grid Margin="0,0,0,6">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="📋 Plan Terapéutico, Cuidados e Indicaciones Médicas" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                                                        <!-- Plantillas rápidas -->
+                                                        <WrapPanel Grid.Column="1" Orientation="Horizontal">
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AppendGeneralIndicationPresetCommand}" CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." Padding="6,2" Margin="0,0,4,0">
+                                                                <TextBlock Text="+ Hidratación" FontSize="10" />
+                                                            </Button>
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AppendGeneralIndicationPresetCommand}" CommandParameter="Reposo relativo por 48 horas, evitar esfuerzos físicos pesados." Padding="6,2" Margin="0,0,4,0">
+                                                                <TextBlock Text="+ Reposo" FontSize="10" />
+                                                            </Button>
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AppendGeneralIndicationPresetCommand}" CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." Padding="6,2" Margin="0,0,4,0">
+                                                                <TextBlock Text="+ Dieta blanda" FontSize="10" />
+                                                            </Button>
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AppendGeneralIndicationPresetCommand}" CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." Padding="6,2">
+                                                                <TextBlock Text="+ Alarma" FontSize="10" />
+                                                            </Button>
+                                                        </WrapPanel>
+                                                    </Grid>
+                                                    <TextBox Text="{Binding ConsultationTreatmentPlan, UpdateSourceTrigger=PropertyChanged}" 
+                                                             Style="{DynamicResource ModernTextBox}" 
+                                                             AcceptsReturn="True" 
+                                                             TextWrapping="Wrap" 
+                                                             MinHeight="55" 
+                                                             Padding="8,6" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Receta Médica y Fármacos Prescritos en Vivo -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <TextBlock Text="💊 Receta Médica y Medicamentos Prescritos" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                                    <Grid Margin="0,0,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="70" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBox Grid.Column="0" Text="{Binding NewPrescriptionMedicine, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" ToolTip="Nombre del medicamento (ej. Paracetamol 500mg)" />
+                                                        <TextBox Grid.Column="2" Text="{Binding NewPrescriptionDosage, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" ToolTip="Dosis y posología (ej. 1 tableta cada 8 horas por 5 días)" />
+                                                        <TextBox Grid.Column="4" Text="{Binding NewPrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,5" ToolTip="Cantidad de piezas o cajas" />
+                                                        <Button Grid.Column="6" Style="{DynamicResource AccentButton}" Command="{Binding AddPrescriptionItemCommand}" Padding="10,5">
+                                                            <TextBlock Text="+ Recetar" FontSize="11" FontWeight="Bold" />
+                                                        </Button>
+                                                    </Grid>
+
+                                                    <!-- Lista de Medicamentos Prescritos -->
+                                                    <ItemsControl ItemsSource="{Binding ConsultationPrescriptions}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,4">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <TextBlock Text="💊 " FontSize="11" />
+                                                                            <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" Margin="0,0,6,0" />
+                                                                            <TextBlock Text="{Binding Dosage, StringFormat='({0})'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                        </StackPanel>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" Margin="10,0" />
+                                                                        <Button Grid.Column="2" Style="{DynamicResource OutlineButton}" Command="{Binding DataContext.RemovePrescriptionItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="6,2" VerticalAlignment="Center" ToolTip="Eliminar de la receta">
+                                                                            <TextBlock Text="✕" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                                        </Button>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Botones Inferiores de la Consulta Activa -->
+                                            <Grid Margin="0,6,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Button Grid.Column="0" Style="{DynamicResource OutlineButton}" Command="{Binding CancelActiveConsultationCommand}" Padding="12,6" ToolTip="Cancelar la consulta en curso">
+                                                    <TextBlock Text="Cancelar Consulta" FontSize="11" Foreground="{DynamicResource ThemeError}" />
+                                                </Button>
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding OpenSuppliesModalCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Agregar insumos y material de curación">
+                                                        <TextBlock Text="📦 + Insumos" FontSize="11" FontWeight="SemiBold" />
+                                                    </Button>
+                                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding OpenServicesModalCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Agregar procedimientos y servicios clínicos">
+                                                        <TextBlock Text="🩺 + Procedimientos" FontSize="11" FontWeight="SemiBold" />
+                                                    </Button>
+                                                    <Button Style="{DynamicResource AccentButton}" Command="{Binding FinalizeConsultationAndOpenPosCommand}" Padding="16,6">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="🛒" FontSize="12" Margin="0,0,5,0" />
+                                                            <TextBlock Text="Finalizar y Cobrar en POS" FontSize="11" FontWeight="Bold" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ================================================================= -->
+                                    <!-- 2. BANNER DE INICIO DE CONSULTA (SI NO HAY CONSULTA ACTIVA)       -->
+                                    <!-- ================================================================= -->
+                                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                            BorderBrush="{DynamicResource ThemeAccent}" 
+                                            BorderThickness="1.5" 
+                                            CornerRadius="10" 
+                                            Padding="16" 
+                                            Margin="0,0,0,14"
+                                            Visibility="{Binding HasActiveConsultation, Converter={StaticResource InverseBoolToVis}}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="🩺 Iniciar Consulta Médica con este Paciente" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeText}" />
+                                                <TextBlock Text="Al iniciar la consulta podrá registrar en tiempo real signos vitales con IMC automático, exploración por aparatos y sistemas, diagnóstico clínico, plan de tratamiento y emitir la receta médica." 
+                                                           FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" Margin="0,4,0,0" MaxWidth="620" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Style="{DynamicResource AccentButton}" Command="{Binding StartActiveConsultationCommand}" Padding="18,10" VerticalAlignment="Center" ToolTip="Iniciar una nueva consulta médica activa con este paciente">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="🩺" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="Iniciar Consulta" FontSize="13" FontWeight="Bold" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- ================================================================= -->
+                                    <!-- 3. EXPEDIENTE CLÍNICO INTEGRAL DEL PACIENTE (NOM-004-SSA3)        -->
+                                    <!-- ================================================================= -->
                                     <!-- Datos de Contacto y Antecedentes (NOM-004-SSA3) -->
                                     <Border Background="{DynamicResource ThemeSurface}" 
                                             BorderBrush="{DynamicResource ThemeBorder}" 
@@ -484,7 +796,7 @@
 
                                             <!-- Columna 1: Contacto y Ubicación -->
                                             <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                                <TextBlock Text="📞 Información de Contacto" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                                <TextBlock Text="📞 Información de Contacto y General" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                                                     <TextBlock Text="Teléfono: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
                                                     <TextBlock Text="{Binding SelectedPatient.FormattedPhone}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
@@ -493,9 +805,15 @@
                                                     <TextBlock Text="Correo: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
                                                     <TextBlock Text="{Binding SelectedPatient.Email}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
                                                 </StackPanel>
-                                                <StackPanel Orientation="Horizontal">
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                                                     <TextBlock Text="Domicilio: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
                                                     <TextBlock Text="{Binding SelectedPatient.Address}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Ocupación: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.Occupation}" FontSize="11" Foreground="{DynamicResource ThemeText}" Margin="0,0,10,0" />
+                                                    <TextBlock Text="Religión: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.Religion}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
                                                 </StackPanel>
                                             </StackPanel>
 
@@ -517,7 +835,7 @@
                                         </Grid>
                                     </Border>
 
-                                    <!-- Signos Vitales de Última Consulta con Botón para Agregar/Actualizar -->
+                                    <!-- Antecedentes Heredofamiliares (AHF) -->
                                     <Border Background="{DynamicResource ThemeSurface}" 
                                             BorderBrush="{DynamicResource ThemeBorder}" 
                                             BorderThickness="1" 
@@ -525,37 +843,12 @@
                                             Padding="14" 
                                             Margin="0,0,0,12">
                                         <StackPanel>
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" 
-                                                           Text="📊 Signos Vitales y Somatometría" 
-                                                           FontWeight="Bold" 
-                                                           FontSize="13" 
-                                                           Foreground="{DynamicResource ThemeText}" 
-                                                           VerticalAlignment="Center" />
-                                                <Button Grid.Column="1" 
-                                                        Style="{DynamicResource AccentButton}" 
-                                                        Command="{Binding OpenVitalSignsModalCommand}" 
-                                                        Padding="10,4" 
-                                                        ToolTip="Abrir captura completa de signos vitales (todos opcionales)">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="🩺" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                        <TextBlock Text="Agregar Signos Vitales" FontSize="11" FontWeight="Bold" />
-                                                    </StackPanel>
-                                                </Button>
-                                            </Grid>
-                                            <TextBlock Text="{Binding SelectedPatient.VitalSigns}" 
-                                                       FontSize="13" 
-                                                       FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource ThemeAccent}" 
-                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="🧬 Antecedentes Heredofamiliares (AHF)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,4" />
+                                            <TextBlock Text="{Binding SelectedPatient.FamilyHistory}" FontSize="11.5" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Diagnóstico y Notas Clínicas -->
+                                    <!-- Antecedentes Personales Patológicos (APP) -->
                                     <Border Background="{DynamicResource ThemeSurface}" 
                                             BorderBrush="{DynamicResource ThemeBorder}" 
                                             BorderThickness="1" 
@@ -563,98 +856,146 @@
                                             Padding="14" 
                                             Margin="0,0,0,12">
                                         <StackPanel>
-                                            <TextBlock Text="🩺 Diagnóstico y Evolución Médica" 
-                                                       FontWeight="Bold" 
-                                                       FontSize="13" 
-                                                       Foreground="{DynamicResource ThemeText}" 
-                                                       Margin="0,0,0,6" />
-                                            <TextBlock Text="{Binding SelectedPatient.LastDiagnosis, StringFormat='Diagnóstico: {0}'}" 
-                                                       FontWeight="SemiBold" 
-                                                       FontSize="13" 
-                                                       Foreground="{DynamicResource ThemeText}" 
-                                                       Margin="0,0,0,4" />
-                                            <TextBlock Text="{Binding SelectedPatient.ClinicalNotes}" 
-                                                       FontSize="12" 
-                                                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                       TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- Indicaciones Generales y Cuidados (NOM-004-SSA3) -->
-                                    <Border Background="{DynamicResource ThemeSurface}" 
-                                            BorderBrush="{DynamicResource ThemeBorder}" 
-                                            BorderThickness="1" 
-                                            CornerRadius="8" 
-                                            Padding="14" 
-                                            Margin="0,0,0,12">
-                                        <StackPanel>
-                                            <Grid Margin="0,0,0,8">
+                                            <TextBlock Text="🏥 Antecedentes Personales Patológicos (APP)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,6" />
+                                            <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="14" />
+                                                    <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
+
                                                 <StackPanel Grid.Column="0">
-                                                    <TextBlock Text="📋 Indicaciones Generales y Cuidados" 
-                                                               FontWeight="Bold" 
-                                                               FontSize="13" 
-                                                               Foreground="{DynamicResource ThemeText}" />
-                                                    <TextBlock Text="Recomendaciones generales de salud, dieta, reposo y signos de alarma." 
-                                                               FontSize="11" 
-                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                               Margin="0,2,0,0" />
-                                                </StackPanel>
-                                                <Button Grid.Column="1" 
-                                                        Style="{DynamicResource AccentButton}" 
-                                                        Command="{Binding AddGeneralIndicationsToPrescriptionCommand}" 
-                                                        Padding="10,5" 
-                                                        ToolTip="Vincular estas indicaciones para que aparezcan en la receta médica oficial impresa o en PDF">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="📋" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                        <TextBlock Text="Agregar a la Receta" FontSize="11" FontWeight="Bold" />
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Cirugías previas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding SelectedPatient.Surgeries}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
-                                                </Button>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Transfusiones previas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding SelectedPatient.Transfusions}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2">
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                                        <TextBlock Text="Hospitalizaciones previas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding SelectedPatient.Hospitalizations}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Esquema de vacunación: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        <TextBlock Text="{Binding SelectedPatient.ImmunizationSchedule}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </StackPanel>
                                             </Grid>
+                                        </StackPanel>
+                                    </Border>
 
-                                            <TextBox Text="{Binding ConsultationGeneralIndications, UpdateSourceTrigger=PropertyChanged}" 
-                                                     FontSize="12" 
-                                                     Padding="10,8" 
-                                                     AcceptsReturn="True" 
-                                                     TextWrapping="Wrap" 
-                                                     MinHeight="55" 
-                                                     MaxHeight="90" 
-                                                     Background="{DynamicResource ThemeBackground}" 
-                                                     BorderBrush="{DynamicResource ThemeBorder}" 
-                                                     Foreground="{DynamicResource ThemeText}" 
-                                                     Margin="0,0,0,8" />
-
-                                            <!-- Botones de sugerencias rápidas -->
-                                            <WrapPanel Orientation="Horizontal">
-                                                <TextBlock Text="Plantillas rápidas: " FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
-                                                        CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." 
-                                                        Padding="6,3" Margin="0,0,4,4">
-                                                    <TextBlock Text="+ Hidratación" FontSize="10" />
-                                                </Button>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
-                                                        CommandParameter="Reposo relativo por 48 horas, evitar esfuerzos físicos pesados." 
-                                                        Padding="6,3" Margin="0,0,4,4">
-                                                    <TextBlock Text="+ Reposo" FontSize="10" />
-                                                </Button>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
-                                                        CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." 
-                                                        Padding="6,3" Margin="0,0,4,4">
-                                                    <TextBlock Text="+ Dieta blanda" FontSize="10" />
-                                                </Button>
-                                                <Button Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding AppendGeneralIndicationPresetCommand}" 
-                                                        CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." 
-                                                        Padding="6,3" Margin="0,0,4,4">
-                                                    <TextBlock Text="+ Datos de alarma" FontSize="10" />
-                                                </Button>
+                                    <!-- Antecedentes Gineco-Obstétricos (AGO) (Visible para Mujeres) -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14" 
+                                            Margin="0,0,0,12"
+                                            Visibility="{Binding SelectedPatient.IsFemale, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel>
+                                            <TextBlock Text="🌸 Antecedentes Gineco-Obstétricos (AGO)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,6" />
+                                            <WrapPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Menarca: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.MenarcheAge, StringFormat='{}{0} años'}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="IVSA: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.SexualOnsetAge, StringFormat='{}{0} años'}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Parejas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.SexualPartnersCount}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Periodo: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.PeriodDuration}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Flujo: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.IsPeriodHeavy}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Papanicolaou: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.PapSmear}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Gestas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.PregnanciesCount}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Cesáreas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.CesareansCount}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="Abortos: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.AbortionsCount}" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                                    <TextBlock Text="¿Embarazo actual?: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Text="Sí" Visibility="{Binding SelectedPatient.IsCurrentlyPregnant, Converter={StaticResource BoolToVis}}" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                                    <TextBlock Text="No" Visibility="{Binding SelectedPatient.IsCurrentlyPregnant, Converter={StaticResource InverseBoolToVis}}" Foreground="{DynamicResource ThemeText}" />
+                                                    <TextBlock Text="{Binding SelectedPatient.GestationalWeeks, StringFormat=' ({0} sem)'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" Visibility="{Binding SelectedPatient.IsCurrentlyPregnant, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
                                             </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Hitos del Desarrollo Psicomotor (Visible para Niños) -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeWarning}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14" 
+                                            Margin="0,0,0,12"
+                                            Visibility="{Binding SelectedPatient.IsPediatric, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel>
+                                            <TextBlock Text="👶 Hitos del Desarrollo Psicomotor (Pediátrico)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeWarning}" Margin="0,0,0,4" />
+                                            <TextBlock Text="{Binding SelectedPatient.DevelopmentalMilestones}" FontSize="11.5" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Antecedentes No Patológicos (APNP) -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14" 
+                                            Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="🏡 Antecedentes Personales No Patológicos (APNP)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,6" />
+                                            <StackPanel Margin="0,0,0,3">
+                                                <TextBlock Text="Alimentación y Nutrición: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding SelectedPatient.Diet}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,0,0,3">
+                                                <TextBlock Text="Vivienda y Servicios: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding SelectedPatient.HousingConditions}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock Text="Zoonosis / Mascotas: " FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding SelectedPatient.Zoonosis}" FontSize="11" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Signos Vitales y Diagnóstico de la Última Consulta -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="8" 
+                                            Padding="14" 
+                                            Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="📊 Última Visita y Diagnóstico Registrado" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
+                                            <TextBlock Text="{Binding SelectedPatient.VitalSigns, StringFormat='Signos Vitales: {0}'}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,4" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding SelectedPatient.LastDiagnosis, StringFormat='Diagnóstico: {0}'}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,4" />
+                                            <TextBlock Text="{Binding SelectedPatient.ClinicalNotes}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
@@ -1096,8 +1437,8 @@
                     BorderThickness="2" 
                     CornerRadius="16" 
                     Padding="26,22" 
-                    MaxWidth="780" 
-                    MaxHeight="720" 
+                    MaxWidth="860" 
+                    MaxHeight="750" 
                     HorizontalAlignment="Center" 
                     VerticalAlignment="Center">
                 <Grid>
@@ -1107,30 +1448,156 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Cabecera del Modal -->
-                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
-                            <Border Background="{DynamicResource ThemeAccent}" 
-                                    CornerRadius="6" 
-                                    Padding="8,3" 
-                                    Margin="0,0,8,0">
-                                <TextBlock Text="📋 EXPEDIENTE CLÍNICO" 
-                                           FontWeight="Bold" 
-                                           FontSize="11" 
-                                           Foreground="{DynamicResource ThemeAccentText}" />
-                            </Border>
-                            <TextBlock Text="{Binding PatientModalTitle}" 
-                                       FontWeight="Bold" 
-                                       FontSize="17" 
-                                       Foreground="{DynamicResource ThemeText}" />
-                        </StackPanel>
-                        <TextBlock Text="Cumplimiento con los lineamientos oficiales de la NOM-004-SSA3 del expediente clínico." 
-                                   FontSize="12" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <!-- Cabecera del Modal con Stepper de Pasos -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                                    <Border Background="{DynamicResource ThemeAccent}" 
+                                            CornerRadius="6" 
+                                            Padding="8,3" 
+                                            Margin="0,0,8,0">
+                                        <TextBlock Text="📋 EXPEDIENTE CLÍNICO" 
+                                                   FontWeight="Bold" 
+                                                   FontSize="11" 
+                                                   Foreground="{DynamicResource ThemeAccentText}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding PatientModalTitle}" 
+                                               FontWeight="Bold" 
+                                               FontSize="17" 
+                                               Foreground="{DynamicResource ThemeText}" />
+                                </StackPanel>
+                                <TextBlock Text="Historia clínica integral conforme a los requerimientos oficiales de la NOM-004-SSA3." 
+                                           FontSize="12" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </StackPanel>
+
+                            <!-- Badges Dinámicos de Perfil Condicional -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeAccent}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="6" 
+                                        Padding="8,4" 
+                                        Margin="0,0,6,0"
+                                        Visibility="{Binding FormIsFemale, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="♀️ Femenino (AGO Activo)" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                </Border>
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeWarning}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="6" 
+                                        Padding="8,4"
+                                        Visibility="{Binding FormIsPediatric, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="👶 Pediátrico (Hitos y Vacunas)" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeWarning}" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Pestañas de Navegación por Pasos -->
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                BorderThickness="1" 
+                                CornerRadius="8" 
+                                Padding="4">
+                            <UniformGrid Columns="4">
+                                <!-- Paso 1: Identificación -->
+                                <Button Command="{Binding SetFormPatientStepTabCommand}" 
+                                        CommandParameter="Identificacion" 
+                                        Padding="6,6" 
+                                        Margin="2">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FormPatientActiveTab}" Value="Identificacion">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    <Setter Property="BorderThickness" Value="0" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="1. " FontWeight="Bold" FontSize="11" />
+                                        <TextBlock Text="Identificación" FontSize="11" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Paso 2: AHF y APP -->
+                                <Button Command="{Binding SetFormPatientStepTabCommand}" 
+                                        CommandParameter="Patologicos" 
+                                        Padding="6,6" 
+                                        Margin="2">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FormPatientActiveTab}" Value="Patologicos">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    <Setter Property="BorderThickness" Value="0" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="2. " FontWeight="Bold" FontSize="11" />
+                                        <TextBlock Text="AHF y Patológicos" FontSize="11" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Paso 3: Gineco / Hitos -->
+                                <Button Command="{Binding SetFormPatientStepTabCommand}" 
+                                        CommandParameter="GinecoHitos" 
+                                        Padding="6,6" 
+                                        Margin="2">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FormPatientActiveTab}" Value="GinecoHitos">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    <Setter Property="BorderThickness" Value="0" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="3. " FontWeight="Bold" FontSize="11" />
+                                        <TextBlock Text="Gineco / Hitos" FontSize="11" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Paso 4: APNP -->
+                                <Button Command="{Binding SetFormPatientStepTabCommand}" 
+                                        CommandParameter="NoPatologicos" 
+                                        Padding="6,6" 
+                                        Margin="2">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FormPatientActiveTab}" Value="NoPatologicos">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    <Setter Property="BorderThickness" Value="0" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="4. " FontWeight="Bold" FontSize="11" />
+                                        <TextBlock Text="No Patológicos (APNP)" FontSize="11" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+                            </UniformGrid>
+                        </Border>
                     </StackPanel>
 
                     <!-- Formulario con Scroll -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,14">
                         <StackPanel Margin="0,0,8,0">
                             <!-- Alerta de Error si existe -->
                             <Border Background="#33EF4444" 
@@ -1146,246 +1613,498 @@
                                            FontWeight="SemiBold" />
                             </Border>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="18" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
+                            <!-- ============================================================= -->
+                            <!-- PESTAÑA 1: FICHA DE IDENTIFICACIÓN                            -->
+                            <!-- ============================================================= -->
+                            <StackPanel Visibility="{Binding FormPatientActiveTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Identificacion}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="18" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                                <!-- Columna Izquierda: Identificación y Demografía -->
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="IDENTIFICACIÓN DEL PACIENTE" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                                    <!-- Columna 1: Datos Personales y Demografía -->
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="DATOS PERSONALES" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
 
-                                    <TextBlock Text="Folio de Expediente *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormRecordNumber, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             FontFamily="Consolas" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                        <TextBlock Text="Folio de Expediente *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormRecordNumber, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 FontFamily="Consolas" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" />
 
-                                    <TextBlock Text="Nombre(s) *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormFirstName, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                        <TextBlock Text="Nombre(s) *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormFirstName, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" />
 
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Apellido Paterno *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormLastName, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Apellido Materno" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormMaternalLastName, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                        </Grid>
 
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Apellido Paterno *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormLastName, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Edad (Años) *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormAgeText, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Sexo / Género *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <ComboBox ItemsSource="{Binding GenderOptions}" 
+                                                          SelectedItem="{Binding FormGender}" 
+                                                          Height="36" />
+                                            </StackPanel>
+                                        </Grid>
 
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Apellido Materno (Opcional)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormMaternalLastName, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
-                                    </Grid>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Ocupación" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormOccupation, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Religión" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormReligion, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
 
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
+                                    <!-- Columna 2: Contacto, Ubicación y Emergencia -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="LOCALIZACIÓN Y CONTACTO" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
 
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Edad (Años)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormAgeText, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="110" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Teléfono de Contacto" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormPhone, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Grupo Sangre" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <ComboBox ItemsSource="{Binding BloodTypeOptions}" 
+                                                          SelectedItem="{Binding FormBloodType}" 
+                                                          Height="36" />
+                                            </StackPanel>
+                                        </Grid>
 
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Sexo / Género" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <ComboBox ItemsSource="{Binding GenderOptions}" 
-                                                      SelectedItem="{Binding FormGender}" 
-                                                      Height="36" />
-                                        </StackPanel>
-                                    </Grid>
+                                        <TextBlock Text="Correo Electrónico" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormEmail, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" />
 
-                                    <TextBlock Text="Teléfono de Contacto" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormPhone, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                        <TextBlock Text="Domicilio Habitual" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormAddress, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" />
 
-                                    <TextBlock Text="Correo Electrónico" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormEmail, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                        <TextBlock Text="CONTACTO DE EMERGENCIA" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" Margin="0,4,0,8" />
 
-                                    <TextBlock Text="Domicilio Habitual" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormAddress, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
-                                </StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Nombre del Contacto" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormEmergencyContactName, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Teléfono Emergencia" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormEmergencyContactPhone, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
 
-                                <!-- Columna Derecha: Clínica, Alergias y Emergencia -->
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="ANTECEDENTES Y CLÍNICA" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                            <!-- ============================================================= -->
+                            <!-- PESTAÑA 2: HEREDOFAMILIARES (AHF) Y PATOLÓGICOS (APP)        -->
+                            <!-- ============================================================= -->
+                            <StackPanel Visibility="{Binding FormPatientActiveTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Patologicos}">
+                                <!-- Antecedentes Heredofamiliares -->
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="14" 
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <TextBlock Text="🧬 ANTECEDENTES HEREDOFAMILIARES (AHF)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Diabetes mellitus, hipertensión arterial, cardiopatías, nefropatías, cáncer u oncología, enfermedades psiquiátricas en familiares de primer o segundo grado (padres, abuelos, hermanos)." 
+                                                   FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding FormFamilyHistory, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 AcceptsReturn="True" 
+                                                 TextWrapping="Wrap" 
+                                                 MinHeight="60" 
+                                                 Padding="10,6" />
+                                    </StackPanel>
+                                </Border>
 
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
+                                <!-- Antecedentes Personales Patológicos -->
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="14" 
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <TextBlock Text="🏥 ANTECEDENTES PERSONALES PATOLÓGICOS (APP)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
 
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Grupo Sanguíneo" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <ComboBox ItemsSource="{Binding BloodTypeOptions}" 
-                                                      SelectedItem="{Binding FormBloodType}" 
-                                                      Height="36" />
-                                        </StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="14" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
 
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Alergias Medicamentosas" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormAllergies, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
-                                    </Grid>
+                                            <!-- Columna APP 1 -->
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Enfermedades Crónicas / Comorbilidades" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormChronicDiseases, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" 
+                                                         Margin="0,0,0,10" />
 
-                                    <TextBlock Text="Enfermedades Crónicas / Comorbilidades" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormChronicDiseases, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Padding="10,6" 
-                                             Margin="0,0,0,10" />
+                                                <TextBlock Text="Cirugías Previas (Quirúrgicos)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormSurgeries, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" 
+                                                         Margin="0,0,0,10" />
 
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Transfusiones Previas" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormTransfusions, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                            </StackPanel>
 
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Contacto de Emergencia" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormEmergencyContactName, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Tel. Emergencia" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding FormEmergencyContactPhone, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Style="{DynamicResource ModernTextBox}" 
-                                                     Padding="10,6" />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <!-- Signos Vitales Base / Somatometría Individuales -->
-                                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                            BorderBrush="{DynamicResource ThemeBorder}" 
-                                            BorderThickness="1" 
-                                            CornerRadius="8" 
-                                            Padding="10,8" 
-                                            Margin="0,0,0,10">
-                                        <StackPanel>
-                                            <Grid Margin="0,0,0,6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="📊 Somatometría y Signos Vitales Base" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
-                                                <Border Grid.Column="1" 
-                                                        Background="{DynamicResource ThemeAccent}" 
-                                                        CornerRadius="4" 
-                                                        Padding="6,2">
-                                                    <TextBlock Text="{Binding FormVitalIMC, StringFormat='IMC: {0}'}" 
-                                                               FontWeight="Bold" 
-                                                               FontSize="10" 
-                                                               Foreground="{DynamicResource ThemeAccentText}" />
+                                            <!-- Columna APP 2 -->
+                                            <StackPanel Grid.Column="2">
+                                                <Border BorderBrush="{DynamicResource ThemeError}" BorderThickness="1.5" CornerRadius="6" Padding="6,4" Margin="0,0,0,10">
+                                                    <StackPanel>
+                                                        <TextBlock Text="⚠️ Alergias Medicamentosas / Alimentos *" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" Margin="0,0,0,4" />
+                                                        <TextBox Text="{Binding FormAllergies, UpdateSourceTrigger=PropertyChanged}" 
+                                                                 Style="{DynamicResource ModernTextBox}" 
+                                                                 Padding="8,5" />
+                                                    </StackPanel>
                                                 </Border>
-                                            </Grid>
 
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="6" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="6" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="6" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
+                                                <TextBlock Text="Hospitalizaciones Previas" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormHospitalizations, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" 
+                                                         Margin="0,0,0,10" />
 
-                                                <StackPanel Grid.Row="0" Grid.Column="0">
-                                                    <TextBlock Text="T.A. (mmHg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalTA, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
+                                                <!-- Esquema de Vacunación (Resaltado en Niños) -->
+                                                <TextBlock Text="Esquema de Vacunación" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormImmunizationSchedule, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="10,6" />
+                                                <TextBlock Text="Para pacientes pediátricos: BCG, HepB, Hexavalente, Rotavirus, Neumococo, SRP." 
+                                                           FontSize="10.5" 
+                                                           Foreground="{DynamicResource ThemeWarning}" 
+                                                           Margin="0,2,0,0" 
+                                                           Visibility="{Binding FormIsPediatric, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
 
-                                                <StackPanel Grid.Row="0" Grid.Column="2">
-                                                    <TextBlock Text="F.C. (lpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalFC, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
+                            <!-- ============================================================= -->
+                            <!-- PESTAÑA 3: GINECO-OBSTÉTRICOS (AGO) / HITOS DEL DESARROLLO   -->
+                            <!-- ============================================================= -->
+                            <StackPanel Visibility="{Binding FormPatientActiveTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=GinecoHitos}">
+                                <!-- Sección Mujeres: Antecedentes Gineco-Obstétricos -->
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeAccent}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="14" 
+                                        Margin="0,0,0,12"
+                                        Visibility="{Binding FormIsFemale, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel>
+                                        <TextBlock Text="🌸 ANTECEDENTES GINECO-OBSTÉTRICOS (AGO)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
 
-                                                <StackPanel Grid.Row="0" Grid.Column="4">
-                                                    <TextBlock Text="F.R. (rpm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalFR, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
 
-                                                <StackPanel Grid.Row="2" Grid.Column="0">
-                                                    <TextBlock Text="Temp (°C)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalTemp, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Menarca (Edad 1ª Regla)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormMenarcheAge, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" />
+                                            </StackPanel>
 
-                                                <StackPanel Grid.Row="2" Grid.Column="2">
-                                                    <TextBlock Text="Peso (kg)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalWeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Inicio Vida Sexual (IVSA)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormSexualOnsetAge, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" />
+                                            </StackPanel>
 
-                                                <StackPanel Grid.Row="2" Grid.Column="4">
-                                                    <TextBlock Text="Talla (m)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding FormVitalHeight, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,4" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
+                                            <StackPanel Grid.Column="4">
+                                                <TextBlock Text="Parejas Sexuales" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormSexualPartnersCount, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" />
+                                            </StackPanel>
+                                        </Grid>
 
-                                    <TextBlock Text="Notas Clínicas Iniciales / Antecedentes Relevantes" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding FormClinicalNotes, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             Height="56" 
-                                             TextWrapping="Wrap" 
-                                             AcceptsReturn="True" 
-                                             Padding="10,6" />
-                                </StackPanel>
-                            </Grid>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Duración Ciclo / Periodo" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormPeriodDuration, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Flujo Menstrual" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <ComboBox ItemsSource="{Binding PeriodHeavyOptions}" SelectedItem="{Binding FormIsPeriodHeavy}" Height="34" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="4">
+                                                <TextBlock Text="Papanicolaou (Fecha/Result)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormPapSmear, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- Obstétricos: Embarazos, Cesáreas, Abortos, Embarazo Actual -->
+                                        <TextBlock Text="HISTORIAL OBSTÉTRICO (FÓRMULA G-P-C-A)" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,6" />
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Gestas" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormPregnanciesCount, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,5" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Cesáreas" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormCesareansCount, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,5" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="4">
+                                                <TextBlock Text="Abortos" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormAbortionsCount, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,5" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="6" VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding FormIsCurrentlyPregnant}" Content="¿Embarazo actual?" FontWeight="Bold" FontSize="11" Margin="4,14,4,0" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="8">
+                                                <TextBlock Text="Semanas Gestación" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <TextBox Text="{Binding FormGestationalWeeks, UpdateSourceTrigger=PropertyChanged}" 
+                                                         Style="{DynamicResource ModernTextBox}" 
+                                                         Padding="6,5"
+                                                         IsEnabled="{Binding FormIsCurrentlyPregnant}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Sección Niños: Hitos del Desarrollo Psicomotor -->
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeWarning}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="14" 
+                                        Margin="0,0,0,12"
+                                        Visibility="{Binding FormIsPediatric, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel>
+                                        <TextBlock Text="👶 HITOS DEL DESARROLLO PSICOMOTOR (PEDIÁTRICO)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeWarning}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Registre edades y progreso clave: sostén cefálico, sedestación (sentarse solo), gateo, bipedestación, edad en que empezó a caminar, primeras palabras y lenguaje, control de esfínteres." 
+                                                   FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding FormDevelopmentalMilestones, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 AcceptsReturn="True" 
+                                                 TextWrapping="Wrap" 
+                                                 MinHeight="70" 
+                                                 Padding="10,6" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Estado cuando no es mujer ni pediátrico -->
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="16" 
+                                        Margin="0,0,0,12">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding FormIsFemale}" Value="False" />
+                                                        <Condition Binding="{Binding FormIsPediatric}" Value="False" />
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="ℹ️ Sección No Aplicable Directamente" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                                        <TextBlock Text="Este paciente es un varón adulto. Los antecedentes gineco-obstétricos y los hitos del desarrollo psicomotor pediátrico no aplican obligatoriamente. Puede continuar al siguiente paso de Antecedentes No Patológicos." 
+                                                   FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0" MaxWidth="560" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- ============================================================= -->
+                            <!-- PESTAÑA 4: PERSONALES NO PATOLÓGICOS (APNP)                   -->
+                            <!-- ============================================================= -->
+                            <StackPanel Visibility="{Binding FormPatientActiveTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=NoPatologicos}">
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                        BorderBrush="{DynamicResource ThemeBorder}" 
+                                        BorderThickness="1" 
+                                        CornerRadius="8" 
+                                        Padding="14" 
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <TextBlock Text="🏡 ANTECEDENTES PERSONALES NO PATOLÓGICOS (APNP)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+
+                                        <!-- Alimentación -->
+                                        <TextBlock Text="Alimentación y Hábitos Dietéticos" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormDiet, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" 
+                                                 ToolTip="Frecuencia de comidas, calidad de la dieta, ingesta de líquidos al día." />
+
+                                        <!-- Vivienda -->
+                                        <TextBlock Text="Vivienda y Servicios Básicos" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormHousingConditions, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" 
+                                                 ToolTip="Tipo de piso/techo, servicios básicos (agua potable, drenaje, luz eléctrica), hacinamiento." />
+
+                                        <!-- Zoonosis y Mascotas -->
+                                        <TextBlock Text="Zoonosis y Convivencia con Mascotas / Animales" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormZoonosis, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Padding="10,6" 
+                                                 Margin="0,0,0,10" 
+                                                 ToolTip="Convivencia con perros, gatos u otros animales de granja, desparasitación y vacunación animal." />
+
+                                        <!-- Notas Clínicas Iniciales -->
+                                        <TextBlock Text="Notas Clínicas Iniciales / Observaciones de Ingreso" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding FormClinicalNotes, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Style="{DynamicResource ModernTextBox}" 
+                                                 Height="60" 
+                                                 TextWrapping="Wrap" 
+                                                 AcceptsReturn="True" 
+                                                 Padding="10,6" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- Botones de Acción del Modal -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{DynamicResource OutlineButton}" 
+                    <!-- Botones de Acción del Modal con Navegación de Pasos -->
+                    <Grid Grid.Row="2" Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0" 
+                                Style="{DynamicResource OutlineButton}" 
                                 Command="{Binding ClosePatientModalCommand}" 
-                                Margin="0,0,10,0" 
                                 Padding="16,8">
                             <TextBlock Text="Cancelar" FontSize="13" />
                         </Button>
 
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding SavePatientModalCommand}" 
-                                Padding="20,8">
-                            <TextBlock Text="Guardar Expediente" FontWeight="Bold" FontSize="13" />
-                        </Button>
-                    </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding PreviousFormPatientStepCommand}" 
+                                    Margin="0,0,8,0" 
+                                    Padding="14,8">
+                                <TextBlock Text="← Anterior" FontSize="12" FontWeight="SemiBold" />
+                            </Button>
+
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding NextFormPatientStepCommand}" 
+                                    Margin="0,0,10,0" 
+                                    Padding="14,8">
+                                <TextBlock Text="Siguiente →" FontSize="12" FontWeight="SemiBold" />
+                            </Button>
+
+                            <Button Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding SavePatientModalCommand}" 
+                                    Padding="20,8">
+                                <TextBlock Text="💾 Guardar Expediente" FontWeight="Bold" FontSize="13" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </Border>

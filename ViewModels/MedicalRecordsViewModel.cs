@@ -255,10 +255,130 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             FormAgeText = str;
         }
+        FormIsPediatric = value < 18;
     }
 
     [ObservableProperty]
     private string _formGender = "Masculino";
+
+    partial void OnFormGenderChanged(string value)
+    {
+        FormIsFemale = !string.IsNullOrWhiteSpace(value) && value.StartsWith("Fem", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [ObservableProperty]
+    private DateTime? _formBirthDate;
+
+    [ObservableProperty]
+    private string _formOccupation = string.Empty;
+
+    [ObservableProperty]
+    private string _formReligion = string.Empty;
+
+    // Antecedentes Heredofamiliares (AHF)
+    [ObservableProperty]
+    private string _formFamilyHistory = string.Empty;
+
+    // Antecedentes Personales Patológicos (APP)
+    [ObservableProperty]
+    private string _formSurgeries = string.Empty;
+
+    [ObservableProperty]
+    private string _formTransfusions = string.Empty;
+
+    [ObservableProperty]
+    private string _formHospitalizations = string.Empty;
+
+    [ObservableProperty]
+    private string _formImmunizationSchedule = string.Empty; // Para niños
+
+    // Antecedentes Gineco-Obstétricos (AGO) (Mujeres)
+    [ObservableProperty]
+    private string _formMenarcheAge = string.Empty;
+
+    [ObservableProperty]
+    private string _formSexualOnsetAge = string.Empty;
+
+    [ObservableProperty]
+    private string _formSexualPartnersCount = string.Empty;
+
+    [ObservableProperty]
+    private string _formPeriodDuration = string.Empty;
+
+    [ObservableProperty]
+    private string _formIsPeriodHeavy = "Normal";
+
+    [ObservableProperty]
+    private string _formPapSmear = string.Empty;
+
+    [ObservableProperty]
+    private int _formPregnanciesCount = 0;
+
+    [ObservableProperty]
+    private int _formCesareansCount = 0;
+
+    [ObservableProperty]
+    private int _formAbortionsCount = 0;
+
+    [ObservableProperty]
+    private bool _formIsCurrentlyPregnant = false;
+
+    [ObservableProperty]
+    private string _formGestationalWeeks = string.Empty;
+
+    // Hitos del Desarrollo Psicomotor (Niños)
+    [ObservableProperty]
+    private string _formDevelopmentalMilestones = string.Empty;
+
+    // Antecedentes Personales No Patológicos (APNP)
+    [ObservableProperty]
+    private string _formDiet = string.Empty;
+
+    [ObservableProperty]
+    private string _formHousingConditions = string.Empty;
+
+    [ObservableProperty]
+    private string _formZoonosis = string.Empty;
+
+    [ObservableProperty]
+    private string _formPatientActiveTab = "Identificacion"; // "Identificacion", "Patologicos", "GinecoHitos", "NoPatologicos"
+
+    [ObservableProperty]
+    private bool _formIsFemale;
+
+    [ObservableProperty]
+    private bool _formIsPediatric;
+
+    [RelayCommand]
+    public void SetFormPatientStepTab(string tab)
+    {
+        if (string.IsNullOrWhiteSpace(tab)) return;
+        FormPatientActiveTab = tab;
+    }
+
+    [RelayCommand]
+    public void NextFormPatientStep()
+    {
+        FormPatientActiveTab = FormPatientActiveTab switch
+        {
+            "Identificacion" => "Patologicos",
+            "Patologicos" => "GinecoHitos",
+            "GinecoHitos" => "NoPatologicos",
+            _ => "NoPatologicos"
+        };
+    }
+
+    [RelayCommand]
+    public void PreviousFormPatientStep()
+    {
+        FormPatientActiveTab = FormPatientActiveTab switch
+        {
+            "NoPatologicos" => "GinecoHitos",
+            "GinecoHitos" => "Patologicos",
+            "Patologicos" => "Identificacion",
+            _ => "Identificacion"
+        };
+    }
 
     [ObservableProperty]
     private string _formPhone = string.Empty;
@@ -559,6 +679,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public List<string> GenderOptions { get; } = new() { "Masculino", "Femenino", "Otro / No especificado" };
     public List<string> BloodTypeOptions { get; } = new() { "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
+    public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
 
     // ==========================================
     // MODAL DE NUEVA CONSULTA / NOTA MÉDICA (NOM-004-SSA3)
@@ -603,7 +724,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string _consultationIMC = "24.2 kg/m² (Peso normal)";
 
     [ObservableProperty]
+    private string _consultationGlucose = string.Empty;
+
+    [ObservableProperty]
     private string _consultationPhysicalExam = string.Empty;
+
+    [ObservableProperty]
+    private string _consultationSystemsReview = string.Empty;
 
     [ObservableProperty]
     private string _consultationDiagnosis = string.Empty;
@@ -1026,15 +1153,21 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             _onInventoryChangedHandler = () =>
             {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                try
                 {
-                    app.Dispatcher.InvokeAsync(async () => await LoadPatientsAsync());
+                    var app = System.Windows.Application.Current;
+                    if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                    {
+                        app.Dispatcher.InvokeAsync(async () => await LoadPatientsAsync());
+                        return;
+                    }
                 }
-                else
+                catch
                 {
-                    _ = LoadPatientsAsync();
+                    // Fallback para entornos donde WPF Application/Dispatcher no está disponible (ej. Linux tests)
                 }
+
+                _ = LoadPatientsAsync();
             };
             _inventoryService.OnInventoryChanged += _onInventoryChangedHandler;
             _ = LoadInitialDataAsync();
@@ -1619,6 +1752,33 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormEmergencyContactName = string.Empty;
         FormEmergencyContactPhone = string.Empty;
 
+        FormBirthDate = null;
+        FormOccupation = string.Empty;
+        FormReligion = string.Empty;
+        FormFamilyHistory = string.Empty;
+        FormSurgeries = string.Empty;
+        FormTransfusions = string.Empty;
+        FormHospitalizations = string.Empty;
+        FormImmunizationSchedule = string.Empty;
+        FormMenarcheAge = string.Empty;
+        FormSexualOnsetAge = string.Empty;
+        FormSexualPartnersCount = string.Empty;
+        FormPeriodDuration = string.Empty;
+        FormIsPeriodHeavy = "Normal";
+        FormPapSmear = string.Empty;
+        FormPregnanciesCount = 0;
+        FormCesareansCount = 0;
+        FormAbortionsCount = 0;
+        FormIsCurrentlyPregnant = false;
+        FormGestationalWeeks = string.Empty;
+        FormDevelopmentalMilestones = string.Empty;
+        FormDiet = string.Empty;
+        FormHousingConditions = string.Empty;
+        FormZoonosis = string.Empty;
+        FormPatientActiveTab = "Identificacion";
+        FormIsFemale = false;
+        FormIsPediatric = false;
+
         FormVitalTA = "120/80";
         FormVitalFC = "75";
         FormVitalFR = "18";
@@ -1666,6 +1826,33 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormChronicDiseases = SelectedPatient.ChronicDiseases;
         FormEmergencyContactName = SelectedPatient.EmergencyContactName;
         FormEmergencyContactPhone = FormatPhoneNumber(SelectedPatient.EmergencyContactPhone);
+
+        FormBirthDate = SelectedPatient.BirthDate;
+        FormOccupation = SelectedPatient.Occupation ?? string.Empty;
+        FormReligion = SelectedPatient.Religion ?? string.Empty;
+        FormFamilyHistory = SelectedPatient.FamilyHistory ?? string.Empty;
+        FormSurgeries = SelectedPatient.Surgeries ?? string.Empty;
+        FormTransfusions = SelectedPatient.Transfusions ?? string.Empty;
+        FormHospitalizations = SelectedPatient.Hospitalizations ?? string.Empty;
+        FormImmunizationSchedule = SelectedPatient.ImmunizationSchedule ?? string.Empty;
+        FormMenarcheAge = SelectedPatient.MenarcheAge ?? string.Empty;
+        FormSexualOnsetAge = SelectedPatient.SexualOnsetAge ?? string.Empty;
+        FormSexualPartnersCount = SelectedPatient.SexualPartnersCount ?? string.Empty;
+        FormPeriodDuration = SelectedPatient.PeriodDuration ?? string.Empty;
+        FormIsPeriodHeavy = string.IsNullOrWhiteSpace(SelectedPatient.IsPeriodHeavy) ? "Normal" : SelectedPatient.IsPeriodHeavy;
+        FormPapSmear = SelectedPatient.PapSmear ?? string.Empty;
+        FormPregnanciesCount = SelectedPatient.PregnanciesCount;
+        FormCesareansCount = SelectedPatient.CesareansCount;
+        FormAbortionsCount = SelectedPatient.AbortionsCount;
+        FormIsCurrentlyPregnant = SelectedPatient.IsCurrentlyPregnant;
+        FormGestationalWeeks = SelectedPatient.GestationalWeeks ?? string.Empty;
+        FormDevelopmentalMilestones = SelectedPatient.DevelopmentalMilestones ?? string.Empty;
+        FormDiet = SelectedPatient.Diet ?? string.Empty;
+        FormHousingConditions = SelectedPatient.HousingConditions ?? string.Empty;
+        FormZoonosis = SelectedPatient.Zoonosis ?? string.Empty;
+        FormIsFemale = SelectedPatient.IsFemale;
+        FormIsPediatric = SelectedPatient.IsPediatric;
+        FormPatientActiveTab = "Identificacion";
 
         ParseVitalSigns(SelectedPatient.VitalSigns);
         FormInitialVitalSigns = SelectedPatient.VitalSigns;
@@ -1763,6 +1950,30 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         patient.ChronicDiseases = string.IsNullOrWhiteSpace(FormChronicDiseases) ? "Ninguna" : FormChronicDiseases.Trim();
         patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
         patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        patient.BirthDate = FormBirthDate;
+        patient.Occupation = FormOccupation?.Trim() ?? string.Empty;
+        patient.Religion = FormReligion?.Trim() ?? string.Empty;
+        patient.FamilyHistory = FormFamilyHistory?.Trim() ?? string.Empty;
+        patient.Surgeries = FormSurgeries?.Trim() ?? string.Empty;
+        patient.Transfusions = FormTransfusions?.Trim() ?? string.Empty;
+        patient.Hospitalizations = FormHospitalizations?.Trim() ?? string.Empty;
+        patient.ImmunizationSchedule = FormImmunizationSchedule?.Trim() ?? string.Empty;
+        patient.MenarcheAge = FormMenarcheAge?.Trim() ?? string.Empty;
+        patient.SexualOnsetAge = FormSexualOnsetAge?.Trim() ?? string.Empty;
+        patient.SexualPartnersCount = FormSexualPartnersCount?.Trim() ?? string.Empty;
+        patient.PeriodDuration = FormPeriodDuration?.Trim() ?? string.Empty;
+        patient.IsPeriodHeavy = FormIsPeriodHeavy?.Trim() ?? string.Empty;
+        patient.PapSmear = FormPapSmear?.Trim() ?? string.Empty;
+        patient.PregnanciesCount = FormPregnanciesCount;
+        patient.CesareansCount = FormCesareansCount;
+        patient.AbortionsCount = FormAbortionsCount;
+        patient.IsCurrentlyPregnant = FormIsCurrentlyPregnant;
+        patient.GestationalWeeks = FormGestationalWeeks?.Trim() ?? string.Empty;
+        patient.DevelopmentalMilestones = FormDevelopmentalMilestones?.Trim() ?? string.Empty;
+        patient.Diet = FormDiet?.Trim() ?? string.Empty;
+        patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
+        patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
 
         var cleanTA = (FormVitalTA ?? string.Empty).Trim().TrimEnd('/');
         var vitalsParts = new List<string>();
@@ -1946,6 +2157,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ChiefComplaint = ConsultationChiefComplaint.Trim(),
             VitalSigns = vitalSignsFormatted,
             PhysicalExamination = ConsultationPhysicalExam.Trim(),
+            SystemsReview = ConsultationSystemsReview.Trim(),
             Diagnosis = ConsultationDiagnosis.Trim(),
             TreatmentPlan = ConsultationTreatmentPlan.Trim(),
             Notes = ConsultationNotes.Trim(),
@@ -2034,8 +2246,18 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var start = active?.StartedAt ?? DateTime.Now;
 
         var cleanConsultationTA = (ConsultationTA ?? string.Empty).Trim().TrimEnd('/');
-        var vitalSignsFormatted = !string.IsNullOrWhiteSpace(cleanConsultationTA) || !string.IsNullOrWhiteSpace(ConsultationFC)
-            ? $"TA: {cleanConsultationTA} mmHg | FC: {ConsultationFC?.Trim()} lpm | FR: {ConsultationFR?.Trim()} rpm | Temp: {ConsultationTemp?.Trim()} °C | Peso: {ConsultationWeight?.Trim()} kg | Talla: {ConsultationHeight?.Trim()} m | IMC: {ConsultationIMC?.Trim()}"
+        var vitalsParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(cleanConsultationTA)) vitalsParts.Add($"TA: {cleanConsultationTA} mmHg");
+        if (!string.IsNullOrWhiteSpace(ConsultationFC)) vitalsParts.Add($"FC: {ConsultationFC.Trim()} lpm");
+        if (!string.IsNullOrWhiteSpace(ConsultationFR)) vitalsParts.Add($"FR: {ConsultationFR.Trim()} rpm");
+        if (!string.IsNullOrWhiteSpace(ConsultationTemp)) vitalsParts.Add($"Temp: {ConsultationTemp.Trim()} °C");
+        if (!string.IsNullOrWhiteSpace(ConsultationWeight)) vitalsParts.Add($"Peso: {ConsultationWeight.Trim()} kg");
+        if (!string.IsNullOrWhiteSpace(ConsultationHeight)) vitalsParts.Add($"Talla: {ConsultationHeight.Trim()} m");
+        if (!string.IsNullOrWhiteSpace(ConsultationGlucose)) vitalsParts.Add($"Glucosa: {ConsultationGlucose.Trim()} mg/dL");
+        if (!string.IsNullOrWhiteSpace(ConsultationIMC) && !ConsultationIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {ConsultationIMC.Trim()}");
+
+        var vitalSignsFormatted = vitalsParts.Count > 0 
+            ? string.Join(" | ", vitalsParts) 
             : (SelectedPatient.VitalSigns ?? string.Empty);
 
         var chiefComplaint = !string.IsNullOrWhiteSpace(ConsultationChiefComplaint)
@@ -2049,6 +2271,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var treatmentPlan = !string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
             ? ConsultationTreatmentPlan.Trim()
             : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : "Tratamiento e indicaciones médicas según receta.");
+
+        var systemsReview = !string.IsNullOrWhiteSpace(ConsultationSystemsReview)
+            ? ConsultationSystemsReview.Trim()
+            : string.Empty;
 
         var folio = !string.IsNullOrWhiteSpace(active?.Folio)
             ? active.Folio
@@ -2068,6 +2294,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ChiefComplaint = chiefComplaint,
             VitalSigns = vitalSignsFormatted,
             PhysicalExamination = ConsultationPhysicalExam?.Trim() ?? string.Empty,
+            SystemsReview = systemsReview,
             Diagnosis = diagnosis,
             TreatmentPlan = treatmentPlan,
             Notes = ConsultationNotes?.Trim() ?? string.Empty,
@@ -2124,7 +2351,65 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             _consultationService.StartConsultation(SelectedPatient);
             SyncActiveConsultation();
-            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nEl cronómetro de consulta está en curso. Durante la atención puede prescribir medicamentos e insumos en la sección de Receta Médica.";
+
+            ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}";
+            ConsultationChiefComplaint = string.Empty;
+            ConsultationSystemsReview = string.Empty;
+            ConsultationPhysicalExam = string.Empty;
+            ConsultationDiagnosis = string.Empty;
+            ConsultationTreatmentPlan = string.Empty;
+            ConsultationNotes = string.Empty;
+            ConsultationGlucose = string.Empty;
+            ConsultationTA = string.Empty;
+            ConsultationFC = string.Empty;
+            ConsultationFR = string.Empty;
+            ConsultationTemp = string.Empty;
+            ConsultationWeight = string.Empty;
+            ConsultationHeight = string.Empty;
+            ConsultationIMC = "Valores no disponibles";
+            ConsultationPrescriptions.Clear();
+            PatientDetailTab = "Resumen";
+
+            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede registrar en tiempo real los signos vitales, exploración por aparatos y sistemas, diagnóstico, tratamiento y receta médica.";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public async Task SaveActiveConsultationNoteAsync()
+    {
+        if (SelectedPatient == null || !HasActiveConsultation)
+        {
+            InfoModalMessage = "No hay ninguna consulta activa en curso.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ConsultationChiefComplaint))
+        {
+            ConsultationChiefComplaint = "Consulta Médica General";
+        }
+        if (string.IsNullOrWhiteSpace(ConsultationDiagnosis))
+        {
+            ConsultationDiagnosis = "Revisión clínica general";
+        }
+
+        var consultation = await SaveActiveConsultationToDbAsync(DateTime.Now);
+        if (consultation != null)
+        {
+            _consultationService?.CloseActiveConsultation();
+            SyncActiveConsultation();
+            StopConsultationTimer();
+
+            ConsultationChiefComplaint = string.Empty;
+            ConsultationPhysicalExam = string.Empty;
+            ConsultationSystemsReview = string.Empty;
+            ConsultationDiagnosis = string.Empty;
+            ConsultationTreatmentPlan = string.Empty;
+            ConsultationNotes = string.Empty;
+            ConsultationErrorMessage = null;
+
+            InfoModalMessage = $"Nota médica guardada exitosamente en el expediente de {SelectedPatient.FullName}.\nFolio: {consultation.Folio}";
             IsInfoModalVisible = true;
         }
     }

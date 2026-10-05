@@ -24,6 +24,22 @@ public class InventoryService
 
     public event Action? OnInventoryChanged;
 
+    private void NotifyInventoryChanged()
+    {
+        if (OnInventoryChanged == null) return;
+        foreach (var handler in OnInventoryChanged.GetInvocationList().Cast<Action>())
+        {
+            try
+            {
+                handler();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error notifying inventory changed: {ex.Message}");
+            }
+        }
+    }
+
     public InventoryService(AppDbContext context)
     {
         _context = context;
@@ -154,7 +170,7 @@ public class InventoryService
             await _context.SaveChangesAsync();
         }
 
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     public async Task DeleteProductAsync(int id)
@@ -164,7 +180,7 @@ public class InventoryService
         {
             product.IsActive = false; // Borrado lógico
             await _context.SaveChangesAsync();
-            OnInventoryChanged?.Invoke();
+            NotifyInventoryChanged();
         }
     }
 
@@ -186,7 +202,7 @@ public class InventoryService
             _context.Categories.Update(category);
         }
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     public async Task<List<ProductBatch>> GetBatchesAsync(int? productId = null)
@@ -230,7 +246,7 @@ public class InventoryService
             }
         }
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     public async Task DeleteBatchAsync(int id)
@@ -240,7 +256,7 @@ public class InventoryService
         {
             _context.ProductBatches.Remove(batch);
             await _context.SaveChangesAsync();
-            OnInventoryChanged?.Invoke();
+            NotifyInventoryChanged();
         }
     }
 
@@ -298,7 +314,7 @@ public class InventoryService
         });
 
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     // Registro de venta en Punto de Venta (POS) con carrito
@@ -368,7 +384,7 @@ public class InventoryService
         }
 
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     // Registro genérico de movimiento
@@ -394,7 +410,7 @@ public class InventoryService
 
         _context.InventoryMovements.Add(movement);
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
     }
 
     public async Task<List<InventoryMovement>> GetRecentMovementsAsync(int count = 50)
@@ -503,7 +519,7 @@ public class InventoryService
         }
 
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
         return service;
     }
 
@@ -514,7 +530,7 @@ public class InventoryService
         {
             _context.ClinicalServices.Remove(service);
             await _context.SaveChangesAsync();
-            OnInventoryChanged?.Invoke();
+            NotifyInventoryChanged();
         }
     }
 
@@ -630,6 +646,29 @@ public class InventoryService
                 existing.ChronicDiseases = patient.ChronicDiseases;
                 existing.EmergencyContactName = patient.EmergencyContactName;
                 existing.EmergencyContactPhone = patient.EmergencyContactPhone;
+                existing.BirthDate = patient.BirthDate;
+                existing.Occupation = patient.Occupation;
+                existing.Religion = patient.Religion;
+                existing.FamilyHistory = patient.FamilyHistory;
+                existing.Surgeries = patient.Surgeries;
+                existing.Transfusions = patient.Transfusions;
+                existing.Hospitalizations = patient.Hospitalizations;
+                existing.ImmunizationSchedule = patient.ImmunizationSchedule;
+                existing.MenarcheAge = patient.MenarcheAge;
+                existing.SexualOnsetAge = patient.SexualOnsetAge;
+                existing.SexualPartnersCount = patient.SexualPartnersCount;
+                existing.PeriodDuration = patient.PeriodDuration;
+                existing.IsPeriodHeavy = patient.IsPeriodHeavy;
+                existing.PapSmear = patient.PapSmear;
+                existing.PregnanciesCount = patient.PregnanciesCount;
+                existing.CesareansCount = patient.CesareansCount;
+                existing.AbortionsCount = patient.AbortionsCount;
+                existing.IsCurrentlyPregnant = patient.IsCurrentlyPregnant;
+                existing.GestationalWeeks = patient.GestationalWeeks;
+                existing.DevelopmentalMilestones = patient.DevelopmentalMilestones;
+                existing.Diet = patient.Diet;
+                existing.HousingConditions = patient.HousingConditions;
+                existing.Zoonosis = patient.Zoonosis;
                 existing.LastVisit = patient.LastVisit;
                 existing.LastDiagnosis = patient.LastDiagnosis;
                 existing.VitalSigns = patient.VitalSigns;
@@ -646,7 +685,7 @@ public class InventoryService
         }
 
         await _context.SaveChangesAsync();
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
         return patient;
     }
 
@@ -657,7 +696,7 @@ public class InventoryService
         {
             patient.IsActive = false; // Borrado lógico
             await _context.SaveChangesAsync();
-            OnInventoryChanged?.Invoke();
+            NotifyInventoryChanged();
         }
     }
 
@@ -713,7 +752,7 @@ public class InventoryService
         _context.PatientConsultations.Add(consultation);
         await _context.SaveChangesAsync();
 
-        OnInventoryChanged?.Invoke();
+        NotifyInventoryChanged();
         return consultation;
     }
 }

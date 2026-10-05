@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Permite compilar y analizar proyectos WPF / net10.0-windows en entornos no Windows (Linux) -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>

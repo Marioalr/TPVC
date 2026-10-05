@@ -2601,6 +2601,217 @@ public class InventoryTests
         Assert.AreEqual("Records", mainVm.ActiveViewName);
         Assert.IsTrue(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Debe abrir inmediatamente el modal de agregar paciente al entrar a Records");
     }
+
+    [TestMethod]
+    public async Task SavePatientAsync_PersistsNom004Fields_IncludingAGO_Pediatric_And_APNP()
+    {
+        var patient = new PatientRecord
+        {
+            RecordNumber = "EXP-NOM004-TEST",
+            FullName = "María Elena Rosas García",
+            Age = 28,
+            Gender = "Femenino",
+            Phone = "5551234567",
+            Email = "maria.rosas@example.com",
+            Address = "Av. Insurgentes Sur 123, CDMX",
+            BloodType = "O+",
+            EmergencyContactName = "Juan Rosas",
+            EmergencyContactPhone = "5557654321",
+            Occupation = "Ingeniera de Software",
+            Religion = "Católica",
+            FamilyHistory = "Madre con DM2 controlada, Padre con HTA, Abuela materna con CA de mama",
+            Surgeries = "Apendicectomía laparoscópica en 2018",
+            Transfusions = "Negadas",
+            Hospitalizations = "1 hospitalización por apendicitis (2018)",
+            Allergies = "Penicilina",
+            ImmunizationSchedule = "Esquema completo",
+            MenarcheAge = "12 años",
+            SexualOnsetAge = "19 años",
+            SexualPartnersCount = "2",
+            PeriodDuration = "4 días cada 28 días",
+            IsPeriodHeavy = "No",
+            PapSmear = "Negativo realizado hace 8 meses",
+            PregnanciesCount = 1,
+            CesareansCount = 1,
+            AbortionsCount = 0,
+            IsCurrentlyPregnant = true,
+            GestationalWeeks = "14 semanas por FUM",
+            DevelopmentalMilestones = "Desarrollo psicomotor normal sin antecedentes perinatales de importancia",
+            Diet = "Buena en calidad y cantidad, 3 comidas al día balanceadas",
+            HousingConditions = "Casa propia, cuenta con todos los servicios intradomiciliarios",
+            Zoonosis = "2 gatos vacunados y desparasitados",
+            ClinicalNotes = "Paciente en control prenatal regular"
+        };
+
+        await _inventoryService.SavePatientAsync(patient);
+
+        var patients = await _inventoryService.GetPatientsAsync();
+        var retrieved = patients.FirstOrDefault(p => p.RecordNumber == "EXP-NOM004-TEST");
+
+        Assert.IsNotNull(retrieved, "El paciente debe guardarse y recuperarse correctamente");
+        Assert.AreEqual("Ingeniera de Software", retrieved.Occupation);
+        Assert.AreEqual("Católica", retrieved.Religion);
+        Assert.IsTrue(retrieved.FamilyHistory.Contains("DM2"));
+        Assert.IsTrue(retrieved.Surgeries.Contains("Apendicectomía"));
+        Assert.AreEqual("Negadas", retrieved.Transfusions);
+        Assert.AreEqual("Penicilina", retrieved.Allergies);
+        Assert.AreEqual("12 años", retrieved.MenarcheAge);
+        Assert.AreEqual("19 años", retrieved.SexualOnsetAge);
+        Assert.AreEqual("2", retrieved.SexualPartnersCount);
+        Assert.AreEqual("4 días cada 28 días", retrieved.PeriodDuration);
+        Assert.AreEqual("No", retrieved.IsPeriodHeavy);
+        Assert.IsTrue(retrieved.PapSmear.Contains("Negativo"));
+        Assert.AreEqual(1, retrieved.PregnanciesCount);
+        Assert.AreEqual(1, retrieved.CesareansCount);
+        Assert.AreEqual(0, retrieved.AbortionsCount);
+        Assert.IsTrue(retrieved.IsCurrentlyPregnant);
+        Assert.AreEqual("14 semanas por FUM", retrieved.GestationalWeeks);
+        Assert.IsTrue(retrieved.DevelopmentalMilestones.Contains("normal"));
+        Assert.IsTrue(retrieved.Diet.Contains("3 comidas"));
+        Assert.IsTrue(retrieved.HousingConditions.Contains("servicios"));
+        Assert.IsTrue(retrieved.Zoonosis.Contains("gatos"));
+        Assert.IsTrue(retrieved.IsFemale);
+        Assert.IsFalse(retrieved.IsPediatric);
+    }
+
+    [TestMethod]
+    public async Task AddConsultationNoteAsync_PersistsSystemsReview_And_AllClinicalFields()
+    {
+        var patient = new PatientRecord
+        {
+            RecordNumber = "EXP-SR-TEST",
+            FullName = "Carlos Santana López",
+            Age = 45,
+            Gender = "Masculino"
+        };
+        await _inventoryService.SavePatientAsync(patient);
+
+        var consultation = new PatientConsultation
+        {
+            Folio = "CNS-20261005-001",
+            Date = DateTime.Today,
+            ChiefComplaint = "Tos seca y dolor torácico leve",
+            SystemsReview = "Aparato respiratorio: Tos seca no productiva, sin sibilancias. Cardiovascular: Sin palpitaciones. Digestivo: Asintomático.",
+            PhysicalExamination = "Faringe ligeramente hiperémica, campos pulmonares bien ventilados sin ruidos agregados.",
+            Diagnosis = "Faringitis aguda viral (J02.9)",
+            TreatmentPlan = "Paracetamol 500mg c/8h por 3 días, abundantes líquidos y reposo.",
+            VitalSigns = "TA: 120/80 mmHg, FC: 74 lpm, FR: 18 rpm, Temp: 36.6 °C, Glucosa: 95 mg/dL, Peso: 75 kg, Talla: 172 cm, IMC: 25.35 kg/m²"
+        };
+
+        await _inventoryService.AddConsultationNoteAsync(patient.Id, consultation);
+
+        var patients = await _inventoryService.GetPatientsAsync();
+        var retrieved = patients.First(p => p.Id == patient.Id);
+        var savedConsultation = retrieved.Consultations.FirstOrDefault(c => c.Folio == "CNS-20261005-001");
+
+        Assert.IsNotNull(savedConsultation, "La consulta debe encontrarse en la lista de consultas del paciente");
+        Assert.AreEqual("Tos seca y dolor torácico leve", savedConsultation.ChiefComplaint);
+        Assert.IsTrue(savedConsultation.SystemsReview.Contains("Aparato respiratorio: Tos seca"));
+        Assert.IsTrue(savedConsultation.PhysicalExamination.Contains("Faringe"));
+        Assert.IsTrue(savedConsultation.Diagnosis.Contains("Faringitis"));
+        Assert.IsTrue(savedConsultation.TreatmentPlan.Contains("Paracetamol"));
+        Assert.IsTrue(savedConsultation.VitalSigns.Contains("120/80"));
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_ReactiveAgeAndGender_UpdatesPediatricAndFemaleFlags()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+
+        // Test Gender reactivity
+        vm.FormGender = "Femenino";
+        Assert.IsTrue(vm.FormIsFemale, "Al seleccionar Femenino, FormIsFemale debe ser true");
+
+        vm.FormGender = "Masculino";
+        Assert.IsFalse(vm.FormIsFemale, "Al seleccionar Masculino, FormIsFemale debe ser false");
+
+        // Test Age reactivity
+        vm.FormAge = 9;
+        Assert.IsTrue(vm.FormIsPediatric, "A los 9 años debe considerarse pediátrico (< 18 años)");
+
+        vm.FormAge = 17;
+        Assert.IsTrue(vm.FormIsPediatric, "A los 17 años debe considerarse pediátrico (< 18 años)");
+
+        vm.FormAge = 18;
+        Assert.IsFalse(vm.FormIsPediatric, "A los 18 años ya no se considera pediátrico");
+
+        vm.FormAge = 45;
+        Assert.IsFalse(vm.FormIsPediatric, "A los 45 años no es pediátrico");
+    }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_StepNavigationCommands_CycleTabsCorrectly()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+
+        Assert.AreEqual("Identificacion", vm.FormPatientActiveTab);
+
+        // Next -> Patologicos
+        vm.NextFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab);
+
+        // Next -> GinecoHitos
+        vm.NextFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("GinecoHitos", vm.FormPatientActiveTab);
+
+        // Next -> NoPatologicos
+        vm.NextFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
+
+        // Next at end stays at NoPatologicos
+        vm.NextFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
+
+        // Previous -> GinecoHitos
+        vm.PreviousFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("GinecoHitos", vm.FormPatientActiveTab);
+
+        // Previous -> Patologicos
+        vm.PreviousFormPatientStepCommand.Execute(null);
+        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab);
+
+        // Direct tab set
+        vm.SetFormPatientStepTabCommand.Execute("NoPatologicos");
+        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecordsViewModel_SaveActiveConsultationNoteCommand_PersistsDirectlyWithoutOpeningPOS()
+    {
+        var consultService = new ConsultationService();
+        var mainVm = new MainViewModel(_inventoryService, consultService, new ThemeService(), new AppUpdateService());
+        await mainVm.MedicalRecordsVM.LoadPatientsAsync();
+
+        var patient = mainVm.MedicalRecordsVM.Patients.First();
+        mainVm.MedicalRecordsVM.SelectPatient(patient);
+
+        mainVm.MedicalRecordsVM.StartActiveConsultation();
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
+
+        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Cefalea tensional recurrente";
+        mainVm.MedicalRecordsVM.ConsultationSystemsReview = "Neurológico: Sin focalización ni alteraciones de pares craneales. Oftalmológico: Fondo de ojo sin alteraciones.";
+        mainVm.MedicalRecordsVM.ConsultationPhysicalExam = "Músculos trapecios y cervicales posteriores con contractura dolorosa bilateral.";
+        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
+        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Ibuprofeno 400mg c/8h por 3 días + calor local y ejercicios de relajación";
+
+        // Guardar nota directa (sin cobrar en POS)
+        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+
+        // Se cierra la consulta activa sin abrir el POS
+        Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta activa debe cerrarse tras guardar la nota");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.IsPosModalOpen, "No debe abrirse el POS cuando solo se guarda la nota médica");
+
+        // Verificar en base de datos
+        var patients = await _inventoryService.GetPatientsAsync();
+        var updatedPatient = patients.First(p => p.Id == patient.Id);
+        var savedNote = updatedPatient.Consultations.FirstOrDefault(c => c.ChiefComplaint == "Cefalea tensional recurrente");
+
+        Assert.IsNotNull(savedNote, "La nota médica debe estar registrada en el expediente del paciente");
+        Assert.IsTrue(savedNote.SystemsReview.Contains("Neurológico: Sin focalización"));
+        Assert.IsTrue(savedNote.PhysicalExamination.Contains("contractura"));
+        Assert.IsTrue(savedNote.Diagnosis.Contains("G44.2"));
+        Assert.IsTrue(savedNote.TreatmentPlan.Contains("Ibuprofeno"));
+    }
 }
 
 

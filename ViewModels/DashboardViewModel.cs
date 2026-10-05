@@ -41,18 +41,23 @@ public partial class DashboardViewModel : ObservableObject
         _inventoryService = inventoryService;
         _navigateAction = navigateAction;
 
-        // Auto-actualización reactiva en tiempo real al detectar cualquier cambio
         _inventoryService.OnInventoryChanged += () =>
         {
-            var app = Application.Current;
-            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            try
             {
-                app.Dispatcher.InvokeAsync(async () => await RefreshAsync());
+                var app = Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(async () => await RefreshAsync());
+                    return;
+                }
             }
-            else
+            catch
             {
-                _ = RefreshAsync();
+                // Fallback para entornos de pruebas sin runtime de WPF Application
             }
+
+            _ = RefreshAsync();
         };
     }
 

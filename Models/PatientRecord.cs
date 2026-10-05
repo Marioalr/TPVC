@@ -44,7 +44,8 @@ public class PatientConsultation
     public DateTime? EndedAt { get; set; }
     public string ChiefComplaint { get; set; } = string.Empty; // Motivo de consulta
     public string VitalSigns { get; set; } = string.Empty; // TA, FC, FR, Temp, Peso, Talla, IMC
-    public string PhysicalExamination { get; set; } = string.Empty; // Exploración física
+    public string PhysicalExamination { get; set; } = string.Empty; // Exploración física general
+    public string SystemsReview { get; set; } = string.Empty; // Exploración e interrogatorio por aparatos y sistemas
     public string Diagnosis { get; set; } = string.Empty; // Diagnóstico clínico
     public string TreatmentPlan { get; set; } = string.Empty; // Plan de tratamiento e indicaciones
     public string Notes { get; set; } = string.Empty; // Notas de evolución
@@ -130,6 +131,47 @@ public class PatientRecord
     public string ChronicDiseases { get; set; } = "Ninguna";
     public string EmergencyContactName { get; set; } = string.Empty;
     public string EmergencyContactPhone { get; set; } = string.Empty;
+
+    // Ficha de identificación extendida
+    public DateTime? BirthDate { get; set; }
+    public string Occupation { get; set; } = string.Empty;
+    public string Religion { get; set; } = string.Empty;
+
+    // Historia Clínica - Antecedentes Heredofamiliares (AHF)
+    public string FamilyHistory { get; set; } = string.Empty;
+
+    // Historia Clínica - Antecedentes Personales Patológicos (APP)
+    public string Surgeries { get; set; } = string.Empty;
+    public string Transfusions { get; set; } = string.Empty;
+    public string Hospitalizations { get; set; } = string.Empty;
+    public string ImmunizationSchedule { get; set; } = string.Empty; // Para niños / esquema de vacunación
+
+    // Historia Clínica - Antecedentes Gineco-Obstétricos (AGO) (para mujeres)
+    public string MenarcheAge { get; set; } = string.Empty; // Edad de la primera regla
+    public string SexualOnsetAge { get; set; } = string.Empty; // Inicio de vida sexual activa
+    public string SexualPartnersCount { get; set; } = string.Empty; // Número de parejas sexuales
+    public string PeriodDuration { get; set; } = string.Empty; // Duración del ciclo / periodo
+    public string IsPeriodHeavy { get; set; } = string.Empty; // Si el sangrado es abundante
+    public string PapSmear { get; set; } = string.Empty; // Papanicolaou (fecha / resultado)
+    public int PregnanciesCount { get; set; } = 0; // Número de embarazos (Gestas)
+    public int CesareansCount { get; set; } = 0; // Cesáreas / Partos
+    public int AbortionsCount { get; set; } = 0; // Abortos
+    public bool IsCurrentlyPregnant { get; set; } = false; // Embarazo actual
+    public string GestationalWeeks { get; set; } = string.Empty; // Semanas de gestación
+
+    // Historia Clínica - Hitos del Desarrollo (para niños)
+    public string DevelopmentalMilestones { get; set; } = string.Empty; // Hitos psicomotores (caminar, etc.)
+
+    // Historia Clínica - Antecedentes Personales No Patológicos (APNP)
+    public string Diet { get; set; } = string.Empty; // Alimentación
+    public string HousingConditions { get; set; } = string.Empty; // Vivienda
+    public string Zoonosis { get; set; } = string.Empty; // Zoonosis (convivencia con mascotas / animales)
+
+    [NotMapped]
+    public bool IsFemale => !string.IsNullOrWhiteSpace(Gender) && Gender.StartsWith("Fem", StringComparison.OrdinalIgnoreCase);
+
+    [NotMapped]
+    public bool IsPediatric => Age < 18;
 
     [NotMapped]
     public string FormattedPhone => FormatPhoneNumber(Phone);

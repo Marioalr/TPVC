@@ -40,6 +40,21 @@ public partial class ActiveConsultation : ObservableObject
     private string _vitalSigns = string.Empty;
 
     [ObservableProperty]
+    private string _physicalExamination = string.Empty;
+
+    [ObservableProperty]
+    private string _systemsReview = string.Empty;
+
+    [ObservableProperty]
+    private string _diagnosis = string.Empty;
+
+    [ObservableProperty]
+    private string _treatmentPlan = string.Empty;
+
+    [ObservableProperty]
+    private string _notes = string.Empty;
+
+    [ObservableProperty]
     private string _generalIndications = string.Empty;
 
     [ObservableProperty]

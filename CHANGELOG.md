@@ -2,6 +2,42 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.4.0] - 2026-10-05
+
+### Añadido
+* **Historia Clínica Integral en 4 Pasos (NOM-004-SSA3-2012)**:
+  * Rediseño completo del asistente de alta y edición de expedientes clínicos en un flujo secuencial guiado de 4 etapas:
+    * **Paso 1: Ficha de Identificación**: Folio automático (`EXP-YYYY-XXX`), Nombre y Apellidos estructurados, Edad, Sexo, Ocupación, Religión, Teléfono, Correo, Domicilio completo, Grupo Sanguíneo y Contacto de Emergencia.
+    * **Paso 2: AHF y APP**: Antecedentes Heredofamiliares completos; Antecedentes Personales Patológicos (comorbilidades crónicas, cirugías previas, transfusiones, hospitalizaciones, alergias destacadas y esquema de vacunación).
+    * **Paso 3: Gineco-Obstétricos (AGO) e Hitos del Desarrollo**:
+      * Para mujeres (`IsFemale`): Edad de menarca, IVSA, número de parejas sexuales, duración del ciclo, sangrado abundante, Papanicolaou (fecha/resultado), gestas, cesáreas, abortos, confirmación de embarazo en curso y semanas de gestación.
+      * Para niños (`IsPediatric`, <18 años): Hitos psicomotores del desarrollo (marcha, lenguaje, esfínteres) y esquema de vacunación prioritario.
+    * **Paso 4: Antecedentes Personales No Patológicos (APNP)**: Alimentación, condiciones de vivienda y servicios intradomiciliarios, zoonosis / convivencia con animales y notas de ingreso.
+  * Botones interactivos de navegación: `← Anterior`, `Siguiente →` y `Guardar Expediente`.
+* **Exploración por Aparatos y Sistemas en Consulta Activa**:
+  * Integración del campo clínico `SystemsReview` en el modelo `PatientConsultation`, `ActiveConsultation` y base de datos SQLite.
+  * Nuevo editor en tiempo real en la vista de consulta médica para registrar el interrogatorio y examen por aparatos y sistemas (respiratorio, cardiovascular, digestivo, neurológico, etc.).
+* **Flujo Clínico Ágil para Pacientes ya Registrados**:
+  * Para pacientes existentes, el médico inicia consulta directamente sin recapturar la historia basal, desplegando el resumen clínico completo y permitiendo capturar de inmediato la nota médica de evolución.
+  * Nuevo botón `[💾 Guardar Nota Médica]` que persiste la nota clínica en el expediente sin obligar a abrir el Punto de Venta.
+* **Migraciones DDL Automáticas en SQLite**:
+  * 23 nuevas columnas agregadas a la tabla `Patients` y columna `SystemsReview` en `PatientConsultations` mediante `ALTER TABLE` no destructivo en `DatabaseInitializer`.
+* **Despacho Reactivo Aislado ante Excepciones de Hilo (`NotifyInventoryChanged`)**:
+  * Manejo seguro de invocación de eventos en `InventoryService` y protección contra `TypeInitializationException` al consultar `Application.Current` en entornos de pruebas unitarias cruzadas.
+* **Suite de Pruebas Unitarias Ampliada a 91 Pruebas**:
+  * Incorporación de pruebas unitarias específicas:
+    * `SavePatientAsync_PersistsNom004Fields_IncludingAGO_Pediatric_And_APNP`: Valida persistencia de los 23 campos de expediente en SQLite.
+    * `AddConsultationNoteAsync_PersistsSystemsReview_And_AllClinicalFields`: Valida la persistencia de exploración por aparatos y sistemas y somatometría.
+    * `MedicalRecordsViewModel_ReactiveAgeAndGender_UpdatesPediatricAndFemaleFlags`: Comprueba la reactividad de género y edad pediátrica.
+    * `MedicalRecordsViewModel_StepNavigationCommands_CycleTabsCorrectly`: Comprueba la navegación de pasos de alta de paciente.
+    * `MedicalRecordsViewModel_SaveActiveConsultationNoteCommand_PersistsDirectlyWithoutOpeningPOS`: Valida el guardado directo de la nota en expediente.
+
+### Modificado
+* **Limpieza de Cabecera Superior en Módulo de Consulta**:
+  * Se eliminó el botón redundante "Nueva Consulta" en la barra de navegación superior que abría un popup descontextualizado, reemplazándolo por el botón directo **`[+ Nuevo Paciente]`**.
+
+---
+
 ## [1.3.19] - 2026-10-04
 
 ### Añadido

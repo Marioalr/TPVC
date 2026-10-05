@@ -68,15 +68,21 @@ public partial class BatchesViewModel : ObservableObject
 
         _inventoryService.OnInventoryChanged += () =>
         {
-            var app = System.Windows.Application.Current;
-            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            try
             {
-                app.Dispatcher.InvokeAsync(async () => await LoadBatchesAsync());
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(async () => await LoadBatchesAsync());
+                    return;
+                }
             }
-            else
+            catch
             {
-                _ = LoadBatchesAsync();
+                // Fallback para entornos de pruebas sin runtime de WPF Application
             }
+
+            _ = LoadBatchesAsync();
         };
     }
 

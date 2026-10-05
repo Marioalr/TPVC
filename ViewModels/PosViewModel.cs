@@ -377,20 +377,26 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
     private void OnInventoryChangedHandler()
     {
-        var app = System.Windows.Application.Current;
-        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+        try
         {
-            app.Dispatcher.InvokeAsync(async () =>
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
             {
-                await LoadCatalogAsync();
-                await LoadServicesAsync();
-            });
+                app.Dispatcher.InvokeAsync(async () =>
+                {
+                    await LoadCatalogAsync();
+                    await LoadServicesAsync();
+                });
+                return;
+            }
         }
-        else
+        catch
         {
-            _ = LoadCatalogAsync();
-            _ = LoadServicesAsync();
+            // Fallback para entornos donde WPF Application/Dispatcher no está disponible (ej. Linux tests)
         }
+
+        _ = LoadCatalogAsync();
+        _ = LoadServicesAsync();
     }
 
     public async Task InitializeAsync()
