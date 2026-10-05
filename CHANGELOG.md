@@ -2,6 +2,12 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.5.1] - 2026-10-05
+
+### Añadido
+* **Botón 'Ver Expediente' en barra de acciones del paciente**: acceso directo e inmediato al expediente clínico integral y al historial de consultas sin abandonar ni resetear la consulta activa en curso.
+* **Ocultamiento contextual del expediente basal durante consulta activa**: la sección inferior de antecedentes y expediente integral se oculta automáticamente mientras hay una consulta médica en curso (`HasActiveConsultation == true`), manteniendo la pantalla despejada y enfocada en la nota de evolución médica, exploración y signos vitales en tiempo real.
+
 ## [1.5.0] - 2026-10-05
 
 ### Corregido

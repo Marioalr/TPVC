@@ -338,6 +338,17 @@
                                                 </Button>
 
                                                 <Button Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding ViewSelectedPatientRecordCommand}" 
+                                                        Padding="10,6" 
+                                                        Margin="0,0,8,0" 
+                                                        ToolTip="Ver el expediente clínico completo del paciente">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="📋" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="Ver Expediente" FontSize="11" FontWeight="SemiBold" />
+                                                    </StackPanel>
+                                                </Button>
+
+                                                <Button Style="{DynamicResource OutlineButton}" 
                                                         Command="{Binding EditPatientCommand}" 
                                                         Padding="10,6" 
                                                         Margin="0,0,8,0" 
@@ -780,8 +791,10 @@
 
                                     <!-- ================================================================= -->
                                     <!-- 3. EXPEDIENTE CLÍNICO INTEGRAL DEL PACIENTE (NOM-004-SSA3)        -->
+                                    <!--    Oculto durante consulta activa para mantener el flujo limpio   -->
                                     <!-- ================================================================= -->
-                                    <!-- Datos de Contacto y Antecedentes (NOM-004-SSA3) -->
+                                    <StackPanel Visibility="{Binding HasActiveConsultation, Converter={StaticResource InverseBoolToVis}}">
+                                        <!-- Datos de Contacto y Antecedentes (NOM-004-SSA3) -->
                                     <Border Background="{DynamicResource ThemeSurface}" 
                                             BorderBrush="{DynamicResource ThemeBorder}" 
                                             BorderThickness="1" 
@@ -998,6 +1011,7 @@
                                             <TextBlock Text="{Binding SelectedPatient.ClinicalNotes}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
+                                    </StackPanel>
 
                                 </StackPanel>
 

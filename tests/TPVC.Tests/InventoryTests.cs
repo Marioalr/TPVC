@@ -2812,6 +2812,56 @@ public class InventoryTests
         Assert.IsTrue(savedNote.Diagnosis.Contains("G44.2"));
         Assert.IsTrue(savedNote.TreatmentPlan.Contains("Ibuprofeno"));
     }
+
+    [TestMethod]
+    public void MedicalRecordsViewModel_ViewSelectedPatientRecordCommand_OpensModalForSelectedPatientWithoutAffectingActiveConsultation()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+
+        // Si no hay paciente seleccionado, no debe abrir el modal
+        vm.SelectedPatient = null;
+        vm.ViewSelectedPatientRecordCommand.Execute(null);
+        Assert.IsFalse(vm.IsRecordsViewerModalOpen, "No debe abrir el modal de expediente si no hay paciente seleccionado");
+
+        // Con paciente seleccionado y consulta activa en curso
+        var patient = new PatientRecord
+        {
+            Id = 999,
+            FullName = "Paciente Prueba Expediente",
+            Age = 35,
+            Gender = "Femenino"
+        };
+        vm.SelectedPatient = patient;
+
+        // Iniciar consulta activa y cargar datos en progreso
+        vm.StartActiveConsultationCommand.Execute(null);
+        Assert.IsTrue(vm.HasActiveConsultation);
+        vm.ConsultationDiagnosis = "Cefalea en estudio";
+        vm.ConsultationChiefComplaint = "Dolor pulsátil";
+
+        // Ejecutar comando Ver Expediente
+        vm.ViewSelectedPatientRecordCommand.Execute(null);
+
+        // Validaciones: Modal abierto y paciente asignado correctamente
+        Assert.IsTrue(vm.IsRecordsViewerModalOpen, "Debe abrir el modal de expediente");
+        Assert.AreSame(patient, vm.ViewingRecordPatient, "El paciente en el visor debe coincidir con SelectedPatient");
+        Assert.AreEqual("Resumen", vm.ViewingRecordTab, "La pestaña inicial debe ser Resumen");
+
+        // Comprobar que no se alteró la consulta activa en curso
+        Assert.IsTrue(vm.HasActiveConsultation, "La consulta activa debe permanecer activa");
+        Assert.AreEqual("Cefalea en estudio", vm.ConsultationDiagnosis, "El diagnóstico en curso no debe verse afectado");
+        Assert.AreEqual("Dolor pulsátil", vm.ConsultationChiefComplaint, "El motivo de consulta en curso no debe verse afectado");
+
+        // Cerrar visor: primer clic vuelve a la lista de expedientes
+        vm.CloseRecordsViewerModalCommand.Execute(null);
+        Assert.IsNull(vm.ViewingRecordPatient, "Al cerrar desde el detalle vuelve a la lista general");
+        Assert.IsTrue(vm.IsRecordsViewerModalOpen, "La modal sigue abierta en la lista general");
+
+        // Segundo clic cierra completamente la modal
+        vm.CloseRecordsViewerModalCommand.Execute(null);
+        Assert.IsFalse(vm.IsRecordsViewerModalOpen, "El modal de expediente debe cerrarse completamente");
+        Assert.IsTrue(vm.HasActiveConsultation, "La consulta activa sigue en pie después de cerrar el visor");
+    }
 }
 
 

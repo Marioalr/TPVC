@@ -1691,6 +1691,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    public void ViewSelectedPatientRecord()
+    {
+        if (SelectedPatient == null) return;
+        ViewPatientRecordDetail(SelectedPatient);
+        IsRecordsViewerModalOpen = true;
+    }
+
+    [RelayCommand]
     public void ViewPatientRecordDetail(PatientRecord? patient)
     {
         if (patient == null) return;
