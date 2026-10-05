@@ -33,9 +33,16 @@ public class PatientServiceItem
     public int Quantity { get; set; } = 1;
 }
 
-public class PatientConsultation
+public class PatientConsultation : ISyncEntity
 {
     public int Id { get; set; }
+    public Guid SyncId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
+    // Igualdad por Id: las consultas sin tracking devuelven instancias nuevas en cada recarga y
+    // la UI (ComboBox/ListBox, Contains) debe reconocer el mismo registro.
+    public override bool Equals(object? obj) => obj is PatientConsultation other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
+    public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     public int PatientRecordId { get; set; }
     public PatientRecord? PatientRecord { get; set; }
     public string Folio { get; set; } = string.Empty; // ej. CNS-20260404-001
@@ -116,9 +123,16 @@ public class PatientConsultation
     }
 }
 
-public class PatientRecord
+public class PatientRecord : ISyncEntity
 {
     public int Id { get; set; }
+    public Guid SyncId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
+    // Igualdad por Id: las consultas sin tracking devuelven instancias nuevas en cada recarga y
+    // la UI (ComboBox/ListBox, Contains) debe reconocer el mismo registro.
+    public override bool Equals(object? obj) => obj is PatientRecord other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
+    public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     public string RecordNumber { get; set; } = string.Empty; // ej. EXP-2026-001
     public string FullName { get; set; } = string.Empty;
     public int Age { get; set; }

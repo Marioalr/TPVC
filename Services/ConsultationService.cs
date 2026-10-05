@@ -16,9 +16,20 @@ public class ConsultationService
 
     public ObservableCollection<PatientRecord> Patients { get; } = new();
 
-    public ConsultationService()
+    public ConsultationService() : this(seedDemoPatients: true)
     {
-        InitializeDefaultPatients();
+    }
+
+    /// <param name="seedDemoPatients">
+    /// Pacientes de demostración en memoria (solo para pruebas / vista sin base de datos).
+    /// La aplicación real usa false y carga los expedientes desde SQLite.
+    /// </param>
+    public ConsultationService(bool seedDemoPatients)
+    {
+        if (seedDemoPatients)
+        {
+            InitializeDefaultPatients();
+        }
     }
 
     public void LoadPatientsFromDatabase(IEnumerable<PatientRecord> patients)

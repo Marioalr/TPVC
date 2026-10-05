@@ -22,7 +22,7 @@
             </StackPanel>
 
             <!-- Tarjetas de Métricas Principales (KPIs) -->
-            <UniformGrid Columns="4" Margin="0,0,0,28">
+            <UniformGrid Columns="5" Margin="0,0,0,28">
                 <!-- Total Productos -->
                 <Border Style="{DynamicResource CardBorder}" Margin="0,0,8,0">
                     <Grid>
@@ -102,7 +102,7 @@
                 </Border>
 
                 <!-- Consumo en Consulta Hoy -->
-                <Border Style="{DynamicResource CardBorder}" Margin="8,0,0,0">
+                <Border Style="{DynamicResource CardBorder}" Margin="8,0,8,0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -121,6 +121,32 @@
                                    Foreground="{DynamicResource ThemeAccent}" />
                         <TextBlock Grid.Row="2" 
                                    Text="Unidades utilizadas en consulta" 
+                                   FontSize="11" 
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Grid>
+                </Border>
+                <!-- Ventas de Hoy (tickets persistidos) -->
+                <Border Style="{DynamicResource CardBorder}" Margin="8,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Ventas de Hoy" 
+                                   FontSize="12" 
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Row="1" 
+                                   Text="{Binding Metrics.SalesTodayTotal, StringFormat='${0:N2}'}" 
+                                   FontSize="26" 
+                                   FontWeight="Bold" 
+                                   Margin="0,8,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource ThemeSuccess}" />
+                        <TextBlock Grid.Row="2" 
+                                   Text="{Binding Metrics.SalesTodayCount, StringFormat='{}{0} ticket(s) cobrados'}" 
                                    FontSize="11" 
                                    Margin="0,4,0,0"
                                    Foreground="{DynamicResource ThemeTextSecondary}" />

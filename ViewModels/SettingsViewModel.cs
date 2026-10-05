@@ -17,6 +17,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly ThemeService _themeService;
     private readonly AppUpdateService _updateService;
+    private readonly BackupService _backupService;
 
     [ObservableProperty]
     private string _currentMode = "Claro";
@@ -31,7 +32,24 @@ public partial class SettingsViewModel : ObservableObject
     private string _customSurfaceHex = "#FFFFFF";
 
     [ObservableProperty]
-    private string _appVersion = "1.4.0";
+    private string _appVersion = "1.5.0";
+
+    [ObservableProperty]
+    private string _expectedSha256 = string.Empty;
+
+    // Respaldos de la base de datos
+    [ObservableProperty]
+    private string _lastBackupText = "Sin respaldos todavía";
+
+    [ObservableProperty]
+    private string _backupStatusMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _isBackingUp;
+
+    public string DatabasePath => _backupService.DatabasePath;
+
+    public string BackupDirectory => _backupService.BackupDirectory;
 
     [ObservableProperty]
     private string _updateStatusMessage = "Presiona 'Buscar Actualizaciones' para comprobar.";
@@ -81,10 +99,12 @@ public partial class SettingsViewModel : ObservableObject
         new() { Name = "Grafito Neutro", Hex = "#475569" }
     };
 
-    public SettingsViewModel(ThemeService themeService, AppUpdateService updateService)
+    public SettingsViewModel(ThemeService themeService, AppUpdateService updateService, BackupService? backupService = null)
     {
         _themeService = themeService;
         _updateService = updateService;
+        _backupService = backupService ?? new BackupService();
+        RefreshBackupInfo();
 
         AppVersion = _updateService.CurrentVersion.TrimStart('v', 'V');
         GitHubToken = _updateService.GitHubToken ?? string.Empty;
@@ -149,6 +169,7 @@ public partial class SettingsViewModel : ObservableObject
             DirectDownloadUrl = result.DirectDownloadUrl;
             AssetApiUrl = result.AssetApiUrl;
             DownloadFileName = result.DownloadFileName;
+            ExpectedSha256 = result.ExpectedSha256 ?? string.Empty;
         }
         catch (Exception ex)
         {
@@ -173,12 +194,71 @@ public partial class SettingsViewModel : ObservableObject
         DownloadProgress = 0;
         var progress = new Progress<double>(p => DownloadProgress = Math.Round(p, 1));
 
-        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, AssetApiUrl, progress);
+        bool success = await _updateService.DownloadAndInstallUpdateAsync(DirectDownloadUrl, DownloadFileName, AssetApiUrl, progress, ExpectedSha256);
         IsDownloading = false;
 
         if (!success)
         {
-            UpdateStatusMessage = "Hubo un error al descargar e instalar el archivo de actualización. Verifique permisos o el token configurado.";
+            UpdateStatusMessage = $"No se pudo descargar e instalar la actualización. {_updateService.LastError ?? "Verifique la conexión o el token configurado."}";
+        }
+    }
+
+    // ==========================================
+    // RESPALDOS
+    // ==========================================
+    public void RefreshBackupInfo()
+    {
+        try
+        {
+            var latest = _backupService.GetLatestBackup();
+            LastBackupText = latest == null
+                ? "Sin respaldos todavía"
+                : $"Último respaldo: {latest.LastWriteTime:dd/MM/yyyy HH:mm} ({latest.Length / 1024.0:N0} KB) • {_backupService.GetBackups().Count} guardados";
+        }
+        catch
+        {
+            LastBackupText = "No se pudo leer la carpeta de respaldos";
+        }
+    }
+
+    [RelayCommand]
+    public async Task BackupNowAsync()
+    {
+        IsBackingUp = true;
+        BackupStatusMessage = "Creando respaldo...";
+        try
+        {
+            var path = await _backupService.CreateBackupNowAsync();
+            BackupStatusMessage = $"✓ Respaldo creado: {System.IO.Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error en respaldo manual", ex);
+            BackupStatusMessage = $"No se pudo crear el respaldo: {ex.Message}";
+        }
+        finally
+        {
+            IsBackingUp = false;
+            RefreshBackupInfo();
+        }
+    }
+
+    [RelayCommand]
+    public void OpenBackupFolder() => OpenFolder(_backupService.BackupDirectory);
+
+    [RelayCommand]
+    public void OpenLogsFolder() => OpenFolder(AppLogger.LogDirectory);
+
+    private static void OpenFolder(string path)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(path);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"No se pudo abrir la carpeta {path}", ex);
         }
     }
 }

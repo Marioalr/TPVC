@@ -1062,14 +1062,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var q = query.Trim().ToLowerInvariant();
+        var q = TextSearch.Normalize(query);
         var matches = AvailableProducts
             .Where(p => IsProductMedication(p))
-            .Where(p => 
-                p.Name.ToLowerInvariant().Contains(q) ||
-                (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.ToLowerInvariant().Contains(q)) ||
-                p.Code.ToLowerInvariant().Contains(q)
-            )
+            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code))
             .Take(8)
             .ToList();
 
@@ -1091,14 +1087,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var q = query.Trim().ToLowerInvariant();
+        var q = TextSearch.Normalize(query);
         var matches = AvailableProducts
             .Where(p => IsProductSupply(p))
-            .Where(p =>
-                p.Name.ToLowerInvariant().Contains(q) ||
-                (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.ToLowerInvariant().Contains(q)) ||
-                p.Code.ToLowerInvariant().Contains(q)
-            )
+            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code))
             .Take(8)
             .ToList();
 
@@ -1120,13 +1112,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var q = query.Trim().ToLowerInvariant();
+        var q = TextSearch.Normalize(query);
         var matches = Services
-            .Where(s =>
-                s.Name.ToLowerInvariant().Contains(q) ||
-                s.Code.ToLowerInvariant().Contains(q) ||
-                s.Category.ToLowerInvariant().Contains(q)
-            )
+            .Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category))
             .Take(8)
             .ToList();
 
@@ -1169,7 +1157,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
                 _ = LoadPatientsAsync();
             };
-            _inventoryService.OnInventoryChanged += _onInventoryChangedHandler;
+            _inventoryService.OnPatientsChanged += _onInventoryChangedHandler;
             _ = LoadInitialDataAsync();
         }
         else
@@ -1209,7 +1197,22 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (_inventoryService != null)
         {
             var dbPatients = await _inventoryService.GetPatientsAsync();
-            var prevSelectedId = SelectedPatient?.Id ?? 0;
+            var prevSelected = SelectedPatient;
+            var prevSelectedId = prevSelected?.Id ?? 0;
+
+            // Se conserva la misma instancia del paciente seleccionado (la UI y los formularios
+            // abiertos trabajan sobre ella); solo se toma de la base su historial de consultas.
+            PatientRecord? keptSelected = null;
+            if (prevSelected != null && prevSelectedId > 0)
+            {
+                var index = dbPatients.FindIndex(p => p.Id == prevSelectedId);
+                if (index >= 0)
+                {
+                    prevSelected.Consultations = dbPatients[index].Consultations;
+                    dbPatients[index] = prevSelected;
+                    keptSelected = prevSelected;
+                }
+            }
 
             Patients = new ObservableCollection<PatientRecord>(dbPatients);
             ApplyPatientFilter();
@@ -1219,7 +1222,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
             if (prevSelectedId > 0)
             {
-                SelectedPatient = Patients.FirstOrDefault(p => p.Id == prevSelectedId);
+                if (keptSelected == null)
+                {
+                    SelectedPatient = null; // El expediente fue dado de baja
+                }
+                else
+                {
+                    RefreshConsultationsHistory(keptSelected);
+                }
             }
             else if (_consultationService != null && _consultationService.HasActiveConsultation)
             {
@@ -1229,14 +1239,18 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    partial void OnSelectedPatientChanged(PatientRecord? value)
+    partial void OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
-        _isCurrentConsultationSaved = false;
+        // Solo un cambio real de paciente reinicia el estado de guardado de la consulta
+        if (oldValue?.Id != newValue?.Id || newValue == null)
+        {
+            _isCurrentConsultationSaved = false;
+        }
         OnPropertyChanged(nameof(PatientActionButtonText));
         OnPropertyChanged(nameof(HasSelectedPatient));
-        if (value != null)
+        if (newValue != null)
         {
-            var list = value.Consultations.OrderByDescending(c => c.Date).ToList();
+            var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
             ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
             SelectedHistoryConsultation = ConsultationsHistory.FirstOrDefault();
         }
@@ -1245,6 +1259,35 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ConsultationsHistory.Clear();
             SelectedHistoryConsultation = null;
         }
+    }
+
+    /// <summary>
+    /// Refleja en la instancia en memoria los datos que AddConsultationNoteAsync actualiza en la base.
+    /// </summary>
+    private static void ApplyConsultationSummary(PatientRecord patient, PatientConsultation consultation)
+    {
+        patient.LastVisit = consultation.Date;
+        if (!string.IsNullOrWhiteSpace(consultation.Diagnosis)) patient.LastDiagnosis = consultation.Diagnosis;
+        if (!string.IsNullOrWhiteSpace(consultation.VitalSigns)) patient.VitalSigns = consultation.VitalSigns;
+        if (!string.IsNullOrWhiteSpace(consultation.Notes) || !string.IsNullOrWhiteSpace(consultation.TreatmentPlan))
+        {
+            patient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
+        }
+        if (consultation.Prescriptions.Count > 0)
+        {
+            patient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
+        }
+    }
+
+    private void RefreshConsultationsHistory(PatientRecord patient)
+    {
+        var selectedId = SelectedHistoryConsultation?.Id ?? 0;
+        var selectedFolio = SelectedHistoryConsultation?.Folio;
+        var list = patient.Consultations.OrderByDescending(c => c.Date).ToList();
+        ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
+        SelectedHistoryConsultation =
+            ConsultationsHistory.FirstOrDefault(c => (selectedId > 0 && c.Id == selectedId) || (selectedFolio != null && c.Folio == selectedFolio))
+            ?? ConsultationsHistory.FirstOrDefault();
     }
 
     public void SyncActiveConsultation()
@@ -1319,7 +1362,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         if (_inventoryService != null && _onInventoryChangedHandler != null)
         {
-            _inventoryService.OnInventoryChanged -= _onInventoryChangedHandler;
+            _inventoryService.OnPatientsChanged -= _onInventoryChangedHandler;
         }
         StopConsultationTimer();
         GC.SuppressFinalize(this);
@@ -1539,17 +1582,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else
         {
-            var q = SearchPatientText.Trim().ToLowerInvariant();
+            var q = TextSearch.Normalize(SearchPatientText);
             FilteredPatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p => 
-                    p.FullName.ToLowerInvariant().Contains(q) ||
-                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
-                    p.Phone.Contains(q) ||
-                    p.FormattedPhone.Contains(q) ||
-                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
-                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q))
-                )
-            );
+                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email)));
         }
     }
 
@@ -1566,18 +1601,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else
         {
-            var q = SelectPatientSearchText.Trim().ToLowerInvariant();
+            var q = TextSearch.Normalize(SelectPatientSearchText);
             SelectablePatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p =>
-                    p.FullName.ToLowerInvariant().Contains(q) ||
-                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
-                    p.Phone.Contains(q) ||
-                    p.FormattedPhone.Contains(q) ||
-                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
-                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
-                    (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
-                )
-            );
+                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email, p.Allergies)));
         }
     }
 
@@ -1631,18 +1657,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else
         {
-            var q = RecordsViewerSearchText.Trim().ToLowerInvariant();
+            var q = TextSearch.Normalize(RecordsViewerSearchText);
             RecordsViewerPatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p =>
-                    p.FullName.ToLowerInvariant().Contains(q) ||
-                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
-                    p.Phone.Contains(q) ||
-                    p.FormattedPhone.Contains(q) ||
-                    p.LastDiagnosis.ToLowerInvariant().Contains(q) ||
-                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
-                    (!string.IsNullOrEmpty(p.Allergies) && p.Allergies.ToLowerInvariant().Contains(q))
-                )
-            );
+                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email, p.Allergies)));
         }
     }
 
@@ -2171,6 +2188,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             try
             {
                 await _inventoryService.AddConsultationNoteAsync(SelectedPatient.Id, consultation);
+                ApplyConsultationSummary(SelectedPatient, consultation);
                 await LoadPatientsAsync();
             }
             catch (Exception ex)
@@ -2306,11 +2324,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             try
             {
                 await _inventoryService.AddConsultationNoteAsync(SelectedPatient.Id, consultation);
+                ApplyConsultationSummary(SelectedPatient, consultation);
                 _isCurrentConsultationSaved = true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error al guardar nota de consulta en BD: {ex.Message}");
+                // No reportar como guardada una nota que no llegó a la base de datos
+                AppLogger.Error("Error al guardar nota de consulta en BD", ex);
+                DialogService.ShowError($"No se pudo guardar la nota médica en el expediente:\n{ex.Message}");
+                return null;
             }
         }
         else
@@ -2563,7 +2585,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // 0. Si por alguna razón no se guardó la nota de consulta en BD, asegurarse de persistirla
         if (!_isCurrentConsultationSaved && SelectedPatient != null)
         {
-            await SaveActiveConsultationToDbAsync(DateTime.Now);
+            try
+            {
+                await SaveActiveConsultationToDbAsync(DateTime.Now);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo guardar la nota de consulta al cobrar", ex);
+            }
         }
         _isCurrentConsultationSaved = false;
 

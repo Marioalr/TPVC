@@ -1,8 +1,14 @@
 param(
-    [string]$Version = "1.4.0"
+    # Por defecto se toma la versión declarada en TPVC.csproj (única fuente de verdad)
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $csproj = Join-Path (Split-Path -Parent $PSScriptRoot) "TPVC.csproj"
+    $Version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+}
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host " Construyendo TPVC e Instalador v$Version " -ForegroundColor Cyan
@@ -63,13 +69,20 @@ if (-not (Test-Path $builtSetupExe)) {
     throw "Error: No se encontró el ejecutable del instalador generado."
 }
 
-# Copiar el instalador final a publish/TPVC-Setup-v1.3.0.exe
+# Copiar el instalador final a publish/TPVC-Setup-v<versión>.exe
 Copy-Item -Path $builtSetupExe -Destination $finalSetupExe -Force
 Remove-Item -Recurse -Force $setupPublishDir
 
 $setupSizeMb = [Math]::Round((Get-Item $finalSetupExe).Length / 1MB, 2)
+
+# Sumas SHA-256 para verificar la integridad de lo publicado
+$checksumsPath = Join-Path $publishDir "SHA256SUMS-v$Version.txt"
+@($finalSetupExe, $appZipPath) | ForEach-Object {
+    "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), (Split-Path $_ -Leaf)
+} | Set-Content -Path $checksumsPath -Encoding ascii
 Write-Host "`n[4/4] ¡Instalador completado exitosamente!" -ForegroundColor Green
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
 Write-Host "Instalador Oficial: $finalSetupExe ($setupSizeMb MB)" -ForegroundColor White
 Write-Host "Paquete Portátil:   $appZipPath ($zipSizeMb MB)" -ForegroundColor White
+Write-Host "Checksums:          $checksumsPath" -ForegroundColor White
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan

@@ -9,9 +9,16 @@ public enum ExpirationStatus
     Vencido
 }
 
-public class ProductBatch
+public class ProductBatch : ISyncEntity
 {
     public int Id { get; set; }
+    public Guid SyncId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
+    // Igualdad por Id: las consultas sin tracking devuelven instancias nuevas en cada recarga y
+    // la UI (ComboBox/ListBox, Contains) debe reconocer el mismo registro.
+    public override bool Equals(object? obj) => obj is ProductBatch other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
+    public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     public int ProductId { get; set; }
     public Product? Product { get; set; }
 

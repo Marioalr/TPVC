@@ -86,9 +86,12 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - **Persistencia Local**: La preferencia se almacena en `theme.json` y se recuerda en cada inicio.
 
 ### 9. Base de Datos Local y Segura (SQLite)
-- Almacenamiento local en `%LocalAppData%\TPVC\consultorio.db`.
+- Almacenamiento local en `%LocalAppData%\TPVC\consultorio.db` en modo **WAL** (escrituras rápidas y lecturas concurrentes).
 - Totalmente autónomo: no requiere internet ni configuración de servidores externos.
-- Sincronización automática reactiva con indicador discreto en la barra inferior (`● Datos sincronizados`).
+- **Respaldo automático diario** en `%LocalAppData%\TPVC\backups` (se conservan 14) y botón **Respaldar Ahora** en Ajustes.
+- **Migración automática del esquema**: al actualizar, las tablas y columnas nuevas se agregan sin tocar los datos existentes.
+- **Lista para sincronizar**: cada registro tiene un identificador global (`SyncId`), marca de modificación UTC y registro de borrados, base para un futuro servidor con varios dispositivos (Windows / Android).
+- Bitácora de errores en `%LocalAppData%\TPVC\logs` para diagnóstico.
 
 ### 10. Instalador Oficial en 3 Vistas (Experiencia de Prueba)
 - **Instalador Oficial para Windows (`TPVC-Setup-v1.3.0.exe`)**: Diseñado para una experiencia de evaluación ultra rápida y sin fricción.
@@ -108,7 +111,8 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Patrón de Arquitectura**: MVVM con `CommunityToolkit.Mvvm`
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
-* **Pruebas Automatizadas**: MSTest con **28 pruebas unitarias de integración al 100%**
+* **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
+* **Pruebas Automatizadas**: MSTest con **107 pruebas** unitarias y de integración
 
 ---
 
@@ -119,7 +123,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * Runtime / SDK: [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Opción A: Instalador de Experiencia de Prueba (Recomendado)
-Descargue `TPVC-Setup-v1.3.4.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/tag/v1.3.4), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación.
+Descargue `TPVC-Setup-vX.Y.Z.exe` desde [Releases](https://github.com/Marioalr/TPVC/releases/latest), ejecútelo, pulse **Instalar** y finalice para abrir la aplicación. Cada release incluye `SHA256SUMS-vX.Y.Z.txt` para verificar la descarga.
 
 ### Opción B: Compilación y Empaquetado del Instalador desde el Código Fuente
 ```powershell
@@ -127,15 +131,21 @@ Descargue `TPVC-Setup-v1.3.4.exe` desde [Releases](https://github.com/Marioalr/T
 git clone https://github.com/Marioalr/TPVC.git
 cd TPVC
 
-# 2. Restaurar dependencias y ejecutar pruebas unitarias (32 pruebas)
+# 2. Restaurar dependencias y ejecutar pruebas unitarias
 dotnet restore TPVC.sln
 dotnet test TPVC.sln
 
-# 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe) y paquete .zip
-powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.3.4"
+# 3. Compilar la aplicación y generar el Instalador Oficial (Setup .exe), paquete .zip y SHA256SUMS
+#    (la versión se toma de TPVC.csproj; puede forzarse con -Version "X.Y.Z")
+powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1
 
-# El ejecutable quedará en: publish/TPVC-Setup-v1.3.4.exe
+# Los archivos quedarán en: publish/
 ```
+
+### Publicar una nueva versión
+1. Actualice `<Version>` en `TPVC.csproj` y agregue la sección `## [X.Y.Z]` en `CHANGELOG.md`.
+2. Cree y suba el tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. El workflow **Release** compila en Windows, ejecuta las pruebas, empaqueta y publica el release con las notas del CHANGELOG y las sumas SHA-256.
 
 ---
 
@@ -149,10 +159,11 @@ Para habilitar la comprobación y descarga automática de versiones en los equip
    - Vaya a GitHub: `Settings` → `Developer Settings` → `Personal access tokens` → `Tokens (classic)` (o Fine-grained).
    - Genere un nuevo token con permiso/alcance **`repo`** (o `read:packages`).
 2. **Configuración en la Aplicación**:
-   - **Desde la Interfaz Gráfica**: Abra TPVC → **Configuración** → **Ajustes** → Sección *"🔒 Autenticación para Repositorio Privado en Producción"*, pegue el token y haga clic en **"Guardar Token"**. Se guardará de forma persistente y local en `%LocalAppData%\TPVC\update_config.json`.
+   - **Desde la Interfaz Gráfica**: Abra TPVC → **Configuración** → **Ajustes** → Sección *"🔒 Autenticación para Repositorio Privado en Producción"*, pegue el token y haga clic en **"Guardar Token"**. Se guarda cifrado con DPAPI de Windows (solo legible por su usuario) en `%LocalAppData%\TPVC\update_config.json`.
    - **Mediante Variable de Entorno**: En despliegues desatendidos o automatizados, declare la variable de entorno del sistema `GITHUB_TOKEN` o `GH_TOKEN` con el valor del token.
 3. **Descarga Segura de Paquetes**:
    - La aplicación detecta el token y descarga automáticamente los instaladores `.exe` autenticados mediante el endpoint de assets de la API de GitHub (`Accept: application/octet-stream`).
+   - Antes de ejecutar el instalador se verifica su **SHA-256** contra el digest que publica GitHub; si no coincide, la descarga se descarta.
    - *(En caso de que el repositorio se configure como Público en el futuro, no se requiere ningún token y las actualizaciones funcionarán abiertamente para todos los usuarios).*
 
 ---

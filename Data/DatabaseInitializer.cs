@@ -6,242 +6,26 @@ using TPVC.Models;
 
 namespace TPVC.Data;
 
-public static class DatabaseInitializer
+public static partial class DatabaseInitializer
 {
     public static void Initialize(AppDbContext context)
     {
-        // Asegura que las tablas existan
+        // Asegura que las tablas existan (base nueva)
         context.Database.EnsureCreated();
 
-        // Migración preventiva segura para SQLite en caso de bases de datos preexistentes
+        // WAL: lecturas concurrentes mientras se escribe y escrituras más rápidas.
+        // Es persistente en el archivo, basta con aplicarlo una vez por base.
         try
         {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Products ADD COLUMN Price TEXT NOT NULL DEFAULT '0';");
+            context.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
         }
         catch
         {
-            // Columna ya existe o base nueva
+            // Algunos entornos (bases en memoria / sólo lectura) no admiten WAL
         }
 
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN ActiveSuppliesJson TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN ActiveServicesJson TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN NextAppointmentDate TEXT NULL;");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN NextAppointmentTime TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN NextAppointmentReason TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE Patients ADD COLUMN NextAppointmentNotes TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN StartedAt TEXT NULL;");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN EndedAt TEXT NULL;");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw("ALTER TABLE PatientConsultations ADD COLUMN SystemsReview TEXT NOT NULL DEFAULT '';");
-        }
-        catch
-        {
-        }
-
-        // Migraciones de historia clínica completa (NOM-004-SSA3)
-        string[] newPatientColumns = new[]
-        {
-            "BirthDate TEXT NULL",
-            "Occupation TEXT NOT NULL DEFAULT ''",
-            "Religion TEXT NOT NULL DEFAULT ''",
-            "FamilyHistory TEXT NOT NULL DEFAULT ''",
-            "Surgeries TEXT NOT NULL DEFAULT ''",
-            "Transfusions TEXT NOT NULL DEFAULT ''",
-            "Hospitalizations TEXT NOT NULL DEFAULT ''",
-            "ImmunizationSchedule TEXT NOT NULL DEFAULT ''",
-            "MenarcheAge TEXT NOT NULL DEFAULT ''",
-            "SexualOnsetAge TEXT NOT NULL DEFAULT ''",
-            "SexualPartnersCount TEXT NOT NULL DEFAULT ''",
-            "PeriodDuration TEXT NOT NULL DEFAULT ''",
-            "IsPeriodHeavy TEXT NOT NULL DEFAULT ''",
-            "PapSmear TEXT NOT NULL DEFAULT ''",
-            "PregnanciesCount INTEGER NOT NULL DEFAULT 0",
-            "CesareansCount INTEGER NOT NULL DEFAULT 0",
-            "AbortionsCount INTEGER NOT NULL DEFAULT 0",
-            "IsCurrentlyPregnant INTEGER NOT NULL DEFAULT 0",
-            "GestationalWeeks TEXT NOT NULL DEFAULT ''",
-            "DevelopmentalMilestones TEXT NOT NULL DEFAULT ''",
-            "Diet TEXT NOT NULL DEFAULT ''",
-            "HousingConditions TEXT NOT NULL DEFAULT ''",
-            "Zoonosis TEXT NOT NULL DEFAULT ''"
-        };
-
-        foreach (var colDef in newPatientColumns)
-        {
-            try
-            {
-                context.Database.ExecuteSqlRaw($"ALTER TABLE Patients ADD COLUMN {colDef};");
-            }
-            catch
-            {
-            }
-        }
-
-        try
-        {
-            context.Database.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS ClinicalServices (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Code TEXT NOT NULL,
-                    Name TEXT NOT NULL,
-                    Description TEXT NOT NULL,
-                    Category TEXT NOT NULL,
-                    Price TEXT NOT NULL,
-                    EstimatedDurationMinutes INTEGER NOT NULL,
-                    IsActive INTEGER NOT NULL,
-                    CreatedAt TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS IX_ClinicalServices_Code ON ClinicalServices (Code);
-                CREATE INDEX IF NOT EXISTS IX_ClinicalServices_Name ON ClinicalServices (Name);
-
-                CREATE TABLE IF NOT EXISTS ServiceDefaultProducts (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ClinicalServiceId INTEGER NOT NULL,
-                    ProductId INTEGER NOT NULL,
-                    Quantity INTEGER NOT NULL,
-                    Instructions TEXT NULL,
-                    FOREIGN KEY (ClinicalServiceId) REFERENCES ClinicalServices (Id) ON DELETE CASCADE,
-                    FOREIGN KEY (ProductId) REFERENCES Products (Id) ON DELETE RESTRICT
-                );
-                CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ClinicalServiceId ON ServiceDefaultProducts (ClinicalServiceId);
-                CREATE INDEX IF NOT EXISTS IX_ServiceDefaultProducts_ProductId ON ServiceDefaultProducts (ProductId);
-
-                CREATE TABLE IF NOT EXISTS Patients (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    RecordNumber TEXT NOT NULL,
-                    FullName TEXT NOT NULL,
-                    Age INTEGER NOT NULL,
-                    Gender TEXT NOT NULL,
-                    Phone TEXT NOT NULL,
-                    Email TEXT NOT NULL,
-                    Address TEXT NOT NULL,
-                    BloodType TEXT NOT NULL,
-                    Allergies TEXT NOT NULL,
-                    ChronicDiseases TEXT NOT NULL,
-                    EmergencyContactName TEXT NOT NULL,
-                    EmergencyContactPhone TEXT NOT NULL,
-                    BirthDate TEXT NULL,
-                    Occupation TEXT NOT NULL DEFAULT '',
-                    Religion TEXT NOT NULL DEFAULT '',
-                    FamilyHistory TEXT NOT NULL DEFAULT '',
-                    Surgeries TEXT NOT NULL DEFAULT '',
-                    Transfusions TEXT NOT NULL DEFAULT '',
-                    Hospitalizations TEXT NOT NULL DEFAULT '',
-                    ImmunizationSchedule TEXT NOT NULL DEFAULT '',
-                    MenarcheAge TEXT NOT NULL DEFAULT '',
-                    SexualOnsetAge TEXT NOT NULL DEFAULT '',
-                    SexualPartnersCount TEXT NOT NULL DEFAULT '',
-                    PeriodDuration TEXT NOT NULL DEFAULT '',
-                    IsPeriodHeavy TEXT NOT NULL DEFAULT '',
-                    PapSmear TEXT NOT NULL DEFAULT '',
-                    PregnanciesCount INTEGER NOT NULL DEFAULT 0,
-                    CesareansCount INTEGER NOT NULL DEFAULT 0,
-                    AbortionsCount INTEGER NOT NULL DEFAULT 0,
-                    IsCurrentlyPregnant INTEGER NOT NULL DEFAULT 0,
-                    GestationalWeeks TEXT NOT NULL DEFAULT '',
-                    DevelopmentalMilestones TEXT NOT NULL DEFAULT '',
-                    Diet TEXT NOT NULL DEFAULT '',
-                    HousingConditions TEXT NOT NULL DEFAULT '',
-                    Zoonosis TEXT NOT NULL DEFAULT '',
-                    LastVisit TEXT NOT NULL,
-                    LastDiagnosis TEXT NOT NULL,
-                    VitalSigns TEXT NOT NULL,
-                    ClinicalNotes TEXT NOT NULL,
-                    ActivePrescriptionJson TEXT NOT NULL,
-                    ActiveSuppliesJson TEXT NOT NULL DEFAULT '',
-                    ActiveServicesJson TEXT NOT NULL DEFAULT '',
-                    NextAppointmentDate TEXT NULL,
-                    NextAppointmentTime TEXT NOT NULL DEFAULT '',
-                    NextAppointmentReason TEXT NOT NULL DEFAULT '',
-                    NextAppointmentNotes TEXT NOT NULL DEFAULT '',
-                    IsActive INTEGER NOT NULL,
-                    CreatedAt TEXT NOT NULL
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS IX_Patients_RecordNumber ON Patients (RecordNumber);
-                CREATE INDEX IF NOT EXISTS IX_Patients_FullName ON Patients (FullName);
-
-                CREATE TABLE IF NOT EXISTS PatientConsultations (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    PatientRecordId INTEGER NOT NULL,
-                    Folio TEXT NOT NULL,
-                    Date TEXT NOT NULL,
-                    StartedAt TEXT NULL,
-                    EndedAt TEXT NULL,
-                    ChiefComplaint TEXT NOT NULL,
-                    VitalSigns TEXT NOT NULL,
-                    PhysicalExamination TEXT NOT NULL,
-                    SystemsReview TEXT NOT NULL DEFAULT '',
-                    Diagnosis TEXT NOT NULL,
-                    TreatmentPlan TEXT NOT NULL,
-                    Notes TEXT NOT NULL,
-                    PrescriptionsJson TEXT NOT NULL,
-                    FOREIGN KEY (PatientRecordId) REFERENCES Patients (Id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_Folio ON PatientConsultations (Folio);
-                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_Date ON PatientConsultations (Date);
-                CREATE INDEX IF NOT EXISTS IX_PatientConsultations_PatientRecordId ON PatientConsultations (PatientRecordId);
-            ");
-        }
-        catch
-        {
-        }
+        // Migración aditiva automática para bases preexistentes
+        EnsureSchema(context);
 
         // Si ya hay categorías, solo verificar si faltan los servicios clínicos o pacientes
         if (context.Categories.Any())

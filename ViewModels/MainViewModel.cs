@@ -39,7 +39,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.4.0";
+    private string _appVersion = "1.5.0";
 
     // ==========================================
     // PALETA GLOBAL DE COMANDOS (Ctrl + K / Ctrl + P)
@@ -76,7 +76,8 @@ public partial class MainViewModel : ObservableObject
         InventoryService inventoryService, 
         ConsultationService consultationService,
         ThemeService themeService, 
-        AppUpdateService updateService)
+        AppUpdateService updateService,
+        BackupService? backupService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -130,7 +131,7 @@ public partial class MainViewModel : ObservableObject
         InventoryVM = new InventoryViewModel(inventoryService);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
-        SettingsVM = new SettingsViewModel(themeService, updateService);
+        SettingsVM = new SettingsViewModel(themeService, updateService, backupService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
             NavigateTo,
@@ -292,25 +293,16 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            var q = query.Trim().ToLowerInvariant();
+            // Búsqueda sin distinguir mayúsculas ni acentos ("perez" encuentra "Pérez")
+            var q = TextSearch.Normalize(query);
 
             // 1. Comandos estáticos
-            var matchedCommands = _staticCommandItems.Where(c =>
-                c.Title.ToLowerInvariant().Contains(q) ||
-                c.Subtitle.ToLowerInvariant().Contains(q) ||
-                c.Category.ToLowerInvariant().Contains(q)
-            );
+            var matchedCommands = _staticCommandItems.Where(c => TextSearch.Matches(q, c.Title, c.Subtitle, c.Category));
             list.AddRange(matchedCommands);
 
             // 2. Pacientes
             var patients = MedicalRecordsVM.Patients
-                .Where(p =>
-                    p.FullName.ToLowerInvariant().Contains(q) ||
-                    p.RecordNumber.ToLowerInvariant().Contains(q) ||
-                    p.Phone.Contains(q) ||
-                    (!string.IsNullOrEmpty(p.Email) && p.Email.ToLowerInvariant().Contains(q)) ||
-                    (!string.IsNullOrEmpty(p.LastDiagnosis) && p.LastDiagnosis.ToLowerInvariant().Contains(q))
-                )
+                .Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.Email, p.LastDiagnosis))
                 .Take(6);
 
             foreach (var p in patients)
@@ -337,12 +329,7 @@ public partial class MainViewModel : ObservableObject
             // 3. Productos / Medicamentos
             var productsSource = PosVM.Products.Count > 0 ? PosVM.Products : InventoryVM.Products;
             var products = productsSource
-                .Where(p =>
-                    p.Name.ToLowerInvariant().Contains(q) ||
-                    (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.ToLowerInvariant().Contains(q)) ||
-                    p.Code.ToLowerInvariant().Contains(q) ||
-                    (!string.IsNullOrEmpty(p.Location) && p.Location.ToLowerInvariant().Contains(q))
-                )
+                .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location))
                 .Take(6);
 
             foreach (var prod in products)

@@ -29,6 +29,10 @@ public class GitHubReleaseAsset
 
     [JsonPropertyName("size")]
     public long Size { get; set; }
+
+    // "sha256:<hex>" calculado por GitHub al subir el asset
+    [JsonPropertyName("digest")]
+    public string? Digest { get; set; }
 }
 
 public class GitHubReleaseInfo
@@ -51,19 +55,24 @@ public class GitHubReleaseInfo
 
 public class UpdateConfig
 {
+    // Formato heredado (texto plano). Se migra a ProtectedToken al volver a guardar.
     public string? GitHubToken { get; set; }
+
+    // Token cifrado con DPAPI (solo descifrable por el mismo usuario de Windows)
+    public string? ProtectedToken { get; set; }
 }
 
 public class UpdateCheckResult
 {
     public bool IsUpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = "1.4.0";
-    public string LatestVersion { get; set; } = "1.4.0";
+    public string CurrentVersion { get; set; } = "1.5.0";
+    public string LatestVersion { get; set; } = "1.5.0";
     public string ReleaseNotes { get; set; } = string.Empty;
     public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;
     public string AssetApiUrl { get; set; } = string.Empty;
     public string DownloadFileName { get; set; } = string.Empty;
+    public string? ExpectedSha256 { get; set; }
     public string Message { get; set; } = string.Empty;
 }
 
@@ -91,11 +100,14 @@ public class AppUpdateService
         get => _currentVersion ?? 
                Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? 
                typeof(AppUpdateService).Assembly.GetName().Version?.ToString(3) ?? 
-               "1.3.19";
+               "1.5.0";
         set => _currentVersion = value;
     }
 
     public string? GitHubToken { get; set; }
+
+    /// <summary>Motivo del último fallo de descarga/instalación (para mostrarlo en Ajustes).</summary>
+    public string? LastError { get; private set; }
 
     public AppUpdateService()
     {
@@ -110,9 +122,10 @@ public class AppUpdateService
             {
                 var json = File.ReadAllText(ConfigPath);
                 var config = JsonSerializer.Deserialize<UpdateConfig>(json);
-                if (config != null && !string.IsNullOrWhiteSpace(config.GitHubToken))
+                var token = UnprotectToken(config?.ProtectedToken) ?? config?.GitHubToken;
+                if (!string.IsNullOrWhiteSpace(token))
                 {
-                    GitHubToken = config.GitHubToken.Trim();
+                    GitHubToken = token.Trim();
                 }
             }
         }
@@ -133,13 +146,46 @@ public class AppUpdateService
                 Directory.CreateDirectory(dir);
             }
 
-            var config = new UpdateConfig { GitHubToken = GitHubToken };
+            var protectedToken = ProtectToken(GitHubToken);
+            var config = protectedToken != null
+                ? new UpdateConfig { ProtectedToken = protectedToken }
+                : new UpdateConfig { GitHubToken = GitHubToken };
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ConfigPath, json);
         }
         catch
         {
             // Omitir fallos de escritura de configuración
+        }
+    }
+
+    private static string? ProtectToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || !OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var bytes = System.Security.Cryptography.ProtectedData.Protect(
+                System.Text.Encoding.UTF8.GetBytes(token), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? UnprotectToken(string? protectedToken)
+    {
+        if (string.IsNullOrWhiteSpace(protectedToken) || !OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var bytes = System.Security.Cryptography.ProtectedData.Unprotect(
+                Convert.FromBase64String(protectedToken), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return System.Text.Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -184,13 +230,18 @@ public class AppUpdateService
                     result.ReleaseNotes = release.Body;
                     result.ReleaseUrl = release.HtmlUrl;
 
-                    var asset = release.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || 
-                                                                 a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+                    // Preferir el instalador .exe; el .zip portátil es respaldo
+                    var asset = release.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                                ?? release.Assets.FirstOrDefault(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
                     if (asset != null)
                     {
                         result.DirectDownloadUrl = asset.BrowserDownloadUrl;
                         result.AssetApiUrl = asset.Url;
                         result.DownloadFileName = asset.Name;
+                        if (asset.Digest?.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            result.ExpectedSha256 = asset.Digest.Substring("sha256:".Length);
+                        }
                     }
 
                     var currentClean = result.CurrentVersion.TrimStart('v', 'V');
@@ -253,11 +304,15 @@ public class AppUpdateService
         return result;
     }
 
-    public async Task<bool> DownloadAndInstallUpdateAsync(string downloadUrl, string fileName, string? assetApiUrl = null, IProgress<double>? progress = null)
+    public async Task<bool> DownloadAndInstallUpdateAsync(string downloadUrl, string fileName, string? assetApiUrl = null, IProgress<double>? progress = null, string? expectedSha256 = null)
     {
+        LastError = null;
         try
         {
-            var destination = Path.Combine(Path.GetTempPath(), fileName);
+            // El nombre viene del release: se descarta cualquier ruta para no escribir fuera de %TEMP%
+            var safeName = Path.GetFileName(fileName);
+            if (string.IsNullOrWhiteSpace(safeName)) safeName = "TPVC-Update.exe";
+            var destination = Path.Combine(Path.GetTempPath(), safeName);
             var token = GetEffectiveToken();
 
             // Para repositorios privados con token, descargar directamente del endpoint de asset con Accept: application/octet-stream
@@ -300,6 +355,19 @@ public class AppUpdateService
 
             fileStream.Close();
 
+            // Verificar integridad contra el digest publicado por GitHub antes de ejecutar nada
+            if (!string.IsNullOrWhiteSpace(expectedSha256))
+            {
+                var actual = await ComputeSha256Async(destination);
+                if (!actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(destination);
+                    LastError = "La descarga no coincide con la firma SHA-256 publicada. Se descartó el archivo por seguridad.";
+                    AppLogger.Error($"SHA-256 no coincide: esperado {expectedSha256}, obtenido {actual}");
+                    return false;
+                }
+            }
+
             // Si es un instalador o ejecutable, ejecutarlo
             if (destination.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
@@ -320,10 +388,19 @@ public class AppUpdateService
             OpenReleaseUrl(Path.GetDirectoryName(destination) ?? destination);
             return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LastError = ex.Message;
+            AppLogger.Error("Error al descargar la actualización", ex);
             return false;
         }
+    }
+
+    public static async Task<string> ComputeSha256Async(string path)
+    {
+        await using var stream = File.OpenRead(path);
+        var hash = await System.Security.Cryptography.SHA256.HashDataAsync(stream);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     public void OpenReleaseUrl(string url)

@@ -13,9 +13,11 @@ public enum MovementType
     SalidaVenta
 }
 
-public class InventoryMovement
+public class InventoryMovement : ISyncEntity
 {
     public int Id { get; set; }
+    public Guid SyncId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
     public int ProductId { get; set; }
     public Product? Product { get; set; }
 

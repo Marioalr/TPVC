@@ -441,14 +441,9 @@ public partial class PosViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var q = query.Trim().ToLowerInvariant();
+        var q = TextSearch.Normalize(query);
         var matches = Products
-            .Where(p => 
-                p.Name.ToLowerInvariant().Contains(q) ||
-                (p.GenericName != null && p.GenericName.ToLowerInvariant().Contains(q)) ||
-                p.Code.ToLowerInvariant().Contains(q) ||
-                (p.Location != null && p.Location.ToLowerInvariant().Contains(q))
-            )
+            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location))
             .OrderBy(p => p.Name)
             .Take(8)
             .ToList();
@@ -577,13 +572,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrWhiteSpace(CatalogSearchText))
         {
-            var q = CatalogSearchText.Trim().ToLowerInvariant();
-            list = list.Where(p => 
-                p.Name.ToLowerInvariant().Contains(q) ||
-                (p.GenericName != null && p.GenericName.ToLowerInvariant().Contains(q)) ||
-                p.Code.ToLowerInvariant().Contains(q) ||
-                (p.Location != null && p.Location.ToLowerInvariant().Contains(q))
-            );
+            var q = TextSearch.Normalize(CatalogSearchText);
+            list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location));
         }
 
         CatalogFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
@@ -731,15 +721,19 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
         try
         {
-            var saleItems = Cart.Select(c => (c.ProductId, c.Quantity, c.UnitPrice)).ToList();
-            var total = TotalCartAmount;
+            var saleLines = Cart
+                .Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name))
+                .ToList();
             var patient = string.IsNullOrWhiteSpace(PatientName) ? "Público General" : PatientName.Trim();
 
-            // Construir el recibo / ticket simulado con los datos exactos cobrados
+            // Se registra primero: si falta stock no se genera ticket ni se vacía el carrito
+            var sale = await _inventoryService.RegisterSaleAsync(saleLines, patient, SelectedPaymentMethod, "Dr. Titular / Consultorio TPVC");
+
+            // Construir el recibo / ticket con los datos exactos cobrados y el folio persistido
             var receipt = new SaleReceipt
             {
-                Folio = $"TKT-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
-                Date = DateTime.Now,
+                Folio = sale?.Folio ?? $"TKT-{DateTime.Now:yyyyMMdd-HHmmss}",
+                Date = sale?.Date ?? DateTime.Now,
                 PatientName = patient,
                 PaymentMethod = SelectedPaymentMethod,
                 Cashier = "Dr. Titular / Consultorio TPVC",
@@ -753,8 +747,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
                     UnitPrice = c.UnitPrice
                 }).ToList()
             };
-
-            await _inventoryService.RegisterSaleAsync(saleItems, patient, SelectedPaymentMethod);
 
             bool isFromConsultation = IsEmbeddedInModal || IsConsultationCheckout;
 
@@ -787,7 +779,10 @@ public partial class PosViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
+            AppLogger.Error("Error al procesar la venta", ex);
             ShowAlert($"Error al procesar la venta: {ex.Message}", false);
+            // Refrescar existencias para que el carrito muestre el stock real
+            _ = LoadCatalogAsync();
         }
     }
 
@@ -1108,12 +1103,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrWhiteSpace(ServiceSearchText))
         {
-            var search = ServiceSearchText.Trim();
-            query = query.Where(s => 
-                s.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                s.Code.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                s.Category.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrWhiteSpace(s.Description) && s.Description.Contains(search, StringComparison.OrdinalIgnoreCase)));
+            var search = TextSearch.Normalize(ServiceSearchText);
+            query = query.Where(s => TextSearch.Matches(search, s.Name, s.Code, s.Category, s.Description));
         }
 
         FilteredServices = new ObservableCollection<ClinicalService>(query.OrderBy(s => s.Category).ThenBy(s => s.Name));

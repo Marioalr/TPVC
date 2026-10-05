@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${1:-1.4.0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Por defecto se toma la versión declarada en TPVC.csproj (única fuente de verdad)
+VERSION="${1:-$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$ROOT_DIR/TPVC.csproj" | head -n1)}"
 PUBLISH_DIR="$ROOT_DIR/publish"
 APP_PUBLISH_DIR="$PUBLISH_DIR/TPVC-v$VERSION-win-x64"
 APP_ZIP_PATH="$PUBLISH_DIR/TPVC-v$VERSION-win-x64.zip"
@@ -70,8 +71,13 @@ cp "$BUILT_SETUP_EXE" "$FINAL_SETUP_EXE"
 rm -rf "$SETUP_PUBLISH_DIR"
 
 SETUP_SIZE=$(du -h "$FINAL_SETUP_EXE" | cut -f1)
+
+# Sumas SHA-256 para verificar la integridad de lo publicado
+CHECKSUMS_PATH="$PUBLISH_DIR/SHA256SUMS-v$VERSION.txt"
+(cd "$PUBLISH_DIR" && sha256sum "TPVC-Setup-v$VERSION.exe" "TPVC-v$VERSION-win-x64.zip" > "$CHECKSUMS_PATH")
 echo -e "\n[4/4] ¡Instalador completado exitosamente!"
 echo "--------------------------------------------------"
 echo "Instalador Oficial: $FINAL_SETUP_EXE ($SETUP_SIZE)"
 echo "Paquete Portátil:   $APP_ZIP_PATH ($ZIP_SIZE)"
+echo "Checksums:          $CHECKSUMS_PATH"
 echo "--------------------------------------------------"

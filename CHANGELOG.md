@@ -2,6 +2,46 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.5.0] - 2026-10-05
+
+### Corregido
+* **Errores intermitentes al recargar vistas**: todas las pantallas compartían un único `DbContext`; tras una venta o cambio de inventario se lanzaban 5–6 recargas simultáneas que fallaban con *"A second operation was started on this context"*. Ahora cada operación usa su propio contexto (`IDbContextFactory`).
+* **Ventas y consumos sin stock suficiente**: el stock se recortaba a 0 en silencio y el Kardex registraba una cantidad que no existía. Ahora la venta completa se rechaza con un mensaje claro y no se guarda nada (transacción).
+* **Stock desalineado con lotes y Kardex**:
+  * Editar las existencias en la ficha del producto ahora registra un movimiento de *Ajuste de inventario*.
+  * Eliminar un lote con piezas descuenta esas piezas del producto (antes quedaban "fantasma").
+  * Recibir un lote (lote + existencias + Kardex) es una sola operación atómica.
+* **Servicios cobrados sin registro**: las consultas y procedimientos cobrados en el POS no quedaban guardados en ningún lado. Ahora cada venta se persiste como ticket con folio consecutivo diario (`TKT-yyyyMMdd-0001`) e incluye productos y servicios.
+* **Nota médica reportada como guardada aunque fallara**: si la base rechazaba la nota se mostraba "guardada exitosamente". Ahora se informa el error y se reintenta al cobrar.
+* **Pacientes de demostración en memoria** aparecían en el selector del POS antes de cargar los expedientes reales.
+* Folio de consulta activa basado en número aleatorio (posibles colisiones); ahora usa fecha y hora (`CNS-yyyyMMdd-HHmmss`).
+* La búsqueda no encontraba texto con acentos ("acido" no encontraba "Ácido", "perez" no encontraba "Pérez") en inventario, POS, expedientes y paleta de comandos.
+
+### Añadido
+* **Respaldo automático diario** de la base de datos (se conservan 14) y sección *Base de Datos Local y Respaldos* en Ajustes con **Respaldar Ahora**, abrir carpeta de respaldos y bitácora de errores.
+* **Bitácora de errores** en `%LocalAppData%\TPVC\logs` y manejador global: un error inesperado de interfaz ya no cierra la aplicación (ni se pierde una consulta en curso).
+* **Confirmación** antes de dar de baja un producto o eliminar un lote.
+* KPI **Ventas de Hoy** (total y número de tickets) en el panel de métricas.
+* **Preparación para servidor y varios dispositivos**: `SyncId` (GUID) y `UpdatedAtUtc` en todas las entidades, tabla `SyncTombstones` para borrados, índices para sincronización incremental.
+* **Migración automática del esquema**: tablas, columnas e índices nuevos se crean comparando el modelo con la base real (reemplaza ~35 `ALTER TABLE` manuales); probado sobre una base v1.4.0.
+* Workflow **Release** (tag `vX.Y.Z`): compila y prueba en Windows, empaqueta y publica el release con notas del CHANGELOG y `SHA256SUMS`.
+
+### Seguridad
+* El actualizador verifica el **SHA-256** del instalador descargado contra el digest publicado por GitHub antes de ejecutarlo y sanea el nombre del archivo.
+* El token de GitHub se guarda **cifrado con DPAPI** (los tokens en texto plano existentes se siguen leyendo y se cifran al volver a guardar).
+
+### Rendimiento
+* SQLite en modo **WAL** con `synchronous=NORMAL` (escrituras más rápidas, lecturas concurrentes).
+* Lecturas sin tracking; métricas del panel calculadas con agregados en SQLite en lugar de cargar catálogos completos.
+* Búsqueda de inventario con *debounce* y Kardex filtrado en memoria (sin consulta a la base por cada tecla).
+* Guardar un expediente o nota ya no recarga catálogos de inventario, y una venta ya no recarga expedientes.
+
+### Modificado
+* La versión de los scripts de empaquetado y del CI se toma de `TPVC.csproj` (única fuente de verdad).
+* Suite de pruebas ampliada a **107** (16 nuevas en `DataLayerTests`).
+
+---
+
 ## [1.4.0] - 2026-10-05
 
 ### Añadido

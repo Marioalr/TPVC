@@ -296,25 +296,63 @@
                 </StackPanel>
             </Border>
 
-            <!-- Sección 4: Base de Datos Local -->
+            <!-- Sección 4: Base de Datos Local y Respaldos -->
             <Border Style="{DynamicResource CardBorder}">
                 <StackPanel>
-                    <TextBlock Text="Base de Datos Local (SQLite)" 
+                    <TextBlock Text="Base de Datos Local y Respaldos" 
                                FontSize="16" 
                                FontWeight="SemiBold" 
                                Foreground="{DynamicResource ThemeText}" 
                                Margin="0,0,0,4" />
-                    <TextBlock Text="Los datos se almacenan de manera local y segura en este equipo. Puedes respaldar el archivo .db copiándolo:" 
+                    <TextBlock Text="Los datos se guardan en este equipo. Cada día, al abrir la aplicación, se crea un respaldo automático y se conservan los últimos 14." 
                                FontSize="12" 
+                               TextWrapping="Wrap"
                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                Margin="0,0,0,12" />
 
-                    <Button Style="{DynamicResource OutlineButton}" 
-                            Content="Abrir Carpeta de Base de Datos" 
-                            Click="OpenDbFolder_Click" 
-                            HorizontalAlignment="Left" 
-                            Padding="14,6" 
-                            FontSize="12" />
+                    <TextBlock Text="{Binding LastBackupText}" 
+                               FontSize="13" 
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ThemeText}" 
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding DatabasePath, StringFormat='Base de datos: {0}'}" 
+                               FontSize="11" 
+                               FontFamily="Consolas"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               Margin="0,0,0,12" />
+
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Style="{DynamicResource AccentButton}" 
+                                Content="Respaldar Ahora" 
+                                Command="{Binding BackupNowCommand}" 
+                                Padding="14,6" 
+                                Margin="0,0,8,8"
+                                FontSize="12" />
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Content="Abrir Carpeta de Respaldos" 
+                                Command="{Binding OpenBackupFolderCommand}" 
+                                Padding="14,6" 
+                                Margin="0,0,8,8"
+                                FontSize="12" />
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Content="Abrir Carpeta de Base de Datos" 
+                                Click="OpenDbFolder_Click" 
+                                Padding="14,6" 
+                                Margin="0,0,8,8"
+                                FontSize="12" />
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Content="Ver Bitácora de Errores" 
+                                Command="{Binding OpenLogsFolderCommand}" 
+                                Padding="14,6" 
+                                Margin="0,0,8,8"
+                                FontSize="12" />
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding BackupStatusMessage}" 
+                               FontSize="11" 
+                               Foreground="{DynamicResource ThemeAccent}" 
+                               Visibility="{Binding BackupStatusMessage, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </Border>
         </StackPanel>

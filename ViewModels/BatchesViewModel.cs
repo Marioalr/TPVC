@@ -200,28 +200,42 @@ public partial class BatchesViewModel : ObservableObject
             Notes = NewBatchNotes
         };
 
-        await _inventoryService.SaveBatchAsync(batch);
-
-        // Sumar stock al producto automáticamente
-        await _inventoryService.RegisterMovementAsync(new InventoryMovement
+        try
         {
-            ProductId = NewBatchSelectedProduct.Id,
-            BatchId = batch.Id,
-            MovementType = MovementType.EntradaCompra,
-            Quantity = NewBatchQuantity,
-            Reason = $"Entrada de lote {batch.BatchNumber}",
-            Responsible = "Dr. Consulta"
-        });
-
-        IsNewBatchModalOpen = false;
-        await LoadBatchesAsync();
+            // Lote + suma de existencias + Kardex en una sola transacción
+            await _inventoryService.ReceiveBatchAsync(batch);
+            IsNewBatchModalOpen = false;
+            await LoadBatchesAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al registrar lote", ex);
+            DialogService.ShowError($"No se pudo registrar el lote:\n{ex.Message}");
+        }
     }
 
     [RelayCommand]
     public async Task DeleteBatchAsync(ProductBatch? batch)
     {
         if (batch == null) return;
-        await _inventoryService.DeleteBatchAsync(batch.Id);
-        await LoadBatchesAsync();
+
+        var remaining = !batch.IsDepleted && batch.Quantity > 0
+            ? $"\n\nSe descontarán {batch.Quantity} pieza(s) restantes de las existencias de '{batch.Product?.Name}'."
+            : string.Empty;
+        if (!DialogService.Confirm($"¿Eliminar el lote {batch.BatchNumber}?{remaining}\n\nEsta acción no se puede deshacer.", "Eliminar lote"))
+        {
+            return;
+        }
+
+        try
+        {
+            await _inventoryService.DeleteBatchAsync(batch.Id);
+            await LoadBatchesAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al eliminar lote", ex);
+            DialogService.ShowError($"No se pudo eliminar el lote:\n{ex.Message}");
+        }
     }
 }

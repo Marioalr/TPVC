@@ -26,7 +26,8 @@ public partial class ConsultationProductItem : ObservableObject
 
 public partial class ActiveConsultation : ObservableObject
 {
-    public string Folio { get; set; } = $"CONS-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+    // Folio con fecha y hora: único para un consultorio sin depender de números aleatorios
+    public string Folio { get; set; } = $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
     public int PatientId { get; set; }
     public string PatientName { get; set; } = string.Empty;
     public string PatientRecordNumber { get; set; } = string.Empty;

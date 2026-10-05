@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -49,26 +50,16 @@ public partial class MovementsViewModel : ObservableObject
         };
     }
 
+    private List<InventoryMovement> _loadedMovements = new();
+
     [RelayCommand]
     public async Task LoadMovementsAsync()
     {
         IsLoading = true;
         try
         {
-            var list = await _inventoryService.GetRecentMovementsAsync(100);
-
-            if (!string.IsNullOrWhiteSpace(SearchText))
-            {
-                var s = SearchText.Trim().ToLower();
-                list = list.Where(m => 
-                    (m.Product != null && m.Product.Name.ToLower().Contains(s)) ||
-                    (m.Reason != null && m.Reason.ToLower().Contains(s)) ||
-                    (m.Responsible != null && m.Responsible.ToLower().Contains(s))
-                ).ToList();
-            }
-
-            Movements = new ObservableCollection<InventoryMovement>(list);
-            TotalMovementsCount = Movements.Count;
+            _loadedMovements = await _inventoryService.GetRecentMovementsAsync(MovementsPageSize);
+            ApplySearchFilter();
         }
         finally
         {
@@ -76,8 +67,26 @@ public partial class MovementsViewModel : ObservableObject
         }
     }
 
+    public const int MovementsPageSize = 200;
+
+    /// <summary>
+    /// La búsqueda filtra en memoria los movimientos ya cargados (sin consultar la base por tecla).
+    /// </summary>
+    private void ApplySearchFilter()
+    {
+        IEnumerable<InventoryMovement> list = _loadedMovements;
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var q = TextSearch.Normalize(SearchText);
+            list = list.Where(m => TextSearch.Matches(q, m.Product?.Name, m.Product?.Code, m.Reason, m.Responsible, m.MovementTypeDisplay));
+        }
+
+        Movements = new ObservableCollection<InventoryMovement>(list);
+        TotalMovementsCount = Movements.Count;
+    }
+
     partial void OnSearchTextChanged(string value)
     {
-        _ = LoadMovementsAsync();
+        ApplySearchFilter();
     }
 }

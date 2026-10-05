@@ -12,6 +12,7 @@ namespace TPVC.ViewModels;
 public partial class InventoryViewModel : ObservableObject
 {
     private readonly InventoryService _inventoryService;
+    private readonly Debouncer _searchDebouncer = new();
 
     [ObservableProperty]
     private ObservableCollection<Product> _products = new();
@@ -129,7 +130,8 @@ public partial class InventoryViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value)
     {
-        _ = FilterProductsAsync();
+        // Evita una consulta a la base por cada tecla
+        _ = _searchDebouncer.RunAsync(FilterProductsAsync);
     }
 
     [RelayCommand]
@@ -218,6 +220,11 @@ public partial class InventoryViewModel : ObservableObject
             IsQuickActionOpen = false;
             await FilterProductsAsync();
         }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error en movimiento rápido de inventario", ex);
+            DialogService.ShowError($"No se pudo registrar el movimiento:\n{ex.Message}");
+        }
         finally
         {
             IsLoading = false;
@@ -229,6 +236,13 @@ public partial class InventoryViewModel : ObservableObject
     {
         var target = product ?? SelectedProduct;
         if (target == null) return;
+
+        if (!DialogService.Confirm(
+                $"¿Dar de baja '{target.Name}' ({target.Code}) del catálogo?\n\nEl historial de movimientos se conserva.",
+                "Dar de baja producto"))
+        {
+            return;
+        }
 
         await _inventoryService.DeleteProductAsync(target.Id);
         await FilterProductsAsync();

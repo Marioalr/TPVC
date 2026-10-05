@@ -1,6 +1,11 @@
 using System;
+using System.Data.Common;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using TPVC.Models;
 
 namespace TPVC.Data;
@@ -15,6 +20,11 @@ public class AppDbContext : DbContext
     public DbSet<ServiceDefaultProduct> ServiceDefaultProducts => Set<ServiceDefaultProduct>();
     public DbSet<PatientRecord> Patients => Set<PatientRecord>();
     public DbSet<PatientConsultation> PatientConsultations => Set<PatientConsultation>();
+    public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<SaleItem> SaleItems => Set<SaleItem>();
+    public DbSet<SyncTombstone> SyncTombstones => Set<SyncTombstone>();
+
+    private static readonly SqlitePragmaInterceptor PragmaInterceptor = new();
 
     public AppDbContext()
     {
@@ -24,25 +34,81 @@ public class AppDbContext : DbContext
     {
     }
 
-    public static string DbPath { get; } = GetDatabasePath();
+    public static string DataDirectory { get; } = GetDataDirectory();
 
-    private static string GetDatabasePath()
+    public static string DbPath { get; } = Path.Combine(DataDirectory, "consultorio.db");
+
+    public static string ConnectionString => $"Data Source={DbPath}";
+
+    private static string GetDataDirectory()
     {
         // Guardar en AppData/Local/TPVC para garantizar permisos de escritura seguros
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var dir = Path.Combine(appData, "TPVC");
-        if (!Directory.Exists(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-        return Path.Combine(dir, "consultorio.db");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>
+    /// Configuración común de SQLite (usada por la app y por el DbContextFactory).
+    /// </summary>
+    public static void ConfigureSqlite(DbContextOptionsBuilder optionsBuilder, string? connectionString = null)
+    {
+        optionsBuilder
+            .UseSqlite(connectionString ?? ConnectionString)
+            .AddInterceptors(PragmaInterceptor);
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlite($"Data Source={DbPath}");
+            ConfigureSqlite(optionsBuilder);
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampSyncMetadata();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampSyncMetadata();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Asigna SyncId / UpdatedAtUtc y registra tombstones de borrados físicos,
+    /// dejando la base lista para una sincronización incremental con servidor.
+    /// </summary>
+    private void StampSyncMetadata()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var entry in ChangeTracker.Entries<ISyncEntity>().ToList())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    if (entry.Entity.SyncId == Guid.Empty) entry.Entity.SyncId = Guid.NewGuid();
+                    entry.Entity.UpdatedAtUtc = now;
+                    break;
+                case EntityState.Modified:
+                    entry.Entity.UpdatedAtUtc = now;
+                    break;
+                case EntityState.Deleted:
+                    if (entry.Entity.SyncId != Guid.Empty)
+                    {
+                        SyncTombstones.Add(new SyncTombstone
+                        {
+                            EntityType = entry.Metadata.ClrType.Name,
+                            SyncId = entry.Entity.SyncId,
+                            DeletedAtUtc = now
+                        });
+                    }
+                    break;
+            }
         }
     }
 
@@ -50,12 +116,26 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Índices de sincronización (SyncId único + UpdatedAtUtc para deltas)
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(t => typeof(ISyncEntity).IsAssignableFrom(t.ClrType)))
+        {
+            modelBuilder.Entity(entityType.ClrType).HasIndex(nameof(ISyncEntity.SyncId)).IsUnique();
+            modelBuilder.Entity(entityType.ClrType).HasIndex(nameof(ISyncEntity.UpdatedAtUtc));
+        }
+
         // Indices
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Code);
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name);
+
+        modelBuilder.Entity<ProductBatch>()
+            .HasIndex(b => b.ExpirationDate);
+
+        modelBuilder.Entity<InventoryMovement>()
+            .HasIndex(m => m.Date);
 
         // Relaciones
         modelBuilder.Entity<Product>()
@@ -128,5 +208,46 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<PatientConsultation>()
             .Ignore(c => c.Prescriptions);
+
+        // Ventas persistidas (tickets)
+        modelBuilder.Entity<Sale>()
+            .HasIndex(s => s.Folio)
+            .IsUnique();
+
+        modelBuilder.Entity<Sale>()
+            .HasIndex(s => s.Date);
+
+        modelBuilder.Entity<SaleItem>()
+            .HasOne(i => i.Sale)
+            .WithMany(s => s.Items)
+            .HasForeignKey(i => i.SaleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SyncTombstone>()
+            .HasIndex(t => t.DeletedAtUtc);
+    }
+}
+
+/// <summary>
+/// Ajustes por conexión: synchronous=NORMAL es seguro con WAL y reduce fsyncs en cada guardado;
+/// busy_timeout evita errores "database is locked" si otro proceso (p.ej. un futuro agente de
+/// sincronización) escribe al mismo tiempo.
+/// </summary>
+internal sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
+{
+    private const string Pragmas = "PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;";
+
+    public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = Pragmas;
+        cmd.ExecuteNonQuery();
+    }
+
+    public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = Pragmas;
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 }

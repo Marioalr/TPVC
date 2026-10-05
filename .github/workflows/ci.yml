@@ -7,6 +7,13 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Build & Run Unit Tests
@@ -21,6 +28,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Read version from TPVC.csproj
+        id: version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content TPVC.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          "value=$version" >> $env:GITHUB_OUTPUT
+
       - name: Restore Dependencies
         run: dotnet restore TPVC.sln
 
@@ -31,16 +45,16 @@ jobs:
         run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
 
       - name: Build Installer and Packages
-        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "1.4.0"
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.version.outputs.value }}"
 
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TPVC-Setup-v1.4.0
-          path: ./publish/TPVC-Setup-v1.4.0.exe
+          name: TPVC-Setup-v${{ steps.version.outputs.value }}
+          path: ./publish/TPVC-Setup-v${{ steps.version.outputs.value }}.exe
 
       - name: Upload Portable Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TPVC-v1.4.0-win-x64
-          path: ./publish/TPVC-v1.4.0-win-x64.zip
+          name: TPVC-v${{ steps.version.outputs.value }}-win-x64
+          path: ./publish/TPVC-v${{ steps.version.outputs.value }}-win-x64.zip

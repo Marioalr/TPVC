@@ -1,5 +1,8 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TPVC.Data;
 using TPVC.Services;
@@ -20,43 +23,42 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // Base de Datos SQLite
-        services.AddDbContext<AppDbContext>();
+        services.AddTpvcCoreServices();
 
-        // Servicios Core
-        services.AddSingleton<ThemeService>();
-        services.AddSingleton<InventoryService>();
-        services.AddSingleton<ConsultationService>();
-        services.AddSingleton<AppUpdateService>();
-
-        // ViewModels
+        // ViewModels y vistas principales
         services.AddSingleton<MainViewModel>();
-        services.AddTransient<MainHubViewModel>();
-        services.AddTransient<PosViewModel>();
-        services.AddTransient<MedicalRecordsViewModel>();
-        services.AddTransient<ConfigurationShellViewModel>();
-        services.AddTransient<DashboardViewModel>();
-        services.AddTransient<InventoryViewModel>();
-        services.AddTransient<BatchesViewModel>();
-        services.AddTransient<MovementsViewModel>();
-        services.AddTransient<SettingsViewModel>();
-        services.AddTransient<ProductDialogViewModel>();
-
-        // Vistas principales
         services.AddSingleton<MainWindow>();
 
-        return services.BuildServiceProvider();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Inicializar y sembrar base de datos local SQLite si es necesario
-        using (var scope = Services.CreateScope())
+        RegisterGlobalErrorHandlers();
+        DialogService.ConfirmHandler = (message, title) =>
+            MessageBox.Show(MainWindow ?? Current.MainWindow!, message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+        DialogService.ErrorHandler = (message, title) =>
+            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+
+        AppLogger.Info($"Inicio de TPVC v{Services.GetRequiredService<AppUpdateService>().CurrentVersion}");
+
+        // Inicializar, migrar y sembrar base de datos local SQLite si es necesario
+        try
         {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var factory = Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
+            using var db = factory.CreateDbContext();
             DatabaseInitializer.Initialize(db);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo inicializar la base de datos", ex);
+            MessageBox.Show(
+                $"No se pudo abrir la base de datos del consultorio.\n\n{ex.Message}\n\nRuta: {AppDbContext.DbPath}\nRespaldos: {Services.GetRequiredService<BackupService>().BackupDirectory}",
+                "TPVC - Error de base de datos", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
         }
 
         // Cargar y aplicar configuración de temas guardada
@@ -66,5 +68,42 @@ public partial class App : Application
         // Mostrar la ventana principal
         var mainWindow = Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+
+        // Respaldo diario y limpieza de bitácoras en segundo plano (no retrasa el arranque)
+        var backupService = Services.GetRequiredService<BackupService>();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                backupService.EnsureDailyBackup();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Fallo el respaldo automático diario", ex);
+            }
+            AppLogger.PurgeOldLogs();
+        });
+    }
+
+    private void RegisterGlobalErrorHandlers()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            AppLogger.Error("Excepción no controlada (AppDomain)", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            AppLogger.Error("Excepción no observada en tarea", args.Exception);
+            args.SetObserved();
+        };
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        // Mantener la app abierta: una consulta en curso no debe perderse por un error de UI
+        AppLogger.Error("Excepción no controlada en la interfaz", e.Exception);
+        MessageBox.Show(
+            $"Ocurrió un error inesperado, pero la aplicación sigue en funcionamiento.\n\n{e.Exception.Message}\n\nDetalle guardado en: {AppLogger.LogDirectory}",
+            "TPVC - Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        e.Handled = true;
     }
 }

@@ -1,0 +1,93 @@
+name: Release
+
+# Publica un release reproducible al subir un tag vX.Y.Z:
+# compila en Windows, ejecuta las pruebas, empaqueta instalador + zip portátil,
+# genera SHA256SUMS y crea el GitHub Release con las notas del CHANGELOG.
+on:
+  push:
+    tags: [ "v*.*.*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existente a publicar (p.ej. v1.5.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Test & Publish Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ github.event.inputs.tag }}" } else { "${{ github.ref_name }}" }
+          "name=$tag" >> $env:GITHUB_OUTPUT
+          "version=$($tag.TrimStart('v'))" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Verify tag matches TPVC.csproj version
+        shell: pwsh
+        run: |
+          $csprojVersion = ([xml](Get-Content TPVC.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($csprojVersion -ne "${{ steps.tag.outputs.version }}") {
+            throw "El tag ${{ steps.tag.outputs.name }} no coincide con la versión de TPVC.csproj ($csprojVersion)."
+          }
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore TPVC.sln
+
+      - name: Build Solution
+        run: dotnet build TPVC.sln --configuration Release --no-restore
+
+      - name: Execute Unit Tests
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
+
+      - name: Build Installer and Packages
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.tag.outputs.version }}"
+
+      - name: Extract release notes from CHANGELOG
+        shell: pwsh
+        run: |
+          $version = "${{ steps.tag.outputs.version }}"
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $start = ($lines | Select-String -Pattern "^## \[$([regex]::Escape($version))\]" | Select-Object -First 1).LineNumber
+          if (-not $start) { throw "No se encontró la sección [$version] en CHANGELOG.md" }
+          $notes = @()
+          for ($i = $start; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '^## \[') { break }
+            $notes += $lines[$i]
+          }
+          ($notes -join "`n").Trim() | Set-Content -Path release-notes.md -Encoding utf8
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.name }}"
+          $version = "${{ steps.tag.outputs.version }}"
+          $assets = @(
+            "publish/TPVC-Setup-v$version.exe",
+            "publish/TPVC-v$version-win-x64.zip",
+            "publish/SHA256SUMS-v$version.txt"
+          )
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --title "TPVC v$version" --notes-file release-notes.md --verify-tag
+          }
