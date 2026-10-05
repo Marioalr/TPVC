@@ -21,6 +21,8 @@ public static class ServiceRegistration
         services.AddSingleton<ThemeService>();
         services.AddSingleton<AppUpdateService>();
         services.AddSingleton(_ => new BackupService());
+        services.AddSingleton<ClinicProfileService>();
+        services.AddSingleton<PrintingService>();
 
         return services;
     }

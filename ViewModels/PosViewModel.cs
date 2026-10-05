@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -34,10 +35,72 @@ public partial class PosViewModel : ObservableObject, IDisposable
 {
     private readonly InventoryService _inventoryService;
     private readonly ConsultationService _consultationService;
+    private readonly ClinicProfileService? _clinicProfileService;
+    private readonly PrintingService? _printingService;
+    private readonly Action? _onProfileChangedHandler;
+    private readonly Action? _onSalesChangedHandler;
+
     public Action? OnBackToHubRequested { get; set; }
 
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
+
+    // ==========================================
+    // PERFIL DEL CONSULTORIO Y MÉDICO EN TICKET
+    // ==========================================
+    [ObservableProperty]
+    private string _clinicProfileName = "Consultorio Médico TPVC";
+
+    [ObservableProperty]
+    private string _doctorNameWithTitle = "Dr. Titular";
+
+    [ObservableProperty]
+    private string _doctorSpecialtyAndLicense = "Médico General";
+
+    [ObservableProperty]
+    private string _clinicAddressAndPhone = "";
+
+    // ==========================================
+    // CORTE DE CAJA DIARIO
+    // ==========================================
+    [ObservableProperty]
+    private bool _isCashCutModalOpen;
+
+    [ObservableProperty]
+    private DailyCashCut? _currentCashCut;
+
+    [ObservableProperty]
+    private DateTime _cashCutDate = DateTime.Today;
+
+    [ObservableProperty]
+    private string? _cashCutStatusMessage;
+
+    // ==========================================
+    // HISTORIAL Y CANCELACIÓN DE TICKETS
+    // ==========================================
+    [ObservableProperty]
+    private bool _isTicketHistoryModalOpen;
+
+    [ObservableProperty]
+    private string _ticketSearchFolio = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<Sale> _recentSales = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCancelSelectedSale))]
+    private Sale? _selectedSaleForDetail;
+
+    public bool CanCancelSelectedSale => SelectedSaleForDetail != null && !SelectedSaleForDetail.IsCancelled;
+
+    [ObservableProperty]
+    private bool _isCancelConfirmModalOpen;
+
+    [ObservableProperty]
+    private string _cancellationReason = "Devolución de mercancía";
+
+    [ObservableProperty]
+    private string? _ticketHistoryStatusMessage;
 
     // ==========================================
     // BÚSQUEDA EN TIEMPO REAL CON DROPDOWN
@@ -289,13 +352,49 @@ public partial class PosViewModel : ObservableObject, IDisposable
         OnCloseModalRequested?.Invoke();
     }
 
-    public PosViewModel(InventoryService inventoryService, ConsultationService? consultationService = null)
+    public PosViewModel(
+        InventoryService inventoryService, 
+        ConsultationService? consultationService = null,
+        ClinicProfileService? clinicProfileService = null,
+        PrintingService? printingService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService ?? new ConsultationService();
+        _clinicProfileService = clinicProfileService;
+        _printingService = printingService;
+
         _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
         _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
         _cart.CollectionChanged += (s, e) => RecalculateTotals();
+
+        if (_clinicProfileService != null)
+        {
+            _onProfileChangedHandler = () => RefreshProfileData();
+            _clinicProfileService.ProfileChanged += _onProfileChangedHandler;
+            RefreshProfileData();
+        }
+
+        _onSalesChangedHandler = () =>
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(async () =>
+                    {
+                        if (IsTicketHistoryModalOpen) await LoadSalesHistoryAsync();
+                        if (IsCashCutModalOpen) await LoadCashCutForDateAsync();
+                    });
+                    return;
+                }
+            }
+            catch { }
+
+            if (IsTicketHistoryModalOpen) _ = LoadSalesHistoryAsync();
+            if (IsCashCutModalOpen) _ = LoadCashCutForDateAsync();
+        };
+        _inventoryService.OnSalesChanged += _onSalesChangedHandler;
 
         AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
         SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
@@ -367,9 +466,37 @@ public partial class PosViewModel : ObservableObject, IDisposable
         }
     }
 
+    public void RefreshProfileData()
+    {
+        var p = _clinicProfileService?.CurrentProfile;
+        if (p != null)
+        {
+            ClinicProfileName = string.IsNullOrWhiteSpace(p.ClinicName) ? "Consultorio Médico TPVC" : p.ClinicName;
+            DoctorNameWithTitle = p.DoctorNameWithTitle;
+
+            var details = new List<string>();
+            if (!string.IsNullOrWhiteSpace(p.DoctorSpecialty)) details.Add(p.DoctorSpecialty);
+            if (!string.IsNullOrWhiteSpace(p.DoctorLicense)) details.Add($"Céd. Prof. {p.DoctorLicense}");
+            DoctorSpecialtyAndLicense = details.Count > 0 ? string.Join(" • ", details) : "Médico General";
+
+            var contact = new List<string>();
+            if (!string.IsNullOrWhiteSpace(p.ClinicAddress)) contact.Add(p.ClinicAddress);
+            if (!string.IsNullOrWhiteSpace(p.ClinicPhone)) contact.Add($"Tel: {p.ClinicPhone}");
+            ClinicAddressAndPhone = contact.Count > 0 ? string.Join(" • ", contact) : "";
+        }
+    }
+
     public void Dispose()
     {
         _inventoryService.OnInventoryChanged -= OnInventoryChangedHandler;
+        if (_onSalesChangedHandler != null)
+        {
+            _inventoryService.OnSalesChanged -= _onSalesChangedHandler;
+        }
+        if (_clinicProfileService != null && _onProfileChangedHandler != null)
+        {
+            _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
+        }
         _consultationService.OnActiveConsultationChanged -= SyncActiveConsultation;
         StopConsultationTimer();
         GC.SuppressFinalize(this);
@@ -725,9 +852,10 @@ public partial class PosViewModel : ObservableObject, IDisposable
                 .Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name))
                 .ToList();
             var patient = string.IsNullOrWhiteSpace(PatientName) ? "Público General" : PatientName.Trim();
+            string cashierName = !string.IsNullOrWhiteSpace(DoctorNameWithTitle) ? DoctorNameWithTitle : "Dr. Titular";
 
             // Se registra primero: si falta stock no se genera ticket ni se vacía el carrito
-            var sale = await _inventoryService.RegisterSaleAsync(saleLines, patient, SelectedPaymentMethod, "Dr. Titular / Consultorio TPVC");
+            var sale = await _inventoryService.RegisterSaleAsync(saleLines, patient, SelectedPaymentMethod, cashierName);
 
             // Construir el recibo / ticket con los datos exactos cobrados y el folio persistido
             var receipt = new SaleReceipt
@@ -736,7 +864,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
                 Date = sale?.Date ?? DateTime.Now,
                 PatientName = patient,
                 PaymentMethod = SelectedPaymentMethod,
-                Cashier = "Dr. Titular / Consultorio TPVC",
+                Cashier = cashierName,
                 Items = Cart.Select(c => new SaleReceiptItem
                 {
                     ProductId = c.ProductId,
@@ -798,8 +926,236 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void PrintTicket()
     {
-        IsTicketPrinted = true;
-        TicketStatusMessage = "¡Ticket enviado a la impresora térmica correctamente!";
+        if (CurrentReceipt == null) return;
+        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
+        {
+            ClinicName = ClinicProfileName,
+            DoctorName = DoctorNameWithTitle
+        };
+
+        if (_printingService != null)
+        {
+            bool printed = _printingService.PrintTicket(CurrentReceipt, profile);
+            if (printed)
+            {
+                IsTicketPrinted = true;
+                TicketStatusMessage = "¡Ticket enviado a la impresora térmica con éxito!";
+            }
+            else
+            {
+                TicketStatusMessage = "Impresión de ticket cancelada o no se seleccionó impresora.";
+            }
+        }
+        else
+        {
+            IsTicketPrinted = true;
+            TicketStatusMessage = "¡Ticket emitido correctamente!";
+        }
+    }
+
+    // ==========================================
+    // MÉTODOS DE CORTE DE CAJA DIARIO
+    // ==========================================
+    [RelayCommand]
+    public async Task OpenCashCutModalAsync()
+    {
+        CashCutDate = DateTime.Today;
+        CashCutStatusMessage = null;
+        await LoadCashCutForDateAsync();
+        IsCashCutModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCashCutModal()
+    {
+        IsCashCutModalOpen = false;
+        CurrentCashCut = null;
+        CashCutStatusMessage = null;
+    }
+
+    [RelayCommand]
+    public async Task LoadCashCutForDateAsync()
+    {
+        var profile = _clinicProfileService?.CurrentProfile;
+        CurrentCashCut = await _inventoryService.GetDailyCashCutAsync(CashCutDate, profile);
+        CashCutStatusMessage = null;
+    }
+
+    [RelayCommand]
+    public void PrintCashCut()
+    {
+        if (CurrentCashCut == null) return;
+        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile();
+
+        if (_printingService != null)
+        {
+            bool printed = _printingService.PrintCashCut(CurrentCashCut, profile);
+            CashCutStatusMessage = printed
+                ? "¡Corte de caja enviado a la impresora térmica con éxito!"
+                : "Impresión de corte cancelada.";
+        }
+        else
+        {
+            CashCutStatusMessage = "Servicio de impresión no disponible en este entorno.";
+        }
+    }
+
+    [RelayCommand]
+    public async Task ExportCashCutCsvAsync()
+    {
+        if (CurrentCashCut == null) return;
+        try
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            if (string.IsNullOrEmpty(desktop) || !Directory.Exists(desktop))
+            {
+                desktop = Path.GetTempPath();
+            }
+            string filename = $"Corte_Caja_{CurrentCashCut.Date:yyyyMMdd_HHmmss}.csv";
+            string filePath = Path.Combine(desktop, filename);
+            string csv = _inventoryService.ExportDailyCashCutToCsv(CurrentCashCut);
+            await File.WriteAllTextAsync(filePath, csv, System.Text.Encoding.UTF8);
+            CashCutStatusMessage = $"¡Corte exportado a CSV exitosamente en:\n{filePath}";
+        }
+        catch (Exception ex)
+        {
+            CashCutStatusMessage = $"Error al exportar corte: {ex.Message}";
+        }
+    }
+
+    // ==========================================
+    // MÉTODOS DE HISTORIAL Y CANCELACIÓN DE TICKETS
+    // ==========================================
+    [RelayCommand]
+    public async Task OpenTicketHistoryModalAsync()
+    {
+        TicketSearchFolio = string.Empty;
+        TicketHistoryStatusMessage = null;
+        IsCancelConfirmModalOpen = false;
+        await LoadSalesHistoryAsync();
+        IsTicketHistoryModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseTicketHistoryModal()
+    {
+        IsTicketHistoryModalOpen = false;
+        IsCancelConfirmModalOpen = false;
+        TicketHistoryStatusMessage = null;
+        SelectedSaleForDetail = null;
+    }
+
+    [RelayCommand]
+    public async Task LoadSalesHistoryAsync()
+    {
+        var sales = await _inventoryService.GetSalesHistoryAsync(limit: 50);
+        RecentSales = new ObservableCollection<Sale>(sales);
+        SelectedSaleForDetail = RecentSales.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    public async Task SearchTicketByFolioAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TicketSearchFolio))
+        {
+            await LoadSalesHistoryAsync();
+            return;
+        }
+
+        var sale = await _inventoryService.GetSaleByFolioAsync(TicketSearchFolio.Trim());
+        if (sale != null)
+        {
+            RecentSales = new ObservableCollection<Sale> { sale };
+            SelectedSaleForDetail = sale;
+            TicketHistoryStatusMessage = $"Ticket {sale.Folio} localizado.";
+        }
+        else
+        {
+            TicketHistoryStatusMessage = $"No se encontró ningún ticket con el folio '{TicketSearchFolio}'.";
+        }
+    }
+
+    [RelayCommand]
+    public void SelectSaleForDetail(Sale? sale)
+    {
+        if (sale != null)
+        {
+            SelectedSaleForDetail = sale;
+        }
+    }
+
+    [RelayCommand]
+    public void ReprintSelectedTicket()
+    {
+        if (SelectedSaleForDetail == null) return;
+
+        var receipt = new SaleReceipt
+        {
+            Folio = SelectedSaleForDetail.Folio,
+            Date = SelectedSaleForDetail.Date,
+            PatientName = SelectedSaleForDetail.PatientName,
+            PaymentMethod = SelectedSaleForDetail.PaymentMethod,
+            Cashier = SelectedSaleForDetail.Cashier,
+            Items = SelectedSaleForDetail.Items.Select(i => new SaleReceiptItem
+            {
+                ProductId = i.ProductId ?? 0,
+                Name = i.ProductName,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice
+            }).ToList()
+        };
+
+        CurrentReceipt = receipt;
+        IsTicketModalOpen = true;
+        IsTicketPrinted = false;
+        TicketStatusMessage = null;
+    }
+
+    [RelayCommand]
+    public void RequestCancelSale(Sale? sale = null)
+    {
+        if (sale != null) SelectedSaleForDetail = sale;
+        if (SelectedSaleForDetail == null) return;
+        if (SelectedSaleForDetail.IsCancelled)
+        {
+            TicketHistoryStatusMessage = "Este ticket ya se encuentra cancelado.";
+            return;
+        }
+
+        CancellationReason = "Devolución de producto solicitado por paciente";
+        IsCancelConfirmModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseCancelConfirmModal()
+    {
+        IsCancelConfirmModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task ConfirmCancelSaleAsync()
+    {
+        if (SelectedSaleForDetail == null) return;
+        try
+        {
+            bool ok = await _inventoryService.CancelSaleAsync(SelectedSaleForDetail.Id, CancellationReason);
+            if (ok)
+            {
+                IsCancelConfirmModalOpen = false;
+                TicketHistoryStatusMessage = $"¡Ticket {SelectedSaleForDetail.Folio} cancelado! Mercancía devuelta al inventario con éxito.";
+                await LoadSalesHistoryAsync();
+                await LoadCatalogAsync();
+                ShowAlert($"Ticket {SelectedSaleForDetail.Folio} cancelado y stock reingresado a inventario.", true);
+            }
+            else
+            {
+                TicketHistoryStatusMessage = "No se pudo cancelar el ticket seleccionado.";
+            }
+        }
+        catch (Exception ex)
+        {
+            TicketHistoryStatusMessage = $"Error al cancelar ticket: {ex.Message}";
+        }
     }
 
     public void AddPrescriptionItem(string medicineName, int qty = 1)

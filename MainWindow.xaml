@@ -390,5 +390,153 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- ============================================ -->
+        <!-- OVERLAY: ASISTENTE DE PRIMER ARRANQUE -->
+        <!-- ============================================ -->
+        <Grid Grid.Row="0" Grid.RowSpan="2" 
+              Panel.ZIndex="1000"
+              Visibility="{Binding IsFirstRunWizardOpen, Converter={StaticResource BoolToVis}}">
+            <!-- Fondo oscuro -->
+            <Border Background="#CC0F172A" />
+
+            <!-- Contenedor del Asistente -->
+            <Border Width="650" 
+                    MaxHeight="680"
+                    VerticalAlignment="Center" 
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource ThemeCard}"
+                    BorderBrush="{DynamicResource ThemeAccent}"
+                    BorderThickness="1.5"
+                    CornerRadius="16"
+                    Padding="28,24">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="40" ShadowDepth="12" Opacity="0.4" Direction="270" Color="#000000" />
+                </Border.Effect>
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de Bienvenida -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource ThemeAccent}" 
+                                    CornerRadius="10" 
+                                    Width="38" Height="38" 
+                                    Margin="0,0,12,0">
+                                <TextBlock Text="🩺" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="¡Bienvenido a TPVC Consultorio!" 
+                                           FontSize="19" 
+                                           FontWeight="Bold" 
+                                           Foreground="{DynamicResource ThemeText}" />
+                                <TextBlock Text="Asistente de configuración inicial para su consultorio médico." 
+                                           FontSize="12" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Formulario de Configuración Inicial -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,0,8,0">
+                            <!-- Alerta de Error si faltan datos obligatorios -->
+                            <Border Background="#FEF2F2" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14" Visibility="{Binding WizardErrorMessage, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚠️ " Foreground="#DC2626" FontWeight="Bold" />
+                                    <TextBlock Text="{Binding WizardErrorMessage}" Foreground="#DC2626" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Sección 1: Datos del Médico -->
+                            <TextBlock Text="1. DATOS DEL MÉDICO TITULAR (NOM-004-SSA3)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                            <Grid Margin="0,0,0,12">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="1.2*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                    <TextBlock Text="Nombre Completo del Médico:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding WizardDoctorName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                    <TextBlock Text="Cédula Profesional:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding WizardDoctorLicense, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
+                                    <TextBlock Text="Especialidad:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding WizardDoctorSpecialty, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,8,0,0">
+                                    <TextBlock Text="Teléfono Contacto:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding WizardClinicPhone, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Sección 2: Datos del Consultorio -->
+                            <TextBlock Text="2. DATOS DEL CONSULTORIO O CLÍNICA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,6,0,8" />
+                            <StackPanel Margin="0,0,0,14">
+                                <TextBlock Text="Nombre del Consultorio / Clínica:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding WizardClinicName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" Margin="0,0,0,8" />
+
+                                <TextBlock Text="Dirección / Domicilio:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding WizardClinicAddress, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                            </StackPanel>
+
+                            <!-- Sección 3: Modo de Inicio (Base Vacía vs Demostración) -->
+                            <TextBlock Text="3. MODO DE INICIO DEL SISTEMA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,6,0,8" />
+                            <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12">
+                                <StackPanel>
+                                    <RadioButton GroupName="StartupModeGroup" 
+                                                 IsChecked="{Binding WizardSeedDemoData, Converter={StaticResource InverseBool}}" 
+                                                 Margin="0,0,0,10">
+                                        <StackPanel Margin="6,0,0,0">
+                                            <TextBlock Text="Empezar vacío (Recomendado para consultorio real)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                            <TextBlock Text="Inicia sin pacientes ni medicamentos ficticios. El catálogo y expedientes estarán listos para que capture solo su información real." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </RadioButton>
+
+                                    <RadioButton GroupName="StartupModeGroup" 
+                                                 IsChecked="{Binding WizardSeedDemoData}" 
+                                                 Margin="0,4,0,0">
+                                        <StackPanel Margin="6,0,0,0">
+                                            <TextBlock Text="Empezar con datos de demostración" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                            <TextBlock Text="Carga 4 pacientes de prueba y 9 medicamentos muestra para evaluar o probar las funciones del software." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </RadioButton>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Botón de Finalización -->
+                    <Grid Grid.Row="2" Margin="0,16,0,0">
+                        <Button Style="{DynamicResource AccentButton}" 
+                                Command="{Binding CompleteFirstRunWizardCommand}" 
+                                Padding="20,10" 
+                                HorizontalAlignment="Right">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="✓" FontWeight="Bold" FontSize="14" Margin="0,0,8,0" />
+                                <TextBlock Text="Completar Configuración y Empezar" FontWeight="Bold" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

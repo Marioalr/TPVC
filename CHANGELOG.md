@@ -2,6 +2,34 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.6.0] - 2026-10-05
+
+### Añadido
+* **Perfil oficial del médico y del consultorio**:
+  * Configuración completa de datos profesionales del médico (Nombre, Cédula Profesional, Especialidad, Universidad) y del consultorio (Nombre de la clínica, Dirección completa, Teléfono, Correo electrónico, RFC y Notas adicionales) almacenados de forma segura e independiente en `%LocalAppData%\TPVC\clinic_profile.json`.
+  * Integración en el panel de Configuración (*Datos del Médico y Clínica*): visualización con campos bloqueados en modo solo lectura y botón "Editar"; al dar clic en "Editar" se habilitan los campos y el botón cambia a "Guardar". Si no hay datos registrados, inicia abierto con el botón "Guardar".
+  * Sustitución completa de textos fijos como "Dr. Titular" por el nombre, cédula profesional y datos reales de la clínica en recetas médicas, tickets de venta y reportes.
+* **Impresión real de recetas y tickets**:
+  * Servicio de impresión física nativo WPF (`PrintingService`) con soporte para impresoras térmicas de 58mm y 80mm e impresoras estándar (Carta / A4) a través del diálogo de impresión del sistema.
+  * Exportación de recetas médicas a formato imprimible/PDF bajo norma NOM-004-SSA3 con membrete oficial, cédula profesional, diagnóstico y firma.
+* **Corte de caja diario y exportación**:
+  * Módulo interactivo de Corte de Caja Diario en el Punto de Venta (POS) con selector de fecha.
+  * Desglose financiero detallado: ingresos agrupados por método de pago (Efectivo, Tarjeta de Débito, Tarjeta de Crédito, Transferencia SPEI, Otros).
+  * Discriminación de ingresos por Servicios Clínicos (consultas, procedimientos) contra Productos/Medicamentos (importes y cantidades vendidas).
+  * Exportación del reporte de corte diario a archivo CSV con formato de tabla y cabecera compatible con Microsoft Excel (UTF-8 con BOM).
+  * Impresión directa de ticket térmico de corte de caja diario.
+* **Cancelación / Devolución de tickets y reimpresión por folio**:
+  * Historial de tickets recientes y buscador rápido por folio en el Punto de Venta.
+  * Cancelación de tickets con motivo obligatorio: reingreso atómico del stock al inventario general y a los lotes activos (devolución FEFO).
+  * Registro automático en el Kardex de inventario con el nuevo tipo de movimiento `EntradaDevolucion` ("Entrada por devolución de venta").
+  * Reimpresión de tickets históricos y cancelados directamente desde el visor.
+* **Asistente de primer arranque e inicio limpio sin datos de demostración**:
+  * Detección de primera instalación limpia (cuando no existía previamente la base de datos ni el archivo de perfil).
+  * Asistente interactivo en el primer inicio para capturar los datos esenciales del médico y elegir entre:
+    * *Empezar vacío (Recomendado para consultorio)*: inicializa categorías clínicas y servicios sin crear pacientes ni medicamentos ficticios.
+    * *Empezar con datos de prueba*: incluye 4 pacientes y 9 medicamentos de ejemplo para exploración y capacitación.
+  * Las actualizaciones de versiones previas con bases de datos existentes no despliegan el asistente ni alteran la experiencia de uso.
+
 ## [1.5.1] - 2026-10-05
 
 ### Añadido

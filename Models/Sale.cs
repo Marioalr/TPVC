@@ -16,9 +16,14 @@ public class Sale : ISyncEntity
     public string Folio { get; set; } = string.Empty; // TKT-yyyyMMdd-0001
     public DateTime Date { get; set; } = DateTime.Now;
     public string CustomerName { get; set; } = "Público General";
+    public string PatientName { get => CustomerName; set => CustomerName = value; }
     public string PaymentMethod { get; set; } = "Efectivo";
     public string Cashier { get; set; } = string.Empty;
     public decimal Total { get; set; }
+
+    public bool IsCancelled { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancellationReason { get; set; }
 
     public List<SaleItem> Items { get; set; } = new();
 }
@@ -37,11 +42,13 @@ public class SaleItem : ISyncEntity
     public Sale? Sale { get; set; }
 
     public int? ProductId { get; set; }
+    public int ProductIdSafe => ProductId ?? 0;
     public int? ClinicalServiceId { get; set; }
     public bool IsService { get; set; }
 
     public string Code { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string ProductName { get => Description; set => Description = value; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Subtotal { get; set; }

@@ -21,6 +21,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
     public MovementsViewModel MovementsVM { get; }
+    public ClinicProfileViewModel ClinicProfileVM { get; }
     public SettingsViewModel SettingsVM { get; }
 
     public ConfigurationShellViewModel(
@@ -29,6 +30,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         InventoryViewModel inventoryVM,
         BatchesViewModel batchesVM,
         MovementsViewModel movementsVM,
+        ClinicProfileViewModel clinicProfileVM,
         SettingsViewModel settingsVM,
         string appVersion)
     {
@@ -37,6 +39,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         InventoryVM = inventoryVM;
         BatchesVM = batchesVM;
         MovementsVM = movementsVM;
+        ClinicProfileVM = clinicProfileVM;
         SettingsVM = settingsVM;
         AppVersion = appVersion;
 
@@ -66,6 +69,10 @@ public partial class ConfigurationShellViewModel : ObservableObject
             case "Movements":
                 CurrentSubView = MovementsVM;
                 _ = MovementsVM.LoadMovementsAsync();
+                break;
+            case "ClinicProfile":
+                CurrentSubView = ClinicProfileVM;
+                ClinicProfileVM.LoadFromProfile();
                 break;
             case "Settings":
                 CurrentSubView = SettingsVM;

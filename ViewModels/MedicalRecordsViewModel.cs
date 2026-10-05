@@ -16,7 +16,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 {
     private readonly InventoryService? _inventoryService;
     private readonly ConsultationService? _consultationService;
+    private readonly ClinicProfileService? _clinicProfileService;
+    private readonly PrintingService? _printingService;
     private readonly Action? _onInventoryChangedHandler;
+    private readonly Action? _onProfileChangedHandler;
 
     public Action<string, int>? OnSendPrescriptionToPos { get; set; }
     public Action<ActiveConsultation>? OnCheckoutConsultationRequested { get; set; }
@@ -852,6 +855,27 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private bool _isPrescriptionModalOpen;
 
     // ==========================================
+    // DATOS DE IDENTIFICACIÓN MÉDICA (NOM-004-SSA3)
+    // ==========================================
+    [ObservableProperty]
+    private string _doctorName = "Dr. Titular";
+
+    [ObservableProperty]
+    private string _doctorLicense = "";
+
+    [ObservableProperty]
+    private string _doctorSpecialty = "Médico General";
+
+    [ObservableProperty]
+    private string _clinicName = "Consultorio Médico";
+
+    [ObservableProperty]
+    private string _clinicAddress = "";
+
+    [ObservableProperty]
+    private string _clinicPhone = "";
+
+    // ==========================================
     // MODAL DE INSUMOS Y MATERIAL CLÍNICO
     // ==========================================
     [ObservableProperty]
@@ -922,15 +946,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _appointmentNotes = string.Empty;
-
-    [ObservableProperty]
-    private string _doctorName = "Dr(a). Médico Tratante";
-
-    [ObservableProperty]
-    private string _doctorLicense = "CED-PROF-10928374";
-
-    [ObservableProperty]
-    private string _clinicName = "CONSULTORIO MÉDICO GENERAL Y FARMACIA";
 
     // ==========================================
     // MODAL DE REGISTRO RÁPIDO DE SIGNOS VITALES
@@ -1122,15 +1137,29 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsServiceModalDropdownOpen = ServiceModalSuggestions.Count > 0;
     }
 
-    public MedicalRecordsViewModel() : this(null, null, null)
+    public MedicalRecordsViewModel() : this(null, null, null, null, null)
     {
     }
 
-    public MedicalRecordsViewModel(InventoryService? inventoryService, ConsultationService? consultationService = null, PosViewModel? posViewModel = null)
+    public MedicalRecordsViewModel(
+        InventoryService? inventoryService, 
+        ConsultationService? consultationService = null, 
+        PosViewModel? posViewModel = null,
+        ClinicProfileService? clinicProfileService = null,
+        PrintingService? printingService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         PosVM = posViewModel;
+        _clinicProfileService = clinicProfileService;
+        _printingService = printingService;
+
+        if (_clinicProfileService != null)
+        {
+            _onProfileChangedHandler = () => RefreshProfileData();
+            _clinicProfileService.ProfileChanged += _onProfileChangedHandler;
+            RefreshProfileData();
+        }
 
         if (_consultationService != null)
         {
@@ -1354,6 +1383,20 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
+    public void RefreshProfileData(ClinicProfile? profile = null)
+    {
+        var p = profile ?? _clinicProfileService?.CurrentProfile;
+        if (p != null)
+        {
+            DoctorName = string.IsNullOrWhiteSpace(p.DoctorName) ? "Dr. Titular" : p.DoctorName;
+            DoctorLicense = p.DoctorLicense ?? string.Empty;
+            DoctorSpecialty = string.IsNullOrWhiteSpace(p.DoctorSpecialty) ? "Médico General" : p.DoctorSpecialty;
+            ClinicName = string.IsNullOrWhiteSpace(p.ClinicName) ? "Consultorio Médico" : p.ClinicName;
+            ClinicAddress = p.ClinicAddress ?? string.Empty;
+            ClinicPhone = p.ClinicPhone ?? string.Empty;
+        }
+    }
+
     public void Dispose()
     {
         if (_consultationService != null)
@@ -1363,6 +1406,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (_inventoryService != null && _onInventoryChangedHandler != null)
         {
             _inventoryService.OnPatientsChanged -= _onInventoryChangedHandler;
+        }
+        if (_clinicProfileService != null && _onProfileChangedHandler != null)
+        {
+            _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
         }
         StopConsultationTimer();
         GC.SuppressFinalize(this);
@@ -3582,7 +3629,91 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void PrintOrExportPrescriptionPdf()
     {
-        InfoModalMessage = "¡Módulo de exportación directa a PDF configurado!\n\nLa receta oficial NOM-004-SSA3 ha sido formateada con éxito y está lista para su emisión física o guardado digital en PDF.";
+        if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
+        {
+            InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para imprimir.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
+        {
+            DoctorName = DoctorName,
+            DoctorLicense = DoctorLicense,
+            DoctorSpecialty = DoctorSpecialty,
+            ClinicName = ClinicName,
+            ClinicAddress = ClinicAddress,
+            ClinicPhone = ClinicPhone
+        };
+
+        if (_printingService != null)
+        {
+            bool printed = _printingService.PrintPrescription(
+                SelectedPatient, 
+                SelectedPatient.ActivePrescription, 
+                profile, 
+                PrescriptionGeneralInstructions);
+
+            if (printed)
+            {
+                InfoModalMessage = "¡Receta médica enviada a la impresora física con éxito!";
+            }
+            else
+            {
+                InfoModalMessage = "Impresión de receta cancelada o no se seleccionó impresora.";
+            }
+        }
+        else
+        {
+            InfoModalMessage = "La receta oficial NOM-004-SSA3 ha sido formateada con éxito para emisión física o guardado en PDF.";
+        }
+
+        IsInfoModalVisible = true;
+        IsPrescriptionPdfModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void ExportPrescriptionDocument()
+    {
+        if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
+        {
+            InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para exportar.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
+        {
+            DoctorName = DoctorName,
+            DoctorLicense = DoctorLicense,
+            DoctorSpecialty = DoctorSpecialty,
+            ClinicName = ClinicName,
+            ClinicAddress = ClinicAddress,
+            ClinicPhone = ClinicPhone
+        };
+
+        if (_printingService != null)
+        {
+            string? filePath = _printingService.ExportPrescriptionDocument(
+                SelectedPatient, 
+                SelectedPatient.ActivePrescription, 
+                profile, 
+                PrescriptionGeneralInstructions);
+
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                InfoModalMessage = $"¡Receta médica oficial exportada con éxito!\nGuardada en: {filePath}";
+            }
+            else
+            {
+                InfoModalMessage = "Exportación de receta cancelada.";
+            }
+        }
+        else
+        {
+            InfoModalMessage = "Servicio de exportación no disponible en este entorno.";
+        }
+
         IsInfoModalVisible = true;
         IsPrescriptionPdfModalOpen = false;
     }

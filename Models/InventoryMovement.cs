@@ -10,7 +10,8 @@ public enum MovementType
     SalidaCaducidad,
     SalidaMerma,
     AjusteInventario,
-    SalidaVenta
+    SalidaVenta,
+    EntradaDevolucion
 }
 
 public class InventoryMovement : ISyncEntity
@@ -34,12 +35,14 @@ public class InventoryMovement : ISyncEntity
 
     public bool IsEntry => MovementType == MovementType.EntradaCompra || 
                            MovementType == MovementType.EntradaAjuste || 
+                           MovementType == MovementType.EntradaDevolucion ||
                            (MovementType == MovementType.AjusteInventario && StockAfter >= StockBefore);
 
     public string MovementTypeDisplay => MovementType switch
     {
         MovementType.EntradaCompra => "Entrada por compra",
         MovementType.EntradaAjuste => "Entrada por donación/ajuste",
+        MovementType.EntradaDevolucion => "Devolución por cancelación de ticket",
         MovementType.SalidaConsulta => "Consumo en consulta",
         MovementType.SalidaCaducidad => "Baja por caducidad",
         MovementType.SalidaMerma => "Baja por daño/merma",

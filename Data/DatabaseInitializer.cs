@@ -8,7 +8,7 @@ namespace TPVC.Data;
 
 public static partial class DatabaseInitializer
 {
-    public static void Initialize(AppDbContext context)
+    public static void Initialize(AppDbContext context, bool seedDemoData = true)
     {
         // Asegura que las tablas existan (base nueva)
         context.Database.EnsureCreated();
@@ -27,11 +27,14 @@ public static partial class DatabaseInitializer
         // Migración aditiva automática para bases preexistentes
         EnsureSchema(context);
 
-        // Si ya hay categorías, solo verificar si faltan los servicios clínicos o pacientes
+        // Si ya hay categorías, solo verificar si faltan los servicios clínicos o pacientes de demo
         if (context.Categories.Any())
         {
             SeedClinicalServices(context);
-            SeedPatients(context);
+            if (seedDemoData)
+            {
+                SeedPatients(context);
+            }
             return;
         }
 
@@ -69,6 +72,39 @@ public static partial class DatabaseInitializer
 
         context.Categories.AddRange(catMedicamentos, catCuracion, catInsumos, catAntisepticos, catDiagnostico);
         context.SaveChanges();
+
+        if (!seedDemoData)
+        {
+            SeedClinicalServices(context);
+            return;
+        }
+
+        SeedDemoProducts(context);
+        SeedClinicalServices(context);
+        SeedPatients(context);
+    }
+
+    public static void SeedDemoData(AppDbContext context)
+    {
+        SeedDemoProducts(context);
+        SeedClinicalServices(context);
+        SeedPatients(context);
+    }
+
+    public static void SeedDemoProducts(AppDbContext context)
+    {
+        if (context.Products.Any()) return;
+
+        var catMedicamentos = context.Categories.FirstOrDefault(c => c.Name.Contains("Medicamentos"))
+            ?? context.Categories.First();
+        var catCuracion = context.Categories.FirstOrDefault(c => c.Name.Contains("Curación"))
+            ?? catMedicamentos;
+        var catInsumos = context.Categories.FirstOrDefault(c => c.Name.Contains("Insumos"))
+            ?? catMedicamentos;
+        var catAntisepticos = context.Categories.FirstOrDefault(c => c.Name.Contains("Antisépticos"))
+            ?? catMedicamentos;
+        var catDiagnostico = context.Categories.FirstOrDefault(c => c.Name.Contains("Diagnóstico"))
+            ?? catMedicamentos;
 
         // Productos de ejemplo para un consultorio de médico general
         var productos = new List<Product>
@@ -259,9 +295,6 @@ public static partial class DatabaseInitializer
             });
         }
         context.SaveChanges();
-
-        SeedClinicalServices(context);
-        SeedPatients(context);
     }
 
     public static void SeedClinicalServices(AppDbContext context)

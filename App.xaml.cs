@@ -44,12 +44,15 @@ public partial class App : Application
 
         AppLogger.Info($"Inicio de TPVC v{Services.GetRequiredService<AppUpdateService>().CurrentVersion}");
 
+        var profileService = Services.GetRequiredService<ClinicProfileService>();
+        bool isFirstRun = profileService.IsFirstRun;
+
         // Inicializar, migrar y sembrar base de datos local SQLite si es necesario
         try
         {
             var factory = Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
             using var db = factory.CreateDbContext();
-            DatabaseInitializer.Initialize(db);
+            DatabaseInitializer.Initialize(db, seedDemoData: !isFirstRun);
         }
         catch (Exception ex)
         {

@@ -26,6 +26,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ConsultationService _consultationService;
     private readonly ThemeService _themeService;
     private readonly AppUpdateService _updateService;
+    private readonly ClinicProfileService _clinicProfileService;
+    private readonly PrintingService? _printingService;
 
     private readonly List<CommandPaletteItem> _staticCommandItems = new();
 
@@ -39,7 +41,37 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.5.0";
+    private string _appVersion = "1.6.0";
+
+    // ==========================================
+    // ASISTENTE DE PRIMER ARRANQUE (BIENVENIDA)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isFirstRunWizardOpen;
+
+    [ObservableProperty]
+    private string _wizardDoctorName = string.Empty;
+
+    [ObservableProperty]
+    private string _wizardDoctorLicense = string.Empty;
+
+    [ObservableProperty]
+    private string _wizardDoctorSpecialty = "Medicina General";
+
+    [ObservableProperty]
+    private string _wizardClinicName = "Consultorio Médico";
+
+    [ObservableProperty]
+    private string _wizardClinicAddress = string.Empty;
+
+    [ObservableProperty]
+    private string _wizardClinicPhone = string.Empty;
+
+    [ObservableProperty]
+    private bool _wizardSeedDemoData = false;
+
+    [ObservableProperty]
+    private string? _wizardErrorMessage;
 
     // ==========================================
     // PALETA GLOBAL DE COMANDOS (Ctrl + K / Ctrl + P)
@@ -66,6 +98,7 @@ public partial class MainViewModel : ObservableObject
     public PosViewModel PosVM { get; }
     public MedicalRecordsViewModel MedicalRecordsVM { get; }
     public ConfigurationShellViewModel ConfigurationShellVM { get; }
+    public ClinicProfileViewModel ClinicProfileVM { get; }
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
@@ -77,18 +110,22 @@ public partial class MainViewModel : ObservableObject
         ConsultationService consultationService,
         ThemeService themeService, 
         AppUpdateService updateService,
-        BackupService? backupService = null)
+        BackupService? backupService = null,
+        ClinicProfileService? clinicProfileService = null,
+        PrintingService? printingService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         _themeService = themeService;
         _updateService = updateService;
+        _clinicProfileService = clinicProfileService ?? new ClinicProfileService();
+        _printingService = printingService;
 
         AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
         MainHubVM = new MainHubViewModel(NavigateTo);
-        PosVM = new PosViewModel(inventoryService, consultationService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM);
+        PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService);
         _ = MedicalRecordsVM.LoadInitialDataAsync();
         _ = PosVM.InitializeAsync();
 
@@ -131,6 +168,7 @@ public partial class MainViewModel : ObservableObject
         InventoryVM = new InventoryViewModel(inventoryService);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
+        ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
         SettingsVM = new SettingsViewModel(themeService, updateService, backupService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
@@ -139,8 +177,15 @@ public partial class MainViewModel : ObservableObject
             InventoryVM,
             BatchesVM,
             MovementsVM,
+            ClinicProfileVM,
             SettingsVM,
             AppVersion);
+
+        // Si es el primer arranque en una instalación nueva, abrir el Asistente Inicial
+        if (_clinicProfileService.IsFirstRun || (!_clinicProfileService.CurrentProfile.IsInitialSetupCompleted && !_clinicProfileService.CurrentProfile.IsConfigured))
+        {
+            IsFirstRunWizardOpen = true;
+        }
 
         // Inicializar comandos estáticos y resultados de la paleta
         InitializeStaticCommands();
@@ -148,6 +193,40 @@ public partial class MainViewModel : ObservableObject
 
         // Iniciar en la Vista Principal (las 3 cards: Nueva Venta, Nueva Consulta y Configuración)
         NavigateTo("MainHub");
+    }
+
+    [RelayCommand]
+    public async Task CompleteFirstRunWizardAsync()
+    {
+        if (string.IsNullOrWhiteSpace(WizardDoctorName) && string.IsNullOrWhiteSpace(WizardClinicName))
+        {
+            WizardErrorMessage = "Por favor capture al menos el Nombre del Médico o del Consultorio.";
+            return;
+        }
+
+        var profile = new ClinicProfile
+        {
+            DoctorName = WizardDoctorName?.Trim() ?? string.Empty,
+            ProfessionalLicense = WizardDoctorLicense?.Trim() ?? string.Empty,
+            Specialty = string.IsNullOrWhiteSpace(WizardDoctorSpecialty) ? "Medicina General" : WizardDoctorSpecialty.Trim(),
+            ClinicName = string.IsNullOrWhiteSpace(WizardClinicName) ? "Consultorio Médico" : WizardClinicName.Trim(),
+            Address = WizardClinicAddress?.Trim() ?? string.Empty,
+            Phone = WizardClinicPhone?.Trim() ?? string.Empty,
+            IsConfigured = true,
+            IsInitialSetupCompleted = true
+        };
+
+        _clinicProfileService.SaveProfile(profile);
+
+        if (WizardSeedDemoData)
+        {
+            await _inventoryService.SeedDemoDataAsync();
+            await MedicalRecordsVM.LoadPatientsAsync();
+            await PosVM.LoadCatalogAsync();
+        }
+
+        IsFirstRunWizardOpen = false;
+        WizardErrorMessage = null;
     }
 
     private void InitializeStaticCommands()

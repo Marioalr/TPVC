@@ -23,6 +23,9 @@
         <DataTemplate DataType="{x:Type vm:MovementsViewModel}">
             <views:MovementsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ClinicProfileViewModel}">
+            <views:ClinicProfileView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
             <views:SettingsView />
         </DataTemplate>
@@ -153,7 +156,19 @@
                             </StackPanel>
                         </RadioButton>
 
-                        <!-- 5. Temas y Ajustes -->
+                        <!-- 5. Datos de Consultorio y Médico -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="ConfigNav"
+                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=ClinicProfile, Mode=OneWay}"
+                                     Command="{Binding NavigateSubViewCommand}" 
+                                     CommandParameter="ClinicProfile">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🩺" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Datos del Médico y Clínica" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 6. Temas y Ajustes -->
                         <RadioButton Style="{DynamicResource NavRadioButton}" 
                                      GroupName="ConfigNav"
                                      IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Settings, Mode=OneWay}"

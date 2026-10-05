@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -40,6 +41,9 @@ public class InventoryService
     /// <summary>Cambios en expedientes de pacientes o notas de consulta.</summary>
     public event Action? OnPatientsChanged;
 
+    /// <summary>Cambios en ventas, tickets, cortes o devoluciones/cancelaciones.</summary>
+    public event Action? OnSalesChanged;
+
     public InventoryService(IDbContextFactory<AppDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
@@ -58,6 +62,8 @@ public class InventoryService
     private void NotifyInventoryChanged() => Raise(OnInventoryChanged, "inventory");
 
     private void NotifyPatientsChanged() => Raise(OnPatientsChanged, "patients");
+
+    private void NotifySalesChanged() => Raise(OnSalesChanged, "sales");
 
     private static void Raise(Action? handlers, string area)
     {
@@ -598,6 +604,7 @@ public class InventoryService
         await transaction.CommitAsync();
 
         NotifyInventoryChanged();
+        NotifySalesChanged();
         return sale;
     }
 
@@ -626,6 +633,276 @@ public class InventoryService
             .Where(s => s.Date >= from && s.Date < to)
             .OrderByDescending(s => s.Date)
             .ToListAsync();
+    }
+
+    public async Task<Sale?> GetSaleByFolioAsync(string folio)
+    {
+        if (string.IsNullOrWhiteSpace(folio)) return null;
+        var cleanFolio = folio.Trim();
+        await using var db = CreateContext();
+        return await db.Sales
+            .AsNoTracking()
+            .Include(s => s.Items)
+            .FirstOrDefaultAsync(s => s.Folio.ToLower() == cleanFolio.ToLower());
+    }
+
+    public async Task<List<Sale>> GetSalesHistoryAsync(DateTime? fromDate = null, DateTime? toDate = null, string? searchFolio = null, int limit = 150)
+    {
+        await using var db = CreateContext();
+        var query = db.Sales
+            .AsNoTracking()
+            .Include(s => s.Items)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+        {
+            var from = fromDate.Value.Date;
+            query = query.Where(s => s.Date >= from);
+        }
+
+        if (toDate.HasValue)
+        {
+            var to = toDate.Value.Date.AddDays(1);
+            query = query.Where(s => s.Date < to);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchFolio))
+        {
+            var needle = searchFolio.Trim().ToLower();
+            query = query.Where(s => s.Folio.ToLower().Contains(needle) || s.CustomerName.ToLower().Contains(needle));
+        }
+
+        return await query.OrderByDescending(s => s.Date).Take(limit).ToListAsync();
+    }
+
+    /// <summary>
+    /// Cancela o devuelve un ticket previamente cobrado, reintegrando de forma atómica
+    /// el stock de todos los productos y generando los movimientos de Kardex de devolución.
+    /// </summary>
+    public async Task<bool> CancelSaleAsync(int saleId, string reason = "Devolución / Cancelación de ticket", string responsible = "Dr. Titular")
+    {
+        if (saleId <= 0) return false;
+        string reasonText = string.IsNullOrWhiteSpace(reason) ? "Devolución / Cancelación de ticket" : reason.Trim();
+        string responsibleText = string.IsNullOrWhiteSpace(responsible) ? "Dr. / Farmacia" : responsible.Trim();
+
+        await using var db = CreateContext();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        var sale = await db.Sales
+            .Include(s => s.Items)
+            .FirstOrDefaultAsync(s => s.Id == saleId);
+
+        if (sale == null)
+        {
+            throw new InvalidOperationException($"No se encontró la venta con ID {saleId}.");
+        }
+
+        if (sale.IsCancelled)
+        {
+            throw new InvalidOperationException($"El ticket {sale.Folio} ya se encuentra cancelado.");
+        }
+
+        var now = DateTime.Now;
+        sale.IsCancelled = true;
+        sale.CancelledAt = now;
+        sale.CancellationReason = reasonText;
+
+        // Reintegrar stock de productos al inventario
+        var productItemGroups = sale.Items
+            .Where(i => !i.IsService && i.ProductId.HasValue && i.Quantity > 0)
+            .GroupBy(i => i.ProductId!.Value)
+            .ToList();
+
+        if (productItemGroups.Count > 0)
+        {
+            var productIds = productItemGroups.Select(g => g.Key).ToList();
+            var products = await db.Products
+                .Include(p => p.Batches)
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            foreach (var group in productItemGroups)
+            {
+                if (products.TryGetValue(group.Key, out var product))
+                {
+                    int totalQtyToRestore = group.Sum(i => i.Quantity);
+                    int stockBefore = product.CurrentStock;
+                    product.CurrentStock = stockBefore + totalQtyToRestore;
+                    product.UpdatedAt = now;
+
+                    // Reintegrar a un lote activo si existe
+                    var targetBatch = product.Batches.FirstOrDefault(b => b.ExpirationDate > DateTime.Today)
+                        ?? product.Batches.FirstOrDefault();
+                    if (targetBatch != null)
+                    {
+                        targetBatch.Quantity += totalQtyToRestore;
+                    }
+
+                    db.InventoryMovements.Add(new InventoryMovement
+                    {
+                        ProductId = product.Id,
+                        BatchId = targetBatch?.Id,
+                        MovementType = MovementType.EntradaDevolucion,
+                        Quantity = totalQtyToRestore,
+                        StockBefore = stockBefore,
+                        StockAfter = product.CurrentStock,
+                        Date = now,
+                        Reason = $"Devolución por cancelación de ticket {sale.Folio}: {reasonText}",
+                        Responsible = responsibleText
+                    });
+                }
+            }
+        }
+
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        NotifyInventoryChanged();
+        NotifySalesChanged();
+        return true;
+    }
+
+    /// <summary>
+    /// Calcula el corte de caja diario con desglose de métodos de pago y servicios vs productos.
+    /// </summary>
+    public async Task<DailyCashCut> GetDailyCashCutAsync(DateTime date, ClinicProfile? profile = null)
+    {
+        var day = date.Date;
+        var nextDay = day.AddDays(1);
+
+        await using var db = CreateContext();
+        var sales = await db.Sales
+            .AsNoTracking()
+            .Include(s => s.Items)
+            .Where(s => s.Date >= day && s.Date < nextDay)
+            .OrderByDescending(s => s.Date)
+            .ToListAsync();
+
+        var cut = new DailyCashCut
+        {
+            Date = day,
+            Sales = sales,
+            TotalTicketsCount = sales.Count,
+            ActiveTicketsCount = sales.Count(s => !s.IsCancelled),
+            CancelledTicketsCount = sales.Count(s => s.IsCancelled),
+            TotalSalesAmount = sales.Where(s => !s.IsCancelled).Sum(s => s.Total),
+            TotalCancelledAmount = sales.Where(s => s.IsCancelled).Sum(s => s.Total)
+        };
+
+        var activeSales = sales.Where(s => !s.IsCancelled).ToList();
+
+        // Ingresos por método de pago
+        foreach (var sale in activeSales)
+        {
+            var method = (sale.PaymentMethod ?? "").Trim().ToLowerInvariant();
+            if (method.Contains("efectivo"))
+            {
+                cut.TotalCash += sale.Total;
+            }
+            else if (method.Contains("débito") || method.Contains("debito"))
+            {
+                cut.TotalDebitCard += sale.Total;
+            }
+            else if (method.Contains("crédito") || method.Contains("credito"))
+            {
+                cut.TotalCreditCard += sale.Total;
+            }
+            else if (method.Contains("transfer"))
+            {
+                cut.TotalTransfer += sale.Total;
+            }
+            else
+            {
+                cut.TotalOtherPaymentMethods += sale.Total;
+            }
+        }
+
+        // Desglose Servicios vs Productos
+        foreach (var item in activeSales.SelectMany(s => s.Items))
+        {
+            if (item.IsService)
+            {
+                cut.TotalServicesAmount += item.Subtotal;
+                cut.TotalServicesCount += item.Quantity;
+            }
+            else
+            {
+                cut.TotalProductsAmount += item.Subtotal;
+                cut.TotalProductsUnitsSold += item.Quantity;
+            }
+        }
+
+        return cut;
+    }
+
+    /// <summary>
+    /// Exporta el corte de caja a formato CSV compatible con Microsoft Excel (UTF-8 con BOM).
+    /// </summary>
+    public string ExportDailyCashCutToCsv(DailyCashCut cut, ClinicProfile? profile = null)
+    {
+        var sb = new StringBuilder();
+        // BOM UTF-8
+        sb.Append('\uFEFF');
+
+        string clinic = profile != null && !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "Consultorio Médico";
+        string doctor = profile != null && !string.IsNullOrWhiteSpace(profile.DoctorName) ? profile.DoctorName : "Dr. Titular";
+        string license = profile != null && !string.IsNullOrWhiteSpace(profile.ProfessionalLicense) ? profile.ProfessionalLicense : "N/D";
+
+        sb.AppendLine($"CORTE DE CAJA DIARIO;{clinic}");
+        sb.AppendLine($"Fecha de Corte;{cut.Date:dd/MM/yyyy}");
+        sb.AppendLine($"Médico / Titular;{doctor}");
+        sb.AppendLine($"Cédula Profesional;{license}");
+        sb.AppendLine($"Generado el;{DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+        sb.AppendLine();
+
+        sb.AppendLine("RESUMEN DE INGRESOS");
+        sb.AppendLine($"Total Ventas Netas;${cut.TotalSalesAmount:F2}");
+        sb.AppendLine($"Tickets Cobrados;{cut.ActiveTicketsCount}");
+        sb.AppendLine($"Tickets Cancelados;{cut.CancelledTicketsCount};Importe Cancelado;${cut.TotalCancelledAmount:F2}");
+        sb.AppendLine();
+
+        sb.AppendLine("DESGLOSE POR MÉTODO DE PAGO");
+        sb.AppendLine($"Efectivo;${cut.TotalCash:F2}");
+        sb.AppendLine($"Tarjeta de Débito;${cut.TotalDebitCard:F2}");
+        sb.AppendLine($"Tarjeta de Crédito;${cut.TotalCreditCard:F2}");
+        sb.AppendLine($"Transferencia Electrónica;${cut.TotalTransfer:F2}");
+        if (cut.TotalOtherPaymentMethods > 0)
+        {
+            sb.AppendLine($"Otros Métodos;${cut.TotalOtherPaymentMethods:F2}");
+        }
+        sb.AppendLine();
+
+        sb.AppendLine("DESGLOSE SERVICIOS CLÍNICOS VS PRODUCTOS DE FARMACIA");
+        sb.AppendLine($"Servicios Médicos (Consultas/Procedimientos);${cut.TotalServicesAmount:F2};Servicios Realizados;{cut.TotalServicesCount}");
+        sb.AppendLine($"Productos de Inventario / Farmacia;${cut.TotalProductsAmount:F2};Piezas Despachadas;{cut.TotalProductsUnitsSold}");
+        sb.AppendLine();
+
+        sb.AppendLine("DETALLE DE TICKETS DEL DÍA");
+        sb.AppendLine("Folio;Hora;Paciente / Cliente;Método de Pago;Productos ($);Servicios ($);Total ($);Estado;Motivo Cancelación");
+
+        foreach (var sale in cut.Sales.OrderBy(s => s.Date))
+        {
+            decimal prodSub = sale.Items.Where(i => !i.IsService).Sum(i => i.Subtotal);
+            decimal servSub = sale.Items.Where(i => i.IsService).Sum(i => i.Subtotal);
+            string estado = sale.IsCancelled ? "CANCELADO" : "COBRADO";
+            string motivo = sale.IsCancelled ? (sale.CancellationReason ?? "") : "";
+
+            sb.AppendLine($"{sale.Folio};{sale.Date:HH:mm:ss};\"{sale.CustomerName}\";{sale.PaymentMethod};${prodSub:F2};${servSub:F2};${sale.Total:F2};{estado};\"{motivo}\"");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Siembra pacientes y productos de demostración a solicitud explícita (asistente de inicio).
+    /// </summary>
+    public async Task SeedDemoDataAsync()
+    {
+        await using var db = CreateContext();
+        DatabaseInitializer.SeedDemoData(db);
+        NotifyInventoryChanged();
+        NotifyPatientsChanged();
+        NotifySalesChanged();
     }
 
     // Registro genérico de movimiento
