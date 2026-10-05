@@ -277,7 +277,11 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isEmbeddedInModal;
 
+    [ObservableProperty]
+    private bool _isConsultationCheckout;
+
     public Action? OnCloseModalRequested { get; set; }
+    public Action? OnSaleCompletedFromConsultation { get; set; }
 
     [RelayCommand]
     public void CloseModal()
@@ -746,17 +750,34 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
             await _inventoryService.RegisterSaleAsync(saleItems, patient, SelectedPaymentMethod);
 
-            // Presentar el ticket simulado en pantalla
-            CurrentReceipt = receipt;
-            IsTicketModalOpen = true;
-            IsTicketPrinted = false;
-            TicketStatusMessage = null;
+            bool isFromConsultation = IsEmbeddedInModal || IsConsultationCheckout;
 
-            Cart.Clear();
-            RecalculateTotals();
-            PatientName = "Público General";
+            if (isFromConsultation)
+            {
+                IsConsultationCheckout = false;
+                IsEmbeddedInModal = false;
+                IsTicketModalOpen = false;
+                CurrentReceipt = receipt;
+                Cart.Clear();
+                RecalculateTotals();
+                PatientName = "Público General";
 
-            ShowAlert($"¡Venta procesada con éxito! Comprobante generado: {receipt.Folio}", true);
+                OnSaleCompletedFromConsultation?.Invoke();
+            }
+            else
+            {
+                // Presentar el ticket simulado en pantalla para ventas directas de farmacia
+                CurrentReceipt = receipt;
+                IsTicketModalOpen = true;
+                IsTicketPrinted = false;
+                TicketStatusMessage = null;
+
+                Cart.Clear();
+                RecalculateTotals();
+                PatientName = "Público General";
+
+                ShowAlert($"¡Venta procesada con éxito! Comprobante generado: {receipt.Folio}", true);
+            }
         }
         catch (Exception ex)
         {
@@ -898,6 +919,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
             return;
         }
 
+        IsConsultationCheckout = true;
         var consult = _consultationService.CurrentConsultation;
         if (consult.Items.Count == 0)
         {

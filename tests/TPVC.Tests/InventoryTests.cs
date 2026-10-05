@@ -771,9 +771,9 @@ public class InventoryTests
         Assert.AreEqual(patient.FullName, posVm.PatientName);
         Assert.IsFalse(posVm.HasActiveConsultation, "La consulta activa se cierra para cobro final");
 
-        // Procesar la venta final genera el comprobante
+        // Procesar la venta final genera el comprobante y sale de todo (sin dejar modal abierta)
         await posVm.ProcessSaleAsync();
-        Assert.IsTrue(posVm.IsTicketModalOpen);
+        Assert.IsFalse(posVm.IsTicketModalOpen, "Al cobrar desde consulta médica, se sale de todo y no se bloquea en la modal de ticket");
         Assert.IsNotNull(posVm.CurrentReceipt);
         Assert.AreEqual(patient.FullName, posVm.CurrentReceipt.PatientName);
         Assert.AreEqual(initialCartTotal, posVm.CurrentReceipt.TotalAmount);
@@ -2491,6 +2491,54 @@ public class InventoryTests
         Assert.IsFalse(mainVm.IsCommandPaletteOpen);
         Assert.AreEqual("Records", mainVm.ActiveViewName);
         Assert.AreEqual(patient.Id, mainVm.MedicalRecordsVM.SelectedPatient?.Id);
+    }
+
+    [TestMethod]
+    public async Task MedicalRecords_FinalizeConsultation_ProcessSale_ExitsEverythingAndOpensSelectPatientModal()
+    {
+        var consultService = new ConsultationService();
+        var mainVm = new MainViewModel(_inventoryService, consultService, new ThemeService(), new AppUpdateService());
+        await mainVm.MedicalRecordsVM.LoadPatientsAsync();
+
+        var patient = mainVm.MedicalRecordsVM.Patients.First();
+        mainVm.MedicalRecordsVM.SelectPatient(patient);
+        Assert.AreEqual(patient.Id, mainVm.MedicalRecordsVM.SelectedPatient?.Id);
+
+        // Iniciar consulta activa
+        mainVm.MedicalRecordsVM.StartActiveConsultation();
+        Assert.IsTrue(consultService.HasActiveConsultation);
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
+
+        // Finalizar consulta: abre el modal del POS
+        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsPosModalOpen, "Debe abrirse la ventana modal del POS");
+        Assert.IsNotNull(mainVm.MedicalRecordsVM.PosVM);
+        Assert.IsTrue(mainVm.MedicalRecordsVM.PosVM.Cart.Count > 0, "Debe incluir al menos la Consulta Médica General");
+
+        // Al cobrar en el POS:
+        await mainVm.MedicalRecordsVM.PosVM.ProcessSaleAsync();
+
+        // 1. Debe salir de todo:
+        Assert.IsFalse(mainVm.MedicalRecordsVM.IsPosModalOpen, "La ventana modal del POS debe cerrarse");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.PosVM.IsTicketModalOpen, "El modal de ticket debe cerrarse al cobrar desde consulta");
+        Assert.IsFalse(consultService.HasActiveConsultation, "La consulta activa debe cerrarse");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "No debe haber consulta activa en curso");
+        Assert.IsNull(mainVm.MedicalRecordsVM.SelectedPatient, "El paciente debe deseleccionarse para volver a la vista inicial");
+
+        // 2. Debe abrir inmediatamente la ventana modal de agregar paciente:
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Debe abrirse inmediatamente el modal de agregar paciente");
+    }
+
+    [TestMethod]
+    public void MainViewModel_NavigateToRecords_WithoutPatient_OpensSelectPatientModalImmediately()
+    {
+        var mainVm = new MainViewModel(_inventoryService, new ConsultationService(), new ThemeService(), new AppUpdateService());
+        Assert.IsNull(mainVm.MedicalRecordsVM.SelectedPatient);
+
+        mainVm.NavigateTo("Records");
+
+        Assert.AreEqual("Records", mainVm.ActiveViewName);
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Debe abrir inmediatamente el modal de agregar paciente al entrar a Records");
     }
 }
 

@@ -2,6 +2,28 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.3.18] - 2026-10-04
+
+### Añadido
+* **Apertura Inmediata del Selector de Pacientes en Nueva Consulta**:
+  * Al ingresar a la vista de Expedientes / Nueva Consulta sin tener un paciente seleccionado previamente, la ventana modal de selección y búsqueda de pacientes (`IsSelectPatientModalOpen`) se despliega de manera automática e inmediata.
+  * El cursor y foco de escritura se posicionan directamente en el cuadro de búsqueda (`SelectPatientSearchTextBox`) seleccionando el texto para permitir teclear el nombre o folio del paciente al instante sin clics adicionales.
+* **Cobertura de Pruebas Unitarias Ampliada a 84 Pruebas**:
+  * Incorporación de pruebas unitarias específicas:
+    * `MedicalRecords_FinalizeConsultation_ProcessSale_ExitsEverythingAndOpensSelectPatientModal`: Comprueba el ciclo completo de finalización de consulta, cobro en POS, cierre atómico de todas las ventanas modales, deselección del paciente y reapertura inmediata del selector de pacientes.
+    * `MainViewModel_NavigateToRecords_WithoutPatient_OpensSelectPatientModalImmediately`: Verifica que al navegar a Expedientes Clínicos desde el Hub Principal sin paciente activo se abra automáticamente el modal de selección.
+
+### Modificado
+* **Flujo Clínico Despejado al Finalizar y Cobrar Consulta Médica**:
+  * Al presionar `Finalizar Consulta` y procesar el cobro en el Punto de Venta (`ProcessSaleAsync`), el sistema ahora cierra atómicamente la modal del POS, la modal de comprobante/ticket y cualquier ventana emergente secundaria.
+  * Se cierra la consulta activa, se detiene el cronómetro clínico, se limpian los campos de evolución y se deselecciona al paciente (`SelectedPatient = null`).
+  * El sistema retorna de inmediato a la vista inicial y reabre de forma automática el modal de selección de paciente para recibir fluidamente al siguiente paciente en sala de espera.
+* **Rediseño de la Vista Inicial de Nueva Consulta (Estado sin Paciente)**:
+  * Se retiraron los botones redundantes `[Agregar Paciente]` y `[Nuevo Expediente]` de la tarjeta central.
+  * Toda la tarjeta central ahora cuenta con cursor de mano interactivo y evento de clic para reabrir el buscador de pacientes en caso de haber cerrado el modal emergente.
+
+---
+
 ## [1.3.17] - 2026-10-04
 
 ### Añadido

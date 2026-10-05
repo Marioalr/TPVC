@@ -22,6 +22,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public Action<ActiveConsultation>? OnCheckoutConsultationRequested { get; set; }
     public Action? OnNavigateToPosRequested { get; set; }
     public Action? OnBackToHubRequested { get; set; }
+    public Action? OnNavigateToRecordsRequested { get; set; }
 
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
@@ -2041,8 +2042,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (_inventoryService == null)
+        {
+            InfoModalMessage = "El servicio de inventario no está disponible.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
         PosVM ??= new PosViewModel(_inventoryService, _consultationService);
         PosVM.IsEmbeddedInModal = true;
+        PosVM.IsConsultationCheckout = true;
+        PosVM.OnSaleCompletedFromConsultation ??= HandleSaleCompletedFromConsultation;
         await PosVM.InitializeAsync();
         PosVM.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? "Público General";
 
@@ -2153,8 +2163,53 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (PosVM != null)
         {
             PosVM.IsEmbeddedInModal = false;
+            PosVM.IsConsultationCheckout = false;
         }
         SyncActiveConsultation();
+    }
+
+    public void HandleSaleCompletedFromConsultation()
+    {
+        // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
+        ClosePosModal();
+        IsPrescriptionModalOpen = false;
+        IsSuppliesModalOpen = false;
+        IsServicesModalOpen = false;
+        IsScheduleAppointmentModalOpen = false;
+        IsVitalSignsModalOpen = false;
+        IsRecordsViewerModalOpen = false;
+        IsPatientModalOpen = false;
+        DismissInfoModal();
+
+        // 2. Finalizar y cerrar la consulta médica en el servicio y detener cronómetro
+        _consultationService?.CloseActiveConsultation();
+        SyncActiveConsultation();
+        StopConsultationTimer();
+
+        // 3. Limpiar los campos de la consulta
+        ConsultationChiefComplaint = string.Empty;
+        ConsultationPhysicalExam = string.Empty;
+        ConsultationDiagnosis = string.Empty;
+        ConsultationTreatmentPlan = string.Empty;
+        ConsultationNotes = string.Empty;
+        ConsultationErrorMessage = null;
+
+        // 4. Salir de todo y volver a la vista inicial (sin paciente seleccionado)
+        SelectedPatient = null;
+        ConsultationsHistory.Clear();
+        SelectedHistoryConsultation = null;
+
+        // 5. Si la venta se procesó en la vista independiente de POS, volver a la vista de Expedientes/Consulta
+        OnNavigateToRecordsRequested?.Invoke();
+
+        // 6. Abrir inmediatamente la ventana modal de agregar paciente
+        OpenSelectPatientModal();
+    }
+
+    [RelayCommand]
+    public async Task FinalizeConsultationAndOpenPosAsync()
+    {
+        await FinalizeConsultationAsync();
     }
 
     [RelayCommand]

@@ -188,7 +188,11 @@
                             CornerRadius="16" 
                             Padding="48,36" 
                             MaxWidth="600"
+                            Cursor="Hand"
                             Visibility="{Binding SelectedPatient, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick" Command="{Binding OpenSelectPatientModalCommand}" />
+                        </Border.InputBindings>
                         <StackPanel HorizontalAlignment="Center">
                             <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
                                     CornerRadius="32" 
@@ -208,45 +212,13 @@
                                        Foreground="{DynamicResource ThemeText}" 
                                        HorizontalAlignment="Center" 
                                        Margin="0,0,0,8" />
-                            <TextBlock Text="Para consultar o capturar un expediente clínico, signos vitales, notas de evolución o emitir recetas, agregue un paciente a la vista." 
+                            <TextBlock Text="Para iniciar una consulta médica, registrar notas de evolución o emitir recetas, seleccione un paciente. Haga clic en esta tarjeta o en '+ Nueva Consulta' para abrir el catálogo de pacientes." 
                                        FontSize="13" 
                                        Foreground="{DynamicResource ThemeTextSecondary}" 
                                        TextAlignment="Center" 
                                        TextWrapping="Wrap" 
                                        LineHeight="19" 
-                                       HorizontalAlignment="Center" 
-                                       Margin="0,0,0,24" />
-                            
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Style="{DynamicResource AccentButton}" 
-                                        Command="{Binding OpenSelectPatientModalCommand}" 
-                                        Padding="22,12" 
-                                        Margin="0,0,12,0" 
-                                        Cursor="Hand">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Path Data="{StaticResource IconUser}" 
-                                              Fill="{DynamicResource ThemeAccentText}" 
-                                              Width="14" Height="14" 
-                                              Stretch="Uniform" 
-                                              Margin="0,0,8,0" />
-                                        <TextBlock Text="Agregar Paciente" FontWeight="Bold" FontSize="14" />
-                                    </StackPanel>
-                                </Button>
-
-                                <Button Style="{DynamicResource OutlineButton}" 
-                                        Command="{Binding NewPatientCommand}" 
-                                        Padding="18,12" 
-                                        Cursor="Hand">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Path Data="{StaticResource IconPlus}" 
-                                              Fill="{DynamicResource ThemeText}" 
-                                              Width="13" Height="13" 
-                                              Stretch="Uniform" 
-                                              Margin="0,0,8,0" />
-                                        <TextBlock Text="Nuevo Expediente" FontWeight="SemiBold" FontSize="13" />
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
+                                       HorizontalAlignment="Center" />
                         </StackPanel>
                     </Border>
 
@@ -1919,6 +1891,7 @@
                                       Margin="4,0,10,0" 
                                       VerticalAlignment="Center" />
                                 <TextBox Grid.Column="1" 
+                                         x:Name="SelectPatientSearchTextBox"
                                          Text="{Binding SelectPatientSearchText, UpdateSourceTrigger=PropertyChanged}" 
                                          Background="Transparent" 
                                          BorderThickness="0" 

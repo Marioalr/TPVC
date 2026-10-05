@@ -39,7 +39,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.3.17";
+    private string _appVersion = "1.3.18";
 
     // ==========================================
     // PALETA GLOBAL DE COMANDOS (Ctrl + K / Ctrl + P)
@@ -106,8 +106,19 @@ public partial class MainViewModel : ObservableObject
         // Enlace para liquidar consulta activa en POS
         MedicalRecordsVM.OnCheckoutConsultationRequested = (consultation) =>
         {
+            PosVM.IsConsultationCheckout = true;
             PosVM.CheckoutActiveConsultation();
             NavigateTo("Pos");
+        };
+
+        PosVM.OnSaleCompletedFromConsultation = () =>
+        {
+            MedicalRecordsVM.HandleSaleCompletedFromConsultation();
+        };
+
+        MedicalRecordsVM.OnNavigateToRecordsRequested = () =>
+        {
+            NavigateTo("Records");
         };
 
         MedicalRecordsVM.OnNavigateToPosRequested = () =>
@@ -451,6 +462,10 @@ public partial class MainViewModel : ObservableObject
                 break;
             case "Records":
                 CurrentView = MedicalRecordsVM;
+                if (MedicalRecordsVM.SelectedPatient == null && !MedicalRecordsVM.IsSelectPatientModalOpen)
+                {
+                    MedicalRecordsVM.OpenSelectPatientModal();
+                }
                 break;
             case "Config":
                 CurrentView = ConfigurationShellVM;
