@@ -43,31 +43,155 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="RightAlignedDataGridText" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+
+        <Style x:Key="RightBoldDataGridText" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
     </UserControl.Resources>
 
-    <!-- Contenedor Centralizado de la Vista Principal -->
-    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <!-- Contenedor Principal con Capas (Vista Principal + Modales) -->
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24,20" MaxWidth="1160">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" /> <!-- Banner de Alertas -->
+                    <RowDefinition Height="Auto" /> <!-- Cabecera de Bienvenida -->
+                    <RowDefinition Height="Auto" /> <!-- Las Tres Tarjetas Grandes -->
+                </Grid.RowDefinitions>
 
-        <!-- Cabecera de Bienvenida -->
-        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,36">
-            <TextBlock Text="Consultorio Médico General" 
-                       FontWeight="Bold" 
-                       FontSize="28" 
-                       Foreground="{DynamicResource ThemeText}" 
-                       HorizontalAlignment="Center" />
-            <TextBlock Text="Seleccione una acción principal para comenzar la jornada clínica" 
-                       FontSize="14" 
-                       Foreground="{DynamicResource ThemeTextSecondary}" 
-                       HorizontalAlignment="Center" 
-                       Margin="0,8,0,0" />
-        </StackPanel>
+                <!-- ============================================ -->
+                <!-- BANNER DE ALERTAS DE INICIO DEL DÍA (REQ 11) -->
+                <!-- ============================================ -->
+                <Border Grid.Row="0" 
+                        Visibility="{Binding HasAlerts, Converter={StaticResource BoolToVis}}" 
+                        Background="{DynamicResource ThemeSurfaceSubtle}" 
+                        BorderBrush="{DynamicResource ThemeAccent}" 
+                        BorderThickness="1.5" 
+                        CornerRadius="14" 
+                        Padding="18,14" 
+                        Margin="0,0,0,24" 
+                        SnapsToDevicePixels="True">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-        <!-- Las Tres Tarjetas Grandes de Acción Directa -->
-        <Grid Grid.Row="1" MaxWidth="1160">
+                        <!-- Mensaje Resumen de Alertas -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource ThemeAccent}" CornerRadius="20" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <TextBlock Text="🔔" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Avisos del Sistema al Iniciar la Jornada" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeText}" />
+                                <TextBlock Text="{Binding AlertNotificationMessage}" FontSize="12.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Botones de Acción Directa para Atender Alertas -->
+                        <WrapPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                            <!-- Citas de hoy -->
+                            <Button Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding NavigateToAppointmentsCommand}" 
+                                    Visibility="{Binding TodayAppointmentsCount, Converter={StaticResource BoolToVis}}" 
+                                    Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📅 Citas Hoy (" FontSize="11.5" />
+                                    <TextBlock Text="{Binding TodayAppointmentsCount}" FontWeight="Bold" FontSize="11.5" />
+                                    <TextBlock Text=")" FontSize="11.5" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Stock bajo -->
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding NavigateToLowStockCommand}" 
+                                    Visibility="{Binding LowStockCount, Converter={StaticResource BoolToVis}}" 
+                                    Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚠️ Stock Bajo (" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
+                                    <TextBlock Text="{Binding LowStockCount}" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
+                                    <TextBlock Text=")" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Lotes caducados -->
+                            <Button Style="{DynamicResource DangerButton}" 
+                                    Command="{Binding NavigateToBatchesCommand}" 
+                                    Visibility="{Binding ExpiredBatchesCount, Converter={StaticResource BoolToVis}}" 
+                                    Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⛔ Caducados (" FontSize="11.5" />
+                                    <TextBlock Text="{Binding ExpiredBatchesCount}" FontWeight="Bold" FontSize="11.5" />
+                                    <TextBlock Text=")" FontSize="11.5" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Lotes por vencer -->
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding NavigateToBatchesCommand}" 
+                                    Visibility="{Binding NearExpiryBatchesCount, Converter={StaticResource BoolToVis}}" 
+                                    Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⏳ Por Vencer (" FontSize="11.5" />
+                                    <TextBlock Text="{Binding NearExpiryBatchesCount}" FontWeight="Bold" FontSize="11.5" />
+                                    <TextBlock Text=")" FontSize="11.5" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Lista sugerida de compras -->
+                            <Button Style="{DynamicResource AccentButton}" 
+                                    Command="{Binding OpenSuggestedPurchasesCommand}" 
+                                    Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋 Compras Sugeridas" FontSize="11.5" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Refrescar -->
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding RefreshAlertsCommand}" 
+                                    ToolTip="Refrescar estado de alertas" 
+                                    Padding="8,6" Margin="0,2,0,2">
+                                <TextBlock Text="🔄" FontSize="12" />
+                            </Button>
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Cabecera de Bienvenida -->
+                <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,32">
+                    <TextBlock Text="Consultorio Médico General" 
+                               FontWeight="Bold" 
+                               FontSize="28" 
+                               Foreground="{DynamicResource ThemeText}" 
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="Seleccione una acción principal para comenzar la jornada clínica" 
+                               FontSize="14" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,8,0,0" />
+                    <Button Style="{DynamicResource OutlineButton}" 
+                            Command="{Binding OpenSuggestedPurchasesCommand}" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,12,0,0" 
+                            Padding="12,5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📋 Ver Lista Sugerida de Compras y Resurtido de Stock" FontSize="11.5" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Las Tres Tarjetas Grandes de Acción Directa -->
+                <Grid Grid.Row="2" MaxWidth="1160">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="290" MaxWidth="370" />
                 <ColumnDefinition Width="22" />
@@ -328,6 +452,202 @@
                     </Border>
                 </Grid>
             </Button>
+        </Grid>
+        </Grid>
+    </ScrollViewer>
+
+        <!-- ======================================================= -->
+        <!-- MODAL: LISTA SUGERIDA DE COMPRAS Y RESURTIDO (REQ 11)   -->
+        <!-- ======================================================= -->
+        <Grid Visibility="{Binding IsSuggestedPurchasesOpen, Converter={StaticResource BoolToVis}}" 
+              SnapsToDevicePixels="True">
+            <!-- Fondo Oscuro Translúcido -->
+            <Border Background="#99000000" />
+
+            <!-- Contenedor del Modal Centrado -->
+            <Border Background="{DynamicResource ThemeCard}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="16" 
+                    MaxWidth="1080" 
+                    MaxHeight="680" 
+                    Margin="24" 
+                    Padding="24" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /> <!-- Cabecera del modal -->
+                        <RowDefinition Height="Auto" /> <!-- Resumen de Totales e Inversión -->
+                        <RowDefinition Height="Auto" /> <!-- Mensaje de Estado / Notificación -->
+                        <RowDefinition Height="*" />    <!-- Tabla de Productos a Comprar -->
+                        <RowDefinition Height="Auto" /> <!-- Botones de Acción (CSV, Imprimir, Cerrar) -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera del Modal -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="📋 Lista Sugerida de Compras y Resurtido" 
+                                           FontWeight="Bold" 
+                                           FontSize="18" 
+                                           Foreground="{DynamicResource ThemeText}" />
+                                <Border Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Inventario Inteligente" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="Calculado automáticamente comparando stock actual contra stock mínimo, alertas de desabasto y lotes vencidos o próximos a vencer." 
+                                       FontSize="12" 
+                                       Foreground="{DynamicResource ThemeTextSecondary}" 
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!-- Botón de Cerrar (X) -->
+                        <Button Grid.Column="1" 
+                                Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CloseSuggestedPurchasesCommand}" 
+                                Width="34" Height="34" 
+                                Padding="0" 
+                                HorizontalAlignment="Right" 
+                                VerticalAlignment="Top">
+                            <TextBlock Text="✕" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Resumen de Métricas de Resurtido -->
+                    <Border Grid.Row="1" 
+                            Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="1" 
+                            CornerRadius="10" 
+                            Padding="16,12" 
+                            Margin="0,0,0,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="Productos a Resurtir" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding SuggestedPurchases.Count}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Width="1" Background="{DynamicResource ThemeBorder}" Margin="12,0" />
+
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="Unidades Totales Sugeridas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding TotalSuggestedQuantity}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                            </StackPanel>
+
+                            <Border Grid.Column="3" Width="1" Background="{DynamicResource ThemeBorder}" Margin="12,0" />
+
+                            <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                                <TextBlock Text="Inversión Estimada (Costo)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding TotalSuggestedCost, StringFormat='${0:N2} MXN'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeSuccess}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Notificación de Estado (Exportación / Impresión) -->
+                    <Border Grid.Row="2" 
+                            Visibility="{Binding SuggestedPurchasesStatusMessage, Converter={StaticResource BoolToVis}}" 
+                            Background="{DynamicResource ThemeSelectionBackground}" 
+                            BorderBrush="{DynamicResource ThemeAccent}" 
+                            BorderThickness="1" 
+                            CornerRadius="8" 
+                            Padding="12,8" 
+                            Margin="0,0,0,12">
+                        <TextBlock Text="{Binding SuggestedPurchasesStatusMessage}" 
+                                   Foreground="{DynamicResource ThemeAccent}" 
+                                   FontWeight="SemiBold" 
+                                   FontSize="12" 
+                                   TextWrapping="Wrap" />
+                    </Border>
+
+                    <!-- DataGrid de la Lista de Compras -->
+                    <DataGrid Grid.Row="3" 
+                              ItemsSource="{Binding SuggestedPurchases}" 
+                              AutoGenerateColumns="False" 
+                              IsReadOnly="True" 
+                              CanUserSortColumns="True" 
+                              GridLinesVisibility="Horizontal" 
+                              HorizontalGridLinesBrush="{DynamicResource ThemeBorder}" 
+                              MaxHeight="360" 
+                              Margin="0,0,0,16">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Código" Binding="{Binding ProductCode}" Width="95" />
+                            <DataGridTemplateColumn Header="Producto" Width="2*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Vertical" Margin="4,2">
+                                            <TextBlock Text="{Binding ProductName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding GenericName, StringFormat='Genérico: {0}'}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Visibility="{Binding GenericName, Converter={StaticResource BoolToVis}}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Presentación" Binding="{Binding Presentation}" Width="1.2*" />
+                            <DataGridTextColumn Header="Categoría" Binding="{Binding CategoryName}" Width="1*" />
+                            <DataGridTextColumn Header="Stock Act." Binding="{Binding CurrentStock}" Width="80" ElementStyle="{StaticResource RightAlignedDataGridText}" />
+                            <DataGridTextColumn Header="Mín." Binding="{Binding MinStock}" Width="65" ElementStyle="{StaticResource RightAlignedDataGridText}" />
+                            <DataGridTemplateColumn Header="Sugerido" Width="85">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource ThemeSelectionBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right" Margin="4,2">
+                                            <TextBlock Text="{Binding SuggestedQuantity}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Right" />
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Costo U. Est." Binding="{Binding EstimatedUnitCost, StringFormat='${0:N2}'}" Width="100" ElementStyle="{StaticResource RightAlignedDataGridText}" />
+                            <DataGridTextColumn Header="Total Est." Binding="{Binding EstimatedTotalCost, StringFormat='${0:N2}'}" Width="110" ElementStyle="{StaticResource RightBoldDataGridText}" />
+                            <DataGridTextColumn Header="Motivo" Binding="{Binding Reason}" Width="1.5*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Acciones Inferiores -->
+                    <Grid Grid.Row="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding ExportSuggestedPurchasesCsvCommand}" 
+                                    Padding="14,8" 
+                                    Margin="0,0,10,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📥 Exportar a CSV (Excel)" FontWeight="SemiBold" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{DynamicResource OutlineButton}" 
+                                    Command="{Binding PrintSuggestedPurchasesCommand}" 
+                                    Padding="14,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🖨️ Imprimir / Guardar Informe" FontWeight="SemiBold" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <Button Grid.Column="1" 
+                                Style="{DynamicResource AccentButton}" 
+                                Command="{Binding CloseSuggestedPurchasesCommand}" 
+                                Padding="24,8">
+                            <TextBlock Text="Cerrar" FontWeight="Bold" FontSize="13" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </UserControl>

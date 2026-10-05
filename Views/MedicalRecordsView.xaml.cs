@@ -127,11 +127,47 @@ public partial class MedicalRecordsView : UserControl
     {
         if (DataContext is not MedicalRecordsViewModel vm) return;
 
+        if (vm.IsAllergyAlertOpen)
+        {
+            vm.CancelAllergyPrescription();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsGoogleCalendarTodoModalOpen)
+        {
+            vm.CloseGoogleCalendarTodo();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsWhatsAppTodoModalOpen)
+        {
+            vm.CloseWhatsAppTodo();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsEditAppointmentModalOpen)
+        {
+            vm.CloseEditAppointmentModal();
+            e.Handled = true;
+            return;
+        }
         if (vm.IsCatalogBrowserModalOpen)
         {
             vm.CloseCatalogBrowser();
             e.Handled = true;
             RestoreModalFocus(vm);
+            return;
+        }
+        if (vm.IsCie10DropdownOpen)
+        {
+            vm.IsCie10DropdownOpen = false;
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsAgendaModalOpen)
+        {
+            vm.CloseAgendaModal();
+            e.Handled = true;
             return;
         }
         if (vm.IsPrescriptionModalOpen)
@@ -169,6 +205,86 @@ public partial class MedicalRecordsView : UserControl
             vm.DismissInfoModal();
             e.Handled = true;
             return;
+        }
+    }
+
+    // ==========================================
+    // DIAGNÓSTICO CIE-10
+    // ==========================================
+
+    private void DiagnosisTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (e.Key == Key.Down)
+        {
+            if (ActiveCie10SuggestionsListBox?.Items.Count > 0)
+            {
+                var cur = ActiveCie10SuggestionsListBox.SelectedIndex;
+                var nextIndex = cur + 1;
+                if (nextIndex >= ActiveCie10SuggestionsListBox.Items.Count || nextIndex < 0)
+                    nextIndex = 0;
+                ActiveCie10SuggestionsListBox.SelectedIndex = nextIndex;
+                var item = ActiveCie10SuggestionsListBox.Items[nextIndex];
+                ActiveCie10SuggestionsListBox.ScrollIntoView(item);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Up)
+        {
+            if (ActiveCie10SuggestionsListBox?.Items.Count > 0)
+            {
+                var cur = ActiveCie10SuggestionsListBox.SelectedIndex;
+                var prevIndex = cur - 1;
+                if (prevIndex < 0 || prevIndex >= ActiveCie10SuggestionsListBox.Items.Count)
+                    prevIndex = ActiveCie10SuggestionsListBox.Items.Count - 1;
+                ActiveCie10SuggestionsListBox.SelectedIndex = prevIndex;
+                var item = ActiveCie10SuggestionsListBox.Items[prevIndex];
+                ActiveCie10SuggestionsListBox.ScrollIntoView(item);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
+        {
+            if (ActiveCie10SuggestionsListBox?.SelectedItem is Cie10Diagnosis item)
+            {
+                vm.SelectCie10Suggestion(item);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void Cie10SuggestionsListBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (e.Key == Key.Enter)
+        {
+            if (ActiveCie10SuggestionsListBox?.SelectedItem is Cie10Diagnosis item)
+            {
+                vm.SelectCie10Suggestion(item);
+                ActiveConsultationDiagnosisTextBox?.Focus();
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void Cie10SuggestionsListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var dep = e.OriginalSource as DependencyObject;
+        while (dep != null && dep is not ListBoxItem && dep != sender)
+        {
+            dep = VisualTreeHelper.GetParent(dep);
+        }
+
+        if (dep is ListBoxItem item && item.DataContext is Cie10Diagnosis diag)
+        {
+            if (DataContext is MedicalRecordsViewModel vm)
+            {
+                vm.SelectCie10Suggestion(diag);
+                ActiveConsultationDiagnosisTextBox?.Focus();
+                e.Handled = true;
+            }
         }
     }
 

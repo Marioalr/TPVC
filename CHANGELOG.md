@@ -2,6 +2,38 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.7.0] - 2026-10-05
+
+### Añadido
+* **Agenda integral de citas médicas con vistas de Día y Semana (Requisito 7)**:
+  * Nueva entidad `PatientAppointment` en base de datos local SQLite con relación al expediente del paciente, permitiendo registrar múltiples citas por paciente.
+  * Interfaz de Agenda con selector de vista (Día y Semana), navegación por fecha (Día anterior, Hoy, Día siguiente, Semana anterior/siguiente) y panel lateral con listado de citas o cuadrícula de 7 días.
+  * Gestión de estados de cita: *Programada*, *Confirmada*, *Atendida* y *Cancelada* con códigos de color.
+  * **Integración con Google Calendar**: Botón con generación automática de enlace web para agendar en 1 clic en Google Calendar con título, horario, paciente, consultorio y notas, acompañado del modal de planificación técnica (TODO) para sincronización bidireccional mediante Google Calendar API v3 y OAuth2.
+  * **Recordatorio por WhatsApp**: Botón con enlace directo `wa.me` formateado con el número telefónico del paciente (prefijo internacional de México +52) y mensaje de recordatorio personalizado con confirmación de asistencia, acompañado del modal de planificación técnica (TODO) para automatización mediante WhatsApp Business Cloud API.
+  * Pestaña "Citas" dentro del expediente de cada paciente para consultar y gestionar su historial de citas pasadas y próximas.
+* **Signos vitales numéricos con gráfica de evolución temporal (Requisito 8)**:
+  * Propiedades numéricas estructuradas en `PatientConsultation` (`Weight`, `BloodPressureSystolic`, `BloodPressureDiastolic`, `Glucose`, `HeartRate`, `RespiratoryRate`, `Temperature`, `Height`, `BMI`).
+  * Parser regex retrocompatible que extrae automáticamente los valores numéricos a partir de notas y cadenas de texto históricas previas, calculando el Índice de Masa Corporal (IMC) automáticamente si se capturaron Peso y Talla.
+  * Nueva pestaña "Evolución de Signos Vitales" en el expediente clínico con tarjetas de resumen clínico (Último, Mínimo, Máximo y Promedio de Peso, Presión Arterial y Glucosa).
+  * **Gráfica nativa vectorial de evolución**: Trazado en WPF `Canvas` con curvas diferenciadas por color para Peso (Azul), Presión Sistólica (Rojo), Presión Diastólica (Ámbar) y Glucosa (Verde) con etiquetas de valores y fechas, sin dependencias pesadas de terceros.
+  * Tabla histórica detallada de signos vitales por consulta con fecha y valores somatométricos formateados.
+* **Sistema de seguridad de alerta de alergias a medicamentos (Requisito 9)**:
+  * Validación cruzada activa en tiempo real al seleccionar un medicamento del catálogo o capturarlo manualmente en la receta médica.
+  * Detección avanzada por subcadenas y por **familias farmacológicas con reactividad cruzada común**: Penicilinas / Betalactámicos (amoxicilina, ampicilina, dicloxacilina, clavulanato), Cefalosporinas, Sulfas (sulfametoxazol, trimetoprima, bactrim), AINEs / Aspirina (ácido acetilsalicílico, ibuprofeno, naproxeno, ketorolaco, diclofenaco), Macrólidos y Quinolonas.
+  * Ventana modal de seguridad clínica de alto contraste que advierte el riesgo de reacción alérgica grave, detiene la emisión accidental y permite al médico cancelar la prescripción o autorizarla bajo su criterio médico (*override* clínico con registro de advertencia).
+* **Catálogo CIE-10 oficial con autocompletado en diagnósticos (Requisito 10)**:
+  * Catálogo integrado de más de 100 diagnósticos clínicos ambulatorios de consulta general conforme a la Clasificación Internacional de Enfermedades (CIE-10).
+  * Menú autocompletable reactivo en tiempo real al escribir código (ej. "J00", "I10", "E11") o descripción patológica (ej. "faringitis", "hipertensión", "diabetes").
+  * Navegación completa por teclado en las sugerencias con flechas (↑ / ↓), selección instantánea con `Enter` y cierre con tecla `Escape` (`Esc`).
+* **Avisos al iniciar jornada y Lista Sugerida de Compras (Requisito 11)**:
+  * **Banner de avisos del sistema en el Hub Principal**: Monitoreo automático al abrir la aplicación que alerta el número de citas programadas para el día, productos con stock igual o inferior al mínimo configurado, y lotes de medicamentos caducados o por caducar en los próximos 30 días, con botones de acceso directo para atender cada situación.
+  * **Ventana de Lista Sugerida de Compras y Resurtido**: Cálculo inteligente de piezas faltantes por producto, inversión estimada en MXN y desglose por presentación, stock actual, stock mínimo y motivo de reabastecimiento.
+  * Exportación de la lista sugerida a formato `.csv` en el escritorio para fácil apertura en Microsoft Excel y generación de informe estructurado para impresión o archivo físico.
+
+### Mejorado
+* Cobertura de pruebas unitarias ampliada a **123 pruebas al 100% de éxito**, cubriendo todas las nuevas funciones clínicas y administrativas.
+
 ## [1.6.3] - 2026-10-05
 
 ### Corregido

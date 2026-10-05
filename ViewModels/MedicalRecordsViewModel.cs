@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -121,6 +122,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (tab == "Servicios" && Services.Count == 0)
         {
             _ = LoadServicesAsync();
+        }
+        else if (tab == "Evolucion")
+        {
+            RefreshVitalSignsEvolution(SelectedPatient);
+        }
+        else if (tab == "Citas")
+        {
+            _ = LoadPatientAppointmentsAsync(SelectedPatient?.Id);
         }
     }
 
@@ -738,6 +747,56 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _consultationDiagnosis = string.Empty;
 
+    private bool _isSelectingCie10;
+
+    partial void OnConsultationDiagnosisChanged(string value)
+    {
+        if (_isSelectingCie10) return;
+        if (string.IsNullOrWhiteSpace(value) || value.Trim().Length < 2)
+        {
+            Cie10Suggestions = new ObservableCollection<Cie10Diagnosis>();
+            IsCie10DropdownOpen = false;
+            return;
+        }
+
+        var matches = Cie10Diagnosis.Search(value.Trim(), 20);
+        Cie10Suggestions = new ObservableCollection<Cie10Diagnosis>(matches);
+        SelectedCie10Suggestion = Cie10Suggestions.FirstOrDefault();
+        IsCie10DropdownOpen = Cie10Suggestions.Count > 0;
+    }
+
+    [ObservableProperty]
+    private ObservableCollection<Cie10Diagnosis> _cie10Suggestions = new();
+
+    [ObservableProperty]
+    private Cie10Diagnosis? _selectedCie10Suggestion;
+
+    [ObservableProperty]
+    private bool _isCie10DropdownOpen;
+
+    [RelayCommand]
+    public void SelectCie10Suggestion(Cie10Diagnosis? item)
+    {
+        if (item == null) return;
+        _isSelectingCie10 = true;
+        try
+        {
+            ConsultationDiagnosis = item.ToString();
+            IsCie10DropdownOpen = false;
+            Cie10Suggestions.Clear();
+        }
+        finally
+        {
+            _isSelectingCie10 = false;
+        }
+    }
+
+    [RelayCommand]
+    public void CloseCie10Dropdown()
+    {
+        IsCie10DropdownOpen = false;
+    }
+
     [ObservableProperty]
     private string _consultationTreatmentPlan = string.Empty;
 
@@ -930,8 +989,184 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private int _serviceModalQuantity = 1;
 
     // ==========================================
-    // MODAL DE AGENDAR NUEVA CONSULTA / CITAS
+    // ALERTA DE ALERGIA FARMACOLÓGICA (SAFETY CHECK)
     // ==========================================
+    [ObservableProperty]
+    private bool _isAllergyAlertOpen;
+
+    [ObservableProperty]
+    private string _allergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+
+    [ObservableProperty]
+    private string _allergyAlertMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _allergyPatientAllergies = string.Empty;
+
+    private Product? _pendingAllergyProduct;
+    private string _pendingAllergyMedName = string.Empty;
+    private string _pendingAllergyDosage = string.Empty;
+    private int _pendingAllergyQty = 1;
+
+    [RelayCommand]
+    public void CancelAllergyPrescription()
+    {
+        _pendingAllergyProduct = null;
+        _pendingAllergyMedName = string.Empty;
+        _pendingAllergyDosage = string.Empty;
+        _pendingAllergyQty = 1;
+        IsAllergyAlertOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task ConfirmOverrideAllergyPrescriptionAsync()
+    {
+        IsAllergyAlertOpen = false;
+        var prod = _pendingAllergyProduct;
+        var name = _pendingAllergyMedName;
+        var dosage = _pendingAllergyDosage;
+        var qty = _pendingAllergyQty;
+
+        _pendingAllergyProduct = null;
+        _pendingAllergyMedName = string.Empty;
+        _pendingAllergyDosage = string.Empty;
+        _pendingAllergyQty = 1;
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            await AddPrescriptionItemInternalAsync(prod, name, dosage, qty);
+        }
+    }
+
+    // ==========================================
+    // AGENDA Y CALENDARIO DE CITAS (VISTA DÍA Y SEMANA)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isAgendaModalOpen;
+
+    [ObservableProperty]
+    private string _agendaViewMode = "Day"; // "Day" o "Week"
+
+    [ObservableProperty]
+    private DateTime _agendaDate = DateTime.Today;
+
+    [ObservableProperty]
+    private string _agendaHeaderTitle = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientAppointment> _dayAppointments = new();
+
+    [ObservableProperty]
+    private ObservableCollection<AgendaWeekDayGroup> _weekDays = new();
+
+    [ObservableProperty]
+    private PatientAppointment? _selectedAgendaAppointment;
+
+    [ObservableProperty]
+    private ObservableCollection<PatientAppointment> _patientAppointmentsHistory = new();
+
+    // Submodal de Crear / Editar Cita
+    [ObservableProperty]
+    private bool _isEditAppointmentModalOpen;
+
+    [ObservableProperty]
+    private string _editAppointmentModalTitle = "Nueva Cita Médica";
+
+    [ObservableProperty]
+    private int _editAppointmentId;
+
+    [ObservableProperty]
+    private int? _editAppointmentPatientRecordId;
+
+    [ObservableProperty]
+    private string _editAppointmentPatientName = string.Empty;
+
+    [ObservableProperty]
+    private string _editAppointmentPatientRecordNumber = string.Empty;
+
+    [ObservableProperty]
+    private string _editAppointmentPatientPhone = string.Empty;
+
+    [ObservableProperty]
+    private DateTime _editAppointmentDate = DateTime.Today;
+
+    [ObservableProperty]
+    private string _editAppointmentTime = "10:00 AM";
+
+    [ObservableProperty]
+    private int _editAppointmentDurationMinutes = 30;
+
+    [ObservableProperty]
+    private string _editAppointmentReason = "Consulta General";
+
+    [ObservableProperty]
+    private string _editAppointmentNotes = string.Empty;
+
+    [ObservableProperty]
+    private string _editAppointmentStatus = "Programada"; // "Programada", "Confirmada", "Atendida", "Cancelada"
+
+    // Modales de TODO: Google Calendar y WhatsApp
+    [ObservableProperty]
+    private bool _isGoogleCalendarTodoModalOpen;
+
+    [ObservableProperty]
+    private string _googleCalendarUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _googleCalendarTitle = string.Empty;
+
+    [ObservableProperty]
+    private string _googleCalendarDetails = string.Empty;
+
+    [ObservableProperty]
+    private bool _isWhatsAppTodoModalOpen;
+
+    [ObservableProperty]
+    private string _whatsAppUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _whatsAppMessagePreview = string.Empty;
+
+    // ==========================================
+    // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS)
+    // ==========================================
+    [ObservableProperty]
+    private ObservableCollection<VitalSignsEvolutionPoint> _vitalSignsEvolutionPoints = new();
+
+    [ObservableProperty]
+    private string _vitalSignsFilter = "Todos"; // "Todos", "Peso", "Presion", "Glucosa"
+
+    [ObservableProperty]
+    private string _weightPolylinePoints = string.Empty;
+
+    [ObservableProperty]
+    private string _systolicPolylinePoints = string.Empty;
+
+    [ObservableProperty]
+    private string _diastolicPolylinePoints = string.Empty;
+
+    [ObservableProperty]
+    private string _glucosePolylinePoints = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<VitalSignsChartPoint> _chartPoints = new();
+
+    [ObservableProperty]
+    private bool _hasEnoughPointsForChart;
+
+    [ObservableProperty]
+    private string _latestWeightFormatted = "--";
+
+    [ObservableProperty]
+    private string _latestBPFormatted = "--";
+
+    [ObservableProperty]
+    private string _latestGlucoseFormatted = "--";
+
+    [ObservableProperty]
+    private string _latestIMCFormatted = "--";
+
+    // Retro-compatibilidad para Modal de Agendar Consulta Rápida
     [ObservableProperty]
     private bool _isScheduleAppointmentModalOpen;
 
@@ -1329,11 +1564,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
             ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
             SelectedHistoryConsultation = ConsultationsHistory.FirstOrDefault();
+            RefreshVitalSignsEvolution(newValue);
+            _ = LoadPatientAppointmentsAsync(newValue.Id);
         }
         else
         {
             ConsultationsHistory.Clear();
             SelectedHistoryConsultation = null;
+            RefreshVitalSignsEvolution(null);
+            PatientAppointmentsHistory.Clear();
         }
     }
 
@@ -2216,11 +2455,32 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var medName = NewPrescriptionMedicine.Trim();
+        var dosage = string.IsNullOrWhiteSpace(NewPrescriptionDosage) ? "Según indicación médica" : NewPrescriptionDosage.Trim();
+        var qty = Math.Max(1, NewPrescriptionQuantity);
+
+        if (SelectedPatient != null)
+        {
+            var allergyCheck = InventoryService.CheckMedicationAllergy(SelectedPatient, null, medName);
+            if (allergyCheck.HasConflict)
+            {
+                _pendingAllergyProduct = null;
+                _pendingAllergyMedName = medName;
+                _pendingAllergyDosage = dosage;
+                _pendingAllergyQty = qty;
+                AllergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+                AllergyAlertMessage = allergyCheck.WarningDetails;
+                AllergyPatientAllergies = SelectedPatient.Allergies ?? "Sin alergias declaradas";
+                IsAllergyAlertOpen = true;
+                return;
+            }
+        }
+
         ConsultationPrescriptions.Add(new PatientPrescriptionItem
         {
-            MedicineName = NewPrescriptionMedicine.Trim(),
-            Dosage = string.IsNullOrWhiteSpace(NewPrescriptionDosage) ? "Según indicación médica" : NewPrescriptionDosage.Trim(),
-            RecommendedQuantity = Math.Max(1, NewPrescriptionQuantity)
+            MedicineName = medName,
+            Dosage = dosage,
+            RecommendedQuantity = qty
         });
 
         NewPrescriptionMedicine = string.Empty;
@@ -2423,6 +2683,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             Prescriptions = prescriptions
         };
 
+        consultation.EnsureNumericVitalSigns();
+
         if (_inventoryService != null)
         {
             try
@@ -2472,6 +2734,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ConsultationsHistory.Insert(0, consultation);
             SelectedHistoryConsultation = consultation;
         }
+
+        RefreshVitalSignsEvolution(SelectedPatient);
 
         return consultation;
     }
@@ -2825,6 +3089,30 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             : PrescriptionDosage.Trim();
 
         var qty = PrescriptionQuantity > 0 ? PrescriptionQuantity : 1;
+
+        if (SelectedPatient != null)
+        {
+            var allergyCheck = InventoryService.CheckMedicationAllergy(SelectedPatient, product, name);
+            if (allergyCheck.HasConflict)
+            {
+                _pendingAllergyProduct = product;
+                _pendingAllergyMedName = name;
+                _pendingAllergyDosage = dosage;
+                _pendingAllergyQty = qty;
+                AllergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+                AllergyAlertMessage = allergyCheck.WarningDetails;
+                AllergyPatientAllergies = SelectedPatient.Allergies ?? "Sin alergias declaradas";
+                IsAllergyAlertOpen = true;
+                return;
+            }
+        }
+
+        await AddPrescriptionItemInternalAsync(product, name, dosage, qty);
+    }
+
+    private async Task AddPrescriptionItemInternalAsync(Product? product, string name, string dosage, int qty)
+    {
+        if (SelectedPatient == null) return;
 
         var newItem = new PatientPrescriptionItem
         {
@@ -3821,6 +4109,552 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsInfoModalVisible = true;
 
         OnPropertyChanged(nameof(SelectedPatient));
+    }
+
+    // ==========================================
+    // OPERACIONES DE AGENDA Y CALENDARIO DE CITAS
+    // ==========================================
+
+    [RelayCommand]
+    public void OpenAgendaModal()
+    {
+        IsAgendaModalOpen = true;
+        _ = LoadAgendaDataAsync();
+    }
+
+    [RelayCommand]
+    public void CloseAgendaModal()
+    {
+        IsAgendaModalOpen = false;
+        IsEditAppointmentModalOpen = false;
+        IsGoogleCalendarTodoModalOpen = false;
+        IsWhatsAppTodoModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void SwitchAgendaView(string mode)
+    {
+        AgendaViewMode = mode == "Week" ? "Week" : "Day";
+        _ = LoadAgendaDataAsync();
+    }
+
+    [RelayCommand]
+    public void AgendaPreviousPeriod()
+    {
+        AgendaDate = AgendaViewMode == "Week" ? AgendaDate.AddDays(-7) : AgendaDate.AddDays(-1);
+        _ = LoadAgendaDataAsync();
+    }
+
+    [RelayCommand]
+    public void AgendaNextPeriod()
+    {
+        AgendaDate = AgendaViewMode == "Week" ? AgendaDate.AddDays(7) : AgendaDate.AddDays(1);
+        _ = LoadAgendaDataAsync();
+    }
+
+    [RelayCommand]
+    public void AgendaToday()
+    {
+        AgendaDate = DateTime.Today;
+        _ = LoadAgendaDataAsync();
+    }
+
+    public async Task LoadAgendaDataAsync()
+    {
+        if (_inventoryService == null) return;
+
+        try
+        {
+            if (AgendaViewMode == "Day")
+            {
+                AgendaHeaderTitle = AgendaDate.ToString("dddd, dd 'de' MMMM 'de' yyyy", new CultureInfo("es-MX"));
+                AgendaHeaderTitle = char.ToUpper(AgendaHeaderTitle[0]) + AgendaHeaderTitle.Substring(1);
+
+                var list = await _inventoryService.GetAppointmentsByDayAsync(AgendaDate);
+                DayAppointments = new ObservableCollection<PatientAppointment>(list);
+            }
+            else
+            {
+                int diff = (7 + (AgendaDate.DayOfWeek - DayOfWeek.Monday)) % 7;
+                var monday = AgendaDate.AddDays(-1 * diff).Date;
+                var sunday = monday.AddDays(6);
+
+                AgendaHeaderTitle = $"Semana del {monday:dd MMM} al {sunday:dd MMM yyyy}";
+
+                var weekList = await _inventoryService.GetAppointmentsByWeekAsync(monday);
+                var groups = new ObservableCollection<AgendaWeekDayGroup>();
+
+                for (int i = 0; i < 7; i++)
+                {
+                    var d = monday.AddDays(i);
+                    var dayName = d.ToString("ddd dd/MM", new CultureInfo("es-MX"));
+                    var fullDayName = d.ToString("dddd", new CultureInfo("es-MX"));
+                    dayName = char.ToUpper(dayName[0]) + dayName.Substring(1);
+                    fullDayName = char.ToUpper(fullDayName[0]) + fullDayName.Substring(1);
+
+                    var dayAppts = weekList.Where(a => a.Date.Date == d.Date).OrderBy(a => a.Time).ToList();
+                    groups.Add(new AgendaWeekDayGroup
+                    {
+                        Date = d,
+                        DayName = dayName,
+                        DayOfWeekName = fullDayName,
+                        IsToday = d.Date == DateTime.Today,
+                        Appointments = new ObservableCollection<PatientAppointment>(dayAppts)
+                    });
+                }
+
+                WeekDays = groups;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al cargar citas de la agenda", ex);
+        }
+    }
+
+    [RelayCommand]
+    public void OpenNewAppointmentModal(DateTime? initialDate = null)
+    {
+        EditAppointmentId = 0;
+        EditAppointmentModalTitle = "Nueva Cita Médica";
+        EditAppointmentPatientRecordId = SelectedPatient?.Id;
+        EditAppointmentPatientName = SelectedPatient?.FullName ?? string.Empty;
+        EditAppointmentPatientRecordNumber = SelectedPatient?.RecordNumber ?? string.Empty;
+        EditAppointmentPatientPhone = SelectedPatient?.Phone ?? string.Empty;
+        EditAppointmentDate = initialDate ?? (AgendaDate > DateTime.Today ? AgendaDate : DateTime.Today.AddDays(1));
+        EditAppointmentTime = "10:00 AM";
+        EditAppointmentDurationMinutes = 30;
+        EditAppointmentReason = "Consulta General";
+        EditAppointmentNotes = string.Empty;
+        EditAppointmentStatus = "Programada";
+        IsEditAppointmentModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void OpenEditAppointmentModal(PatientAppointment? appt)
+    {
+        if (appt == null) return;
+        EditAppointmentId = appt.Id;
+        EditAppointmentModalTitle = "Editar Cita Médica";
+        EditAppointmentPatientRecordId = appt.PatientRecordId > 0 ? appt.PatientRecordId : null;
+        EditAppointmentPatientName = appt.PatientName;
+        EditAppointmentPatientRecordNumber = appt.PatientRecordNumber;
+        EditAppointmentPatientPhone = appt.PatientPhone;
+        EditAppointmentDate = appt.Date;
+        EditAppointmentTime = appt.Time;
+        EditAppointmentDurationMinutes = appt.DurationMinutes > 0 ? appt.DurationMinutes : 30;
+        EditAppointmentReason = appt.Reason;
+        EditAppointmentNotes = appt.Notes;
+        EditAppointmentStatus = appt.Status;
+        IsEditAppointmentModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseEditAppointmentModal()
+    {
+        IsEditAppointmentModalOpen = false;
+    }
+
+    [RelayCommand]
+    public async Task SaveAppointmentModalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EditAppointmentPatientName))
+        {
+            InfoModalMessage = "El nombre del paciente es obligatorio para agendar la cita.";
+            IsInfoModalVisible = true;
+            return;
+        }
+
+        var appt = new PatientAppointment
+        {
+            Id = EditAppointmentId,
+            PatientRecordId = EditAppointmentPatientRecordId ?? (SelectedPatient?.Id ?? 0),
+            PatientName = EditAppointmentPatientName.Trim(),
+            PatientRecordNumber = EditAppointmentPatientRecordNumber?.Trim() ?? string.Empty,
+            PatientPhone = EditAppointmentPatientPhone?.Trim() ?? string.Empty,
+            Date = EditAppointmentDate.Date,
+            Time = string.IsNullOrWhiteSpace(EditAppointmentTime) ? "10:00 AM" : EditAppointmentTime.Trim(),
+            DurationMinutes = EditAppointmentDurationMinutes > 0 ? EditAppointmentDurationMinutes : 30,
+            Reason = string.IsNullOrWhiteSpace(EditAppointmentReason) ? "Consulta General" : EditAppointmentReason.Trim(),
+            Notes = EditAppointmentNotes?.Trim() ?? string.Empty,
+            Status = string.IsNullOrWhiteSpace(EditAppointmentStatus) ? "Programada" : EditAppointmentStatus.Trim()
+        };
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SaveAppointmentAsync(appt);
+            }
+            catch (Exception ex)
+            {
+                InfoModalMessage = $"Error al guardar la cita: {ex.Message}";
+                IsInfoModalVisible = true;
+                return;
+            }
+        }
+
+        IsEditAppointmentModalOpen = false;
+        await LoadAgendaDataAsync();
+
+        if (SelectedPatient != null && SelectedPatient.Id == appt.PatientRecordId)
+        {
+            await LoadPatientAppointmentsAsync(SelectedPatient.Id);
+        }
+
+        InfoModalMessage = $"¡Cita guardada correctamente para {appt.PatientName} el {appt.Date:dd/MM/yyyy} a las {appt.Time}!";
+        IsInfoModalVisible = true;
+    }
+
+    [RelayCommand]
+    public async Task DeleteAppointmentAsync(PatientAppointment? appt)
+    {
+        if (appt == null || _inventoryService == null) return;
+
+        try
+        {
+            await _inventoryService.DeleteAppointmentAsync(appt.Id);
+            await LoadAgendaDataAsync();
+            if (SelectedPatient != null && SelectedPatient.Id == appt.PatientRecordId)
+            {
+                await LoadPatientAppointmentsAsync(SelectedPatient.Id);
+            }
+            InfoModalMessage = "Cita eliminada correctamente.";
+            IsInfoModalVisible = true;
+        }
+        catch (Exception ex)
+        {
+            InfoModalMessage = $"Error al eliminar la cita: {ex.Message}";
+            IsInfoModalVisible = true;
+        }
+    }
+
+    [RelayCommand]
+    public async Task MarkAppointmentAttendedAsync(PatientAppointment? appt)
+    {
+        await UpdateAppointmentStatusAsync(appt, "Atendida");
+    }
+
+    [RelayCommand]
+    public async Task MarkAppointmentCancelledAsync(PatientAppointment? appt)
+    {
+        await UpdateAppointmentStatusAsync(appt, "Cancelada");
+    }
+
+    [RelayCommand]
+    public async Task MarkAppointmentConfirmedAsync(PatientAppointment? appt)
+    {
+        await UpdateAppointmentStatusAsync(appt, "Confirmada");
+    }
+
+    public async Task UpdateAppointmentStatusAsync(PatientAppointment? appt, string status)
+    {
+        if (appt == null || _inventoryService == null) return;
+
+        try
+        {
+            await _inventoryService.UpdateAppointmentStatusAsync(appt.Id, status);
+            appt.Status = status;
+            await LoadAgendaDataAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al actualizar estado de cita", ex);
+        }
+    }
+
+    public async Task LoadPatientAppointmentsAsync(int? patientId)
+    {
+        if (_inventoryService == null || !patientId.HasValue || patientId.Value <= 0)
+        {
+            PatientAppointmentsHistory.Clear();
+            return;
+        }
+
+        try
+        {
+            var all = await _inventoryService.GetAppointmentsAsync(DateTime.Today.AddMonths(-6), DateTime.Today.AddMonths(6));
+            var patientList = all.Where(a => a.PatientRecordId == patientId.Value).OrderByDescending(a => a.Date).ToList();
+            PatientAppointmentsHistory = new ObservableCollection<PatientAppointment>(patientList);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al cargar historial de citas del paciente", ex);
+        }
+    }
+
+    // ==========================================
+    // GOOGLE CALENDAR TODO & INTEGRACIÓN
+    // ==========================================
+    [RelayCommand]
+    public void OpenGoogleCalendarTodo(PatientAppointment? appt)
+    {
+        if (appt == null) return;
+
+        var start = appt.Date.Date;
+        if (DateTime.TryParse(appt.Time, out var parsedTime))
+        {
+            start = start.Add(parsedTime.TimeOfDay);
+        }
+        else
+        {
+            start = start.AddHours(10);
+        }
+
+        var end = start.AddMinutes(appt.DurationMinutes > 0 ? appt.DurationMinutes : 30);
+        var startUtc = start.ToString("yyyyMMdd\\THHmmss");
+        var endUtc = end.ToString("yyyyMMdd\\THHmmss");
+
+        var title = Uri.EscapeDataString($"Cita Médica - {appt.PatientName}");
+        var details = Uri.EscapeDataString($"Paciente: {appt.PatientName}\nTeléfono: {appt.PatientPhone}\nMotivo: {appt.Reason}\nNotas: {appt.Notes}\nClínica: {ClinicName}");
+        var location = Uri.EscapeDataString(string.IsNullOrWhiteSpace(ClinicAddress) ? ClinicName : ClinicAddress);
+
+        GoogleCalendarUrl = $"https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}&dates={startUtc}/{endUtc}&details={details}&location={location}";
+        GoogleCalendarTitle = $"Cita Médica: {appt.PatientName} ({appt.Date:dd/MM/yyyy} {appt.Time})";
+        GoogleCalendarDetails = $"Plan de Sincronización Google Calendar:\n• Fase 1 (Actual): Generación de plantilla web directa para agendar con 1 clic en su cuenta de Google Calendar.\n• Fase 2 (En desarrollo): Sincronización bidireccional automática mediante Google Calendar API v3 y OAuth2.\n\nEnlace generado listo para abrir.";
+
+        IsGoogleCalendarTodoModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseGoogleCalendarTodo()
+    {
+        IsGoogleCalendarTodoModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void LaunchGoogleCalendarUrl()
+    {
+        if (string.IsNullOrWhiteSpace(GoogleCalendarUrl)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(GoogleCalendarUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al abrir navegador para Google Calendar", ex);
+        }
+    }
+
+    // ==========================================
+    // WHATSAPP REMINDER TODO & INTEGRACIÓN
+    // ==========================================
+    [RelayCommand]
+    public void OpenWhatsAppTodo(PatientAppointment? appt)
+    {
+        if (appt == null) return;
+
+        var phone = new string((appt.PatientPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (phone.Length == 10)
+        {
+            phone = "52" + phone;
+        }
+
+        var msg = $"Hola {appt.PatientName}, le recordamos su cita médica en {ClinicName} programada para el {appt.Date:dd/MM/yyyy} a las {appt.Time}. Motivo: {appt.Reason}. Por favor confirme su asistencia respondiendo a este mensaje. ¡Le esperamos!";
+        WhatsAppMessagePreview = msg;
+        WhatsAppUrl = $"https://wa.me/{phone}?text={Uri.EscapeDataString(msg)}";
+
+        IsWhatsAppTodoModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseWhatsAppTodo()
+    {
+        IsWhatsAppTodoModalOpen = false;
+    }
+
+    [RelayCommand]
+    public void LaunchWhatsAppUrl()
+    {
+        if (string.IsNullOrWhiteSpace(WhatsAppUrl)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(WhatsAppUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al abrir WhatsApp", ex);
+        }
+    }
+
+    // ==========================================
+    // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS)
+    // ==========================================
+    [RelayCommand]
+    public void SetVitalSignsFilter(string filter)
+    {
+        VitalSignsFilter = filter;
+        RecalculateChartPoints();
+    }
+
+    public void RefreshVitalSignsEvolution(PatientRecord? patient = null)
+    {
+        var pat = patient ?? SelectedPatient;
+        if (pat == null)
+        {
+            VitalSignsEvolutionPoints.Clear();
+            ChartPoints.Clear();
+            HasEnoughPointsForChart = false;
+            LatestWeightFormatted = "--";
+            LatestBPFormatted = "--";
+            LatestGlucoseFormatted = "--";
+            LatestIMCFormatted = "--";
+            WeightPolylinePoints = string.Empty;
+            SystolicPolylinePoints = string.Empty;
+            DiastolicPolylinePoints = string.Empty;
+            GlucosePolylinePoints = string.Empty;
+            return;
+        }
+
+        var points = pat.GetVitalSignsEvolution();
+        VitalSignsEvolutionPoints = new ObservableCollection<VitalSignsEvolutionPoint>(points);
+
+        var latest = points.LastOrDefault();
+        if (latest != null)
+        {
+            LatestWeightFormatted = latest.Weight.HasValue ? $"{latest.Weight.Value:F1} kg" : "--";
+            LatestBPFormatted = (latest.Systolic.HasValue && latest.Diastolic.HasValue) ? $"{latest.Systolic.Value}/{latest.Diastolic.Value} mmHg" : "--";
+            LatestGlucoseFormatted = latest.Glucose.HasValue ? $"{latest.Glucose.Value:F0} mg/dL" : "--";
+            LatestIMCFormatted = latest.BMI.HasValue ? $"{latest.BMI.Value:F1}" : "--";
+        }
+        else
+        {
+            LatestWeightFormatted = "--";
+            LatestBPFormatted = "--";
+            LatestGlucoseFormatted = "--";
+            LatestIMCFormatted = "--";
+        }
+
+        RecalculateChartPoints();
+    }
+
+    private void RecalculateChartPoints()
+    {
+        var points = VitalSignsEvolutionPoints.ToList();
+        if (points.Count == 0)
+        {
+            HasEnoughPointsForChart = false;
+            WeightPolylinePoints = string.Empty;
+            SystolicPolylinePoints = string.Empty;
+            DiastolicPolylinePoints = string.Empty;
+            GlucosePolylinePoints = string.Empty;
+            ChartPoints.Clear();
+            return;
+        }
+
+        HasEnoughPointsForChart = true;
+
+        double width = 640;
+        double height = 200;
+        double padLeft = 40;
+        double padRight = 30;
+        double padTop = 20;
+        double padBottom = 30;
+
+        double plotW = width - padLeft - padRight;
+        double plotH = height - padTop - padBottom;
+
+        int n = points.Count;
+        double stepX = n > 1 ? plotW / (n - 1) : plotW / 2;
+
+        var chartPts = new ObservableCollection<VitalSignsChartPoint>();
+
+        var weightPoly = new StringBuilder();
+        var sysPoly = new StringBuilder();
+        var diaPoly = new StringBuilder();
+        var gluPoly = new StringBuilder();
+
+        for (int i = 0; i < n; i++)
+        {
+            var p = points[i];
+            double x = n > 1 ? padLeft + (i * stepX) : padLeft + stepX;
+
+            // Peso: escala 30..150 kg
+            if (p.Weight.HasValue)
+            {
+                double normW = (double)Math.Clamp(p.Weight.Value, 30m, 150m);
+                double yW = padTop + plotH - ((normW - 30.0) / 120.0 * plotH);
+                weightPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yW));
+                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Peso")
+                {
+                    chartPts.Add(new VitalSignsChartPoint
+                    {
+                        X = x,
+                        Y = yW,
+                        DateLabel = p.FormattedDate,
+                        ValueLabel = $"{p.Weight.Value:F1} kg",
+                        SeriesName = "Peso",
+                        ColorHex = "#3B82F6"
+                    });
+                }
+            }
+
+            // Presión sistólica: escala 60..220 mmHg
+            if (p.Systolic.HasValue)
+            {
+                double normSys = (double)Math.Clamp(p.Systolic.Value, 60m, 220m);
+                double ySys = padTop + plotH - ((normSys - 60.0) / 160.0 * plotH);
+                sysPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, ySys));
+                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion")
+                {
+                    chartPts.Add(new VitalSignsChartPoint
+                    {
+                        X = x,
+                        Y = ySys,
+                        DateLabel = p.FormattedDate,
+                        ValueLabel = $"{p.Systolic.Value} Sis",
+                        SeriesName = "Presión Sistólica",
+                        ColorHex = "#EF4444"
+                    });
+                }
+            }
+
+            // Presión diastólica: escala 40..130 mmHg
+            if (p.Diastolic.HasValue)
+            {
+                double normDia = (double)Math.Clamp(p.Diastolic.Value, 40m, 130m);
+                double yDia = padTop + plotH - ((normDia - 40.0) / 90.0 * plotH);
+                diaPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yDia));
+                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion")
+                {
+                    chartPts.Add(new VitalSignsChartPoint
+                    {
+                        X = x,
+                        Y = yDia,
+                        DateLabel = p.FormattedDate,
+                        ValueLabel = $"{p.Diastolic.Value} Dia",
+                        SeriesName = "Presión Diastólica",
+                        ColorHex = "#F59E0B"
+                    });
+                }
+            }
+
+            // Glucosa: escala 50..300 mg/dL
+            if (p.Glucose.HasValue)
+            {
+                double normGlu = (double)Math.Clamp(p.Glucose.Value, 50m, 300m);
+                double yGlu = padTop + plotH - ((normGlu - 50.0) / 250.0 * plotH);
+                gluPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yGlu));
+                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Glucosa")
+                {
+                    chartPts.Add(new VitalSignsChartPoint
+                    {
+                        X = x,
+                        Y = yGlu,
+                        DateLabel = p.FormattedDate,
+                        ValueLabel = $"{p.Glucose.Value:F0} mg/dL",
+                        SeriesName = "Glucosa",
+                        ColorHex = "#10B981"
+                    });
+                }
+            }
+        }
+
+        WeightPolylinePoints = weightPoly.ToString().Trim();
+        SystolicPolylinePoints = sysPoly.ToString().Trim();
+        DiastolicPolylinePoints = diaPoly.ToString().Trim();
+        GlucosePolylinePoints = gluPoly.ToString().Trim();
+        ChartPoints = chartPts;
     }
 
     [RelayCommand]

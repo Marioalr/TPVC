@@ -123,7 +123,11 @@ public partial class MainViewModel : ObservableObject
 
         AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
-        MainHubVM = new MainHubViewModel(NavigateTo);
+        MainHubVM = new MainHubViewModel(NavigateTo, inventoryService, _printingService);
+        MainHubVM.OnOpenAgendaRequested = () =>
+        {
+            MedicalRecordsVM?.OpenAgendaModal();
+        };
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
         MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService);
         _ = MedicalRecordsVM.LoadInitialDataAsync();
@@ -521,6 +525,7 @@ public partial class MainViewModel : ObservableObject
         {
             case "MainHub":
                 CurrentView = MainHubVM;
+                _ = MainHubVM.RefreshAlertsAsync();
                 break;
             case "Pos":
                 CurrentView = PosVM;

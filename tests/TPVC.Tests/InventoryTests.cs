@@ -2877,6 +2877,7 @@ public class InventoryTests
         var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
         await vm.LoadPatientsAsync();
         var patient = vm.Patients.First();
+        patient.Allergies = "Ninguna";
         patient.ActivePrescription = new List<PatientPrescriptionItem>();
         patient.ActiveSupplies = new List<PatientSupplyItem>();
         patient.ActiveServices = new List<PatientServiceItem>();
@@ -3221,6 +3222,7 @@ public class InventoryTests
         await vm.LoadInitialDataAsync();
 
         var patient = vm.Patients.First();
+        patient.Allergies = "Ninguna";
         patient.ActivePrescription = new List<PatientPrescriptionItem>();
         patient.ActiveSupplies = new List<PatientSupplyItem>();
         patient.ActiveServices = new List<PatientServiceItem>();
@@ -3269,6 +3271,230 @@ public class InventoryTests
         Assert.IsFalse(vm.IsCatalogBrowserModalOpen);
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
+    }
+
+    [TestMethod]
+    public async Task Appointments_Save_GetByDay_GetByWeek_UpdateStatus_Delete_WorksCorrectly()
+    {
+        var patient = (await _inventoryService.GetPatientsAsync()).First();
+        var today = DateTime.Today;
+
+        var appt1 = new PatientAppointment
+        {
+            PatientRecordId = patient.Id,
+            PatientName = patient.FullName,
+            PatientPhone = patient.Phone,
+            Date = today,
+            Time = "10:30",
+            Reason = "Revisión general de control",
+            Notes = "Paciente en ayuno",
+            Status = "Programada"
+        };
+
+        var appt2 = new PatientAppointment
+        {
+            PatientRecordId = patient.Id,
+            PatientName = patient.FullName,
+            PatientPhone = patient.Phone,
+            Date = today.AddDays(2),
+            Time = "16:00",
+            Reason = "Seguimiento de glucosa",
+            Status = "Programada"
+        };
+
+        var saved1 = await _inventoryService.SaveAppointmentAsync(appt1);
+        var saved2 = await _inventoryService.SaveAppointmentAsync(appt2);
+
+        Assert.IsTrue(saved1.Id > 0);
+        Assert.IsTrue(saved2.Id > 0);
+
+        // Day view
+        var dayAppointments = await _inventoryService.GetAppointmentsByDayAsync(today);
+        Assert.IsTrue(dayAppointments.Any(a => a.Id == saved1.Id));
+        Assert.IsFalse(dayAppointments.Any(a => a.Id == saved2.Id));
+
+        // Week view
+        var weekAppointments = await _inventoryService.GetAppointmentsByWeekAsync(today);
+        Assert.IsTrue(weekAppointments.Count >= 2);
+
+        // Update status
+        await _inventoryService.UpdateAppointmentStatusAsync(saved1.Id, "Confirmada");
+        var refreshed = (await _inventoryService.GetAppointmentsAsync()).First(a => a.Id == saved1.Id);
+        Assert.AreEqual("Confirmada", refreshed.Status);
+
+        // Delete
+        await _inventoryService.DeleteAppointmentAsync(saved2.Id);
+        var allAfterDelete = await _inventoryService.GetAppointmentsAsync();
+        Assert.IsFalse(allAfterDelete.Any(a => a.Id == saved2.Id));
+    }
+
+    [TestMethod]
+    public void VitalSigns_EnsureNumericParsing_AndEvolutionChart_WorksCorrectly()
+    {
+        var consultation = new PatientConsultation
+        {
+            Date = DateTime.Today,
+            VitalSigns = "TA: 120/80 mmHg, FC: 72 lpm, Temp: 36.5 °C, Peso: 74.5 kg, Talla: 1.70 m, Glucosa: 95 mg/dL"
+        };
+
+        consultation.EnsureNumericVitalSigns();
+
+        Assert.AreEqual(74.5m, consultation.Weight);
+        Assert.AreEqual(120m, consultation.BloodPressureSystolic);
+        Assert.AreEqual(80m, consultation.BloodPressureDiastolic);
+        Assert.AreEqual(95m, consultation.Glucose);
+        Assert.AreEqual(72m, consultation.HeartRate);
+        Assert.AreEqual(36.5m, consultation.Temperature);
+        Assert.AreEqual(1.70m, consultation.Height);
+        Assert.IsTrue(consultation.BMI.HasValue);
+        Assert.IsTrue(Math.Abs((double)consultation.BMI.Value - 25.77) < 0.1);
+
+        // PatientRecord evolution
+        var patient = new PatientRecord
+        {
+            FullName = "Paciente Test",
+            Consultations = new List<PatientConsultation>
+            {
+                new() { Date = DateTime.Today.AddDays(-30), Weight = 78.0m, BloodPressureSystolic = 135m, BloodPressureDiastolic = 85m, Glucose = 110m },
+                new() { Date = DateTime.Today.AddDays(-15), Weight = 76.2m, BloodPressureSystolic = 125m, BloodPressureDiastolic = 82m, Glucose = 102m },
+                new() { Date = DateTime.Today, Weight = 74.5m, BloodPressureSystolic = 120m, BloodPressureDiastolic = 80m, Glucose = 95m }
+            }
+        };
+
+        var evolution = patient.GetVitalSignsEvolution();
+        Assert.AreEqual(3, evolution.Count);
+        Assert.AreEqual(78.0m, evolution[0].Weight);
+        Assert.AreEqual(74.5m, evolution[2].Weight);
+    }
+
+    [TestMethod]
+    public async Task MedicationAllergy_CheckAndModalOverride_WorksCorrectly()
+    {
+        var patient = new PatientRecord
+        {
+            FullName = "Juan Pérez",
+            Allergies = "Penicilina (urticaria grave), Aspirina"
+        };
+
+        var amoxi = new Product { Name = "Amoxicilina con Ácido Clavulánico", GenericName = "Amoxicilina / Clavulanato", Presentation = "Tabletas 500mg/125mg" };
+        var aspirina = new Product { Name = "Aspirina Protect", GenericName = "Ácido Acetilsalicílico", Presentation = "100mg" };
+        var paracetamol = new Product { Name = "Tempra", GenericName = "Paracetamol", Presentation = "500mg" };
+
+        // Test InventoryService.CheckMedicationAllergy
+        var checkAmoxi = InventoryService.CheckMedicationAllergy(patient, amoxi, amoxi.Name);
+        Assert.IsTrue(checkAmoxi.HasConflict);
+        Assert.IsTrue(checkAmoxi.WarningDetails.Contains("penicilina", StringComparison.OrdinalIgnoreCase));
+
+        var checkAsp = InventoryService.CheckMedicationAllergy(patient, aspirina, aspirina.Name);
+        Assert.IsTrue(checkAsp.HasConflict);
+
+        var checkPara = InventoryService.CheckMedicationAllergy(patient, paracetamol, paracetamol.Name);
+        Assert.IsFalse(checkPara.HasConflict);
+
+        // Test MedicalRecordsViewModel allergy alert interception & override
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        patient.ActivePrescription = new List<PatientPrescriptionItem>();
+        vm.SelectPatient(patient);
+
+        // Attempting to prescribe Amoxicilina should trigger alert modal
+        await vm.SelectAndAddPrescriptionProductAsync(amoxi);
+        Assert.IsTrue(vm.IsAllergyAlertOpen, "La alerta de alergia debe abrirse para un medicamento en conflicto");
+        Assert.AreEqual(0, patient.ActivePrescription.Count, "No debe añadirse a la receta mientras esté pendiente la alerta");
+
+        // Doctor confirms override under clinical discretion
+        await vm.ConfirmOverrideAllergyPrescriptionAsync();
+        Assert.IsFalse(vm.IsAllergyAlertOpen, "El modal debe cerrarse tras confirmar el override");
+        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(amoxi.Name));
+    }
+
+    [TestMethod]
+    public void Cie10Catalog_SearchAndAutocomplete_WorksCorrectly()
+    {
+        // Search by code
+        var resCode = Cie10Diagnosis.Search("I10").ToList();
+        Assert.IsTrue(resCode.Count > 0);
+        Assert.IsTrue(resCode.Any(d => d.Code == "I10" && d.Name.Contains("Hipertensión")));
+
+        // Search by normalized word
+        var resText = Cie10Diagnosis.Search("faringitis").ToList();
+        Assert.IsTrue(resText.Count > 0);
+        Assert.IsTrue(resText.All(d => d.Name.Contains("faringitis", StringComparison.OrdinalIgnoreCase) || d.Category.Contains("faringitis", StringComparison.OrdinalIgnoreCase)));
+
+        // Empty search returns common diagnoses
+        var resEmpty = Cie10Diagnosis.Search("").ToList();
+        Assert.IsTrue(resEmpty.Count > 0);
+
+        // Autocomplete in MedicalRecordsViewModel
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        vm.ConsultationDiagnosis = "diab";
+        Assert.IsTrue(vm.IsCie10DropdownOpen);
+        Assert.IsTrue(vm.Cie10Suggestions.Count > 0);
+
+        var chosen = vm.Cie10Suggestions.First();
+        vm.SelectCie10Suggestion(chosen);
+        Assert.IsFalse(vm.IsCie10DropdownOpen);
+        Assert.AreEqual($"{chosen.Code} - {chosen.Name}", vm.ConsultationDiagnosis);
+    }
+
+    [TestMethod]
+    public async Task SystemAlerts_AndSuggestedPurchases_CSV_AndPrint_WorksCorrectly()
+    {
+        var summary = await _inventoryService.GetSystemAlertsSummaryAsync();
+        Assert.IsNotNull(summary);
+
+        var purchases = await _inventoryService.GetSuggestedPurchaseListAsync();
+        Assert.IsNotNull(purchases);
+
+        var hubVm = new MainHubViewModel(s => { }, _inventoryService);
+        await hubVm.RefreshAlertsAsync();
+        Assert.IsNotNull(hubVm.AlertsSummary);
+
+        await hubVm.OpenSuggestedPurchasesAsync();
+        Assert.IsTrue(hubVm.IsSuggestedPurchasesOpen);
+        Assert.IsNotNull(hubVm.SuggestedPurchases);
+
+        // Test CSV export
+        await hubVm.ExportSuggestedPurchasesCsvAsync();
+        Assert.IsNotNull(hubVm.SuggestedPurchasesStatusMessage);
+        Assert.IsTrue(hubVm.SuggestedPurchasesStatusMessage.Contains("Exportado") || hubVm.SuggestedPurchasesStatusMessage.Contains("No hay"));
+
+        // Test Print report text generation
+        hubVm.PrintSuggestedPurchases();
+        Assert.IsNotNull(hubVm.SuggestedPurchasesStatusMessage);
+
+        hubVm.CloseSuggestedPurchases();
+        Assert.IsFalse(hubVm.IsSuggestedPurchasesOpen);
+    }
+
+    [TestMethod]
+    public void Agenda_GoogleCalendarAndWhatsApp_TodoPlan_WorksCorrectly()
+    {
+        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
+        var appt = new PatientAppointment
+        {
+            Id = 42,
+            PatientName = "Pedro Sánchez",
+            PatientPhone = "5512345678",
+            Date = DateTime.Today.AddDays(1),
+            Time = "11:00",
+            Reason = "Control de presión arterial"
+        };
+
+        // Google Calendar TODO
+        vm.OpenGoogleCalendarTodo(appt);
+        Assert.IsTrue(vm.IsGoogleCalendarTodoModalOpen);
+        Assert.IsTrue(vm.GoogleCalendarUrl.Contains("calendar.google.com"));
+        Assert.IsTrue(vm.GoogleCalendarDetails.Contains("Google Calendar API"));
+        vm.CloseGoogleCalendarTodo();
+        Assert.IsFalse(vm.IsGoogleCalendarTodoModalOpen);
+
+        // WhatsApp Reminder TODO
+        vm.OpenWhatsAppTodo(appt);
+        Assert.IsTrue(vm.IsWhatsAppTodoModalOpen);
+        Assert.IsTrue(vm.WhatsAppUrl.Contains("wa.me"));
+        Assert.IsTrue(vm.WhatsAppMessagePreview.Contains("Pedro"));
+        vm.CloseWhatsAppTodo();
+        Assert.IsFalse(vm.IsWhatsAppTodoModalOpen);
     }
 }
 

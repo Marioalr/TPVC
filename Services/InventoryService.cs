@@ -22,6 +22,24 @@ public class DashboardMetrics
     public decimal SalesTodayTotal { get; set; }
 }
 
+public class SystemAlertsSummary
+{
+    public int TodayAppointmentsCount { get; set; }
+    public List<PatientAppointment> TodayAppointments { get; set; } = new();
+
+    public int LowStockProductsCount { get; set; }
+    public int LowStockCount => LowStockProductsCount;
+    public List<Product> LowStockProducts { get; set; } = new();
+
+    public int ExpiredBatchesCount { get; set; }
+    public List<ProductBatch> ExpiredBatches { get; set; } = new();
+
+    public int NearExpiryBatchesCount { get; set; }
+    public List<ProductBatch> NearExpiryBatches { get; set; } = new();
+
+    public bool HasAlerts => TodayAppointmentsCount > 0 || LowStockProductsCount > 0 || ExpiredBatchesCount > 0 || NearExpiryBatchesCount > 0;
+}
+
 /// <summary>
 /// Acceso a datos del consultorio. Cada operación usa un DbContext de vida corta
 /// (IDbContextFactory): las lecturas son sin tracking y las escrituras son atómicas.
@@ -43,6 +61,9 @@ public class InventoryService
 
     /// <summary>Cambios en ventas, tickets, cortes o devoluciones/cancelaciones.</summary>
     public event Action? OnSalesChanged;
+
+    /// <summary>Cambios en la agenda de citas médicas.</summary>
+    public event Action? OnAppointmentsChanged;
 
     public InventoryService(IDbContextFactory<AppDbContext> contextFactory)
     {
@@ -1263,11 +1284,22 @@ public class InventoryService
             ? await db.PatientConsultations.FirstOrDefaultAsync(c => c.Folio == consultation.Folio)
             : null;
 
+        consultation.EnsureNumericVitalSigns();
+
         if (existing != null)
         {
             existing.EndedAt = consultation.EndedAt;
             existing.ChiefComplaint = consultation.ChiefComplaint;
             existing.VitalSigns = consultation.VitalSigns;
+            existing.BloodPressureSystolic = consultation.BloodPressureSystolic;
+            existing.BloodPressureDiastolic = consultation.BloodPressureDiastolic;
+            existing.HeartRate = consultation.HeartRate;
+            existing.RespiratoryRate = consultation.RespiratoryRate;
+            existing.Temperature = consultation.Temperature;
+            existing.Weight = consultation.Weight;
+            existing.Height = consultation.Height;
+            existing.BMI = consultation.BMI;
+            existing.Glucose = consultation.Glucose;
             existing.PhysicalExamination = consultation.PhysicalExamination;
             existing.SystemsReview = consultation.SystemsReview;
             existing.Diagnosis = consultation.Diagnosis;
@@ -1287,4 +1319,324 @@ public class InventoryService
         NotifyPatientsChanged();
         return consultation;
     }
+
+    private void NotifyAppointmentsChanged() => OnAppointmentsChanged?.Invoke();
+
+    // =========================================================================
+    // AGENDA Y CONTROL DE CITAS MÉDICAS
+    // =========================================================================
+
+    public async Task<List<PatientAppointment>> GetAppointmentsAsync(DateTime? fromDate = null, DateTime? toDate = null)
+    {
+        await using var db = CreateContext();
+        var query = db.Appointments
+            .AsNoTracking()
+            .Include(a => a.PatientRecord)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+        {
+            var from = fromDate.Value.Date;
+            query = query.Where(a => a.Date >= from);
+        }
+        if (toDate.HasValue)
+        {
+            var to = toDate.Value.Date.AddDays(1);
+            query = query.Where(a => a.Date < to);
+        }
+
+        return await query.OrderBy(a => a.Date).ThenBy(a => a.Time).ToListAsync();
+    }
+
+    public async Task<List<PatientAppointment>> GetAppointmentsByDayAsync(DateTime day)
+    {
+        var targetDate = day.Date;
+        var nextDate = targetDate.AddDays(1);
+        await using var db = CreateContext();
+        return await db.Appointments
+            .AsNoTracking()
+            .Include(a => a.PatientRecord)
+            .Where(a => a.Date >= targetDate && a.Date < nextDate)
+            .OrderBy(a => a.Time)
+            .ToListAsync();
+    }
+
+    public async Task<List<PatientAppointment>> GetAppointmentsByWeekAsync(DateTime startOfWeek)
+    {
+        var from = startOfWeek.Date;
+        var to = from.AddDays(7);
+        await using var db = CreateContext();
+        return await db.Appointments
+            .AsNoTracking()
+            .Include(a => a.PatientRecord)
+            .Where(a => a.Date >= from && a.Date < to)
+            .OrderBy(a => a.Date)
+            .ThenBy(a => a.Time)
+            .ToListAsync();
+    }
+
+    public async Task<PatientAppointment> SaveAppointmentAsync(PatientAppointment appointment)
+    {
+        await using var db = CreateContext();
+
+        if (appointment.PatientRecordId > 0 && string.IsNullOrWhiteSpace(appointment.PatientName))
+        {
+            var patient = await db.Patients.FindAsync(appointment.PatientRecordId);
+            if (patient != null)
+            {
+                appointment.PatientName = patient.FullName;
+                appointment.PatientRecordNumber = patient.RecordNumber;
+                appointment.PatientPhone = patient.Phone;
+            }
+        }
+
+        if (appointment.Id == 0)
+        {
+            appointment.CreatedAt = DateTime.Now;
+            db.Appointments.Add(appointment);
+        }
+        else
+        {
+            var existing = await db.Appointments.FindAsync(appointment.Id);
+            if (existing != null)
+            {
+                existing.PatientRecordId = appointment.PatientRecordId;
+                existing.PatientName = appointment.PatientName;
+                existing.PatientRecordNumber = appointment.PatientRecordNumber;
+                existing.PatientPhone = appointment.PatientPhone;
+                existing.Date = appointment.Date;
+                existing.Time = appointment.Time;
+                existing.DurationMinutes = appointment.DurationMinutes;
+                existing.Reason = appointment.Reason;
+                existing.Notes = appointment.Notes;
+                existing.Status = appointment.Status;
+                existing.UpdatedAtUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                db.Appointments.Add(appointment);
+            }
+        }
+
+        // Sincronizar en PatientRecord si corresponde
+        if (appointment.PatientRecordId > 0)
+        {
+            var pat = await db.Patients.FindAsync(appointment.PatientRecordId);
+            if (pat != null && appointment.Status != "Cancelada")
+            {
+                pat.NextAppointmentDate = appointment.Date;
+                pat.NextAppointmentTime = appointment.Time;
+                pat.NextAppointmentReason = appointment.Reason;
+                pat.NextAppointmentNotes = appointment.Notes;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        NotifyAppointmentsChanged();
+        NotifyPatientsChanged();
+        return appointment;
+    }
+
+    public async Task DeleteAppointmentAsync(int appointmentId)
+    {
+        await using var db = CreateContext();
+        var appt = await db.Appointments.FindAsync(appointmentId);
+        if (appt != null)
+        {
+            db.Appointments.Remove(appt);
+            await db.SaveChangesAsync();
+            NotifyAppointmentsChanged();
+        }
+    }
+
+    public async Task UpdateAppointmentStatusAsync(int appointmentId, string status)
+    {
+        await using var db = CreateContext();
+        var appt = await db.Appointments.FindAsync(appointmentId);
+        if (appt != null)
+        {
+            appt.Status = status;
+            appt.UpdatedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            NotifyAppointmentsChanged();
+        }
+    }
+
+    // =========================================================================
+    // ALERTAS DEL SISTEMA Y LISTA DE COMPRAS SUGERIDA
+    // =========================================================================
+
+    public async Task<SystemAlertsSummary> GetSystemAlertsSummaryAsync()
+    {
+        var summary = new SystemAlertsSummary();
+        var today = DateTime.Today;
+        var tomorrow = today.AddDays(1);
+        var in30Days = today.AddDays(30);
+
+        await using var db = CreateContext();
+
+        // 1. Citas del día
+        summary.TodayAppointments = await db.Appointments
+            .AsNoTracking()
+            .Include(a => a.PatientRecord)
+            .Where(a => a.Date >= today && a.Date < tomorrow && a.Status != "Cancelada")
+            .OrderBy(a => a.Time)
+            .ToListAsync();
+        summary.TodayAppointmentsCount = summary.TodayAppointments.Count;
+
+        // 2. Stock bajo
+        var allProducts = await db.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.IsActive)
+            .ToListAsync();
+
+        summary.LowStockProducts = allProducts
+            .Where(p => p.CurrentStock <= (p.MinStock > 0 ? p.MinStock : 5))
+            .OrderBy(p => p.CurrentStock)
+            .ToList();
+        summary.LowStockProductsCount = summary.LowStockProducts.Count;
+
+        // 3. Lotes vencidos y por vencer
+        var batches = await db.ProductBatches
+            .AsNoTracking()
+            .Include(b => b.Product)
+            .Where(b => b.Quantity > 0)
+            .ToListAsync();
+
+        summary.ExpiredBatches = batches
+            .Where(b => b.ExpirationDate.Date < today)
+            .OrderBy(b => b.ExpirationDate)
+            .ToList();
+        summary.ExpiredBatchesCount = summary.ExpiredBatches.Count;
+
+        summary.NearExpiryBatches = batches
+            .Where(b => b.ExpirationDate.Date >= today && b.ExpirationDate.Date <= in30Days)
+            .OrderBy(b => b.ExpirationDate)
+            .ToList();
+        summary.NearExpiryBatchesCount = summary.NearExpiryBatches.Count;
+
+        return summary;
+    }
+
+    public async Task<List<SuggestedPurchaseItem>> GetSuggestedPurchaseListAsync()
+    {
+        await using var db = CreateContext();
+        var products = await db.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.IsActive)
+            .ToListAsync();
+
+        var suggestedList = new List<SuggestedPurchaseItem>();
+
+        foreach (var p in products)
+        {
+            int min = p.MinStock > 0 ? p.MinStock : 5;
+            if (p.CurrentStock <= min)
+            {
+                int target = min * 2;
+                int qtyToBuy = Math.Max(target - p.CurrentStock, min);
+                if (qtyToBuy <= 0) qtyToBuy = 5;
+
+                decimal estimatedCost = p.Price > 0 ? Math.Round(p.Price * 0.65m, 2) : 25.00m;
+
+                string reason = p.CurrentStock == 0 ? "Agotado en consultorio" : $"Stock bajo ({p.CurrentStock} de {min} mín.)";
+
+                suggestedList.Add(new SuggestedPurchaseItem
+                {
+                    ProductId = p.Id,
+                    ProductCode = p.Code,
+                    ProductName = p.Name,
+                    GenericName = p.GenericName ?? string.Empty,
+                    Presentation = p.Presentation ?? string.Empty,
+                    CategoryName = p.Category?.Name ?? "General",
+                    CurrentStock = p.CurrentStock,
+                    MinStock = min,
+                    SuggestedQuantity = qtyToBuy,
+                    EstimatedUnitCost = estimatedCost,
+                    Reason = reason
+                });
+            }
+        }
+
+        return suggestedList.OrderBy(s => s.CurrentStock).ThenBy(s => s.ProductName).ToList();
+    }
+
+    // =========================================================================
+    // DETECCIÓN DE ALERGIAS FARMACOLÓGICAS
+    // =========================================================================
+
+    public static (bool HasConflict, string MatchedAllergy, string WarningDetails) CheckMedicationAllergy(
+        PatientRecord? patient, Product? product, string? medicineName = null)
+    {
+        if (patient == null || !patient.HasAllergies || string.IsNullOrWhiteSpace(patient.Allergies))
+        {
+            return (false, string.Empty, string.Empty);
+        }
+
+        var medName = (medicineName ?? product?.Name ?? string.Empty).Trim();
+        var generic = (product?.GenericName ?? string.Empty).Trim();
+        var medCombined = $"{medName} {generic}".Trim();
+        if (string.IsNullOrWhiteSpace(medCombined))
+        {
+            return (false, string.Empty, string.Empty);
+        }
+
+        var normalizedMed = TextSearch.Normalize(medCombined);
+
+        // Separar alergias declaradas por el paciente
+        var allergyTokens = patient.Allergies
+            .Split(new[] { ',', ';', '/', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(a => a.Trim())
+            .Where(a => !string.IsNullOrWhiteSpace(a) && 
+                        !a.Equals("Ninguna", StringComparison.OrdinalIgnoreCase) && 
+                        !a.Equals("Ninguna conocida", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Familias farmacológicas con reactividad cruzada común
+        var drugFamilies = new Dictionary<string, string[]>
+        {
+            ["penicilina"] = new[] { "penicilina", "amoxicilina", "ampicilina", "dicloxacilina", "bencilpenicilina", "clavulonato", "clavulanico", "clavulánico", "augmentin" },
+            ["betalactamico"] = new[] { "penicilina", "amoxicilina", "ampicilina", "cefalexina", "ceftriaxona", "cefotaxima", "cefuroxima" },
+            ["cefalosporina"] = new[] { "cefalexina", "ceftriaxona", "cefotaxima", "cefuroxima", "cefixima", "cefazolina" },
+            ["aines"] = new[] { "aspirina", "acido acetilsalicilico", "ácido acetilsalicílico", "ibuprofeno", "naproxeno", "ketorolaco", "diclofenaco", "meloxicam", "piroxicam", "indometacina", "clonixinato" },
+            ["aspirina"] = new[] { "aspirina", "acido acetilsalicilico", "ácido acetilsalicílico", "aas" },
+            ["ibuprofeno"] = new[] { "ibuprofeno", "motrin", "advil" },
+            ["sulfa"] = new[] { "sulfa", "sulfas", "sulfametoxazol", "trimetoprima", "bactrim", "sulfadiazina", "sulfasalazina" },
+            ["macrolido"] = new[] { "azitromicina", "claritromicina", "eritromicina" },
+            ["quinolona"] = new[] { "ciprofloxacino", "levofloxacino", "moxifloxacino" }
+        };
+
+        foreach (var allergy in allergyTokens)
+        {
+            var normAllergy = TextSearch.Normalize(allergy);
+
+            // 1. Coincidencia directa de subcadena
+            if (normalizedMed.Contains(normAllergy) || (normAllergy.Length >= 4 && normAllergy.Contains(normalizedMed)))
+            {
+                return (true, allergy, $"El paciente registra alergia a '{allergy}'. El medicamento recetado contiene '{medName}'.");
+            }
+
+            // 2. Coincidencia por familias de fármacos
+            foreach (var kvp in drugFamilies)
+            {
+                var familyKey = kvp.Key;
+                var members = kvp.Value;
+
+                bool allergyMatchesFamily = normAllergy.Contains(familyKey) || members.Any(m => normAllergy.Contains(m));
+                if (allergyMatchesFamily)
+                {
+                    bool medMatchesFamily = normalizedMed.Contains(familyKey) || members.Any(m => normalizedMed.Contains(m));
+                    if (medMatchesFamily)
+                    {
+                        return (true, allergy, $"Riesgo de hipersensibilidad: El paciente registra alergia a '{allergy}' (grupo {familyKey.ToUpper()}). El medicamento recetado '{medName}' pertenece o presenta reactividad cruzada con esta familia farmacológica.");
+                    }
+                }
+            }
+        }
+
+        return (false, string.Empty, string.Empty);
+    }
 }
+

@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<ServiceDefaultProduct> ServiceDefaultProducts => Set<ServiceDefaultProduct>();
     public DbSet<PatientRecord> Patients => Set<PatientRecord>();
     public DbSet<PatientConsultation> PatientConsultations => Set<PatientConsultation>();
+    public DbSet<PatientAppointment> Appointments => Set<PatientAppointment>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<SyncTombstone> SyncTombstones => Set<SyncTombstone>();
@@ -208,6 +209,15 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<PatientConsultation>()
             .Ignore(c => c.Prescriptions);
+
+        modelBuilder.Entity<PatientAppointment>()
+            .HasIndex(a => a.Date);
+
+        modelBuilder.Entity<PatientAppointment>()
+            .HasOne(a => a.PatientRecord)
+            .WithMany(p => p.Appointments)
+            .HasForeignKey(a => a.PatientRecordId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Ventas persistidas (tickets)
         modelBuilder.Entity<Sale>()

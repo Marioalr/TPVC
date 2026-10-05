@@ -51,6 +51,78 @@ public class PatientConsultation : ISyncEntity
     public DateTime? EndedAt { get; set; }
     public string ChiefComplaint { get; set; } = string.Empty; // Motivo de consulta
     public string VitalSigns { get; set; } = string.Empty; // TA, FC, FR, Temp, Peso, Talla, IMC
+
+    // ==========================================
+    // SIGNOS VITALES NUMÉRICOS Y METABÓLICOS
+    // ==========================================
+    public decimal? BloodPressureSystolic { get; set; } // TA Sistólica (mmHg)
+    public decimal? BloodPressureDiastolic { get; set; } // TA Diastólica (mmHg)
+    public decimal? HeartRate { get; set; } // FC (lpm)
+    public decimal? RespiratoryRate { get; set; } // FR (rpm)
+    public decimal? Temperature { get; set; } // Temp (°C)
+    public decimal? Weight { get; set; } // Peso (kg)
+    public decimal? Height { get; set; } // Talla (m)
+    public decimal? BMI { get; set; } // IMC (kg/m²)
+    public decimal? Glucose { get; set; } // Glucosa (mg/dL)
+
+    public void EnsureNumericVitalSigns()
+    {
+        if (BloodPressureSystolic.HasValue || Weight.HasValue || Glucose.HasValue) return;
+        ParseAndSetVitalSigns(VitalSigns);
+    }
+
+    public void ParseAndSetVitalSigns(string? vitalsText)
+    {
+        if (string.IsNullOrWhiteSpace(vitalsText)) return;
+
+        // TA: 120/80
+        var taMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"TA:\s*(\d{2,3})\s*/\s*(\d{2,3})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (taMatch.Success)
+        {
+            if (decimal.TryParse(taMatch.Groups[1].Value, out var sys)) BloodPressureSystolic = sys;
+            if (decimal.TryParse(taMatch.Groups[2].Value, out var dia)) BloodPressureDiastolic = dia;
+        }
+
+        // FC: 75
+        var fcMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"FC:\s*(\d{2,3})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (fcMatch.Success && decimal.TryParse(fcMatch.Groups[1].Value, out var fc)) HeartRate = fc;
+
+        // FR: 18
+        var frMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"FR:\s*(\d{1,2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (frMatch.Success && decimal.TryParse(frMatch.Groups[1].Value, out var fr)) RespiratoryRate = fr;
+
+        // Temp: 36.5
+        var tempMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Temp:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (tempMatch.Success && decimal.TryParse(tempMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var temp)) Temperature = temp;
+
+        // Peso: 70.0
+        var pesoMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Peso:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (pesoMatch.Success && decimal.TryParse(pesoMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var peso)) Weight = peso;
+
+        // Talla: 1.70
+        var tallaMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Talla:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (tallaMatch.Success && decimal.TryParse(tallaMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var talla)) Height = talla;
+
+        // IMC: 24.2
+        var imcMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"IMC:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (imcMatch.Success && decimal.TryParse(imcMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var imc)) BMI = imc;
+
+        // Glucosa: 95
+        var gluMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Glucosa:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (gluMatch.Success && decimal.TryParse(gluMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var glu)) Glucose = glu;
+
+        // Calcular IMC automáticamente si no vino explícito pero hay Peso y Talla
+        if (!BMI.HasValue && Weight.HasValue && Height.HasValue && Height.Value > 0)
+        {
+            var h = Height.Value;
+            if (h > 3) h /= 100m; // convertir cm a metros si es necesario (ej. 170 -> 1.70)
+            if (h > 0)
+            {
+                BMI = Math.Round(Weight.Value / (h * h), 2);
+            }
+        }
+    }
+
     public string PhysicalExamination { get; set; } = string.Empty; // Exploración física general
     public string SystemsReview { get; set; } = string.Empty; // Exploración e interrogatorio por aparatos y sistemas
     public string Diagnosis { get; set; } = string.Empty; // Diagnóstico clínico
@@ -362,4 +434,60 @@ public class PatientRecord : ISyncEntity
 
     [NotMapped]
     public string GeneralIndications { get; set; } = string.Empty;
+
+    public List<PatientAppointment> Appointments { get; set; } = new();
+
+    public List<VitalSignsEvolutionPoint> GetVitalSignsEvolution()
+    {
+        var points = new List<VitalSignsEvolutionPoint>();
+        var ordered = Consultations.OrderBy(c => c.Date).ToList();
+        foreach (var c in ordered)
+        {
+            c.EnsureNumericVitalSigns();
+            if (c.Weight.HasValue || c.BloodPressureSystolic.HasValue || c.Glucose.HasValue || c.Temperature.HasValue)
+            {
+                points.Add(new VitalSignsEvolutionPoint
+                {
+                    Date = c.Date,
+                    Weight = c.Weight,
+                    Systolic = c.BloodPressureSystolic,
+                    Diastolic = c.BloodPressureDiastolic,
+                    Glucose = c.Glucose,
+                    HeartRate = c.HeartRate,
+                    Temperature = c.Temperature,
+                    BMI = c.BMI
+                });
+            }
+        }
+        return points;
+    }
 }
+
+public class VitalSignsEvolutionPoint
+{
+    public DateTime Date { get; set; }
+    public string FormattedDate => Date.ToString("dd/MM/yy");
+    public decimal? Weight { get; set; }
+    public decimal? Systolic { get; set; }
+    public decimal? Diastolic { get; set; }
+    public decimal? Glucose { get; set; }
+    public decimal? HeartRate { get; set; }
+    public decimal? Temperature { get; set; }
+    public decimal? BMI { get; set; }
+
+    public string WeightText => Weight.HasValue ? $"{Weight.Value:F1} kg" : "--";
+    public string BloodPressureText => (Systolic.HasValue && Diastolic.HasValue) ? $"{Systolic.Value:F0}/{Diastolic.Value:F0}" : "--";
+    public string GlucoseText => Glucose.HasValue ? $"{Glucose.Value:F0} mg/dL" : "--";
+    public string TempText => Temperature.HasValue ? $"{Temperature.Value:F1} °C" : "--";
+}
+
+public class VitalSignsChartPoint
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public string DateLabel { get; set; } = string.Empty;
+    public string ValueLabel { get; set; } = string.Empty;
+    public string SeriesName { get; set; } = string.Empty;
+    public string ColorHex { get; set; } = "#3B82F6";
+}
+

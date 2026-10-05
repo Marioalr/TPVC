@@ -81,6 +81,18 @@
                         </StackPanel>
                     </Button>
 
+                    <!-- Botón Agenda de Citas -->
+                    <Button Style="{DynamicResource OutlineButton}" 
+                            Command="{Binding OpenAgendaModalCommand}" 
+                            Margin="0,0,10,0" 
+                            Padding="14,8"
+                            ToolTip="Abrir la agenda y calendario de citas del consultorio (vista de día y semana)">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="📅" FontSize="13" Margin="0,0,7,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Agenda de Citas" FontSize="13" FontWeight="Bold" />
+                        </StackPanel>
+                    </Button>
+
                     <!-- Botón Ver Expedientes -->
                     <Button Style="{DynamicResource AccentButton}" 
                             Command="{Binding OpenRecordsViewerModalCommand}" 
@@ -464,6 +476,7 @@
 
                                     <Button Command="{Binding SwitchPatientDetailTabCommand}" 
                                             CommandParameter="Servicios" 
+                                            Margin="0,0,8,0" 
                                             Padding="14,6">
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
@@ -477,6 +490,43 @@
                                             </Style>
                                         </Button.Style>
                                         <TextBlock Text="🩺 Servicios y Cobro (POS)" FontSize="12" FontWeight="SemiBold" />
+                                    </Button>
+
+                                    <!-- Pestaña 4: Evolución de Signos Vitales -->
+                                    <Button Command="{Binding SwitchPatientDetailTabCommand}" 
+                                            CommandParameter="Evolucion" 
+                                            Margin="0,0,8,0" 
+                                            Padding="14,6">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PatientDetailTab}" Value="Evolucion">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                        <Setter Property="BorderThickness" Value="0" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="📈 Evolución de Signos Vitales" FontSize="12" FontWeight="SemiBold" />
+                                    </Button>
+
+                                    <!-- Pestaña 5: Citas Programadas del Paciente -->
+                                    <Button Command="{Binding SwitchPatientDetailTabCommand}" 
+                                            CommandParameter="Citas" 
+                                            Padding="14,6">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PatientDetailTab}" Value="Citas">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                        <Setter Property="BorderThickness" Value="0" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="{Binding PatientAppointmentsHistory.Count, StringFormat='📅 Citas ({0})'}" FontSize="12" FontWeight="SemiBold" />
                                     </Button>
                                 </StackPanel>
 
@@ -636,13 +686,83 @@
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Diagnóstico Clínico -->
+                                            <!-- Diagnóstico Clínico con Autocompletado CIE-10 -->
                                             <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
                                                 <StackPanel>
-                                                    <TextBlock Text="🩺 Diagnóstico Clínico (CIE-10 / Impresión Diagnóstica) *" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,4" />
-                                                    <TextBox Text="{Binding ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}" 
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="🩺 Diagnóstico Clínico (Catálogo CIE-10 Oficial) *" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Grid.Column="1" Text="Escriba código o patología para autocompletar" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </Grid>
+                                                    <TextBox x:Name="ActiveConsultationDiagnosisTextBox" 
+                                                             Text="{Binding ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}" 
                                                              Style="{DynamicResource ModernTextBox}" 
+                                                             PreviewKeyDown="DiagnosisTextBox_PreviewKeyDown"
                                                              Padding="8,6" />
+
+                                                    <!-- Menú desplegable de sugerencias CIE-10 -->
+                                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                                            BorderBrush="{DynamicResource ThemeAccent}" 
+                                                            BorderThickness="1.5" 
+                                                            CornerRadius="8" 
+                                                            Margin="0,4,0,0" 
+                                                            MaxHeight="220" 
+                                                            Visibility="{Binding IsCie10DropdownOpen, Converter={StaticResource BoolToVis}}" 
+                                                            SnapsToDevicePixels="True">
+                                                        <ListBox x:Name="ActiveCie10SuggestionsListBox" 
+                                                                 ItemsSource="{Binding Cie10Suggestions}" 
+                                                                 BorderThickness="0" 
+                                                                 Background="Transparent" 
+                                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
+                                                                 ScrollViewer.VerticalScrollBarVisibility="Auto" 
+                                                                 PreviewKeyDown="Cie10SuggestionsListBox_PreviewKeyDown" 
+                                                                 PreviewMouseLeftButtonUp="Cie10SuggestionsListBox_PreviewMouseLeftButtonUp">
+                                                            <ListBox.ItemContainerStyle>
+                                                                <Style TargetType="ListBoxItem">
+                                                                    <Setter Property="Padding" Value="0" />
+                                                                    <Setter Property="Margin" Value="1" />
+                                                                    <Setter Property="Template">
+                                                                        <Setter.Value>
+                                                                            <ControlTemplate TargetType="ListBoxItem">
+                                                                                <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="8,6" SnapsToDevicePixels="True">
+                                                                                    <ContentPresenter />
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                                                    </Trigger>
+                                                                                    <Trigger Property="IsSelected" Value="True">
+                                                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                                                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                                                                        <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
+                                                                                    </Trigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                </Style>
+                                                            </ListBox.ItemContainerStyle>
+                                                            <ListBox.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <Border Grid.Column="0" Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                                                            <TextBlock Text="{Binding Code}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccentText}" />
+                                                                        </Border>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                                        <TextBlock Grid.Column="2" Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ListBox.ItemTemplate>
+                                                        </ListBox>
+                                                    </Border>
                                                 </StackPanel>
                                             </Border>
 
@@ -1386,6 +1506,328 @@
                                             </StackPanel>
                                         </Border>
                                     </Grid>
+                                </StackPanel>
+
+                                <!-- VISTA DE PESTAÑA 4: EVOLUCIÓN DE SIGNOS VITALES (GRÁFICA Y MÉTRICAS) -->
+                                <StackPanel Visibility="{Binding PatientDetailTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Evolucion}">
+                                    <!-- Tarjeta de Controles y Filtros -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="10" 
+                                            Padding="16" 
+                                            Margin="0,0,0,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="📈 Evolución Histórica de Signos Vitales" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeText}" />
+                                                <TextBlock Text="Monitoreo de tendencias y curvas clínicas de peso, tensión arterial y glucosa entre consultas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Filtrar métrica:" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Todos" Padding="10,5" Margin="0,0,4,0">
+                                                    <TextBlock Text="● Todos" FontSize="11" FontWeight="SemiBold" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Peso" Padding="10,5" Margin="0,0,4,0">
+                                                    <TextBlock Text="⚖️ Peso" FontSize="11" FontWeight="SemiBold" Foreground="#3B82F6" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Presion" Padding="10,5" Margin="0,0,4,0">
+                                                    <TextBlock Text="❤️ Presión" FontSize="11" FontWeight="SemiBold" Foreground="#EF4444" />
+                                                </Button>
+                                                <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Glucosa" Padding="10,5">
+                                                    <TextBlock Text="🩸 Glucosa" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Tarjetas KPI con Últimos Valores Registrados -->
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- KPI 1: Peso -->
+                                        <Border Grid.Column="0" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                                            <StackPanel>
+                                                <TextBlock Text="Último Peso" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding LatestWeightFormatted}" FontSize="18" FontWeight="Bold" Foreground="#3B82F6" Margin="0,4,0,0" />
+                                                <TextBlock Text="Escala normal: 18.5 - 24.9 IMC" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- KPI 2: Presión Arterial -->
+                                        <Border Grid.Column="2" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                                            <StackPanel>
+                                                <TextBlock Text="Última T.A." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding LatestBPFormatted}" FontSize="18" FontWeight="Bold" Foreground="#EF4444" Margin="0,4,0,0" />
+                                                <TextBlock Text="Óptima: &lt; 120/80 mmHg" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- KPI 3: Glucosa -->
+                                        <Border Grid.Column="4" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                                            <StackPanel>
+                                                <TextBlock Text="Última Glucosa" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding LatestGlucoseFormatted}" FontSize="18" FontWeight="Bold" Foreground="#10B981" Margin="0,4,0,0" />
+                                                <TextBlock Text="Ayuno normal: 70 - 100 mg/dL" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- KPI 4: IMC -->
+                                        <Border Grid.Column="6" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                                            <StackPanel>
+                                                <TextBlock Text="Índice Masa (IMC)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                <TextBlock Text="{Binding LatestIMCFormatted}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" Margin="0,4,0,0" />
+                                                <TextBlock Text="kg/m² somatometría" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Gráfica Visual de Curvas -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="10" 
+                                            Padding="16" 
+                                            Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="📊 Gráfica de Tendencia Temporal" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                                                        <Border Background="#3B82F6" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                                                        <TextBlock Text="Peso (kg)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                                                        <Border Background="#EF4444" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                                                        <TextBlock Text="T.A. Sistólica" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                                                        <Border Background="#F59E0B" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                                                        <TextBlock Text="T.A. Diastólica" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Border Background="#10B981" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                                                        <TextBlock Text="Glucosa (mg/dL)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Lienzo de Gráfica Renderizado en WPF Nativo -->
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Height="220" ClipToBounds="True">
+                                                <Grid>
+                                                    <!-- Mensaje si no hay puntos -->
+                                                    <TextBlock Text="No hay consultas registradas con signos vitales numéricos para este paciente." 
+                                                               FontSize="12" 
+                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                                               HorizontalAlignment="Center" 
+                                                               VerticalAlignment="Center" 
+                                                               Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource InverseBoolToVis}}" />
+
+                                                    <!-- Curvas polilíneas y puntos -->
+                                                    <Canvas Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource BoolToVis}}">
+                                                        <!-- Líneas guía horizontales de fondo -->
+                                                        <Line X1="30" Y1="40" X2="620" Y2="40" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+                                                        <Line X1="30" Y1="100" X2="620" Y2="100" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+                                                        <Line X1="30" Y1="160" X2="620" Y2="160" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+
+                                                        <!-- Curva Peso -->
+                                                        <Polyline Points="{Binding WeightPolylinePoints}" Stroke="#3B82F6" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                                                        <!-- Curva Presión Sistólica -->
+                                                        <Polyline Points="{Binding SystolicPolylinePoints}" Stroke="#EF4444" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                                                        <!-- Curva Presión Diastólica -->
+                                                        <Polyline Points="{Binding DiastolicPolylinePoints}" Stroke="#F59E0B" StrokeThickness="2" StrokeDashArray="2,2" StrokeLineJoin="Round" />
+                                                        <!-- Curva Glucosa -->
+                                                        <Polyline Points="{Binding GlucosePolylinePoints}" Stroke="#10B981" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                                                    </Canvas>
+
+                                                    <!-- Puntos de datos y etiquetas -->
+                                                    <ItemsControl ItemsSource="{Binding ChartPoints}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <Canvas />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemContainerStyle>
+                                                            <Style TargetType="ContentPresenter">
+                                                                <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                                <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                            </Style>
+                                                        </ItemsControl.ItemContainerStyle>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Canvas Margin="-5,-5,0,0">
+                                                                    <Ellipse Width="10" Height="10" Fill="{Binding ColorHex}" Stroke="White" StrokeThickness="1.5" ToolTip="{Binding ValueLabel}" />
+                                                                </Canvas>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Tabla Histórica Detallada de Mediciones -->
+                                    <Border Background="{DynamicResource ThemeSurface}" 
+                                            BorderBrush="{DynamicResource ThemeBorder}" 
+                                            BorderThickness="1" 
+                                            CornerRadius="10" 
+                                            Padding="16">
+                                        <StackPanel>
+                                            <TextBlock Text="📋 Historial Completo de Mediciones Clínicas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,10" />
+
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="100" />
+                                                        <ColumnDefinition Width="80" />
+                                                        <ColumnDefinition Width="80" />
+                                                        <ColumnDefinition Width="80" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="Fecha" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="1" Text="Peso" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="2" Text="T.A." FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="3" Text="Glucosa" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="4" Text="F.C." FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="5" Text="Temp" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <TextBlock Grid.Column="6" Text="IMC" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                </Grid>
+                                            </Border>
+
+                                            <ItemsControl ItemsSource="{Binding VitalSignsEvolutionPoints}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="10,8">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="90" />
+                                                                    <ColumnDefinition Width="90" />
+                                                                    <ColumnDefinition Width="110" />
+                                                                    <ColumnDefinition Width="100" />
+                                                                    <ColumnDefinition Width="80" />
+                                                                    <ColumnDefinition Width="80" />
+                                                                    <ColumnDefinition Width="80" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="{Binding FormattedDate}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                                                <TextBlock Grid.Column="1" Text="{Binding WeightText}" FontSize="12" Foreground="#3B82F6" FontWeight="SemiBold" />
+                                                                <TextBlock Grid.Column="2" Text="{Binding BloodPressureText}" FontSize="12" Foreground="#EF4444" FontWeight="SemiBold" />
+                                                                <TextBlock Grid.Column="3" Text="{Binding GlucoseText}" FontSize="12" Foreground="#10B981" FontWeight="SemiBold" />
+                                                                <TextBlock Grid.Column="4" Text="{Binding HeartRate, TargetNullValue='--'}" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                                <TextBlock Grid.Column="5" Text="{Binding TempText}" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                                <TextBlock Grid.Column="6" Text="{Binding BMI, StringFormat='{}{0:F1}', TargetNullValue='--'}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- VISTA DE PESTAÑA 5: CITAS DEL PACIENTE -->
+                                <StackPanel Visibility="{Binding PatientDetailTab, Converter={StaticResource ComparisonToVis}, ConverterParameter=Citas}">
+                                    <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="📅 Agenda de Citas del Paciente" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeText}" />
+                                                <TextBlock Text="Historial y próximas consultas programadas con opciones de sincronización y recordatorio" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Style="{DynamicResource AccentButton}" Command="{Binding OpenNewAppointmentModalCommand}" CommandParameter="{x:Null}" Padding="14,7">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="+" FontWeight="Bold" FontSize="13" Margin="0,0,6,0" />
+                                                    <TextBlock Text="Agendar Nueva Cita" FontSize="12" FontWeight="Bold" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Lista de Citas del Paciente -->
+                                    <ItemsControl ItemsSource="{Binding PatientAppointmentsHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Fecha y Hora -->
+                                                        <Border Grid.Column="0" Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                            <StackPanel HorizontalAlignment="Center">
+                                                                <TextBlock Text="{Binding FormattedDate}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Center" />
+                                                                <TextBlock Text="{Binding Time}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                                            </StackPanel>
+                                                        </Border>
+
+                                                        <!-- Datos de la Cita -->
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="{Binding Reason}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                                                <Border Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0">
+                                                                    <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
+                                                                </Border>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Notes, StringFormat='Notas: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,4,0,0" />
+                                                            <TextBlock Text="{Binding DurationMinutes, StringFormat='⏱️ Duración: {0} minutos'}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                                        </StackPanel>
+
+                                                        <!-- Botones de Acción: Calendar, WhatsApp, Atender, Cancelar -->
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <!-- Google Calendar -->
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding DataContext.OpenGoogleCalendarTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="10,6" Margin="0,0,6,0" ToolTip="Agregar a Google Calendar">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="📅" FontSize="11" Margin="0,0,4,0" />
+                                                                    <TextBlock Text="Google Calendar" FontSize="11" FontWeight="SemiBold" />
+                                                                </StackPanel>
+                                                            </Button>
+
+                                                            <!-- WhatsApp -->
+                                                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding DataContext.OpenWhatsAppTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="10,6" Margin="0,0,6,0" ToolTip="Enviar recordatorio por WhatsApp">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="💬" FontSize="11" Margin="0,0,4,0" />
+                                                                    <TextBlock Text="WhatsApp" FontSize="11" FontWeight="SemiBold" />
+                                                                </StackPanel>
+                                                            </Button>
+
+                                                            <!-- Marcar Atendida -->
+                                                            <Button Style="{DynamicResource GhostButton}" Command="{Binding DataContext.MarkAppointmentAttendedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="8,6" Margin="0,0,4,0" ToolTip="Marcar como atendida">
+                                                                <TextBlock Text="✓ Atendida" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeSuccess}" />
+                                                            </Button>
+
+                                                            <!-- Eliminar -->
+                                                            <Button Style="{DynamicResource GhostButton}" Command="{Binding DataContext.DeleteAppointmentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="8,6" ToolTip="Eliminar cita">
+                                                                <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -5789,6 +6231,655 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="💾" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
                                 <TextBlock Text="Guardar Servicio" FontSize="12" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: ALERTA DE ALERGIA A MEDICAMENTO (FARMACOVIGILANCIA / SEGURIDAD)    -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#B3000000" 
+                Visibility="{Binding IsAllergyAlertOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="#EF4444" 
+                    BorderThickness="2.5" 
+                    CornerRadius="16" 
+                    Padding="26,22" 
+                    MaxWidth="580" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de Alerta Roja -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Background="#FEE2E2" CornerRadius="24" Width="48" Height="48" Margin="0,0,14,0">
+                            <TextBlock Text="⚠️" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AllergyAlertTitle}" FontWeight="Bold" FontSize="16" Foreground="#DC2626" />
+                            <TextBlock Text="Advertencia clínica de seguridad del paciente" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                        </StackPanel>
+
+                        <Button Grid.Column="2" 
+                                Style="{DynamicResource GhostButton}" 
+                                Command="{Binding CancelAllergyPrescriptionCommand}" 
+                                Padding="8,4" 
+                                VerticalAlignment="Top">
+                            <TextBlock Text="✕" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Cuerpo del Mensaje de Alerta -->
+                    <StackPanel Grid.Row="1" Margin="0,0,0,20">
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+                            <TextBlock Text="{Binding AllergyAlertMessage}" 
+                                       FontSize="13" 
+                                       LineHeight="20" 
+                                       TextWrapping="Wrap" 
+                                       Foreground="{DynamicResource ThemeText}" />
+                        </Border>
+
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <StackPanel>
+                                <TextBlock Text="Alergias registradas en el expediente:" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding AllergyPatientAllergies}" FontSize="12.5" FontWeight="SemiBold" Foreground="#DC2626" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Botones de Acción: Cancelar (Recomendado) o Recetar Bajo Criterio -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Cancelar prescripción (Opción segura) -->
+                        <Button Grid.Column="0" 
+                                Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CancelAllergyPrescriptionCommand}" 
+                                Padding="12,9" 
+                                ToolTip="Cancelar la adición de este medicamento a la receta">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="✕" FontSize="12" Margin="0,0,6,0" FontWeight="Bold" Foreground="#DC2626" />
+                                <TextBlock Text="Cancelar Prescripción" FontSize="12" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Recetar de todos modos (Bajo criterio médico) -->
+                        <Button Grid.Column="2" 
+                                Style="{DynamicResource AccentButton}" 
+                                Command="{Binding ConfirmOverrideAllergyPrescriptionAsyncCommand}" 
+                                Background="#DC2626" 
+                                BorderBrush="#DC2626" 
+                                Padding="12,9" 
+                                ToolTip="Recetar bajo supervisión y criterio médico responsable">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="⚠️" FontSize="12" Margin="0,0,6,0" />
+                                <TextBlock Text="Recetar de Todos Modos" FontSize="12" FontWeight="Bold" Foreground="White" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL: AGENDA Y CALENDARIO DE CITAS (VISTA DÍA Y SEMANA)                   -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#99000000" 
+                Visibility="{Binding IsAgendaModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="{DynamicResource ThemeAccent}" 
+                    BorderThickness="2" 
+                    CornerRadius="16" 
+                    Padding="24,20" 
+                    MaxWidth="1080" 
+                    MaxHeight="720" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Cabecera de la Agenda -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeAccent}" CornerRadius="6" Padding="8,4" Margin="0,0,10,0">
+                                    <TextBlock Text="📅 AGENDA MÉDICA" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccentText}" />
+                                </Border>
+                                <TextBlock Text="{Binding AgendaHeaderTitle}" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="Organización de citas y consultas médicas con vistas de día y semana" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" />
+                        </StackPanel>
+
+                        <!-- Controles de Navegación y Vistas -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Switcher Día / Semana -->
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="3" Margin="0,0,10,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SwitchAgendaViewCommand}" CommandParameter="Day" Padding="12,5" Margin="0,0,3,0">
+                                        <TextBlock Text="Vista Día" FontSize="11" FontWeight="SemiBold" />
+                                    </Button>
+                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SwitchAgendaViewCommand}" CommandParameter="Week" Padding="12,5">
+                                        <TextBlock Text="Vista Semana" FontSize="11" FontWeight="SemiBold" />
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Navegación Temporal -->
+                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AgendaPreviousPeriodCommand}" Padding="10,6" Margin="0,0,4,0" ToolTip="Período anterior">
+                                <TextBlock Text="◀" FontSize="11" />
+                            </Button>
+                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AgendaTodayCommand}" Padding="12,6" Margin="0,0,4,0">
+                                <TextBlock Text="Hoy" FontSize="11" FontWeight="Bold" />
+                            </Button>
+                            <Button Style="{DynamicResource OutlineButton}" Command="{Binding AgendaNextPeriodCommand}" Padding="10,6" Margin="0,0,10,0" ToolTip="Período siguiente">
+                                <TextBlock Text="▶" FontSize="11" />
+                            </Button>
+
+                            <!-- Botón Nueva Cita -->
+                            <Button Style="{DynamicResource AccentButton}" Command="{Binding OpenNewAppointmentModalCommand}" CommandParameter="{x:Null}" Padding="14,7" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="+" FontWeight="Bold" FontSize="13" Margin="0,0,5,0" />
+                                    <TextBlock Text="Nueva Cita" FontSize="12" FontWeight="Bold" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Cerrar Modal -->
+                            <Button Style="{DynamicResource GhostButton}" Command="{Binding CloseAgendaModalCommand}" Padding="8,4" VerticalAlignment="Center">
+                                <TextBlock Text="✕" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Contenido según Vista: Día o Semana -->
+                    <Grid Grid.Row="1">
+                        <!-- VISTA DE DÍA -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding AgendaViewMode, Converter={StaticResource ComparisonToVis}, ConverterParameter=Day}">
+                            <StackPanel>
+                                <TextBlock Text="No hay citas programadas para este día." 
+                                           FontStyle="Italic" 
+                                           FontSize="13" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                           HorizontalAlignment="Center" 
+                                           Margin="0,40" 
+                                           Visibility="{Binding DayAppointments.Count, Converter={StaticResource InverseBoolToVis}}" />
+
+                                <ItemsControl ItemsSource="{Binding DayAppointments}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,10">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Hora y Duración -->
+                                                    <Border Grid.Column="0" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,16,0" VerticalAlignment="Center" MinWidth="90">
+                                                        <StackPanel HorizontalAlignment="Center">
+                                                            <TextBlock Text="{Binding Time}" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Center" />
+                                                            <TextBlock Text="{Binding DurationMinutes, StringFormat='{}{0} min'}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" Margin="0,3,0,0" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Información del Paciente y Cita -->
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                            <TextBlock Text="{Binding PatientName}" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeText}" />
+                                                            <Border Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                            <TextBlock Text="{Binding PatientPhone, StringFormat='📞 Tel: {0}'}" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,14,0" />
+                                                            <TextBlock Text="{Binding PatientRecordNumber, StringFormat='📁 Exp: {0}'}" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                        </StackPanel>
+
+                                                        <TextBlock Text="{Binding Reason, StringFormat='Motivo: {0}'}" FontSize="12" Foreground="{DynamicResource ThemeText}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Notes, StringFormat='Notas: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" Visibility="{Binding Notes, Converter={StaticResource ComparisonToVis}, ConverterParameter=''}" />
+                                                    </StackPanel>
+
+                                                    <!-- Acciones Rápidas -->
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <!-- Botón Google Calendar (TODO) -->
+                                                        <Button Style="{DynamicResource OutlineButton}" 
+                                                                Command="{Binding DataContext.OpenGoogleCalendarTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="10,6" 
+                                                                Margin="0,0,6,0" 
+                                                                ToolTip="Sincronizar / Agregar a Google Calendar">
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <TextBlock Text="📅" FontSize="11" Margin="0,0,4,0" />
+                                                                <TextBlock Text="Calendar" FontSize="11" FontWeight="SemiBold" />
+                                                            </StackPanel>
+                                                        </Button>
+
+                                                        <!-- Botón WhatsApp (TODO) -->
+                                                        <Button Style="{DynamicResource OutlineButton}" 
+                                                                Command="{Binding DataContext.OpenWhatsAppTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="10,6" 
+                                                                Margin="0,0,6,0" 
+                                                                ToolTip="Enviar recordatorio de cita por WhatsApp">
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <TextBlock Text="💬" FontSize="11" Margin="0,0,4,0" />
+                                                                <TextBlock Text="WhatsApp" FontSize="11" FontWeight="SemiBold" />
+                                                            </StackPanel>
+                                                        </Button>
+
+                                                        <!-- Confirmar -->
+                                                        <Button Style="{DynamicResource GhostButton}" 
+                                                                Command="{Binding DataContext.MarkAppointmentConfirmedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="8,6" 
+                                                                Margin="0,0,4,0" 
+                                                                ToolTip="Marcar como Confirmada">
+                                                            <TextBlock Text="✓ Conf." FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" />
+                                                        </Button>
+
+                                                        <!-- Atender -->
+                                                        <Button Style="{DynamicResource GhostButton}" 
+                                                                Command="{Binding DataContext.MarkAppointmentAttendedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="8,6" 
+                                                                Margin="0,0,4,0" 
+                                                                ToolTip="Marcar como Atendida">
+                                                            <TextBlock Text="✓ Atendida" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeSuccess}" />
+                                                        </Button>
+
+                                                        <!-- Editar -->
+                                                        <Button Style="{DynamicResource GhostButton}" 
+                                                                Command="{Binding DataContext.OpenEditAppointmentModalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="8,6" 
+                                                                Margin="0,0,4,0" 
+                                                                ToolTip="Editar datos de la cita">
+                                                            <TextBlock Text="✏️" FontSize="11" />
+                                                        </Button>
+
+                                                        <!-- Eliminar -->
+                                                        <Button Style="{DynamicResource GhostButton}" 
+                                                                Command="{Binding DataContext.DeleteAppointmentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Padding="8,6" 
+                                                                ToolTip="Eliminar cita">
+                                                            <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- VISTA DE SEMANA (7 COLUMNAS) -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Visibility="{Binding AgendaViewMode, Converter={StaticResource ComparisonToVis}, ConverterParameter=Week}">
+                            <ItemsControl ItemsSource="{Binding WeekDays}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="7" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Margin="3" Padding="8" MinHeight="420">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Encabezado del Día -->
+                                                <Border Grid.Row="0" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="6,4" Margin="0,0,0,8">
+                                                    <StackPanel HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding DayOfWeekName}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" HorizontalAlignment="Center" />
+                                                        <TextBlock Text="{Binding DayName}" FontSize="10" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Center" Margin="0,1,0,0" />
+                                                        <TextBlock Text="{Binding AppointmentsCount, StringFormat='{}{0} citas'}" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- Citas en la Columna -->
+                                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                                    <ItemsControl ItemsSource="{Binding Appointments}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="6" Margin="0,0,0,6">
+                                                                    <StackPanel>
+                                                                        <Grid>
+                                                                            <TextBlock Text="{Binding Time}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" />
+                                                                            <TextBlock Text="{Binding Status}" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" />
+                                                                        </Grid>
+                                                                        <TextBlock Text="{Binding PatientName}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                                                        <TextBlock Text="{Binding Reason}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+
+                                                                        <!-- Acciones rápidas pequeñas -->
+                                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                                                            <Button Style="{DynamicResource GhostButton}" Command="{Binding DataContext.OpenGoogleCalendarTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="4,2" Margin="0,0,3,0" ToolTip="Google Calendar">
+                                                                                <TextBlock Text="📅" FontSize="9" />
+                                                                            </Button>
+                                                                            <Button Style="{DynamicResource GhostButton}" Command="{Binding DataContext.OpenWhatsAppTodoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="4,2" Margin="0,0,3,0" ToolTip="WhatsApp">
+                                                                                <TextBlock Text="💬" FontSize="9" />
+                                                                            </Button>
+                                                                            <Button Style="{DynamicResource GhostButton}" Command="{Binding DataContext.OpenEditAppointmentModalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="4,2" ToolTip="Editar">
+                                                                                <TextBlock Text="✏️" FontSize="9" />
+                                                                            </Button>
+                                                                        </StackPanel>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+
+                                                <!-- Botón para agendar en este día específico -->
+                                                <Button Grid.Row="2" 
+                                                        Style="{DynamicResource OutlineButton}" 
+                                                        Command="{Binding DataContext.OpenNewAppointmentModalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                        CommandParameter="{Binding Date}" 
+                                                        Padding="4,4" 
+                                                        Margin="0,6,0,0">
+                                                    <TextBlock Text="+ Cita" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- SUBMODAL: CREAR / EDITAR CITA MÉDICA                                      -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#B3000000" 
+                Visibility="{Binding IsEditAppointmentModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="{DynamicResource ThemeAccent}" 
+                    BorderThickness="2" 
+                    CornerRadius="14" 
+                    Padding="24,20" 
+                    MaxWidth="540" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{Binding EditAppointmentModalTitle}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,16" />
+
+                    <StackPanel Grid.Row="1">
+                        <!-- Paciente -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="Nombre del Paciente *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding EditAppointmentPatientName, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" />
+                        </StackPanel>
+
+                        <!-- Teléfono y No. Expediente -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Teléfono (WhatsApp)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding EditAppointmentPatientPhone, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" ToolTip="10 dígitos para recordatorios por WhatsApp" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="No. Expediente" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding EditAppointmentPatientRecordNumber, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Fecha, Hora y Duración -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Fecha *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <DatePicker SelectedDate="{Binding EditAppointmentDate}" Height="34" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Hora *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding EditAppointmentTime, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" ToolTip="Ej. 10:00 AM o 16:30" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="Duración" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding EditAppointmentDurationMinutes, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" ToolTip="Minutos de consulta" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Motivo y Estado -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Motivo de la Cita *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding EditAppointmentReason, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,6" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Estado" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ComboBox SelectedValue="{Binding EditAppointmentStatus}" SelectedValuePath="Content" Style="{DynamicResource ModernComboBox}" Height="34">
+                                    <ComboBoxItem Content="Programada" />
+                                    <ComboBoxItem Content="Confirmada" />
+                                    <ComboBoxItem Content="Atendida" />
+                                    <ComboBoxItem Content="Cancelada" />
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Notas Adicionales -->
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="Notas / Indicaciones Previas" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding EditAppointmentNotes, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Height="50" TextWrapping="Wrap" AcceptsReturn="True" Padding="8,6" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Botones Guardar / Cancelar -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Style="{DynamicResource OutlineButton}" Command="{Binding CloseEditAppointmentModalCommand}" HorizontalAlignment="Left" Padding="16,7">
+                            <TextBlock Text="Cancelar" FontSize="12" FontWeight="SemiBold" />
+                        </Button>
+                        <Button Grid.Column="1" Style="{DynamicResource AccentButton}" Command="{Binding SaveAppointmentModalAsyncCommand}" Padding="18,7">
+                            <TextBlock Text="Guardar Cita" FontSize="12" FontWeight="Bold" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- SUBMODAL: GOOGLE CALENDAR (TODO Y ENLACE DIRECTO)                         -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#B3000000" 
+                Visibility="{Binding IsGoogleCalendarTodoModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="#4285F4" 
+                    BorderThickness="2" 
+                    CornerRadius="14" 
+                    Padding="24,20" 
+                    MaxWidth="540" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#4285F4" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                    <TextBlock Text="GOOGLE CALENDAR" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                </Border>
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                    <TextBlock Text="TODO • Roadmap" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="{Binding GoogleCalendarTitle}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeText}" Margin="0,6,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{DynamicResource GhostButton}" Command="{Binding CloseGoogleCalendarTodoCommand}" Padding="6,3" VerticalAlignment="Top">
+                            <TextBlock Text="✕" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Margin="0,0,0,18">
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+                            <TextBlock Text="{Binding GoogleCalendarDetails}" FontSize="12" LineHeight="18" TextWrapping="Wrap" Foreground="{DynamicResource ThemeText}" />
+                        </Border>
+                        <TextBlock Text="💡 Puede abrir el enlace generado para guardar la cita en su Google Calendar web de inmediato con todos los campos pre-llenados." FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Style="{DynamicResource OutlineButton}" Command="{Binding CloseGoogleCalendarTodoCommand}" HorizontalAlignment="Left" Padding="14,7">
+                            <TextBlock Text="Cerrar" FontSize="12" FontWeight="SemiBold" />
+                        </Button>
+                        <Button Grid.Column="1" Style="{DynamicResource AccentButton}" Command="{Binding LaunchGoogleCalendarUrlCommand}" Background="#4285F4" BorderBrush="#4285F4" Padding="16,7">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🌐" FontSize="12" Margin="0,0,6,0" />
+                                <TextBlock Text="Abrir en Google Calendar Web" FontSize="12" FontWeight="Bold" Foreground="White" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ========================================================================= -->
+        <!-- SUBMODAL: RECORDATORIO WHATSAPP (TODO Y PLANTILLA WA.ME)                  -->
+        <!-- ========================================================================= -->
+        <Border Grid.Row="0" Grid.RowSpan="2" 
+                Background="#B3000000" 
+                Visibility="{Binding IsWhatsAppTodoModalOpen, Converter={StaticResource BoolToVis}}" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="#25D366" 
+                    BorderThickness="2" 
+                    CornerRadius="14" 
+                    Padding="24,20" 
+                    MaxWidth="540" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#25D366" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                    <TextBlock Text="WHATSAPP RECORDATORIO" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                </Border>
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                    <TextBlock Text="TODO • Roadmap" FontSize="10" FontWeight="SemiBold" Foreground="#25D366" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="Plantilla de Recordatorio de Cita Médica" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeText}" Margin="0,6,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{DynamicResource GhostButton}" Command="{Binding CloseWhatsAppTodoCommand}" Padding="6,3" VerticalAlignment="Top">
+                            <TextBlock Text="✕" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Margin="0,0,0,18">
+                        <TextBlock Text="Vista previa del mensaje pre-redactado:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="#86EFAC" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+                            <TextBlock Text="{Binding WhatsAppMessagePreview}" FontSize="12.5" LineHeight="19" TextWrapping="Wrap" Foreground="{DynamicResource ThemeText}" />
+                        </Border>
+                        <TextBlock Text="Plan de Integración WhatsApp:&#x0a;• Fase 1 (Actual): Apertura directa de chat wa.me con plantilla lista para enviar.&#x0a;• Fase 2 (En desarrollo): Automatización con WhatsApp Business Cloud API para envío masivo 24h previas." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" LineHeight="17" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Style="{DynamicResource OutlineButton}" Command="{Binding CloseWhatsAppTodoCommand}" HorizontalAlignment="Left" Padding="14,7">
+                            <TextBlock Text="Cerrar" FontSize="12" FontWeight="SemiBold" />
+                        </Button>
+                        <Button Grid.Column="1" Style="{DynamicResource AccentButton}" Command="{Binding LaunchWhatsAppUrlCommand}" Background="#25D366" BorderBrush="#25D366" Padding="16,7">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="💬" FontSize="12" Margin="0,0,6,0" />
+                                <TextBlock Text="Abrir en WhatsApp (Web / App)" FontSize="12" FontWeight="Bold" Foreground="White" />
                             </StackPanel>
                         </Button>
                     </Grid>

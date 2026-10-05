@@ -1,0 +1,59 @@
+using System;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace TPVC.Models;
+
+public class PatientAppointment : ISyncEntity
+{
+    public int Id { get; set; }
+    public Guid SyncId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public int PatientRecordId { get; set; }
+    public PatientRecord? PatientRecord { get; set; }
+
+    public string PatientName { get; set; } = string.Empty;
+    public string PatientRecordNumber { get; set; } = string.Empty;
+    public string PatientPhone { get; set; } = string.Empty;
+
+    public DateTime Date { get; set; } = DateTime.Today;
+    public string Time { get; set; } = "10:00";
+    public int DurationMinutes { get; set; } = 30;
+
+    public string Reason { get; set; } = "Consulta de Seguimiento";
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = "Programada"; // Programada, Confirmada, Atendida, Cancelada
+
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+    [NotMapped]
+    public string FormattedDate => Date.ToString("dd/MM/yyyy");
+
+    [NotMapped]
+    public string FormattedDateTime => $"{Date:dd/MM/yyyy} {Time}";
+
+    [NotMapped]
+    public bool IsToday => Date.Date == DateTime.Today;
+
+    [NotMapped]
+    public bool IsUpcoming => Date.Date >= DateTime.Today && Status != "Cancelada" && Status != "Atendida";
+
+    [NotMapped]
+    public bool IsAttended => Status == "Atendida";
+
+    [NotMapped]
+    public bool IsCancelled => Status == "Cancelada";
+
+    public override bool Equals(object? obj) => obj is PatientAppointment other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
+    public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+}
+
+public class AgendaWeekDayGroup
+{
+    public DateTime Date { get; set; }
+    public string DayName { get; set; } = string.Empty;
+    public string DayOfWeekName { get; set; } = string.Empty;
+    public bool IsToday { get; set; }
+    public System.Collections.ObjectModel.ObservableCollection<PatientAppointment> Appointments { get; set; } = new();
+    public int AppointmentsCount => Appointments.Count;
+}
