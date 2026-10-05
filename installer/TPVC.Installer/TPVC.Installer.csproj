@@ -16,7 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\Payload.zip" Condition="Exists('Resources\Payload.zip')" />
+    <EmbeddedResource Include="Resources/Payload.zip" Condition="Exists('Resources/Payload.zip')" />
   </ItemGroup>
 
 </Project>
