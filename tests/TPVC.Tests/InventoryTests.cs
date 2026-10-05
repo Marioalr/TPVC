@@ -1476,14 +1476,17 @@ public class InventoryTests
         recordsVm.ViewPatientRecordDetail(targetPatient);
         Assert.IsNotNull(recordsVm.ViewingRecordPatient);
 
-        // Al dar en cerrar mientras se visualiza el expediente, debe volver a la vista de ver expedientes (no cerrar la modal)
+        // Al dar en cerrar mientras se visualiza el expediente, debe cerrar la modal por completo
         recordsVm.CloseRecordsViewerModal();
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe permanecer abierta");
-        Assert.IsNull(recordsVm.ViewingRecordPatient, "Debe volver al estado de listado de expedientes");
+        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Cerrar debe cerrar la modal por completo sin volver a la lista general");
+        Assert.IsNull(recordsVm.ViewingRecordPatient, "El paciente visualizado debe limpiarse");
 
-        // Al dar en cerrar desde la lista de expedientes, ahora sí debe cerrar la modal
-        recordsVm.CloseRecordsViewerModal();
-        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Al estar en la lista, cerrar debe cerrar la modal completa");
+        // Al usar explícitamente BackToRecordsListCommand debe regresar a la lista de expedientes
+        recordsVm.OpenRecordsViewerModal();
+        recordsVm.ViewPatientRecordDetail(targetPatient);
+        recordsVm.BackToRecordsListCommand.Execute(null);
+        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "BackToRecordsList debe mantener abierta la modal en la lista general");
+        Assert.IsNull(recordsVm.ViewingRecordPatient, "El paciente visualizado debe ser nulo tras volver a la lista");
     }
 
     [TestMethod]
@@ -2963,14 +2966,10 @@ public class InventoryTests
         Assert.AreEqual("Cefalea en estudio", vm.ConsultationDiagnosis, "El diagnóstico en curso no debe verse afectado");
         Assert.AreEqual("Dolor pulsátil", vm.ConsultationChiefComplaint, "El motivo de consulta en curso no debe verse afectado");
 
-        // Cerrar visor: primer clic vuelve a la lista de expedientes
-        vm.CloseRecordsViewerModalCommand.Execute(null);
-        Assert.IsNull(vm.ViewingRecordPatient, "Al cerrar desde el detalle vuelve a la lista general");
-        Assert.IsTrue(vm.IsRecordsViewerModalOpen, "La modal sigue abierta en la lista general");
-
-        // Segundo clic cierra completamente la modal
+        // Cerrar visor: clic en cerrar o tecla Esc sale por completo
         vm.CloseRecordsViewerModalCommand.Execute(null);
         Assert.IsFalse(vm.IsRecordsViewerModalOpen, "El modal de expediente debe cerrarse completamente");
+        Assert.IsNull(vm.ViewingRecordPatient, "El paciente visualizado debe ser nulo");
         Assert.IsTrue(vm.HasActiveConsultation, "La consulta activa sigue en pie después de cerrar el visor");
     }
 
@@ -3177,7 +3176,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_Modals_InitialSuggestionsImmediatelyVisible()
+    public async Task MedicalRecordsViewModel_Modals_InitialDropdownClosedUntilTyping()
     {
         var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
         await vm.LoadInitialDataAsync();
@@ -3185,27 +3184,33 @@ public class InventoryTests
         var patient = vm.Patients.First();
         vm.SelectedPatient = patient;
 
-        // 1. Receta médica: las sugerencias deben estar visibles inmediatamente sin teclear
+        // 1. Receta médica: el menú desplegable NO debe estar abierto al inicio
         await vm.OpenPrescriptionModalAsync();
         Assert.IsTrue(vm.IsPrescriptionModalOpen);
-        Assert.IsTrue(vm.IsPrescriptionDropdownOpen, "El menú de sugerencias debe desplegarse inmediatamente al abrir");
-        Assert.IsTrue(vm.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias iniciales de medicamentos");
+        Assert.IsFalse(vm.IsPrescriptionDropdownOpen, "El menú de sugerencias no debe desplegarse al entrar");
+        vm.PrescriptionSearchText = "Para";
+        Assert.IsTrue(vm.IsPrescriptionDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de medicamentos");
         Assert.IsTrue(vm.PrescriptionProductSuggestions.All(MedicalRecordsViewModel.IsProductMedication), "Solo debe tener medicamentos");
         vm.ClosePrescriptionModal();
 
-        // 2. Insumos: las sugerencias deben estar visibles inmediatamente sin teclear
+        // 2. Insumos: el menú desplegable NO debe estar abierto al inicio
         await vm.OpenSuppliesModalAsync();
         Assert.IsTrue(vm.IsSuppliesModalOpen);
-        Assert.IsTrue(vm.IsSupplyDropdownOpen, "El menú de insumos debe desplegarse inmediatamente al abrir");
-        Assert.IsTrue(vm.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias iniciales de insumos");
+        Assert.IsFalse(vm.IsSupplyDropdownOpen, "El menú de insumos no debe desplegarse al entrar");
+        vm.SupplySearchText = "Gas";
+        Assert.IsTrue(vm.IsSupplyDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de insumos");
         Assert.IsTrue(vm.SupplyProductSuggestions.All(MedicalRecordsViewModel.IsProductSupply), "Solo debe tener insumos");
         vm.CloseSuppliesModal();
 
-        // 3. Servicios: las sugerencias deben estar visibles inmediatamente sin teclear
+        // 3. Servicios: el menú desplegable NO debe estar abierto al inicio
         await vm.OpenServicesModalAsync();
         Assert.IsTrue(vm.IsServicesModalOpen);
-        Assert.IsTrue(vm.IsServiceModalDropdownOpen, "El menú de servicios debe desplegarse inmediatamente al abrir");
-        Assert.IsTrue(vm.ServiceModalSuggestions.Count > 0, "Debe tener sugerencias iniciales de servicios");
+        Assert.IsFalse(vm.IsServiceModalDropdownOpen, "El menú de servicios no debe desplegarse al entrar");
+        vm.ServiceModalSearchText = "Cons";
+        Assert.IsTrue(vm.IsServiceModalDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.ServiceModalSuggestions.Count > 0, "Debe tener sugerencias filtradas de servicios");
         vm.CloseServicesModal();
     }
 

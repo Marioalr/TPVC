@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.6.3] - 2026-10-05
+
+### Corregido
+* **Cierre fluido y consistente con tecla Escape (`Esc`)**:
+  * Se implementó intercepción de la tecla `Escape` a nivel de ventana (`Window.PreviewKeyDown`) y restauración automática de foco hacia la caja de búsqueda de la ventana modal abierta (Receta, Insumos o Servicios) tras cerrar el buscador de catálogo. Esto asegura que la ventana subyacente se cierre de manera continua e infalible al presionar `Esc` de nuevo.
+  * En la visualización del expediente clínico ("Ver Expediente"), tanto presionar `Esc` como hacer clic en el botón "Cerrar" ahora salen por completo del visor sin pasar por el listado de otros expedientes clínicos.
+* **Eliminación de menú desplegable al abrir modales**:
+  * Las ventanas de Receta Médica, Insumos Clínicos y Servicios Médicos ahora abren limpias sin ningún menú flotante inicial pre-desplegado. El menú de sugerencias se activa y despliega exclusivamente cuando el médico comienza a escribir en el buscador o al consultar mediante "Buscar en Catálogo".
+* **Depuración de la vista de Consulta Activa**:
+  * Se eliminó el bloque integrado de captura de receta dentro del formulario de la consulta activa, dejando el espacio despejado y enfocado en la nota clínica conforme a la NOM-004-SSA3, canalizando la emisión de fármacos mediante el botón dedicado "Receta Médica" y "+ Receta".
+
 ## [1.6.2] - 2026-10-05
 
 ### Añadido

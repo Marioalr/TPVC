@@ -1080,7 +1080,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         PrescriptionProductSuggestions = new ObservableCollection<Product>(matches);
         SelectedPrescriptionProduct = PrescriptionProductSuggestions.FirstOrDefault();
-        IsPrescriptionDropdownOpen = PrescriptionProductSuggestions.Count > 0;
+        IsPrescriptionDropdownOpen = !string.IsNullOrWhiteSpace(query) && PrescriptionProductSuggestions.Count > 0;
     }
 
     partial void OnSupplySearchTextChanged(string value)
@@ -1100,7 +1100,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         SupplyProductSuggestions = new ObservableCollection<Product>(matches);
         SelectedSupplyProduct = SupplyProductSuggestions.FirstOrDefault();
-        IsSupplyDropdownOpen = SupplyProductSuggestions.Count > 0;
+        IsSupplyDropdownOpen = !string.IsNullOrWhiteSpace(query) && SupplyProductSuggestions.Count > 0;
     }
 
     partial void OnServiceModalSearchTextChanged(string value)
@@ -1119,7 +1119,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         ServiceModalSuggestions = new ObservableCollection<ClinicalService>(matches);
         SelectedServiceModalItem = ServiceModalSuggestions.FirstOrDefault();
-        IsServiceModalDropdownOpen = ServiceModalSuggestions.Count > 0;
+        IsServiceModalDropdownOpen = !string.IsNullOrWhiteSpace(query) && ServiceModalSuggestions.Count > 0;
     }
 
     // ==========================================
@@ -1777,12 +1777,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void CloseRecordsViewerModal()
     {
-        if (ViewingRecordPatient != null)
-        {
-            BackToRecordsList();
-            return;
-        }
-
         IsRecordsViewerModalOpen = false;
         ViewingRecordPatient = null;
         ViewingPatientConsultations.Clear();
@@ -3161,7 +3155,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
             ApplyPrescriptionSuggestions(string.Empty);
-            IsPrescriptionDropdownOpen = true;
+            IsPrescriptionDropdownOpen = false;
         }
     }
 
@@ -3179,7 +3173,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
         ApplyPrescriptionSuggestions(string.Empty);
-        IsPrescriptionDropdownOpen = true;
+        IsPrescriptionDropdownOpen = false;
         IsPrescriptionModalOpen = true;
     }
 
@@ -3240,7 +3234,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
             ApplySupplySuggestions(string.Empty);
-            IsSupplyDropdownOpen = true;
+            IsSupplyDropdownOpen = false;
         }
     }
 
@@ -3258,7 +3252,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
         ApplySupplySuggestions(string.Empty);
-        IsSupplyDropdownOpen = true;
+        IsSupplyDropdownOpen = false;
         IsSuppliesModalOpen = true;
     }
 
@@ -3484,7 +3478,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
             ApplyServiceModalSuggestions(string.Empty);
-            IsServiceModalDropdownOpen = true;
+            IsServiceModalDropdownOpen = false;
         }
     }
 
@@ -3502,7 +3496,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
         ApplyServiceModalSuggestions(string.Empty);
-        IsServiceModalDropdownOpen = true;
+        IsServiceModalDropdownOpen = false;
         IsServicesModalOpen = true;
     }
 

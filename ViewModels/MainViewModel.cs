@@ -41,7 +41,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.6.2";
+    private string _appVersion = "1.6.3";
 
     // ==========================================
     // ASISTENTE DE PRIMER ARRANQUE (BIENVENIDA)

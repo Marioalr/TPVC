@@ -17,9 +17,25 @@ public partial class MedicalRecordsView : UserControl
 
         Loaded += (s, e) =>
         {
+            var win = Window.GetWindow(this);
+            if (win != null)
+            {
+                win.PreviewKeyDown -= Window_PreviewKeyDown;
+                win.PreviewKeyDown += Window_PreviewKeyDown;
+            }
+
             if (DataContext is MedicalRecordsViewModel vm && vm.SelectedPatient == null && !vm.IsSelectPatientModalOpen)
             {
                 vm.OpenSelectPatientModal();
+            }
+        };
+
+        Unloaded += (s, e) =>
+        {
+            var win = Window.GetWindow(this);
+            if (win != null)
+            {
+                win.PreviewKeyDown -= Window_PreviewKeyDown;
             }
         };
 
@@ -72,13 +88,28 @@ public partial class MedicalRecordsView : UserControl
                 ServiceModalSearchTextBox?.SelectAll();
             }, DispatcherPriority.Input);
         }
-        else if (e.PropertyName == nameof(MedicalRecordsViewModel.IsCatalogBrowserModalOpen) && vm.IsCatalogBrowserModalOpen)
+        else if (e.PropertyName == nameof(MedicalRecordsViewModel.IsCatalogBrowserModalOpen))
         {
-            Dispatcher.InvokeAsync(() =>
+            if (vm.IsCatalogBrowserModalOpen)
             {
-                CatalogBrowserSearchTextBox?.Focus();
-                CatalogBrowserSearchTextBox?.SelectAll();
-            }, DispatcherPriority.Input);
+                _ = Dispatcher.InvokeAsync(() =>
+                {
+                    CatalogBrowserSearchTextBox?.Focus();
+                    CatalogBrowserSearchTextBox?.SelectAll();
+                }, DispatcherPriority.Input);
+            }
+            else
+            {
+                RestoreModalFocus(vm);
+            }
+        }
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            HandleEscapeKey(e);
         }
     }
 
@@ -88,52 +119,83 @@ public partial class MedicalRecordsView : UserControl
 
         if (e.Key == Key.Escape)
         {
-            if (DataContext is MedicalRecordsViewModel vm)
-            {
-                if (vm.IsCatalogBrowserModalOpen)
-                {
-                    vm.CloseCatalogBrowser();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsPrescriptionModalOpen)
-                {
-                    vm.ClosePrescriptionModal();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsSuppliesModalOpen)
-                {
-                    vm.CloseSuppliesModal();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsServicesModalOpen)
-                {
-                    vm.CloseServicesModal();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsSelectPatientModalOpen)
-                {
-                    vm.CloseSelectPatientModal();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsRecordsViewerModalOpen)
-                {
-                    vm.CloseRecordsViewerModal();
-                    e.Handled = true;
-                    return;
-                }
-                if (vm.IsInfoModalVisible)
-                {
-                    vm.DismissInfoModal();
-                    e.Handled = true;
-                    return;
-                }
-            }
+            HandleEscapeKey(e);
         }
+    }
+
+    private void HandleEscapeKey(KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+
+        if (vm.IsCatalogBrowserModalOpen)
+        {
+            vm.CloseCatalogBrowser();
+            e.Handled = true;
+            RestoreModalFocus(vm);
+            return;
+        }
+        if (vm.IsPrescriptionModalOpen)
+        {
+            vm.ClosePrescriptionModal();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsSuppliesModalOpen)
+        {
+            vm.CloseSuppliesModal();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsServicesModalOpen)
+        {
+            vm.CloseServicesModal();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsRecordsViewerModalOpen)
+        {
+            vm.CloseRecordsViewerModal();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsSelectPatientModalOpen)
+        {
+            vm.CloseSelectPatientModal();
+            e.Handled = true;
+            return;
+        }
+        if (vm.IsInfoModalVisible)
+        {
+            vm.DismissInfoModal();
+            e.Handled = true;
+            return;
+        }
+    }
+
+    private void RestoreModalFocus(MedicalRecordsViewModel vm)
+    {
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            if (vm.IsPrescriptionModalOpen)
+            {
+                PrescriptionSearchTextBox?.Focus();
+                PrescriptionSearchTextBox?.SelectAll();
+            }
+            else if (vm.IsSuppliesModalOpen)
+            {
+                SupplySearchTextBox?.Focus();
+                SupplySearchTextBox?.SelectAll();
+            }
+            else if (vm.IsServicesModalOpen)
+            {
+                ServiceModalSearchTextBox?.Focus();
+                ServiceModalSearchTextBox?.SelectAll();
+            }
+            else
+            {
+                this.Focus();
+            }
+        }, DispatcherPriority.Input);
     }
 
     // ==========================================

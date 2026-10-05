@@ -7,7 +7,8 @@
              xmlns:views="clr-namespace:TPVC.Views"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}"
-             d:DesignHeight="750" d:DesignWidth="1050">
+             d:DesignHeight="750" d:DesignWidth="1050"
+             Focusable="True">
 
     <Grid Margin="16,14,16,14">
         <Grid.RowDefinitions>
@@ -679,56 +680,7 @@
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Receta Médica y Fármacos Prescritos en Vivo -->
-                                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
-                                                <StackPanel>
-                                                    <TextBlock Text="💊 Receta Médica y Medicamentos Prescritos" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,6" />
-                                                    <Grid Margin="0,0,0,8">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="8" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="8" />
-                                                            <ColumnDefinition Width="70" />
-                                                            <ColumnDefinition Width="8" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
 
-                                                        <TextBox Grid.Column="0" Text="{Binding NewPrescriptionMedicine, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" ToolTip="Nombre del medicamento (ej. Paracetamol 500mg)" />
-                                                        <TextBox Grid.Column="2" Text="{Binding NewPrescriptionDosage, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="8,5" ToolTip="Dosis y posología (ej. 1 tableta cada 8 horas por 5 días)" />
-                                                        <TextBox Grid.Column="4" Text="{Binding NewPrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ModernTextBox}" Padding="6,5" ToolTip="Cantidad de piezas o cajas" />
-                                                        <Button Grid.Column="6" Style="{DynamicResource AccentButton}" Command="{Binding AddPrescriptionItemCommand}" Padding="10,5">
-                                                            <TextBlock Text="+ Recetar" FontSize="11" FontWeight="Bold" />
-                                                        </Button>
-                                                    </Grid>
-
-                                                    <!-- Lista de Medicamentos Prescritos -->
-                                                    <ItemsControl ItemsSource="{Binding ConsultationPrescriptions}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,4">
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="*" />
-                                                                            <ColumnDefinition Width="Auto" />
-                                                                            <ColumnDefinition Width="Auto" />
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                            <TextBlock Text="💊 " FontSize="11" />
-                                                                            <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" Margin="0,0,6,0" />
-                                                                            <TextBlock Text="{Binding Dosage, StringFormat='({0})'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                                                        </StackPanel>
-                                                                        <TextBlock Grid.Column="1" Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" Margin="10,0" />
-                                                                        <Button Grid.Column="2" Style="{DynamicResource OutlineButton}" Command="{Binding DataContext.RemovePrescriptionItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="6,2" VerticalAlignment="Center" ToolTip="Eliminar de la receta">
-                                                                            <TextBlock Text="✕" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
-                                                                        </Button>
-                                                                    </Grid>
-                                                                </Border>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </StackPanel>
-                                            </Border>
 
                                             <!-- Botones Inferiores de la Consulta Activa -->
                                             <Grid Margin="0,6,0,0">
@@ -743,6 +695,9 @@
                                                 </Button>
 
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding OpenPrescriptionModalCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Abrir receta médica para indicar medicamentos y posología">
+                                                        <TextBlock Text="💊 + Receta" FontSize="11" FontWeight="SemiBold" />
+                                                    </Button>
                                                     <Button Style="{DynamicResource OutlineButton}" Command="{Binding OpenSuppliesModalCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Agregar insumos y material de curación">
                                                         <TextBlock Text="📦 + Insumos" FontSize="11" FontWeight="SemiBold" />
                                                     </Button>
