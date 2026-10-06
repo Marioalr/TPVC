@@ -29,6 +29,9 @@
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
             <views:SettingsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:TursoSyncViewModel}">
+            <views:TursoSyncView />
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -181,6 +184,18 @@
                                       Stretch="Uniform" 
                                       Margin="0,0,10,0" />
                                 <TextBlock Text="Temas y Ajustes" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 7. Nube y Sincronización Turso -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="ConfigNav"
+                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=TursoSync, Mode=OneWay}"
+                                     Command="{Binding NavigateSubViewCommand}" 
+                                     CommandParameter="TursoSync">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="☁️" FontSize="13" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Nube y Turso Cloud" />
                             </StackPanel>
                         </RadioButton>
                     </StackPanel>

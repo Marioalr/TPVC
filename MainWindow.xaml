@@ -115,11 +115,36 @@
                     </StackPanel>
                 </Button>
 
-                <!-- Indicador discreto de sincronización de datos -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                    <TextBlock Text="Datos sincronizados" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
-                </StackPanel>
+                <!-- Indicador interactivo de sincronización Turso Cloud / Local -->
+                <Button Grid.Column="2" 
+                        Command="{Binding OpenTursoSyncCommand}"
+                        Cursor="Hand"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,2"
+                        ToolTip="{Binding TursoStatusToolTip}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="7" Height="7" CornerRadius="3.5" 
+                                Background="{Binding TursoStatusColorHex}" 
+                                Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding TursoStatusText}" 
+                                   FontSize="11" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 

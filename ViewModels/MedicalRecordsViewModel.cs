@@ -2955,24 +2955,26 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SyncActiveConsultation();
     }
 
-    public async void HandleSaleCompletedFromConsultation()
+    public async Task HandleSaleCompletedFromConsultationAsync()
     {
-        // 0. Si por alguna razón no se guardó la nota de consulta en BD, asegurarse de persistirla
-        if (!_isCurrentConsultationSaved && SelectedPatient != null)
+        try
         {
-            try
+            // 0. Si por alguna razón no se guardó la nota de consulta en BD, asegurarse de persistirla
+            if (!_isCurrentConsultationSaved && SelectedPatient != null)
             {
-                await SaveActiveConsultationToDbAsync(DateTime.Now);
+                try
+                {
+                    await SaveActiveConsultationToDbAsync(DateTime.Now);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("No se pudo guardar la nota de consulta al cobrar", ex);
+                }
             }
-            catch (Exception ex)
-            {
-                AppLogger.Error("No se pudo guardar la nota de consulta al cobrar", ex);
-            }
-        }
-        _isCurrentConsultationSaved = false;
+            _isCurrentConsultationSaved = false;
 
-        // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
-        ClosePosModal();
+            // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
+            ClosePosModal();
         IsPrescriptionModalOpen = false;
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
@@ -3006,6 +3008,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         // 6. Abrir inmediatamente la ventana modal de agregar paciente
         OpenSelectPatientModal();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al finalizar consulta tras venta completada", ex);
+        }
+    }
+
+    public void HandleSaleCompletedFromConsultation()
+    {
+        _ = HandleSaleCompletedFromConsultationAsync();
     }
 
     [RelayCommand]

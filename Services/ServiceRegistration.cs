@@ -23,6 +23,12 @@ public static class ServiceRegistration
         services.AddSingleton(_ => new BackupService());
         services.AddSingleton<ClinicProfileService>();
         services.AddSingleton<PrintingService>();
+        services.AddSingleton<TursoSettingsService>();
+        services.AddSingleton(sp => new TursoSyncService(
+            sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
+            sp.GetRequiredService<TursoSettingsService>(),
+            sp.GetRequiredService<ClinicProfileService>(),
+            sp.GetRequiredService<InventoryService>()));
 
         return services;
     }

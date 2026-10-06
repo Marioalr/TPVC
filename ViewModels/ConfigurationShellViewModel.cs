@@ -23,6 +23,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     public MovementsViewModel MovementsVM { get; }
     public ClinicProfileViewModel ClinicProfileVM { get; }
     public SettingsViewModel SettingsVM { get; }
+    public TursoSyncViewModel TursoSyncVM { get; }
 
     public ConfigurationShellViewModel(
         Action<string> navigateMain,
@@ -32,6 +33,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         MovementsViewModel movementsVM,
         ClinicProfileViewModel clinicProfileVM,
         SettingsViewModel settingsVM,
+        TursoSyncViewModel tursoSyncVM,
         string appVersion)
     {
         _navigateMain = navigateMain;
@@ -41,7 +43,8 @@ public partial class ConfigurationShellViewModel : ObservableObject
         MovementsVM = movementsVM;
         ClinicProfileVM = clinicProfileVM;
         SettingsVM = settingsVM;
-        AppVersion = appVersion;
+        TursoSyncVM = tursoSyncVM;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.8.0" : appVersion;
 
         // Iniciar en el Panel y Métricas por defecto
         NavigateSubView("Dashboard");
@@ -76,6 +79,10 @@ public partial class ConfigurationShellViewModel : ObservableObject
                 break;
             case "Settings":
                 CurrentSubView = SettingsVM;
+                break;
+            case "TursoSync":
+                CurrentSubView = TursoSyncVM;
+                TursoSyncVM.LoadFromSettings();
                 break;
         }
     }

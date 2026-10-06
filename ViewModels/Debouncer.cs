@@ -28,7 +28,18 @@ internal sealed class Debouncer
 
     public async Task RunAsync(Func<Task> action, int? delayMs = null)
     {
-        _cts?.Cancel();
+        var oldCts = _cts;
+        _cts = null;
+        if (oldCts != null)
+        {
+            try
+            {
+                oldCts.Cancel();
+                oldCts.Dispose();
+            }
+            catch { }
+        }
+
         var cts = new CancellationTokenSource();
         _cts = cts;
 

@@ -65,6 +65,15 @@ public class InventoryService
     /// <summary>Cambios en la agenda de citas médicas.</summary>
     public event Action? OnAppointmentsChanged;
 
+    /// <summary>Dispara todos los eventos de cambio para sincronización o recargas masivas.</summary>
+    public void NotifyAllChanged()
+    {
+        OnInventoryChanged?.Invoke();
+        OnPatientsChanged?.Invoke();
+        OnSalesChanged?.Invoke();
+        OnAppointmentsChanged?.Invoke();
+    }
+
     public InventoryService(IDbContextFactory<AppDbContext> contextFactory)
     {
         _contextFactory = contextFactory;

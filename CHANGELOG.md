@@ -2,6 +2,37 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.8.0] - 2026-10-06
+
+### Añadido
+* **Sincronización en la Nube con Turso Cloud (libSQL Hrana Protocol)**:
+  * Arquitectura *Local-First* (offline-first) integral: operación 100% autónoma y funcional en el consultorio aun sin conexión a internet.
+  * Sincronización bidireccional incremental por lotes (`TursoSyncService` y `TursoClient`) con protocolo Hrana 3 JSON sobre HTTP `/v2/pipeline`.
+  * Resolución de conflictos determinista *Last-Write-Wins (LWW)* mediante identificador universal `SyncId` (GUID) y marca de tiempo `UpdatedAtUtc` en todas las entidades del dominio.
+  * Propagación de bajas y eliminaciones mediante registro en tabla `SyncTombstones`.
+  * Optimización estricta para **nivel gratuito permanente (Turso Free Tier)**: consumo proyectado menor al 0.05% de las cuotas mensuales (25M escrituras, 1B lecturas y 9GB almacenamiento).
+  * Monitor guardián de cuotas en tiempo real (`TursoQuotaGuardian`) con porcentaje de consumo mensual y alertas preventivas.
+* **Topología Multi-Dispositivo y Matriz de Roles (Hasta 3 Dispositivos)**:
+  * Preparación y modelado de roles de dispositivo con matriz estricta de permisos:
+    * *Windows 11 Desktop (Estación Principal)*: Acceso irrestricto clínico, administrativo, facturación y gestión de configuración.
+    * *Tablet Android (Asistente Clínico y POS)*: Expedientes, notas de consulta, recetas y cobro de caja; configuración restringida.
+    * *Celular Android (Administración Móvil)*: Visualización ejecutiva de ingresos del día, métricas financieras, alertas de bajo stock y directorio de pacientes; sin facultades de prescripción o cobro directo.
+  * Generador de carga de emparejamiento seguro para Android (`GenerateAndroidPairingPayload`) compatible con protocolo URI `tpvc-sync://pairing?data=...` y códigos JSON exportables para vinculación en 1 clic.
+* **Interfaz de Usuario y Experiencia (UX/UI)**:
+  * Pestaña dedicada "Nube y Turso Cloud" en la ventana de Configuración con asistente de enlace paso a paso, prueba de latencia, carga inicial a la nube y visualizador de cuotas.
+  * Botón e indicador de estado de nube en tiempo real en la barra superior de la ventana principal (`MainWindow`), con código de color interactivo y tooltip con hora de última sincronización.
+  * Integración en la paleta de comandos rápida (`Ctrl + K`): "Sincronizar con Turso Cloud Ahora" y "Configurar Turso Cloud".
+  * Sincronización automática silenciosa en segundo plano al arrancar la aplicación.
+* **Documentación Técnica**:
+  * Guía completa de arquitectura y configuración de Turso en `docs/TURSO_SYNC_ARCHITECTURE.md`.
+
+### Corregido y Optimizado
+* **Punto de Venta (`PosViewModel`)**: Resuelto bug donde la lista de pacientes disponibles para venta no se actualizaba reactivamente cuando se registraban o editaban pacientes en expedientes; suscripción limpia al evento `OnPatientsChanged` con desuscripción en `Dispose()`.
+* **Utilidad `Debouncer`**: Corregida fuga potencial de recursos liberando y cancelando adecuadamente el `CancellationTokenSource` anterior antes de instanciar uno nuevo.
+* **Expedientes Médicos (`MedicalRecordsViewModel`)**: Sustituido método de riesgo `async void` por `HandleSaleCompletedFromConsultationAsync` con manejo exhaustivo de excepciones y empaquetado seguro.
+* **Inventario (`InventoryService`)**: Agregado método `NotifyAllChanged()` para refrescar reactivamente todos los catálogos en UI tras la descarga de cambios de la nube.
+* **Cobertura de Pruebas**: Suite de pruebas unitarias ampliada a **130 pruebas al 100% de éxito**.
+
 ## [1.7.0] - 2026-10-05
 
 ### Añadido

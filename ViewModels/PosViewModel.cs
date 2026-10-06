@@ -39,6 +39,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
     private readonly PrintingService? _printingService;
     private readonly Action? _onProfileChangedHandler;
     private readonly Action? _onSalesChangedHandler;
+    private readonly Action? _onPatientsChangedHandler;
 
     public Action? OnBackToHubRequested { get; set; }
 
@@ -396,11 +397,41 @@ public partial class PosViewModel : ObservableObject, IDisposable
         };
         _inventoryService.OnSalesChanged += _onSalesChangedHandler;
 
-        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-        SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+        _onPatientsChangedHandler = () =>
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                {
+                    app.Dispatcher.InvokeAsync(RefreshAvailablePatients);
+                    return;
+                }
+            }
+            catch { }
+            RefreshAvailablePatients();
+        };
+        _inventoryService.OnPatientsChanged += _onPatientsChangedHandler;
+
+        RefreshAvailablePatients();
         SyncActiveConsultation();
 
         _ = LoadServicesAsync();
+    }
+
+    public void RefreshAvailablePatients()
+    {
+        var currentSelectedId = SelectedPatientForConsultation?.Id;
+        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
+        if (currentSelectedId.HasValue && currentSelectedId.Value > 0)
+        {
+            SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault(p => p.Id == currentSelectedId.Value) 
+                ?? AvailablePatientsForConsultation.FirstOrDefault();
+        }
+        else
+        {
+            SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
+        }
     }
 
     public void SyncActiveConsultation()
@@ -492,6 +523,10 @@ public partial class PosViewModel : ObservableObject, IDisposable
         if (_onSalesChangedHandler != null)
         {
             _inventoryService.OnSalesChanged -= _onSalesChangedHandler;
+        }
+        if (_onPatientsChangedHandler != null)
+        {
+            _inventoryService.OnPatientsChanged -= _onPatientsChangedHandler;
         }
         if (_clinicProfileService != null && _onProfileChangedHandler != null)
         {

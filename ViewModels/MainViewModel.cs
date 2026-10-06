@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 
@@ -28,6 +29,8 @@ public partial class MainViewModel : ObservableObject
     private readonly AppUpdateService _updateService;
     private readonly ClinicProfileService _clinicProfileService;
     private readonly PrintingService? _printingService;
+    private readonly TursoSyncService _tursoSyncService;
+    private readonly TursoSettingsService _tursoSettingsService;
 
     private readonly List<CommandPaletteItem> _staticCommandItems = new();
 
@@ -41,7 +44,16 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.6.3";
+    private string _appVersion = "1.8.0";
+
+    [ObservableProperty]
+    private string _tursoStatusText = "Modo Local (SQLite)";
+
+    [ObservableProperty]
+    private string _tursoStatusToolTip = "Almacenamiento local SQLite (0 latencia). Clic para configurar Turso Cloud.";
+
+    [ObservableProperty]
+    private string _tursoStatusColorHex = "#64748B";
 
     // ==========================================
     // ASISTENTE DE PRIMER ARRANQUE (BIENVENIDA)
@@ -104,6 +116,7 @@ public partial class MainViewModel : ObservableObject
     public BatchesViewModel BatchesVM { get; }
     public MovementsViewModel MovementsVM { get; }
     public SettingsViewModel SettingsVM { get; }
+    public TursoSyncViewModel TursoSyncVM { get; }
 
     public MainViewModel(
         InventoryService inventoryService, 
@@ -112,7 +125,9 @@ public partial class MainViewModel : ObservableObject
         AppUpdateService updateService,
         BackupService? backupService = null,
         ClinicProfileService? clinicProfileService = null,
-        PrintingService? printingService = null)
+        PrintingService? printingService = null,
+        TursoSyncService? tursoSyncService = null,
+        TursoSettingsService? tursoSettingsService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -120,6 +135,13 @@ public partial class MainViewModel : ObservableObject
         _updateService = updateService;
         _clinicProfileService = clinicProfileService ?? new ClinicProfileService();
         _printingService = printingService;
+
+        _tursoSettingsService = tursoSettingsService ?? new TursoSettingsService();
+        _tursoSyncService = tursoSyncService ?? new TursoSyncService(
+            new AppDbContextFactory(),
+            _tursoSettingsService,
+            _clinicProfileService,
+            _inventoryService);
 
         AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
@@ -174,6 +196,7 @@ public partial class MainViewModel : ObservableObject
         MovementsVM = new MovementsViewModel(inventoryService);
         ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
         SettingsVM = new SettingsViewModel(themeService, updateService, backupService);
+        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
             NavigateTo,
@@ -183,7 +206,25 @@ public partial class MainViewModel : ObservableObject
             MovementsVM,
             ClinicProfileVM,
             SettingsVM,
+            TursoSyncVM,
             AppVersion);
+
+        // Suscribir eventos del estado de Turso
+        _tursoSyncService.StatusChanged += (st, msg) => UpdateTursoStatus(st, msg);
+        UpdateTursoStatus(_tursoSyncService.Status, _tursoSyncService.StatusMessage);
+
+        if (_tursoSettingsService.CurrentSettings.IsSyncEnabled && _tursoSettingsService.CurrentSettings.AutoSyncOnStartup)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(1500);
+                    await _tursoSyncService.SyncAsync(isBackgroundAutoSync: true);
+                }
+                catch { }
+            });
+        }
 
         // Si es el primer arranque en una instalación nueva, abrir el Asistente Inicial
         if (_clinicProfileService.IsFirstRun || (!_clinicProfileService.CurrentProfile.IsInitialSetupCompleted && !_clinicProfileService.CurrentProfile.IsConfigured))
@@ -296,6 +337,14 @@ public partial class MainViewModel : ObservableObject
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
+            Title = "Nube y Turso Cloud",
+            Subtitle = "Configuración de sincronización multi-dispositivo y plan gratis",
+            Category = "Módulos",
+            Icon = "☁️",
+            Action = OpenTursoSync
+        });
+        _staticCommandItems.Add(new CommandPaletteItem
+        {
             Title = "Menú Principal (Hub)",
             Subtitle = "Pantalla inicial con accesos principales",
             Category = "Módulos",
@@ -304,6 +353,14 @@ public partial class MainViewModel : ObservableObject
         });
 
         // Acciones rápidas
+        _staticCommandItems.Add(new CommandPaletteItem
+        {
+            Title = "Sincronizar con Turso Cloud",
+            Subtitle = "Enviar y recibir cambios con la base en la nube",
+            Category = "Acciones Rápidas",
+            Icon = "🔄",
+            Action = () => _ = SyncTursoNowAsync()
+        });
         _staticCommandItems.Add(new CommandPaletteItem
         {
             Title = "Nueva Consulta Médica",
@@ -546,8 +603,66 @@ public partial class MainViewModel : ObservableObject
             case "Batches":
             case "Movements":
             case "Settings":
+            case "TursoSync":
                 ConfigurationShellVM.NavigateSubView(viewName);
                 CurrentView = ConfigurationShellVM;
+                break;
+        }
+    }
+
+    [RelayCommand]
+    public void OpenTursoSync()
+    {
+        NavigateTo("Config");
+        ConfigurationShellVM.NavigateSubView("TursoSync");
+    }
+
+    [RelayCommand]
+    public async Task SyncTursoNowAsync()
+    {
+        await _tursoSyncService.SyncAsync();
+    }
+
+    private void UpdateTursoStatus(TursoSyncStatus status, string message)
+    {
+        try
+        {
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(() => UpdateTursoStatus(status, message));
+                return;
+            }
+        }
+        catch { }
+
+        switch (status)
+        {
+            case TursoSyncStatus.NotConfigured:
+                TursoStatusText = "Modo Local (SQLite)";
+                TursoStatusColorHex = "#64748B"; // Gris pizarra
+                TursoStatusToolTip = "Almacenamiento local SQLite (0 latencia). Clic para configurar Turso Cloud y sincronizar con Android.";
+                break;
+            case TursoSyncStatus.Idle:
+                TursoStatusText = "Turso: Conectado";
+                TursoStatusColorHex = "#0284C7"; // Azul cielo
+                TursoStatusToolTip = $"Base de datos en la nube Turso activa.\n{message}";
+                break;
+            case TursoSyncStatus.Syncing:
+                TursoStatusText = "Turso: Sincronizando...";
+                TursoStatusColorHex = "#F59E0B"; // Ámbar
+                TursoStatusToolTip = "Sincronizando cambios en segundo plano con Turso Cloud...";
+                break;
+            case TursoSyncStatus.Success:
+                TursoStatusText = "Turso: Sincronizado";
+                TursoStatusColorHex = "#10B981"; // Verde esmeralda
+                TursoStatusToolTip = $"Datos actualizados en la nube Turso.\n{message}";
+                break;
+            case TursoSyncStatus.Offline:
+            case TursoSyncStatus.Error:
+                TursoStatusText = "Turso: Sin conexión";
+                TursoStatusColorHex = "#EF4444"; // Rojo suave
+                TursoStatusToolTip = $"Operando localmente sin riesgo de pérdida de datos.\n{message}";
                 break;
         }
     }

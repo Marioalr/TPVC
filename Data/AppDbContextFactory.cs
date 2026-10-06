@@ -10,6 +10,13 @@ public sealed class AppDbContextFactory : IDbContextFactory<AppDbContext>
 {
     private readonly DbContextOptions<AppDbContext> _options;
 
+    public AppDbContextFactory()
+    {
+        var builder = new DbContextOptionsBuilder<AppDbContext>();
+        AppDbContext.ConfigureSqlite(builder);
+        _options = builder.Options;
+    }
+
     public AppDbContextFactory(DbContextOptions<AppDbContext> options)
     {
         _options = options;
