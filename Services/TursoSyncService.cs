@@ -499,7 +499,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             settings.DeviceId,
             settings.DeviceName,
             settings.DeviceRole.ToString(),
-            "1.8.0",
+            "1.8.1",
             DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
         }, ct);
     }

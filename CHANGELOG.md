@@ -2,6 +2,37 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.8.1] - 2026-10-06
+
+### Seguridad y Privacidad
+* **Cifrado Fuerte de Credenciales en Disco**:
+  * **Turso Cloud**: Verificado y blindado el almacenamiento del token de autenticación en `turso_config.json`. Se utiliza DPAPI de Windows (`ProtectedData.Protect` a nivel de usuario) y el modelo `TursoSettings.AuthToken` está marcado con `[JsonIgnore]`, impidiendo que el token se escriba en texto plano en disco bajo cualquier circunstancia.
+  * **GitHub Release Token**: Se fortaleció `AppUpdateService` para cifrar automáticamente el Personal Access Token (PAT) con DPAPI y evitar la escritura en texto plano en `update_config.json`. Si existía un archivo de configuración heredado en texto plano, se migra de manera transparente al formato cifrado en el primer arranque.
+  * Se añadieron pruebas unitarias automatizadas (`TursoSettingsService_NeverPersistsPlaintextTokenToDisk`) para asegurar la persistencia exclusivamente cifrada en disco.
+
+### Interfaz de Usuario y Experiencia (UX/UI)
+* **Protección Visual de Tokens en Pantalla**:
+  * Tanto el token de Turso (`TursoSyncView`) como el token de GitHub Releases (`SettingsView`) ahora se presentan enmascarados de manera predeterminada (`●●●●●●`) mediante controles de contraseña especializados (`ModernPasswordBox`).
+  * Implementado `PasswordBoxHelper` con enlace bidireccional seguro (Two-Way MVVM Binding) en WPF.
+  * Botón interactivo para alternar visibilidad (**👁️** para revelar / **🙈** para ocultar) al lado de cada campo de credenciales sensibles.
+* **Botones de Portapapeles (1 Clic)**:
+  * Agregados botones dedicados con ícono de portapapeles (**📋 Pegar**) junto a los campos de:
+    * URL de la base de datos de Turso (`libsql://...` o `https://...`).
+    * Token de autenticación de Turso Cloud (Bearer Token).
+    * Token Personal Access Token (PAT) de GitHub Releases.
+  * Limpieza y sanitización automática al pegar desde el portapapeles para evitar espacios en blanco o caracteres espurios.
+
+### Conectividad y Diagnóstico de Turso Cloud
+* **Diagnóstico Inteligente y Asistido en "Probar Conexión"**:
+  * Validación preventiva de campos obligatorios: advierte claramente si falta la URL o el Token antes de realizar la petición HTTP.
+  * Detección de URL incompleta: si el usuario ingresa solo el nombre de la base de datos (ej. `mi-clinica`), el sistema explica detalladamente que se requiere la dirección completa con dominio (ej. `libsql://mi-clinica-usuario.turso.io`).
+  * Normalización automática de tokens: elimina comillas accidentales (`"` o `'`), saltos de línea y el prefijo redundante `Bearer ` si fue copiado de la consola o archivos de configuración.
+  * Compatibilidad con esquemas `turso://`, `libsql://` y `https://`, además de depuración de cadenas de conexión con argumentos de consulta.
+  * Encabezados HTTP oficiales del protocolo: configurados `Accept: application/json` y `User-Agent: TPVC-Desktop/1.8.1` para asegurar compatibilidad transparente con gateways de red y proxys perimetrales (Fly.io/Cloudflare).
+  * Tolerancia a tipos numéricos en respuestas Hrana 3: lectura segura y resiliente de números enteros y flotantes tanto en formato JSON numérico como cadenas textuales (`ParseLongSafe`, `ParseDoubleSafe`).
+  * Diagnóstico contextual con mensajes claros y sugerencias paso a paso para errores HTTP 401 (token inválido o expirado y comando CLI para generarlo), 403 (permisos insuficientes) y 404 (host no encontrado).
+* **Cobertura de Pruebas**: Suite ampliada a **134 pruebas unitarias con 100% de éxito**.
+
 ## [1.8.0] - 2026-10-06
 
 ### Añadido

@@ -423,7 +423,7 @@ public class TursoClient : IDisposable
 
         if (!req.Headers.UserAgent.Any())
         {
-            req.Headers.UserAgent.ParseAdd("TPVC-Desktop/1.8.0");
+            req.Headers.UserAgent.ParseAdd("TPVC-Desktop/1.8.1");
         }
 
         var json = requestBody.ToJsonString();
