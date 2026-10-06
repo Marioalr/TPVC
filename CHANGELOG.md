@@ -2,6 +2,28 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.8.2] - 2026-10-06
+
+### Base de Datos y Compatibilidad de Formato Clínico
+* **Ajuste y Validación del Esquema Clínico**:
+  * Verificado y alineado el esquema de base de datos con los datos reales del consultorio (derivados del formato de recetas y catálogo clínico):
+    * **Médico Titular**: Dra. María del Cielo Alberto Galicia, Benemérita Universidad Autónoma de Puebla, Cédula Profesional 15632243, Teléfono 2481592448, Domicilio en Yehualtepec. Mapeado al perfil oficial `ClinicProfile`.
+    * **Signos Vitales y Oximetría**: Soporte añadido para saturación de oxígeno (`OxygenSaturation` / SpO2%), detección de presión arterial con formato `T/A:` y `TA:`, y conversión automática de talla en centímetros a metros.
+    * **Catálogo Farmacéutico**: Desglose de principios activos, dosificaciones y presentaciones para los 259 medicamentos clínicos, preservando presentaciones orales y suspensiones pediátricas con claves compartidas.
+  * Migración aditiva automática en SQLite (`EnsureSchema`) que añade la columna `OxygenSaturation` de forma no destructiva.
+
+### Nube e Importación de Datos (TursoSyncView)
+* **Importación de Catálogos Excel (.xlsx / .csv)**:
+  * Motor nativo OpenXML ultra-ligero y rápido sin dependencias externas pesadas (`System.IO.Compression` + `System.Xml.Linq`).
+  * Lee hojas `MEDICAMENTOS` y `RECETA`: importa fármacos, claves, dosis, datos del médico tratante y expedientes clínicos con sus prescripciones.
+* **Importación y Restauración de Base de Datos SQLite (.db)**:
+  * Permite restaurar o sustituir la base de datos local completa con validación de cabecera mágica SQLite (`SQLite format 3`).
+  * Cierre preventivo de pools de conexión (`SqliteConnection.ClearAllPools()`), limpieza de archivos WAL/SHM y ejecución inmediata de migraciones aditivas de compatibilidad.
+* **Seguridad Crítica con Confirmación Explícita y Respaldo Previo**:
+  * **Respaldo Automático Previo**: Cada importación o reemplazo crea automáticamente una copia de seguridad íntegra de la base de datos antes de escribir un solo registro (`consultorio-YYYYMMDD-HHmmss.db`).
+  * **Diálogo Modal con Palabra de Confirmación**: Bloqueo estricto que exige escribir exactamente la palabra `CONFIRMAR` para desbloquear el botón de ejecución, evitando clics accidentales o sustituciones involuntarias.
+  * **Protección contra Doble Clic**: Ejecución bloqueada y deshabilitada mientras hay una operación en curso (`IsBusy` / `IsImporting`).
+
 ## [1.8.1] - 2026-10-06
 
 ### Seguridad y Privacidad

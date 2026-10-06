@@ -132,7 +132,7 @@ public class TursoSettingsService
     {
         var pairing = new
         {
-            Version = "1.8.1",
+            Version = "1.8.2",
             DatabaseUrl = CurrentSettings.DatabaseUrl,
             AuthToken = CurrentSettings.AuthToken,
             AssignedRole = targetRole.ToString(),

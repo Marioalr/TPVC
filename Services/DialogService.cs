@@ -12,7 +12,20 @@ public static class DialogService
 
     public static Action<string, string> ErrorHandler { get; set; } = (_, _) => { };
 
+    public static Func<string, string, string?> OpenFilePickerHandler { get; set; } = (filter, title) =>
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            Title = title
+        };
+        return dlg.ShowDialog() == true ? dlg.FileName : null;
+    };
+
     public static bool Confirm(string message, string title = "Confirmar acción") => ConfirmHandler(message, title);
 
     public static void ShowError(string message, string title = "TPVC") => ErrorHandler(message, title);
+
+    public static string? ShowOpenFileDialog(string filter, string title = "Seleccionar archivo") =>
+        OpenFilePickerHandler(filter, title);
 }

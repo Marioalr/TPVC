@@ -64,10 +64,11 @@ public class PatientConsultation : ISyncEntity
     public decimal? Height { get; set; } // Talla (m)
     public decimal? BMI { get; set; } // IMC (kg/m²)
     public decimal? Glucose { get; set; } // Glucosa (mg/dL)
+    public decimal? OxygenSaturation { get; set; } // SpO2 (%)
 
     public void EnsureNumericVitalSigns()
     {
-        if (BloodPressureSystolic.HasValue || Weight.HasValue || Glucose.HasValue) return;
+        if (BloodPressureSystolic.HasValue || Weight.HasValue || Glucose.HasValue || OxygenSaturation.HasValue) return;
         ParseAndSetVitalSigns(VitalSigns);
     }
 
@@ -75,8 +76,8 @@ public class PatientConsultation : ISyncEntity
     {
         if (string.IsNullOrWhiteSpace(vitalsText)) return;
 
-        // TA: 120/80
-        var taMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"TA:\s*(\d{2,3})\s*/\s*(\d{2,3})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // TA: 120/80 o T/A: 120/80
+        var taMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:T/?A|TA|PA|Presi[oó]n):\s*(\d{2,3})\s*/\s*(\d{2,3})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (taMatch.Success)
         {
             if (decimal.TryParse(taMatch.Groups[1].Value, out var sys)) BloodPressureSystolic = sys;
@@ -92,16 +93,28 @@ public class PatientConsultation : ISyncEntity
         if (frMatch.Success && decimal.TryParse(frMatch.Groups[1].Value, out var fr)) RespiratoryRate = fr;
 
         // Temp: 36.5
-        var tempMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Temp:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var tempMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:Temp|Temperatura):\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (tempMatch.Success && decimal.TryParse(tempMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var temp)) Temperature = temp;
 
         // Peso: 70.0
-        var pesoMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Peso:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var pesoMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:Peso|Weight):\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (pesoMatch.Success && decimal.TryParse(pesoMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var peso)) Weight = peso;
 
-        // Talla: 1.70
-        var tallaMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"Talla:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (tallaMatch.Success && decimal.TryParse(tallaMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var talla)) Height = talla;
+        // Talla: 1.70 o Talla: 95 cm
+        var tallaMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:Talla|Height|Estatura):\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (tallaMatch.Success && decimal.TryParse(tallaMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var talla))
+        {
+            if (talla > 3) talla /= 100m; // ej. 95 cm -> 0.95 m
+            Height = talla;
+        }
+
+        // SpO2%: 0.94 o SpO2: 95
+        var spo2Match = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:SpO2%?|SatO2|SPO2)\s*[:=]?\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (spo2Match.Success && decimal.TryParse(spo2Match.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var spo2))
+        {
+            if (spo2 > 0 && spo2 <= 1.0m) spo2 *= 100m;
+            OxygenSaturation = spo2;
+        }
 
         // IMC: 24.2
         var imcMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"IMC:\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -444,7 +457,7 @@ public class PatientRecord : ISyncEntity
         foreach (var c in ordered)
         {
             c.EnsureNumericVitalSigns();
-            if (c.Weight.HasValue || c.BloodPressureSystolic.HasValue || c.Glucose.HasValue || c.Temperature.HasValue)
+            if (c.Weight.HasValue || c.BloodPressureSystolic.HasValue || c.Glucose.HasValue || c.Temperature.HasValue || c.OxygenSaturation.HasValue)
             {
                 points.Add(new VitalSignsEvolutionPoint
                 {
@@ -455,7 +468,8 @@ public class PatientRecord : ISyncEntity
                     Glucose = c.Glucose,
                     HeartRate = c.HeartRate,
                     Temperature = c.Temperature,
-                    BMI = c.BMI
+                    BMI = c.BMI,
+                    OxygenSaturation = c.OxygenSaturation
                 });
             }
         }
@@ -474,11 +488,13 @@ public class VitalSignsEvolutionPoint
     public decimal? HeartRate { get; set; }
     public decimal? Temperature { get; set; }
     public decimal? BMI { get; set; }
+    public decimal? OxygenSaturation { get; set; }
 
     public string WeightText => Weight.HasValue ? $"{Weight.Value:F1} kg" : "--";
     public string BloodPressureText => (Systolic.HasValue && Diastolic.HasValue) ? $"{Systolic.Value:F0}/{Diastolic.Value:F0}" : "--";
     public string GlucoseText => Glucose.HasValue ? $"{Glucose.Value:F0} mg/dL" : "--";
     public string TempText => Temperature.HasValue ? $"{Temperature.Value:F1} °C" : "--";
+    public string OxygenSaturationText => OxygenSaturation.HasValue ? $"{OxygenSaturation.Value:F0}%" : "--";
 }
 
 public class VitalSignsChartPoint

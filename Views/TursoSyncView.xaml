@@ -102,6 +102,135 @@
                     </Grid>
                 </Border>
 
+                <!-- Tarjeta de Importación y Restauración de Datos -->
+                <Border Background="{DynamicResource ThemeSurface}" 
+                        BorderBrush="{DynamicResource ThemeBorder}" 
+                        BorderThickness="1" 
+                        CornerRadius="16" 
+                        Padding="24" 
+                        Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="📥" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Importación de Catálogos y Restauración de Base de Datos" 
+                                               FontSize="16" 
+                                               FontWeight="Bold" 
+                                               Foreground="{DynamicResource ThemeText}" 
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="Cargue su catálogo completo de medicamentos desde un archivo Excel (.xlsx / .csv) o restaure una base de datos SQLite (.db) completa." 
+                                           FontSize="12.5" 
+                                           Foreground="{DynamicResource ThemeTextSecondary}" 
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" 
+                                    Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                    BorderBrush="{DynamicResource ThemeAccent}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="16" 
+                                    Padding="12,5" 
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="🛡️ Respaldo Automático Previo" 
+                                           FontSize="11.5" 
+                                           FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource ThemeAccent}" />
+                            </Border>
+                        </Grid>
+
+                        <!-- Mensaje de estado de la última importación -->
+                        <Border Visibility="{Binding ImportStatusMessage, Converter={StaticResource BoolToVis}}" 
+                                Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                BorderBrush="{DynamicResource ThemeBorder}" 
+                                BorderThickness="1" 
+                                CornerRadius="8" 
+                                Padding="12,10" 
+                                Margin="0,0,0,16">
+                            <TextBlock Text="{Binding ImportStatusMessage}" 
+                                       FontSize="12.5" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{DynamicResource ThemeText}" 
+                                       TextWrapping="Wrap" />
+                        </Border>
+
+                        <!-- Botones de Acción de Importación -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Opción A: Importar XLSX / CSV -->
+                            <Border Grid.Column="0" 
+                                    Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="12" 
+                                    Padding="16">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="📊" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Catálogo Excel (.xlsx / .csv)" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="Lee hojas 'MEDICAMENTOS' y 'RECETA': importa fármacos, claves, dosis, perfil del médico tratante y expedientes." 
+                                               FontSize="11.5" 
+                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                               TextWrapping="Wrap" 
+                                               Margin="0,0,0,14" />
+                                    <Button Style="{DynamicResource AccentButton}" 
+                                            Command="{Binding StartImportExcelCommand}" 
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            Padding="14,9" 
+                                            HorizontalAlignment="Left">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📥" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="Importar Catálogo XLSX / CSV" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Opción B: Importar Base de Datos .db -->
+                            <Border Grid.Column="2" 
+                                    Background="{DynamicResource ThemeSurfaceSubtle}" 
+                                    BorderBrush="{DynamicResource ThemeBorder}" 
+                                    BorderThickness="1" 
+                                    CornerRadius="12" 
+                                    Padding="16">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="🗄️" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Base de Datos SQLite (.db)" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource ThemeText}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="Restaura una base de datos local completa. Crea respaldo previo y aplica migraciones aditivas automáticamente." 
+                                               FontSize="11.5" 
+                                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                                               TextWrapping="Wrap" 
+                                               Margin="0,0,0,14" />
+                                    <Button Style="{DynamicResource OutlineButton}" 
+                                            Command="{Binding StartImportDatabaseCommand}" 
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            Padding="14,9" 
+                                            HorizontalAlignment="Left">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🔄" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="Importar Base de Datos (.db)" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Tarjeta 1: Parámetros de Conexión a Turso -->
                 <Border Background="{DynamicResource ThemeSurface}" 
                         BorderBrush="{DynamicResource ThemeBorder}" 
@@ -549,6 +678,78 @@
                                 Command="{Binding ClosePairingModalCommand}" 
                                 Padding="14,8">
                             <TextBlock Text="Cerrar" FontSize="12.5" />
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Modal Flotante de Confirmación Crítica (Escribir CONFIRMAR) -->
+        <Grid Panel.ZIndex="1000" Visibility="{Binding IsImportConfirmModalOpen, Converter={StaticResource BoolToVis}}">
+            <Border Background="#AA000000" />
+            <Border Background="{DynamicResource ThemeSurface}" 
+                    BorderBrush="{DynamicResource ThemeBorder}" 
+                    BorderThickness="1.5" 
+                    CornerRadius="18" 
+                    Width="600" 
+                    VerticalAlignment="Center" 
+                    HorizontalAlignment="Center" 
+                    Padding="28">
+                <StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Text="⚠️" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ImportModalTitle}" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeDanger}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="✕" Style="{DynamicResource OutlineButton}" Padding="8,4" Command="{Binding CancelImportCommand}" />
+                    </Grid>
+
+                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
+                            BorderBrush="{DynamicResource ThemeBorder}" 
+                            BorderThickness="1" 
+                            CornerRadius="10" 
+                            Padding="14" 
+                            Margin="0,0,0,16">
+                        <TextBlock Text="{Binding ImportModalWarning}" 
+                                   FontSize="12.5" 
+                                   Foreground="{DynamicResource ThemeText}" 
+                                   TextWrapping="Wrap" 
+                                   LineHeight="19" />
+                    </Border>
+
+                    <TextBlock Text="Escriba exactamente la palabra CONFIRMAR para autorizar la operación:" 
+                               FontSize="12" 
+                               FontWeight="Bold" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               Margin="0,0,0,6" />
+
+                    <TextBox Text="{Binding ImportConfirmWord, UpdateSourceTrigger=PropertyChanged}" 
+                             FontSize="14" 
+                             FontWeight="Bold" 
+                             FontFamily="Consolas, monospace"
+                             Foreground="{DynamicResource ThemeText}"
+                             Padding="10,8" 
+                             Margin="0,0,0,18" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding CancelImportCommand}" 
+                                Padding="16,8" 
+                                Margin="0,0,10,0">
+                            <TextBlock Text="Cancelar" FontSize="12.5" />
+                        </Button>
+                        <Button Style="{DynamicResource DangerButton}" 
+                                Command="{Binding ExecuteConfirmedImportCommand}" 
+                                IsEnabled="{Binding CanProceedWithImport}"
+                                Padding="18,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚡" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Proceder con la Importación" FontWeight="Bold" FontSize="12.5" VerticalAlignment="Center" />
+                            </StackPanel>
                         </Button>
                     </StackPanel>
                 </StackPanel>

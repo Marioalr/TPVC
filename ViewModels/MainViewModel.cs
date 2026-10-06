@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.8.1";
+    private string _appVersion = "1.8.2";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -127,7 +127,8 @@ public partial class MainViewModel : ObservableObject
         ClinicProfileService? clinicProfileService = null,
         PrintingService? printingService = null,
         TursoSyncService? tursoSyncService = null,
-        TursoSettingsService? tursoSettingsService = null)
+        TursoSettingsService? tursoSettingsService = null,
+        DataImportService? dataImportService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -196,7 +197,7 @@ public partial class MainViewModel : ObservableObject
         MovementsVM = new MovementsViewModel(inventoryService);
         ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
         SettingsVM = new SettingsViewModel(themeService, updateService, backupService);
-        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService);
+        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService, dataImportService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
             NavigateTo,
