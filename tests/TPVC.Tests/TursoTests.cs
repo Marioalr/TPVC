@@ -51,6 +51,31 @@ public class TursoTests
         // 4. already full pipeline url
         var url4 = TursoClient.NormalizePipelineUrl("https://my-db-mario.turso.io/v2/pipeline");
         Assert.AreEqual("https://my-db-mario.turso.io/v2/pipeline", url4);
+
+        // 5. quoted url
+        var url5 = TursoClient.NormalizePipelineUrl("\"libsql://my-db-mario.turso.io\"");
+        Assert.AreEqual("https://my-db-mario.turso.io/v2/pipeline", url5);
+
+        // 6. turso:// scheme and query strings
+        var url6 = TursoClient.NormalizePipelineUrl("turso://my-db-mario.turso.io?authToken=abc&tls=true");
+        Assert.AreEqual("https://my-db-mario.turso.io/v2/pipeline", url6);
+
+        // 7. bare db name without domain throws informative exception
+        Assert.ThrowsExactly<ArgumentException>(() =>
+        {
+            TursoClient.NormalizePipelineUrl("clinica-db");
+        });
+    }
+
+    [TestMethod]
+    public void TursoClient_CleanToken_StripsQuotesWhitespaceAndBearerPrefix()
+    {
+        Assert.AreEqual("eyJhbGciOi...", TursoClient.CleanToken("Bearer eyJhbGciOi..."));
+        Assert.AreEqual("eyJhbGciOi...", TursoClient.CleanToken("\"Bearer eyJhbGciOi...\""));
+        Assert.AreEqual("eyJhbGciOi...", TursoClient.CleanToken("'bearer eyJhbGciOi...'"));
+        Assert.AreEqual("eyJ123456", TursoClient.CleanToken("  eyJ123\r\n456  "));
+        Assert.AreEqual(string.Empty, TursoClient.CleanToken(null));
+        Assert.AreEqual(string.Empty, TursoClient.CleanToken("   "));
     }
 
     [TestMethod]
@@ -215,6 +240,72 @@ public class TursoTests
         {
             await client.QueryAsync("SELECT * FROM UnknownTable;");
         });
+    }
+
+    [TestMethod]
+    public void TursoSettingsService_NeverPersistsPlaintextTokenToDisk()
+    {
+        var service = new TursoSettingsService(_tempConfigPath);
+        var secret = "super-secret-turso-token-98765";
+        service.SaveSettings(new TursoSettings
+        {
+            DatabaseUrl = "https://clinica.turso.io",
+            AuthToken = secret
+        });
+
+        var fileContent = File.ReadAllText(_tempConfigPath);
+        Assert.IsFalse(fileContent.Contains(secret), "El token plano nunca debe aparecer en el archivo JSON de configuración.");
+        Assert.IsTrue(fileContent.Contains("ProtectedAuthToken"), "El JSON debe contener el token cifrado en disco.");
+    }
+
+    [TestMethod]
+    public async Task TursoClient_QueryAsync_ParsesStringNumbersSafely()
+    {
+        var mockResponse = @"{
+            ""results"": [
+                {
+                    ""type"": ""ok"",
+                    ""response"": {
+                        ""type"": ""execute"",
+                        ""result"": {
+                            ""cols"": [
+                                { ""name"": ""Count"" },
+                                { ""name"": ""Rate"" }
+                            ],
+                            ""rows"": [
+                                [
+                                    { ""type"": ""integer"", ""value"": ""42"" },
+                                    { ""type"": ""float"", ""value"": ""99.95"" }
+                                ]
+                            ],
+                            ""affected_row_count"": 0
+                        }
+                    }
+                }
+            ]
+        }";
+
+        var handler = new MockHttpMessageHandler(HttpStatusCode.OK, mockResponse);
+        using var httpClient = new HttpClient(handler);
+        using var client = new TursoClient("https://dummy.turso.io", "token", httpClient);
+
+        var rows = await client.QueryAsync("SELECT 42 AS Count, 99.95 AS Rate;");
+        Assert.AreEqual(1, rows.Count);
+        Assert.AreEqual(42L, rows[0]["Count"]);
+        Assert.AreEqual(99.95, rows[0]["Rate"]);
+    }
+
+    [TestMethod]
+    public async Task TursoClient_TestConnectionAsync_ReturnsInformativeErrorOn401()
+    {
+        var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "{\"error\":\"JWT validation failed\"}");
+        using var httpClient = new HttpClient(handler);
+        using var client = new TursoClient("https://dummy.turso.io", "expired-token", httpClient);
+
+        var (success, latency, error) = await client.TestConnectionAsync();
+        Assert.IsFalse(success);
+        Assert.IsNotNull(error);
+        Assert.IsTrue(error.Contains("HTTP 401") || error.Contains("autenticación"), "El error debe ser informativo sobre el token.");
     }
 
     private class MockHttpMessageHandler : HttpMessageHandler

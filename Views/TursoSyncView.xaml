@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:conv="clr-namespace:TPVC.Converters"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:TursoSyncViewModel}"
              d:DesignHeight="900" d:DesignWidth="1050"
@@ -129,11 +130,28 @@
                                    FontWeight="SemiBold" 
                                    Foreground="{DynamicResource ThemeText}" 
                                    Margin="0,0,0,6" />
-                        <TextBox Text="{Binding DatabaseUrl, UpdateSourceTrigger=PropertyChanged}" 
-                                 Style="{DynamicResource ModernTextBox}" 
-                                 Padding="12,10" 
-                                 FontSize="13" 
-                                 Margin="0,0,0,14" />
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding DatabaseUrl, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{DynamicResource ModernTextBox}" 
+                                     Padding="12,10" 
+                                     FontSize="13" />
+                            <Button Grid.Column="2"
+                                    Style="{DynamicResource OutlineButton}"
+                                    Command="{Binding PasteDatabaseUrlCommand}"
+                                    ToolTip="Pegar URL desde el portapapeles"
+                                    Padding="12,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Pegar" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
                         <!-- Token de Autenticación -->
                         <TextBlock Text="Token de Autenticación de Turso (Bearer Token):" 
@@ -141,12 +159,55 @@
                                    FontWeight="SemiBold" 
                                    Foreground="{DynamicResource ThemeText}" 
                                    Margin="0,0,0,6" />
-                        <TextBox Text="{Binding AuthToken, UpdateSourceTrigger=PropertyChanged}" 
-                                 Style="{DynamicResource ModernTextBox}" 
-                                 Padding="12,10" 
-                                 FontSize="12" 
-                                 FontFamily="Consolas, monospace" 
-                                 Margin="0,0,0,14" />
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Campo con máscara (predeterminado) -->
+                            <PasswordBox x:Name="TursoTokenPasswordBox"
+                                         Grid.Column="0"
+                                         Style="{DynamicResource ModernPasswordBox}"
+                                         Padding="12,10" 
+                                         FontSize="13"
+                                         Visibility="{Binding IsAuthTokenVisible, Converter={StaticResource InverseBoolToVis}}"
+                                         helpers:PasswordBoxHelper.BindPassword="True"
+                                         helpers:PasswordBoxHelper.BoundPassword="{Binding AuthToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <!-- Campo en texto claro (al presionar ver) -->
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding AuthToken, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{DynamicResource ModernTextBox}" 
+                                     Padding="12,10" 
+                                     FontSize="12" 
+                                     FontFamily="Consolas, monospace"
+                                     Visibility="{Binding IsAuthTokenVisible, Converter={StaticResource BoolToVis}}" />
+
+                            <!-- Botón Mostrar / Ocultar Token -->
+                            <Button Grid.Column="2"
+                                    Style="{DynamicResource OutlineButton}"
+                                    Command="{Binding ToggleAuthTokenVisibilityCommand}"
+                                    ToolTip="Mostrar u ocultar token"
+                                    Padding="10,8">
+                                <TextBlock Text="{Binding AuthTokenVisibilityIcon}" FontSize="14" VerticalAlignment="Center" />
+                            </Button>
+
+                            <!-- Botón Pegar Portapapeles -->
+                            <Button Grid.Column="4"
+                                    Style="{DynamicResource OutlineButton}"
+                                    Command="{Binding PasteAuthTokenCommand}"
+                                    ToolTip="Pegar token desde el portapapeles"
+                                    Padding="12,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Pegar" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
                         <!-- Fila de Acciones de Conexión -->
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
@@ -187,6 +248,7 @@
                                    FontSize="12.5" 
                                    FontWeight="SemiBold" 
                                    Foreground="{DynamicResource ThemeAccent}" 
+                                   TextWrapping="Wrap" 
                                    Margin="0,6,0,0" />
 
                         <!-- Mensaje de guardado -->

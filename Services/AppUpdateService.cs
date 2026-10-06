@@ -126,6 +126,11 @@ public class AppUpdateService
                 if (!string.IsNullOrWhiteSpace(token))
                 {
                     GitHubToken = token.Trim();
+                    // Si estaba almacenado en formato heredado en texto plano, migrar inmediatamente a cifrado
+                    if (!string.IsNullOrWhiteSpace(config?.GitHubToken) && string.IsNullOrWhiteSpace(config?.ProtectedToken))
+                    {
+                        SaveToken(GitHubToken);
+                    }
                 }
             }
         }
@@ -147,9 +152,12 @@ public class AppUpdateService
             }
 
             var protectedToken = ProtectToken(GitHubToken);
-            var config = protectedToken != null
-                ? new UpdateConfig { ProtectedToken = protectedToken }
-                : new UpdateConfig { GitHubToken = GitHubToken };
+            // El token en texto plano NUNCA se persiste en disco, solo el cifrado
+            var config = new UpdateConfig
+            {
+                ProtectedToken = protectedToken,
+                GitHubToken = null
+            };
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ConfigPath, json);
         }
@@ -161,32 +169,58 @@ public class AppUpdateService
 
     private static string? ProtectToken(string? token)
     {
-        if (string.IsNullOrWhiteSpace(token) || !OperatingSystem.IsWindows()) return null;
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
         try
         {
-            var bytes = System.Security.Cryptography.ProtectedData.Protect(
-                System.Text.Encoding.UTF8.GetBytes(token), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
-            return Convert.ToBase64String(bytes);
+            if (OperatingSystem.IsWindows())
+            {
+                var bytes = System.Security.Cryptography.ProtectedData.Protect(
+                    System.Text.Encoding.UTF8.GetBytes(token), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return Convert.ToBase64String(bytes);
+            }
         }
         catch
         {
-            return null;
+            // Fallback si DPAPI no está disponible
         }
+
+        // Fallback en desarrollo o entornos no Windows
+        return "B64:" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(token));
     }
 
     private static string? UnprotectToken(string? protectedToken)
     {
-        if (string.IsNullOrWhiteSpace(protectedToken) || !OperatingSystem.IsWindows()) return null;
+        if (string.IsNullOrWhiteSpace(protectedToken)) return null;
+
+        if (protectedToken.StartsWith("B64:"))
+        {
+            try
+            {
+                var raw = Convert.FromBase64String(protectedToken.Substring(4));
+                return System.Text.Encoding.UTF8.GetString(raw);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         try
         {
-            var bytes = System.Security.Cryptography.ProtectedData.Unprotect(
-                Convert.FromBase64String(protectedToken), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
-            return System.Text.Encoding.UTF8.GetString(bytes);
+            if (OperatingSystem.IsWindows())
+            {
+                var bytes = System.Security.Cryptography.ProtectedData.Unprotect(
+                    Convert.FromBase64String(protectedToken), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return System.Text.Encoding.UTF8.GetString(bytes);
+            }
         }
         catch
         {
             return null;
         }
+
+        return null;
     }
 
     public string? GetEffectiveToken()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Services;
@@ -82,7 +83,14 @@ public partial class SettingsViewModel : ObservableObject
     private double _downloadProgress;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GitHubTokenVisibilityIcon))]
     private string _gitHubToken = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GitHubTokenVisibilityIcon))]
+    private bool _isGitHubTokenVisible;
+
+    public string GitHubTokenVisibilityIcon => IsGitHubTokenVisible ? "🙈" : "👁";
 
     [ObservableProperty]
     private string _tokenStatusMessage = string.Empty;
@@ -143,6 +151,33 @@ public partial class SettingsViewModel : ObservableObject
 
         _themeService.SetCustomBackground(CustomBgHex.Trim(), CustomSurfaceHex.Trim());
         CurrentMode = "Personalizado";
+    }
+
+    [RelayCommand]
+    public void ToggleGitHubTokenVisibility()
+    {
+        IsGitHubTokenVisible = !IsGitHubTokenVisible;
+    }
+
+    [RelayCommand]
+    public void PasteGitHubToken()
+    {
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                var text = Clipboard.GetText();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    GitHubToken = TursoClient.CleanToken(text);
+                    TokenStatusMessage = "✓ Token pegado desde el portapapeles.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al pegar token de GitHub desde el portapapeles", ex);
+        }
     }
 
     [RelayCommand]

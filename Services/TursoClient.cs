@@ -39,10 +39,10 @@ public class TursoClient : IDisposable
 
     public TursoClient(string databaseUrl, string token, HttpClient? httpClient = null)
     {
-        if (string.IsNullOrWhiteSpace(databaseUrl)) throw new ArgumentException("Database URL cannot be empty", nameof(databaseUrl));
-        _token = token?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(databaseUrl)) throw new ArgumentException("La URL de la base de datos de Turso no puede estar vacía.", nameof(databaseUrl));
+        _token = CleanToken(token);
 
-        DatabaseUrl = databaseUrl.Trim();
+        DatabaseUrl = databaseUrl.Trim().Trim('"', '\'', '`');
         _pipelineUrl = NormalizePipelineUrl(DatabaseUrl);
 
         if (httpClient != null)
@@ -57,12 +57,51 @@ public class TursoClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Limpia y normaliza un token de Turso, eliminando comillas accidentales, prefijos Bearer y saltos de línea.
+    /// </summary>
+    public static string CleanToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return string.Empty;
+
+        var clean = token.Trim().Trim('"', '\'', '`');
+        clean = clean.Replace("\r", "").Replace("\n", "").Replace(" ", "").Trim();
+
+        if (clean.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase))
+        {
+            clean = clean.Substring("Bearer".Length).Trim().Trim('"', '\'', '`');
+        }
+
+        return clean;
+    }
+
+    /// <summary>
+    /// Normaliza la URL de Turso a un endpoint válido del protocolo Hrana (/v2/pipeline).
+    /// Soporta esquemas libsql://, https://, turso:// y hosts planos con validación de host.
+    /// </summary>
     public static string NormalizePipelineUrl(string url)
     {
-        var clean = url.Trim();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            throw new ArgumentException("La URL de la base de datos de Turso no puede estar vacía.", nameof(url));
+        }
+
+        var clean = url.Trim().Trim('"', '\'', '`');
+
+        // Quitar parámetros de consulta si se pegó una cadena de conexión con argumentos (?authToken=... etc.)
+        var qIdx = clean.IndexOf('?');
+        if (qIdx >= 0)
+        {
+            clean = clean.Substring(0, qIdx);
+        }
+
         if (clean.StartsWith("libsql://", StringComparison.OrdinalIgnoreCase))
         {
             clean = "https://" + clean.Substring("libsql://".Length);
+        }
+        else if (clean.StartsWith("turso://", StringComparison.OrdinalIgnoreCase))
+        {
+            clean = "https://" + clean.Substring("turso://".Length);
         }
         else if (!clean.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                  !clean.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -75,6 +114,18 @@ public class TursoClient : IDisposable
         {
             clean += "/v2/pipeline";
         }
+
+        if (Uri.TryCreate(clean, UriKind.Absolute, out var parsedUri))
+        {
+            var host = parsedUri.Host;
+            if (!host.Contains('.') && !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1")
+            {
+                throw new ArgumentException(
+                    $"La dirección '{host}' parece ser solo el nombre de la base de datos. " +
+                    "Turso requiere la URL completa del host (por ejemplo: libsql://{host}-usuario.turso.io o https://{host}.turso.io).");
+            }
+        }
+
         return clean;
     }
 
@@ -83,6 +134,11 @@ public class TursoClient : IDisposable
     /// </summary>
     public async Task<(bool Success, long LatencyMs, string? Error)> TestConnectionAsync(CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            return (false, 0, "Token de autenticación no proporcionado. Ingrese el token de la base de datos generado en Turso.");
+        }
+
         var sw = Stopwatch.StartNew();
         try
         {
@@ -92,7 +148,12 @@ public class TursoClient : IDisposable
             {
                 return (true, sw.ElapsedMilliseconds, null);
             }
-            return (false, sw.ElapsedMilliseconds, "Turso no devolvió resultados.");
+            return (false, sw.ElapsedMilliseconds, "Turso respondió pero no devolvió filas de prueba.");
+        }
+        catch (TursoException tex)
+        {
+            sw.Stop();
+            return (false, sw.ElapsedMilliseconds, tex.Message);
         }
         catch (Exception ex)
         {
@@ -303,9 +364,9 @@ public class TursoClient : IDisposable
 
             return type switch
             {
-                "integer" => valNode.GetValue<long>(),
-                "float" => valNode.GetValue<double>(),
-                "text" => valNode.GetValue<string>(),
+                "integer" => ParseLongSafe(valNode),
+                "float" => ParseDoubleSafe(valNode),
+                "text" => valNode.ToString(),
                 "blob" => obj["base64"]?.GetValue<string>(),
                 _ => valNode.ToString()
             };
@@ -321,6 +382,20 @@ public class TursoClient : IDisposable
         }
 
         return node.ToString();
+    }
+
+    private static long ParseLongSafe(JsonNode node)
+    {
+        if (node is JsonValue val && val.TryGetValue<long>(out var l)) return l;
+        if (long.TryParse(node.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        return 0L;
+    }
+
+    private static double ParseDoubleSafe(JsonNode node)
+    {
+        if (node is JsonValue val && val.TryGetValue<double>(out var d)) return d;
+        if (double.TryParse(node.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        return 0.0;
     }
 
     private static void CheckResultError(JsonNode? result)
@@ -343,6 +418,14 @@ public class TursoClient : IDisposable
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
         }
 
+        req.Headers.Accept.Clear();
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        if (!req.Headers.UserAgent.Any())
+        {
+            req.Headers.UserAgent.ParseAdd("TPVC-Desktop/1.8.0");
+        }
+
         var json = requestBody.ToJsonString();
         req.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -353,14 +436,27 @@ public class TursoClient : IDisposable
         }
         catch (HttpRequestException ex)
         {
-            throw new TursoException($"No se pudo conectar con el servidor de Turso ({_pipelineUrl}): {ex.Message}", "NETWORK_ERROR", ex);
+            throw new TursoException($"No se pudo conectar con el servidor de Turso ({_pipelineUrl}): {ex.Message}. Verifique la conexión a internet o la URL.", "NETWORK_ERROR", ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new TursoException($"Tiempo de espera agotado al conectar con Turso ({_pipelineUrl}).", "TIMEOUT", ex);
         }
 
         var respContent = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
         {
-            throw new TursoException($"Turso respondió con error HTTP {(int)resp.StatusCode} ({resp.ReasonPhrase}): {respContent}", $"HTTP_{(int)resp.StatusCode}");
+            var code = (int)resp.StatusCode;
+            string diag = code switch
+            {
+                401 => $"Error de autenticación (HTTP 401 Unauthorized): El token no es válido o ha expirado. Verifique que sea un token de base de datos generado con 'turso db tokens create' o en Turso Dashboard -> Connect -> Generate token.",
+                403 => $"Acceso denegado (HTTP 403 Forbidden): El token no tiene permisos suficientes para esta base de datos.",
+                404 => $"Base de datos o endpoint no encontrado (HTTP 404 Not Found): Verifique que la URL ingresada corresponda a una base de datos existente en Turso.",
+                _ => $"Turso respondió con error HTTP {code} ({resp.ReasonPhrase}): {respContent}"
+            };
+
+            throw new TursoException(diag, $"HTTP_{code}");
         }
 
         var node = JsonNode.Parse(respContent);

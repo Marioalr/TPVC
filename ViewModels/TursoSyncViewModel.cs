@@ -30,7 +30,14 @@ public partial class TursoSyncViewModel : ObservableObject
     private string _databaseUrl = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthTokenVisibilityIcon))]
     private string _authToken = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthTokenVisibilityIcon))]
+    private bool _isAuthTokenVisible;
+
+    public string AuthTokenVisibilityIcon => IsAuthTokenVisible ? "🙈" : "👁";
 
     [ObservableProperty]
     private string _deviceName = string.Empty;
@@ -181,11 +188,66 @@ public partial class TursoSyncViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public void ToggleAuthTokenVisibility()
+    {
+        IsAuthTokenVisible = !IsAuthTokenVisible;
+    }
+
+    [RelayCommand]
+    public void PasteAuthToken()
+    {
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                var text = Clipboard.GetText();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    AuthToken = TursoClient.CleanToken(text);
+                    SaveStatusMessage = "✓ Token pegado desde el portapapeles.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al pegar token desde el portapapeles", ex);
+        }
+    }
+
+    [RelayCommand]
+    public void PasteDatabaseUrl()
+    {
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                var text = Clipboard.GetText();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    DatabaseUrl = text.Trim().Trim('"', '\'', '`');
+                    SaveStatusMessage = "✓ URL pegada desde el portapapeles.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al pegar URL desde el portapapeles", ex);
+        }
+    }
+
+    [RelayCommand]
     public async Task TestConnectionAsync()
     {
         if (string.IsNullOrWhiteSpace(DatabaseUrl))
         {
-            TestConnectionResult = "Por favor ingrese la URL de la base de datos de Turso.";
+            TestConnectionResult = "✕ Falta la URL: Ingrese la dirección de su base de datos de Turso (ej. libsql://mi-clinica.turso.io).";
+            IsTestSuccessful = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(AuthToken))
+        {
+            TestConnectionResult = "✕ Falta el Token: Ingrese el Token de autenticación de Turso (Bearer Token).";
             IsTestSuccessful = false;
             return;
         }
@@ -201,18 +263,28 @@ public partial class TursoSyncViewModel : ObservableObject
             if (success)
             {
                 IsTestSuccessful = true;
-                TestConnectionResult = $"✓ Conexión exitosa con Turso Cloud (Latencia: {latency} ms)";
+                TestConnectionResult = $"✓ Conexión exitosa con Turso Cloud (Latencia: {latency} ms). Base de datos lista.";
             }
             else
             {
                 IsTestSuccessful = false;
-                TestConnectionResult = $"✕ Error al conectar: {error}";
+                TestConnectionResult = $"✕ {error}";
             }
+        }
+        catch (ArgumentException aex)
+        {
+            IsTestSuccessful = false;
+            TestConnectionResult = $"✕ {aex.Message}";
+        }
+        catch (TursoException tex)
+        {
+            IsTestSuccessful = false;
+            TestConnectionResult = $"✕ {tex.Message}";
         }
         catch (Exception ex)
         {
             IsTestSuccessful = false;
-            TestConnectionResult = $"✕ Excepción de red: {ex.Message}";
+            TestConnectionResult = $"✕ Excepción al conectar: {ex.Message}";
         }
         finally
         {
