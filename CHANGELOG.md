@@ -31,6 +31,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * **Utilidad `Debouncer`**: Corregida fuga potencial de recursos liberando y cancelando adecuadamente el `CancellationTokenSource` anterior antes de instanciar uno nuevo.
 * **Expedientes Médicos (`MedicalRecordsViewModel`)**: Sustituido método de riesgo `async void` por `HandleSaleCompletedFromConsultationAsync` con manejo exhaustivo de excepciones y empaquetado seguro.
 * **Inventario (`InventoryService`)**: Agregado método `NotifyAllChanged()` para refrescar reactivamente todos los catálogos en UI tras la descarga de cambios de la nube.
+* **Carga Inicial de "Nube y Turso Cloud" (`TursoSyncView`)**: Resuelto fallo de interfaz (`XamlParseException`) al hacer clic por primera vez en la pestaña de Turso o en el botón de sincronización de la barra inferior, originado por la clave de recurso estático `InverseBoolConverter` y agregados los estilos y alias de botones correspondientes junto con despacho seguro en el hilo de UI (`Dispatcher`).
 * **Cobertura de Pruebas**: Suite de pruebas unitarias ampliada a **130 pruebas al 100% de éxito**.
 
 ## [1.7.0] - 2026-10-05

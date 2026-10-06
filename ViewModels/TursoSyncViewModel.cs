@@ -107,19 +107,38 @@ public partial class TursoSyncViewModel : ObservableObject
 
         _syncService.StatusChanged += (s, m) =>
         {
-            Status = s;
-            StatusMessage = m;
-            RefreshLastSyncText();
-            RefreshQuotaDisplay();
+            RunOnUIThread(() =>
+            {
+                Status = s;
+                StatusMessage = m;
+                RefreshLastSyncText();
+                RefreshQuotaDisplay();
+            });
         };
 
         _syncService.SyncCompleted += (res) =>
         {
-            RefreshLastSyncText();
-            RefreshQuotaDisplay();
+            RunOnUIThread(() =>
+            {
+                RefreshLastSyncText();
+                RefreshQuotaDisplay();
+            });
         };
 
         LoadFromSettings();
+    }
+
+    private static void RunOnUIThread(Action action)
+    {
+        var app = Application.Current;
+        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+        {
+            app.Dispatcher.Invoke(action);
+        }
+        else
+        {
+            action();
+        }
     }
 
     public void LoadFromSettings()
