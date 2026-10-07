@@ -2,6 +2,24 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.10.0] - 2026-10-07
+
+### Cambiado — Pantalla de consulta
+* **Nueva pantalla de consulta en curso**: cinco secciones en el orden de la entrevista (motivo y padecimiento, signos vitales, exploración, diagnóstico CIE-10, tratamiento y receta). Se abre una a la vez y las cerradas muestran un resumen de lo capturado; **Ctrl + ↓/↑** cambian de sección y **Ctrl + Enter** termina la consulta.
+* Ayudas para llenar durante la entrevista: motivos frecuentes y hallazgos normales de un clic, aviso de signos vitales fuera de rango, SpO₂, IMC automático y la última consulta del paciente a la vista.
+* **Cuenta de la consulta** siempre visible: honorario, medicamentos que se surten en el consultorio, insumos y servicios (inyección, curación, revisión especial) se agregan en cuanto se usan para no olvidar cobrarlos.
+* Receta con casilla **"Se surte aquí"**, marcada por defecto cuando hay existencias (desmarcarla quita el cargo).
+* **Terminar consulta** abre una sola ventana con la nota guardada, la receta (imprimir / PDF), la cuenta editable, la forma de pago y el cambio. *Volver a la consulta* (o Esc) permite agregar algo que faltó. Si se quitan todos los cargos (consulta de cortesía) termina sin registrar una venta en ceros.
+* **Descartar** (paciente equivocado o se retiró) borra el avance guardado y no cobra nada.
+* Listas de **posología frecuente, dosis pediátrica y medidas generales**: se despliegan y al escribir el cursor salta a la opción (sin acentos ni mayúsculas); Enter la elige.
+
+### Eliminado
+* Botones y enlaces de la consulta hacia el Punto de Venta ("Finalizar y Cobrar en POS", "Agregar al POS", "Cargar Receta a POS", pestaña "Servicios y Cobro (POS)" y el POS embebido). El POS solo puede llevar a la consulta (*Abrir consulta*), nunca al revés.
+
+### Corregido
+* Falsa **alerta de alergia** al recetar un medicamento escrito a mano: se evaluaba el genérico del producto que la lista dejaba preseleccionado (p. ej. alergia a penicilina al recetar alcohol etílico).
+* Al cobrar una consulta no se limpiaban la exploración por aparatos, los signos vitales ni las medidas generales capturadas.
+
 ## [1.9.0] - 2026-10-07
 
 ### Corregido — Sincronización con Turso

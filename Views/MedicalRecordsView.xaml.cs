@@ -94,6 +94,10 @@ public partial class MedicalRecordsView : UserControl
                 ServiceModalSearchTextBox?.SelectAll();
             }, DispatcherPriority.Input);
         }
+        else if (e.PropertyName == nameof(MedicalRecordsViewModel.ConsultationSection))
+        {
+            FocusActiveConsultationSection();
+        }
         else if (e.PropertyName == nameof(MedicalRecordsViewModel.IsCatalogBrowserModalOpen))
         {
             if (vm.IsCatalogBrowserModalOpen)
@@ -109,6 +113,54 @@ public partial class MedicalRecordsView : UserControl
                 RestoreModalFocus(vm);
             }
         }
+    }
+
+    /// <summary>
+    /// Atajos de la consulta: Ctrl+↓/↑ cambian de sección y Ctrl+Enter termina. Se atienden en
+    /// Preview porque dentro de un cuadro multilínea Ctrl+↑/↓ mueven por párrafos y no llegarían.
+    /// </summary>
+    private void ConsultationWorkspace_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control || DataContext is not MedicalRecordsViewModel vm) return;
+
+        ICommand? command = e.Key switch
+        {
+            Key.Down => vm.NextConsultationSectionCommand,
+            Key.Up => vm.PreviousConsultationSectionCommand,
+            Key.Enter => vm.FinalizeConsultationCommand,
+            _ => null
+        };
+        if (command == null) return;
+
+        e.Handled = true;
+        if (command.CanExecute(null)) command.Execute(null);
+    }
+
+    /// <summary>Al abrir una sección el cursor queda en su primer campo, listo para escribir.</summary>
+    private void FocusActiveConsultationSection()
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (FindFirstVisible<TextBox>(ConsultationSectionsPanel) is { } box)
+            {
+                box.Focus();
+                box.CaretIndex = box.Text.Length;
+                box.BringIntoView();
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private static T? FindFirstVisible<T>(DependencyObject? root) where T : UIElement
+    {
+        if (root == null) return null;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is UIElement { IsVisible: false }) continue;
+            if (child is T match && match.IsEnabled) return match;
+            if (FindFirstVisible<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -211,6 +263,12 @@ public partial class MedicalRecordsView : UserControl
             vm.DismissInfoModal();
             e.Handled = true;
             return;
+        }
+        if (vm.IsPosModalOpen)
+        {
+            // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
+            vm.ClosePosModal();
+            e.Handled = true;
         }
     }
 

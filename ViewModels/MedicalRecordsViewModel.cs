@@ -716,6 +716,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             ConsultationTA = formatted;
         }
+        OnPropertyChanged(nameof(VitalSignsWarning));
+        OnPropertyChanged(nameof(HasVitalSignsWarning));
     }
 
     [ObservableProperty]
@@ -1644,6 +1646,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
         OnPropertyChanged(nameof(ConsultationActionButtonText));
+        NotifyAccountChanged();
 
         if (HasActiveConsultation)
         {
@@ -2666,6 +2669,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(ConsultationWeight)) vitalsParts.Add($"Peso: {ConsultationWeight.Trim()} kg");
         if (!string.IsNullOrWhiteSpace(ConsultationHeight)) vitalsParts.Add($"Talla: {ConsultationHeight.Trim()} m");
         if (!string.IsNullOrWhiteSpace(ConsultationGlucose)) vitalsParts.Add($"Glucosa: {ConsultationGlucose.Trim()} mg/dL");
+        if (!string.IsNullOrWhiteSpace(ConsultationSpO2)) vitalsParts.Add($"SpO2: {ConsultationSpO2.Trim().TrimEnd('%')}%");
         if (!string.IsNullOrWhiteSpace(ConsultationIMC) && !ConsultationIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {ConsultationIMC.Trim()}");
 
         var vitalSignsFormatted = vitalsParts.Count > 0 
@@ -2790,26 +2794,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _consultationService.StartConsultation(SelectedPatient);
             SyncActiveConsultation();
 
-            ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}";
-            ConsultationChiefComplaint = string.Empty;
-            ConsultationSystemsReview = string.Empty;
-            ConsultationPhysicalExam = string.Empty;
-            ConsultationDiagnosis = string.Empty;
-            ConsultationTreatmentPlan = string.Empty;
-            ConsultationNotes = string.Empty;
-            ConsultationGlucose = string.Empty;
-            ConsultationTA = string.Empty;
-            ConsultationFC = string.Empty;
-            ConsultationFR = string.Empty;
-            ConsultationTemp = string.Empty;
-            ConsultationWeight = string.Empty;
-            ConsultationHeight = string.Empty;
-            ConsultationIMC = "Valores no disponibles";
-            ConsultationPrescriptions.Clear();
+            ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
+            ClearConsultationFields();
             PatientDetailTab = "Resumen";
-
-            InfoModalMessage = $"¡Consulta iniciada con éxito para {SelectedPatient.FullName}!\nFolio: {_consultationService.CurrentConsultation?.Folio}\n\nPuede registrar en tiempo real los signos vitales, exploración por aparatos y sistemas, diagnóstico, tratamiento y receta médica.";
-            IsInfoModalVisible = true;
+            NotifyAccountChanged();
+            // La pantalla de consulta ya indica que está en curso: sin ventana emergente que interrumpa
         }
     }
 
@@ -2850,7 +2839,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (_consultationService == null || !_consultationService.HasActiveConsultation)
         {
-            InfoModalMessage = "No hay ninguna consulta médica activa para finalizar.";
+            InfoModalMessage = "No hay ninguna consulta médica activa para terminar.";
             IsInfoModalVisible = true;
             return;
         }
@@ -2862,12 +2851,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Registrar la fecha y hora final de la consulta y guardarla en BD si aún no se ha guardado
+        // Guardar (o actualizar) la nota con la hora de término; si ya había un avance guardado,
+        // se actualiza el mismo registro (mismo folio)
         var endedAt = DateTime.Now;
         if (_consultationService.CurrentConsultation != null)
         {
             _consultationService.CurrentConsultation.EndedAt = endedAt;
         }
+        _isCurrentConsultationSaved = false;
         await SaveActiveConsultationToDbAsync(endedAt);
 
         PosVM ??= new PosViewModel(_inventoryService, _consultationService);
@@ -2875,86 +2866,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PosVM.IsConsultationCheckout = true;
         PosVM.OnSaleCompletedFromConsultation ??= HandleSaleCompletedFromConsultation;
         await PosVM.InitializeAsync();
+        if (Services.Count == 0) await LoadServicesAsync();
         PosVM.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? "Público General";
 
-        // Agregar en automático la consulta general al carrito
-        var consultaService = PosVM.Services.FirstOrDefault(s => 
-            s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase) || 
-            s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase) || 
-            s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase))
-            ?? Services.FirstOrDefault(s => 
-            s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase) || 
-            s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase) || 
-            s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase));
-
-        if (consultaService != null)
-        {
-            var existingService = PosVM.Cart.FirstOrDefault(c => c.IsService && (c.Code == consultaService.Code || c.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase)));
-            if (existingService == null)
-            {
-                PosVM.AddServiceToCart(consultaService);
-            }
-        }
-        else
-        {
-            var existingService = PosVM.Cart.FirstOrDefault(c => c.IsService && c.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
-            if (existingService == null)
-            {
-                PosVM.Cart.Add(new CartItem
-                {
-                    ProductId = -1,
-                    Code = "SERV-001",
-                    Name = "Consulta Médica General",
-                    GenericName = "Servicio Clínico • Consulta",
-                    Presentation = "Honorario • 25 min",
-                    Unit = "Servicio",
-                    AvailableStock = 999,
-                    UnitPrice = 300.00m,
-                    Quantity = 1,
-                    IsService = true
-                });
-                PosVM.RecalculateTotals();
-            }
-        }
-
-        // Transferir insumos acumulados durante la consulta activa al carrito
-        if (_consultationService.CurrentConsultation != null)
-        {
-            foreach (var cItem in _consultationService.CurrentConsultation.Items)
-            {
-                var existing = PosVM.Cart.FirstOrDefault(c => c.ProductId == cItem.ProductId);
-                if (existing != null)
-                {
-                    existing.Quantity += cItem.Quantity;
-                }
-                else
-                {
-                    var prod = PosVM.Products.FirstOrDefault(p => p.Id == cItem.ProductId);
-                    PosVM.Cart.Add(new CartItem
-                    {
-                        ProductId = cItem.ProductId,
-                        Code = cItem.Code,
-                        Name = cItem.Name,
-                        GenericName = cItem.GenericName,
-                        Presentation = cItem.Presentation,
-                        Unit = cItem.Unit,
-                        AvailableStock = prod?.CurrentStock ?? 999,
-                        UnitPrice = cItem.UnitPrice,
-                        Quantity = cItem.Quantity,
-                        RequiresRefrigeration = prod?.RequiresRefrigeration ?? false,
-                        IsService = cItem.ProductId <= 0
-                    });
-                }
-            }
-        }
-
-        PosVM.RecalculateTotals();
-
-        // Finalizar y cerrar la consulta médica en el servicio
-        _consultationService.CloseActiveConsultation();
-        SyncActiveConsultation();
-
-        // Abrir la ventana modal del POS
+        // Honorario + todo lo cargado durante la consulta. La consulta sigue activa hasta cobrar:
+        // "Volver a la consulta" permite agregar algo que faltó.
+        BuildCheckoutCart();
         IsPosModalOpen = true;
     }
 
@@ -2963,7 +2880,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (_consultationService == null || !_consultationService.HasActiveConsultation)
         {
-            InfoModalMessage = "Solo se pueden agregar medicamentos y servicios desde el Punto de Venta si existe una consulta médica activa.\n\nInicie una consulta médica con un paciente primero.";
+            InfoModalMessage = "Se necesita una consulta médica activa para agregar medicamentos, insumos o servicios a la cuenta del paciente.";
             IsInfoModalVisible = true;
             return;
         }
@@ -2983,8 +2900,18 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsPosModalOpen = false;
         if (PosVM != null)
         {
+            bool wasCheckout = PosVM.IsConsultationCheckout;
             PosVM.IsEmbeddedInModal = false;
             PosVM.IsConsultationCheckout = false;
+
+            // Se volvió a la consulta sin cobrar: el cobro se rearma al terminar de nuevo y la
+            // nota se actualizará entonces (no dejar el carrito de la consulta en el POS general)
+            if (wasCheckout && HasActiveConsultation)
+            {
+                PosVM.Cart.Clear();
+                PosVM.RecalculateTotals();
+                _isCurrentConsultationSaved = false;
+            }
         }
         SyncActiveConsultation();
     }
@@ -3025,12 +2952,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         StopConsultationTimer();
 
         // 3. Limpiar los campos de la consulta
-        ConsultationChiefComplaint = string.Empty;
-        ConsultationPhysicalExam = string.Empty;
-        ConsultationDiagnosis = string.Empty;
-        ConsultationTreatmentPlan = string.Empty;
-        ConsultationNotes = string.Empty;
-        ConsultationErrorMessage = null;
+        ClearConsultationFields();
 
         // 4. Salir de todo y volver a la vista inicial (sin paciente seleccionado)
         SelectedPatient = null;
@@ -3077,7 +2999,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task CancelActiveConsultationAsync()
     {
-        await FinalizeConsultationAsync();
+        await DiscardActiveConsultationAsync();
     }
 
     public void CancelActiveConsultation()
@@ -3130,6 +3052,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // La lista de sugerencias puede dejar preseleccionado otro medicamento cuando el nombre se
+        // escribe a mano: solo cuenta el producto que corresponde a lo recetado (alergias y surtido)
+        if (product != null && !ProductMatchesName(product, name))
+        {
+            product = FindCatalogProduct(name);
+        }
+
         var dosage = string.IsNullOrWhiteSpace(PrescriptionDosage)
             ? "Según indicación médica"
             : PrescriptionDosage.Trim();
@@ -3166,6 +3095,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             Dosage = dosage,
             RecommendedQuantity = qty
         };
+
+        // "Se surte aquí" marcado por defecto cuando hay existencias: se carga solo a la cuenta.
+        // El producto solo cuenta si corresponde al nombre recetado (la lista de sugerencias puede
+        // traer preseleccionado otro medicamento cuando el nombre se escribió a mano).
+        if (HasActiveConsultation)
+        {
+            var dispensed = product != null && ProductMatchesName(product, name) ? product : null;
+            newItem.DispenseInClinic = ChargePrescription(newItem, dispensed);
+        }
 
         var currentList = new List<PatientPrescriptionItem>(SelectedPatient.ActivePrescription) { newItem };
         SelectedPatient.ActivePrescription = currentList;
@@ -3204,64 +3142,25 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddPrescriptionItemToPos(PatientPrescriptionItem? item)
     {
-        if (item == null) return;
-
-        var name = item.MedicineName;
-        var qty = Math.Max(1, item.RecommendedQuantity);
-
-        var matchedProduct = AvailableProducts.FirstOrDefault(p => 
-            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || 
-            $"{p.Name} ({p.Presentation})".Equals(name, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(name, StringComparison.OrdinalIgnoreCase))
-        );
-
-        int prodId = matchedProduct?.Id ?? -Random.Shared.Next(100, 9999);
-        string code = matchedProduct?.Code ?? "MED-001";
-        decimal price = matchedProduct?.Price ?? 85.00m;
-        string? gen = matchedProduct?.GenericName;
-        string? pres = matchedProduct?.Presentation ?? "Caja / Frasco";
-        string unit = matchedProduct?.Unit ?? "Piezas";
+        // Compatibilidad: equivale a marcar "Se surte aquí" (cargo a la cuenta de la consulta)
+        if (item == null || item.DispenseInClinic) return;
 
         if (!HasActiveConsultation)
         {
             StartActiveConsultation();
         }
 
-        if (_consultationService?.CurrentConsultation != null)
+        if (ChargePrescription(item))
         {
-            _consultationService.AddCartItemToActiveConsultation(
-                prodId, code, name, gen, pres, unit, price, qty
-            );
-            SyncActiveConsultation();
+            item.DispenseInClinic = true;
+            SelectedPatient?.SyncPrescriptionJson();
+            OnPropertyChanged(nameof(SelectedPatient));
         }
-
-        if (PosVM != null)
+        else
         {
-            var existing = PosVM.Cart.FirstOrDefault(c => c.ProductId == prodId);
-            if (existing != null)
-            {
-                existing.Quantity += qty;
-            }
-            else
-            {
-                PosVM.Cart.Add(new CartItem
-                {
-                    ProductId = prodId,
-                    Code = code,
-                    Name = name,
-                    GenericName = gen,
-                    Presentation = pres,
-                    Unit = unit,
-                    AvailableStock = matchedProduct?.CurrentStock ?? 999,
-                    UnitPrice = price,
-                    Quantity = qty
-                });
-            }
-            PosVM.RecalculateTotals();
+            InfoModalMessage = $"'{item.MedicineName}' no está en el inventario o no tiene existencias suficientes: queda solo en la receta.";
+            IsInfoModalVisible = true;
         }
-
-        InfoModalMessage = $"Medicamento '{name}' (Cant: {qty}) agregado a la cuenta de la consulta para cobro en el POS.";
-        IsInfoModalVisible = true;
     }
 
     [RelayCommand]
@@ -3306,8 +3205,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             }
 
             SyncActiveConsultation();
-            InfoModalMessage = $"Servicio '{service.Name}' (${service.Price:N2}) agregado a la cuenta de la consulta para cobro en POS.";
-            IsInfoModalVisible = true;
+            // El cargo aparece al instante en "Cuenta de la consulta": sin ventana que interrumpa
         }
     }
 
@@ -3467,6 +3365,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task RemovePrescriptionItemFromPatientAsync(PatientPrescriptionItem? item)
     {
         if (SelectedPatient == null || item == null) return;
+
+        if (item.DispenseInClinic && HasActiveConsultation)
+        {
+            UnchargePrescription(item);
+        }
 
         var list = new List<PatientPrescriptionItem>(SelectedPatient.ActivePrescription);
         list.Remove(item);
@@ -3642,7 +3545,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(SupplyName))
         {
             name = SupplyName.Trim();
-            unitPrice = 35.00m;
+            // Antes se cobraba $35 aunque se hubiera elegido un producto del inventario
+            unitPrice = product?.Price ?? FindCatalogProduct(name)?.Price ?? 35.00m;
         }
         else if (product != null)
         {
@@ -3678,6 +3582,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var list = new List<PatientSupplyItem>(SelectedPatient.ActiveSupplies) { newItem };
         SelectedPatient.ActiveSupplies = list;
         SelectedPatient.SyncSuppliesJson();
+
+        // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo)
+        if (HasActiveConsultation)
+        {
+            ChargeSupply(newItem, product ?? FindCatalogProduct(name));
+        }
 
         if (_inventoryService != null)
         {
@@ -3729,64 +3639,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddSupplyItemToPos(PatientSupplyItem? item)
     {
+        // Compatibilidad: cargo explícito de un insumo a la cuenta de la consulta
         if (item == null) return;
-
-        var name = item.SupplyName;
-        var qty = Math.Max(1, item.Quantity);
-
-        var matchedProduct = AvailableProducts.FirstOrDefault(p =>
-            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-            $"{p.Name} ({p.Presentation})".Equals(name, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(name, StringComparison.OrdinalIgnoreCase))
-        );
-
-        int prodId = matchedProduct?.Id ?? -Random.Shared.Next(100, 9999);
-        string code = matchedProduct?.Code ?? "INS-001";
-        decimal price = matchedProduct?.Price ?? (item.UnitPrice > 0 ? item.UnitPrice : 35.00m);
-        string? gen = matchedProduct?.GenericName ?? "Material Clínico";
-        string? pres = matchedProduct?.Presentation ?? "Pieza / Paquete";
-        string unit = matchedProduct?.Unit ?? "Piezas";
-
         if (!HasActiveConsultation)
         {
             StartActiveConsultation();
         }
-
-        if (_consultationService?.CurrentConsultation != null)
-        {
-            _consultationService.AddCartItemToActiveConsultation(
-                prodId, code, name, gen, pres, unit, price, qty
-            );
-            SyncActiveConsultation();
-        }
-
-        if (PosVM != null)
-        {
-            var existing = PosVM.Cart.FirstOrDefault(c => c.ProductId == prodId);
-            if (existing != null)
-            {
-                existing.Quantity += qty;
-            }
-            else
-            {
-                PosVM.Cart.Add(new CartItem
-                {
-                    ProductId = prodId,
-                    Code = code,
-                    Name = name,
-                    GenericName = gen,
-                    Presentation = pres,
-                    Unit = unit,
-                    AvailableStock = matchedProduct?.CurrentStock ?? 999,
-                    UnitPrice = price,
-                    Quantity = qty
-                });
-            }
-            PosVM.RecalculateTotals();
-        }
-
-        InfoModalMessage = $"Insumo '{name}' (Cant: {qty}) agregado a la cuenta de la consulta para cobro en el POS.";
-        IsInfoModalVisible = true;
+        ChargeSupply(item, null);
     }
 
     [RelayCommand]
@@ -3970,6 +3829,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SelectedPatient.ActiveServices = list;
         SelectedPatient.SyncServicesJson();
 
+        // Durante la consulta, el servicio realizado se carga de inmediato a la cuenta
+        if (HasActiveConsultation)
+        {
+            ChargeService(newItem);
+        }
+
         if (_inventoryService != null)
         {
             try
@@ -4020,37 +3885,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddServiceItemToPos(PatientServiceItem? item)
     {
+        // Compatibilidad: cargo explícito de un servicio a la cuenta de la consulta
         if (item == null) return;
-
-        var serviceObj = Services.FirstOrDefault(s => s.Id == item.ServiceId || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
-        if (serviceObj != null)
+        if (!HasActiveConsultation)
         {
-            AddServiceToActiveConsultation(serviceObj);
+            StartActiveConsultation();
         }
-        else
-        {
-            if (!HasActiveConsultation)
-            {
-                StartActiveConsultation();
-            }
-
-            if (_consultationService?.CurrentConsultation != null)
-            {
-                _consultationService.AddCartItemToActiveConsultation(
-                    -Random.Shared.Next(100, 9999),
-                    item.ServiceCode,
-                    item.ServiceName,
-                    $"Servicio Clínico • {item.Category}",
-                    item.Notes,
-                    "Servicio",
-                    item.Price,
-                    item.Quantity
-                );
-                SyncActiveConsultation();
-                InfoModalMessage = $"Servicio '{item.ServiceName}' agregado a la cuenta de la consulta para cobro en POS.";
-                IsInfoModalVisible = true;
-            }
-        }
+        ChargeService(item);
     }
 
     [RelayCommand]

@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.9.0";
+    private string _appVersion = "1.10.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -159,6 +159,7 @@ public partial class MainViewModel : ObservableObject
         // Enlace para volver a la Vista Principal desde el POS o Expedientes
         PosVM.OnBackToHubRequested = () => NavigateTo("MainHub");
         PosVM.OnCloseModalRequested = () => MedicalRecordsVM.ClosePosModal();
+        PosVM.OnOpenConsultationRequested = () => NavigateTo("Records");
         MedicalRecordsVM.OnBackToHubRequested = () => NavigateTo("MainHub");
 
         // Enlace para enviar receta médica directamente al carrito de venta del POS

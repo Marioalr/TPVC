@@ -7,11 +7,30 @@ using System.Text.Json;
 
 namespace TPVC.Models;
 
-public class PatientPrescriptionItem
+public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChanged
 {
     public string MedicineName { get; set; } = string.Empty;
     public string Dosage { get; set; } = string.Empty;
     public int RecommendedQuantity { get; set; } = 1;
+
+    private bool _dispenseInClinic;
+
+    /// <summary>
+    /// "Se surte aquí": el medicamento se entrega en el consultorio y se carga a la cuenta de la consulta.
+    /// Se marca solo cuando hay existencias suficientes.
+    /// </summary>
+    public bool DispenseInClinic
+    {
+        get => _dispenseInClinic;
+        set
+        {
+            if (_dispenseInClinic == value) return;
+            _dispenseInClinic = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DispenseInClinic)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class PatientSupplyItem

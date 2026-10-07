@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.9.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.10.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -31,7 +31,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
   - **Card 📋 "Nueva Consulta"**: Acceso directo al módulo de **Expedientes Clínicos y Consultas Médicas Operativo (NOM-004-SSA3)** para gestión de fichas, registro de signos vitales, somatometría y notas de evolución.
   - **Card ⚙️ "Configuración"**: Acceso al centro de gestión y administración que **alberga el panel lateral** con Métricas, Inventario, Lotes (FEFO), Kardex y Temas/Ajustes.
 - **Navegación Intuitiva**: Todas las vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*).
-- **Interconexión Clínica**: Despache las recetas de los pacientes directamente al carrito de compras con el botón *"Cargar a Venta (POS)"*.
+- **Interconexión Clínica**: Desde el Punto de Venta, *"Abrir consulta"* lleva a la consulta en curso. La consulta nunca manda al POS: todo lo que se usa con el paciente se cobra al terminarla.
 
 ### 2. Punto de Venta (POS / Farmacia)
 - **Área Central de Ticket**: Visualización principal en formato de tabla para los productos agregados a la venta actual (nombre comercial, genérico, SKU, stock disponible, precio unitario, stepper interactivo de cantidades `+`/`-`, subtotal y eliminación).
@@ -46,9 +46,11 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 ### 3. Expedientes Clínicos y Consultas Médicas (NOM-004-SSA3-2012)
 - **Gestión Completa de Expedientes en SQLite**: Alta y edición de fichas de pacientes con generación automática de folio (`EXP-YYYY-NNN`), datos demográficos completos, tipo de sangre, contactos de emergencia y antecedentes heredofamiliares/patológicos.
 - **Alerta Roja de Alergias Medicamentosas**: Resalta prominentemente en el expediente cualquier hipersensibilidad o alergia a fármacos para prevenir prescripciones de riesgo.
-- **Registro de Consultas y Notas de Evolución**: Captura de motivo de consulta, signos vitales completos y somatometría con cálculo instantáneo de **Índice de Masa Corporal (IMC)** y semáforo nutricional.
+- **Pantalla de Consulta en Curso (v1.10)**: cinco secciones en el orden de la entrevista (motivo, signos vitales, exploración, diagnóstico CIE-10 y tratamiento) que se abren una a la vez, con frases frecuentes de un clic, aviso de signos vitales fuera de rango, IMC automático y atajos **Ctrl + ↓/↑** (sección) y **Ctrl + Enter** (terminar).
+- **Cuenta de la Consulta**: honorario, medicamentos que se surten en el consultorio (casilla *"Se surte aquí"*, marcada por defecto si hay existencias), insumos y servicios (inyección, curación, revisión especial) se agregan en cuanto se usan; al **Terminar consulta** se revisa la cuenta y se cobra en una sola ventana.
+- **Listas que buscan al escribir**: en posología, dosis pediátrica y medidas generales se despliega la lista, se escribe y el cursor salta a la opción (sin acentos ni mayúsculas), Enter la elige.
 - **Historial Cronológico de Consultas**: Pestaña dedicada para revisar todas las evoluciones y notas clínicas previas del paciente.
-- **Prescripción y Envío a POS**: Generación de recetas farmacológicas integradas con despacho directo al Punto de Venta o preservación en la consulta médica activa.
+- **Prescripción**: Recetas con plantillas de posología, calculadora pediátrica por peso, alerta de alergias y entrega en el consultorio cargada a la cuenta de la consulta.
 - **Catálogo de Servicios Clínicos y Paquetes de Insumos**: Pestaña dedicada para explorar y crear servicios médicos (Consultas, Curaciones, Suturas, Glucemia, Certificados) con insumos predeterminados vinculados.
 
 ### 4. Panel de Métricas y KPIs (Dashboard)
@@ -114,7 +116,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **159 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **165 pruebas** unitarias y de integración
 
 ---
 

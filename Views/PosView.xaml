@@ -141,19 +141,11 @@
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding CheckoutActiveConsultationCommand}" 
+                                Command="{Binding OpenActiveConsultationCommand}" 
                                 Padding="12,5" 
                                 FontSize="11" 
-                                Margin="0,0,8,0" 
-                                ToolTip="Pasa todos los insumos de esta consulta al carrito para liquidar la venta y emitir el ticket">
-                            <TextBlock Text="💳 Liquidar Consulta en POS" FontSize="11" FontWeight="SemiBold" />
-                        </Button>
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding CancelActiveConsultationCommand}" 
-                                Padding="10,5" 
-                                FontSize="11" 
-                                ToolTip="Finalizar/cerrar la consulta médica activa">
-                            <TextBlock Text="✕ Finalizar" FontSize="11" />
+                                ToolTip="Ir a la consulta en curso: ahí se revisa la cuenta y se cobra al terminar">
+                            <TextBlock Text="Abrir consulta" FontSize="11" FontWeight="SemiBold" />
                         </Button>
                     </StackPanel>
                 </Grid>

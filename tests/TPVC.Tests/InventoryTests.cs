@@ -1716,16 +1716,28 @@ public class InventoryTests
         Assert.AreEqual("Finalizar Consulta", recordsVm.ConsultationActionButtonText);
         Assert.AreEqual("María Elena Soto", consultService.CurrentConsultation?.PatientName);
 
-        // Click en Finalizar Consulta -> debe transferir al POS, agregar Consulta General y abrir modal
+        // Click en Terminar Consulta -> abre el cobro de la consulta con el honorario incluido.
+        // La consulta sigue activa hasta cobrar ("Volver a la consulta" permite agregar lo que faltó).
         await recordsVm.ToggleActiveConsultationAsync();
 
-        Assert.IsFalse(recordsVm.HasActiveConsultation, "La consulta debe haber finalizado");
-        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
-        Assert.IsTrue(recordsVm.IsPosModalOpen, "Debe abrir la modal del POS");
+        Assert.IsTrue(recordsVm.HasActiveConsultation, "La consulta se cierra hasta cobrar");
+        Assert.IsTrue(recordsVm.IsPosModalOpen, "Debe abrir la ventana de cobro de la consulta");
         Assert.IsNotNull(posVm.Cart);
         Assert.IsTrue(posVm.Cart.Count >= 1, "Debe tener items en el carrito");
         Assert.IsTrue(posVm.Cart.Any(i => i.Code == "SERV-001" || i.Name.Contains("Consulta")), 
-            "Debe incluir la Consulta Médica General en el carrito de venta");
+            "Debe incluir la Consulta Médica General en el cobro");
+
+        // Volver a la consulta y terminar de nuevo no duplica el honorario
+        recordsVm.ClosePosModal();
+        Assert.IsTrue(recordsVm.HasActiveConsultation);
+        Assert.IsEmpty(posVm.Cart, "El carrito del POS general queda limpio al volver a la consulta");
+        await recordsVm.FinalizeConsultationAsync();
+        Assert.AreEqual(1, posVm.Cart.Count(i => i.IsService && i.Name.Contains("Consulta")));
+
+        // Al cobrar, la consulta termina
+        await posVm.ProcessSaleAsync();
+        Assert.IsFalse(recordsVm.HasActiveConsultation, "La consulta termina al cobrar");
+        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
     }
 
     [TestMethod]
@@ -1916,10 +1928,14 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecords_Prescription_AddPrescriptionItemDoesNotAutoAddToPos_AddPrescriptionItemToPosWorks()
+    public async Task MedicalRecords_Prescription_DispensedInClinic_ChargesOnlyWhenInStock()
     {
         var consultationService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
+        recordsVm.AvailableProducts = new System.Collections.ObjectModel.ObservableCollection<Product>
+        {
+            new() { Id = 501, Code = "AMX-500", Name = "Amoxicilina 500mg", Price = 120m, CurrentStock = 10, Unit = "Cajas" }
+        };
 
         var patient = new PatientRecord
         {
@@ -1930,31 +1946,34 @@ public class InventoryTests
         };
         recordsVm.SelectedPatient = patient;
         recordsVm.StartActiveConsultation();
-
         Assert.AreEqual(0, consultationService.CurrentConsultation?.Items.Count);
 
-        // 1. Agregar medicamento a la receta ("+ Recetar")
+        // 1. Medicamento con existencias: "Se surte aquí" marcado y cargado a la cuenta automáticamente
         recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
         recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
         recordsVm.PrescriptionQuantity = 2;
-
         await recordsVm.AddPrescriptionItemToPatientAsync();
 
-        // Verificamos que se agregó a la receta del paciente
         Assert.AreEqual(1, patient.ActivePrescription.Count);
-        Assert.AreEqual("Amoxicilina 500mg", patient.ActivePrescription[0].MedicineName);
+        Assert.IsTrue(patient.ActivePrescription[0].DispenseInClinic);
+        var charged = consultationService.CurrentConsultation!.Items.Single();
+        Assert.AreEqual(501, charged.ProductId);
+        Assert.AreEqual(2, charged.Quantity);
+        Assert.AreEqual(120m, charged.UnitPrice, "Precio real del inventario");
 
-        // REGLA CRÍTICA: NO se agrega automáticamente al POS/cuenta de consulta
-        Assert.AreEqual(0, consultationService.CurrentConsultation?.Items.Count);
+        // 2. Desmarcar "Se surte aquí" quita el cargo
+        patient.ActivePrescription[0].DispenseInClinic = false;
+        await recordsVm.ToggleDispenseInClinicAsync(patient.ActivePrescription[0]);
+        Assert.IsEmpty(consultationService.CurrentConsultation.Items);
 
-        // 2. Usar el botón explícito "Agregar al POS" para este medicamento
-        recordsVm.AddPrescriptionItemToPos(patient.ActivePrescription[0]);
+        // 3. Medicamento que no está en el consultorio: se receta, pero no se cobra
+        recordsVm.PrescriptionMedicineName = "Medicamento de farmacia externa";
+        recordsVm.PrescriptionDosage = "1 tableta al día";
+        recordsVm.PrescriptionQuantity = 1;
+        await recordsVm.AddPrescriptionItemToPatientAsync();
 
-        // Ahora sí debe estar en la cuenta de la consulta activa
-        Assert.AreEqual(1, consultationService.CurrentConsultation?.Items.Count);
-        var consultationItem = consultationService.CurrentConsultation!.Items[0];
-        Assert.AreEqual("Amoxicilina 500mg", consultationItem.ProductName);
-        Assert.AreEqual(2, consultationItem.Quantity);
+        Assert.IsFalse(patient.ActivePrescription[1].DispenseInClinic);
+        Assert.IsEmpty(consultationService.CurrentConsultation.Items);
     }
 
     [TestMethod]

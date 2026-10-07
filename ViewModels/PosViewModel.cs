@@ -349,6 +349,12 @@ public partial class PosViewModel : ObservableObject, IDisposable
     private bool _isConsultationCheckout;
 
     public Action? OnCloseModalRequested { get; set; }
+
+    /// <summary>El POS manda a la consulta (nunca al revés): la cuenta se cobra al terminarla.</summary>
+    public Action? OnOpenConsultationRequested { get; set; }
+
+    [RelayCommand]
+    public void OpenActiveConsultation() => OnOpenConsultationRequested?.Invoke();
     public Action? OnSaleCompletedFromConsultation { get; set; }
 
     [RelayCommand]
@@ -883,6 +889,15 @@ public partial class PosViewModel : ObservableObject, IDisposable
     {
         if (Cart.Count == 0)
         {
+            if (IsEmbeddedInModal || IsConsultationCheckout)
+            {
+                // El médico quitó todos los cargos a propósito (consulta de cortesía): se termina
+                // la consulta sin registrar una venta en ceros
+                IsConsultationCheckout = false;
+                IsEmbeddedInModal = false;
+                OnSaleCompletedFromConsultation?.Invoke();
+                return;
+            }
             ShowAlert("La venta no contiene ningún producto.", false);
             return;
         }

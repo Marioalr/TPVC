@@ -1381,6 +1381,19 @@ public class InventoryService
         return consultation;
     }
 
+    /// <summary>Elimina la nota de una consulta (avance guardado de una consulta que se descartó).</summary>
+    public async Task<bool> DeleteConsultationNoteAsync(int patientId, string folio)
+    {
+        if (string.IsNullOrWhiteSpace(folio)) return false;
+        await using var db = CreateContext();
+        var note = await db.PatientConsultations.FirstOrDefaultAsync(c => c.PatientRecordId == patientId && c.Folio == folio);
+        if (note == null) return false;
+        db.PatientConsultations.Remove(note);
+        await db.SaveChangesAsync();
+        NotifyPatientsChanged();
+        return true;
+    }
+
     private void NotifyAppointmentsChanged() => Raise(OnAppointmentsChanged, "appointments");
 
     // =========================================================================
