@@ -55,7 +55,7 @@
         </Grid.RowDefinitions>
 
         <!-- Área Principal de Contenido Dinámico a Ancho Completo -->
-        <ContentControl Grid.Row="0" Content="{Binding CurrentView}" />
+        <ContentControl Grid.Row="0" Content="{Binding CurrentView, Converter={StaticResource CachedView}}" />
 
         <!-- Barra Inferior Discreta (Datos sincronizados y versión del sistema para consulta de un vistazo) -->
         <Border Grid.Row="1" 

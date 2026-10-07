@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.3.19-blue.svg)](https://github.com/Marioalr/TPVC/releases/tag/v1.3.19)
+[![Version](https://img.shields.io/badge/version-v1.9.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -16,6 +16,8 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * 🩺 **[Plan de Consulta y Servicios Clínicos (docs/PLAN_DE_CONSULTA.md)](docs/PLAN_DE_CONSULTA.md)**: Hoja de ruta conforme a la norma técnica mexicana NOM-004-SSA3, catálogo de servicios médicos, paquetes con insumos por defecto y diagramas Mermaid.
 * 📖 **[Manual de Usuario (docs/MANUAL_DE_USUARIO.md)](docs/MANUAL_DE_USUARIO.md)**: Guía práctica completa para el personal del consultorio (manejo de la vista principal dividida, punto de venta con carrito, expedientes, lotes y temas).
 * 🏗️ **[Arquitectura Técnica (docs/ARQUITECTURA_TECNICA.md)](docs/ARQUITECTURA_TECNICA.md)**: Diagramas Mermaid, modelo de base de datos relacional, algoritmo de venta POS FEFO y especificaciones de ingeniería.
+* ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2 multi-dispositivo (Windows / Android), esquema remoto y garantías.
+* 📱 **[Pendientes antes de la app Android (docs/PENDIENTES_ANDROID.md)](docs/PENDIENTES_ANDROID.md)**: Bloqueantes de datos, preparación del código compartido y alcance de la tablet.
 * 📝 **[Historial de Versiones (CHANGELOG.md)](CHANGELOG.md)**: Registro de cambios detallado siguiendo *Semantic Versioning*.
 * ⚖️ **[Licencia MIT](LICENSE)**: Términos y condiciones de uso del software.
 
@@ -112,7 +114,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **107 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **159 pruebas** unitarias y de integración
 
 ---
 

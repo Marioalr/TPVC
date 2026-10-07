@@ -12,6 +12,13 @@ using System.Threading.Tasks;
 
 namespace TPVC.Services;
 
+/// <summary>Formatos de texto compartidos por el protocolo de sincronización (Windows y Android).</summary>
+public static class TursoSyncFormats
+{
+    /// <summary>Fechas y marcas de tiempo: orden lexicográfico = orden cronológico.</summary>
+    public const string DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fffffff";
+}
+
 public class TursoException : Exception
 {
     public string? ErrorCode { get; }
@@ -30,6 +37,19 @@ public class TursoException : Exception
 /// </summary>
 public class TursoClient : IDisposable
 {
+    /// <summary>
+    /// Conexiones HTTP compartidas por toda la app: crear un HttpClient por sincronización
+    /// (cada pocos segundos con el auto-sync) dejaba sockets abiertos en TIME_WAIT.
+    /// </summary>
+    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        AutomaticDecompression = System.Net.DecompressionMethods.All
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly string _pipelineUrl;
@@ -52,8 +72,8 @@ public class TursoClient : IDisposable
         }
         else
         {
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            _ownsHttpClient = true;
+            _httpClient = SharedHttpClient;
+            _ownsHttpClient = false;
         }
     }
 
@@ -167,21 +187,37 @@ public class TursoClient : IDisposable
     /// </summary>
     public async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, object?[]? args = null, CancellationToken ct = default)
     {
-        var requestObj = CreatePipelineRequest(new[] { (sql, args) });
+        var results = await QueryBatchAsync(new[] { (sql, args) }, ct);
+        return results.Count > 0 ? results[0] : new List<Dictionary<string, object?>>();
+    }
+
+    /// <summary>
+    /// Ejecuta varias consultas en un solo viaje HTTP y devuelve las filas de cada una, en orden.
+    /// </summary>
+    public async Task<List<List<Dictionary<string, object?>>>> QueryBatchAsync(IEnumerable<(string Sql, object?[]? Args)> statements, CancellationToken ct = default)
+    {
+        var requestObj = CreatePipelineRequest(statements);
         var root = await SendPipelineAsync(requestObj, ct);
 
-        var list = new List<Dictionary<string, object?>>();
+        var all = new List<List<Dictionary<string, object?>>>();
         var results = root["results"]?.AsArray();
-        if (results == null || results.Count == 0) return list;
+        if (results == null) return all;
 
-        var firstResult = results[0];
-        CheckResultError(firstResult);
+        foreach (var result in results)
+        {
+            // La respuesta del "close" final no trae filas
+            if (result?["response"]?["type"]?.GetValue<string>() == "close") continue;
+            CheckResultError(result);
+            all.Add(ParseRows(result?["response"]?["result"]));
+        }
+        return all;
+    }
 
-        var resultObj = firstResult?["response"]?["result"];
-        if (resultObj == null) return list;
-
-        var cols = resultObj["cols"]?.AsArray();
-        var rows = resultObj["rows"]?.AsArray();
+    private static List<Dictionary<string, object?>> ParseRows(JsonNode? resultObj)
+    {
+        var list = new List<Dictionary<string, object?>>();
+        var cols = resultObj?["cols"]?.AsArray();
+        var rows = resultObj?["rows"]?.AsArray();
         if (cols == null || rows == null) return list;
 
         var colNames = new List<string>();
@@ -202,7 +238,6 @@ public class TursoClient : IDisposable
             }
             list.Add(dict);
         }
-
         return list;
     }
 
@@ -220,8 +255,7 @@ public class TursoClient : IDisposable
         var firstResult = results[0];
         CheckResultError(firstResult);
 
-        var affected = firstResult?["response"]?["result"]?["affected_row_count"]?.GetValue<int>() ?? 0;
-        return affected;
+        return ReadAffectedRows(firstResult);
     }
 
     /// <summary>
@@ -239,7 +273,7 @@ public class TursoClient : IDisposable
         foreach (var res in results)
         {
             CheckResultError(res);
-            totalAffected += res?["response"]?["result"]?["affected_row_count"]?.GetValue<int>() ?? 0;
+            totalAffected += ReadAffectedRows(res);
         }
 
         return totalAffected;
@@ -299,7 +333,7 @@ public class TursoClient : IDisposable
         };
     }
 
-    private static JsonObject FormatArg(object? value)
+    public static JsonObject FormatArg(object? value)
     {
         if (value == null || value == DBNull.Value)
         {
@@ -313,27 +347,38 @@ public class TursoClient : IDisposable
 
         if (value is Guid g)
         {
-            return new JsonObject { ["type"] = "text", ["value"] = g.ToString() };
+            return new JsonObject { ["type"] = "text", ["value"] = g.ToString("D") };
         }
 
         if (value is DateTime dt)
         {
-            return new JsonObject { ["type"] = "text", ["value"] = dt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) };
+            // Sin conversión de zona: el llamador decide si el valor ya es UTC (UpdatedAtUtc)
+            // o una fecha local de negocio. Ver TursoSyncService.FormatDate.
+            return new JsonObject { ["type"] = "text", ["value"] = dt.ToString(TursoSyncFormats.DateTimeFormat, CultureInfo.InvariantCulture) };
         }
 
+        // Hrana: los enteros viajan como CADENA ("value": "42") para no perder precisión en JSON.
+        // Enviarlos como número hace que Turso rechace todo el pipeline con HTTP 400 Bad Request.
         if (value is bool b)
         {
-            return new JsonObject { ["type"] = "integer", ["value"] = b ? 1 : 0 };
+            return new JsonObject { ["type"] = "integer", ["value"] = b ? "1" : "0" };
         }
 
-        if (value is int or long or short or byte)
+        if (value is int or long or short or byte or sbyte or uint or ushort)
         {
-            return new JsonObject { ["type"] = "integer", ["value"] = Convert.ToInt64(value) };
+            return new JsonObject { ["type"] = "integer", ["value"] = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture) };
+        }
+
+        if (value is Enum e)
+        {
+            return new JsonObject { ["type"] = "integer", ["value"] = Convert.ToInt64(e, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture) };
         }
 
         if (value is float or double)
         {
-            return new JsonObject { ["type"] = "float", ["value"] = Convert.ToDouble(value) };
+            var d = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            if (double.IsNaN(d) || double.IsInfinity(d)) return new JsonObject { ["type"] = "null" };
+            return new JsonObject { ["type"] = "float", ["value"] = d };
         }
 
         if (value is decimal dec)
@@ -398,6 +443,12 @@ public class TursoClient : IDisposable
         return 0.0;
     }
 
+    private static int ReadAffectedRows(JsonNode? result)
+    {
+        var node = result?["response"]?["result"]?["affected_row_count"];
+        return node == null ? 0 : (int)ParseLongSafe(node);
+    }
+
     private static void CheckResultError(JsonNode? result)
     {
         if (result == null) return;
@@ -423,7 +474,7 @@ public class TursoClient : IDisposable
 
         if (!req.Headers.UserAgent.Any())
         {
-            req.Headers.UserAgent.ParseAdd("TPVC-Desktop/1.8.2");
+            req.Headers.UserAgent.ParseAdd($"TPVC-Desktop/{typeof(TursoClient).Assembly.GetName().Version?.ToString(3) ?? "1"}");
         }
 
         var json = requestBody.ToJsonString();
@@ -453,7 +504,8 @@ public class TursoClient : IDisposable
                 401 => $"Error de autenticación (HTTP 401 Unauthorized): El token no es válido o ha expirado. Verifique que sea un token de base de datos generado con 'turso db tokens create' o en Turso Dashboard -> Connect -> Generate token.",
                 403 => $"Acceso denegado (HTTP 403 Forbidden): El token no tiene permisos suficientes para esta base de datos.",
                 404 => $"Base de datos o endpoint no encontrado (HTTP 404 Not Found): Verifique que la URL ingresada corresponda a una base de datos existente en Turso.",
-                _ => $"Turso respondió con error HTTP {code} ({resp.ReasonPhrase}): {respContent}"
+                400 => $"Turso rechazó la solicitud (HTTP 400 Bad Request): {Truncate(respContent, 400)}",
+                _ => $"Turso respondió con error HTTP {code} ({resp.ReasonPhrase}): {Truncate(respContent, 400)}"
             };
 
             throw new TursoException(diag, $"HTTP_{code}");
@@ -467,6 +519,9 @@ public class TursoClient : IDisposable
 
         return node;
     }
+
+    private static string Truncate(string text, int max) =>
+        string.IsNullOrEmpty(text) || text.Length <= max ? text : text.Substring(0, max) + "…";
 
     public void Dispose()
     {

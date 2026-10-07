@@ -132,7 +132,9 @@ public class TursoSettingsService
     {
         var pairing = new
         {
-            Version = "1.8.2",
+            Version = typeof(TursoSettingsService).Assembly.GetName().Version?.ToString(3) ?? "1",
+            // El dispositivo Android debe hablar la misma versión del protocolo (ver docs/TURSO_SYNC_ARCHITECTURE.md)
+            SyncProtocolVersion = TursoSyncService.RemoteSchemaVersion,
             DatabaseUrl = CurrentSettings.DatabaseUrl,
             AuthToken = CurrentSettings.AuthToken,
             AssignedRole = targetRole.ToString(),

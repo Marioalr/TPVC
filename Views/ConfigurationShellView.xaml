@@ -220,6 +220,6 @@
         </Border>
 
         <!-- Área de Contenido de la Vista Administrativa Seleccionada -->
-        <ContentControl Grid.Column="1" Content="{Binding CurrentSubView}" />
+        <ContentControl Grid.Column="1" Content="{Binding CurrentSubView, Converter={StaticResource CachedView}}" />
     </Grid>
 </UserControl>

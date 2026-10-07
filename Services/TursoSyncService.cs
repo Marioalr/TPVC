@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.ViewModels;
@@ -15,12 +18,36 @@ namespace TPVC.Services;
 
 /// <summary>
 /// Motor de sincronización bidireccional incremental entre SQLite local y Turso Cloud (libSQL).
-/// Diseñado para operar 100% GRATIS en el Free Tier de Turso con hasta 3 dispositivos
-/// (1 PC Win11, 1 Tablet Android, 1 Celular Android administrador).
-/// Utiliza resolución de conflictos Last-Write-Wins (LWW) y referencias desacopladas por SyncId.
+///
+/// Protocolo (versión 2, compartido con la futura app Android):
+/// * Cada tabla remota replica TODAS las columnas del modelo local (ver <see cref="TableMap"/>),
+///   identificada por "SyncId" (GUID en minúsculas). Los Id enteros locales nunca se suben:
+///   las referencias viajan como "&lt;Referencia&gt;SyncId" (p. ej. ProductId → ProductSyncId).
+/// * "UpdatedAtUtc" (reloj del dispositivo que escribió) resuelve conflictos: gana la versión más reciente.
+/// * "SyncedAtUtc" lo asigna el servidor al escribir; las descargas usan esa marca, así un dispositivo
+///   con el reloj atrasado no puede "esconder" cambios.
+/// * "OriginDeviceId" evita descargar de vuelta lo que el propio dispositivo subió.
+/// * Los borrados físicos viajan en "SyncTombstones".
 /// </summary>
 public class TursoSyncService
 {
+    public const int RemoteSchemaVersion = 2;
+
+    private const string ServerNowSql = "strftime('%Y-%m-%d %H:%M:%f','now')";
+    private const string TombstonesTable = "SyncTombstones";
+    private const string MetaTable = "_tpvc_meta";
+    private const int PushChunkSize = 80;
+    private const int PullPageSize = 500;
+
+    /// <summary>
+    /// Referencias enteras sin relación declarada en EF que también deben traducirse a SyncId.
+    /// </summary>
+    private static readonly (Type Entity, string Property, Type Principal)[] SoftReferences =
+    {
+        (typeof(SaleItem), nameof(SaleItem.ProductId), typeof(Product)),
+        (typeof(SaleItem), nameof(SaleItem.ClinicalServiceId), typeof(ClinicalService)),
+    };
+
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly TursoSettingsService _settingsService;
     private readonly ClinicProfileService _clinicProfileService;
@@ -28,6 +55,14 @@ public class TursoSyncService
 
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Debouncer _autoSyncDebouncer = new();
+
+    private List<TableMap>? _tableMaps;
+    private string? _verifiedSchemaUrl;
+    private string? _registeredDeviceUrl;
+    private int _suppressAutoSync;
+
+    /// <summary>Crea el cliente HTTP de Turso (reemplazable en pruebas por un servidor simulado).</summary>
+    public Func<string, string, TursoClient> ClientFactory { get; set; } = (url, token) => new TursoClient(url, token);
 
     public TursoSyncStatus Status { get; private set; } = TursoSyncStatus.NotConfigured;
     public string StatusMessage { get; private set; } = "Sin configurar";
@@ -62,30 +97,38 @@ public class TursoSyncService
 
     private void UpdateInitialStatus()
     {
+        if (Status == TursoSyncStatus.Syncing) return;
+
         var settings = _settingsService.CurrentSettings;
         if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
         {
-            Status = TursoSyncStatus.NotConfigured;
-            StatusMessage = "Sincronización en la nube desactivada (Modo Local SQLite)";
+            SetStatus(TursoSyncStatus.NotConfigured, "Sincronización en la nube desactivada (Modo Local SQLite)");
         }
-        else
+        else if (Status != TursoSyncStatus.Error)
         {
-            Status = TursoSyncStatus.Idle;
-            StatusMessage = settings.LastSyncUtc.HasValue
+            SetStatus(TursoSyncStatus.Idle, settings.LastSyncUtc.HasValue
                 ? $"Conectado a Turso • Último sync: {settings.LastSyncUtc.Value.ToLocalTime():dd/MM/yyyy HH:mm}"
-                : "Conectado a Turso • Pendiente primera sincronización";
+                : "Conectado a Turso • Pendiente primera sincronización");
         }
-        StatusChanged?.Invoke(Status, StatusMessage);
+    }
+
+    private void SetStatus(TursoSyncStatus status, string message)
+    {
+        Status = status;
+        StatusMessage = message;
+        StatusChanged?.Invoke(status, message);
     }
 
     private void OnLocalDataChanged()
     {
+        // Cambios que llegaron de la nube no deben disparar otra sincronización
+        if (Volatile.Read(ref _suppressAutoSync) > 0) return;
+
         var settings = _settingsService.CurrentSettings;
         if (!settings.IsSyncEnabled || !settings.AutoSyncOnChanges || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
             return;
 
-        // Debounce de 4 segundos: si el médico guarda varios registros seguidos,
-        // se agrupan en una única llamada eficiente a Turso (máximo ahorro de cuota gratuita)
+        // Debounce de 4 segundos: varios guardados seguidos se agrupan en una sola sincronización
         _ = _autoSyncDebouncer.RunAsync(async () =>
         {
             try
@@ -99,18 +142,39 @@ public class TursoSyncService
         }, delayMs: 4000);
     }
 
-    public async Task<TursoSyncResult> SyncAsync(bool isBackgroundAutoSync = false, CancellationToken ct = default)
+    /// <summary>Sincronización incremental (sube cambios locales y descarga los remotos).</summary>
+    public Task<TursoSyncResult> SyncAsync(bool isBackgroundAutoSync = false, CancellationToken ct = default)
     {
         var settings = _settingsService.CurrentSettings;
         if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
         {
-            return new TursoSyncResult
+            return Task.FromResult(new TursoSyncResult
             {
                 Success = false,
                 ErrorMessage = "La sincronización no está habilitada o falta configurar la URL de Turso."
-            };
+            });
         }
 
+        return RunExclusiveAsync(isBackgroundAutoSync, fullResync: false, ct);
+    }
+
+    /// <summary>
+    /// Sincronización completa: sube todos los datos locales y descarga todos los remotos,
+    /// ignorando las marcas de la última sincronización (útil al conectar por primera vez
+    /// o para recuperar un equipo).
+    /// </summary>
+    public Task<TursoSyncResult> InitialUploadToTursoAsync(CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_settingsService.CurrentSettings.DatabaseUrl))
+        {
+            return Task.FromResult(new TursoSyncResult { Success = false, ErrorMessage = "URL de Turso no especificada." });
+        }
+
+        return RunExclusiveAsync(isBackgroundAutoSync: false, fullResync: true, ct);
+    }
+
+    private async Task<TursoSyncResult> RunExclusiveAsync(bool isBackgroundAutoSync, bool fullResync, CancellationToken ct)
+    {
         if (!await _syncLock.WaitAsync(isBackgroundAutoSync ? 0 : 5000, ct))
         {
             return new TursoSyncResult
@@ -121,56 +185,28 @@ public class TursoSyncService
         }
 
         var sw = Stopwatch.StartNew();
-        Status = TursoSyncStatus.Syncing;
-        StatusMessage = "Sincronizando con Turso Cloud...";
-        StatusChanged?.Invoke(Status, StatusMessage);
-
-        int rowsPushed = 0;
-        int rowsPulled = 0;
-        var syncCutoffUtc = DateTime.UtcNow;
-        var lastSyncUtc = settings.LastSyncUtc ?? DateTime.MinValue;
-
         try
         {
-            using var client = new TursoClient(settings.DatabaseUrl, settings.AuthToken);
+            SetStatus(TursoSyncStatus.Syncing, fullResync ? "Sincronización completa con Turso Cloud..." : "Sincronizando con Turso Cloud...");
 
-            // 1. Asegurar esquema en Turso si es la primera vez
-            await EnsureRemoteSchemaAsync(client, ct);
-
-            // 2. Registrar este dispositivo en la nube
-            await RegisterDeviceAsync(client, settings, ct);
-
-            // 3. PUSH: Subir cambios locales a Turso
-            rowsPushed = await PushLocalChangesAsync(client, lastSyncUtc, syncCutoffUtc, ct);
-
-            // 4. PULL: Descargar cambios de Turso a la base local
-            rowsPulled = await PullRemoteChangesAsync(client, lastSyncUtc, ct);
-
-            // 5. Sincronizar perfil de la clínica si aplica
-            await SyncClinicProfileAsync(client, ct);
-
+            // Fuera del hilo de la interfaz: las consultas SQLite y el armado de lotes no congelan la ventana
+            var (pushed, pulled) = await Task.Run(() => SyncCoreAsync(fullResync, ct), ct);
             sw.Stop();
-            settings.LastSyncUtc = syncCutoffUtc;
-            _settingsService.RecordUsage(rowsPulled + 15, rowsPushed + 10);
-            _settingsService.SaveSettings(settings);
-
-            Status = TursoSyncStatus.Success;
-            StatusMessage = $"✓ Sincronizado ({rowsPushed} subidos, {rowsPulled} recibidos • {sw.ElapsedMilliseconds} ms)";
-            StatusChanged?.Invoke(Status, StatusMessage);
 
             var result = new TursoSyncResult
             {
                 Success = true,
-                RowsPushed = rowsPushed,
-                RowsPulled = rowsPulled,
+                RowsPushed = pushed,
+                RowsPulled = pulled,
                 ElapsedMilliseconds = sw.ElapsedMilliseconds,
-                TimestampUtc = syncCutoffUtc
+                TimestampUtc = DateTime.UtcNow
             };
+
+            SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)");
             LastSyncResult = result;
             SyncCompleted?.Invoke(result);
 
-            // Notificar a las vistas si hubo cambios descargados
-            if (rowsPulled > 0 && _inventoryService != null)
+            if (pulled > 0)
             {
                 NotifyLocalViews();
             }
@@ -180,11 +216,10 @@ public class TursoSyncService
         catch (Exception ex)
         {
             sw.Stop();
-            AppLogger.Error("Fallo la sincronización con Turso", ex);
+            AppLogger.Error("Falló la sincronización con Turso", ex);
 
-            Status = TursoSyncStatus.Error;
-            StatusMessage = $"Error de sincronización: {ex.Message}";
-            StatusChanged?.Invoke(Status, StatusMessage);
+            var offline = ex is TursoException { ErrorCode: "NETWORK_ERROR" or "TIMEOUT" };
+            SetStatus(offline ? TursoSyncStatus.Offline : TursoSyncStatus.Error, $"Error de sincronización: {ex.Message}");
 
             var result = new TursoSyncResult
             {
@@ -203,284 +238,308 @@ public class TursoSyncService
         }
     }
 
-    /// <summary>
-    /// Sube todos los datos locales existentes a Turso (migración inicial completa de la base).
-    /// </summary>
-    public async Task<TursoSyncResult> InitialUploadToTursoAsync(CancellationToken ct = default)
+    private async Task<(int Pushed, int Pulled)> SyncCoreAsync(bool fullResync, CancellationToken ct)
     {
         var settings = _settingsService.CurrentSettings;
-        if (string.IsNullOrWhiteSpace(settings.DatabaseUrl))
+        using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
+
+        await EnsureRemoteSchemaAsync(client, ct);
+
+        if (_registeredDeviceUrl != settings.DatabaseUrl)
         {
-            return new TursoSyncResult { Success = false, ErrorMessage = "URL de Turso no especificada." };
-        }
-
-        await _syncLock.WaitAsync(ct);
-        var sw = Stopwatch.StartNew();
-
-        try
-        {
-            Status = TursoSyncStatus.Syncing;
-            StatusMessage = "Preparando esquema e inicio en Turso...";
-            StatusChanged?.Invoke(Status, StatusMessage);
-
-            using var client = new TursoClient(settings.DatabaseUrl, settings.AuthToken);
-            await EnsureRemoteSchemaAsync(client, ct);
             await RegisterDeviceAsync(client, settings, ct);
+            _registeredDeviceUrl = settings.DatabaseUrl;
+        }
 
-            int totalPushed = await PushLocalChangesAsync(client, DateTime.MinValue, DateTime.UtcNow, ct);
-            await SyncClinicProfileAsync(client, ct);
+        // 1. PUSH: lo modificado localmente desde la última subida
+        var cutoffUtc = DateTime.UtcNow;
+        var lastPushed = fullResync ? DateTime.MinValue : settings.LastPushedLocalUtc ?? DateTime.MinValue;
+        int pushed = await PushLocalChangesAsync(client, settings.DeviceId, lastPushed, cutoffUtc, ct);
 
-            sw.Stop();
-            settings.LastSyncUtc = DateTime.UtcNow;
-            _settingsService.RecordUsage(20, totalPushed);
-            _settingsService.SaveSettings(settings);
+        // 2. PULL: lo que otros dispositivos escribieron en el servidor desde la última descarga
+        //    (la nueva marca se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
+        var watermarkRows = await client.QueryAsync($"SELECT strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds') AS wm;", null, ct);
+        var newWatermark = watermarkRows.FirstOrDefault()?["wm"]?.ToString();
+        var lastPulled = fullResync ? null : settings.LastPulledServerWatermark;
+        var (pulled, rowsRead) = await PullRemoteChangesAsync(client, settings.DeviceId, lastPulled, skipOwnRows: !fullResync, ct);
 
-            Status = TursoSyncStatus.Success;
-            StatusMessage = $"✓ Base local subida a Turso con éxito ({totalPushed} registros subidos)";
-            StatusChanged?.Invoke(Status, StatusMessage);
+        // 3. Perfil del consultorio (último en modificarse gana)
+        await SyncClinicProfileAsync(client, ct);
 
-            var res = new TursoSyncResult
+        settings.LastPushedLocalUtc = cutoffUtc;
+        if (!string.IsNullOrWhiteSpace(newWatermark)) settings.LastPulledServerWatermark = newWatermark;
+        settings.LastSyncUtc = DateTime.UtcNow;
+        _settingsService.RecordUsage(rowsRead + 3, pushed + 1);
+        _settingsService.SaveSettings(settings);
+
+        return (pushed, pulled);
+    }
+
+    // =========================================================================
+    // MAPEO GENÉRICO DEL MODELO
+    // =========================================================================
+
+    private sealed class SyncColumn
+    {
+        public required string Name { get; init; }
+        public required Type ClrType { get; init; }
+        public required bool IsNullable { get; init; }
+        public required PropertyInfo Property { get; init; }
+        public required string RemoteType { get; init; }
+    }
+
+    private sealed class SyncReference
+    {
+        public required PropertyInfo Property { get; init; }
+        public required Type PrincipalType { get; init; }
+        public required string RemoteColumn { get; init; }
+        public required bool IsRequired { get; init; }
+    }
+
+    private sealed class TableMap
+    {
+        public required Type ClrType { get; init; }
+        public required string Table { get; init; }
+        public required List<SyncColumn> Columns { get; init; }
+        public required List<SyncReference> References { get; init; }
+        public required List<PropertyInfo> UniqueProperties { get; init; }
+
+        public IEnumerable<string> RemoteColumnNames =>
+            Columns.Select(c => c.Name).Concat(References.Select(r => r.RemoteColumn));
+
+        public string UpsertSql
+        {
+            get
             {
-                Success = true,
-                RowsPushed = totalPushed,
-                RowsPulled = 0,
-                ElapsedMilliseconds = sw.ElapsedMilliseconds
-            };
-            LastSyncResult = res;
-            SyncCompleted?.Invoke(res);
-            return res;
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            AppLogger.Error("Error en migración inicial a Turso", ex);
-            Status = TursoSyncStatus.Error;
-            StatusMessage = $"Error en carga inicial: {ex.Message}";
-            StatusChanged?.Invoke(Status, StatusMessage);
-            return new TursoSyncResult { Success = false, ErrorMessage = ex.Message };
-        }
-        finally
-        {
-            _syncLock.Release();
+                var cols = RemoteColumnNames.ToList();
+                var insertCols = string.Join(", ", new[] { "\"SyncId\"", "\"UpdatedAtUtc\"", "\"SyncedAtUtc\"", "\"OriginDeviceId\"" }
+                    .Concat(cols.Select(Q)));
+                var values = string.Join(", ", new[] { "?", "?", ServerNowSql, "?" }.Concat(cols.Select(_ => "?")));
+                var updates = string.Join(", ", new[] { "UpdatedAtUtc", "SyncedAtUtc", "OriginDeviceId" }.Concat(cols)
+                    .Select(c => $"{Q(c)} = excluded.{Q(c)}"));
+                return $"INSERT INTO {Q(Table)} ({insertCols}) VALUES ({values}) " +
+                       $"ON CONFLICT(\"SyncId\") DO UPDATE SET {updates} " +
+                       $"WHERE excluded.\"UpdatedAtUtc\" > {Q(Table)}.\"UpdatedAtUtc\";";
+            }
         }
     }
 
+    private static string Q(string identifier) => $"\"{identifier.Replace("\"", "\"\"")}\"";
+
+    private List<TableMap> GetTableMaps()
+    {
+        if (_tableMaps != null) return _tableMaps;
+
+        using var db = _contextFactory.CreateDbContext();
+        var maps = new List<TableMap>();
+
+        foreach (var entityType in db.Model.GetEntityTypes().Where(t => typeof(ISyncEntity).IsAssignableFrom(t.ClrType)))
+        {
+            var table = entityType.GetTableName();
+            if (string.IsNullOrEmpty(table)) continue;
+            var storeObject = StoreObjectIdentifier.Table(table, entityType.GetSchema());
+
+            var references = new List<SyncReference>();
+            var referenceProps = new HashSet<string>();
+
+            foreach (var fk in entityType.GetForeignKeys())
+            {
+                if (fk.Properties.Count != 1 || !typeof(ISyncEntity).IsAssignableFrom(fk.PrincipalEntityType.ClrType)) continue;
+                var prop = fk.Properties[0];
+                if (prop.PropertyInfo == null) continue;
+                references.Add(new SyncReference
+                {
+                    Property = prop.PropertyInfo,
+                    PrincipalType = fk.PrincipalEntityType.ClrType,
+                    RemoteColumn = ReferenceColumnName(prop.Name),
+                    IsRequired = !prop.IsNullable
+                });
+                referenceProps.Add(prop.Name);
+            }
+
+            foreach (var (entity, propertyName, principal) in SoftReferences.Where(r => r.Entity == entityType.ClrType))
+            {
+                var prop = entityType.FindProperty(propertyName);
+                if (prop?.PropertyInfo == null || referenceProps.Contains(propertyName)) continue;
+                references.Add(new SyncReference
+                {
+                    Property = prop.PropertyInfo,
+                    PrincipalType = principal,
+                    RemoteColumn = ReferenceColumnName(propertyName),
+                    IsRequired = false
+                });
+                referenceProps.Add(propertyName);
+            }
+
+            var columns = entityType.GetProperties()
+                .Where(p => !p.IsPrimaryKey()
+                            && p.PropertyInfo != null
+                            && p.Name != nameof(ISyncEntity.SyncId)
+                            && p.Name != nameof(ISyncEntity.UpdatedAtUtc)
+                            && !referenceProps.Contains(p.Name))
+                .Select(p => new SyncColumn
+                {
+                    Name = p.GetColumnName(storeObject) ?? p.Name,
+                    ClrType = p.ClrType,
+                    IsNullable = p.IsNullable,
+                    Property = p.PropertyInfo!,
+                    RemoteType = RemoteTypeFor(p.ClrType)
+                })
+                .ToList();
+
+            var uniqueProps = entityType.GetIndexes()
+                .Where(i => i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name != nameof(ISyncEntity.SyncId)
+                            && i.Properties[0].ClrType == typeof(string) && i.Properties[0].PropertyInfo != null)
+                .Select(i => i.Properties[0].PropertyInfo!)
+                .ToList();
+
+            maps.Add(new TableMap
+            {
+                ClrType = entityType.ClrType,
+                Table = table,
+                Columns = columns,
+                References = references,
+                UniqueProperties = uniqueProps
+            });
+        }
+
+        _tableMaps = OrderByDependencies(maps);
+        return _tableMaps;
+    }
+
+    /// <summary>ProductId → ProductSyncId, PatientRecordId → PatientRecordSyncId...</summary>
+    private static string ReferenceColumnName(string propertyName) =>
+        (propertyName.EndsWith("Id", StringComparison.Ordinal) ? propertyName[..^2] : propertyName) + "SyncId";
+
+    private static string RemoteTypeFor(Type clrType)
+    {
+        var t = Nullable.GetUnderlyingType(clrType) ?? clrType;
+        if (t == typeof(bool) || t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte) || t.IsEnum) return "INTEGER";
+        if (t == typeof(double) || t == typeof(float)) return "REAL";
+        return "TEXT"; // string, decimal (exacto), DateTime, Guid
+    }
+
+    /// <summary>Principales antes que dependientes (Categoría → Producto → Lote → Movimiento...).</summary>
+    private static List<TableMap> OrderByDependencies(List<TableMap> maps)
+    {
+        var ordered = new List<TableMap>();
+        var pending = maps.OrderBy(m => m.Table, StringComparer.Ordinal).ToList();
+        while (pending.Count > 0)
+        {
+            var next = pending.FirstOrDefault(m => m.References.All(r =>
+                r.PrincipalType == m.ClrType || ordered.Any(o => o.ClrType == r.PrincipalType) || pending.All(p => p.ClrType != r.PrincipalType)))
+                ?? pending[0];
+            ordered.Add(next);
+            pending.Remove(next);
+        }
+        return ordered;
+    }
+
+    // =========================================================================
+    // ESQUEMA REMOTO
+    // =========================================================================
+
+    private IEnumerable<string> BuildSchemaStatements()
+    {
+        yield return $"CREATE TABLE IF NOT EXISTS {Q(MetaTable)} (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
+
+        foreach (var map in GetTableMaps())
+        {
+            var cols = map.Columns.Select(c => $"{Q(c.Name)} {c.RemoteType}")
+                .Concat(map.References.Select(r => $"{Q(r.RemoteColumn)} TEXT"));
+            yield return $"CREATE TABLE IF NOT EXISTS {Q(map.Table)} (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, " +
+                         $"\"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, {string.Join(", ", cols)})";
+            yield return $"CREATE INDEX IF NOT EXISTS {Q($"IX_{map.Table}_SyncedAtUtc")} ON {Q(map.Table)} (\"SyncedAtUtc\")";
+        }
+
+        yield return $"CREATE TABLE IF NOT EXISTS {Q(TombstonesTable)} (\"EntityType\" TEXT NOT NULL, \"SyncId\" TEXT NOT NULL, " +
+                     "\"DeletedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, PRIMARY KEY (\"EntityType\", \"SyncId\"))";
+        yield return $"CREATE INDEX IF NOT EXISTS \"IX_SyncTombstones_SyncedAtUtc\" ON {Q(TombstonesTable)} (\"SyncedAtUtc\")";
+
+        yield return "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, " +
+                     "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)";
+        yield return "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, " +
+                     "AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)";
+    }
+
+    /// <summary>
+    /// Crea o actualiza el esquema remoto. Las tablas creadas por versiones 1.8.x (con Id entero y sin
+    /// SyncedAtUtc) se renombran a "legacy_v1_*" sin borrar nada, y se crean las tablas nuevas.
+    /// Solo consulta la estructura cuando cambia la huella del esquema (ahorra cuota del plan gratuito).
+    /// </summary>
     public async Task EnsureRemoteSchemaAsync(TursoClient client, CancellationToken ct = default)
     {
-        const string schemaSql = @"
-CREATE TABLE IF NOT EXISTS Categories (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    Name TEXT NOT NULL,
-    Description TEXT,
-    Icon TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        if (_verifiedSchemaUrl == client.DatabaseUrl) return;
 
-CREATE TABLE IF NOT EXISTS Products (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    Code TEXT NOT NULL,
-    Name TEXT NOT NULL,
-    GenericName TEXT,
-    Presentation TEXT,
-    CategorySyncId TEXT,
-    Price REAL NOT NULL,
-    CurrentStock INTEGER NOT NULL,
-    MinStock INTEGER NOT NULL,
-    OptimalStock INTEGER NOT NULL,
-    Location TEXT,
-    RequiresRefrigeration INTEGER NOT NULL,
-    Notes TEXT,
-    Unit TEXT,
-    IsActive INTEGER NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        var statements = BuildSchemaStatements().ToList();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            $"v{RemoteSchemaVersion}|" + string.Join("|", statements))))[..16];
 
-CREATE TABLE IF NOT EXISTS ProductBatches (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    ProductSyncId TEXT NOT NULL,
-    BatchNumber TEXT NOT NULL,
-    ExpirationDate TEXT NOT NULL,
-    Quantity INTEGER NOT NULL,
-    ReceivedDate TEXT NOT NULL,
-    Notes TEXT,
-    IsDepleted INTEGER NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        var probe = await client.QueryBatchAsync(new (string, object?[]?)[]
+        {
+            (statements[0], null),
+            ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = 'schema';", null)
+        }, ct);
 
-CREATE TABLE IF NOT EXISTS InventoryMovements (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    ProductSyncId TEXT NOT NULL,
-    BatchSyncId TEXT,
-    MovementType INTEGER NOT NULL,
-    Quantity INTEGER NOT NULL,
-    StockBefore INTEGER NOT NULL,
-    StockAfter INTEGER NOT NULL,
-    Date TEXT NOT NULL,
-    Reason TEXT,
-    Responsible TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        if (probe.Count > 1 && probe[1].FirstOrDefault()?["Value"]?.ToString() == fingerprint)
+        {
+            _verifiedSchemaUrl = client.DatabaseUrl;
+            return;
+        }
 
-CREATE TABLE IF NOT EXISTS ClinicalServices (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    Code TEXT NOT NULL,
-    Name TEXT NOT NULL,
-    Description TEXT,
-    Price REAL NOT NULL,
-    Category TEXT,
-    IsActive INTEGER NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        // Estructura actual de las tablas sincronizadas
+        var syncTables = GetTableMaps().Select(m => m.Table).Append(TombstonesTable).ToList();
+        var existingTables = (await client.QueryAsync("SELECT name FROM sqlite_master WHERE type = 'table';", null, ct))
+            .Select(r => r["name"]?.ToString() ?? string.Empty)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-CREATE TABLE IF NOT EXISTS ServiceDefaultProducts (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    ServiceSyncId TEXT NOT NULL,
-    ProductSyncId TEXT NOT NULL,
-    DefaultQuantity INTEGER NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        var tablesToInspect = syncTables.Where(existingTables.Contains).ToList();
+        var columnsByTable = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        if (tablesToInspect.Count > 0)
+        {
+            var info = await client.QueryBatchAsync(
+                tablesToInspect.Select(t => ($"SELECT name FROM pragma_table_info('{t}');", (object?[]?)null)), ct);
+            for (int i = 0; i < tablesToInspect.Count && i < info.Count; i++)
+            {
+                columnsByTable[tablesToInspect[i]] = info[i]
+                    .Select(r => r["name"]?.ToString() ?? string.Empty)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+        }
 
-CREATE TABLE IF NOT EXISTS Patients (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    RecordNumber TEXT NOT NULL,
-    FullName TEXT NOT NULL,
-    Age INTEGER NOT NULL,
-    Gender TEXT,
-    Phone TEXT,
-    Email TEXT,
-    Address TEXT,
-    BloodType TEXT,
-    Allergies TEXT,
-    ChronicDiseases TEXT,
-    LastVisit TEXT,
-    LastDiagnosis TEXT,
-    VitalSigns TEXT,
-    ClinicalNotes TEXT,
-    ActivePrescriptionJson TEXT,
-    ActiveSuppliesJson TEXT,
-    ActiveServicesJson TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        var ddl = new List<(string Sql, object?[]? Args)>();
+        foreach (var (table, columns) in columnsByTable)
+        {
+            if (!columns.Contains("SyncedAtUtc") || columns.Contains("Id"))
+            {
+                var legacyName = $"legacy_v1_{table}";
+                if (existingTables.Contains(legacyName)) legacyName += $"_{DateTime.UtcNow:yyyyMMddHHmmss}";
+                ddl.Add(($"ALTER TABLE {Q(table)} RENAME TO {Q(legacyName)};", null));
+                AppLogger.Warn($"Turso: tabla heredada {table} renombrada a {legacyName} (esquema v{RemoteSchemaVersion}).");
+            }
+        }
 
-CREATE TABLE IF NOT EXISTS PatientConsultations (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    PatientSyncId TEXT NOT NULL,
-    Folio TEXT NOT NULL,
-    Date TEXT NOT NULL,
-    StartedAt TEXT,
-    EndedAt TEXT,
-    ChiefComplaint TEXT,
-    VitalSigns TEXT,
-    BloodPressureSystolic REAL,
-    BloodPressureDiastolic REAL,
-    HeartRate REAL,
-    RespiratoryRate REAL,
-    Temperature REAL,
-    Weight REAL,
-    Height REAL,
-    BMI REAL,
-    Glucose REAL,
-    PhysicalExamination TEXT,
-    SystemsReview TEXT,
-    Diagnosis TEXT,
-    TreatmentPlan TEXT,
-    Notes TEXT,
-    PrescriptionsJson TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        ddl.AddRange(statements.Select(s => (s + ";", (object?[]?)null)));
 
-CREATE TABLE IF NOT EXISTS Appointments (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    PatientSyncId TEXT,
-    PatientName TEXT NOT NULL,
-    PatientRecordNumber TEXT,
-    PatientPhone TEXT,
-    Date TEXT NOT NULL,
-    Time TEXT,
-    DurationMinutes INTEGER NOT NULL,
-    Reason TEXT,
-    Notes TEXT,
-    Status TEXT NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        // Columnas nuevas del modelo en tablas v2 existentes
+        foreach (var map in GetTableMaps())
+        {
+            if (!columnsByTable.TryGetValue(map.Table, out var cols) || !cols.Contains("SyncedAtUtc") || cols.Contains("Id")) continue;
+            foreach (var c in map.Columns.Where(c => !cols.Contains(c.Name)))
+            {
+                ddl.Add(($"ALTER TABLE {Q(map.Table)} ADD COLUMN {Q(c.Name)} {c.RemoteType};", null));
+            }
+            foreach (var r in map.References.Where(r => !cols.Contains(r.RemoteColumn)))
+            {
+                ddl.Add(($"ALTER TABLE {Q(map.Table)} ADD COLUMN {Q(r.RemoteColumn)} TEXT;", null));
+            }
+        }
 
-CREATE TABLE IF NOT EXISTS Sales (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    Folio TEXT NOT NULL,
-    Date TEXT NOT NULL,
-    CustomerName TEXT,
-    PaymentMethod TEXT,
-    Cashier TEXT,
-    Total REAL NOT NULL,
-    IsCancelled INTEGER NOT NULL,
-    CancellationReason TEXT,
-    CancelledAt TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
+        ddl.Add(($"INSERT INTO {Q(MetaTable)} (\"Key\", \"Value\") VALUES ('schema', ?) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\";",
+            new object?[] { fingerprint }));
 
-CREATE TABLE IF NOT EXISTS SaleItems (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    SyncId TEXT NOT NULL UNIQUE,
-    SaleSyncId TEXT NOT NULL,
-    ProductSyncId TEXT,
-    ClinicalServiceId INTEGER,
-    IsService INTEGER NOT NULL,
-    Code TEXT,
-    Description TEXT NOT NULL,
-    Quantity INTEGER NOT NULL,
-    UnitPrice REAL NOT NULL,
-    Subtotal REAL NOT NULL,
-    UpdatedAtUtc TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS SyncTombstones (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    EntityType TEXT NOT NULL,
-    SyncId TEXT NOT NULL,
-    DeletedAtUtc TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS ClinicProfiles (
-    Id INTEGER PRIMARY KEY,
-    DoctorName TEXT,
-    ProfessionalLicense TEXT,
-    Specialty TEXT,
-    University TEXT,
-    ClinicName TEXT,
-    Address TEXT,
-    Phone TEXT,
-    Email TEXT,
-    TaxId TEXT,
-    AdditionalNotes TEXT,
-    UpdatedAtUtc TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS RegisteredDevices (
-    DeviceId TEXT PRIMARY KEY,
-    DeviceName TEXT NOT NULL,
-    DeviceRole TEXT NOT NULL,
-    AppVersion TEXT NOT NULL,
-    LastSeenUtc TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_products_sync ON Products(SyncId);
-CREATE INDEX IF NOT EXISTS idx_patients_sync ON Patients(SyncId);
-CREATE INDEX IF NOT EXISTS idx_consultations_sync ON PatientConsultations(SyncId);
-CREATE INDEX IF NOT EXISTS idx_sales_sync ON Sales(SyncId);
-CREATE INDEX IF NOT EXISTS idx_appointments_sync ON Appointments(SyncId);
-";
-
-        await client.ExecuteScriptAsync(schemaSql, ct);
+        await client.ExecuteBatchAsync(ddl, ct);
+        _verifiedSchemaUrl = client.DatabaseUrl;
     }
 
     private static async Task RegisterDeviceAsync(TursoClient client, TursoSettings settings, CancellationToken ct)
@@ -492,525 +551,559 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     DeviceName = excluded.DeviceName,
     DeviceRole = excluded.DeviceRole,
     AppVersion = excluded.AppVersion,
-    LastSeenUtc = excluded.LastSeenUtc;
-";
+    LastSeenUtc = excluded.LastSeenUtc;";
+
         await client.ExecuteAsync(sql, new object?[]
         {
             settings.DeviceId,
             settings.DeviceName,
             settings.DeviceRole.ToString(),
-            "1.8.2",
-            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
+            typeof(TursoSyncService).Assembly.GetName().Version?.ToString(3) ?? "1",
+            FormatDate(DateTime.UtcNow)
         }, ct);
     }
 
-    private async Task<int> PushLocalChangesAsync(TursoClient client, DateTime lastSyncUtc, DateTime syncCutoffUtc, CancellationToken ct)
+    // =========================================================================
+    // PUSH
+    // =========================================================================
+
+    private async Task<int> PushLocalChangesAsync(TursoClient client, string deviceId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {
         using var db = _contextFactory.CreateDbContext();
         var statements = new List<(string Sql, object?[]? Args)>();
+        var idMaps = new Dictionary<Type, Dictionary<int, Guid>>();
 
-        // 1. Categorías
-        var cats = await db.Categories.AsNoTracking().Where(c => c.UpdatedAtUtc > lastSyncUtc && c.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var c in cats)
+        foreach (var map in GetTableMaps())
         {
-            statements.Add((
-                @"INSERT INTO Categories (SyncId, Name, Description, Icon, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    Name = excluded.Name, Description = excluded.Description, Icon = excluded.Icon, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= Categories.UpdatedAtUtc;",
-                new object?[] { c.SyncId.ToString(), c.Name, c.Description, c.Icon, FormatDate(c.UpdatedAtUtc) }
-            ));
-        }
+            var changed = await LoadChangedAsync(db, map.ClrType, fromUtc, toUtc, ct);
+            if (changed.Count == 0) continue;
 
-        // 2. Productos
-        var prods = await db.Products.Include(p => p.Category).AsNoTracking().Where(p => p.UpdatedAtUtc > lastSyncUtc && p.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var p in prods)
-        {
-            statements.Add((
-                @"INSERT INTO Products (SyncId, Code, Name, GenericName, Presentation, CategorySyncId, Price, CurrentStock, MinStock, OptimalStock, Location, RequiresRefrigeration, Notes, Unit, IsActive, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    Code = excluded.Code, Name = excluded.Name, GenericName = excluded.GenericName, Presentation = excluded.Presentation,
-                    CategorySyncId = excluded.CategorySyncId, Price = excluded.Price, CurrentStock = excluded.CurrentStock,
-                    MinStock = excluded.MinStock, OptimalStock = excluded.OptimalStock, Location = excluded.Location,
-                    RequiresRefrigeration = excluded.RequiresRefrigeration, Notes = excluded.Notes, Unit = excluded.Unit,
-                    IsActive = excluded.IsActive, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= Products.UpdatedAtUtc;",
-                new object?[] {
-                    p.SyncId.ToString(), p.Code, p.Name, p.GenericName, p.Presentation,
-                    p.Category?.SyncId.ToString(), (double)p.Price, p.CurrentStock, p.MinStock, p.OptimalStock,
-                    p.Location, p.RequiresRefrigeration ? 1 : 0, p.Notes, p.Unit, p.IsActive ? 1 : 0, FormatDate(p.UpdatedAtUtc)
+            var sql = map.UpsertSql;
+            foreach (var entity in changed)
+            {
+                var args = new List<object?>
+                {
+                    FormatGuid(entity.SyncId),
+                    FormatDate(entity.UpdatedAtUtc),
+                    deviceId
+                };
+                args.AddRange(map.Columns.Select(c => ToRemoteValue(c.Property.GetValue(entity))));
+
+                bool skip = false;
+                foreach (var reference in map.References)
+                {
+                    var localId = reference.Property.GetValue(entity) as int?;
+                    Guid? principalSyncId = null;
+                    if (localId is > 0)
+                    {
+                        if (!idMaps.TryGetValue(reference.PrincipalType, out var lookup))
+                        {
+                            lookup = await LoadIdToSyncIdAsync(db, reference.PrincipalType, ct);
+                            idMaps[reference.PrincipalType] = lookup;
+                        }
+                        if (lookup.TryGetValue(localId.Value, out var g)) principalSyncId = g;
+                    }
+
+                    if (principalSyncId == null && reference.IsRequired)
+                    {
+                        skip = true;
+                        break;
+                    }
+                    args.Add(principalSyncId.HasValue ? FormatGuid(principalSyncId.Value) : null);
                 }
-            ));
-        }
 
-        // 3. Lotes
-        var batches = await db.ProductBatches.Include(b => b.Product).AsNoTracking().Where(b => b.UpdatedAtUtc > lastSyncUtc && b.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var b in batches)
-        {
-            if (b.Product == null) continue;
-            statements.Add((
-                @"INSERT INTO ProductBatches (SyncId, ProductSyncId, BatchNumber, ExpirationDate, Quantity, ReceivedDate, Notes, IsDepleted, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    ProductSyncId = excluded.ProductSyncId, BatchNumber = excluded.BatchNumber, ExpirationDate = excluded.ExpirationDate,
-                    Quantity = excluded.Quantity, ReceivedDate = excluded.ReceivedDate, Notes = excluded.Notes, IsDepleted = excluded.IsDepleted,
-                    UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= ProductBatches.UpdatedAtUtc;",
-                new object?[] { b.SyncId.ToString(), b.Product.SyncId.ToString(), b.BatchNumber, FormatDate(b.ExpirationDate), b.Quantity, FormatDate(b.ReceivedDate), b.Notes, b.IsDepleted ? 1 : 0, FormatDate(b.UpdatedAtUtc) }
-            ));
-        }
-
-        // 4. Movimientos de inventario
-        var moves = await db.InventoryMovements.Include(m => m.Product).Include(m => m.Batch).AsNoTracking().Where(m => m.UpdatedAtUtc > lastSyncUtc && m.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var m in moves)
-        {
-            if (m.Product == null) continue;
-            statements.Add((
-                @"INSERT INTO InventoryMovements (SyncId, ProductSyncId, BatchSyncId, MovementType, Quantity, StockBefore, StockAfter, Date, Reason, Responsible, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    ProductSyncId = excluded.ProductSyncId, BatchSyncId = excluded.BatchSyncId, MovementType = excluded.MovementType,
-                    Quantity = excluded.Quantity, StockBefore = excluded.StockBefore, StockAfter = excluded.StockAfter, Date = excluded.Date,
-                    Reason = excluded.Reason, Responsible = excluded.Responsible, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= InventoryMovements.UpdatedAtUtc;",
-                new object?[] { m.SyncId.ToString(), m.Product.SyncId.ToString(), m.Batch?.SyncId.ToString(), (int)m.MovementType, m.Quantity, m.StockBefore, m.StockAfter, FormatDate(m.Date), m.Reason, m.Responsible, FormatDate(m.UpdatedAtUtc) }
-            ));
-        }
-
-        // 5. Servicios Clínicos
-        var services = await db.ClinicalServices.AsNoTracking().Where(s => s.UpdatedAtUtc > lastSyncUtc && s.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var s in services)
-        {
-            statements.Add((
-                @"INSERT INTO ClinicalServices (SyncId, Code, Name, Description, Price, Category, IsActive, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    Code = excluded.Code, Name = excluded.Name, Description = excluded.Description, Price = excluded.Price,
-                    Category = excluded.Category, IsActive = excluded.IsActive, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= ClinicalServices.UpdatedAtUtc;",
-                new object?[] { s.SyncId.ToString(), s.Code, s.Name, s.Description, (double)s.Price, s.Category, s.IsActive ? 1 : 0, FormatDate(s.UpdatedAtUtc) }
-            ));
-        }
-
-        // 6. Pacientes (Expedientes)
-        var patients = await db.Patients.AsNoTracking().Where(p => p.UpdatedAtUtc > lastSyncUtc && p.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var p in patients)
-        {
-            statements.Add((
-                @"INSERT INTO Patients (SyncId, RecordNumber, FullName, Age, Gender, Phone, Email, Address, BloodType, Allergies, ChronicDiseases, LastVisit, LastDiagnosis, VitalSigns, ClinicalNotes, ActivePrescriptionJson, ActiveSuppliesJson, ActiveServicesJson, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    RecordNumber = excluded.RecordNumber, FullName = excluded.FullName, Age = excluded.Age, Gender = excluded.Gender, Phone = excluded.Phone,
-                    Email = excluded.Email, Address = excluded.Address, BloodType = excluded.BloodType, Allergies = excluded.Allergies,
-                    ChronicDiseases = excluded.ChronicDiseases, LastVisit = excluded.LastVisit, LastDiagnosis = excluded.LastDiagnosis,
-                    VitalSigns = excluded.VitalSigns, ClinicalNotes = excluded.ClinicalNotes, ActivePrescriptionJson = excluded.ActivePrescriptionJson,
-                    ActiveSuppliesJson = excluded.ActiveSuppliesJson, ActiveServicesJson = excluded.ActiveServicesJson, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= Patients.UpdatedAtUtc;",
-                new object?[] { p.SyncId.ToString(), p.RecordNumber, p.FullName, p.Age, p.Gender, p.Phone, p.Email, p.Address, p.BloodType, p.Allergies, p.ChronicDiseases, FormatDate(p.LastVisit), p.LastDiagnosis, p.VitalSigns, p.ClinicalNotes, p.ActivePrescriptionJson, p.ActiveSuppliesJson, p.ActiveServicesJson, FormatDate(p.UpdatedAtUtc) }
-            ));
-        }
-
-        // 7. Consultas Médicas
-        var consults = await db.PatientConsultations.Include(c => c.PatientRecord).AsNoTracking().Where(c => c.UpdatedAtUtc > lastSyncUtc && c.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var c in consults)
-        {
-            if (c.PatientRecord == null) continue;
-            statements.Add((
-                @"INSERT INTO PatientConsultations (SyncId, PatientSyncId, Folio, Date, StartedAt, EndedAt, ChiefComplaint, VitalSigns, BloodPressureSystolic, BloodPressureDiastolic, HeartRate, RespiratoryRate, Temperature, Weight, Height, BMI, Glucose, PhysicalExamination, SystemsReview, Diagnosis, TreatmentPlan, Notes, PrescriptionsJson, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    PatientSyncId = excluded.PatientSyncId, Folio = excluded.Folio, Date = excluded.Date, StartedAt = excluded.StartedAt, EndedAt = excluded.EndedAt,
-                    ChiefComplaint = excluded.ChiefComplaint, VitalSigns = excluded.VitalSigns, BloodPressureSystolic = excluded.BloodPressureSystolic,
-                    BloodPressureDiastolic = excluded.BloodPressureDiastolic, HeartRate = excluded.HeartRate, RespiratoryRate = excluded.RespiratoryRate,
-                    Temperature = excluded.Temperature, Weight = excluded.Weight, Height = excluded.Height, BMI = excluded.BMI, Glucose = excluded.Glucose,
-                    PhysicalExamination = excluded.PhysicalExamination, SystemsReview = excluded.SystemsReview, Diagnosis = excluded.Diagnosis,
-                    TreatmentPlan = excluded.TreatmentPlan, Notes = excluded.Notes, PrescriptionsJson = excluded.PrescriptionsJson, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= PatientConsultations.UpdatedAtUtc;",
-                new object?[] {
-                    c.SyncId.ToString(), c.PatientRecord.SyncId.ToString(), c.Folio, FormatDate(c.Date),
-                    c.StartedAt.HasValue ? FormatDate(c.StartedAt.Value) : null,
-                    c.EndedAt.HasValue ? FormatDate(c.EndedAt.Value) : null,
-                    c.ChiefComplaint, c.VitalSigns,
-                    (double?)c.BloodPressureSystolic, (double?)c.BloodPressureDiastolic,
-                    (double?)c.HeartRate, (double?)c.RespiratoryRate,
-                    (double?)c.Temperature, (double?)c.Weight,
-                    (double?)c.Height, (double?)c.BMI, (double?)c.Glucose,
-                    c.PhysicalExamination, c.SystemsReview, c.Diagnosis, c.TreatmentPlan, c.Notes,
-                    c.PrescriptionsJson, FormatDate(c.UpdatedAtUtc)
+                if (skip)
+                {
+                    AppLogger.Warn($"Turso: {map.Table} {entity.SyncId} omitido (referencia requerida inexistente).");
+                    continue;
                 }
-            ));
+                statements.Add((sql, args.ToArray()));
+            }
         }
 
-        // 8. Citas Médicas
-        var appts = await db.Appointments.Include(a => a.PatientRecord).AsNoTracking().Where(a => a.UpdatedAtUtc > lastSyncUtc && a.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var a in appts)
-        {
-            statements.Add((
-                @"INSERT INTO Appointments (SyncId, PatientSyncId, PatientName, PatientRecordNumber, PatientPhone, Date, Time, DurationMinutes, Reason, Notes, Status, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    PatientSyncId = excluded.PatientSyncId, PatientName = excluded.PatientName, PatientRecordNumber = excluded.PatientRecordNumber,
-                    PatientPhone = excluded.PatientPhone, Date = excluded.Date, Time = excluded.Time, DurationMinutes = excluded.DurationMinutes,
-                    Reason = excluded.Reason, Notes = excluded.Notes, Status = excluded.Status, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= Appointments.UpdatedAtUtc;",
-                new object?[] { a.SyncId.ToString(), a.PatientRecord?.SyncId.ToString(), a.PatientName, a.PatientRecordNumber, a.PatientPhone, FormatDate(a.Date), a.Time, a.DurationMinutes, a.Reason, a.Notes, a.Status, FormatDate(a.UpdatedAtUtc) }
-            ));
-        }
-
-        // 9. Ventas (Tickets)
-        var sales = await db.Sales.AsNoTracking().Where(s => s.UpdatedAtUtc > lastSyncUtc && s.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var s in sales)
-        {
-            statements.Add((
-                @"INSERT INTO Sales (SyncId, Folio, Date, CustomerName, PaymentMethod, Cashier, Total, IsCancelled, CancellationReason, CancelledAt, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    Folio = excluded.Folio, Date = excluded.Date, CustomerName = excluded.CustomerName, PaymentMethod = excluded.PaymentMethod,
-                    Cashier = excluded.Cashier, Total = excluded.Total, IsCancelled = excluded.IsCancelled, CancellationReason = excluded.CancellationReason,
-                    CancelledAt = excluded.CancelledAt, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= Sales.UpdatedAtUtc;",
-                new object?[] { s.SyncId.ToString(), s.Folio, FormatDate(s.Date), s.CustomerName, s.PaymentMethod, s.Cashier, (double)s.Total, s.IsCancelled ? 1 : 0, s.CancellationReason, s.CancelledAt.HasValue ? FormatDate(s.CancelledAt.Value) : null, FormatDate(s.UpdatedAtUtc) }
-            ));
-        }
-
-        // 10. Items de Venta
-        var saleItems = await db.SaleItems.Include(i => i.Sale).AsNoTracking().Where(i => i.UpdatedAtUtc > lastSyncUtc && i.UpdatedAtUtc <= syncCutoffUtc).ToListAsync(ct);
-        foreach (var i in saleItems)
-        {
-            if (i.Sale == null) continue;
-            statements.Add((
-                @"INSERT INTO SaleItems (SyncId, SaleSyncId, ClinicalServiceId, IsService, Code, Description, Quantity, UnitPrice, Subtotal, UpdatedAtUtc)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(SyncId) DO UPDATE SET
-                    SaleSyncId = excluded.SaleSyncId, ClinicalServiceId = excluded.ClinicalServiceId, IsService = excluded.IsService,
-                    Code = excluded.Code, Description = excluded.Description, Quantity = excluded.Quantity, UnitPrice = excluded.UnitPrice,
-                    Subtotal = excluded.Subtotal, UpdatedAtUtc = excluded.UpdatedAtUtc
-                  WHERE excluded.UpdatedAtUtc >= SaleItems.UpdatedAtUtc;",
-                new object?[] { i.SyncId.ToString(), i.Sale.SyncId.ToString(), i.ClinicalServiceId, i.IsService ? 1 : 0, i.Code, i.Description, i.Quantity, (double)i.UnitPrice, (double)i.Subtotal, FormatDate(i.UpdatedAtUtc) }
-            ));
-        }
-
-        // 11. Borrados (Tombstones)
-        var tombstones = await db.SyncTombstones.AsNoTracking().Where(t => t.DeletedAtUtc > lastSyncUtc && t.DeletedAtUtc <= syncCutoffUtc).ToListAsync(ct);
+        // Borrados físicos: se registran y se aplican en la nube salvo que allá exista una versión más nueva
+        var tombstones = await db.SyncTombstones.AsNoTracking()
+            .Where(t => t.DeletedAtUtc > fromUtc && t.DeletedAtUtc <= toUtc)
+            .ToListAsync(ct);
+        var tablesByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m.Table);
         foreach (var t in tombstones)
         {
             statements.Add((
-                @"INSERT INTO SyncTombstones (EntityType, SyncId, DeletedAtUtc) VALUES (?, ?, ?);",
-                new object?[] { t.EntityType, t.SyncId.ToString(), FormatDate(t.DeletedAtUtc) }
-            ));
+                $"INSERT INTO {Q(TombstonesTable)} (\"EntityType\", \"SyncId\", \"DeletedAtUtc\", \"SyncedAtUtc\", \"OriginDeviceId\") " +
+                $"VALUES (?, ?, ?, {ServerNowSql}, ?) ON CONFLICT(\"EntityType\", \"SyncId\") DO UPDATE SET " +
+                "\"DeletedAtUtc\" = excluded.\"DeletedAtUtc\", \"SyncedAtUtc\" = excluded.\"SyncedAtUtc\", \"OriginDeviceId\" = excluded.\"OriginDeviceId\";",
+                new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }));
 
-            var tableName = MapEntityTypeToTable(t.EntityType);
-            if (!string.IsNullOrEmpty(tableName))
+            if (tablesByType.TryGetValue(t.EntityType, out var table))
             {
-                statements.Add(($"DELETE FROM {tableName} WHERE SyncId = ?;", new object?[] { t.SyncId.ToString() }));
+                statements.Add(($"DELETE FROM {Q(table)} WHERE \"SyncId\" = ? AND \"UpdatedAtUtc\" <= ?;",
+                    new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }));
             }
         }
 
-        if (statements.Count == 0) return 0;
-
-        const int chunkSize = 100;
-        int pushed = 0;
-        for (int i = 0; i < statements.Count; i += chunkSize)
+        for (int i = 0; i < statements.Count; i += PushChunkSize)
         {
-            var chunk = statements.Skip(i).Take(chunkSize);
-            await client.ExecuteBatchAsync(chunk, ct);
-            pushed += chunk.Count();
+            await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
         }
 
-        return pushed;
+        return statements.Count;
     }
 
-    private async Task<int> PullRemoteChangesAsync(TursoClient client, DateTime lastSyncUtc, CancellationToken ct)
+    private static async Task<List<ISyncEntity>> LoadChangedAsync(AppDbContext db, Type clrType, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {
-        string lastSyncStr = FormatDate(lastSyncUtc);
-        int totalPulled = 0;
-
-        // 1. Descargar Pacientes
-        var remotePatients = await client.QueryAsync("SELECT * FROM Patients WHERE UpdatedAtUtc > ?;", new object?[] { lastSyncStr }, ct);
-        if (remotePatients.Count > 0)
-        {
-            using var db = _contextFactory.CreateDbContext();
-            foreach (var r in remotePatients)
-            {
-                if (!Guid.TryParse(r["SyncId"]?.ToString(), out var syncId)) continue;
-                var updated = ParseDate(r["UpdatedAtUtc"]);
-
-                var local = await db.Patients.FirstOrDefaultAsync(p => p.SyncId == syncId, ct);
-                if (local == null)
-                {
-                    local = new PatientRecord { SyncId = syncId };
-                    db.Patients.Add(local);
-                }
-                else if (local.UpdatedAtUtc >= updated)
-                {
-                    continue; // LWW: El registro local es más reciente
-                }
-
-                local.RecordNumber = r["RecordNumber"]?.ToString() ?? string.Empty;
-                local.FullName = r["FullName"]?.ToString() ?? string.Empty;
-                local.Age = Convert.ToInt32(r["Age"] ?? 0);
-                local.Gender = r["Gender"]?.ToString() ?? string.Empty;
-                local.Phone = r["Phone"]?.ToString() ?? string.Empty;
-                local.Email = r["Email"]?.ToString() ?? string.Empty;
-                local.Address = r["Address"]?.ToString() ?? string.Empty;
-                local.BloodType = r["BloodType"]?.ToString() ?? string.Empty;
-                local.Allergies = r["Allergies"]?.ToString() ?? string.Empty;
-                local.ChronicDiseases = r["ChronicDiseases"]?.ToString() ?? string.Empty;
-                local.LastVisit = ParseDate(r["LastVisit"]);
-                local.LastDiagnosis = r["LastDiagnosis"]?.ToString() ?? string.Empty;
-                local.VitalSigns = r["VitalSigns"]?.ToString() ?? string.Empty;
-                local.ClinicalNotes = r["ClinicalNotes"]?.ToString() ?? string.Empty;
-                local.ActivePrescriptionJson = r["ActivePrescriptionJson"]?.ToString() ?? string.Empty;
-                local.ActiveSuppliesJson = r["ActiveSuppliesJson"]?.ToString() ?? string.Empty;
-                local.ActiveServicesJson = r["ActiveServicesJson"]?.ToString() ?? string.Empty;
-                local.UpdatedAtUtc = updated;
-
-                totalPulled++;
-            }
-            await db.SaveChangesAsync(ct);
-        }
-
-        // 2. Descargar Productos
-        var remoteProducts = await client.QueryAsync("SELECT * FROM Products WHERE UpdatedAtUtc > ?;", new object?[] { lastSyncStr }, ct);
-        if (remoteProducts.Count > 0)
-        {
-            using var db = _contextFactory.CreateDbContext();
-            var categories = await db.Categories.ToListAsync(ct);
-            var defaultCategory = categories.FirstOrDefault();
-
-            foreach (var r in remoteProducts)
-            {
-                if (!Guid.TryParse(r["SyncId"]?.ToString(), out var syncId)) continue;
-                var updated = ParseDate(r["UpdatedAtUtc"]);
-
-                var local = await db.Products.FirstOrDefaultAsync(p => p.SyncId == syncId, ct);
-                if (local == null)
-                {
-                    local = new Product { SyncId = syncId };
-                    db.Products.Add(local);
-                }
-                else if (local.UpdatedAtUtc >= updated)
-                {
-                    continue;
-                }
-
-                local.Code = r["Code"]?.ToString() ?? string.Empty;
-                local.Name = r["Name"]?.ToString() ?? string.Empty;
-                local.GenericName = r["GenericName"]?.ToString();
-                local.Presentation = r["Presentation"]?.ToString();
-                local.Price = Convert.ToDecimal(r["Price"] ?? 0);
-                local.CurrentStock = Convert.ToInt32(r["CurrentStock"] ?? 0);
-                local.MinStock = Convert.ToInt32(r["MinStock"] ?? 5);
-                local.OptimalStock = Convert.ToInt32(r["OptimalStock"] ?? 20);
-                local.Location = r["Location"]?.ToString();
-                local.RequiresRefrigeration = Convert.ToInt32(r["RequiresRefrigeration"] ?? 0) == 1;
-                local.Notes = r["Notes"]?.ToString();
-                local.Unit = r["Unit"]?.ToString() ?? "Piezas";
-                local.IsActive = Convert.ToInt32(r["IsActive"] ?? 1) == 1;
-                local.UpdatedAtUtc = updated;
-
-                if (Guid.TryParse(r["CategorySyncId"]?.ToString(), out var catSyncId))
-                {
-                    var matchedCategory = categories.FirstOrDefault(c => c.SyncId == catSyncId);
-                    if (matchedCategory != null) local.CategoryId = matchedCategory.Id;
-                }
-                else if (local.CategoryId == 0 && defaultCategory != null)
-                {
-                    local.CategoryId = defaultCategory.Id;
-                }
-
-                totalPulled++;
-            }
-            await db.SaveChangesAsync(ct);
-        }
-
-        // 3. Descargar Citas
-        var remoteAppts = await client.QueryAsync("SELECT * FROM Appointments WHERE UpdatedAtUtc > ?;", new object?[] { lastSyncStr }, ct);
-        if (remoteAppts.Count > 0)
-        {
-            using var db = _contextFactory.CreateDbContext();
-            foreach (var r in remoteAppts)
-            {
-                if (!Guid.TryParse(r["SyncId"]?.ToString(), out var syncId)) continue;
-                var updated = ParseDate(r["UpdatedAtUtc"]);
-
-                var local = await db.Appointments.FirstOrDefaultAsync(a => a.SyncId == syncId, ct);
-                if (local == null)
-                {
-                    local = new PatientAppointment { SyncId = syncId };
-                    db.Appointments.Add(local);
-                }
-                else if (local.UpdatedAtUtc >= updated)
-                {
-                    continue;
-                }
-
-                local.PatientName = r["PatientName"]?.ToString() ?? string.Empty;
-                local.PatientRecordNumber = r["PatientRecordNumber"]?.ToString() ?? string.Empty;
-                local.PatientPhone = r["PatientPhone"]?.ToString() ?? string.Empty;
-                local.Date = ParseDate(r["Date"]);
-                local.Time = r["Time"]?.ToString() ?? "10:00";
-                local.DurationMinutes = Convert.ToInt32(r["DurationMinutes"] ?? 30);
-                local.Reason = r["Reason"]?.ToString() ?? string.Empty;
-                local.Notes = r["Notes"]?.ToString() ?? string.Empty;
-                local.Status = r["Status"]?.ToString() ?? "Programada";
-                local.UpdatedAtUtc = updated;
-
-                if (Guid.TryParse(r["PatientSyncId"]?.ToString(), out var patSyncId))
-                {
-                    var pat = await db.Patients.FirstOrDefaultAsync(p => p.SyncId == patSyncId, ct);
-                    if (pat != null) local.PatientRecordId = pat.Id;
-                }
-
-                totalPulled++;
-            }
-            await db.SaveChangesAsync(ct);
-        }
-
-        // 4. Descargar Borrados (Tombstones)
-        var remoteTombstones = await client.QueryAsync("SELECT * FROM SyncTombstones WHERE DeletedAtUtc > ?;", new object?[] { lastSyncStr }, ct);
-        if (remoteTombstones.Count > 0)
-        {
-            using var db = _contextFactory.CreateDbContext();
-            foreach (var t in remoteTombstones)
-            {
-                if (!Guid.TryParse(t["SyncId"]?.ToString(), out var syncId)) continue;
-                var entityType = t["EntityType"]?.ToString() ?? string.Empty;
-
-                switch (entityType)
-                {
-                    case nameof(PatientRecord):
-                        var pat = await db.Patients.FirstOrDefaultAsync(p => p.SyncId == syncId, ct);
-                        if (pat != null) { db.Patients.Remove(pat); totalPulled++; }
-                        break;
-                    case nameof(Product):
-                        var prod = await db.Products.FirstOrDefaultAsync(p => p.SyncId == syncId, ct);
-                        if (prod != null) { db.Products.Remove(prod); totalPulled++; }
-                        break;
-                    case nameof(PatientAppointment):
-                        var appt = await db.Appointments.FirstOrDefaultAsync(a => a.SyncId == syncId, ct);
-                        if (appt != null) { db.Appointments.Remove(appt); totalPulled++; }
-                        break;
-                }
-            }
-            await db.SaveChangesAsync(ct);
-        }
-
-        return totalPulled;
+        var method = typeof(TursoSyncService).GetMethod(nameof(LoadChangedGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(clrType);
+        return await (Task<List<ISyncEntity>>)method.Invoke(null, new object[] { db, fromUtc, toUtc, ct })!;
     }
+
+    private static async Task<List<ISyncEntity>> LoadChangedGenericAsync<T>(AppDbContext db, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+        where T : class, ISyncEntity
+    {
+        var list = await db.Set<T>().AsNoTracking()
+            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc
+                        && EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) <= toUtc)
+            .ToListAsync(ct);
+        return list.Cast<ISyncEntity>().ToList();
+    }
+
+    private static async Task<Dictionary<int, Guid>> LoadIdToSyncIdAsync(AppDbContext db, Type clrType, CancellationToken ct)
+    {
+        var pairs = await LoadIdPairsAsync(db, clrType, ct);
+        return pairs.ToDictionary(p => p.Id, p => p.SyncId);
+    }
+
+    private static async Task<Dictionary<Guid, int>> LoadSyncIdToIdAsync(AppDbContext db, Type clrType, CancellationToken ct)
+    {
+        var pairs = await LoadIdPairsAsync(db, clrType, ct);
+        var map = new Dictionary<Guid, int>();
+        foreach (var p in pairs) map[p.SyncId] = p.Id;
+        return map;
+    }
+
+    private static async Task<List<(int Id, Guid SyncId)>> LoadIdPairsAsync(AppDbContext db, Type clrType, CancellationToken ct)
+    {
+        var method = typeof(TursoSyncService).GetMethod(nameof(LoadIdPairsGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(clrType);
+        return await (Task<List<(int, Guid)>>)method.Invoke(null, new object[] { db, ct })!;
+    }
+
+    private static async Task<List<(int, Guid)>> LoadIdPairsGenericAsync<T>(AppDbContext db, CancellationToken ct) where T : class
+    {
+        var rows = await db.Set<T>().AsNoTracking()
+            .Select(e => new { Id = EF.Property<int>(e, "Id"), SyncId = EF.Property<Guid>(e, nameof(ISyncEntity.SyncId)) })
+            .ToListAsync(ct);
+        return rows.Select(r => (r.Id, r.SyncId)).ToList();
+    }
+
+    // =========================================================================
+    // PULL
+    // =========================================================================
+
+    private async Task<(int Applied, int RowsRead)> PullRemoteChangesAsync(
+        TursoClient client, string deviceId, string? fromWatermark, bool skipOwnRows, CancellationToken ct)
+    {
+        int applied = 0;
+        int rowsRead = 0;
+        var syncIdMaps = new Dictionary<Type, Dictionary<Guid, int>>();
+
+        foreach (var map in GetTableMaps())
+        {
+            await foreach (var page in ReadPagesAsync(client, map.Table, deviceId, fromWatermark, skipOwnRows, ct))
+            {
+                rowsRead += page.Count;
+                applied += await ApplyPageAsync(map, page, syncIdMaps, ct);
+            }
+            // Esta tabla pudo recibir filas nuevas: refrescar su mapa para las tablas dependientes
+            syncIdMaps.Remove(map.ClrType);
+        }
+
+        await foreach (var page in ReadPagesAsync(client, TombstonesTable, deviceId, fromWatermark, skipOwnRows, ct, keyColumn: "SyncId"))
+        {
+            rowsRead += page.Count;
+            applied += await ApplyTombstonesAsync(page, ct);
+        }
+
+        return (applied, rowsRead);
+    }
+
+    private static async IAsyncEnumerable<List<Dictionary<string, object?>>> ReadPagesAsync(
+        TursoClient client, string table, string deviceId, string? fromWatermark, bool skipOwnRows,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct, string keyColumn = "SyncId")
+    {
+        string lastSynced = fromWatermark ?? string.Empty;
+        string lastKey = string.Empty;
+        var originFilter = skipOwnRows ? " AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?)" : string.Empty;
+
+        while (true)
+        {
+            var sql = $"SELECT * FROM {Q(table)} WHERE (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND {Q(keyColumn)} > ?)){originFilter} " +
+                      $"ORDER BY \"SyncedAtUtc\", {Q(keyColumn)} LIMIT {PullPageSize};";
+            var args = skipOwnRows
+                ? new object?[] { lastSynced, lastSynced, lastKey, deviceId }
+                : new object?[] { lastSynced, lastSynced, lastKey };
+
+            var rows = await client.QueryAsync(sql, args, ct);
+            if (rows.Count == 0) yield break;
+            yield return rows;
+            if (rows.Count < PullPageSize) yield break;
+
+            var last = rows[^1];
+            lastSynced = last["SyncedAtUtc"]?.ToString() ?? lastSynced;
+            lastKey = last[keyColumn]?.ToString() ?? string.Empty;
+        }
+    }
+
+    private async Task<int> ApplyPageAsync(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps, CancellationToken ct)
+    {
+        var method = typeof(TursoSyncService).GetMethod(nameof(ApplyPageGenericAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
+            .MakeGenericMethod(map.ClrType);
+        return await (Task<int>)method.Invoke(this, new object[] { map, rows, syncIdMaps, ct })!;
+    }
+
+    private async Task<int> ApplyPageGenericAsync<T>(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps, CancellationToken ct)
+        where T : class, ISyncEntity, new()
+    {
+        using var db = _contextFactory.CreateDbContext();
+        db.ApplyingRemoteChanges = true;
+
+        var incoming = rows
+            .Select(r => (Row: r, SyncId: ParseGuid(r.GetValueOrDefault("SyncId"))))
+            .Where(x => x.SyncId.HasValue)
+            .ToList();
+        var ids = incoming.Select(x => x.SyncId!.Value).ToList();
+        var locals = (await db.Set<T>()
+                .Where(e => ids.Contains(EF.Property<Guid>(e, nameof(ISyncEntity.SyncId))))
+                .ToListAsync(ct))
+            .ToDictionary(e => e.SyncId);
+
+        int applied = 0;
+        foreach (var (row, syncIdNullable) in incoming)
+        {
+            var syncId = syncIdNullable!.Value;
+            var remoteUpdated = ParseDate(row.GetValueOrDefault("UpdatedAtUtc"));
+            locals.TryGetValue(syncId, out var local);
+
+            // Last-Write-Wins: la versión local igual o más nueva se conserva
+            if (local != null && local.UpdatedAtUtc >= remoteUpdated) continue;
+
+            // Resolver referencias (SyncId remoto → Id local)
+            var resolved = new List<(PropertyInfo Property, int? Id)>();
+            bool missingRequired = false;
+            foreach (var reference in map.References)
+            {
+                var principalSyncId = ParseGuid(row.GetValueOrDefault(reference.RemoteColumn));
+                int? localId = null;
+                if (principalSyncId.HasValue)
+                {
+                    if (!syncIdMaps.TryGetValue(reference.PrincipalType, out var lookup))
+                    {
+                        lookup = await LoadSyncIdToIdAsync(db, reference.PrincipalType, ct);
+                        syncIdMaps[reference.PrincipalType] = lookup;
+                    }
+                    if (lookup.TryGetValue(principalSyncId.Value, out var id)) localId = id;
+                }
+
+                if (localId == null && reference.IsRequired)
+                {
+                    missingRequired = true;
+                    break;
+                }
+                resolved.Add((reference.Property, localId));
+            }
+
+            if (missingRequired)
+            {
+                AppLogger.Warn($"Turso: {map.Table} {syncId} no se aplicó (falta su registro relacionado en este equipo).");
+                continue;
+            }
+
+            if (local == null)
+            {
+                local = new T { SyncId = syncId };
+                db.Set<T>().Add(local);
+                locals[syncId] = local;
+            }
+
+            var entry = db.Entry(local);
+            foreach (var column in map.Columns)
+            {
+                if (!row.TryGetValue(column.Name, out var raw)) continue;
+                entry.Property(column.Property.Name).CurrentValue = FromRemoteValue(raw, column.ClrType, column.IsNullable);
+            }
+            foreach (var (property, id) in resolved)
+            {
+                entry.Property(property.Name).CurrentValue = property.PropertyType == typeof(int) ? id ?? 0 : id;
+            }
+            local.UpdatedAtUtc = remoteUpdated;
+            applied++;
+        }
+
+        await ResolveUniqueConflictsAsync(db, map, ct);
+        await db.SaveChangesAsync(ct);
+        return applied;
+    }
+
+    /// <summary>
+    /// Dos equipos pueden generar el mismo folio (EXP-2026-005, TKT-...) para registros distintos.
+    /// Para no bloquear la sincronización, el registro recibido conserva sus datos y su folio
+    /// se marca con un sufijo visible ("-R1", "-R2"...).
+    /// </summary>
+    private static async Task ResolveUniqueConflictsAsync(AppDbContext db, TableMap map, CancellationToken ct)
+    {
+        if (map.UniqueProperties.Count == 0) return;
+
+        var pending = db.ChangeTracker.Entries()
+            .Where(e => e.Entity.GetType() == map.ClrType && e.State is EntityState.Added or EntityState.Modified)
+            .ToList();
+
+        foreach (var property in map.UniqueProperties)
+        {
+            var batchValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in pending)
+            {
+                var value = entry.Property(property.Name).CurrentValue as string;
+                if (string.IsNullOrEmpty(value)) continue;
+
+                var syncId = ((ISyncEntity)entry.Entity).SyncId;
+                var candidate = value;
+                int attempt = 0;
+                while (batchValues.Contains(candidate) || await ExistsWithOtherSyncIdAsync(db, map.ClrType, property.Name, candidate, syncId, ct))
+                {
+                    attempt++;
+                    candidate = $"{value}-R{attempt}";
+                }
+
+                if (candidate != value)
+                {
+                    AppLogger.Warn($"Turso: {map.Table}.{property.Name} '{value}' ya existía en este equipo; el registro recibido se guardó como '{candidate}'.");
+                    entry.Property(property.Name).CurrentValue = candidate;
+                }
+                batchValues.Add(candidate);
+            }
+        }
+    }
+
+    private static async Task<bool> ExistsWithOtherSyncIdAsync(AppDbContext db, Type clrType, string propertyName, string value, Guid syncId, CancellationToken ct)
+    {
+        var method = typeof(TursoSyncService).GetMethod(nameof(ExistsWithOtherSyncIdGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(clrType);
+        return await (Task<bool>)method.Invoke(null, new object[] { db, propertyName, value, syncId, ct })!;
+    }
+
+    private static Task<bool> ExistsWithOtherSyncIdGenericAsync<T>(AppDbContext db, string propertyName, string value, Guid syncId, CancellationToken ct)
+        where T : class
+    {
+        return db.Set<T>().AsNoTracking().AnyAsync(e =>
+            EF.Property<string>(e, propertyName) == value && EF.Property<Guid>(e, nameof(ISyncEntity.SyncId)) != syncId, ct);
+    }
+
+    private async Task<int> ApplyTombstonesAsync(List<Dictionary<string, object?>> rows, CancellationToken ct)
+    {
+        int applied = 0;
+        var mapsByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m);
+
+        foreach (var row in rows)
+        {
+            var syncId = ParseGuid(row.GetValueOrDefault("SyncId"));
+            var entityType = row.GetValueOrDefault("EntityType")?.ToString() ?? string.Empty;
+            if (syncId == null || !mapsByType.TryGetValue(entityType, out var map)) continue;
+
+            var deletedAt = ParseDate(row.GetValueOrDefault("DeletedAtUtc"));
+            try
+            {
+                using var db = _contextFactory.CreateDbContext();
+                db.ApplyingRemoteChanges = true;
+                var method = typeof(TursoSyncService).GetMethod(nameof(DeleteLocalGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
+                    .MakeGenericMethod(map.ClrType);
+                if (await (Task<bool>)method.Invoke(null, new object[] { db, syncId.Value, deletedAt, ct })!) applied++;
+            }
+            catch (Exception ex)
+            {
+                // P. ej. una categoría que todavía tiene productos en este equipo
+                AppLogger.Warn($"Turso: no se pudo aplicar el borrado de {entityType} {syncId}: {ex.Message}");
+            }
+        }
+        return applied;
+    }
+
+    private static async Task<bool> DeleteLocalGenericAsync<T>(AppDbContext db, Guid syncId, DateTime deletedAtUtc, CancellationToken ct)
+        where T : class, ISyncEntity
+    {
+        var local = await db.Set<T>().FirstOrDefaultAsync(e => EF.Property<Guid>(e, nameof(ISyncEntity.SyncId)) == syncId, ct);
+        // Si aquí se modificó después del borrado remoto, se conserva (LWW)
+        if (local == null || local.UpdatedAtUtc > deletedAtUtc) return false;
+        db.Set<T>().Remove(local);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    // =========================================================================
+    // PERFIL DEL CONSULTORIO
+    // =========================================================================
 
     private async Task SyncClinicProfileAsync(TursoClient client, CancellationToken ct)
     {
         var localProfile = _clinicProfileService.CurrentProfile;
-        if (localProfile.IsConfigured)
+        var rows = await client.QueryAsync("SELECT * FROM ClinicProfiles WHERE Id = 1;", null, ct);
+        var remote = rows.FirstOrDefault();
+        DateTime? remoteUpdated = remote != null ? ParseDate(remote.GetValueOrDefault("UpdatedAtUtc")) : null;
+
+        bool remoteHasData = remote != null && (!string.IsNullOrWhiteSpace(remote.GetValueOrDefault("DoctorName")?.ToString())
+                                                || !string.IsNullOrWhiteSpace(remote.GetValueOrDefault("ClinicName")?.ToString()));
+
+        if (remoteHasData && (localProfile.UpdatedAtUtc == null || remoteUpdated > localProfile.UpdatedAtUtc || !localProfile.IsConfigured))
+        {
+            var r = remote!;
+            var updated = new ClinicProfile
+            {
+                DoctorName = r.GetValueOrDefault("DoctorName")?.ToString() ?? string.Empty,
+                ProfessionalLicense = r.GetValueOrDefault("ProfessionalLicense")?.ToString() ?? string.Empty,
+                Specialty = r.GetValueOrDefault("Specialty")?.ToString() ?? string.Empty,
+                University = r.GetValueOrDefault("University")?.ToString() ?? string.Empty,
+                ClinicName = r.GetValueOrDefault("ClinicName")?.ToString() ?? string.Empty,
+                Address = r.GetValueOrDefault("Address")?.ToString() ?? string.Empty,
+                Phone = r.GetValueOrDefault("Phone")?.ToString() ?? string.Empty,
+                Email = r.GetValueOrDefault("Email")?.ToString() ?? string.Empty,
+                TaxId = r.GetValueOrDefault("TaxId")?.ToString() ?? string.Empty,
+                AdditionalNotes = r.GetValueOrDefault("AdditionalNotes")?.ToString() ?? string.Empty,
+                IsConfigured = true,
+                IsInitialSetupCompleted = true,
+                UpdatedAtUtc = remoteUpdated
+            };
+            // ProfileChanged actualiza vistas: se aplica en el hilo de la interfaz
+            RunOnUiThread(() => _clinicProfileService.SaveProfile(updated, preserveTimestamp: true));
+            return;
+        }
+
+        if (localProfile.IsConfigured && (remote == null || localProfile.UpdatedAtUtc > remoteUpdated))
         {
             const string sql = @"
 INSERT INTO ClinicProfiles (Id, DoctorName, ProfessionalLicense, Specialty, University, ClinicName, Address, Phone, Email, TaxId, AdditionalNotes, UpdatedAtUtc)
 VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(Id) DO UPDATE SET
-    DoctorName = excluded.DoctorName,
-    ProfessionalLicense = excluded.ProfessionalLicense,
-    Specialty = excluded.Specialty,
-    University = excluded.University,
-    ClinicName = excluded.ClinicName,
-    Address = excluded.Address,
-    Phone = excluded.Phone,
-    Email = excluded.Email,
-    TaxId = excluded.TaxId,
-    AdditionalNotes = excluded.AdditionalNotes,
-    UpdatedAtUtc = excluded.UpdatedAtUtc;";
+    DoctorName = excluded.DoctorName, ProfessionalLicense = excluded.ProfessionalLicense, Specialty = excluded.Specialty,
+    University = excluded.University, ClinicName = excluded.ClinicName, Address = excluded.Address, Phone = excluded.Phone,
+    Email = excluded.Email, TaxId = excluded.TaxId, AdditionalNotes = excluded.AdditionalNotes, UpdatedAtUtc = excluded.UpdatedAtUtc;";
 
             await client.ExecuteAsync(sql, new object?[]
             {
-                localProfile.DoctorName,
-                localProfile.ProfessionalLicense,
-                localProfile.Specialty,
-                localProfile.University,
-                localProfile.ClinicName,
-                localProfile.Address,
-                localProfile.Phone,
-                localProfile.Email,
-                localProfile.TaxId,
-                localProfile.AdditionalNotes,
-                DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
+                localProfile.DoctorName, localProfile.ProfessionalLicense, localProfile.Specialty, localProfile.University,
+                localProfile.ClinicName, localProfile.Address, localProfile.Phone, localProfile.Email, localProfile.TaxId,
+                localProfile.AdditionalNotes, FormatDate(localProfile.UpdatedAtUtc ?? DateTime.UtcNow)
             }, ct);
-        }
-        else
-        {
-            // Intentar descargar el perfil si está configurado en Turso (ej. desde otro dispositivo)
-            var rows = await client.QueryAsync("SELECT * FROM ClinicProfiles WHERE Id = 1;", Array.Empty<object?>(), ct);
-            if (rows.Count > 0)
-            {
-                var r = rows[0];
-                var docName = r["DoctorName"]?.ToString();
-                var clinicName = r["ClinicName"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(docName) || !string.IsNullOrWhiteSpace(clinicName))
-                {
-                    localProfile.DoctorName = docName ?? string.Empty;
-                    localProfile.ProfessionalLicense = r["ProfessionalLicense"]?.ToString() ?? string.Empty;
-                    localProfile.Specialty = r["Specialty"]?.ToString() ?? string.Empty;
-                    localProfile.University = r["University"]?.ToString() ?? string.Empty;
-                    localProfile.ClinicName = clinicName ?? string.Empty;
-                    localProfile.Address = r["Address"]?.ToString() ?? string.Empty;
-                    localProfile.Phone = r["Phone"]?.ToString() ?? string.Empty;
-                    localProfile.Email = r["Email"]?.ToString() ?? string.Empty;
-                    localProfile.TaxId = r["TaxId"]?.ToString() ?? string.Empty;
-                    localProfile.AdditionalNotes = r["AdditionalNotes"]?.ToString() ?? string.Empty;
-                    localProfile.IsConfigured = true;
-                    localProfile.IsInitialSetupCompleted = true;
-                    _clinicProfileService.SaveProfile(localProfile);
-                }
-            }
         }
     }
 
+    // =========================================================================
+    // UTILIDADES
+    // =========================================================================
+
     private void NotifyLocalViews()
+    {
+        RunOnUiThread(() =>
+        {
+            Interlocked.Increment(ref _suppressAutoSync);
+            try
+            {
+                _inventoryService?.NotifyAllChanged();
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _suppressAutoSync);
+            }
+        });
+    }
+
+    private static void RunOnUiThread(Action action)
     {
         try
         {
-            var app = System.Windows.Application.Current;
-            if (app?.Dispatcher != null)
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
             {
-                app.Dispatcher.InvokeAsync(() =>
-                {
-                    _inventoryService?.NotifyAllChanged();
-                });
+                dispatcher.InvokeAsync(action);
+                return;
             }
         }
         catch
         {
-            // Silencioso
+            // Sin WPF (pruebas): ejecutar directamente
         }
+        action();
     }
 
-    private static string MapEntityTypeToTable(string entityType) => entityType switch
+    /// <summary>GUID canónico del protocolo: minúsculas con guiones (igual en Windows y Android).</summary>
+    public static string FormatGuid(Guid g) => g.ToString("D");
+
+    /// <summary>
+    /// Fechas sin conversión de zona horaria: UpdatedAtUtc ya está en UTC y las fechas de negocio
+    /// (consulta, caducidad, cita) son hora local del consultorio. Convertirlas desfasaba 6 h en México.
+    /// </summary>
+    public static string FormatDate(DateTime dt) =>
+        dt.ToString(TursoSyncFormats.DateTimeFormat, CultureInfo.InvariantCulture);
+
+    private static readonly string[] DateFormats =
     {
-        nameof(Category) => "Categories",
-        nameof(Product) => "Products",
-        nameof(ProductBatch) => "ProductBatches",
-        nameof(InventoryMovement) => "InventoryMovements",
-        nameof(ClinicalService) => "ClinicalServices",
-        nameof(PatientRecord) => "Patients",
-        nameof(PatientConsultation) => "PatientConsultations",
-        nameof(PatientAppointment) => "Appointments",
-        nameof(Sale) => "Sales",
-        nameof(SaleItem) => "SaleItems",
-        _ => string.Empty
+        TursoSyncFormats.DateTimeFormat,
+        "yyyy-MM-dd HH:mm:ss.FFFFFFF",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd"
     };
 
-    private static string FormatDate(DateTime dt) =>
-        dt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-
-    private static DateTime ParseDate(object? raw)
+    public static DateTime ParseDate(object? raw)
     {
-        if (raw == null) return DateTime.MinValue;
-        var s = raw.ToString();
+        var s = raw?.ToString();
         if (string.IsNullOrWhiteSpace(s)) return DateTime.MinValue;
-        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var dt))
-            return dt;
-        if (DateTime.TryParse(s, out dt)) return dt;
+        if (DateTime.TryParseExact(s, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact)) return exact;
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var loose)) return loose;
         return DateTime.MinValue;
     }
+
+    private static Guid? ParseGuid(object? raw) =>
+        raw != null && Guid.TryParse(raw.ToString(), out var g) ? g : null;
+
+    private static object? ToRemoteValue(object? value) => value switch
+    {
+        null => null,
+        Guid g => FormatGuid(g),
+        DateTime dt => FormatDate(dt),
+        decimal d => d.ToString(CultureInfo.InvariantCulture),
+        Enum e => Convert.ToInt64(e, CultureInfo.InvariantCulture),
+        _ => value
+    };
+
+    private static object? FromRemoteValue(object? raw, Type targetType, bool isNullable)
+    {
+        var t = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (raw == null)
+        {
+            if (isNullable) return null;
+            if (t == typeof(string)) return string.Empty;
+            if (t == typeof(DateTime)) return DateTime.MinValue;
+            return Activator.CreateInstance(t);
+        }
+
+        var text = raw as string ?? Convert.ToString(raw, CultureInfo.InvariantCulture) ?? string.Empty;
+
+        if (t == typeof(string)) return text;
+        if (t == typeof(bool)) return raw is long l ? l != 0 : text == "1" || text.Equals("true", StringComparison.OrdinalIgnoreCase);
+        if (t == typeof(int)) return raw is long li ? (int)li : (int)ParseDouble(text);
+        if (t == typeof(long)) return raw is long ll ? ll : (long)ParseDouble(text);
+        if (t == typeof(short)) return (short)ParseDouble(text);
+        if (t.IsEnum) return Enum.ToObject(t, raw is long le ? le : (long)ParseDouble(text));
+        if (t == typeof(double)) return raw is double d ? d : ParseDouble(text);
+        if (t == typeof(float)) return (float)(raw is double df ? df : ParseDouble(text));
+        if (t == typeof(decimal))
+            return raw is double dd ? (decimal)dd
+                : decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var dec) ? dec : 0m;
+        if (t == typeof(DateTime)) return ParseDate(text);
+        if (t == typeof(Guid)) return Guid.TryParse(text, out var g) ? g : Guid.Empty;
+
+        return Convert.ChangeType(raw, t, CultureInfo.InvariantCulture);
+    }
+
+    private static double ParseDouble(string text) =>
+        double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : 0d;
 }

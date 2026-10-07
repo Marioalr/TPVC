@@ -367,7 +367,7 @@
                                     Padding="14,8">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="⬆" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="Subir Base Local a Turso (Migración Inicial)" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Sincronización Completa (subir y descargar todo)" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>

@@ -275,11 +275,15 @@ public partial class PosViewModel : ObservableObject, IDisposable
         "Transferencia"
     };
 
-    partial void OnCartChanged(ObservableCollection<CartItem> value)
+    partial void OnCartChanged(ObservableCollection<CartItem>? oldValue, ObservableCollection<CartItem> newValue)
     {
-        value.CollectionChanged += (s, e) => RecalculateTotals();
+        // Una sola suscripción por colección: antes cada reemplazo del carrito sumaba otra
+        if (oldValue != null) oldValue.CollectionChanged -= Cart_CollectionChanged;
+        newValue.CollectionChanged += Cart_CollectionChanged;
         RecalculateTotals();
     }
+
+    private void Cart_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => RecalculateTotals();
 
     // ==========================================
     // COMPROBANTE / TICKET DE VENTA SIMULADO
@@ -366,7 +370,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
         _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
         _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
-        _cart.CollectionChanged += (s, e) => RecalculateTotals();
+        _cart.CollectionChanged += Cart_CollectionChanged;
 
         if (_clinicProfileService != null)
         {
@@ -411,7 +415,9 @@ public partial class PosViewModel : ObservableObject, IDisposable
             catch { }
             RefreshAvailablePatients();
         };
-        _inventoryService.OnPatientsChanged += _onPatientsChangedHandler;
+        // La lista de pacientes la publica ConsultationService después de recargarse: escuchar
+        // el evento de la base dejaba al POS un paso atrasado (se ejecutaba antes de la recarga)
+        _consultationService.PatientsChanged += _onPatientsChangedHandler;
 
         RefreshAvailablePatients();
         SyncActiveConsultation();
@@ -526,7 +532,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         }
         if (_onPatientsChangedHandler != null)
         {
-            _inventoryService.OnPatientsChanged -= _onPatientsChangedHandler;
+            _consultationService.PatientsChanged -= _onPatientsChangedHandler;
         }
         if (_clinicProfileService != null && _onProfileChangedHandler != null)
         {

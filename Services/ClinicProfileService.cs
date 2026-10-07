@@ -85,9 +85,14 @@ public class ClinicProfileService
         }
     }
 
-    public void SaveProfile(ClinicProfile profile)
+    /// <param name="preserveTimestamp">true al aplicar un perfil descargado de la nube (conserva su UpdatedAtUtc).</param>
+    public void SaveProfile(ClinicProfile profile, bool preserveTimestamp = false)
     {
         if (profile == null) throw new ArgumentNullException(nameof(profile));
+        if (!preserveTimestamp || profile.UpdatedAtUtc == null)
+        {
+            profile.UpdatedAtUtc = DateTime.UtcNow;
+        }
 
         // Marcar como configurado si tiene al menos nombre de médico o clínica
         if (!string.IsNullOrWhiteSpace(profile.DoctorName) || !string.IsNullOrWhiteSpace(profile.ClinicName))

@@ -146,6 +146,9 @@ public class PrintingService
     /// Genera y exporta la receta médica a un archivo HTML imprimible de alta fidelidad,
     /// abriéndolo automáticamente para su conversión inmediata a PDF o envío digital.
     /// </summary>
+    /// <summary>Texto seguro para HTML (un "&lt;" en una dosis o un nombre ya no rompe el documento).</summary>
+    private static string H(string? text) => System.Net.WebUtility.HtmlEncode(text ?? string.Empty);
+
     public string? ExportPrescriptionDocument(
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
@@ -157,19 +160,19 @@ public class PrintingService
 
         try
         {
-            string clinicName = !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "Consultorio Médico";
-            string doctorName = !string.IsNullOrWhiteSpace(profile.DoctorName) ? profile.DoctorName : "Dr. Titular";
-            string license = !string.IsNullOrWhiteSpace(profile.ProfessionalLicense) ? profile.ProfessionalLicense : "Sin Cédula";
-            string specialty = !string.IsNullOrWhiteSpace(profile.Specialty) ? profile.Specialty : "Medicina General";
-            string address = !string.IsNullOrWhiteSpace(profile.Address) ? profile.Address : "Domicilio Conocido";
-            string phone = !string.IsNullOrWhiteSpace(profile.Phone) ? profile.Phone : "N/D";
+            string clinicName = H(!string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "Consultorio Médico");
+            string doctorName = H(!string.IsNullOrWhiteSpace(profile.DoctorName) ? profile.DoctorName : "Dr. Titular");
+            string license = H(!string.IsNullOrWhiteSpace(profile.ProfessionalLicense) ? profile.ProfessionalLicense : "Sin Cédula");
+            string specialty = H(!string.IsNullOrWhiteSpace(profile.Specialty) ? profile.Specialty : "Medicina General");
+            string address = H(!string.IsNullOrWhiteSpace(profile.Address) ? profile.Address : "Domicilio Conocido");
+            string phone = H(!string.IsNullOrWhiteSpace(profile.Phone) ? profile.Phone : "N/D");
 
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");
             sb.AppendLine("<html lang=\"es\">");
             sb.AppendLine("<head>");
             sb.AppendLine("<meta charset=\"utf-8\">");
-            sb.AppendLine($"<title>Receta Médica - {patient.FullName}</title>");
+            sb.AppendLine($"<title>Receta Médica - {H(patient.FullName)}</title>");
             sb.AppendLine("<style>");
             sb.AppendLine("body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1e293b; line-height: 1.5; }");
             sb.AppendLine(".header { border-bottom: 2px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }");
@@ -200,7 +203,7 @@ public class PrintingService
             sb.AppendLine("  </div>");
             sb.AppendLine("  <div style=\"text-align: right;\">");
             sb.AppendLine("    <div style=\"background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 12px;\">RECETA MÉDICA</div>");
-            sb.AppendLine($"    <div style=\"font-size: 12px; color: #64748b; margin-top: 5px;\">Expediente: <strong>{patient.RecordNumber}</strong></div>");
+            sb.AppendLine($"    <div style=\"font-size: 12px; color: #64748b; margin-top: 5px;\">Expediente: <strong>{H(patient.RecordNumber)}</strong></div>");
             sb.AppendLine($"    <div style=\"font-size: 12px; color: #64748b;\">Fecha: {DateTime.Now:dd/MM/yyyy HH:mm}</div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
@@ -208,20 +211,20 @@ public class PrintingService
             // Patient Box
             sb.AppendLine("<div class=\"patient-box\">");
             sb.AppendLine("  <div class=\"patient-grid\">");
-            sb.AppendLine($"    <div><strong>Paciente:</strong> {patient.FullName}</div>");
+            sb.AppendLine($"    <div><strong>Paciente:</strong> {H(patient.FullName)}</div>");
             sb.AppendLine($"    <div><strong>Edad:</strong> {patient.Age} años</div>");
-            sb.AppendLine($"    <div><strong>Sexo:</strong> {patient.Gender}</div>");
-            sb.AppendLine($"    <div><strong>Signos:</strong> {patient.VitalSigns ?? "No registrados"}</div>");
-            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"color:#dc2626; font-weight:600;\">{patient.Allergies ?? "Ninguna reportada"}</span></div>");
+            sb.AppendLine($"    <div><strong>Sexo:</strong> {H(patient.Gender)}</div>");
+            sb.AppendLine($"    <div><strong>Signos:</strong> {H(patient.VitalSigns ?? "No registrados")}</div>");
+            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"color:#dc2626; font-weight:600;\">{H(patient.Allergies ?? "Ninguna reportada")}</span></div>");
             if (!string.IsNullOrWhiteSpace(patient.LastDiagnosis))
             {
-                sb.AppendLine($"    <div style=\"grid-column: span 3;\"><strong>Diagnóstico:</strong> {patient.LastDiagnosis}</div>");
+                sb.AppendLine($"    <div style=\"grid-column: span 3;\"><strong>Diagnóstico:</strong> {H(patient.LastDiagnosis)}</div>");
             }
             sb.AppendLine("  </div>");
             sb.AppendLine("</div>");
 
             // Rx List
-            sb.AppendLine("<div class=\"rx-title\">&Rx; PRESCRIPCIÓN MÉDICA Y POSOLOGÍA</div>");
+            sb.AppendLine("<div class=\"rx-title\">&#8478; PRESCRIPCIÓN MÉDICA Y POSOLOGÍA</div>");
             var itemList = items?.ToList() ?? new List<PatientPrescriptionItem>();
             if (itemList.Count == 0)
             {
@@ -232,8 +235,8 @@ public class PrintingService
                 foreach (var item in itemList)
                 {
                     sb.AppendLine("<div class=\"med-item\">");
-                    sb.AppendLine($"  <div class=\"med-name\">&bull; {item.MedicineName} <span style=\"float:right; font-size:12px; background:#f1f5f9; padding:2px 8px; border-radius:4px;\">Cantidad: {item.RecommendedQuantity}</span></div>");
-                    sb.AppendLine($"  <div class=\"med-dosage\"><strong>Indicaciones:</strong> {item.Dosage}</div>");
+                    sb.AppendLine($"  <div class=\"med-name\">&bull; {H(item.MedicineName)} <span style=\"float:right; font-size:12px; background:#f1f5f9; padding:2px 8px; border-radius:4px;\">Cantidad: {item.RecommendedQuantity}</span></div>");
+                    sb.AppendLine($"  <div class=\"med-dosage\"><strong>Indicaciones:</strong> {H(item.Dosage)}</div>");
                     sb.AppendLine("</div>");
                 }
             }
@@ -243,7 +246,7 @@ public class PrintingService
                 ? generalNotes
                 : "Completar el esquema terapéutico prescrito, mantener hidratación adecuada y reposo relativo. Acudir a revaloración médica o servicio de urgencias en caso de persistencia de fiebre, dificultad respiratoria o reacciones adversas.";
             sb.AppendLine("<div class=\"instructions\">");
-            sb.AppendLine($"  <strong>&bull; Indicaciones Generales y Datos de Alarma:</strong><br>{indications}");
+            sb.AppendLine($"  <strong>&bull; Indicaciones Generales y Datos de Alarma:</strong><br>{H(indications).Replace("\n", "<br>")}");
             sb.AppendLine("</div>");
 
             // Signature

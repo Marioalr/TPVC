@@ -392,7 +392,7 @@ public partial class TursoSyncViewModel : ObservableObject
         }
 
         bool confirm = DialogService.Confirm(
-            "Esta operación preparará el esquema en Turso Cloud y subirá todos los productos, pacientes, consultas, servicios y recetas locales a la nube.\n\n¿Desea continuar?",
+            "Esta operación prepara el esquema en Turso Cloud y hace una sincronización COMPLETA: sube todos los datos de este equipo (productos, lotes, pacientes, consultas, citas, ventas, servicios y plantillas) y descarga todo lo que ya exista en la nube.\n\nSi un mismo registro cambió en dos equipos, se conserva la versión más reciente.\n\n¿Desea continuar?",
             "TPVC - Migración Inicial a Turso Cloud");
 
         if (!confirm) return;

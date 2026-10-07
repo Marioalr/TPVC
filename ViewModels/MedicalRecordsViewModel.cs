@@ -161,6 +161,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (value)
         {
             _infoModalCts?.Cancel();
+            _infoModalCts?.Dispose();
             _infoModalCts = new System.Threading.CancellationTokenSource();
             var token = _infoModalCts.Token;
 
@@ -1501,13 +1502,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         await LoadPatientsAsync();
         await LoadServicesAsync();
+        await LoadPrescriptionTemplatesAsync();
     }
 
     public async Task LoadPatientsAsync()
     {
         if (_inventoryService != null)
         {
-            var dbPatients = await _inventoryService.GetPatientsAsync();
+            // Listado ligero: las notas de consulta solo se cargan para el expediente abierto
+            var dbPatients = await _inventoryService.GetPatientSummariesAsync();
             var prevSelected = SelectedPatient;
             var prevSelectedId = prevSelected?.Id ?? 0;
 
@@ -1519,7 +1522,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 var index = dbPatients.FindIndex(p => p.Id == prevSelectedId);
                 if (index >= 0)
                 {
-                    prevSelected.Consultations = dbPatients[index].Consultations;
+                    prevSelected.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
                     dbPatients[index] = prevSelected;
                     keptSelected = prevSelected;
                 }
@@ -1566,6 +1569,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             SelectedHistoryConsultation = ConsultationsHistory.FirstOrDefault();
             RefreshVitalSignsEvolution(newValue);
             _ = LoadPatientAppointmentsAsync(newValue.Id);
+
+            if (NeedsConsultationsLoad(newValue))
+            {
+                _ = LoadConsultationsForAsync(newValue, refreshSelectedHistory: true);
+            }
         }
         else
         {
@@ -1591,6 +1599,28 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (consultation.Prescriptions.Count > 0)
         {
             patient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
+        }
+    }
+
+    private bool NeedsConsultationsLoad(PatientRecord patient) =>
+        _inventoryService != null && patient.Id > 0 && patient.Consultations.Count == 0 && patient.ConsultationCount > 0;
+
+    /// <summary>Carga bajo demanda el historial de un expediente del listado ligero.</summary>
+    private async Task LoadConsultationsForAsync(PatientRecord patient, bool refreshSelectedHistory)
+    {
+        if (_inventoryService == null) return;
+        try
+        {
+            patient.Consultations = await _inventoryService.GetPatientConsultationsAsync(patient.Id);
+            if (refreshSelectedHistory && ReferenceEquals(SelectedPatient, patient))
+            {
+                RefreshConsultationsHistory(patient);
+                RefreshVitalSignsEvolution(patient);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"No se pudo cargar el historial del expediente {patient.RecordNumber}", ex);
         }
     }
 
@@ -2023,19 +2053,23 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void ViewSelectedPatientRecord()
+    public async Task ViewSelectedPatientRecord()
     {
         if (SelectedPatient == null) return;
-        ViewPatientRecordDetail(SelectedPatient);
+        await ViewPatientRecordDetail(SelectedPatient);
         IsRecordsViewerModalOpen = true;
     }
 
     [RelayCommand]
-    public void ViewPatientRecordDetail(PatientRecord? patient)
+    public async Task ViewPatientRecordDetail(PatientRecord? patient)
     {
         if (patient == null) return;
 
         ViewingRecordPatient = patient;
+        if (NeedsConsultationsLoad(patient))
+        {
+            await LoadConsultationsForAsync(patient, refreshSelectedHistory: false);
+        }
         var consultations = patient.Consultations.OrderByDescending(c => c.Date).ToList();
         ViewingPatientConsultations = new ObservableCollection<PatientConsultation>(consultations);
         SelectedViewingConsultation = ViewingPatientConsultations.FirstOrDefault();
@@ -3421,6 +3455,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ConsultationGeneralIndications = text;
         else
             ConsultationGeneralIndications = ConsultationGeneralIndications.Trim() + " " + text;
+
+        // Los botones rápidos están junto al "Plan Terapéutico": el texto debe verse ahí
+        // (antes solo se guardaba en un campo que no aparecía en pantalla)
+        ConsultationTreatmentPlan = string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
+            ? text
+            : ConsultationTreatmentPlan.TrimEnd() + " " + text;
     }
 
     [RelayCommand]
@@ -3475,6 +3515,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ApplyPrescriptionSuggestions(string.Empty);
         IsPrescriptionDropdownOpen = false;
         IsPrescriptionModalOpen = true;
+
+        // Plantillas recién importadas del Excel (o llegadas por sincronización)
+        _ = LoadPrescriptionTemplatesAsync();
+        SelectedPediatricRule = null;
+        PediatricWeightText = string.Empty;
     }
 
     [RelayCommand]

@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace TPVC.Models;
 
@@ -21,12 +22,16 @@ public class ClinicProfile
     public string TaxId { get; set; } = string.Empty; // RFC o identificación fiscal opcional
     public string AdditionalNotes { get; set; } = string.Empty; // Horarios o leyendas al pie
 
-    // Aliases para máxima compatibilidad con vistas y componentes
-    public string DoctorLicense { get => ProfessionalLicense; set => ProfessionalLicense = value; }
-    public string DoctorSpecialty { get => Specialty; set => Specialty = value; }
-    public string ClinicAddress { get => Address; set => Address = value; }
-    public string ClinicPhone { get => Phone; set => Phone = value; }
+    /// <summary>Última modificación (UTC) para resolver conflictos al sincronizar entre dispositivos.</summary>
+    public DateTime? UpdatedAtUtc { get; set; }
 
+    // Aliases para máxima compatibilidad con vistas y componentes (no se guardan duplicados en disco)
+    [JsonIgnore] public string DoctorLicense { get => ProfessionalLicense; set => ProfessionalLicense = value; }
+    [JsonIgnore] public string DoctorSpecialty { get => Specialty; set => Specialty = value; }
+    [JsonIgnore] public string ClinicAddress { get => Address; set => Address = value; }
+    [JsonIgnore] public string ClinicPhone { get => Phone; set => Phone = value; }
+
+    [JsonIgnore]
     public string DoctorNameWithTitle => string.IsNullOrWhiteSpace(DoctorName) 
         ? "Dr. Titular" 
         : (DoctorName.StartsWith("Dr", StringComparison.OrdinalIgnoreCase) ? DoctorName : $"Dr(a). {DoctorName}");

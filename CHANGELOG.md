@@ -2,6 +2,51 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.9.0] - 2026-10-07
+
+### Corregido — Sincronización con Turso
+* **HTTP 400 Bad Request al sincronizar**: el protocolo Hrana exige que los enteros viajen como texto (`{"type":"integer","value":"42"}`); se enviaban como número y Turso rechazaba todo el lote. Solo se creaban las tablas y los registros sin enteros (dispositivos, perfil), por eso "parecía" sincronizado.
+* **Desfase de 6 horas y ciclo infinito de sincronización**: las marcas `UpdatedAtUtc` se convertían a UTC dos veces y, al descargar, cada registro se re-estampaba con la hora actual; los datos rebotaban entre la nube y el equipo cada 4 segundos consumiendo cuota.
+* **Datos incompletos en la nube**: solo se descargaban pacientes, productos y citas, y a los pacientes remotos les faltaban los campos NOM-004. Las consultas, ventas, lotes, movimientos y servicios subían pero nunca bajaban.
+* La sincronización ya no congela la ventana (se ejecuta en segundo plano) y reutiliza las conexiones HTTP.
+
+### Añadido — Protocolo de sincronización v2 (base para la app Android)
+* Motor genérico basado en el modelo: **todas** las tablas y columnas, referencias traducidas a `SyncId`, marca de agua con el reloj del servidor (`SyncedAtUtc`), exclusión de las filas propias, borrados con tombstones y resolución por "último cambio gana".
+* Folios repetidos entre equipos (`EXP-2026-005`) se guardan con sufijo `-R1` en lugar de bloquear la sincronización.
+* Las tablas creadas por v1.8.x en Turso se renombran a `legacy_v1_*` (no se borra nada).
+* Perfil del consultorio con fecha de modificación: gana el cambio más reciente entre equipos.
+* Especificación completa en `docs/TURSO_SYNC_ARCHITECTURE.md` y pruebas de punta a punta con un servidor Hrana simulado.
+
+### Añadido — Importación del Excel de recetas
+* Hojas **POSOLOGÍA** y **M. GRALES** → plantillas reutilizables: selector "Posología frecuente" al recetar y selector de medidas generales junto al Plan Terapéutico.
+* Hoja **DOSIS PEDIA** → calculadora de dosis pediátrica por peso en la receta (ml y gotas), usando las fórmulas del Excel.
+* Lectura por número real de fila/celda (las filas vacías ya no desplazan los datos) y CSV con campos entre comillas.
+
+### Corregido — Importación
+* En la hoja RECETA el segundo medicamento se perdía y su posología se importaba como medicamento; ahora cada medicamento conserva su posología.
+* El folio de expediente podía chocar con uno existente (`Count + 1`) y abortar la importación.
+* Reimportar el mismo archivo duplicaba medicamentos con clave repetida (p. ej. 1308).
+* Los medicamentos de catálogo entran con mínimo 0: ya no generan cientos de alertas de stock bajo ni de lista de compras (reimportar el Excel corrige los importados con v1.8.x).
+* SpO₂ en fracción (0.94 → 94 %), T/A, fecha de última visita y medidas generales de la receta.
+* Restaurar una base `.db` usa la API de respaldo de SQLite (antes `File.Copy` podía perder datos con WAL activo) y reinicia la sincronización.
+
+### Corregido — Fugas de memoria y rendimiento
+* **Expedientes y Hub se quedaban en memoria** en cada navegación (el manejador de teclado nunca se quitaba porque la ventana ya era `null` al descargarse) y sus atajos seguían activos en otras pantallas.
+* Las pantallas ahora se crean una sola vez y se reutilizan (navegación inmediata, se conserva el estado).
+* El listado de expedientes ya no carga todas las consultas de todos los pacientes en cada guardado: solo cuenta las consultas y carga el historial del expediente abierto.
+* Doble carga de datos al iniciar; suscripción duplicada del carrito; `CancellationTokenSource` sin liberar; alertas del Hub calculadas en SQLite.
+
+### Corregido — Otros
+* Una nota de consulta podía sobrescribir la de **otro paciente** con el mismo folio.
+* Cancelar un ticket reintegraba piezas a un lote marcado como agotado que FEFO ignoraba.
+* Los botones rápidos de indicaciones (+ Hidratación, + Reposo...) escribían en un campo invisible.
+* La receta HTML exportada no escapaba textos (un "<" rompía el documento) y mostraba "&Rx;".
+* CSV del corte de caja: BOM duplicado (basura en la primera celda de Excel) y separador ";" (Excel en México usa ",").
+* La lista de pacientes del POS se actualizaba un paso atrasada; un error en una vista podía impedir que las demás se refrescaran.
+* CI y release ejecutan además las pruebas con la zona horaria de México.
+
+---
+
 ## [1.8.2] - 2026-10-06
 
 ### Base de Datos y Compatibilidad de Formato Clínico

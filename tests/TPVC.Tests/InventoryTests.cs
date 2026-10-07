@@ -3069,9 +3069,10 @@ public class InventoryTests
         // Exportar a CSV
         string csv = _inventoryService.ExportDailyCashCutToCsv(cut, profile);
         Assert.IsNotNull(csv);
-        Assert.IsTrue(csv.Contains("CORTE DE CAJA DIARIO;Clínica Test"));
+        Assert.IsTrue(csv.Contains("CORTE DE CAJA DIARIO,Clínica Test"));
         Assert.IsTrue(csv.Contains("Dr. Test Especialista"));
-        Assert.IsTrue(csv.Contains("Total Ventas Netas;$400.00"));
+        Assert.IsTrue(csv.Contains("Total Ventas Netas,$400.00"));
+        Assert.IsFalse(csv.StartsWith("\uFEFF", StringComparison.Ordinal), "El BOM lo agrega Encoding.UTF8 al guardar (no duplicarlo)");
     }
 
     [TestMethod]

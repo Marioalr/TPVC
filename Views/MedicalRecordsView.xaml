@@ -789,6 +789,15 @@
                                                             <Button Style="{DynamicResource OutlineButton}" Command="{Binding AppendGeneralIndicationPresetCommand}" CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." Padding="6,2">
                                                                 <TextBlock Text="+ Alarma" FontSize="10" />
                                                             </Button>
+                                                            <ComboBox ItemsSource="{Binding GeneralMeasureTemplates}"
+                                                                      SelectedItem="{Binding SelectedGeneralMeasureTemplate, Mode=TwoWay}"
+                                                                      DisplayMemberPath="Title"
+                                                                      ToolTip="Medidas generales del consultorio (importadas del Excel)"
+                                                                      Width="220"
+                                                                      Height="24"
+                                                                      FontSize="10"
+                                                                      Margin="4,0,0,0"
+                                                                      Visibility="{Binding HasGeneralMeasureTemplates, Converter={StaticResource BoolToVis}}" />
                                                         </WrapPanel>
                                                     </Grid>
                                                     <TextBox Text="{Binding ConsultationTreatmentPlan, UpdateSourceTrigger=PropertyChanged}" 
@@ -3380,6 +3389,62 @@
                                 </StackPanel>
                             </Grid>
 
+                            <!-- Plantillas del Excel del consultorio: posología frecuente y dosis pediátrica por peso -->
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Visibility="{Binding HasPosologyTemplates, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="📋 Posología frecuente" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{Binding PosologyTemplates}"
+                                              SelectedItem="{Binding SelectedPosologyTemplate, Mode=TwoWay}"
+                                              DisplayMemberPath="Text"
+                                              ToolTip="Elija una plantilla para copiarla a las indicaciones"
+                                              Height="32" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Visibility="{Binding HasPediatricDoseRules, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="👶 Dosis pediátrica por peso" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox Grid.Column="0"
+                                                  ItemsSource="{Binding PediatricDoseRules}"
+                                                  SelectedItem="{Binding SelectedPediatricRule, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  Height="32" />
+                                        <TextBox Grid.Column="1"
+                                                 Text="{Binding PediatricWeightText, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Peso del paciente en kg"
+                                                 FontSize="12"
+                                                 Padding="6,6"
+                                                 Margin="6,0,0,0"
+                                                 HorizontalContentAlignment="Center"
+                                                 Background="{DynamicResource ThemeBackground}"
+                                                 BorderBrush="{DynamicResource ThemeBorder}"
+                                                 Foreground="{DynamicResource ThemeText}" />
+                                        <Button Grid.Column="2"
+                                                Style="{DynamicResource OutlineButton}"
+                                                Command="{Binding ApplyPediatricDoseCommand}"
+                                                Content="Usar"
+                                                ToolTip="Copiar la dosis calculada a las indicaciones"
+                                                Padding="10,4"
+                                                Margin="6,0,0,0" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding PediatricDoseResult}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource ThemeAccent}"
+                                               Margin="0,3,0,0"
+                                               Visibility="{Binding PediatricDoseResult, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                            </Grid>
+
                             <!-- Indicador de atajos de teclado -->
                             <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
                                     BorderBrush="{DynamicResource ThemeBorder}" 
@@ -5061,7 +5126,7 @@
                                                                     CornerRadius="4"
                                                                     Padding="6,2"
                                                                     Margin="6,0,0,0">
-                                                                <TextBlock Text="{Binding Consultations.Count, StringFormat='{}{0} consulta(s)'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                                <TextBlock Text="{Binding ConsultationCount, StringFormat='{}{0} consulta(s)'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
                                                             </Border>
                                                         </StackPanel>
 

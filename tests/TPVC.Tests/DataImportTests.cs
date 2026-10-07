@@ -140,7 +140,86 @@ public class DataImportTests
             Assert.AreEqual(0.95m, consultation.Height);
             Assert.AreEqual(94m, consultation.OxygenSaturation);
             Assert.AreEqual(2, consultation.Prescriptions.Count, "Debe incluir las 2 prescripciones médicas");
+
+            // Cada medicamento con SU posología (antes la 2a. posología se importaba como medicamento)
+            Assert.AreEqual("Espabion suspensión", consultation.Prescriptions[0].MedicineName);
+            StringAssert.StartsWith(consultation.Prescriptions[0].Dosage, "Dar 5 ml vía oral cada 8 hrs");
+            StringAssert.StartsWith(consultation.Prescriptions[1].MedicineName, "Adinol (Paracetamol) Jarabe");
+            StringAssert.StartsWith(consultation.Prescriptions[1].Dosage, "Dar 8 ml vía oral cada 8 hrs");
+            Assert.HasCount(2, patient.ActivePrescription, "La receta queda activa en el expediente");
+            Assert.AreEqual(new DateTime(2026, 10, 3), patient.LastVisit.Date);
+
+            // Medicamentos de catálogo: sin mínimo de existencias → no inundan las alertas
+            Assert.IsFalse(await db.Products.AnyAsync(p => p.Code == "3045" && p.MinStock > 0));
         }
+
+        // Plantillas de las hojas POSOLOGÍA y M. GRALES y reglas de DOSIS PEDIA
+        var posologies = await _inventoryService.GetPrescriptionTemplatesAsync(PrescriptionTemplateKinds.Posology);
+        Assert.HasCount(21, posologies);
+        Assert.IsTrue(posologies.Any(t => t.Text.StartsWith("Tomar 1 tableta vía oral cada 8 hrs por 5 días")));
+
+        var measures = await _inventoryService.GetPrescriptionTemplatesAsync(PrescriptionTemplateKinds.GeneralMeasures);
+        Assert.HasCount(3, measures);
+        StringAssert.StartsWith(measures[1].Text, "• Mantener hidratación con Vida Suero Oral");
+        Assert.IsFalse(measures[1].Text.Contains('\t'), "Se normalizan tabuladores de las viñetas");
+
+        var rules = await _inventoryService.GetPediatricDoseRulesAsync();
+        Assert.HasCount(7, rules);
+        var paracetamol = rules.First(r => r.Medication.StartsWith("Paracetamol 3.2"));
+        Assert.AreEqual(15.0 / 32.0, paracetamol.MlPerKg!.Value, 1e-9, "ml/kg = (15 mg/kg) / (32 mg/ml), tomado de la fórmula");
+        Assert.AreEqual(7.0, paracetamol.CalculateMl(15));
+        Assert.AreEqual(140.0, paracetamol.CalculateDrops(15));
+        var ibuprofen = rules.First(r => r.Medication.StartsWith("Ibuprofeno 2 g"));
+        Assert.AreEqual(0.5, ibuprofen.MlPerKg);
+        Assert.IsNull(ibuprofen.DropsPerMl, "Sin fórmula de gotas en el Excel");
+    }
+
+    [TestMethod]
+    public async Task ImportExcel_Twice_IsIdempotent()
+    {
+        string samplePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../TestAssets/catalogo_muestra.xlsx"));
+        if (!File.Exists(samplePath)) samplePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestAssets", "catalogo_muestra.xlsx");
+
+        Assert.IsTrue((await _importService.ImportExcelOrCsvAsync(samplePath)).Success);
+        var second = await _importService.ImportExcelOrCsvAsync(samplePath);
+
+        Assert.IsTrue(second.Success, second.Message);
+        Assert.AreEqual(0, second.ProductsImported);
+        Assert.AreEqual(259, second.ProductsUpdated);
+        Assert.AreEqual(0, second.TemplatesImported);
+        Assert.AreEqual(0, second.PediatricRulesImported);
+
+        using var db = _factory.CreateDbContext();
+        Assert.AreEqual(1, await db.Patients.CountAsync(p => p.FullName == "Zairi Carrera Macedo"));
+        Assert.AreEqual(1, await db.PatientConsultations.CountAsync(c => c.Folio.StartsWith("CNS-20261003-IMP")));
+    }
+
+    [TestMethod]
+    public void ParseMlPerKg_ReadsExcelFormulas()
+    {
+        Assert.AreEqual(15.0 / 32.0, DataImportService.ParseMlPerKg("(C2*15)/32", "", "")!.Value, 1e-9);
+        Assert.AreEqual(0.05, DataImportService.ParseMlPerKg("(C4*0.2)/4", "", "")!.Value, 1e-9);
+        Assert.AreEqual(0.25, DataImportService.ParseMlPerKg("C6*0.25", "", "")!.Value, 1e-9);
+        Assert.AreEqual(0.5, DataImportService.ParseMlPerKg(null, "10", "5")!.Value, 1e-9);
+        Assert.IsNull(DataImportService.ParseMlPerKg(null, "", "0"));
+    }
+
+    [TestMethod]
+    public async Task ImportCsv_HandlesQuotedFieldsWithDelimiters()
+    {
+        string csvPath = Path.Combine(_tempDir, "catalogo_comillas.csv");
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Medicamento,Clave",
+            "\"Paracetamol 100 mg/ml, gotas pediátricas\",PAR-G",
+        });
+
+        var result = await _importService.ImportExcelOrCsvAsync(csvPath);
+        Assert.IsTrue(result.Success);
+
+        using var db = _factory.CreateDbContext();
+        var product = await db.Products.SingleAsync(p => p.Code == "PAR-G");
+        Assert.AreEqual("Paracetamol 100 mg/ml, gotas pediátricas", product.Name);
     }
 
     [TestMethod]

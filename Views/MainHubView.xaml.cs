@@ -7,28 +7,22 @@ namespace TPVC.Views;
 
 public partial class MainHubView : UserControl
 {
+    private Window? _hostWindow;
+
     public MainHubView()
     {
         InitializeComponent();
 
-        Loaded += (s, e) =>
-        {
-            var win = Window.GetWindow(this);
-            if (win != null)
-            {
-                win.PreviewKeyDown -= Window_PreviewKeyDown;
-                win.PreviewKeyDown += Window_PreviewKeyDown;
-            }
-        };
+        // Se guarda la ventana al cargar: en Unloaded Window.GetWindow(this) ya devuelve null
+        Loaded += (s, e) => AttachToWindow(Window.GetWindow(this));
+        Unloaded += (s, e) => AttachToWindow(null);
+    }
 
-        Unloaded += (s, e) =>
-        {
-            var win = Window.GetWindow(this);
-            if (win != null)
-            {
-                win.PreviewKeyDown -= Window_PreviewKeyDown;
-            }
-        };
+    private void AttachToWindow(Window? window)
+    {
+        if (_hostWindow != null) _hostWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+        _hostWindow = window;
+        if (_hostWindow != null) _hostWindow.PreviewKeyDown += Window_PreviewKeyDown;
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)

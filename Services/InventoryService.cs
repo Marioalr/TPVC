@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -68,10 +69,11 @@ public class InventoryService
     /// <summary>Dispara todos los eventos de cambio para sincronización o recargas masivas.</summary>
     public void NotifyAllChanged()
     {
-        OnInventoryChanged?.Invoke();
-        OnPatientsChanged?.Invoke();
-        OnSalesChanged?.Invoke();
-        OnAppointmentsChanged?.Invoke();
+        // Raise aísla cada suscriptor: un error en una vista no impide refrescar las demás
+        Raise(OnInventoryChanged, "inventory");
+        Raise(OnPatientsChanged, "patients");
+        Raise(OnSalesChanged, "sales");
+        Raise(OnAppointmentsChanged, "appointments");
     }
 
     public InventoryService(IDbContextFactory<AppDbContext> contextFactory)
@@ -135,7 +137,7 @@ public class InventoryService
 
         if (onlyLowStock)
         {
-            query = query.Where(p => p.CurrentStock <= p.MinStock);
+            query = query.Where(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock);
         }
 
         var products = await query.OrderBy(p => p.Name).ToListAsync();
@@ -761,11 +763,16 @@ public class InventoryService
                     product.UpdatedAt = now;
 
                     // Reintegrar a un lote activo si existe
-                    var targetBatch = product.Batches.FirstOrDefault(b => b.ExpirationDate > DateTime.Today)
-                        ?? product.Batches.FirstOrDefault();
+                    // Se reintegra al lote vigente que caduca más tarde (el que se habría vendido al final por FEFO)
+                    var targetBatch = product.Batches
+                                          .Where(b => b.ExpirationDate.Date >= DateTime.Today)
+                                          .OrderByDescending(b => b.ExpirationDate)
+                                          .FirstOrDefault()
+                                      ?? product.Batches.OrderByDescending(b => b.ExpirationDate).FirstOrDefault();
                     if (targetBatch != null)
                     {
                         targetBatch.Quantity += totalQtyToRestore;
+                        targetBatch.IsDepleted = false; // un lote agotado vuelve a contar para FEFO
                     }
 
                     db.InventoryMovements.Add(new InventoryMovement
@@ -870,58 +877,68 @@ public class InventoryService
     /// </summary>
     public string ExportDailyCashCutToCsv(DailyCashCut cut, ClinicProfile? profile = null)
     {
+        // Separador "," (configuración regional de México) y sin BOM manual: File.WriteAllText con
+        // Encoding.UTF8 ya escribe el BOM; antes se duplicaba y Excel mostraba basura en la primera celda
         var sb = new StringBuilder();
-        // BOM UTF-8
-        sb.Append('\uFEFF');
+        void Row(params object?[] cells) => sb.AppendLine(string.Join(",", cells.Select(c => CsvCell(c))));
 
         string clinic = profile != null && !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "Consultorio Médico";
         string doctor = profile != null && !string.IsNullOrWhiteSpace(profile.DoctorName) ? profile.DoctorName : "Dr. Titular";
         string license = profile != null && !string.IsNullOrWhiteSpace(profile.ProfessionalLicense) ? profile.ProfessionalLicense : "N/D";
 
-        sb.AppendLine($"CORTE DE CAJA DIARIO;{clinic}");
-        sb.AppendLine($"Fecha de Corte;{cut.Date:dd/MM/yyyy}");
-        sb.AppendLine($"Médico / Titular;{doctor}");
-        sb.AppendLine($"Cédula Profesional;{license}");
-        sb.AppendLine($"Generado el;{DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+        Row("CORTE DE CAJA DIARIO", clinic);
+        Row("Fecha de Corte", $"{cut.Date:dd/MM/yyyy}");
+        Row("Médico / Titular", doctor);
+        Row("Cédula Profesional", license);
+        Row("Generado el", $"{DateTime.Now:dd/MM/yyyy HH:mm:ss}");
         sb.AppendLine();
 
-        sb.AppendLine("RESUMEN DE INGRESOS");
-        sb.AppendLine($"Total Ventas Netas;${cut.TotalSalesAmount:F2}");
-        sb.AppendLine($"Tickets Cobrados;{cut.ActiveTicketsCount}");
-        sb.AppendLine($"Tickets Cancelados;{cut.CancelledTicketsCount};Importe Cancelado;${cut.TotalCancelledAmount:F2}");
+        Row("RESUMEN DE INGRESOS");
+        Row("Total Ventas Netas", Money(cut.TotalSalesAmount));
+        Row("Tickets Cobrados", cut.ActiveTicketsCount);
+        Row("Tickets Cancelados", cut.CancelledTicketsCount, "Importe Cancelado", Money(cut.TotalCancelledAmount));
         sb.AppendLine();
 
-        sb.AppendLine("DESGLOSE POR MÉTODO DE PAGO");
-        sb.AppendLine($"Efectivo;${cut.TotalCash:F2}");
-        sb.AppendLine($"Tarjeta de Débito;${cut.TotalDebitCard:F2}");
-        sb.AppendLine($"Tarjeta de Crédito;${cut.TotalCreditCard:F2}");
-        sb.AppendLine($"Transferencia Electrónica;${cut.TotalTransfer:F2}");
+        Row("DESGLOSE POR MÉTODO DE PAGO");
+        Row("Efectivo", Money(cut.TotalCash));
+        Row("Tarjeta de Débito", Money(cut.TotalDebitCard));
+        Row("Tarjeta de Crédito", Money(cut.TotalCreditCard));
+        Row("Transferencia Electrónica", Money(cut.TotalTransfer));
         if (cut.TotalOtherPaymentMethods > 0)
         {
-            sb.AppendLine($"Otros Métodos;${cut.TotalOtherPaymentMethods:F2}");
+            Row("Otros Métodos", Money(cut.TotalOtherPaymentMethods));
         }
         sb.AppendLine();
 
-        sb.AppendLine("DESGLOSE SERVICIOS CLÍNICOS VS PRODUCTOS DE FARMACIA");
-        sb.AppendLine($"Servicios Médicos (Consultas/Procedimientos);${cut.TotalServicesAmount:F2};Servicios Realizados;{cut.TotalServicesCount}");
-        sb.AppendLine($"Productos de Inventario / Farmacia;${cut.TotalProductsAmount:F2};Piezas Despachadas;{cut.TotalProductsUnitsSold}");
+        Row("DESGLOSE SERVICIOS CLÍNICOS VS PRODUCTOS DE FARMACIA");
+        Row("Servicios Médicos (Consultas/Procedimientos)", Money(cut.TotalServicesAmount), "Servicios Realizados", cut.TotalServicesCount);
+        Row("Productos de Inventario / Farmacia", Money(cut.TotalProductsAmount), "Piezas Despachadas", cut.TotalProductsUnitsSold);
         sb.AppendLine();
 
-        sb.AppendLine("DETALLE DE TICKETS DEL DÍA");
-        sb.AppendLine("Folio;Hora;Paciente / Cliente;Método de Pago;Productos ($);Servicios ($);Total ($);Estado;Motivo Cancelación");
+        Row("DETALLE DE TICKETS DEL DÍA");
+        Row("Folio", "Hora", "Paciente / Cliente", "Método de Pago", "Productos ($)", "Servicios ($)", "Total ($)", "Estado", "Motivo Cancelación");
 
         foreach (var sale in cut.Sales.OrderBy(s => s.Date))
         {
             decimal prodSub = sale.Items.Where(i => !i.IsService).Sum(i => i.Subtotal);
             decimal servSub = sale.Items.Where(i => i.IsService).Sum(i => i.Subtotal);
-            string estado = sale.IsCancelled ? "CANCELADO" : "COBRADO";
-            string motivo = sale.IsCancelled ? (sale.CancellationReason ?? "") : "";
-
-            sb.AppendLine($"{sale.Folio};{sale.Date:HH:mm:ss};\"{sale.CustomerName}\";{sale.PaymentMethod};${prodSub:F2};${servSub:F2};${sale.Total:F2};{estado};\"{motivo}\"");
+            Row(sale.Folio, $"{sale.Date:HH:mm:ss}", sale.CustomerName, sale.PaymentMethod, Money(prodSub), Money(servSub), Money(sale.Total),
+                sale.IsCancelled ? "CANCELADO" : "COBRADO", sale.IsCancelled ? sale.CancellationReason : string.Empty);
         }
 
         return sb.ToString();
     }
+
+    private static string Money(decimal amount) => "$" + amount.ToString("F2", CultureInfo.InvariantCulture);
+
+    /// <summary>Celda CSV: se entrecomilla si contiene coma, comillas o saltos de línea.</summary>
+    private static string CsvCell(object? value)
+    {
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        return text.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 ? $"\"{CsvEscape(text)}\"" : text;
+    }
+
+    private static string CsvEscape(string? text) => (text ?? string.Empty).Replace("\"", "\"\"");
 
     /// <summary>
     /// Siembra pacientes y productos de demostración a solicitud explícita (asistente de inicio).
@@ -1000,7 +1017,7 @@ public class InventoryService
         return new DashboardMetrics
         {
             TotalProducts = await activeProducts.CountAsync(),
-            LowStockCount = await activeProducts.CountAsync(p => p.CurrentStock <= p.MinStock),
+            LowStockCount = await activeProducts.CountAsync(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock),
             ExpiringSoonCount = await activeBatches.CountAsync(b => b.ExpirationDate >= today && b.ExpirationDate < expiringLimit),
             ExpiredCount = await activeBatches.CountAsync(b => b.ExpirationDate < today),
             MovementsToday = await todayMovements.CountAsync(),
@@ -1136,6 +1153,39 @@ public class InventoryService
         }
 
         return patients;
+    }
+
+    /// <summary>
+    /// Listado ligero de expedientes (sin el texto de las consultas). Solo trae cuántas consultas
+    /// tiene cada paciente; las notas se cargan al abrir el expediente con <see cref="GetPatientConsultationsAsync"/>.
+    /// Evita cargar en memoria años de historia clínica de todos los pacientes en cada guardado.
+    /// </summary>
+    public async Task<List<PatientRecord>> GetPatientSummariesAsync(bool activeOnly = true)
+    {
+        await using var db = CreateContext();
+        var query = db.Patients.AsNoTracking();
+        if (activeOnly) query = query.Where(p => p.IsActive);
+
+        var rows = await query
+            .OrderBy(p => p.FullName)
+            .Select(p => new { Patient = p, Count = p.Consultations.Count })
+            .ToListAsync();
+
+        foreach (var row in rows)
+        {
+            row.Patient.ConsultationCount = row.Count;
+        }
+        return rows.Select(r => r.Patient).ToList();
+    }
+
+    public async Task<List<PatientConsultation>> GetPatientConsultationsAsync(int patientId)
+    {
+        await using var db = CreateContext();
+        return await db.PatientConsultations
+            .AsNoTracking()
+            .Where(c => c.PatientRecordId == patientId)
+            .OrderByDescending(c => c.Date)
+            .ToListAsync();
     }
 
     public async Task<PatientRecord?> GetPatientByIdAsync(int id)
@@ -1289,8 +1339,10 @@ public class InventoryService
             patient.SyncPrescriptionJson();
         }
 
+        // La nota existente se busca dentro del MISMO paciente: un folio repetido en otro
+        // expediente (p. ej. importado) nunca debe sobrescribir la consulta de otra persona
         var existing = !string.IsNullOrWhiteSpace(consultation.Folio)
-            ? await db.PatientConsultations.FirstOrDefaultAsync(c => c.Folio == consultation.Folio)
+            ? await db.PatientConsultations.FirstOrDefaultAsync(c => c.Folio == consultation.Folio && c.PatientRecordId == patientId)
             : null;
 
         consultation.EnsureNumericVitalSigns();
@@ -1329,7 +1381,7 @@ public class InventoryService
         return consultation;
     }
 
-    private void NotifyAppointmentsChanged() => OnAppointmentsChanged?.Invoke();
+    private void NotifyAppointmentsChanged() => Raise(OnAppointmentsChanged, "appointments");
 
     // =========================================================================
     // AGENDA Y CONTROL DE CITAS MÉDICAS
@@ -1493,35 +1545,29 @@ public class InventoryService
             .ToListAsync();
         summary.TodayAppointmentsCount = summary.TodayAppointments.Count;
 
-        // 2. Stock bajo
-        var allProducts = await db.Products
+        // 2. Stock bajo (filtrado en SQLite: solo productos con mínimo configurado)
+        summary.LowStockProducts = await db.Products
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.IsActive)
-            .ToListAsync();
-
-        summary.LowStockProducts = allProducts
-            .Where(p => p.CurrentStock <= (p.MinStock > 0 ? p.MinStock : 5))
+            .Where(p => p.IsActive && p.MinStock > 0 && p.CurrentStock <= p.MinStock)
             .OrderBy(p => p.CurrentStock)
-            .ToList();
+            .ToListAsync();
         summary.LowStockProductsCount = summary.LowStockProducts.Count;
 
-        // 3. Lotes vencidos y por vencer
+        // 3. Lotes vencidos y por vencer (solo lotes con piezas de productos activos)
+        var in31Days = in30Days.AddDays(1);
         var batches = await db.ProductBatches
             .AsNoTracking()
             .Include(b => b.Product)
-            .Where(b => b.Quantity > 0)
+            .Where(b => b.Quantity > 0 && !b.IsDepleted && b.ExpirationDate < in31Days && (b.Product == null || b.Product.IsActive))
+            .OrderBy(b => b.ExpirationDate)
             .ToListAsync();
 
-        summary.ExpiredBatches = batches
-            .Where(b => b.ExpirationDate.Date < today)
-            .OrderBy(b => b.ExpirationDate)
-            .ToList();
+        summary.ExpiredBatches = batches.Where(b => b.ExpirationDate.Date < today).ToList();
         summary.ExpiredBatchesCount = summary.ExpiredBatches.Count;
 
         summary.NearExpiryBatches = batches
             .Where(b => b.ExpirationDate.Date >= today && b.ExpirationDate.Date <= in30Days)
-            .OrderBy(b => b.ExpirationDate)
             .ToList();
         summary.NearExpiryBatchesCount = summary.NearExpiryBatches.Count;
 
@@ -1534,15 +1580,14 @@ public class InventoryService
         var products = await db.Products
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.IsActive)
+            .Where(p => p.IsActive && p.MinStock > 0 && p.CurrentStock <= p.MinStock)
             .ToListAsync();
 
         var suggestedList = new List<SuggestedPurchaseItem>();
 
         foreach (var p in products)
         {
-            int min = p.MinStock > 0 ? p.MinStock : 5;
-            if (p.CurrentStock <= min)
+            int min = p.MinStock;
             {
                 int target = min * 2;
                 int qtyToBuy = Math.Max(target - p.CurrentStock, min);
@@ -1570,6 +1615,43 @@ public class InventoryService
         }
 
         return suggestedList.OrderBy(s => s.CurrentStock).ThenBy(s => s.ProductName).ToList();
+    }
+
+    // =========================================================================
+    // PLANTILLAS DE RECETA (POSOLOGÍA, MEDIDAS GENERALES) Y DOSIS PEDIÁTRICA
+    // =========================================================================
+
+    public async Task<List<PrescriptionTemplate>> GetPrescriptionTemplatesAsync(string kind)
+    {
+        await using var db = CreateContext();
+        return await db.PrescriptionTemplates
+            .AsNoTracking()
+            .Where(t => t.Kind == kind && t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.Title)
+            .ToListAsync();
+    }
+
+    public async Task<List<PediatricDoseRule>> GetPediatricDoseRulesAsync()
+    {
+        await using var db = CreateContext();
+        return await db.PediatricDoseRules
+            .AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Medication)
+            .ToListAsync();
+    }
+
+    /// <summary>Baja lógica de una plantilla (se sincroniza como actualización).</summary>
+    public async Task DeactivatePrescriptionTemplateAsync(int id)
+    {
+        await using var db = CreateContext();
+        var template = await db.PrescriptionTemplates.FindAsync(id);
+        if (template == null) return;
+        template.IsActive = false;
+        await db.SaveChangesAsync();
+        NotifyInventoryChanged();
     }
 
     // =========================================================================

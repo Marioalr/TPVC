@@ -44,6 +44,14 @@ jobs:
       - name: Execute Unit Tests
         run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
 
+      # Las fechas se guardan en hora local del consultorio: repetir las pruebas en la zona de México
+      # detecta desfases que no aparecen con el reloj del runner en UTC
+      - name: Execute Unit Tests (zona horaria de México)
+        shell: pwsh
+        run: |
+          tzutil /s "Central Standard Time (Mexico)"
+          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal
+
       - name: Build Installer and Packages
         run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.version.outputs.value }}"
 

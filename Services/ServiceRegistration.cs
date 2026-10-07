@@ -33,7 +33,8 @@ public static class ServiceRegistration
             sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
             sp.GetRequiredService<BackupService>(),
             sp.GetRequiredService<ClinicProfileService>(),
-            sp.GetRequiredService<InventoryService>()));
+            sp.GetRequiredService<InventoryService>(),
+            sp.GetRequiredService<TursoSettingsService>()));
 
         return services;
     }

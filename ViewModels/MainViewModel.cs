@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.8.2";
+    private string _appVersion = "1.9.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -153,7 +153,7 @@ public partial class MainViewModel : ObservableObject
         };
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
         MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService);
-        _ = MedicalRecordsVM.LoadInitialDataAsync();
+        // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
         // Enlace para volver a la Vista Principal desde el POS o Expedientes

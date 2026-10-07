@@ -114,6 +114,19 @@ public class TursoSettings
     /// <summary>Marca de tiempo UTC de la última sincronización completada exitosamente.</summary>
     public DateTime? LastSyncUtc { get; set; }
 
+    /// <summary>
+    /// Hora local (UTC) hasta la que ya se subieron cambios de este dispositivo.
+    /// null = nunca se ha subido nada (la siguiente sincronización sube todo).
+    /// </summary>
+    public DateTime? LastPushedLocalUtc { get; set; }
+
+    /// <summary>
+    /// Marca del reloj del servidor Turso hasta la que ya se descargaron cambios
+    /// (se compara contra la columna SyncedAtUtc que asigna el propio servidor,
+    /// inmune a diferencias de reloj entre dispositivos).
+    /// </summary>
+    public string? LastPulledServerWatermark { get; set; }
+
     /// <summary>Filas enviadas acumuladas en el mes actual.</summary>
     public long MonthlyRowsWritten { get; set; }
 

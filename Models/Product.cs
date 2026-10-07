@@ -40,7 +40,8 @@ public class Product : ISyncEntity
     public ICollection<InventoryMovement> Movements { get; set; } = new List<InventoryMovement>();
 
     // Helpers
-    public bool IsLowStock => CurrentStock <= MinStock;
+    // Mínimo 0 = medicamento de catálogo sin control de existencias (no genera alertas)
+    public bool IsLowStock => MinStock > 0 && CurrentStock <= MinStock;
     public bool IsOutOfStock => CurrentStock <= 0;
     public bool HasStock => CurrentStock > 0;
 

@@ -11,18 +11,20 @@ namespace TPVC.Views;
 
 public partial class MedicalRecordsView : UserControl
 {
+    private Window? _hostWindow;
+    private MedicalRecordsViewModel? _subscribedViewModel;
+
     public MedicalRecordsView()
     {
         InitializeComponent();
 
+        // Las suscripciones viven solo mientras la vista está en pantalla. Antes se quitaban en
+        // Unloaded con Window.GetWindow(this), que ya devuelve null en ese momento: la ventana y el
+        // ViewModel retenían cada instancia vieja de la vista y sus atajos seguían activos.
         Loaded += (s, e) =>
         {
-            var win = Window.GetWindow(this);
-            if (win != null)
-            {
-                win.PreviewKeyDown -= Window_PreviewKeyDown;
-                win.PreviewKeyDown += Window_PreviewKeyDown;
-            }
+            AttachToWindow(Window.GetWindow(this));
+            AttachToViewModel(DataContext as MedicalRecordsViewModel);
 
             if (DataContext is MedicalRecordsViewModel vm && vm.SelectedPatient == null && !vm.IsSelectPatientModalOpen)
             {
@@ -32,24 +34,28 @@ public partial class MedicalRecordsView : UserControl
 
         Unloaded += (s, e) =>
         {
-            var win = Window.GetWindow(this);
-            if (win != null)
-            {
-                win.PreviewKeyDown -= Window_PreviewKeyDown;
-            }
+            AttachToWindow(null);
+            AttachToViewModel(null);
         };
 
         DataContextChanged += (s, e) =>
         {
-            if (e.OldValue is MedicalRecordsViewModel oldVm)
-            {
-                oldVm.PropertyChanged -= ViewModel_PropertyChanged;
-            }
-            if (e.NewValue is MedicalRecordsViewModel newVm)
-            {
-                newVm.PropertyChanged += ViewModel_PropertyChanged;
-            }
+            if (IsLoaded) AttachToViewModel(e.NewValue as MedicalRecordsViewModel);
         };
+    }
+
+    private void AttachToWindow(Window? window)
+    {
+        if (_hostWindow != null) _hostWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+        _hostWindow = window;
+        if (_hostWindow != null) _hostWindow.PreviewKeyDown += Window_PreviewKeyDown;
+    }
+
+    private void AttachToViewModel(MedicalRecordsViewModel? viewModel)
+    {
+        if (_subscribedViewModel != null) _subscribedViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        _subscribedViewModel = viewModel;
+        if (_subscribedViewModel != null) _subscribedViewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)

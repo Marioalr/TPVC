@@ -24,6 +24,8 @@ public class AppDbContext : DbContext
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<SyncTombstone> SyncTombstones => Set<SyncTombstone>();
+    public DbSet<PrescriptionTemplate> PrescriptionTemplates => Set<PrescriptionTemplate>();
+    public DbSet<PediatricDoseRule> PediatricDoseRules => Set<PediatricDoseRule>();
 
     private static readonly SqlitePragmaInterceptor PragmaInterceptor = new();
 
@@ -84,8 +86,17 @@ public class AppDbContext : DbContext
     /// Asigna SyncId / UpdatedAtUtc y registra tombstones de borrados físicos,
     /// dejando la base lista para una sincronización incremental con servidor.
     /// </summary>
+    /// <summary>
+    /// true mientras se aplican cambios descargados de la nube: se conservan SyncId y
+    /// UpdatedAtUtc remotos y no se generan tombstones. Sin esto, cada registro recibido
+    /// parecería un cambio local nuevo y se volvería a subir (ciclo infinito entre dispositivos).
+    /// </summary>
+    public bool ApplyingRemoteChanges { get; set; }
+
     private void StampSyncMetadata()
     {
+        if (ApplyingRemoteChanges) return;
+
         var now = DateTime.UtcNow;
         foreach (var entry in ChangeTracker.Entries<ISyncEntity>().ToList())
         {
@@ -235,6 +246,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<SyncTombstone>()
             .HasIndex(t => t.DeletedAtUtc);
+
+        // Plantillas de receta importadas del Excel del consultorio
+        modelBuilder.Entity<PrescriptionTemplate>()
+            .HasIndex(t => new { t.Kind, t.SortOrder });
     }
 }
 

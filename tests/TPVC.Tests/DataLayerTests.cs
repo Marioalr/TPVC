@@ -360,4 +360,124 @@ public class DataLayerTests
         Assert.AreEqual(a.GetHashCode(), b.GetHashCode());
         Assert.AreNotEqual(new Product(), new Product(), "Entidades nuevas (Id 0) solo son iguales a sí mismas");
     }
+
+    [TestMethod]
+    public async Task LowStock_IgnoresCatalogItemsWithoutMinimum()
+    {
+        var category = (await _service.GetCategoriesAsync()).First();
+        await _service.SaveProductAsync(new Product { Code = "CAT-0", Name = "Solo receta", CategoryId = category.Id, MinStock = 0, OptimalStock = 0 });
+
+        var metrics = await _service.GetDashboardMetricsAsync();
+        var alerts = await _service.GetSystemAlertsSummaryAsync();
+        var purchases = await _service.GetSuggestedPurchaseListAsync();
+        var lowStock = await _service.GetProductsAsync(onlyLowStock: true);
+
+        Assert.IsFalse(alerts.LowStockProducts.Any(p => p.Code == "CAT-0"));
+        Assert.IsFalse(purchases.Any(p => p.ProductCode == "CAT-0"));
+        Assert.IsFalse(lowStock.Any(p => p.Code == "CAT-0"));
+        Assert.AreEqual(lowStock.Count, metrics.LowStockCount, "Panel, alertas y filtro usan la misma regla");
+        Assert.IsFalse(new Product { MinStock = 0, CurrentStock = 0 }.IsLowStock);
+        Assert.IsTrue(new Product { MinStock = 5, CurrentStock = 5 }.IsLowStock);
+    }
+
+    [TestMethod]
+    public async Task AddConsultationNote_SameFolioOnAnotherPatient_DoesNotOverwriteIt()
+    {
+        var patients = await _service.GetPatientsAsync();
+        var first = patients[0];
+        var second = patients[1];
+
+        await _service.AddConsultationNoteAsync(first.Id, new PatientConsultation { Folio = "CNS-20261003-001", ChiefComplaint = "Paciente A" });
+        await _service.AddConsultationNoteAsync(second.Id, new PatientConsultation { Folio = "CNS-20261003-001", ChiefComplaint = "Paciente B" });
+
+        var a = await _service.GetPatientConsultationsAsync(first.Id);
+        var b = await _service.GetPatientConsultationsAsync(second.Id);
+        Assert.IsTrue(a.Any(c => c.ChiefComplaint == "Paciente A"), "La nota del primer paciente se conserva");
+        Assert.IsTrue(b.Any(c => c.ChiefComplaint == "Paciente B"));
+    }
+
+    [TestMethod]
+    public async Task PatientSummaries_CarryCountsWithoutLoadingNotes()
+    {
+        var full = await _service.GetPatientsAsync();
+        var summaries = await _service.GetPatientSummariesAsync();
+
+        Assert.HasCount(full.Count, summaries);
+        foreach (var s in summaries)
+        {
+            Assert.IsEmpty(s.Consultations, "El listado no carga el texto de las consultas");
+            Assert.AreEqual(full.Single(f => f.Id == s.Id).Consultations.Count, s.ConsultationCount);
+        }
+    }
+
+    [TestMethod]
+    public async Task MedicalRecords_SelectingPatientFromLightList_LoadsItsHistory()
+    {
+        var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
+        await records.LoadPatientsAsync();
+
+        var patient = records.Patients.First(p => p.ConsultationCount > 0);
+        Assert.IsEmpty(patient.Consultations);
+
+        records.SelectPatient(patient);
+
+        Assert.HasCount(patient.ConsultationCount, records.ConsultationsHistory, "El historial se carga al abrir el expediente");
+    }
+
+    [TestMethod]
+    public async Task CancelSale_ReactivatesDepletedBatch()
+    {
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "DEP-1", Name = "Lote único", CategoryId = category.Id, Price = 10m };
+        await _service.SaveProductAsync(product);
+        await _service.ReceiveBatchAsync(new ProductBatch { ProductId = product.Id, BatchNumber = "L1", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 2 });
+
+        var sale = await _service.RegisterSaleAsync(new[] { (product.Id, 2, 10m) }, null, null);
+        Assert.IsTrue((await _service.GetBatchesAsync(product.Id)).Single().IsDepleted);
+
+        await _service.CancelSaleAsync(sale!.Id);
+
+        var batch = (await _service.GetBatchesAsync(product.Id)).Single();
+        Assert.AreEqual(2, batch.Quantity);
+        Assert.IsFalse(batch.IsDepleted, "El lote vuelve a estar disponible para FEFO");
+    }
+
+    [TestMethod]
+    public async Task PrescriptionTemplates_ApplyToDosageAndTreatmentPlan()
+    {
+        using (var db = NewContext())
+        {
+            db.PrescriptionTemplates.Add(new PrescriptionTemplate { Kind = PrescriptionTemplateKinds.Posology, Title = "Cada 8", Text = "Tomar 1 tableta vía oral cada 8 hrs por 5 días" });
+            db.PrescriptionTemplates.Add(new PrescriptionTemplate { Kind = PrescriptionTemplateKinds.GeneralMeasures, Title = "Hidratación", Text = "• Mantener adecuada hidratación" });
+            db.PediatricDoseRules.Add(new PediatricDoseRule { Medication = "Paracetamol 3.2 g/100 ml", DoseText = "15 mg/kg/dosis", MlPerKg = 15.0 / 32.0, DropsPerMl = 20 });
+            await db.SaveChangesAsync();
+        }
+
+        var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
+        await records.LoadInitialDataAsync();
+
+        records.SelectedPosologyTemplate = records.PosologyTemplates.Single();
+        Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.PrescriptionDosage);
+        Assert.IsNull(records.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
+
+        records.ConsultationTreatmentPlan = string.Empty;
+        records.SelectedGeneralMeasureTemplate = records.GeneralMeasureTemplates.Single();
+        Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationTreatmentPlan);
+        Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationGeneralIndications);
+
+        records.SelectedPediatricRule = records.PediatricDoseRules.Single();
+        records.PediatricWeightText = "15";
+        StringAssert.Contains(records.PediatricDoseResult, "7 ml (140 gotas)");
+        records.ApplyPediatricDose();
+        StringAssert.StartsWith(records.PrescriptionDosage, "Dar 7 ml (140 gotas) vía oral");
+    }
+
+    [TestMethod]
+    public void GeneralIndicationPreset_IsVisibleInTreatmentPlan()
+    {
+        var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
+        records.ConsultationTreatmentPlan = "Reposo";
+        records.AppendGeneralIndicationPreset("Hidratación abundante.");
+        Assert.AreEqual("Reposo Hidratación abundante.", records.ConsultationTreatmentPlan);
+    }
 }

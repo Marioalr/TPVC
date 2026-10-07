@@ -14,6 +14,9 @@ public class ConsultationService
 
     public event Action? OnActiveConsultationChanged;
 
+    /// <summary>La lista de pacientes en memoria cambió (recarga desde la base o alta/edición).</summary>
+    public event Action? PatientsChanged;
+
     public ObservableCollection<PatientRecord> Patients { get; } = new();
 
     public ConsultationService() : this(seedDemoPatients: true)
@@ -39,6 +42,7 @@ public class ConsultationService
         {
             Patients.Add(p);
         }
+        PatientsChanged?.Invoke();
     }
 
     public void UpsertPatient(PatientRecord patient)
@@ -53,6 +57,7 @@ public class ConsultationService
         {
             Patients.Insert(0, patient);
         }
+        PatientsChanged?.Invoke();
     }
 
     private void InitializeDefaultPatients()

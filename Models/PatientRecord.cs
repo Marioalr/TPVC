@@ -311,6 +311,19 @@ public class PatientRecord : ISyncEntity
 
     public List<PatientConsultation> Consultations { get; set; } = new();
 
+    private int? _consultationCount;
+
+    /// <summary>
+    /// Número de consultas del expediente. En el listado ligero viene del conteo en SQL
+    /// (las notas no se cargan); con el historial cargado es el tamaño de la lista.
+    /// </summary>
+    [NotMapped]
+    public int ConsultationCount
+    {
+        get => Consultations.Count > 0 ? Consultations.Count : _consultationCount ?? 0;
+        set => _consultationCount = value;
+    }
+
     [NotMapped]
     private List<PatientPrescriptionItem>? _activePrescription;
 
