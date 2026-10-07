@@ -44,9 +44,34 @@ public sealed class ConsultationDraft
     public bool SavedToRecord { get; set; }
 
     public List<ConsultationProductItem> Items { get; set; } = new();
+    /// <summary>Receta de esta consulta (la que se ve, se imprime y se cobra).</summary>
     public List<PatientPrescriptionItem> Prescriptions { get; set; } = new();
+
+    /// <summary>Última receta emitida antes de esta consulta (para "Repetir"); null en borradores anteriores a v1.14.</summary>
+    public List<PatientPrescriptionItem>? PreviousPrescriptions { get; set; }
+
+    /// <summary>Resumen del expediente antes de la consulta (vuelve tal cual si se descarta).</summary>
+    public PatientSummarySnapshot? PatientBefore { get; set; }
 
     /// <summary>Consulta a la que pertenece la copia (evita reescribir una ya terminada).</summary>
     [JsonIgnore]
     public long Generation { get; set; }
+}
+
+/// <summary>
+/// Resumen que el expediente muestra de su última consulta. Guardar el avance de una nota lo
+/// actualiza; si después la consulta se descarta, se regresa a como estaba.
+/// </summary>
+public sealed record PatientSummarySnapshot(DateTime LastVisit, string LastDiagnosis, string VitalSigns, string ClinicalNotes)
+{
+    public static PatientSummarySnapshot Of(PatientRecord patient) =>
+        new(patient.LastVisit, patient.LastDiagnosis ?? string.Empty, patient.VitalSigns ?? string.Empty, patient.ClinicalNotes ?? string.Empty);
+
+    public void ApplyTo(PatientRecord patient)
+    {
+        patient.LastVisit = LastVisit;
+        patient.LastDiagnosis = LastDiagnosis;
+        patient.VitalSigns = VitalSigns;
+        patient.ClinicalNotes = ClinicalNotes;
+    }
 }

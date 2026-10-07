@@ -221,11 +221,14 @@ public partial class MedicalRecordsViewModel
             if (!IsFormPage) _pageBeforeForm = PatientsPage;
             if (string.IsNullOrEmpty(FormOpenSection)) FormOpenSection = "Identificacion";
             PatientsPage = PageForm;
+            OnPatientFormOpenedForDraft();
             return;
         }
 
+        OnPatientFormClosedForDraft();
         if (!IsFormPage) return;
-        if (_pageBeforeForm == PageConsultation && HasActiveConsultation) PatientsPage = PageConsultation;
+        // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
+        if (_pageBeforeForm == PageConsultation && HasActiveConsultation) ShowConsultation();
         else if (SelectedPatient != null) PatientsPage = PageChart;
         else GoToPatientsHome();
     }
@@ -453,7 +456,7 @@ public partial class MedicalRecordsViewModel
 
     public bool HasTimeline => Timeline.Count > 0;
     public bool HasLatestVitals => LatestVitals.Count > 0;
-    public bool HasActivePrescription => SelectedPatient?.ActivePrescription.Count > 0;
+    public bool HasActivePrescription => ChartPrescription.Count > 0;
 
     public string NextAppointmentText
     {
@@ -521,7 +524,7 @@ public partial class MedicalRecordsViewModel
         IsVitalsChartVisible = false;
         RefreshTimeline();
         OnPropertyChanged(nameof(SelectedPatientMeta));
-        OnPropertyChanged(nameof(HasActivePrescription));
+        NotifyPrescriptionStateChanged();
         OnPropertyChanged(nameof(IsConsultationForSelectedPatient));
         OnPropertyChanged(nameof(ChartPrimaryActionText));
     }

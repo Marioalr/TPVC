@@ -320,8 +320,8 @@
                                    TextTrimming="CharacterEllipsis"
                                    IsHitTestVisible="False"
                                    Visibility="Collapsed" />
+                        <!-- El TextBox ya aplica su Padding al texto: aquí no se repite -->
                         <ScrollViewer x:Name="PART_ContentHost"
-                                      Margin="{TemplateBinding Padding}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                       Focusable="False" />
                         <Border x:Name="Ring" CornerRadius="8" BorderThickness="2" BorderBrush="{DynamicResource ThemeFocus}" Visibility="Collapsed" IsHitTestVisible="False" />

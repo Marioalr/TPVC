@@ -241,7 +241,7 @@
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                                 <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="{Binding Stock, StringFormat='Stock: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                                            <TextBlock Grid.Column="1" Text="{Binding CurrentStock, StringFormat='Existencias: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
                                             <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
                                         </Grid>
                                     </DataTemplate>

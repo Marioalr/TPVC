@@ -130,7 +130,7 @@
                         </StackPanel>
                     </Border>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding RecentPatients}" Margin="14,14,4,14">
+                        <ItemsControl ItemsSource="{Binding RecentPatients}" Margin="14,14,4,14" VerticalAlignment="Top">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <UniformGrid Columns="2" />
@@ -223,7 +223,8 @@
                                             </Grid>
                                         </Button>
                                         <DataTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}}" Value="0">
+                                            <!-- El contenedor del elemento (no un ContentPresenter más arriba, como el del ScrollViewer) -->
+                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource TemplatedParent}}" Value="0">
                                                 <Setter TargetName="Row" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
                                             </DataTrigger>
                                         </DataTemplate.Triggers>

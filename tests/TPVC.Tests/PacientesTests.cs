@@ -326,6 +326,19 @@ public class PacientesTests
     }
 
     [TestMethod]
+    public void ChronicDiseases_DeniedAnswersDoNotShowAsABadge()
+    {
+        foreach (var denied in new[] { "Ninguna relevante", "Ninguna", "Negadas", "Niega", "no", "Sin enfermedades crónicas", "" })
+        {
+            Assert.IsFalse(new PatientRecord { ChronicDiseases = denied }.HasChronicDiseases, denied);
+        }
+        var diabetic = new PatientRecord { ChronicDiseases = "Diabetes mellitus tipo 2" };
+        Assert.IsTrue(diabetic.HasChronicDiseases);
+        Assert.AreEqual("Crónicos: Diabetes mellitus tipo 2", diabetic.ChronicBadgeText);
+        Assert.IsTrue(new PatientRecord { ChronicDiseases = "Síndrome de Down" }.HasChronicDiseases);
+    }
+
+    [TestMethod]
     public void BuildTimeline_MergesConsultationsAndAppointments_NewestFirst()
     {
         var older = new PatientConsultation
@@ -384,6 +397,299 @@ public class PacientesTests
         Assert.AreEqual(string.Empty, glucose.Trend);
 
         Assert.IsEmpty(MedicalRecordsViewModel.BuildLatestVitals(null));
+    }
+
+    // ------------------------------------------------------------------ receta de la consulta
+
+    private async Task<List<string>> StoredPrescriptionAsync(int patientId) =>
+        (await _service.GetPatientByIdAsync(patientId))!.ActivePrescription.Select(p => p.MedicineName).ToList();
+
+    private static async Task ChargeAsync(MedicalRecordsViewModel records, PosViewModel pos, ConsultationService consultations)
+    {
+        await records.FinalizeConsultationAsync();
+        pos.SelectedPaymentMethod = "Efectivo";
+        pos.CashReceived = 5000m;
+        await pos.ProcessSaleAsync();
+        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage);
+    }
+
+    [TestMethod]
+    public async Task NewConsultation_StartsWithEmptyPrescription_AndOffersToRepeatThePrevious()
+    {
+        var (records, pos, consultations) = await CreateRecordsAsync();
+        var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+        var previous = patient.ActivePrescription.Select(p => p.MedicineName).ToList();
+
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+
+        Assert.IsEmpty(patient.ActivePrescription, "La receta anterior no se arrastra a la consulta nueva");
+        Assert.IsTrue(records.CanRepeatPreviousPrescription);
+        StringAssert.Contains(records.PreviousPrescriptionSummary, previous[0]);
+
+        // En la ficha, durante la consulta, "Última receta" sigue siendo la anterior
+        records.ShowChartFromConsultation();
+        CollectionAssert.AreEqual(previous, records.ChartPrescription.Select(p => p.MedicineName).ToList());
+        records.ShowConsultation();
+
+        // Terminar sin receta: la nota no lleva medicamentos y el expediente conserva la última receta
+        records.ConsultationDiagnosis = "Z00 Revisión general";
+        var folio = consultations.CurrentConsultation!.Folio;
+        await ChargeAsync(records, pos, consultations);
+
+        var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
+        Assert.IsEmpty(note.Prescriptions, "Una consulta sin receta no guarda la anterior como suya");
+        CollectionAssert.AreEqual(previous, await StoredPrescriptionAsync(patient.Id));
+        CollectionAssert.AreEqual(previous, patient.ActivePrescription.Select(p => p.MedicineName).ToList());
+    }
+
+    [TestMethod]
+    public async Task RepeatPreviousPrescription_CopiesItems_AndTheyBecomeThisConsultationsPrescription()
+    {
+        var (records, pos, consultations) = await CreateRecordsAsync();
+        var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+        var previous = patient.ActivePrescription.Select(p => (p.MedicineName, p.Dosage)).ToList();
+
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        await records.RepeatPreviousPrescriptionAsync();
+
+        CollectionAssert.AreEqual(previous, patient.ActivePrescription.Select(p => (p.MedicineName, p.Dosage)).ToList());
+        Assert.IsFalse(records.CanRepeatPreviousPrescription, "Ya no queda nada por repetir");
+
+        // Quitar un medicamento también lo quita de la nota (antes se guardaba aunque se hubiera quitado)
+        var removed = patient.ActivePrescription[0];
+        await records.RemovePrescriptionItemFromPatientAsync(removed);
+        Assert.IsTrue(records.CanRepeatPreviousPrescription, "Lo quitado se puede volver a repetir");
+
+        var folio = consultations.CurrentConsultation!.Folio;
+        records.ConsultationDiagnosis = "Seguimiento";
+        await ChargeAsync(records, pos, consultations);
+
+        var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
+        CollectionAssert.AreEqual(previous.Skip(1).Select(p => p.MedicineName).ToList(), note.Prescriptions.Select(p => p.MedicineName).ToList());
+        CollectionAssert.AreEqual(previous.Skip(1).Select(p => p.MedicineName).ToList(), await StoredPrescriptionAsync(patient.Id));
+    }
+
+    [TestMethod]
+    public async Task RepeatPreviousPrescription_SkipsMedicinesThePatientIsNowAllergicTo()
+    {
+        var (records, _, _) = await CreateRecordsAsync();
+        var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+        var allergic = patient.ActivePrescription[0].MedicineName.Split(' ')[0];
+        patient.Allergies = allergic;
+
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        await records.RepeatPreviousPrescriptionAsync();
+
+        Assert.IsFalse(patient.ActivePrescription.Any(p => p.MedicineName.StartsWith(allergic)), "No se repite lo que causa alergia");
+        Assert.IsTrue(records.IsInfoModalVisible);
+        StringAssert.Contains(records.InfoModalMessage, allergic);
+    }
+
+    [TestMethod]
+    public async Task DiscardConsultation_RestoresThePreviousPrescription()
+    {
+        var (records, _, consultations) = await CreateRecordsAsync();
+        var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+        var previous = patient.ActivePrescription.Select(p => p.MedicineName).ToList();
+
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        records.PrescriptionMedicineName = "Loratadina 10 mg";
+        records.PrescriptionDosage = "1 tableta cada 24 horas";
+        await records.AddPrescriptionItemToPatientAsync();
+        CollectionAssert.AreEqual(new[] { "Loratadina 10 mg" }, await StoredPrescriptionAsync(patient.Id));
+
+        await records.DiscardActiveConsultationAsync();
+
+        Assert.IsFalse(consultations.HasActiveConsultation);
+        CollectionAssert.AreEqual(previous, patient.ActivePrescription.Select(p => p.MedicineName).ToList());
+        CollectionAssert.AreEqual(previous, await StoredPrescriptionAsync(patient.Id), "Lo recetado en la consulta descartada no queda en el expediente");
+    }
+
+    [TestMethod]
+    public async Task DiscardAfterSavingTheNote_LeavesTheRecordAsItWas()
+    {
+        var (records, _, consultations) = await CreateRecordsAsync();
+        var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+        records.OpenPatientChart(patient);
+        await WaitUntilAsync(() => records.ConsultationsHistory.Count > 0);
+        var before = (Diagnosis: patient.LastDiagnosis, Vitals: patient.VitalSigns, Visit: patient.LastVisit, Notes: patient.ClinicalNotes);
+        var historyBefore = records.ConsultationsHistory.Count;
+
+        records.ChartPrimaryAction();
+        records.ConsultationChiefComplaint = "Paciente equivocado";
+        records.ConsultationTA = "150/95";
+        records.ConsultationDiagnosis = "R51 Cefalea";
+        var folio = consultations.CurrentConsultation!.Folio;
+
+        // "Terminar consulta" guarda la nota; luego "Volver a la consulta" y se descarta
+        await records.FinalizeConsultationAsync();
+        Assert.AreEqual("R51 Cefalea", patient.LastDiagnosis);
+        records.ClosePosModal();
+        await records.DiscardActiveConsultationAsync();
+
+        Assert.AreEqual(before.Diagnosis, patient.LastDiagnosis);
+        Assert.AreEqual(before.Vitals, patient.VitalSigns);
+        Assert.AreEqual(before.Visit, patient.LastVisit);
+        Assert.AreEqual(before.Notes, patient.ClinicalNotes);
+        Assert.IsFalse(patient.Consultations.Any(c => c.Folio == folio));
+        Assert.AreEqual(historyBefore, records.ConsultationsHistory.Count);
+        Assert.IsFalse(records.Timeline.Any(t => t.Title == "R51 Cefalea"), "El historial no muestra la consulta descartada");
+
+        var stored = (await _service.GetPatientByIdAsync(patient.Id))!;
+        Assert.AreEqual(before.Diagnosis, stored.LastDiagnosis);
+        Assert.AreEqual(before.Vitals, stored.VitalSigns);
+        Assert.IsFalse((await _service.GetPatientConsultationsAsync(patient.Id)).Any(c => c.Folio == folio));
+    }
+
+    [TestMethod]
+    public async Task RecoveredConsultation_KeepsItsPrescriptionAndThePreviousOne()
+    {
+        var draftDir = Path.Combine(Path.GetTempPath(), $"tpvc_receta_{Guid.NewGuid():N}");
+        var draftPath = Path.Combine(draftDir, "consulta.json");
+        try
+        {
+            var consultations = new ConsultationService(seedDemoPatients: false);
+            var records = new MedicalRecordsViewModel(_service, consultations, consultationDraftStore: new ConsultationDraftStore(draftPath));
+            await records.LoadInitialDataAsync();
+            var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
+            var previous = patient.ActivePrescription.Select(p => p.MedicineName).ToList();
+
+            records.OpenPatientChart(patient);
+            records.ChartPrimaryAction();
+            records.PrescriptionMedicineName = "Loratadina 10 mg";
+            records.PrescriptionDosage = "1 tableta cada 24 horas";
+            await records.AddPrescriptionItemToPatientAsync();
+            records.FlushConsultationDraft();
+            records.Dispose();
+
+            // Se cierra el programa sin terminar la consulta y se vuelve a abrir
+            var reopened = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false), consultationDraftStore: new ConsultationDraftStore(draftPath));
+            await reopened.LoadInitialDataAsync();
+
+            Assert.IsTrue(reopened.HasActiveConsultation);
+            CollectionAssert.AreEqual(new[] { "Loratadina 10 mg" }, reopened.SelectedPatient!.ActivePrescription.Select(p => p.MedicineName).ToList());
+            Assert.IsTrue(reopened.CanRepeatPreviousPrescription);
+            StringAssert.Contains(reopened.PreviousPrescriptionSummary, previous[0]);
+        }
+        finally
+        {
+            try { Directory.Delete(draftDir, recursive: true); } catch { }
+        }
+    }
+
+    // ------------------------------------------------------------------ alta guardada sola
+
+    private sealed class DraftFolder : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"tpvc_alta_{Guid.NewGuid():N}");
+        public ConsultationDraftStore Store() => new(System.IO.Path.Combine(Path, "consulta.json"));
+        public void Dispose() { try { Directory.Delete(Path, recursive: true); } catch { } }
+    }
+
+    private async Task<MedicalRecordsViewModel> OpenAppAsync(DraftFolder folder)
+    {
+        var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false), consultationDraftStore: folder.Store());
+        await records.LoadInitialDataAsync();
+        return records;
+    }
+
+    [TestMethod]
+    public async Task NewPatientForm_IsRecoveredAfterTheAppCloses_AndClearedWhenSaved()
+    {
+        using var folder = new DraftFolder();
+        var records = await OpenAppAsync(folder);
+        await records.NewPatientAsync();
+        var folio = records.FormRecordNumber;
+        records.FormFirstName = "Lucía";
+        records.FormLastName = "Pérez";
+        records.FormGender = "Femenino";
+        records.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
+        records.FormPregnanciesCount = 2;
+        records.OpenFormSection("Gineco");
+        records.FlushConsultationDraft();
+        records.Dispose();
+        Assert.IsTrue(File.Exists(folder.Store().PatientFormPath));
+
+        var reopened = await OpenAppAsync(folder);
+
+        Assert.IsTrue(reopened.IsFormPage, "Se reabre el alta");
+        Assert.IsTrue(reopened.IsFormNew);
+        Assert.AreEqual(folio, reopened.FormRecordNumber);
+        Assert.AreEqual("Lucía", reopened.FormFirstName);
+        Assert.AreEqual("Pérez", reopened.FormLastName);
+        Assert.AreEqual(2, reopened.FormPregnanciesCount);
+        Assert.AreEqual(30, reopened.FormAge, "La edad se recalcula de la fecha");
+        Assert.IsTrue(reopened.FormShowsGyneco);
+        Assert.AreEqual("Gineco", reopened.FormOpenSection);
+
+        reopened.SetAllergiesDenied();
+        await reopened.SavePatientModalAsync();
+        Assert.IsNull(reopened.FormErrorMessage);
+        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Guardado: ya no hay nada que recuperar");
+        reopened.Dispose();
+    }
+
+    [TestMethod]
+    public async Task EditPatientForm_IsRecoveredOnTheSamePatient_AndCancelDiscardsIt()
+    {
+        using var folder = new DraftFolder();
+        var records = await OpenAppAsync(folder);
+        var patient = records.Patients.First();
+        records.OpenPatientChart(patient);
+        records.EditPatient();
+        records.FormPhone = "5598765432";
+        var typedPhone = records.FormPhone;
+        records.FlushConsultationDraft();
+        records.Dispose();
+
+        var reopened = await OpenAppAsync(folder);
+
+        Assert.IsTrue(reopened.IsFormPage);
+        Assert.AreEqual(patient.Id, reopened.FormPatientId);
+        Assert.AreEqual(patient.Id, reopened.SelectedPatient?.Id);
+        Assert.AreEqual(typedPhone, reopened.FormPhone);
+
+        reopened.CancelPatientForm();
+        Assert.IsFalse(reopened.IsFormPage);
+        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath));
+        reopened.Dispose();
+    }
+
+    [TestMethod]
+    public async Task PatientForm_WithoutChanges_LeavesNothingToRecover()
+    {
+        using var folder = new DraftFolder();
+        var records = await OpenAppAsync(folder);
+
+        await records.NewPatientAsync();
+        records.FlushConsultationDraft();
+        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Un alta vacía no se recupera");
+        records.CancelPatientForm();
+
+        records.OpenPatientChart(records.Patients.First());
+        records.EditPatient();
+        records.FlushConsultationDraft();
+        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Abrir la edición sin cambiar nada no se recupera");
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task PatientForm_SavesItselfAfterAPauseInTyping()
+    {
+        using var folder = new DraftFolder();
+        var records = await OpenAppAsync(folder);
+        records.AutosaveDelay = TimeSpan.FromMilliseconds(30);
+
+        await records.NewPatientAsync();
+        records.FormFirstName = "Mateo";
+
+        await WaitUntilAsync(() => File.Exists(folder.Store().PatientFormPath));
+        StringAssert.Contains(File.ReadAllText(folder.Store().PatientFormPath), "Mateo");
+        records.Dispose();
     }
 
     // ------------------------------------------------------------------ agenda

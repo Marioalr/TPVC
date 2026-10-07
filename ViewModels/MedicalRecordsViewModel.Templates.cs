@@ -43,6 +43,9 @@ public partial class MedicalRecordsViewModel
     public bool HasGeneralMeasureTemplates => GeneralMeasureTemplates.Count > 0;
     public bool HasPediatricDoseRules => PediatricDoseRules.Count > 0;
 
+    /// <summary>La dosis pediátrica por peso solo se ofrece con pacientes menores de edad.</summary>
+    public bool ShowsPediatricDose => HasPediatricDoseRules && SelectedPatient?.IsPediatric == true;
+
     public async Task LoadPrescriptionTemplatesAsync()
     {
         if (_inventoryService == null) return;
@@ -63,6 +66,7 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(HasPosologyTemplates));
         OnPropertyChanged(nameof(HasGeneralMeasureTemplates));
         OnPropertyChanged(nameof(HasPediatricDoseRules));
+        OnPropertyChanged(nameof(ShowsPediatricDose));
     }
 
     /// <summary>Elegir una posología la copia al campo de indicaciones del medicamento que se captura.</summary>

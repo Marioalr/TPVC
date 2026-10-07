@@ -36,8 +36,8 @@
                             <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
                         </Border>
                         <Border Style="{StaticResource BadgeWarning}" Margin="0,0,8,4"
-                                Visibility="{Binding SelectedPatient.ChronicDiseases, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="{Binding SelectedPatient.ChronicDiseases}" TextTrimming="CharacterEllipsis" MaxWidth="360" />
+                                Visibility="{Binding SelectedPatient.HasChronicDiseases, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding SelectedPatient.ChronicBadgeText}" TextTrimming="CharacterEllipsis" MaxWidth="360" />
                         </Border>
                         <Border Style="{StaticResource Badge}" Margin="0,0,8,4" Visibility="{Binding HasNextAppointment, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding NextAppointmentText}" />
@@ -109,8 +109,8 @@
                             <TextBlock Style="{StaticResource TextCaption}" Text="Sin signos vitales registrados en consultas."
                                        Visibility="{Binding HasLatestVitals, Converter={StaticResource InverseBoolToVis}}" Margin="0,0,0,8" />
 
-                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Receta activa" Margin="0,8,0,4" />
-                            <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Última receta" Margin="0,8,0,4" />
+                            <ItemsControl ItemsSource="{Binding ChartPrescription}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientPrescriptionItem}">
                                         <StackPanel Margin="0,0,0,6">
@@ -120,7 +120,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock Style="{StaticResource TextCaption}" Text="Sin medicamentos activos. La receta se hace dentro de la consulta."
+                            <TextBlock Style="{StaticResource TextCaption}" Text="Sin receta registrada. La receta se hace dentro de la consulta."
                                        Visibility="{Binding HasActivePrescription, Converter={StaticResource InverseBoolToVis}}" />
                         </StackPanel>
                     </Border>

@@ -376,6 +376,16 @@ public partial class MedicalRecordsViewModel
             }
         }
 
+        // El avance que se hubiera guardado deja de verse en la ficha (historial, signos, resumen)
+        var patient = SelectedPatient;
+        if (patient != null && !string.IsNullOrWhiteSpace(folio))
+        {
+            foreach (var note in patient.Consultations.Where(c => c.Folio == folio).ToList()) patient.Consultations.Remove(note);
+            foreach (var note in ConsultationsHistory.Where(c => c.Folio == folio).ToList()) ConsultationsHistory.Remove(note);
+            RefreshVitalSignsEvolution(patient);
+        }
+
+        await EndConsultationOnRecordAsync(discarded: true);
         _consultationService?.CloseActiveConsultation();
         _isCurrentConsultationSaved = false;
         _attendingAppointmentId = null;

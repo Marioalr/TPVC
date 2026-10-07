@@ -388,7 +388,7 @@ public class PatientRecord : ISyncEntity
     }
     public DateTime LastVisit { get; set; } = DateTime.Today;
     public string LastDiagnosis { get; set; } = string.Empty;
-    public string VitalSigns { get; set; } = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
+    public string VitalSigns { get; set; } = string.Empty;
     public string ClinicalNotes { get; set; } = string.Empty;
     public string ActivePrescriptionJson { get; set; } = string.Empty;
     public DateTime? NextAppointmentDate { get; set; }
@@ -581,6 +581,23 @@ public class PatientRecord : ISyncEntity
         var normalized = TPVC.Services.TextSearch.Normalize(text).TrimEnd('.');
         return normalized.Length > 0 && DeniedAllergyAnswers.Contains(normalized);
     }
+
+    /// <summary>Respuestas que significan "sin enfermedades crónicas" ("Ninguna relevante", "Niega"...).</summary>
+    public static bool DeniesChronicDiseases(string? text)
+    {
+        var normalized = TPVC.Services.TextSearch.Normalize(text).TrimEnd('.');
+        return normalized.Length > 0
+            && (DeniedAllergyAnswers.Contains(normalized) || normalized.StartsWith("ningun", StringComparison.Ordinal)
+                || normalized.StartsWith("niega", StringComparison.Ordinal) || normalized.StartsWith("negad", StringComparison.Ordinal)
+                || normalized is "sin enfermedades" or "sin enfermedades cronicas" or "sin antecedentes" or "sin cronicos");
+    }
+
+    /// <summary>Hay enfermedades crónicas anotadas (no cuenta "Ninguna", "Negadas"...).</summary>
+    [NotMapped]
+    public bool HasChronicDiseases => !string.IsNullOrWhiteSpace(ChronicDiseases) && !DeniesChronicDiseases(ChronicDiseases);
+
+    [NotMapped]
+    public string ChronicBadgeText => HasChronicDiseases ? $"Crónicos: {ChronicDiseases.Trim()}" : string.Empty;
 
     [NotMapped]
     public string GeneralIndications { get; set; } = string.Empty;

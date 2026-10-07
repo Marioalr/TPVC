@@ -77,7 +77,9 @@ public partial class MedicalRecordsViewModel
 
     private void OnPropertyChangedForAutosave(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != null && DraftProperties.Contains(e.PropertyName)) ScheduleAutosave();
+        if (e.PropertyName == null) return;
+        if (DraftProperties.Contains(e.PropertyName)) ScheduleAutosave();
+        else if (PatientFormDraftFieldSet.Contains(e.PropertyName)) SchedulePatientFormDraft();
     }
 
     /// <summary>Inicio, cargos a la cuenta y cierre de la consulta (desde SyncActiveConsultation).</summary>
@@ -124,7 +126,12 @@ public partial class MedicalRecordsViewModel
         WritePendingDraft();
     }
 
-    public void FlushConsultationDraft() => SaveConsultationDraftNow();
+    /// <summary>Al cerrar el programa o apagar Windows: consulta y alta de paciente en curso.</summary>
+    public void FlushConsultationDraft()
+    {
+        SaveConsultationDraftNow();
+        SavePatientFormDraftNow();
+    }
 
     private ConsultationDraft? BuildConsultationDraft()
     {
@@ -158,7 +165,10 @@ public partial class MedicalRecordsViewModel
             SavedToRecord = _isCurrentConsultationSaved,
             // Copias: el archivo se escribe en otro hilo mientras la consulta sigue cambiando
             Items = active.Items.Select(CloneItem).ToList(),
-            Prescriptions = ConsultationPrescriptions.Select(ClonePrescription).ToList()
+            Prescriptions = ((_consultationRecordPatient ?? SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
+                .Select(ClonePrescription).ToList(),
+            PreviousPrescriptions = _previousPrescriptionKnown ? _previousPrescription.Select(ClonePrescription).ToList() : null,
+            PatientBefore = _summaryBeforeConsultation
         };
     }
 
@@ -260,14 +270,7 @@ public partial class MedicalRecordsViewModel
             ConsultationSpO2 = draft.SpO2;
             ConsultationGlucose = draft.Glucose;
 
-            // La receta vive en el expediente; se enlazan las mismas instancias para que
-            // "Se surte aquí" siga funcionando sobre la lista visible
-            foreach (var saved in draft.Prescriptions)
-            {
-                var current = patient.ActivePrescription.FirstOrDefault(p =>
-                    p.MedicineName == saved.MedicineName && p.Dosage == saved.Dosage);
-                ConsultationPrescriptions.Add(current ?? saved);
-            }
+            ResumeConsultationOnRecord(patient, draft);
 
             ConsultationSection = Math.Clamp(draft.Section, 1, ConsultationSectionCount);
             _isCurrentConsultationSaved = draft.SavedToRecord;

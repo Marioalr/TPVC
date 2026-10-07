@@ -1506,6 +1506,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         await LoadPrescriptionTemplatesAsync();
         await LoadTodayAppointmentsAsync();
         TryRestoreConsultationDraft();
+        await TryRestorePatientFormDraftAsync();
     }
 
     public async Task LoadPatientsAsync()
@@ -1565,6 +1566,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         OnPropertyChanged(nameof(PatientActionButtonText));
         OnPropertyChanged(nameof(HasSelectedPatient));
+        OnPropertyChanged(nameof(ShowsPediatricDose));
         RefreshChartData();
         NotifyPatientsPageState();
         if (newValue != null)
@@ -1658,10 +1660,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else
         {
             StopConsultationTimer();
+            // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
+            if (_consultationRecordPatient != null) _ = EndConsultationOnRecordAsync(discarded: false);
         }
 
         OnActiveConsultationStateChangedForAutosave();
         NotifyPatientsPageState();
+        NotifyPrescriptionStateChanged();
     }
 
     private void StartConsultationTimer()
@@ -1740,6 +1745,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         DisposePacientes();
         FlushConsultationDraft();
         _autosaveTimer?.Dispose();
+        _formDraftTimer?.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -2731,9 +2737,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ConsultationFolio = folio;
         if (active != null) active.Folio = folio;
 
-        var prescriptions = ConsultationPrescriptions.Count > 0
-            ? new List<PatientPrescriptionItem>(ConsultationPrescriptions)
-            : (SelectedPatient.ActivePrescription ?? new List<PatientPrescriptionItem>());
+        // La receta de la nota es la que se ve, se imprime y se cobra (la del expediente en curso)
+        var prescriptions = new List<PatientPrescriptionItem>(SelectedPatient.ActivePrescription ?? new List<PatientPrescriptionItem>());
 
         var consultation = new PatientConsultation
         {
@@ -2823,6 +2828,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (_consultationService != null)
         {
             _consultationService.StartConsultation(SelectedPatient);
+            BeginConsultationOnRecord(SelectedPatient);
             SyncActiveConsultation();
 
             ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
@@ -2965,6 +2971,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 }
             }
             _isCurrentConsultationSaved = false;
+            await EndConsultationOnRecordAsync(discarded: false);
 
             // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
             ClosePosModal();
@@ -3164,6 +3171,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ApplyPrescriptionSuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
+        NotifyPrescriptionStateChanged();
     }
 
     [RelayCommand]
@@ -3419,6 +3427,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(SelectedPatient));
+        NotifyPrescriptionStateChanged();
     }
 
     [RelayCommand]
