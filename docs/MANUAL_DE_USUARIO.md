@@ -8,7 +8,7 @@ Bienvenido al manual oficial de **TPVC**, una aplicación de escritorio diseñad
 1. [Introducción y Filosofía del Sistema](#1-introducción-y-filosofía-del-sistema)
 2. [Estructura de la Interfaz y Menú Lateral](#2-estructura-de-la-interfaz-y-menú-lateral)
 3. [Módulo 1: Vista Principal](#3-módulo-1-vista-principal)
-4. [Módulo 2: Punto de Venta (POS con Carrito de Compra)](#4-módulo-2-punto-de-venta-pos-con-carrito-de-compra)
+4. [Módulo 2: Punto de Venta (POS / Farmacia)](#4-módulo-2-punto-de-venta-pos--farmacia)
 5. [Módulo 3: Pacientes (expedientes, consulta y agenda)](#5-módulo-3-pacientes-expedientes-consulta-y-agenda)
 6. [Módulo 4: Panel de Métricas (Dashboard)](#6-módulo-4-panel-de-métricas-dashboard)
 7. [Módulo 5: Catálogo de Inventario e Insumos](#7-módulo-5-catálogo-de-inventario-e-insumos)
@@ -68,45 +68,29 @@ Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz
 
 ## 4. Módulo 2: Punto de Venta (POS / Farmacia)
 
-Diseñado como un punto de venta ágil y ergonómico especializado en la dispensación y cobro de medicamentos e insumos médicos en consultorio.
+Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 
-### 1. Barra de Búsqueda en Tiempo Real y Menú Desplegable
-* **Buscador Reactivo Superior**:
-  * Ingrese el nombre comercial, principio activo (genérico) o código SKU (ej. *Paracetamol*, *Amoxicilina*, *Gasa*).
-  * Al escribir, se despliega automáticamente un **menú desplegable en tiempo real** con los productos coincidentes, mostrando nombre, genérico, stock con semáforo y precio unitario.
-  * **Navegación con teclado sin soltar el ratón**:
-    * Utilice las teclas **Flecha Abajo `↓`** y **Flecha Arriba `↑`** para desplazarse entre las sugerencias de medicamentos (el producto seleccionado se resalta con un borde de acento).
-    * Presione la tecla **`Enter`** para despachar de inmediato el producto seleccionado a la venta.
-    * Presione **`Escape` (`Esc`)** para cerrar el menú desplegable en cualquier momento.
-  * También puede hacer clic directo con el ratón sobre cualquier producto sugerido o en su botón `+ Agregar`.
-* **Botón "Buscar en Catálogo"**:
-  * Ubicado junto a la barra de búsqueda, abre una **ventana modal con el catálogo completo**.
-  * Permite filtrar por categorías médicas o texto, explorar todos los insumos disponibles con indicadores de temperatura (❄️) y stock, y agregarlos con el botón `+ Agregar`.
-* **Botón "Vaciar Venta"**:
-  * Permite limpiar rápidamente todos los artículos agregados al ticket actual.
+### Buscar y agregar
+* Escriba en el buscador (F1 lo enfoca): nombre comercial, genérico, código o ubicación. No importan acentos ni mayúsculas. Con el **lector de código de barras** basta escanear.
+* **Enter** agrega el primer resultado (o el elegido con ↑ ↓). Para agregar varios, escriba la cantidad y un asterisco antes: **`3*para`**.
+* **Catálogo** (F2): todos los productos por categoría; Enter agrega el primero, doble clic o *Agregar* el de la fila.
+* **Servicios** (F3): consultas, curaciones, inyecciones… *Agregar a la venta* incluye sus insumos; *Solo el honorario* no.
 
-### 2. Área Principal: Tabla de Artículos en la Venta
-* El cuerpo principal de la pantalla muestra la **tabla detallada de los artículos agregados al ticket**:
-  * **Producto / Medicamento**: Nombre comercial, principio activo, presentación y advertencia de cadena de frío (❄️).
-  * **Código / SKU**: Identificador único escaneable.
-  * **Stock Disponible**: Existencias reales en consultorio.
-  * **Precio Unitario**: Tarifa unitaria vigente en pesos mexicanos ($ MXN).
-  * **Cantidad**: Controles de ajuste rápido `[−]` y `[+]` que respetan los límites de existencias.
-  * **Subtotal**: Cálculo dinámico en tiempo real (`Cantidad × Precio Unitario`).
-  * **Acciones**: Botón `[🗑]` para remover partidas individuales.
+### La cuenta
+* Cada renglón tiene − / + y la cantidad se puede escribir (no pasa de las existencias).
+* Con el buscador vacío: ↑ ↓ eligen el renglón, **+** y **−** cambian la cantidad y **Supr** lo quita.
+* *Vaciar* quita todo; *Deshacer* lo recupera mientras no se empiece otra cuenta.
 
-### 3. Barra Inferior y Botón de Cobro (Esquina Inferior Derecha)
-* **Datos de la Operación**:
-  * **Paciente / Cliente**: Campo de texto para asociar el nombre del paciente (ej. *Juan Pérez* o *Público General*).
-  * **Método de Pago**: Selector con opciones *Efectivo*, *Tarjeta Débito/Crédito* y *Transferencia*.
-  * **Contador**: Muestra la cantidad total de artículos agregados.
-* **Cobro en la Esquina Inferior Derecha**:
-  * **TOTAL A PAGAR**: Destacado en tipografía grande con el color de acento del sistema.
-  * **Botón "Cobrar y Despachar Venta"**:
-    1. Descuenta automáticamente el stock de cada producto en la base de datos SQLite.
-    2. Aplica el descuento inteligente **FEFO** (*First Expired, First Out*) deduciendo de los lotes más próximos a caducar.
-    3. Registra la auditoría en el Kardex de Movimientos con tipo `SalidaVenta`.
-    4. Notifica en vivo a todos los módulos y resetea el ticket para la siguiente operación.
+### Cobrar
+* A la derecha: cliente (opcional), total, forma de pago y, en efectivo, lo recibido. *Exacto* y los billetes sugeridos lo llenan de un clic; se muestra el **cambio** o, si no alcanza, **Faltan $X** (no deja cobrar).
+* **Cobrar** (F5 o Ctrl + Enter) descuenta el inventario por FEFO, registra el ticket y muestra su vista previa (con recibido y cambio). *Imprimir* lo manda a la impresora; **Enter** pasa a la siguiente venta.
+
+### Tickets y corte de caja
+* **Tickets**: los últimos 50 o uno por folio. *Ver / reimprimir* y *Cancelar y devolver al inventario* (con motivo; el ticket queda marcado, no se borra).
+* **Corte de caja** (F6): lo vendido del día, por forma de pago y por tipo, y lo cancelado. Flechas para días anteriores; *Exportar CSV* (al Escritorio) e *Imprimir corte*.
+
+### Con una consulta en curso
+* Aparece un aviso con **Abrir consulta** y, si hay algo en la venta, **Pasar a la cuenta de la consulta** (se cobra al terminarla). Las consultas se inician en Pacientes y se cobran al terminarlas, nunca desde el POS.
 
 ---
 

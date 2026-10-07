@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-07 (TPVC v1.14.0).
+Estado al 2026-10-07 (TPVC v1.15.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -41,7 +41,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 0 | Consulta en curso, cuenta y cobro sin pasar por el POS (v1.10) · guardado automático (v1.11) | ✅ Hecho |
 | 1 | Fundamentos comunes de diseño | ✅ Hecho (v1.13) |
 | 2 | Pacientes y consulta (expediente) | ✅ Hecho (v1.14) · pendientes al final de su sección |
-| 3 | Punto de venta (POS) | Pendiente |
+| 3 | Punto de venta (POS) | ✅ Hecho (v1.15) |
 | 4 | Configuración | Pendiente |
 | E | Consulta entre equipos (PC ↔ tablet) | Pendiente (con la app de la tablet) |
 | 5 | Revisión de la visualización de los temas | Pendiente (casi al final) |
@@ -124,9 +124,8 @@ fotografía todas estas pantallas en claro y oscuro.
 - **Campos de la consulta según edad y sexo**: perímetro cefálico y percentiles (< 2 años), FUM,
   embarazo y semanas de gestación (mujeres de 10 a 55). Requieren columnas nuevas en la nota de
   consulta y en la sincronización (afecta a la tablet), así que se harán junto con la Fase E.
-- **Hojas de receta, insumos, servicios, catálogo y vista previa, y la gráfica de signos** con los
-  componentes comunes: hoy conservan su estilo anterior (iconos emoji, botones de contorno). Se rehacen
-  con la Fase 3, porque comparten el catálogo con el Punto de Venta.
+- ~~Hojas de receta, insumos, servicios, catálogo y vista previa, y la gráfica de signos con los
+  componentes comunes~~ → hecho en v1.15 junto con el POS.
 - **Separar `MedicalRecordsViewModel`** (~5,000 líneas) en ViewModels por función (inicio, ficha, alta,
   consulta, agenda): la vista ya está dividida; el ViewModel se divide en la Fase 6 junto con la
   limpieza de código muerto.
@@ -142,6 +141,17 @@ Mismos principios, sin obligación de reutilizar la pantalla actual:
 - "Abrir consulta" sigue siendo el único enlace entre POS y consulta (del POS hacia la consulta).
 - Ticket, corte de caja e historial como hojas con fondo difuso; sin colores fijos.
 - Catálogo con lista virtualizada y filtros por categoría como chips.
+
+**Hecho en v1.15:** `CheckoutViewModel` + `CartLinesView` + `PaymentPanelView` son el único cobro (POS
+y "Terminar consulta"), cada uno con su propia cuenta (antes compartían el carrito y terminar una
+consulta vaciaba la venta del mostrador). Pantalla nueva del POS (`PosView` + hojas
+`PosCatalogSheetView`, `PosServicesSheetView`, `PosTicketSheetView`, `PosCashCutSheetView`,
+`PosSalesHistorySheetView` y la `CreateServiceSheetView` compartida con Pacientes); búsqueda con
+cantidad ("3*para") y ranking con el código exacto primero; teclado completo; avisos breves. El POS
+ya no inicia ni cobra consultas (se retiraron la ventana "Seleccionar paciente" del POS, "Cobrar
+consulta activa" y "Enviar receta al POS"): solo "Abrir consulta" y "Pasar a la cuenta de la
+consulta" cuando hay una en curso. También se pasaron a los componentes comunes las hojas de la
+consulta, la alerta de alergia y la gráfica de signos (colores de serie del tema).
 
 ### Fase 4 · Configuración
 
@@ -210,6 +220,7 @@ modo oscuro, un acento distinto al azul y el modo personalizado**:
   `ConsultationPrescriptions`), ventanas de agendar / agenda / editar cita (`OpenScheduleAppointmentModal`,
   `OpenAgendaModal`, `OpenNewAppointmentModal`, `OpenEditAppointmentModal`), pendientes de WhatsApp y
   Google Calendar (`OpenWhatsAppTodo`, `OpenGoogleCalendarTodo`) y los pasos del alta antigua
-  (`FormPatientActiveTab`).
+  (`FormPatientActiveTab`). Desde v1.15 también `IsPosModalOpen` (renombrar a "terminar consulta"),
+  `VitalSignsChartPoint.ColorHex` y los colores fijos del indicador de Turso en la barra inferior.
 - Actualizar README, manual y `docs/PENDIENTES_ANDROID.md` (los ViewModels separados son la base de la
   app de la tablet).

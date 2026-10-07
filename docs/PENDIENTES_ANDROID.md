@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-07 (TPVC v1.14.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-07 (TPVC v1.15.0). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -37,10 +37,20 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). En Android: receta por PDF/HTML (el exportador HTML ya existe) y ticket en impresora térmica Bluetooth (ESC/POS). |
 | C3a | **Consulta entre equipos** | Decidido (2026-10-07): se podrá **mandar la consulta en curso de la PC a la tablet y viceversa**, con un solo dueño a la vez. El guardado automático (v1.11) es local de cada equipo; su copia de trabajo es lo que viaja, por una tabla `consultation_handoffs` en Turso. Diseño completo en `docs/PLAN_REDISENO_UI.md` (Fase E). |
 | C3 | **Modo sin conexión** | La tablet trabaja sobre su SQLite local y sincroniza al recuperar red (mismo diseño que la PC). Indicador visible de "pendiente por subir". |
-| C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*) y Pacientes de v1.14 (inicio con citas de hoy, ficha única, alta por secciones, agenda en panel; las reglas están en `MedicalRecordsViewModel.Pacientes.cs` como funciones puras: `RankPatients`, `BuildTimeline`, `BuildAntecedentSections`, `BuildSlots`); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
+| C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*), Pacientes de v1.14 (inicio con citas de hoy, ficha única, alta por secciones, agenda en panel; las reglas están en `MedicalRecordsViewModel.Pacientes.cs` como funciones puras: `RankPatients`, `BuildTimeline`, `BuildAntecedentSections`, `BuildSlots`) y el cobro de v1.15 (`CheckoutViewModel`: cuenta, forma de pago, recibido y cambio; `PosViewModel.RankProducts` y `ParseQuantityPrefix` para la búsqueda); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.15.0 (Punto de venta)
+
+- [ ] POS: escribir "3*para" y Enter agrega 3; escanear un código con el lector agrega ese producto.
+- [ ] Con el buscador vacío: ↑ ↓ cambian el renglón elegido, + y − la cantidad, Supr lo quita; escribir la cantidad a mano no pasa de las existencias.
+- [ ] Recibido menor al total muestra "Faltan $X" y el botón no cobra; Exacto y los billetes sugeridos llenan el recibido; el ticket muestra recibido y cambio; Enter pasa a la siguiente venta.
+- [ ] Doble clic rápido en Cobrar genera un solo ticket.
+- [ ] Con una venta a medias en el POS, terminar y cobrar una consulta: la venta del POS sigue ahí.
+- [ ] Catálogo (F2) por categoría, servicios (F3) con insumos, corte de caja de días anteriores, cancelar un ticket desde Tickets.
+- [ ] Modo oscuro: sugerencias de receta e insumos legibles; alerta de alergia y gráfica de signos con los colores del tema.
 
 ### v1.14.0 (Pacientes)
 

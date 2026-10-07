@@ -2,6 +2,25 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.15.0] - 2026-10-07
+
+### Cambiado — Fase 3 del rediseño: Punto de venta
+* **Nueva pantalla del Punto de Venta** con el buscador al centro: busca al escribir (sin acentos ni mayúsculas); el **código exacto va primero** (lector de código de barras), luego el nombre que empieza así, el genérico, una palabra y lo que lo contiene, siempre con existencias primero. **Enter agrega** el primero y **"3*para" agrega 3**.
+* **Todo con el teclado**: con el buscador vacío ↑ ↓ eligen el renglón de la cuenta, **+ y −** cambian la cantidad y **Supr** lo quita; la cantidad también se puede escribir. F1 buscador, F2 catálogo, F3 servicios, F5 o Ctrl + Enter cobrar, F6 corte de caja y Esc cierra lo de más arriba.
+* **Un solo cobro** para el mostrador y para "Terminar consulta": total, forma de pago, recibido con botones **Exacto** y billetes probables ($300 → $400, $500, $1,000), **cambio** o **"Faltan $X"** (no deja cobrar) y el botón con el monto. Mismo aspecto y mismas reglas en los dos lugares, cada uno con su propia cuenta.
+* Hojas con fondo difuso y los colores del tema: **catálogo** (categorías como chips, lista que solo crea las filas visibles, Enter agrega el primero, doble clic agrega), **servicios** (con sus insumos, solo honorario o a la consulta en curso), **nuevo servicio** (la misma hoja en Pacientes y en el POS), **ticket** (con recibido y cambio; Enter pasa a la siguiente venta), **corte de caja** (día anterior y siguiente, por forma de pago y por tipo) y **tickets** (buscar por folio, reimprimir y cancelar con devolución sin salir del historial).
+* Con una consulta en curso, el POS muestra un aviso con **Abrir consulta** y **Pasar a la cuenta de la consulta**. Las consultas se inician solo en Pacientes y se cobran solo al terminarlas: el POS ya no inicia ni cobra consultas (un solo camino para cada cosa).
+* Los avisos del POS son breves y se van solos (antes una barra fija).
+* Hojas de la consulta (receta, insumos, servicios, catálogo y vista previa), alerta de alergia y **gráfica de signos** con los componentes comunes; en la alerta de alergia, Enter o Esc eligen lo seguro (no recetarlo).
+
+### Corregido
+* **Terminar una consulta vaciaba la venta a medias del mostrador**: el POS y el cobro de la consulta compartían el mismo carrito.
+* Un doble clic en **Cobrar** podía registrar la venta dos veces.
+* Si el efectivo recibido era menor al total, la venta se cobraba igual.
+* Guardado automático: una copia vieja de la consulta (o del alta de paciente) podía terminar de escribirse después de una más nueva; al reabrir faltaba lo último que se había escrito (por ejemplo, la T/A).
+* Modo oscuro: la sugerencia elegida en receta, insumos y servicios tenía un fondo claro fijo con texto claro (ilegible); la alerta de alergia usaba rojos fijos.
+* Gráfica de signos: colores fijos sin contraste suficiente (el verde de la glucosa quedaba en 2.5:1 sobre blanco). Ahora salen del tema y los valores se escriben con el color de texto.
+
 ## [1.14.0] - 2026-10-07
 
 ### Cambiado — Fase 2 del rediseño: Pacientes

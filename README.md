@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.14.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.15.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -35,14 +35,11 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - **Interconexión Clínica**: Desde el Punto de Venta, *"Abrir consulta"* lleva a la consulta en curso. La consulta nunca manda al POS: todo lo que se usa con el paciente se cobra al terminarla.
 
 ### 2. Punto de Venta (POS / Farmacia)
-- **Área Central de Ticket**: Visualización principal en formato de tabla para los productos agregados a la venta actual (nombre comercial, genérico, SKU, stock disponible, precio unitario, stepper interactivo de cantidades `+`/`-`, subtotal y eliminación).
-- **Búsqueda Instantánea con Menú Desplegable y Navegación por Flechas**: Al teclear en la barra superior se despliega en tiempo real un menú flotante con los productos coincidentes. Permite desplazarse entre las sugerencias usando las teclas de dirección (**Flecha Abajo `↓`** y **Flecha Arriba `↑`**), resaltar el producto deseado y agregarlo de inmediato al ticket con **`Enter`** (o con un clic directo), o cerrar el menú con **`Escape` (`Esc`)** manteniendo siempre el foco de escritura.
-- **Ventana Modal de Catálogo Completo**: Botón dedicado *"Buscar en Catálogo"* que abre una ventana emergente donde se exploran todos los productos por categoría, con badges de stock, temperatura (❄️) y botones para seguir agregando.
-- **Cobro en la Esquina Inferior Derecha**:
-  - Resumen de paciente/cliente, método de pago (*Efectivo*, *Tarjeta*, *Transferencia*) y contador de artículos.
-  - **TOTAL A PAGAR** destacado en tipografía de gran formato junto al botón prioritario **"Cobrar y Despachar Venta"**.
-  - Deducción automática de inventario mediante la regla sanitaria **FEFO** (*First Expired, First Out*) y registro inmutable en el Kardex (`SalidaVenta`).
-- **Simulador de Ticket de Compra al Despachar**: Al presionar *"Cobrar y Despachar Venta"*, se despliega automáticamente una ventana que simula un **ticket térmico de consultorio y farmacia** con encabezado oficial, RFC, cédula profesional, folio secuencial, fecha/hora, desglose de medicamentos con presentación y cantidades, subtotal, IVA tasa 0%, total cobrado, código de barras simulado y opciones interactivas para **Imprimir Ticket** o **Finalizar / Nueva Venta**.
+- **Buscador al centro (v1.15)**: busca al escribir por nombre, genérico, código o ubicación (sin acentos ni mayúsculas); el código exacto va primero para el lector de código de barras. **Enter** agrega el primero y **`3*para`** agrega 3.
+- **Todo con el teclado**: con el buscador vacío ↑ ↓ eligen el renglón, **+** y **−** cambian la cantidad y **Supr** lo quita; F1 buscador, F2 catálogo, F3 servicios, F5 o Ctrl + Enter cobrar, F6 corte de caja, Esc cierra.
+- **Cobro único (el mismo de "Terminar consulta")**: cliente, total, forma de pago, recibido con botones *Exacto* y billetes probables, cambio o *Faltan $X* (no deja cobrar con efectivo de menos). Descuento de inventario por **FEFO** y registro en el Kardex.
+- **Hojas**: catálogo por categorías (chips), servicios con sus insumos, nuevo servicio, ticket con recibido y cambio, corte de caja por día y tickets (buscar por folio, reimprimir, cancelar con devolución al inventario).
+- Con una consulta en curso: *Abrir consulta* o *Pasar a la cuenta de la consulta*. El POS no inicia ni cobra consultas.
 
 ### 3. Pacientes: expedientes, consulta y agenda (NOM-004-SSA3-2012)
 - **Inicio de Pacientes (v1.14)**: citas de hoy con *Atender* (abre la consulta con el motivo de la cita), pacientes atendidos recientemente y un buscador que responde al escribir en cualquier momento (nombre, folio, teléfono o diagnóstico; Enter abre el primero).
@@ -120,7 +117,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **218 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **230 pruebas** unitarias y de integración
 
 ---
 
