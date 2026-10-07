@@ -334,6 +334,23 @@ internal sealed class UiSmokeSession
 
             WaitFor(records.OpenPrescriptionModalAsync());
             Capture(host, $"11-receta-{suffix}");
+
+            // El paciente de prueba es alérgico a la penicilina: la amoxicilina debe avisar
+            records.PrescriptionMedicineName = "Amoxicilina / Ácido Clavulánico 500/125 mg";
+            records.PrescriptionDosage = "1 tableta cada 12 horas por 7 días";
+            WaitFor(records.AddPrescriptionItemToPatientAsync());
+            if (records.IsAllergyAlertOpen)
+            {
+                Capture(host, $"11b-alerta-alergia-{suffix}");
+                records.CancelAllergyPrescription();
+            }
+            WaitFor(records.RepeatPreviousPrescriptionAsync());
+            records.DismissInfoModal();
+            Capture(host, $"11c-receta-con-medicamentos-{suffix}");
+            records.OpenPrescriptionPdfPreview();
+            Capture(host, $"11d-vista-previa-receta-{suffix}");
+            records.ClosePrescriptionPdfPreview();
+            records.DismissInfoModal();
             records.ClosePrescriptionModal();
 
             WaitFor(records.OpenSuppliesModalAsync());

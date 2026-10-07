@@ -61,6 +61,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
         Checkout = new CheckoutViewModel(inventoryService, () => string.IsNullOrWhiteSpace(DoctorNameWithTitle) ? "Dr. Titular" : DoctorNameWithTitle)
         {
+            ShowsClientField = true,
+            ChargeHint = "F5 o Ctrl + Enter",
             Notify = (message, ok) => ShowAlert(message, ok),
             Completed = OnSaleCompletedAsync,
             Failed = () => _ = LoadCatalogAsync()

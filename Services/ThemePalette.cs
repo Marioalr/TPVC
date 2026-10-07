@@ -97,6 +97,11 @@ public static class ThemePalette
         // Texto, iconos y enlaces del color del acento sobre la superficie
         var accentForeground = EnsureContrast(accent, new[] { surface, bg, subtle }, TextContrast);
 
+        // Series de la gráfica de signos: se distinguen entre sí y contrastan 3:1 con la tarjeta y
+        // el gris suave en los dos modos (antes eran fijas y el verde quedaba en 2.5:1 sobre blanco)
+        var chartSurfaces = new[] { surface, subtle };
+        ThemeColor Series(ThemeColor light, ThemeColor darkColor) => EnsureContrast(dark ? darkColor : light, chartSurfaces, FocusContrast);
+
         var success = ThemeColor.Rgb(0x04, 0x78, 0x57);
         var warning = ThemeColor.Rgb(0xB4, 0x53, 0x09);
         var danger = ThemeColor.Rgb(0xB9, 0x1C, 0x1C);
@@ -138,6 +143,11 @@ public static class ThemePalette
             ["ThemeDangerText"] = dark ? ThemeColor.Rgb(0xFE, 0xE2, 0xE2) : ThemeColor.Rgb(0x99, 0x1B, 0x1B),
             ["ThemeInfoSubtle"] = dark ? ThemeColor.Rgb(0x0C, 0x4A, 0x6E) : ThemeColor.Rgb(0xE0, 0xF2, 0xFE),
             ["ThemeInfoText"] = dark ? ThemeColor.Rgb(0xE0, 0xF2, 0xFE) : ThemeColor.Rgb(0x07, 0x59, 0x85),
+
+            ["ThemeChartWeight"] = Series(ThemeColor.Rgb(0x25, 0x63, 0xEB), ThemeColor.Rgb(0x60, 0xA5, 0xFA)),
+            ["ThemeChartSystolic"] = Series(ThemeColor.Rgb(0xDC, 0x26, 0x26), ThemeColor.Rgb(0xF8, 0x71, 0x71)),
+            ["ThemeChartDiastolic"] = Series(ThemeColor.Rgb(0xB4, 0x53, 0x09), ThemeColor.Rgb(0xFB, 0xBF, 0x24)),
+            ["ThemeChartGlucose"] = Series(ThemeColor.Rgb(0x04, 0x78, 0x57), ThemeColor.Rgb(0x34, 0xD3, 0x99)),
 
             // Avisos breves (toast): contrastan con todo lo que hay debajo
             ["ThemeToastBackground"] = dark ? ThemeColor.Rgb(0xF8, 0xFA, 0xFC) : ThemeColor.Rgb(0x0F, 0x17, 0x2A),

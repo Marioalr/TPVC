@@ -4,107 +4,66 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             xmlns:views="clr-namespace:TPVC.Views"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
-    <!-- ========================================================================= -->
-    <!-- MODAL: ALERTA DE ALERGIA A MEDICAMENTO (FARMACOVIGILANCIA / SEGURIDAD)    -->
-    <!-- ========================================================================= -->
-    <Border Background="{DynamicResource ThemeOverlay}" 
-            HorizontalAlignment="Stretch" 
-            VerticalAlignment="Stretch">
-        <Border Background="{DynamicResource ThemeSurface}" 
-                BorderBrush="{DynamicResource ThemeDanger}" 
-                BorderThickness="2.5" 
-                CornerRadius="16" 
-                Padding="26,22" 
-                MaxWidth="580" 
-                HorizontalAlignment="Center" 
-                VerticalAlignment="Center">
+    <!-- Alerta de alergia al recetar: lo seguro (no recetarlo) es lo que hace Enter o Esc; -->
+    <!-- recetarlo de todos modos es una decisión explícita.                              -->
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="560" BorderBrush="{DynamicResource ThemeDanger}" BorderThickness="2" Padding="24,20">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Cabecera de Alerta Roja -->
-                <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0" Background="#FEE2E2" CornerRadius="24" Width="48" Height="48" Margin="0,0,14,0">
-                        <TextBlock Text="⚠️" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource Avatar}" Width="48" Height="48" Margin="0,0,14,0"
+                            Background="{DynamicResource ThemeDangerSubtle}" TextElement.Foreground="{DynamicResource ThemeDangerText}">
+                        <helpers:Icon Data="{StaticResource IcoAlert}" Width="24" Height="24" />
                     </Border>
-
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AllergyAlertTitle}" FontWeight="Bold" FontSize="16" Foreground="#DC2626" />
-                        <TextBlock Text="Advertencia clínica de seguridad del paciente" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                        <TextBlock Style="{StaticResource TextHeading}" Foreground="{DynamicResource ThemeDangerText}" Text="{Binding AllergyAlertTitle}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Revise antes de recetar: el paciente tiene alergias registradas" />
                     </StackPanel>
-
-                    <Button Grid.Column="2" 
-                            Style="{DynamicResource GhostButton}" 
-                            Command="{Binding CancelAllergyPrescriptionCommand}" 
-                            Padding="8,4" 
-                            VerticalAlignment="Top">
-                        <TextBlock Text="✕" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                    </Button>
                 </Grid>
 
-                <!-- Cuerpo del Mensaje de Alerta -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,20">
-                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
-                        <TextBlock Text="{Binding AllergyAlertMessage}" 
-                                   FontSize="13" 
-                                   LineHeight="20" 
-                                   TextWrapping="Wrap" 
-                                   Foreground="{DynamicResource ThemeText}" />
+                    <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,10">
+                        <TextBlock Text="{Binding AllergyAlertMessage}" TextWrapping="Wrap" FontSize="{StaticResource FontSizeBody}" LineHeight="20" />
                     </Border>
-
-                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+                    <Border Style="{StaticResource CardSubtle}">
                         <StackPanel>
-                            <TextBlock Text="Alergias registradas en el expediente:" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                            <TextBlock Text="{Binding AllergyPatientAllergies}" FontSize="12.5" FontWeight="SemiBold" Foreground="#DC2626" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Alergias registradas en el expediente" Margin="0,0,0,4" />
+                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeDangerText}" Text="{Binding AllergyPatientAllergies}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
 
-                <!-- Botones de Acción: Cancelar (Recomendado) o Recetar Bajo Criterio -->
                 <Grid Grid.Row="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="10" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-
-                    <!-- Cancelar prescripción (Opción segura) -->
-                    <Button Grid.Column="0" 
-                            Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding CancelAllergyPrescriptionCommand}" 
-                            Padding="12,9" 
-                            ToolTip="Cancelar la adición de este medicamento a la receta">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="✕" FontSize="12" Margin="0,0,6,0" FontWeight="Bold" Foreground="#DC2626" />
-                            <TextBlock Text="Cancelar Prescripción" FontSize="12" FontWeight="Bold" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding CancelAllergyPrescriptionCommand}" IsDefault="True" MinHeight="44"
+                            ToolTip="No agregar este medicamento a la receta (Enter o Esc)">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoClose}" Margin="0,0,8,0" />
+                            <TextBlock Text="No recetarlo" />
                         </StackPanel>
                     </Button>
-
-                    <!-- Recetar de todos modos (Bajo criterio médico) -->
-                    <Button Grid.Column="2" 
-                            Style="{DynamicResource AccentButton}" 
-                            Command="{Binding ConfirmOverrideAllergyPrescriptionCommand}" 
-                            Background="#DC2626" 
-                            BorderBrush="#DC2626" 
-                            Padding="12,9" 
-                            ToolTip="Recetar bajo supervisión y criterio médico responsable">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="⚠️" FontSize="12" Margin="0,0,6,0" />
-                            <TextBlock Text="Recetar de Todos Modos" FontSize="12" FontWeight="Bold" Foreground="White" />
+                    <Button Grid.Column="2" Style="{StaticResource ButtonDanger}" Command="{Binding ConfirmOverrideAllergyPrescriptionCommand}" MinHeight="44"
+                            ToolTip="Recetar bajo su criterio y responsabilidad">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoAlert}" Margin="0,0,8,0" />
+                            <TextBlock Text="Recetar de todos modos" />
                         </StackPanel>
                     </Button>
                 </Grid>

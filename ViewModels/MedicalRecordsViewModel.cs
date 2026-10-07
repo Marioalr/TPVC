@@ -989,7 +989,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private bool _isAllergyAlertOpen;
 
     [ObservableProperty]
-    private string _allergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+    private string _allergyAlertTitle = "Alerta de alergia a medicamento";
 
     [ObservableProperty]
     private string _allergyAlertMessage = string.Empty;
@@ -2546,7 +2546,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 _pendingAllergyMedName = medName;
                 _pendingAllergyDosage = dosage;
                 _pendingAllergyQty = qty;
-                AllergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+                AllergyAlertTitle = "Alerta de alergia a medicamento";
                 AllergyAlertMessage = allergyCheck.WarningDetails;
                 AllergyPatientAllergies = SelectedPatient.Allergies ?? "Sin alergias declaradas";
                 IsAllergyAlertOpen = true;
@@ -3055,7 +3055,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 _pendingAllergyMedName = name;
                 _pendingAllergyDosage = dosage;
                 _pendingAllergyQty = qty;
-                AllergyAlertTitle = "⚠️ ALERTA DE ALERGIA A MEDICAMENTO";
+                AllergyAlertTitle = "Alerta de alergia a medicamento";
                 AllergyAlertMessage = allergyCheck.WarningDetails;
                 AllergyPatientAllergies = SelectedPatient.Allergies ?? "Sin alergias declaradas";
                 IsAllergyAlertOpen = true;
@@ -3721,6 +3721,49 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
+    [RelayCommand]
+    public async Task AddFirstFromCatalogBrowserAsync()
+    {
+        if (CatalogBrowserMode == "Services")
+        {
+            await AddServiceFromCatalogBrowserAsync(CatalogBrowserFilteredServices.FirstOrDefault());
+        }
+        else
+        {
+            // En insumos solo sirve lo que hay; en la receta se puede recetar aunque no se surta aquí
+            var first = CatalogBrowserMode == "Supplies"
+                ? CatalogBrowserFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0)
+                : CatalogBrowserFilteredProducts.FirstOrDefault();
+            await AddProductFromCatalogBrowserAsync(first);
+        }
+    }
+
+    public bool IsCatalogBrowserServicesMode => CatalogBrowserMode == "Services";
+
+    public string CatalogBrowserSummary => IsCatalogBrowserServicesMode
+        ? (CatalogBrowserFilteredServices.Count == 1 ? "1 servicio" : $"{CatalogBrowserFilteredServices.Count} servicios")
+        : (CatalogBrowserFilteredProducts.Count == 1 ? "1 producto" : $"{CatalogBrowserFilteredProducts.Count} productos");
+
+    public bool HasNoCatalogBrowserResults => IsCatalogBrowserServicesMode
+        ? CatalogBrowserFilteredServices.Count == 0
+        : CatalogBrowserFilteredProducts.Count == 0;
+
+    partial void OnCatalogBrowserModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsCatalogBrowserServicesMode));
+        NotifyCatalogBrowserResults();
+    }
+
+    partial void OnCatalogBrowserFilteredProductsChanged(ObservableCollection<Product> value) => NotifyCatalogBrowserResults();
+    partial void OnCatalogBrowserFilteredServicesChanged(ObservableCollection<ClinicalService> value) => NotifyCatalogBrowserResults();
+
+    private void NotifyCatalogBrowserResults()
+    {
+        OnPropertyChanged(nameof(CatalogBrowserSummary));
+        OnPropertyChanged(nameof(HasNoCatalogBrowserResults));
+    }
+
     [RelayCommand]
     public async Task AddServiceFromCatalogBrowserAsync(ClinicalService? service)
     {
@@ -4360,6 +4403,21 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         VitalSignsFilter = filter;
         RecalculateChartPoints();
     }
+
+    /// <summary>Filtros de la gráfica como chips (con acentos para leerse bien).</summary>
+    public IReadOnlyList<string> VitalSignsFilterOptions { get; } = new[] { "Todos", "Peso", "Presión", "Glucosa" };
+
+    public string VitalSignsFilterLabel
+    {
+        get => VitalSignsFilter == "Presion" ? "Presión" : VitalSignsFilter;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            SetVitalSignsFilter(value == "Presión" ? "Presion" : value);
+        }
+    }
+
+    partial void OnVitalSignsFilterChanged(string value) => OnPropertyChanged(nameof(VitalSignsFilterLabel));
 
     public void RefreshVitalSignsEvolution(PatientRecord? patient = null)
     {

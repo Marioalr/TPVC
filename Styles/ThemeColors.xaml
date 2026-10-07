@@ -44,6 +44,10 @@
     <SolidColorBrush x:Key="ThemeDangerText" Color="#991B1B" />
     <SolidColorBrush x:Key="ThemeInfoSubtle" Color="#E0F2FE" />
     <SolidColorBrush x:Key="ThemeInfoText" Color="#075985" />
+    <SolidColorBrush x:Key="ThemeChartWeight" Color="#2563EB" />
+    <SolidColorBrush x:Key="ThemeChartSystolic" Color="#DC2626" />
+    <SolidColorBrush x:Key="ThemeChartDiastolic" Color="#B45309" />
+    <SolidColorBrush x:Key="ThemeChartGlucose" Color="#047857" />
 
     <!-- Avisos breves -->
     <SolidColorBrush x:Key="ThemeToastBackground" Color="#0F172A" />

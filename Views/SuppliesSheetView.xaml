@@ -4,25 +4,15 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:models="clr-namespace:TPVC.Models"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
-    <!-- ========================================================================= -->
-    <!-- MODAL: GESTIÓN DE INSUMOS Y MATERIAL DE CURACIÓN CLÍNICO                  -->
-    <!-- ========================================================================= -->
-    <Border Background="{DynamicResource ThemeOverlay}" 
-            HorizontalAlignment="Stretch" 
-            VerticalAlignment="Stretch">
-        <Border Background="{DynamicResource ThemeCard}" 
-                BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="1.5" 
-                CornerRadius="14" 
-                MaxWidth="800" 
-                MaxHeight="680" 
-                Margin="24" 
-                Padding="22">
+    <!-- Insumos y material usados en la consulta: se escriben (↑↓ y Enter eligen) y se cargan a -->
+    <!-- la cuenta de la consulta en cuanto se agregan.                                       -->
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="820" MaxHeight="700" Padding="0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -31,280 +21,124 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Cabecera de la Modal -->
-                <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid Margin="24,16,16,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ThemeAccent}" 
-                                    CornerRadius="6" 
-                                    Width="28" Height="28" 
-                                    Margin="0,0,10,0">
-                                <TextBlock Text="📦" 
-                                           FontSize="15" 
-                                           HorizontalAlignment="Center" 
-                                           VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Insumos y Material de Curación" 
-                                       FontSize="18" 
-                                       FontWeight="Bold" 
-                                       Foreground="{DynamicResource ThemeText}" />
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Insumos y material" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Gasas, jeringas, vendas… lo usado se carga a la cuenta de la consulta" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSupplyCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
+                            ToolTip="Ver todos los insumos del inventario">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoSearch}" Margin="0,0,6,0" />
+                            <TextBlock Text="Catálogo" />
                         </StackPanel>
-                        <TextBlock Text="Registro y control de consumibles, material de curación y apósitos clínicos del paciente." 
-                                   FontSize="12" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" 
-                                   Margin="38,4,0,0" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding OpenSupplyCatalogCommand}" 
-                                Padding="10,6" 
-                                Margin="0,0,8,0" 
-                                ToolTip="Buscar insumo en el catálogo completo">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Data="{StaticResource IconSearch}" 
-                                      Fill="{DynamicResource ThemeAccent}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Buscar en Catálogo" FontSize="12" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding CloseSuppliesModalCommand}" 
-                                Padding="8,5" 
-                                VerticalAlignment="Center">
-                            <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
-                        </Button>
-                    </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding CloseSuppliesModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
                 </Grid>
 
-                <!-- Formulario de Captura Rápida de Insumos -->
-                <Border Grid.Row="1" 
-                        Background="{DynamicResource ThemeSurface}" 
-                        BorderBrush="{DynamicResource ThemeBorder}" 
-                        BorderThickness="1" 
-                        CornerRadius="8" 
-                        Padding="12" 
-                        Margin="0,0,0,14">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2.5*" />
-                                <ColumnDefinition Width="3*" />
-                                <ColumnDefinition Width="80" />
-                            </Grid.ColumnDefinitions>
+                <!-- Captura rápida -->
+                <StackPanel Grid.Row="1" Margin="24,14,24,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2.5*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="3*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="80" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Insumo *" />
+                            <TextBox x:Name="SupplySearchTextBox" Style="{StaticResource FieldTextBox}"
+                                     Text="{Binding SupplySearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     helpers:Field.Placeholder="Escriba para buscar"
+                                     PreviewKeyDown="SupplySearchTextBox_PreviewKeyDown"
+                                     AutomationProperties.Name="Insumo" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Uso o indicación" />
+                            <TextBox x:Name="SupplyInstructionsTextBox" Style="{StaticResource FieldTextBox}"
+                                     Text="{Binding SupplyInstructions, UpdateSourceTrigger=PropertyChanged}"
+                                     helpers:Field.Placeholder="Ej. curación de herida en antebrazo"
+                                     PreviewKeyDown="SupplyAuxInput_PreviewKeyDown"
+                                     AutomationProperties.Name="Uso o indicación" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
+                            <TextBox x:Name="SupplyQuantityTextBox" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
+                                     Text="{Binding SupplyQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                     PreviewKeyDown="SupplyAuxInput_PreviewKeyDown"
+                                     AutomationProperties.Name="Cantidad" />
+                        </StackPanel>
+                    </Grid>
 
-                            <!-- Búsqueda / Nombre de Insumo -->
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Insumo / Material *" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                <Grid>
-                                    <TextBox x:Name="SupplySearchTextBox"
-                                             Text="{Binding SupplySearchText, UpdateSourceTrigger=PropertyChanged}" 
-                                             FontSize="12" 
-                                             Padding="8,6" 
-                                             Background="{DynamicResource ThemeBackground}" 
-                                             BorderBrush="{DynamicResource ThemeBorder}" 
-                                             Foreground="{DynamicResource ThemeText}"
-                                             PreviewKeyDown="SupplySearchTextBox_PreviewKeyDown" />
-                                    <TextBlock Text="Escriba o busque insumo..." 
-                                               FontSize="11" 
-                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                               VerticalAlignment="Center" 
-                                               Margin="9,0,0,0" 
-                                               IsHitTestVisible="False" 
-                                               Visibility="{Binding SupplySearchText, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
-                                </Grid>
-                            </StackPanel>
-
-                            <!-- Indicaciones / Uso Clínico -->
-                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                <TextBlock Text="Indicaciones / Uso Clínico" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                <Grid>
-                                    <TextBox x:Name="SupplyInstructionsTextBox"
-                                             Text="{Binding SupplyInstructions, UpdateSourceTrigger=PropertyChanged}" 
-                                             FontSize="12" 
-                                             Padding="8,6" 
-                                             Background="{DynamicResource ThemeBackground}" 
-                                             BorderBrush="{DynamicResource ThemeBorder}" 
-                                             Foreground="{DynamicResource ThemeText}"
-                                             PreviewKeyDown="SupplyAuxInput_PreviewKeyDown" />
-                                    <TextBlock Text="Ej: Aplicar en herida limpia c/12h..." 
-                                               FontSize="11" 
-                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                               VerticalAlignment="Center" 
-                                               Margin="9,0,0,0" 
-                                               IsHitTestVisible="False" 
-                                               Visibility="{Binding SupplyInstructions, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
-                                </Grid>
-                            </StackPanel>
-
-                            <!-- Cantidad -->
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Cantidad" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                <TextBox x:Name="SupplyQuantityTextBox"
-                                         Text="{Binding SupplyQuantity, UpdateSourceTrigger=PropertyChanged}" 
-                                         FontSize="12" 
-                                         Padding="6,6" 
-                                         HorizontalContentAlignment="Center" 
-                                         Background="{DynamicResource ThemeBackground}" 
-                                         BorderBrush="{DynamicResource ThemeBorder}" 
-                                         Foreground="{DynamicResource ThemeText}"
-                                         PreviewKeyDown="SupplyAuxInput_PreviewKeyDown" />
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Indicador de atajos de teclado -->
-                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                BorderBrush="{DynamicResource ThemeBorder}" 
-                                BorderThickness="1" 
-                                CornerRadius="6" 
-                                Padding="8,5" 
-                                Margin="0,0,0,6">
-                            <TextBlock Text="💡 Flechas ↑ ↓ para navegar en la lista, Enter o clic para agregar insumo, Esc para salir" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </Border>
-
-                        <!-- Dropdown de Sugerencias de Inventario para Insumos -->
-                        <Border Visibility="{Binding IsSupplyDropdownOpen, Converter={StaticResource BoolToVis}}" 
-                                Background="{DynamicResource ThemeBackground}" 
-                                BorderBrush="{DynamicResource ThemeAccent}" 
-                                BorderThickness="1" 
-                                CornerRadius="6" 
-                                Padding="2" 
-                                MaxHeight="160">
-                            <ListBox x:Name="SupplySuggestionsListBox"
+                    <Border Style="{StaticResource Card}" Padding="6" Margin="0,8,0,0"
+                            Visibility="{Binding IsSupplyDropdownOpen, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega · Esc cierra" Margin="10,4,10,4" />
+                            <ListBox x:Name="SupplySuggestionsListBox" Style="{StaticResource PlainList}" MaxHeight="200"
                                      ItemsSource="{Binding SupplyProductSuggestions}"
                                      SelectedItem="{Binding SelectedSupplyProduct, Mode=TwoWay}"
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      PreviewKeyDown="SupplySuggestionsListBox_PreviewKeyDown"
-                                     PreviewMouseLeftButtonUp="SupplySuggestionsListBox_PreviewMouseLeftButtonUp">
-                                <ListBox.ItemContainerStyle>
-                                    <Style TargetType="ListBoxItem">
-                                        <Setter Property="Padding" Value="8,6" />
-                                        <Setter Property="Margin" Value="0,0,0,2" />
-                                        <Setter Property="Cursor" Value="Hand" />
-                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="ListBoxItem">
-                                                    <Border x:Name="Bd" 
-                                                            Background="{TemplateBinding Background}" 
-                                                            BorderBrush="{TemplateBinding BorderBrush}" 
-                                                            BorderThickness="1.5" 
-                                                            CornerRadius="6" 
-                                                            Padding="{TemplateBinding Padding}">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock x:Name="SelectorArrow" Text="▶ " Foreground="{DynamicResource ThemeAccent}" FontWeight="Bold" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" Visibility="Collapsed" />
-                                                            <ContentPresenter Grid.Column="1" />
-                                                        </Grid>
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
-                                                        </Trigger>
-                                                        <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Bd" Property="Background" Value="#E0F2FE" />
-                                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
-                                                            <Setter TargetName="Bd" Property="BorderThickness" Value="2" />
-                                                            <Setter TargetName="SelectorArrow" Property="Visibility" Value="Visible" />
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </ListBox.ItemContainerStyle>
+                                     PreviewMouseLeftButtonUp="SupplySuggestionsListBox_PreviewMouseLeftButtonUp"
+                                     AutomationProperties.Name="Sugerencias de insumos">
                                 <ListBox.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate DataType="{x:Type models:Product}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="90" />
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                <TextBlock Text="{Binding Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Presentation}" />
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="{Binding CurrentStock, StringFormat='Existencias: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Price, StringFormat='{}{0:C}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                            <Border Grid.Column="1" Style="{StaticResource StockBadge}" Margin="12,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding CurrentStock, StringFormat='Existencias: {0}'}" />
+                                            </Border>
+                                            <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
+                                                       Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                        </Border>
-                    </StackPanel>
-                </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
-                <!-- Lista de Insumos del Paciente -->
-                <Border Grid.Row="2" 
-                        Background="{DynamicResource ThemeSurface}" 
-                        BorderBrush="{DynamicResource ThemeBorder}" 
-                        BorderThickness="1" 
-                        CornerRadius="10" 
-                        Padding="8">
+                <!-- Lo usado en la consulta -->
+                <Border Grid.Row="2" Style="{StaticResource CardSubtle}" Margin="24,0,24,0" Padding="8">
                     <Grid>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <ItemsControl ItemsSource="{Binding SelectedPatient.ActiveSupplies}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{DynamicResource ThemeCard}" 
-                                                BorderBrush="{DynamicResource ThemeBorder}" 
-                                                BorderThickness="1" 
-                                                CornerRadius="8" 
-                                                Padding="14,10" 
-                                                Margin="4,4,4,6">
+                                    <DataTemplate DataType="{x:Type models:PatientSupplyItem}">
+                                        <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding SupplyName}" 
-                                                               FontWeight="Bold" 
-                                                               FontSize="13" 
-                                                               Foreground="{DynamicResource ThemeText}" />
-                                                    <TextBlock Text="{Binding Instructions, StringFormat='Uso/Indicaciones: {0}'}" 
-                                                               FontSize="11.5" 
-                                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                                               Margin="0,3,0,0" 
-                                                               TextWrapping="Wrap" />
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding SupplyName}" />
+                                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Instructions}" TextWrapping="Wrap"
+                                                               Visibility="{Binding Instructions, Converter={StaticResource BoolToVis}}" />
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,10,0">
-                                                    <Border Background="{DynamicResource ThemeBorder}" 
-                                                            CornerRadius="4" 
-                                                            Padding="8,4" 
-                                                            Margin="0,0,8,0">
-                                                        <TextBlock Text="{Binding Quantity, StringFormat='Cant: {0}'}" 
-                                                                   FontSize="11" 
-                                                                   FontWeight="SemiBold" 
-                                                                   Foreground="{DynamicResource ThemeText}" />
-                                                    </Border>
-                                                </StackPanel>
-                                                <Button Grid.Column="2" 
-                                                        Style="{DynamicResource OutlineButton}" 
-                                                        Command="{Binding DataContext.RemoveSupplyItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                        CommandParameter="{Binding}" 
-                                                        Padding="8,5" 
-                                                        VerticalAlignment="Center" 
-                                                        ToolTip="Quitar insumo de la lista">
-                                                    <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
+                                                </Border>
+                                                <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta)" AutomationProperties.Name="Quitar insumo"
+                                                        Command="{Binding DataContext.RemoveSupplyItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}">
+                                                    <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
                                                 </Button>
                                             </Grid>
                                         </Border>
@@ -312,60 +146,25 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
-
-                        <!-- Mensaje si no hay insumos -->
-                        <Border Background="{DynamicResource ThemeCard}" 
-                                CornerRadius="8" 
-                                Padding="24" 
-                                VerticalAlignment="Center" 
-                                HorizontalAlignment="Center" 
-                                Visibility="{Binding SelectedPatient.ActiveSupplies.Count, Converter={StaticResource InverseBoolToVis}}">
-                            <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="📦 No hay insumos ni material de curación registrados aún en este expediente." 
-                                           FontStyle="Italic" 
-                                           FontSize="12" 
-                                           Foreground="{DynamicResource ThemeTextSecondary}" 
-                                           HorizontalAlignment="Center" />
-                                <TextBlock Text="Escriba o elija un insumo en el formulario superior para agregarlo a la atención clínica." 
-                                           FontSize="11" 
-                                           Foreground="{DynamicResource ThemeTextSecondary}" 
-                                           HorizontalAlignment="Center" 
-                                           Margin="0,4,0,0" />
-                            </StackPanel>
-                        </Border>
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24"
+                                    Visibility="{Binding SelectedPatient.ActiveSupplies.Count, Converter={StaticResource InverseBoolToVis}}">
+                            <TextBlock Style="{StaticResource TextBody}" Text="Todavía no se ha usado ningún insumo." HorizontalAlignment="Center" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="Escríbalo arriba o ábralo desde el catálogo." HorizontalAlignment="Center" Margin="0,2,0,0" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- Pie de la Modal -->
-                <Grid Grid.Row="3" Margin="0,14,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Botones de Acción (Cerrar y Guardar) -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding CloseSuppliesModalCommand}" 
-                                Padding="16,7" 
-                                Margin="0,0,8,0">
-                            <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
-                        </Button>
-
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding SaveSuppliesModalCommand}" 
-                                Padding="18,7">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Data="{StaticResource IconCheck}" 
-                                      Fill="{DynamicResource ThemeAccentText}" 
-                                      Width="12" Height="12" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,6,0" />
-                                <TextBlock Text="Guardar" FontWeight="Bold" FontSize="12" />
+                <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14" Margin="0,16,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseSuppliesModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveSuppliesModalCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoCheck}" Margin="0,0,8,0" />
+                                <TextBlock Text="Guardar" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
-                </Grid>
+                </Border>
             </Grid>
         </Border>
     </Border>

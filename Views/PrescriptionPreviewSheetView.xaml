@@ -12,17 +12,8 @@
     <!-- ========================================================================= -->
     <!-- MODAL: VISTA PREVIA Y GENERACIÓN DE RECETA MÉDICA OFICIAL (NOM-004-SSA3)  -->
     <!-- ========================================================================= -->
-    <Border Background="{DynamicResource ThemeOverlay}" 
-            HorizontalAlignment="Stretch" 
-            VerticalAlignment="Stretch">
-        <Border Background="{DynamicResource ThemeCard}" 
-                BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="1.5" 
-                CornerRadius="14" 
-                MaxWidth="750" 
-                MaxHeight="680" 
-                Margin="20" 
-                Padding="22">
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="760" MaxHeight="720" Padding="24,18">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -30,38 +21,17 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Cabecera de la Modal -->
-                <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ThemeAccent}" 
-                                    CornerRadius="6" 
-                                    Width="28" Height="28" 
-                                    Margin="0,0,10,0">
-                                <TextBlock Text="📄" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Receta Médica - Vista Previa Oficial (NOM-004-SSA3)" 
-                                       FontSize="17" 
-                                       FontWeight="Bold" 
-                                       Foreground="{DynamicResource ThemeText}" />
-                        </StackPanel>
-                        <TextBlock Text="Formato estandarizado de prescripción médica conforme a la legislación sanitaria vigente." 
-                                   FontSize="11" 
-                                   Foreground="{DynamicResource ThemeTextSecondary}" 
-                                   Margin="38,4,0,0" />
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la receta" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Así se imprime o se guarda (formato NOM-004-SSA3)" />
                     </StackPanel>
-
-                    <Button Grid.Column="1" 
-                            Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding ClosePrescriptionPdfPreviewCommand}" 
-                            Padding="8,5" 
-                            VerticalAlignment="Top">
-                        <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePrescriptionPdfPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
 
@@ -169,7 +139,7 @@
                             <!-- Indicaciones de Cuidados Generales y Alarma -->
                             <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="12,8" Margin="0,0,0,20">
                                 <StackPanel>
-                                    <TextBlock Text="⚠️ MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     <TextBlock Text="{Binding PrescriptionGeneralInstructions}" Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource BoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                     <TextBlock Text="Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas." Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource InverseBoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
@@ -192,46 +162,24 @@
                     </ScrollViewer>
                 </Border>
 
-                <!-- Pie de la Modal con Acciones -->
                 <Grid Grid.Row="2" Margin="0,16,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Column="0" 
-                               Text="Cumplimiento con NOM-004-SSA3-2012 y Ley General de Salud." 
-                               FontSize="11" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               VerticalAlignment="Center" />
-
+                    <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Command="{Binding ClosePrescriptionPdfPreviewCommand}" Content="Cerrar" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding ClosePrescriptionPdfPreviewCommand}" 
-                                Padding="16,7" 
-                                Margin="0,0,10,0">
-                            <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
-                        </Button>
-
-
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Command="{Binding ExportPrescriptionDocumentCommand}" 
-                                Padding="14,7" 
-                                Margin="0,0,10,0" 
-                                ToolTip="Exportar receta a documento digital HTML/PDF">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="💾" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Exportar Documento" FontSize="12" FontWeight="SemiBold" />
+                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ExportPrescriptionDocumentCommand}" Margin="0,0,8,0"
+                                ToolTip="Guardar la receta como documento (HTML/PDF)">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
+                                <TextBlock Text="Guardar documento" />
                             </StackPanel>
                         </Button>
-
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding PrintOrExportPrescriptionPdfCommand}" 
-                                Padding="18,7"
-                                ToolTip="Imprimir receta oficial en impresora física">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="🖨️" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Imprimir Receta" FontSize="12" FontWeight="Bold" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding PrintOrExportPrescriptionPdfCommand}" ToolTip="Imprimir la receta">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoPrint}" Margin="0,0,8,0" />
+                                <TextBlock Text="Imprimir" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
