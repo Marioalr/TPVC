@@ -68,18 +68,17 @@ public class ConsultationWorkspaceTests
         Assert.AreEqual(-1, TextSearch.FindBestMatchIndex(options, "   "));
     }
 
-    private async Task<(MedicalRecordsViewModel Records, PosViewModel Pos, ConsultationService Consultations, PatientRecord Patient)> StartConsultationAsync()
+    private async Task<(MedicalRecordsViewModel Records, CheckoutViewModel Checkout, ConsultationService Consultations, PatientRecord Patient)> StartConsultationAsync()
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
-        var pos = new PosViewModel(_service, consultations);
-        var records = new MedicalRecordsViewModel(_service, consultations, pos);
+        var records = new MedicalRecordsViewModel(_service, consultations);
         await records.LoadInitialDataAsync();
 
         var patient = records.Patients.First();
         records.SelectPatient(patient);
         records.StartActiveConsultation();
         Assert.IsTrue(records.HasActiveConsultation);
-        return (records, pos, consultations, records.SelectedPatient!);
+        return (records, records.Checkout, consultations, records.SelectedPatient!);
     }
 
     private async Task<Product> StockedProductAsync()
@@ -97,7 +96,7 @@ public class ConsultationWorkspaceTests
     [TestMethod]
     public async Task FinalizeConsultation_BuildsCheckoutFromAccount_AndChargingClosesIt()
     {
-        var (records, pos, consultations, patient) = await StartConsultationAsync();
+        var (records, checkout, consultations, patient) = await StartConsultationAsync();
         var product = await StockedProductAsync();
         int stockBefore = product.CurrentStock;
 
@@ -118,24 +117,24 @@ public class ConsultationWorkspaceTests
 
         Assert.IsTrue(records.IsPosModalOpen, "Se abre la ventana de terminar consulta");
         Assert.IsTrue(records.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
-        Assert.HasCount(2, pos.Cart, "Honorario + medicamento surtido");
-        Assert.IsTrue(pos.Cart[0].IsService);
-        Assert.AreEqual(records.ConsultationFeeAmount, pos.Cart[0].UnitPrice);
-        Assert.AreEqual(product.Id, pos.Cart[1].ProductId);
+        Assert.HasCount(2, checkout.Cart, "Honorario + medicamento surtido");
+        Assert.IsTrue(checkout.Cart[0].IsService);
+        Assert.AreEqual(records.ConsultationFeeAmount, checkout.Cart[0].UnitPrice);
+        Assert.AreEqual(product.Id, checkout.Cart[1].ProductId);
 
         // "Volver a la consulta" y terminar otra vez no duplica cargos ni notas
         records.ClosePosModal();
-        Assert.IsEmpty(pos.Cart);
+        Assert.IsEmpty(checkout.Cart);
         Assert.IsTrue(records.HasActiveConsultation);
         await records.FinalizeConsultationAsync();
-        Assert.HasCount(2, pos.Cart);
+        Assert.HasCount(2, checkout.Cart);
 
         var notes = await _service.GetPatientConsultationsAsync(patient.Id);
         Assert.AreEqual(1, notes.Count(c => c.Folio == folio), "La nota se actualiza con el mismo folio");
 
-        pos.SelectedPaymentMethod = "Efectivo";
-        pos.CashReceived = 2000m;
-        await pos.ProcessSaleAsync();
+        checkout.SelectedPaymentMethod = "Efectivo";
+        checkout.CashReceived = 2000m;
+        await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation);
         Assert.IsFalse(records.IsPosModalOpen);
@@ -148,13 +147,13 @@ public class ConsultationWorkspaceTests
     [TestMethod]
     public async Task Checkout_WithAllChargesRemoved_EndsConsultationWithoutSale()
     {
-        var (records, pos, consultations, _) = await StartConsultationAsync();
+        var (records, checkout, consultations, _) = await StartConsultationAsync();
 
         await records.FinalizeConsultationAsync();
-        foreach (var item in pos.Cart.ToList()) pos.RemoveFromCart(item);
-        Assert.IsFalse(pos.HasCartItems);
+        foreach (var item in checkout.Cart.ToList()) checkout.RemoveFromCart(item);
+        Assert.IsFalse(checkout.HasItems);
 
-        await pos.ProcessSaleAsync();
+        await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation);
         var sales = await _service.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1));

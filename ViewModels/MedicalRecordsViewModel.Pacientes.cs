@@ -76,6 +76,18 @@ public partial class MedicalRecordsViewModel
         }
     }
 
+    /// <summary>Problema que no impide seguir (p. ej. falta de existencias al cobrar).</summary>
+    private void ShowWarning(string message)
+    {
+        if (_notifications != null)
+        {
+            _notifications.Warning(message);
+            return;
+        }
+        InfoModalMessage = message;
+        IsInfoModalVisible = true;
+    }
+
     /// <summary>Confirmación breve que se va sola; sin servicio de avisos (pruebas) usa la ventana.</summary>
     private void ShowSuccess(string message)
     {

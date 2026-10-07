@@ -37,6 +37,8 @@ public partial class MedicalRecordsViewModel
     private readonly object _formDraftGate = new();
     private Timer? _formDraftTimer;
     private long _formDraftGeneration;
+    private long _formDraftSequence;
+    private long _lastWrittenFormDraftSequence;
     private Dictionary<string, string>? _patientFormBaseline;
     private bool _suspendFormDraft;
 
@@ -78,11 +80,15 @@ public partial class MedicalRecordsViewModel
         if (_draftStore == null || _suspendFormDraft || !IsPatientModalOpen) return;
 
         var generation = Interlocked.Read(ref _formDraftGeneration);
+        var sequence = Interlocked.Increment(ref _formDraftSequence);
         var fields = CapturePatientFormFields();
         lock (_formDraftGate)
         {
-            // Si el formulario se cerró mientras esperaba, no se resucita su borrador
+            // Si el formulario se cerró mientras esperaba, no se resucita su borrador; una copia
+            // tomada antes que otra ya escrita tampoco la sobrescribe
             if (generation != Interlocked.Read(ref _formDraftGeneration)) return;
+            if (sequence <= _lastWrittenFormDraftSequence) return;
+            _lastWrittenFormDraftSequence = sequence;
 
             // Tal como se abrió (cambiar de sección no es un cambio): no hay nada que recuperar
             var baseline = _patientFormBaseline;

@@ -325,7 +325,7 @@ public class DataLayerTests
         await records.FinalizeConsultationAsync();
         Assert.IsTrue(records.IsPosModalOpen);
 
-        await mainVm.PosVM.ProcessSaleAsync();
+        await records.Checkout.ChargeAsync();
 
         var stored = (await _service.GetPatientByIdAsync(patient.Id))!;
         Assert.AreEqual(1, stored.Consultations.Count(c => c.ChiefComplaint == "Control sin duplicados"),

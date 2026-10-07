@@ -4,252 +4,156 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:models="clr-namespace:TPVC.Models"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
-    <!-- ========================================================================= -->
-    <!-- MODAL: CREAR SERVICIO CLÍNICO Y ASIGNAR INSUMOS                            -->
-    <!-- ========================================================================= -->
-    <Border Background="{DynamicResource ThemeOverlay}" 
-            HorizontalAlignment="Stretch" 
-            VerticalAlignment="Stretch">
-        <Border Background="{DynamicResource ThemeCard}" 
-                BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="1.5" 
-                CornerRadius="14" 
-                MaxWidth="720" 
-                MaxHeight="650" 
-                Margin="24" 
-                HorizontalAlignment="Stretch" 
-                VerticalAlignment="Center">
-            <Grid Margin="22">
+    <!-- Nuevo servicio clínico con sus insumos por defecto. La misma hoja en Pacientes y en el -->
+    <!-- Punto de Venta (los dos ViewModels exponen los mismos nombres).                       -->
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="720" MaxHeight="720" Padding="0">
+            <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Cabecera del Modal -->
-                <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
-                        <Border Background="{DynamicResource ThemeAccent}" 
-                                CornerRadius="6" 
-                                Padding="8,3" 
-                                Margin="0,0,8,0">
-                            <TextBlock Text="🩺 NUEVO SERVICIO" 
-                                       FontWeight="Bold" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeAccentText}" />
-                        </Border>
-                        <TextBlock Text="Crear Servicio Clínico y Asignar Insumos" 
-                                   FontWeight="Bold" 
-                                   FontSize="17" 
-                                   Foreground="{DynamicResource ThemeText}" />
-                    </StackPanel>
-                    <TextBlock Text="Ingresa los datos generales del servicio médico e incluye los productos e insumos de inventario que se consumirán por defecto." 
-                               FontSize="12" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" />
-                </StackPanel>
+                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="24,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextHeading}" Text="Nuevo servicio" />
+                            <TextBlock Style="{StaticResource TextDetail}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       Text="Consulta, curación, inyección… con los insumos que se usan cada vez (se agregan solos al cargarlo)." />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseCreateServiceModalCommand}"
+                                ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                            <helpers:Icon Data="{StaticResource IcoClose}" />
+                        </Button>
+                    </Grid>
+                </Border>
 
-                <!-- Formulario con Scroll -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16">
-                    <StackPanel Margin="0,0,8,0">
-                        <!-- Código y Nombre -->
-                        <Grid Margin="0,0,0,12">
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,18">
+                        <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Código" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"
+                                         Text="{Binding NewServiceCode, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre *" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding NewServiceName, UpdateSourceTrigger=PropertyChanged}"
+                                         helpers:Field.Placeholder="Ej. Aplicación de inyección intramuscular" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="140" />
                             </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Código / Folio *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding NewServiceCode, UpdateSourceTrigger=PropertyChanged}" 
-                                         Style="{DynamicResource ModernTextBox}" 
-                                         Padding="10,6" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Nombre del Servicio Clínico *" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding NewServiceName, UpdateSourceTrigger=PropertyChanged}" 
-                                         Style="{DynamicResource ModernTextBox}" 
-                                         Padding="10,6" />
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Categoría, Precio y Duración -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="120" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Categoría" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <ComboBox Style="{DynamicResource ModernComboBox}" 
-                                          ItemsSource="{Binding ServiceCategories}" 
-                                          SelectedItem="{Binding NewServiceCategory}" 
-                                          Height="36" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Precio ($ MXN)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding NewServicePrice, UpdateSourceTrigger=PropertyChanged}" 
-                                         Style="{DynamicResource ModernTextBox}" 
-                                         Padding="10,6" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="4">
-                                <TextBlock Text="Duración (min)" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding NewServiceDuration, UpdateSourceTrigger=PropertyChanged}" 
-                                         Style="{DynamicResource ModernTextBox}" 
-                                         Padding="10,6" />
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Descripción -->
-                        <StackPanel Margin="0,0,0,16">
-                            <TextBlock Text="Descripción y Alcance Clínico" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
-                            <TextBox Text="{Binding NewServiceDescription, UpdateSourceTrigger=PropertyChanged}" 
-                                     Style="{DynamicResource ModernTextBox}" 
-                                     Height="60" 
-                                     TextWrapping="Wrap" 
-                                     AcceptsReturn="True" 
-                                     VerticalScrollBarVisibility="Auto" 
-                                     Padding="10,6" />
-                        </StackPanel>
-
-                        <!-- Sección: Asociar Insumos por Defecto -->
-                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                BorderBrush="{DynamicResource ThemeBorder}" 
-                                BorderThickness="1" 
-                                CornerRadius="8" 
-                                Padding="14" 
-                                Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="📦 Paquete de Insumos Predeterminados para este Servicio" 
-                                           FontWeight="Bold" 
-                                           FontSize="13" 
-                                           Foreground="{DynamicResource ThemeText}" 
-                                           Margin="0,0,0,4" />
-                                <TextBlock Text="Selecciona insumos del inventario que se consumirán con este procedimiento:" 
-                                           FontSize="11" 
-                                           Foreground="{DynamicResource ThemeTextSecondary}" 
-                                           Margin="0,0,0,10" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Categoría" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding ServiceCategories}" SelectedItem="{Binding NewServiceCategory}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Precio ($)" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"
+                                         Text="{Binding NewServicePrice, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Duración (min)" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding NewServiceDuration, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
 
-                                <!-- Selector para agregar nuevo insumo al servicio -->
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Descripción" />
+                        <TextBox Style="{StaticResource FieldMultiline}" MinHeight="64" Margin="0,0,0,18"
+                                 Text="{Binding NewServiceDescription, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <Border Style="{StaticResource CardSubtle}" Padding="14">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TextSection}" Text="Insumos que usa" />
+                                <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,10" Text="Opcional. Al cargar el servicio se agregan a la cuenta y se descuentan del inventario." />
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="70" />
+                                        <ColumnDefinition Width="72" />
                                         <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-
-                                    <!-- Producto -->
-                                    <ComboBox Grid.Column="0" 
-                                              Style="{DynamicResource ModernComboBox}" 
-                                              ItemsSource="{Binding AvailableProducts}" 
-                                              SelectedItem="{Binding SelectedProductToAdd}" 
-                                              DisplayMemberPath="Name" 
-                                              Height="36" />
-
-                                    <!-- Cantidad -->
-                                    <TextBox Grid.Column="2" 
-                                             Text="{Binding NewProductQuantity, UpdateSourceTrigger=PropertyChanged}" 
-                                             Style="{DynamicResource ModernTextBox}" 
-                                             HorizontalContentAlignment="Center" 
-                                             Padding="6,6" 
-                                             ToolTip="Cantidad de unidades requeridas" />
-
-                                    <!-- Botón Agregar Insumo -->
-                                    <Button Grid.Column="4" 
-                                            Style="{DynamicResource AccentButton}" 
-                                            Command="{Binding AddProductToNewServiceCommand}" 
-                                            Padding="12,6">
-                                        <TextBlock Text="+ Agregar" FontSize="12" FontWeight="SemiBold" />
+                                    <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding AvailableProducts}" SelectedItem="{Binding SelectedProductToAdd}"
+                                              DisplayMemberPath="Name" helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Insumo"
+                                              ToolTip="Despliegue y escriba el nombre para ir directo a él" />
+                                    <TextBox Grid.Column="2" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
+                                             Text="{Binding NewProductQuantity, UpdateSourceTrigger=PropertyChanged}" ToolTip="Cantidad" AutomationProperties.Name="Cantidad" />
+                                    <Button Grid.Column="4" Style="{StaticResource ButtonSecondary}" Command="{Binding AddProductToNewServiceCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,6,0" />
+                                            <TextBlock Text="Agregar" />
+                                        </StackPanel>
                                     </Button>
                                 </Grid>
-
-                                <!-- Lista de insumos vinculados -->
                                 <ItemsControl ItemsSource="{Binding NewServiceDefaultProducts}">
                                     <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="{DynamicResource ThemeSurface}" 
-                                                    BorderBrush="{DynamicResource ThemeBorder}" 
-                                                    BorderThickness="1" 
-                                                    CornerRadius="6" 
-                                                    Padding="8,6" 
-                                                    Margin="0,0,0,6">
+                                        <DataTemplate DataType="{x:Type models:ServiceDefaultProduct}">
+                                            <Border Style="{StaticResource Card}" Padding="12,8" Margin="0,0,0,6">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-
-                                                    <StackPanel Grid.Column="0">
-                                                        <TextBlock Text="{Binding Product.Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                        <TextBlock Text="{Binding Product.Presentation}" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Style="{StaticResource TextBody}" Text="{Binding Product.Name}" />
+                                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Product.Presentation}" />
                                                     </StackPanel>
-
-                                                    <TextBlock Grid.Column="1" 
-                                                               Text="{Binding Quantity, StringFormat='Cant: {0}'}" 
-                                                               FontWeight="Bold" 
-                                                               FontSize="11" 
-                                                               Foreground="{DynamicResource ThemeAccent}" 
-                                                               VerticalAlignment="Center" 
-                                                               Margin="12,0" />
-
-                                                    <Button Grid.Column="2" 
-                                                            Style="{DynamicResource OutlineButton}" 
-                                                            Command="{Binding DataContext.RemoveProductFromNewServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                            CommandParameter="{Binding}" 
-                                                            Padding="6,3" 
-                                                            VerticalAlignment="Center">
-                                                        <TextBlock Text="✕" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeError}" />
+                                                    <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
+                                                    </Border>
+                                                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar" AutomationProperties.Name="Quitar insumo"
+                                                            Command="{Binding DataContext.RemoveProductFromNewServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
                                                     </Button>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <TextBlock Style="{StaticResource TextCaption}" Text="Sin insumos: solo se cobra el honorario."
+                                           Visibility="{Binding NewServiceDefaultProducts.Count, Converter={StaticResource InverseBoolToVis}}" />
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- Botones de Acción -->
-                <Grid Grid.Row="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <Button Grid.Column="0" 
-                            Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding CloseCreateServiceModalCommand}" 
-                            HorizontalAlignment="Left" 
-                            Padding="16,7">
-                        <TextBlock Text="Cancelar" FontWeight="SemiBold" FontSize="12" />
-                    </Button>
-
-                    <Button Grid.Column="1" 
-                            Style="{DynamicResource AccentButton}" 
-                            Command="{Binding SaveNewServiceCommand}" 
-                            Padding="18,7">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="💾" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Guardar Servicio" FontSize="12" FontWeight="Bold" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseCreateServiceModalCommand}" Content="Cancelar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveNewServiceCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
+                                <TextBlock Text="Guardar servicio" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
     </Border>

@@ -1,0 +1,96 @@
+<UserControl x:Class="TPVC.Views.CartLinesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:CheckoutViewModel}"
+             d:DesignHeight="300" d:DesignWidth="700">
+
+    <!-- Renglones de una cuenta: los mismos en el Punto de Venta y en "Terminar consulta".     -->
+    <!-- Cantidad con − / + o escrita; el renglón elegido recibe +, − y Supr desde el teclado.  -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="16,8">
+            <Grid TextElement.Foreground="{DynamicResource ThemeTextSecondary}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition Width="132" />
+                    <ColumnDefinition Width="104" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource TextLabel}" Text="Concepto" />
+                <TextBlock Grid.Column="1" Style="{StaticResource TextLabel}" Text="Precio" TextAlignment="Right" />
+                <TextBlock Grid.Column="2" Style="{StaticResource TextLabel}" Text="Cantidad" TextAlignment="Center" />
+                <TextBlock Grid.Column="3" Style="{StaticResource TextLabel}" Text="Importe" TextAlignment="Right" />
+            </Grid>
+        </Border>
+
+        <ListBox x:Name="Lines" Grid.Row="1" Style="{StaticResource PlainList}" Padding="8,6"
+                 ItemsSource="{Binding Cart}"
+                 SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                 AutomationProperties.Name="Renglones de la cuenta">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:CartItem}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="96" />
+                            <ColumnDefinition Width="132" />
+                            <ColumnDefinition Width="104" />
+                            <ColumnDefinition Width="40" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                <Border Style="{StaticResource BadgeInfo}" Margin="8,0,0,0" Visibility="{Binding RequiresRefrigeration, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Refrigerar" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0} · {1}">
+                                        <Binding Path="Code" />
+                                        <Binding Path="StockText" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding UnitPrice, StringFormat={}{0:C2}, ConverterCulture=es-MX}"
+                                   TextAlignment="Right" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una menos (−)"
+                                    Command="{Binding DataContext.DecreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}">
+                                <TextBlock Text="−" FontSize="16" />
+                            </Button>
+                            <TextBox Style="{StaticResource FieldTextBox}" Width="48" MinHeight="30" Height="30" Padding="2,0" Margin="6,0"
+                                     HorizontalContentAlignment="Center" FontWeight="SemiBold"
+                                     Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Cantidad" />
+                            <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una más (+)"
+                                    Command="{Binding DataContext.IncreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}">
+                                <TextBlock Text="+" FontSize="16" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Grid.Column="3" Style="{StaticResource TextMono}" FontWeight="SemiBold" Text="{Binding Subtotal, StringFormat={}{0:C2}, ConverterCulture=es-MX}"
+                                   TextAlignment="Right" VerticalAlignment="Center" />
+                        <Button Grid.Column="4" Style="{StaticResource ButtonIcon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Quitar (Supr)"
+                                Command="{Binding DataContext.RemoveFromCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}">
+                            <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

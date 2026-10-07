@@ -1,0 +1,176 @@
+<UserControl x:Class="TPVC.Views.PosCashCutSheetView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PosViewModel}">
+
+    <!-- Corte de caja de un día: lo vendido, por forma de pago y por tipo, y lo cancelado. -->
+    <UserControl.Resources>
+        <Style x:Key="AmountRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="760" MaxHeight="760" Padding="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="24,16,16,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Corte de caja" />
+                        <TextBlock Style="{StaticResource TextDetail}" Text="{Binding CashCutDate, StringFormat='{}{0:dddd d &quot;de&quot; MMMM yyyy}', ConverterCulture=es-MX}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,0,8,0">
+                        <Button Style="{StaticResource ButtonIconSecondary}" Command="{Binding PreviousCashCutDayCommand}" ToolTip="Día anterior" AutomationProperties.Name="Día anterior">
+                            <helpers:Icon Data="{StaticResource IcoChevronLeft}" />
+                        </Button>
+                        <Button Style="{StaticResource ButtonSecondary}" Margin="6,0" Command="{Binding TodayCashCutCommand}" Content="Hoy"
+                                IsEnabled="{Binding IsCashCutToday, Converter={StaticResource InverseBool}}" />
+                        <Button Style="{StaticResource ButtonIconSecondary}" Command="{Binding NextCashCutDayCommand}" ToolTip="Día siguiente" AutomationProperties.Name="Día siguiente"
+                                IsEnabled="{Binding CanGoToNextCashCutDay}">
+                            <helpers:Icon Data="{StaticResource IcoChevronRight}" />
+                        </Button>
+                    </StackPanel>
+                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding CloseCashCutModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,0,24,16" DataContext="{Binding CurrentCashCut}">
+                        <!-- Lo principal -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Vendido" />
+                                    <TextBlock Style="{StaticResource TextMono}" FontSize="28" FontWeight="Bold" Text="{Binding TotalSalesAmount, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Tickets" />
+                                    <TextBlock Style="{StaticResource TextMono}" FontSize="28" FontWeight="Bold" Text="{Binding ActiveTicketsCount}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="4" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Cancelados" />
+                                    <TextBlock Style="{StaticResource TextMono}" FontSize="28" FontWeight="Bold" Text="{Binding CancelledTicketsCount}" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TotalCancelledAmount, StringFormat='{}{0:C2} devuelto', ConverterCulture=es-MX}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextSection}" Text="Por forma de pago" Margin="0,0,0,12" />
+                                    <Grid Style="{StaticResource AmountRow}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource TextBody}" Text="Efectivo" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" FontWeight="SemiBold" Text="{Binding TotalCash, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource AmountRow}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource TextBody}" Text="Tarjeta de débito" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding TotalDebitCard, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource AmountRow}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource TextBody}" Text="Tarjeta de crédito" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding TotalCreditCard, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource AmountRow}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource TextBody}" Text="Transferencia" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding TotalTransfer, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource AmountRow}" Margin="0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource TextBody}" Text="Otras" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding TotalOtherPaymentMethods, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextSection}" Text="Por tipo" Margin="0,0,0,12" />
+                                    <Grid Style="{StaticResource AmountRow}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TextBody}" Text="Medicamentos e insumos" />
+                                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TotalProductsUnitsSold, StringFormat='{}{0} pieza(s)'}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" FontWeight="SemiBold" Text="{Binding TotalProductsAmount, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource AmountRow}" Margin="0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TextBody}" Text="Servicios y consultas" />
+                                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TotalServicesCount, StringFormat='{}{0} servicio(s)'}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" FontWeight="SemiBold" Text="{Binding TotalServicesAmount, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource TextDetail}" Margin="0,16,0,0" HorizontalAlignment="Center" Text="No hubo ventas este día."
+                                   Visibility="{Binding TotalTicketsCount, Converter={StaticResource InverseBoolToVis}}" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                    <StackPanel>
+                        <Border Style="{StaticResource Notice}" Margin="0,0,0,10" Padding="12,6"
+                                Visibility="{Binding CashCutStatusMessage, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding CashCutStatusMessage}" TextWrapping="Wrap" />
+                        </Border>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ExportCashCutCsvCommand}" Margin="0,0,8,0" ToolTip="Guarda un archivo CSV en el Escritorio">
+                                <StackPanel Orientation="Horizontal">
+                                    <helpers:Icon Data="{StaticResource IcoFile}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Exportar CSV" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource ButtonPrimary}" Command="{Binding PrintCashCutCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <helpers:Icon Data="{StaticResource IcoPrint}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Imprimir corte" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

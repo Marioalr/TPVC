@@ -1,0 +1,95 @@
+<UserControl x:Class="TPVC.Views.PaymentPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:CheckoutViewModel}"
+             d:DesignHeight="520" d:DesignWidth="380">
+
+    <!-- Cobro: total, forma de pago, recibido y cambio. El mismo en el Punto de Venta y en      -->
+    <!-- "Terminar consulta"; las reglas (efectivo que no alcanza, cuenta vacía) viven en el VM. -->
+    <StackPanel>
+        <StackPanel Visibility="{Binding ShowsClientField, Converter={StaticResource BoolToVis}}" Margin="0,0,0,16">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Cliente" />
+            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding PatientName, UpdateSourceTrigger=PropertyChanged}"
+                     helpers:Field.Placeholder="Público General" AutomationProperties.Name="Cliente" />
+        </StackPanel>
+
+        <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Bottom">
+                <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Total" />
+                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TotalItems, StringFormat='{}{0} artículo(s)'}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" FontSize="30" FontWeight="Bold"
+                       Text="{Binding TotalAmount, StringFormat={}{0:C2}, ConverterCulture=es-MX}" AutomationProperties.Name="Total" />
+        </Grid>
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Forma de pago" />
+        <ListBox Style="{StaticResource ChipList}" Margin="0,0,0,10"
+                 ItemsSource="{Binding PaymentMethods}"
+                 SelectedItem="{Binding SelectedPaymentMethod, Mode=TwoWay}"
+                 AutomationProperties.Name="Forma de pago" />
+
+        <StackPanel Visibility="{Binding IsCash, Converter={StaticResource BoolToVis}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Recibido" />
+            <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" FontSize="18" Height="44"
+                     Text="{Binding CashReceivedText, UpdateSourceTrigger=PropertyChanged}"
+                     helpers:Field.Placeholder="Exacto" AutomationProperties.Name="Efectivo recibido" />
+            <WrapPanel Margin="0,8,0,0">
+                <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Margin="0,0,6,6" Content="Exacto"
+                        Command="{Binding SetExactCashCommand}" ToolTip="Paga exactamente el total" />
+                <ItemsControl ItemsSource="{Binding QuickCashAmounts}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Margin="0,0,6,6"
+                                    Content="{Binding}" ContentStringFormat="{}{0:C0}"
+                                    Command="{Binding DataContext.SetCashReceivedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </WrapPanel>
+
+            <Border Style="{StaticResource NoticeSuccess}" Margin="0,6,0,0" Visibility="{Binding HasChange, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Cambio" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" FontFamily="{StaticResource FontFamilyMono}" FontSize="20" FontWeight="Bold"
+                               Text="{Binding ChangeDue, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource NoticeDanger}" Margin="0,6,0,0" Visibility="{Binding IsCashShort, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Faltan" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" FontFamily="{StaticResource FontFamilyMono}" FontSize="20" FontWeight="Bold"
+                               Text="{Binding MissingAmount, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <Button Style="{StaticResource ButtonPrimary}" Margin="0,16,0,0" MinHeight="52" FontSize="16"
+                Command="{Binding ChargeCommand}" IsEnabled="{Binding CanCharge}"
+                Content="{Binding ChargeText}" AutomationProperties.Name="Cobrar" />
+        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ChargeHint}" HorizontalAlignment="Center" Margin="0,8,0,0"
+                   Visibility="{Binding HasChargeHint, Converter={StaticResource BoolToVis}}" />
+    </StackPanel>
+</UserControl>

@@ -50,13 +50,12 @@ public class PacientesTests
         }
     }
 
-    private async Task<(MedicalRecordsViewModel Records, PosViewModel Pos, ConsultationService Consultations)> CreateRecordsAsync()
+    private async Task<(MedicalRecordsViewModel Records, CheckoutViewModel Checkout, ConsultationService Consultations)> CreateRecordsAsync()
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
-        var pos = new PosViewModel(_service, consultations);
-        var records = new MedicalRecordsViewModel(_service, consultations, pos);
+        var records = new MedicalRecordsViewModel(_service, consultations);
         await records.LoadInitialDataAsync();
-        return (records, pos, consultations);
+        return (records, records.Checkout, consultations);
     }
 
     private static PatientRecord Patient(string name, string record = "", string phone = "", string diagnosis = "") => new()
@@ -404,19 +403,19 @@ public class PacientesTests
     private async Task<List<string>> StoredPrescriptionAsync(int patientId) =>
         (await _service.GetPatientByIdAsync(patientId))!.ActivePrescription.Select(p => p.MedicineName).ToList();
 
-    private static async Task ChargeAsync(MedicalRecordsViewModel records, PosViewModel pos, ConsultationService consultations)
+    private static async Task ChargeAsync(MedicalRecordsViewModel records, CheckoutViewModel checkout, ConsultationService consultations)
     {
         await records.FinalizeConsultationAsync();
-        pos.SelectedPaymentMethod = "Efectivo";
-        pos.CashReceived = 5000m;
-        await pos.ProcessSaleAsync();
+        checkout.SelectedPaymentMethod = "Efectivo";
+        checkout.CashReceived = 5000m;
+        await checkout.ChargeAsync();
         await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage);
     }
 
     [TestMethod]
     public async Task NewConsultation_StartsWithEmptyPrescription_AndOffersToRepeatThePrevious()
     {
-        var (records, pos, consultations) = await CreateRecordsAsync();
+        var (records, checkout, consultations) = await CreateRecordsAsync();
         var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
         var previous = patient.ActivePrescription.Select(p => p.MedicineName).ToList();
 
@@ -435,7 +434,7 @@ public class PacientesTests
         // Terminar sin receta: la nota no lleva medicamentos y el expediente conserva la última receta
         records.ConsultationDiagnosis = "Z00 Revisión general";
         var folio = consultations.CurrentConsultation!.Folio;
-        await ChargeAsync(records, pos, consultations);
+        await ChargeAsync(records, checkout, consultations);
 
         var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
         Assert.IsEmpty(note.Prescriptions, "Una consulta sin receta no guarda la anterior como suya");
@@ -446,7 +445,7 @@ public class PacientesTests
     [TestMethod]
     public async Task RepeatPreviousPrescription_CopiesItems_AndTheyBecomeThisConsultationsPrescription()
     {
-        var (records, pos, consultations) = await CreateRecordsAsync();
+        var (records, checkout, consultations) = await CreateRecordsAsync();
         var patient = records.Patients.First(p => p.ActivePrescription.Count > 0);
         var previous = patient.ActivePrescription.Select(p => (p.MedicineName, p.Dosage)).ToList();
 
@@ -464,7 +463,7 @@ public class PacientesTests
 
         var folio = consultations.CurrentConsultation!.Folio;
         records.ConsultationDiagnosis = "Seguimiento";
-        await ChargeAsync(records, pos, consultations);
+        await ChargeAsync(records, checkout, consultations);
 
         var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
         CollectionAssert.AreEqual(previous.Skip(1).Select(p => p.MedicineName).ToList(), note.Prescriptions.Select(p => p.MedicineName).ToList());
@@ -812,7 +811,7 @@ public class PacientesTests
     [TestMethod]
     public async Task AttendAppointment_StartsConsultationWithReason_AndChargingMarksItAttended()
     {
-        var (records, pos, consultations) = await CreateRecordsAsync();
+        var (records, checkout, consultations) = await CreateRecordsAsync();
         var patient = records.Patients.First();
         await _service.SaveAppointmentAsync(new PatientAppointment
         {
@@ -834,9 +833,9 @@ public class PacientesTests
 
         records.ConsultationDiagnosis = "J02 Faringitis aguda";
         await records.FinalizeConsultationAsync();
-        pos.SelectedPaymentMethod = "Efectivo";
-        pos.CashReceived = 5000m;
-        await pos.ProcessSaleAsync();
+        checkout.SelectedPaymentMethod = "Efectivo";
+        checkout.CashReceived = 5000m;
+        await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage);
         await WaitUntilAsync(() => records.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended));

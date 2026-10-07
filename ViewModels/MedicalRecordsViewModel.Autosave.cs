@@ -48,6 +48,11 @@ public partial class MedicalRecordsViewModel
     private Timer? _autosaveTimer;
     private ConsultationDraft? _pendingDraft;
     private long _draftGeneration;
+
+    // Cada copia lleva un número creciente: una copia vieja que termine de escribirse tarde (otro
+    // hilo del temporizador) nunca sobrescribe a una más nueva
+    private long _draftSequence;
+    private long _lastWrittenDraftSequence;
     private DateTime _lastDraftWriteUtc = DateTime.MinValue;
     private bool _draftSessionActive;
     private bool _suspendAutosave;
@@ -141,6 +146,7 @@ public partial class MedicalRecordsViewModel
         return new ConsultationDraft
         {
             Generation = Interlocked.Read(ref _draftGeneration),
+            Sequence = Interlocked.Increment(ref _draftSequence),
             PatientId = active.PatientId,
             PatientName = active.PatientName,
             Folio = active.Folio,
@@ -182,9 +188,14 @@ public partial class MedicalRecordsViewModel
         {
             // Si la consulta terminó mientras esperaba, no se resucita su borrador
             if (draft.Generation != Interlocked.Read(ref _draftGeneration)) return;
+            if (draft.Sequence <= _lastWrittenDraftSequence) return;
             draft.SavedAt = DateTime.Now;
             saved = _draftStore.Save(draft);
-            if (saved) _lastDraftWriteUtc = DateTime.UtcNow;
+            if (saved)
+            {
+                _lastDraftWriteUtc = DateTime.UtcNow;
+                _lastWrittenDraftSequence = draft.Sequence;
+            }
         }
 
         var status = saved

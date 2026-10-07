@@ -258,7 +258,43 @@ internal sealed class UiSmokeSession
             var suffix = dark ? "oscuro" : "claro";
 
             Show(host, main, "MainHub", $"01-inicio-{suffix}");
-            Show(host, main, "Pos", $"02-pos-{suffix}");
+            var pos = main.PosVM;
+            Show(host, main, "Pos", $"02-pos-vacio-{suffix}");
+            var stocked = pos.Products.Where(p => p.CurrentStock > 3 && p.Price > 0).ToList();
+            pos.AddToCartWithQuantity(stocked[0], 2);
+            pos.AddToCart(stocked[1]);
+            pos.AddServiceOnlyToCart(pos.Services.First());
+            pos.CashReceived = 1000m;
+            Capture(host, $"02b-pos-cuenta-{suffix}");
+            pos.SearchText = "3*para";
+            Capture(host, $"02c-pos-busqueda-{suffix}");
+            pos.SearchText = string.Empty;
+
+            pos.OpenCatalogModal();
+            Capture(host, $"02d-pos-catalogo-{suffix}");
+            pos.CloseCatalogModal();
+
+            WaitFor(pos.OpenServicesModalAsync());
+            Capture(host, $"02e-pos-servicios-{suffix}");
+            pos.OpenCreateServiceModal();
+            Capture(host, $"02f-pos-nuevo-servicio-{suffix}");
+            pos.CloseCreateServiceModal();
+            pos.CloseServicesModal();
+
+            WaitFor(pos.ProcessSaleAsync());
+            Capture(host, $"02g-pos-ticket-{suffix}");
+            pos.CloseTicketModal();
+
+            WaitFor(pos.OpenCashCutModalAsync());
+            Capture(host, $"02h-pos-corte-{suffix}");
+            pos.CloseCashCutModal();
+
+            WaitFor(pos.OpenTicketHistoryModalAsync());
+            Capture(host, $"02i-pos-tickets-{suffix}");
+            pos.RequestCancelSale();
+            Capture(host, $"02j-pos-cancelar-ticket-{suffix}");
+            pos.CloseCancelConfirmModal();
+            pos.CloseTicketHistoryModal();
 
             var records = main.MedicalRecordsVM;
             Show(host, main, "Records", $"03-pacientes-inicio-{suffix}");
@@ -284,6 +320,10 @@ internal sealed class UiSmokeSession
             records.ConsultationTA = "130/85";
             records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
             Capture(host, $"08-consulta-{suffix}");
+
+            // El POS con una consulta en curso (se puede abrir o pasarle la venta)
+            Show(host, main, "Pos", $"08b-pos-con-consulta-{suffix}");
+            main.NavigateTo("Records");
 
             records.ConsultationSection = 5;
             Capture(host, $"09-consulta-tratamiento-{suffix}");

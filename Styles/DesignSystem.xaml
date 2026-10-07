@@ -705,6 +705,20 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeAccentText}" />
     </Style>
 
+    <!-- Existencias de un producto (DataContext = Product): verde, ámbar si quedan pocas, rojo si no hay -->
+    <Style x:Key="StockBadge" TargetType="Border" BasedOn="{StaticResource BadgeSuccess}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsLowStock}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ThemeWarningSubtle}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeWarningText}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsOutOfStock}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeDangerText}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Avisos dentro de la pantalla (no interrumpen) -->
     <Style x:Key="Notice" TargetType="Border">
         <Setter Property="CornerRadius" Value="10" />

@@ -156,46 +156,16 @@ public partial class MainViewModel : ObservableObject
             NavigateTo("Records");
             _ = MedicalRecordsVM?.OpenAgendaPanelAsync();
         };
-        PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService, consultationDraftStore, Notifications);
+        // Cada uno con su propia cuenta y el mismo cobro: terminar una consulta ya no vacía la venta
+        // a medias del mostrador. El POS solo manda a la consulta ("Abrir consulta"), nunca al revés.
+        PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, Notifications);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, consultationDraftStore, Notifications);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
-        // Enlace para volver a la Vista Principal desde el POS o Expedientes
         PosVM.OnBackToHubRequested = () => NavigateTo("MainHub");
-        PosVM.OnCloseModalRequested = () => MedicalRecordsVM.ClosePosModal();
         PosVM.OnOpenConsultationRequested = () => NavigateTo("Records");
         MedicalRecordsVM.OnBackToHubRequested = () => NavigateTo("MainHub");
-
-        // Enlace para enviar receta médica directamente al carrito de venta del POS
-        MedicalRecordsVM.OnSendPrescriptionToPos = (medicine, qty) =>
-        {
-            PosVM.PatientName = MedicalRecordsVM.SelectedPatient?.FullName ?? "Paciente de Consulta";
-            PosVM.AddPrescriptionItem(medicine, qty);
-        };
-
-        // Enlace para liquidar consulta activa en POS
-        MedicalRecordsVM.OnCheckoutConsultationRequested = (consultation) =>
-        {
-            PosVM.IsConsultationCheckout = true;
-            PosVM.CheckoutActiveConsultation();
-            NavigateTo("Pos");
-        };
-
-        PosVM.OnSaleCompletedFromConsultation = () =>
-        {
-            MedicalRecordsVM.HandleSaleCompletedFromConsultation();
-        };
-
-        MedicalRecordsVM.OnNavigateToRecordsRequested = () =>
-        {
-            NavigateTo("Records");
-        };
-
-        MedicalRecordsVM.OnNavigateToPosRequested = () =>
-        {
-            NavigateTo("Pos");
-        };
 
         // Si quedó una consulta sin terminar (cierre o apagón), se abre directo en ella
         _ = OpenRecoveredConsultationAsync();

@@ -22,11 +22,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private readonly Action? _onInventoryChangedHandler;
     private readonly Action? _onProfileChangedHandler;
 
-    public Action<string, int>? OnSendPrescriptionToPos { get; set; }
-    public Action<ActiveConsultation>? OnCheckoutConsultationRequested { get; set; }
-    public Action? OnNavigateToPosRequested { get; set; }
     public Action? OnBackToHubRequested { get; set; }
-    public Action? OnNavigateToRecordsRequested { get; set; }
 
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
@@ -870,8 +866,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         "Certificados"
     };
 
-    [ObservableProperty]
-    private PosViewModel? _posVM;
+    /// <summary>Cuenta de "Terminar consulta": el mismo cobro que el Punto de Venta, con su propia cuenta.</summary>
+    public CheckoutViewModel Checkout { get; }
 
     [ObservableProperty]
     private bool _isPosModalOpen;
@@ -1417,14 +1413,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public MedicalRecordsViewModel() : this(null, null, null, null, null, null, null)
+    public MedicalRecordsViewModel() : this(null, null, null, null, null, null)
     {
     }
 
     public MedicalRecordsViewModel(
         InventoryService? inventoryService, 
         ConsultationService? consultationService = null, 
-        PosViewModel? posViewModel = null,
         ClinicProfileService? clinicProfileService = null,
         PrintingService? printingService = null,
         ConsultationDraftStore? consultationDraftStore = null,
@@ -1432,7 +1427,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
-        PosVM = posViewModel;
+        Checkout = new CheckoutViewModel(inventoryService, () =>
+            _clinicProfileService?.CurrentProfile?.DoctorNameWithTitle is { Length: > 0 } doctor ? doctor : "Dr. Titular")
+        {
+            // Quitar todos los cargos termina una consulta de cortesía sin registrar una venta en ceros
+            EmptyChargeText = "Terminar consulta (sin cargos)",
+            ChargeSuffix = " y terminar",
+            Notify = (message, ok) => { if (!ok) ShowWarning(message); },
+            Completed = OnConsultationChargedAsync,
+            Failed = () => _ = LoadServicesAsync()
+        };
         InitializeAutosave(consultationDraftStore);
         InitializePacientes(notificationService);
         _clinicProfileService = clinicProfileService;
@@ -2657,24 +2661,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void SendPrescriptionToPos()
-    {
-        if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
-        {
-            InfoModalMessage = "El paciente no tiene medicamentos activos en su receta para despachar.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        foreach (var item in SelectedPatient.ActivePrescription)
-        {
-            OnSendPrescriptionToPos?.Invoke(item.MedicineName, item.RecommendedQuantity);
-        }
-
-        OnNavigateToPosRequested?.Invoke();
-    }
-
-    [RelayCommand]
     public async Task ToggleActiveConsultationAsync()
     {
         if (!HasActiveConsultation)
@@ -2899,13 +2885,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         _isCurrentConsultationSaved = false;
         await SaveActiveConsultationToDbAsync(endedAt);
 
-        PosVM ??= new PosViewModel(_inventoryService, _consultationService);
-        PosVM.IsEmbeddedInModal = true;
-        PosVM.IsConsultationCheckout = true;
-        PosVM.OnSaleCompletedFromConsultation ??= HandleSaleCompletedFromConsultation;
-        await PosVM.InitializeAsync();
-        if (Services.Count == 0) await LoadServicesAsync();
-        PosVM.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? "Público General";
+        // Existencias al día para la cuenta (lo surtido se descuenta al cobrar)
+        await LoadServicesAsync();
+        Checkout.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? CheckoutViewModel.DefaultClient;
 
         // Honorario + todo lo cargado durante la consulta. La consulta sigue activa hasta cobrar:
         // "Volver a la consulta" permite agregar algo que faltó.
@@ -2913,45 +2895,26 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsPosModalOpen = true;
     }
 
-    [RelayCommand]
-    public async Task OpenPosModalAsync()
-    {
-        if (_consultationService == null || !_consultationService.HasActiveConsultation)
-        {
-            InfoModalMessage = "Se necesita una consulta médica activa para agregar medicamentos, insumos o servicios a la cuenta del paciente.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        if (PosVM != null)
-        {
-            PosVM.IsEmbeddedInModal = true;
-            await PosVM.InitializeAsync();
-        }
-
-        IsPosModalOpen = true;
-    }
-
+    /// <summary>"Volver a la consulta" (o Esc) desde Terminar consulta: no cobra ni la cierra.</summary>
     [RelayCommand]
     public void ClosePosModal()
     {
         IsPosModalOpen = false;
-        if (PosVM != null)
-        {
-            bool wasCheckout = PosVM.IsConsultationCheckout;
-            PosVM.IsEmbeddedInModal = false;
-            PosVM.IsConsultationCheckout = false;
 
-            // Se volvió a la consulta sin cobrar: el cobro se rearma al terminar de nuevo y la
-            // nota se actualizará entonces (no dejar el carrito de la consulta en el POS general)
-            if (wasCheckout && HasActiveConsultation)
-            {
-                PosVM.Cart.Clear();
-                PosVM.RecalculateTotals();
-                _isCurrentConsultationSaved = false;
-            }
+        // El cobro se rearma al terminar de nuevo y la nota se actualizará entonces
+        if (HasActiveConsultation)
+        {
+            Checkout.Reset();
+            _isCurrentConsultationSaved = false;
         }
         SyncActiveConsultation();
+    }
+
+    /// <summary>Se cobró la consulta (o se terminó sin cargos): se cierra y se vuelve al inicio.</summary>
+    private async Task OnConsultationChargedAsync(SaleReceipt? receipt)
+    {
+        await HandleSaleCompletedFromConsultationAsync();
+        if (receipt != null) ShowSuccess($"Consulta cobrada · {receipt.Folio}");
     }
 
     public async Task HandleSaleCompletedFromConsultationAsync()
@@ -2998,9 +2961,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ConsultationsHistory.Clear();
         SelectedHistoryConsultation = null;
 
-        // 5. Si la venta se procesó en la vista independiente de POS, volver a la vista de Expedientes/Consulta
-        OnNavigateToRecordsRequested?.Invoke();
-
         // 6. La cita que se atendía queda como atendida y se vuelve al inicio, listo para el siguiente
         await CompleteAttendedAppointmentAsync();
         GoToPatientsHome();
@@ -3011,29 +2971,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void HandleSaleCompletedFromConsultation()
-    {
-        _ = HandleSaleCompletedFromConsultationAsync();
-    }
-
     [RelayCommand]
     public async Task FinalizeConsultationAndOpenPosAsync()
     {
         await FinalizeConsultationAsync();
-    }
-
-    [RelayCommand]
-    public void CheckoutActiveConsultation()
-    {
-        if (_consultationService?.CurrentConsultation == null)
-        {
-            InfoModalMessage = "No hay ninguna consulta médica activa para liquidar.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        var consultation = _consultationService.CurrentConsultation;
-        OnCheckoutConsultationRequested?.Invoke(consultation);
     }
 
     [RelayCommand]

@@ -52,13 +52,12 @@ public class ConsultationAutosaveTests
         try { Directory.Delete(Path.GetDirectoryName(_draftPath)!, recursive: true); } catch { }
     }
 
-    private async Task<(MedicalRecordsViewModel Records, PosViewModel Pos, ConsultationService Consultations)> OpenAppAsync()
+    private async Task<(MedicalRecordsViewModel Records, CheckoutViewModel Checkout, ConsultationService Consultations)> OpenAppAsync()
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
-        var pos = new PosViewModel(_service, consultations);
-        var records = new MedicalRecordsViewModel(_service, consultations, pos, null, null, new ConsultationDraftStore(_draftPath));
+        var records = new MedicalRecordsViewModel(_service, consultations, consultationDraftStore: new ConsultationDraftStore(_draftPath));
         await records.InitialLoad;
-        return (records, pos, consultations);
+        return (records, records.Checkout, consultations);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
@@ -90,7 +89,7 @@ public class ConsultationAutosaveTests
 
         // Cierre de la app (o apagón): se guarda lo último y se vuelve a abrir
         records.Dispose();
-        var (reopened, pos, reopenedConsultations) = await OpenAppAsync();
+        var (reopened, checkout, reopenedConsultations) = await OpenAppAsync();
 
         Assert.IsTrue(reopened.HasActiveConsultation, "La consulta se retoma al abrir");
         Assert.IsTrue(reopened.IsConsultationRecovered);
@@ -109,7 +108,7 @@ public class ConsultationAutosaveTests
 
         // Al cobrar, la consulta terminada ya no se recupera
         await reopened.FinalizeConsultationAsync();
-        await pos.ProcessSaleAsync();
+        await checkout.ChargeAsync();
         await WaitUntilAsync(() => !reopenedConsultations.HasActiveConsultation);
         Assert.IsFalse(File.Exists(_draftPath));
         Assert.AreEqual(string.Empty, reopened.AutosaveStatus);

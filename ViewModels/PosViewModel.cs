@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,44 +12,135 @@ using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
-public partial class CartItem : ObservableObject
-{
-    public int ProductId { get; set; }
-    public string Code { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string? GenericName { get; set; }
-    public string? Presentation { get; set; }
-    public string Unit { get; set; } = "Piezas";
-    public int AvailableStock { get; set; }
-    public decimal UnitPrice { get; set; }
-    public bool RequiresRefrigeration { get; set; }
-    public bool IsService { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Subtotal))]
-    private int _quantity = 1;
-
-    public decimal Subtotal => Quantity * UnitPrice;
-}
-
+/// <summary>
+/// Punto de venta (venta de mostrador). El buscador es el centro: se escribe, Enter agrega el
+/// primero ("3*para" agrega 3) y la cuenta se cobra con el mismo componente que "Terminar
+/// consulta" (<see cref="CheckoutViewModel"/>). Con el POS solo se manda a la consulta, nunca al
+/// revés: "Abrir consulta" y "Agregar a la consulta" cuando hay una en curso.
+/// Corte de caja, historial y servicios viven en archivos parciales.
+/// </summary>
 public partial class PosViewModel : ObservableObject, IDisposable
 {
+    private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
+    private static readonly Regex QuantityPrefix = new(@"^\s*(\d{1,3})\s*\*\s*(.*)$", RegexOptions.Compiled);
+
     private readonly InventoryService _inventoryService;
     private readonly ConsultationService _consultationService;
     private readonly ClinicProfileService? _clinicProfileService;
     private readonly PrintingService? _printingService;
+    private readonly NotificationService? _notifications;
     private readonly Action? _onProfileChangedHandler;
     private readonly Action? _onSalesChangedHandler;
-    private readonly Action? _onPatientsChangedHandler;
 
     public Action? OnBackToHubRequested { get; set; }
+
+    /// <summary>El POS manda a la consulta (nunca al revés): la cuenta se cobra al terminarla.</summary>
+    public Action? OnOpenConsultationRequested { get; set; }
+
+    /// <summary>Pide el foco en el buscador (al cerrar una hoja, tras cobrar...).</summary>
+    public event Action? FocusSearchRequested;
 
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
 
-    // ==========================================
-    // PERFIL DEL CONSULTORIO Y MÉDICO EN TICKET
-    // ==========================================
+    [RelayCommand]
+    public void OpenActiveConsultation() => OnOpenConsultationRequested?.Invoke();
+
+    public PosViewModel(
+        InventoryService inventoryService,
+        ConsultationService? consultationService = null,
+        ClinicProfileService? clinicProfileService = null,
+        PrintingService? printingService = null,
+        NotificationService? notificationService = null)
+    {
+        _inventoryService = inventoryService;
+        _consultationService = consultationService ?? new ConsultationService();
+        _clinicProfileService = clinicProfileService;
+        _printingService = printingService;
+        _notifications = notificationService;
+
+        Checkout = new CheckoutViewModel(inventoryService, () => string.IsNullOrWhiteSpace(DoctorNameWithTitle) ? "Dr. Titular" : DoctorNameWithTitle)
+        {
+            Notify = (message, ok) => ShowAlert(message, ok),
+            Completed = OnSaleCompletedAsync,
+            Failed = () => _ = LoadCatalogAsync()
+        };
+        Checkout.PropertyChanged += (_, e) =>
+        {
+            // Los nombres de siempre del POS siguen avisando sus cambios
+            switch (e.PropertyName)
+            {
+                case nameof(CheckoutViewModel.TotalItems): OnPropertyChanged(nameof(TotalCartItems)); break;
+                case nameof(CheckoutViewModel.TotalAmount): OnPropertyChanged(nameof(TotalCartAmount)); break;
+                case nameof(CheckoutViewModel.HasItems): OnPropertyChanged(nameof(HasCartItems)); OnPropertyChanged(nameof(CanAddToActiveConsultation)); break;
+                case nameof(CheckoutViewModel.ChangeDue): OnPropertyChanged(nameof(ChangeDue)); break;
+                case nameof(CheckoutViewModel.HasChange): OnPropertyChanged(nameof(HasChange)); break;
+            }
+        };
+
+        _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
+        _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
+
+        if (_clinicProfileService != null)
+        {
+            _onProfileChangedHandler = RefreshProfileData;
+            _clinicProfileService.ProfileChanged += _onProfileChangedHandler;
+            RefreshProfileData();
+        }
+
+        _onSalesChangedHandler = () => RunOnUi(async () =>
+        {
+            if (IsTicketHistoryModalOpen) await LoadSalesHistoryAsync();
+            if (IsCashCutModalOpen) await LoadCashCutForDateAsync();
+        });
+        _inventoryService.OnSalesChanged += _onSalesChangedHandler;
+
+        SyncActiveConsultation();
+        _ = LoadServicesAsync();
+    }
+
+    private static void RunOnUi(Func<Task> action)
+    {
+        try
+        {
+            var app = System.Windows.Application.Current;
+            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.InvokeAsync(action);
+                return;
+            }
+        }
+        catch
+        {
+            // Sin WPF (pruebas en Linux)
+        }
+        _ = action();
+    }
+
+    public void Dispose()
+    {
+        _inventoryService.OnInventoryChanged -= OnInventoryChangedHandler;
+        if (_onSalesChangedHandler != null) _inventoryService.OnSalesChanged -= _onSalesChangedHandler;
+        if (_clinicProfileService != null && _onProfileChangedHandler != null) _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
+        _consultationService.OnActiveConsultationChanged -= SyncActiveConsultation;
+        StopConsultationTimer();
+        GC.SuppressFinalize(this);
+    }
+
+    private void OnInventoryChangedHandler() => RunOnUi(async () =>
+    {
+        await LoadCatalogAsync();
+        await LoadServicesAsync();
+    });
+
+    public async Task InitializeAsync()
+    {
+        await LoadCatalogAsync();
+        await LoadServicesAsync();
+    }
+
+    // ================================================================== perfil (ticket)
+
     [ObservableProperty]
     private string _clinicProfileName = "Consultorio Médico TPVC";
 
@@ -61,51 +153,33 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _clinicAddressAndPhone = "";
 
-    // ==========================================
-    // CORTE DE CAJA DIARIO
-    // ==========================================
-    [ObservableProperty]
-    private bool _isCashCutModalOpen;
+    public void RefreshProfileData()
+    {
+        var p = _clinicProfileService?.CurrentProfile;
+        if (p == null) return;
+
+        ClinicProfileName = string.IsNullOrWhiteSpace(p.ClinicName) ? "Consultorio Médico TPVC" : p.ClinicName;
+        DoctorNameWithTitle = p.DoctorNameWithTitle;
+
+        var details = new List<string>();
+        if (!string.IsNullOrWhiteSpace(p.DoctorSpecialty)) details.Add(p.DoctorSpecialty);
+        if (!string.IsNullOrWhiteSpace(p.DoctorLicense)) details.Add($"Céd. Prof. {p.DoctorLicense}");
+        DoctorSpecialtyAndLicense = details.Count > 0 ? string.Join(" • ", details) : "Médico General";
+
+        var contact = new List<string>();
+        if (!string.IsNullOrWhiteSpace(p.ClinicAddress)) contact.Add(p.ClinicAddress);
+        if (!string.IsNullOrWhiteSpace(p.ClinicPhone)) contact.Add($"Tel: {p.ClinicPhone}");
+        ClinicAddressAndPhone = contact.Count > 0 ? string.Join(" • ", contact) : "";
+    }
+
+    // ================================================================== catálogo y búsqueda
 
     [ObservableProperty]
-    private DailyCashCut? _currentCashCut;
+    private ObservableCollection<Category> _categories = new();
 
     [ObservableProperty]
-    private DateTime _cashCutDate = DateTime.Today;
+    private ObservableCollection<Product> _products = new();
 
-    [ObservableProperty]
-    private string? _cashCutStatusMessage;
-
-    // ==========================================
-    // HISTORIAL Y CANCELACIÓN DE TICKETS
-    // ==========================================
-    [ObservableProperty]
-    private bool _isTicketHistoryModalOpen;
-
-    [ObservableProperty]
-    private string _ticketSearchFolio = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<Sale> _recentSales = new();
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanCancelSelectedSale))]
-    private Sale? _selectedSaleForDetail;
-
-    public bool CanCancelSelectedSale => SelectedSaleForDetail != null && !SelectedSaleForDetail.IsCancelled;
-
-    [ObservableProperty]
-    private bool _isCancelConfirmModalOpen;
-
-    [ObservableProperty]
-    private string _cancellationReason = "Devolución de mercancía";
-
-    [ObservableProperty]
-    private string? _ticketHistoryStatusMessage;
-
-    // ==========================================
-    // BÚSQUEDA EN TIEMPO REAL CON DROPDOWN
-    // ==========================================
     [ObservableProperty]
     private string _searchText = string.Empty;
 
@@ -121,38 +195,163 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private Product? _selectedSuggestion;
 
+    /// <summary>Cantidad escrita antes del asterisco ("3*para" → 3).</summary>
+    [ObservableProperty]
+    private int _pendingQuantity = 1;
+
+    public bool HasPendingQuantity => PendingQuantity > 1;
+    public string PendingQuantityText => $"Enter agrega {PendingQuantity}";
+    public bool HasSearchText => !string.IsNullOrWhiteSpace(SearchText);
+    public bool HasNoSearchResults => HasSearchText && SearchSuggestions.Count == 0;
+
+    partial void OnPendingQuantityChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasPendingQuantity));
+        OnPropertyChanged(nameof(PendingQuantityText));
+    }
+
     partial void OnSelectedSuggestionIndexChanged(int value)
     {
-        if (value >= 0 && value < SearchSuggestions.Count)
-        {
-            SelectedSuggestion = SearchSuggestions[value];
-        }
-        else
-        {
-            SelectedSuggestion = null;
-        }
+        SelectedSuggestion = value >= 0 && value < SearchSuggestions.Count ? SearchSuggestions[value] : null;
     }
 
     partial void OnSelectedSuggestionChanged(Product? value)
     {
-        if (value != null)
-        {
-            var idx = SearchSuggestions.IndexOf(value);
-            if (idx >= 0 && idx != SelectedSuggestionIndex)
-            {
-                SelectedSuggestionIndex = idx;
-            }
-        }
+        if (value == null) return;
+        var idx = SearchSuggestions.IndexOf(value);
+        if (idx >= 0 && idx != SelectedSuggestionIndex) SelectedSuggestionIndex = idx;
     }
 
-    // ==========================================
-    // CATÁLOGO GENERAL Y MODAL DE BÚSQUEDA
-    // ==========================================
-    [ObservableProperty]
-    private ObservableCollection<Category> _categories = new();
+    public async Task LoadCatalogAsync()
+    {
+        var cats = await _inventoryService.GetCategoriesAsync();
+        var allCat = new Category { Id = 0, Name = "Todas" };
+        Categories = new ObservableCollection<Category>(new[] { allCat }.Concat(cats));
+        if (CatalogSelectedCategory == null || !Categories.Any(c => c.Id == CatalogSelectedCategory.Id))
+        {
+            CatalogSelectedCategory = allCat;
+        }
+        else
+        {
+            CatalogSelectedCategory = Categories.First(c => c.Id == CatalogSelectedCategory.Id);
+        }
 
-    [ObservableProperty]
-    private ObservableCollection<Product> _products = new();
+        Products = new ObservableCollection<Product>(await _inventoryService.GetProductsAsync());
+        ApplyCatalogFilters();
+        ApplySearchSuggestions(SearchText);
+    }
+
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplySearchSuggestions(value);
+        OnPropertyChanged(nameof(HasSearchText));
+    }
+
+    /// <summary>"3*para" → (3, "para"); sin asterisco la cantidad es 1.</summary>
+    public static (int Quantity, string Query) ParseQuantityPrefix(string? text)
+    {
+        var match = QuantityPrefix.Match(text ?? string.Empty);
+        if (!match.Success) return (1, text ?? string.Empty);
+        int quantity = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        return (Math.Max(1, quantity), match.Groups[2].Value);
+    }
+
+    /// <summary>
+    /// Productos que coinciden (sin acentos): el código exacto primero (lector de código de barras),
+    /// luego el nombre que empieza así, el genérico que empieza así, una palabra que empieza así y
+    /// al final lo que lo contiene en nombre, genérico, código o ubicación. Dentro de cada grupo,
+    /// los que tienen existencias primero.
+    /// </summary>
+    public static List<Product> RankProducts(IEnumerable<Product> products, string? query, int limit = 8)
+    {
+        var q = TextSearch.Normalize(query);
+        if (q.Length == 0) return new List<Product>();
+
+        return products
+            .Select(p =>
+            {
+                var name = TextSearch.Normalize(p.Name);
+                var generic = TextSearch.Normalize(p.GenericName);
+                var code = TextSearch.Normalize(p.Code);
+                int rank;
+                if (code == q) rank = 0;
+                else if (name.StartsWith(q, StringComparison.Ordinal)) rank = 1;
+                else if (generic.StartsWith(q, StringComparison.Ordinal)) rank = 2;
+                else if ((" " + name).Contains(" " + q, StringComparison.Ordinal) || (" " + generic).Contains(" " + q, StringComparison.Ordinal)) rank = 3;
+                else if (TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location)) rank = 4;
+                else rank = -1;
+                return (Product: p, Rank: rank);
+            })
+            .Where(x => x.Rank >= 0)
+            .OrderBy(x => x.Rank)
+            .ThenBy(x => x.Product.CurrentStock <= 0)
+            .ThenBy(x => x.Product.Name, StringComparer.CurrentCulture)
+            .Take(limit)
+            .Select(x => x.Product)
+            .ToList();
+    }
+
+    private void ApplySearchSuggestions(string? text)
+    {
+        var (quantity, query) = ParseQuantityPrefix(text);
+        PendingQuantity = quantity;
+
+        SearchSuggestions = new ObservableCollection<Product>(RankProducts(Products, query));
+        IsSearchDropdownOpen = SearchSuggestions.Count > 0;
+        SelectedSuggestionIndex = SearchSuggestions.Count > 0 ? 0 : -1;
+        SelectedSuggestion = SearchSuggestions.FirstOrDefault();
+        OnPropertyChanged(nameof(HasNoSearchResults));
+    }
+
+    [RelayCommand]
+    public void MoveSuggestionDown()
+    {
+        if (SearchSuggestions.Count == 0) return;
+        SelectedSuggestionIndex = SelectedSuggestionIndex < 0 || SelectedSuggestionIndex >= SearchSuggestions.Count - 1 ? 0 : SelectedSuggestionIndex + 1;
+    }
+
+    [RelayCommand]
+    public void MoveSuggestionUp()
+    {
+        if (SearchSuggestions.Count == 0) return;
+        SelectedSuggestionIndex = SelectedSuggestionIndex <= 0 || SelectedSuggestionIndex >= SearchSuggestions.Count ? SearchSuggestions.Count - 1 : SelectedSuggestionIndex - 1;
+    }
+
+    /// <summary>Enter en el buscador: agrega la sugerencia marcada con la cantidad escrita.</summary>
+    [RelayCommand]
+    public void ConfirmSelectedSuggestion()
+    {
+        if (SearchSuggestions.Count == 0) return;
+        var target = SelectedSuggestion
+            ?? (SelectedSuggestionIndex >= 0 && SelectedSuggestionIndex < SearchSuggestions.Count ? SearchSuggestions[SelectedSuggestionIndex] : null)
+            ?? SearchSuggestions[0];
+        SelectSuggestion(target);
+    }
+
+    [RelayCommand]
+    public void SelectSuggestion(Product? product)
+    {
+        if (product == null) return;
+        AddToCartWithQuantity(product, PendingQuantity);
+        SearchText = string.Empty;
+        FocusSearchRequested?.Invoke();
+    }
+
+    [RelayCommand]
+    public void AddFirstSuggestion() => ConfirmSelectedSuggestion();
+
+    [RelayCommand]
+    public void CloseSearchDropdown() => IsSearchDropdownOpen = false;
+
+    /// <summary>Esc en el buscador: primero cierra la lista, luego borra lo escrito.</summary>
+    [RelayCommand]
+    public void ClearSearch()
+    {
+        SearchText = string.Empty;
+        FocusSearchRequested?.Invoke();
+    }
+
+    // ================================================================== catálogo (hoja)
 
     [ObservableProperty]
     private bool _isCatalogModalOpen;
@@ -166,557 +365,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ObservableCollection<Product> _catalogFilteredProducts = new();
 
-    // ==========================================
-    // CATÁLOGO DE SERVICIOS CLÍNICOS E INSUMOS (POS)
-    // ==========================================
-    [ObservableProperty]
-    private ObservableCollection<ClinicalService> _services = new();
+    public string CatalogSummary => CatalogFilteredProducts.Count == 1 ? "1 producto" : $"{CatalogFilteredProducts.Count} productos";
 
-    [ObservableProperty]
-    private ObservableCollection<ClinicalService> _filteredServices = new();
-
-    [ObservableProperty]
-    private ClinicalService? _selectedService;
-
-    [ObservableProperty]
-    private bool _isServicesModalOpen;
-
-    [ObservableProperty]
-    private string _serviceCategoryFilter = "Todos";
-
-    [ObservableProperty]
-    private string _serviceSearchText = string.Empty;
-
-    public List<string> ServiceCategories { get; } = new()
-    {
-        "Todos",
-        "Consulta",
-        "Curaciones",
-        "Procedimientos",
-        "Diagnóstico",
-        "Certificados"
-    };
-
-    // Modal de creación de servicio desde POS
-    [ObservableProperty]
-    private bool _isCreateServiceModalOpen;
-
-    [ObservableProperty]
-    private string _newServiceCode = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceName = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceDescription = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceCategory = "Consulta";
-
-    [ObservableProperty]
-    private decimal _newServicePrice = 300.00m;
-
-    [ObservableProperty]
-    private int _newServiceDuration = 20;
-
-    [ObservableProperty]
-    private ObservableCollection<Product> _availableProductsForService = new();
-
-    [ObservableProperty]
-    private Product? _selectedProductForService;
-
-    [ObservableProperty]
-    private int _newProductQuantity = 1;
-
-    [ObservableProperty]
-    private string _newProductInstructions = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<ServiceDefaultProduct> _newServiceDefaultProducts = new();
-
-    // ==========================================
-    // VENTA ACTUAL / CARRITO PRINCIPAL
-    // ==========================================
-    [ObservableProperty]
-    private ObservableCollection<CartItem> _cart = new();
-
-    [ObservableProperty]
-    private int _totalCartItems = 0;
-
-    [ObservableProperty]
-    private decimal _totalCartAmount = 0m;
-
-    [ObservableProperty]
-    private bool _hasCartItems;
-
-    [ObservableProperty]
-    private string _patientName = "Público General";
-
-    [ObservableProperty]
-    private string _selectedPaymentMethod = "Efectivo";
-
-    [ObservableProperty]
-    private decimal _cashReceived = 0m;
-
-    public decimal ChangeDue => Math.Max(0m, CashReceived - TotalCartAmount);
-
-    public bool HasChange => CashReceived >= TotalCartAmount && TotalCartAmount > 0;
-
-    partial void OnCashReceivedChanged(decimal value)
-    {
-        OnPropertyChanged(nameof(ChangeDue));
-        OnPropertyChanged(nameof(HasChange));
-    }
-
-    public List<string> PaymentMethods { get; } = new()
-    {
-        "Efectivo",
-        "Tarjeta Débito/Crédito",
-        "Transferencia"
-    };
-
-    partial void OnCartChanged(ObservableCollection<CartItem>? oldValue, ObservableCollection<CartItem> newValue)
-    {
-        // Una sola suscripción por colección: antes cada reemplazo del carrito sumaba otra
-        if (oldValue != null) oldValue.CollectionChanged -= Cart_CollectionChanged;
-        newValue.CollectionChanged += Cart_CollectionChanged;
-        RecalculateTotals();
-    }
-
-    private void Cart_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => RecalculateTotals();
-
-    // ==========================================
-    // COMPROBANTE / TICKET DE VENTA SIMULADO
-    // ==========================================
-    [ObservableProperty]
-    private SaleReceipt? _currentReceipt;
-
-    [ObservableProperty]
-    private bool _isTicketModalOpen;
-
-    [ObservableProperty]
-    private string? _ticketStatusMessage;
-
-    [ObservableProperty]
-    private bool _isTicketPrinted;
-
-    // ==========================================
-    // NOTIFICACIONES Y ALERTAS
-    // ==========================================
-    [ObservableProperty]
-    private string? _alertMessage;
-
-    [ObservableProperty]
-    private bool _isAlertVisible;
-
-    [ObservableProperty]
-    private bool _isSuccessAlert;
-
-    // ==========================================
-    // ESTADO DE CONSULTA MÉDICA ACTIVA
-    // ==========================================
-    public bool HasActiveConsultation => _consultationService.HasActiveConsultation;
-    public ActiveConsultation? ActiveConsultation => _consultationService.CurrentConsultation;
-    public string ActiveConsultationFolio => _consultationService.CurrentConsultation?.Folio ?? string.Empty;
-    public string ActiveConsultationPatientName => _consultationService.CurrentConsultation?.PatientName ?? string.Empty;
-    public int ActiveConsultationItemsCount => _consultationService.CurrentConsultation?.TotalItems ?? 0;
-    public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
-
-    [ObservableProperty]
-    private string _activeConsultationElapsedTime = "00:00";
-
-    private System.Threading.Timer? _consultationTimer;
-
-    [ObservableProperty]
-    private bool _isSelectPatientModalOpen;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _availablePatientsForConsultation = new();
-
-    [ObservableProperty]
-    private PatientRecord? _selectedPatientForConsultation;
-
-    [ObservableProperty]
-    private string _newConsultationChiefComplaint = "Consulta Médica General";
-
-    // ==========================================
-    // MODO MODAL EMBEBIDO (DESDE EXPEDIENTES CLÍNICOS)
-    // ==========================================
-    [ObservableProperty]
-    private bool _isEmbeddedInModal;
-
-    [ObservableProperty]
-    private bool _isConsultationCheckout;
-
-    public Action? OnCloseModalRequested { get; set; }
-
-    /// <summary>El POS manda a la consulta (nunca al revés): la cuenta se cobra al terminarla.</summary>
-    public Action? OnOpenConsultationRequested { get; set; }
-
-    [RelayCommand]
-    public void OpenActiveConsultation() => OnOpenConsultationRequested?.Invoke();
-    public Action? OnSaleCompletedFromConsultation { get; set; }
-
-    [RelayCommand]
-    public void CloseModal()
-    {
-        OnCloseModalRequested?.Invoke();
-    }
-
-    public PosViewModel(
-        InventoryService inventoryService, 
-        ConsultationService? consultationService = null,
-        ClinicProfileService? clinicProfileService = null,
-        PrintingService? printingService = null)
-    {
-        _inventoryService = inventoryService;
-        _consultationService = consultationService ?? new ConsultationService();
-        _clinicProfileService = clinicProfileService;
-        _printingService = printingService;
-
-        _inventoryService.OnInventoryChanged += OnInventoryChangedHandler;
-        _consultationService.OnActiveConsultationChanged += SyncActiveConsultation;
-        _cart.CollectionChanged += Cart_CollectionChanged;
-
-        if (_clinicProfileService != null)
-        {
-            _onProfileChangedHandler = () => RefreshProfileData();
-            _clinicProfileService.ProfileChanged += _onProfileChangedHandler;
-            RefreshProfileData();
-        }
-
-        _onSalesChangedHandler = () =>
-        {
-            try
-            {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
-                {
-                    app.Dispatcher.InvokeAsync(async () =>
-                    {
-                        if (IsTicketHistoryModalOpen) await LoadSalesHistoryAsync();
-                        if (IsCashCutModalOpen) await LoadCashCutForDateAsync();
-                    });
-                    return;
-                }
-            }
-            catch { }
-
-            if (IsTicketHistoryModalOpen) _ = LoadSalesHistoryAsync();
-            if (IsCashCutModalOpen) _ = LoadCashCutForDateAsync();
-        };
-        _inventoryService.OnSalesChanged += _onSalesChangedHandler;
-
-        _onPatientsChangedHandler = () =>
-        {
-            try
-            {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
-                {
-                    app.Dispatcher.InvokeAsync(RefreshAvailablePatients);
-                    return;
-                }
-            }
-            catch { }
-            RefreshAvailablePatients();
-        };
-        // La lista de pacientes la publica ConsultationService después de recargarse: escuchar
-        // el evento de la base dejaba al POS un paso atrasado (se ejecutaba antes de la recarga)
-        _consultationService.PatientsChanged += _onPatientsChangedHandler;
-
-        RefreshAvailablePatients();
-        SyncActiveConsultation();
-
-        _ = LoadServicesAsync();
-    }
-
-    public void RefreshAvailablePatients()
-    {
-        var currentSelectedId = SelectedPatientForConsultation?.Id;
-        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-        if (currentSelectedId.HasValue && currentSelectedId.Value > 0)
-        {
-            SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault(p => p.Id == currentSelectedId.Value) 
-                ?? AvailablePatientsForConsultation.FirstOrDefault();
-        }
-        else
-        {
-            SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
-        }
-    }
-
-    public void SyncActiveConsultation()
-    {
-        OnPropertyChanged(nameof(HasActiveConsultation));
-        OnPropertyChanged(nameof(ActiveConsultation));
-        OnPropertyChanged(nameof(ActiveConsultationFolio));
-        OnPropertyChanged(nameof(ActiveConsultationPatientName));
-        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
-        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
-
-        if (HasActiveConsultation)
-        {
-            StartConsultationTimer();
-        }
-        else
-        {
-            StopConsultationTimer();
-        }
-    }
-
-    private void StartConsultationTimer()
-    {
-        _consultationTimer?.Dispose();
-        UpdateActiveConsultationTimer();
-        _consultationTimer = new System.Threading.Timer(_ =>
-        {
-            try
-            {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
-                {
-                    app.Dispatcher.InvokeAsync(() => UpdateActiveConsultationTimer());
-                }
-                else
-                {
-                    UpdateActiveConsultationTimer();
-                }
-            }
-            catch
-            {
-                // Ignored
-            }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-    }
-
-    private void StopConsultationTimer()
-    {
-        _consultationTimer?.Dispose();
-        _consultationTimer = null;
-        ActiveConsultationElapsedTime = "00:00";
-    }
-
-    public void UpdateActiveConsultationTimer(DateTime? asOf = null)
-    {
-        if (_consultationService?.CurrentConsultation != null)
-        {
-            ActiveConsultationElapsedTime = _consultationService.CurrentConsultation.GetFormattedElapsedTime(asOf);
-        }
-        else
-        {
-            ActiveConsultationElapsedTime = "00:00";
-        }
-    }
-
-    public void RefreshProfileData()
-    {
-        var p = _clinicProfileService?.CurrentProfile;
-        if (p != null)
-        {
-            ClinicProfileName = string.IsNullOrWhiteSpace(p.ClinicName) ? "Consultorio Médico TPVC" : p.ClinicName;
-            DoctorNameWithTitle = p.DoctorNameWithTitle;
-
-            var details = new List<string>();
-            if (!string.IsNullOrWhiteSpace(p.DoctorSpecialty)) details.Add(p.DoctorSpecialty);
-            if (!string.IsNullOrWhiteSpace(p.DoctorLicense)) details.Add($"Céd. Prof. {p.DoctorLicense}");
-            DoctorSpecialtyAndLicense = details.Count > 0 ? string.Join(" • ", details) : "Médico General";
-
-            var contact = new List<string>();
-            if (!string.IsNullOrWhiteSpace(p.ClinicAddress)) contact.Add(p.ClinicAddress);
-            if (!string.IsNullOrWhiteSpace(p.ClinicPhone)) contact.Add($"Tel: {p.ClinicPhone}");
-            ClinicAddressAndPhone = contact.Count > 0 ? string.Join(" • ", contact) : "";
-        }
-    }
-
-    public void Dispose()
-    {
-        _inventoryService.OnInventoryChanged -= OnInventoryChangedHandler;
-        if (_onSalesChangedHandler != null)
-        {
-            _inventoryService.OnSalesChanged -= _onSalesChangedHandler;
-        }
-        if (_onPatientsChangedHandler != null)
-        {
-            _consultationService.PatientsChanged -= _onPatientsChangedHandler;
-        }
-        if (_clinicProfileService != null && _onProfileChangedHandler != null)
-        {
-            _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
-        }
-        _consultationService.OnActiveConsultationChanged -= SyncActiveConsultation;
-        StopConsultationTimer();
-        GC.SuppressFinalize(this);
-    }
-
-    private void OnInventoryChangedHandler()
-    {
-        try
-        {
-            var app = System.Windows.Application.Current;
-            if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
-            {
-                app.Dispatcher.InvokeAsync(async () =>
-                {
-                    await LoadCatalogAsync();
-                    await LoadServicesAsync();
-                });
-                return;
-            }
-        }
-        catch
-        {
-            // Fallback para entornos donde WPF Application/Dispatcher no está disponible (ej. Linux tests)
-        }
-
-        _ = LoadCatalogAsync();
-        _ = LoadServicesAsync();
-    }
-
-    public async Task InitializeAsync()
-    {
-        await LoadCatalogAsync();
-        await LoadServicesAsync();
-    }
-
-    public async Task LoadCatalogAsync()
-    {
-        var cats = await _inventoryService.GetCategoriesAsync();
-        var allCat = new Category { Id = 0, Name = "Todas las categorías" };
-        var catList = new List<Category> { allCat };
-        catList.AddRange(cats);
-
-        Categories = new ObservableCollection<Category>(catList);
-        if (CatalogSelectedCategory == null || !Categories.Any(c => c.Id == CatalogSelectedCategory.Id))
-        {
-            CatalogSelectedCategory = allCat;
-        }
-
-        var prods = await _inventoryService.GetProductsAsync();
-        Products = new ObservableCollection<Product>(prods);
-
-        ApplyCatalogFilters();
-        ApplySearchSuggestions(SearchText);
-    }
-
-    partial void OnSearchTextChanged(string value)
-    {
-        ApplySearchSuggestions(value);
-    }
-
-    private void ApplySearchSuggestions(string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            SearchSuggestions.Clear();
-            SelectedSuggestionIndex = -1;
-            SelectedSuggestion = null;
-            IsSearchDropdownOpen = false;
-            return;
-        }
-
-        var q = TextSearch.Normalize(query);
-        var matches = Products
-            .Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location))
-            .OrderBy(p => p.Name)
-            .Take(8)
-            .ToList();
-
-        SearchSuggestions = new ObservableCollection<Product>(matches);
-        IsSearchDropdownOpen = SearchSuggestions.Count > 0;
-        SelectedSuggestionIndex = SearchSuggestions.Count > 0 ? 0 : -1;
-        SelectedSuggestion = SearchSuggestions.FirstOrDefault();
-    }
-
-    [RelayCommand]
-    public void MoveSuggestionDown()
-    {
-        if (SearchSuggestions.Count == 0)
-        {
-            SelectedSuggestionIndex = -1;
-            SelectedSuggestion = null;
-            return;
-        }
-
-        if (SelectedSuggestionIndex < 0 || SelectedSuggestionIndex >= SearchSuggestions.Count - 1)
-        {
-            SelectedSuggestionIndex = 0;
-        }
-        else
-        {
-            SelectedSuggestionIndex++;
-        }
-
-        SelectedSuggestion = SearchSuggestions[SelectedSuggestionIndex];
-    }
-
-    [RelayCommand]
-    public void MoveSuggestionUp()
-    {
-        if (SearchSuggestions.Count == 0)
-        {
-            SelectedSuggestionIndex = -1;
-            SelectedSuggestion = null;
-            return;
-        }
-
-        if (SelectedSuggestionIndex <= 0 || SelectedSuggestionIndex >= SearchSuggestions.Count)
-        {
-            SelectedSuggestionIndex = SearchSuggestions.Count - 1;
-        }
-        else
-        {
-            SelectedSuggestionIndex--;
-        }
-
-        SelectedSuggestion = SearchSuggestions[SelectedSuggestionIndex];
-    }
-
-    [RelayCommand]
-    public void ConfirmSelectedSuggestion()
-    {
-        if (!IsSearchDropdownOpen || SearchSuggestions.Count == 0)
-            return;
-
-        var target = SelectedSuggestion;
-        if (target == null && SelectedSuggestionIndex >= 0 && SelectedSuggestionIndex < SearchSuggestions.Count)
-        {
-            target = SearchSuggestions[SelectedSuggestionIndex];
-        }
-        target ??= SearchSuggestions.FirstOrDefault();
-
-        if (target != null)
-        {
-            SelectSuggestion(target);
-        }
-    }
-
-    [RelayCommand]
-    public void SelectSuggestion(Product product)
-    {
-        AddToCart(product);
-        SearchText = string.Empty;
-        SearchSuggestions.Clear();
-        SelectedSuggestionIndex = -1;
-        SelectedSuggestion = null;
-        IsSearchDropdownOpen = false;
-    }
-
-    [RelayCommand]
-    public void AddFirstSuggestion()
-    {
-        ConfirmSelectedSuggestion();
-    }
-
-    [RelayCommand]
-    public void CloseSearchDropdown()
-    {
-        IsSearchDropdownOpen = false;
-    }
-
-    // ==========================================
-    // MODAL DE CATÁLOGO COMPLETO
-    // ==========================================
     [RelayCommand]
     public void OpenCatalogModal()
     {
@@ -730,6 +380,21 @@ public partial class PosViewModel : ObservableObject, IDisposable
     public void CloseCatalogModal()
     {
         IsCatalogModalOpen = false;
+        FocusSearchRequested?.Invoke();
+    }
+
+    [RelayCommand]
+    public void SelectCatalogCategory(Category? category)
+    {
+        if (category != null) CatalogSelectedCategory = category;
+    }
+
+    /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
+    [RelayCommand]
+    public void AddFirstCatalogProduct()
+    {
+        var first = CatalogFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0);
+        if (first != null) AddToCart(first);
     }
 
     partial void OnCatalogSearchTextChanged(string value) => ApplyCatalogFilters();
@@ -738,237 +403,106 @@ public partial class PosViewModel : ObservableObject, IDisposable
     private void ApplyCatalogFilters()
     {
         var list = Products.AsEnumerable();
-
         if (CatalogSelectedCategory != null && CatalogSelectedCategory.Id > 0)
         {
             list = list.Where(p => p.CategoryId == CatalogSelectedCategory.Id);
         }
 
-        if (!string.IsNullOrWhiteSpace(CatalogSearchText))
-        {
-            var q = TextSearch.Normalize(CatalogSearchText);
-            list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location));
-        }
-
-        CatalogFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+        CatalogFilteredProducts = new ObservableCollection<Product>(string.IsNullOrWhiteSpace(CatalogSearchText)
+            ? list.OrderBy(p => p.Name, StringComparer.CurrentCulture)
+            : RankProducts(list, CatalogSearchText, limit: int.MaxValue));
+        OnPropertyChanged(nameof(CatalogSummary));
     }
 
-    // ==========================================
-    // OPERACIONES DE LA VENTA / CARRITO
-    // ==========================================
-    [RelayCommand]
-    public void AddToCart(Product product)
+    // ================================================================== cuenta (venta de mostrador)
+
+    /// <summary>La cuenta de la venta: el mismo componente que el cobro de la consulta.</summary>
+    public CheckoutViewModel Checkout { get; }
+
+    public ObservableCollection<CartItem> Cart => Checkout.Cart;
+    public int TotalCartItems => Checkout.TotalItems;
+    public decimal TotalCartAmount => Checkout.TotalAmount;
+    public bool HasCartItems => Checkout.HasItems;
+    public IReadOnlyList<string> PaymentMethods => Checkout.PaymentMethods;
+    public decimal ChangeDue => Checkout.ChangeDue;
+    public bool HasChange => Checkout.HasChange;
+
+    public string PatientName
     {
-        AddToCartWithQuantity(product, 1);
+        get => Checkout.PatientName;
+        set => Checkout.PatientName = value;
     }
 
-    public void AddToCartWithQuantity(Product product, int quantity)
+    public string SelectedPaymentMethod
     {
-        if (product.CurrentStock <= 0)
-        {
-            ShowAlert($"El producto '{product.Name}' no tiene existencias disponibles.", false);
-            return;
-        }
+        get => Checkout.SelectedPaymentMethod;
+        set => Checkout.SelectedPaymentMethod = value;
+    }
 
-        int requestedQty = Math.Max(1, quantity);
-        var existing = Cart.FirstOrDefault(c => c.ProductId == product.Id);
-        if (existing != null)
-        {
-            int allowed = Math.Min(existing.Quantity + requestedQty, product.CurrentStock);
-            if (allowed > existing.Quantity)
-            {
-                int added = allowed - existing.Quantity;
-                existing.Quantity = allowed;
-                RecalculateTotals();
-                ShowAlert($"Se aumentó la cantidad de '{product.Name}' en la venta (+{added}, total: {allowed}).", true);
-            }
-            else
-            {
-                ShowAlert($"No hay más existencias disponibles de '{product.Name}' (Stock actual: {product.CurrentStock}).", false);
-            }
-        }
-        else
-        {
-            int initialQty = Math.Min(requestedQty, product.CurrentStock);
-            Cart.Add(new CartItem
-            {
-                ProductId = product.Id,
-                Code = product.Code,
-                Name = product.Name,
-                GenericName = product.GenericName,
-                Presentation = product.Presentation,
-                Unit = product.Unit,
-                AvailableStock = product.CurrentStock,
-                UnitPrice = product.Price,
-                RequiresRefrigeration = product.RequiresRefrigeration,
-                Quantity = initialQty
-            });
-            RecalculateTotals();
-            ShowAlert($"'{product.Name}' ({initialQty} {product.Unit}) agregado a la venta.", true);
-        }
+    public decimal CashReceived
+    {
+        get => Checkout.CashReceived;
+        set => Checkout.CashReceived = value;
     }
 
     [RelayCommand]
-    public void IncreaseQuantity(CartItem item)
+    public void AddToCart(Product? product)
     {
-        if (item.IsService || item.Quantity < item.AvailableStock)
-        {
-            item.Quantity++;
-            RecalculateTotals();
-        }
-        else
-        {
-            ShowAlert($"Stock máximo alcanzado para '{item.Name}' ({item.AvailableStock} disponibles).", false);
-        }
+        if (product != null) AddToCartWithQuantity(product, 1);
     }
+
+    public void AddToCartWithQuantity(Product product, int quantity) => Checkout.AddProduct(product, quantity);
 
     [RelayCommand]
-    public void DecreaseQuantity(CartItem item)
-    {
-        if (item.Quantity > 1)
-        {
-            item.Quantity--;
-            RecalculateTotals();
-        }
-        else
-        {
-            RemoveFromCart(item);
-        }
-    }
+    public void IncreaseQuantity(CartItem? item) => Checkout.IncreaseQuantity(item);
 
     [RelayCommand]
-    public void RemoveFromCart(CartItem item)
+    public void DecreaseQuantity(CartItem? item) => Checkout.DecreaseQuantity(item);
+
+    [RelayCommand]
+    public void RemoveFromCart(CartItem? item) => Checkout.RemoveFromCart(item);
+
+    [RelayCommand]
+    public void ClearCart() => Checkout.ClearCart();
+
+    [RelayCommand]
+    public void UndoClearCart() => Checkout.UndoClear();
+
+    public void RecalculateTotals() => Checkout.Recalculate();
+
+    /// <summary>Cobra la venta (F5 / Ctrl+Enter / botón): mismo cobro que "Terminar consulta".</summary>
+    [RelayCommand]
+    public Task ProcessSaleAsync() => Checkout.ChargeAsync();
+
+    private Task OnSaleCompletedAsync(SaleReceipt? receipt)
     {
-        Cart.Remove(item);
-        RecalculateTotals();
-        ShowAlert($"'{item.Name}' removido de la venta.", true);
+        if (receipt == null) return Task.CompletedTask;
+        CurrentReceipt = receipt;
+        IsFreshSaleTicket = true;
+        IsTicketModalOpen = true;
+        IsTicketPrinted = false;
+        TicketStatusMessage = null;
+        ShowAlert($"Venta cobrada · {receipt.Folio}", true, toast: true);
+        return Task.CompletedTask;
     }
 
-    private List<CartItem>? _lastClearedCart;
+    // ================================================================== ticket
 
     [ObservableProperty]
-    private bool _canUndoClearCart;
+    private SaleReceipt? _currentReceipt;
 
-    [RelayCommand]
-    public void ClearCart()
-    {
-        if (Cart.Count == 0) return;
-        _lastClearedCart = Cart.ToList();
-        CanUndoClearCart = true;
-        Cart.Clear();
-        RecalculateTotals();
-        ShowAlert("Se vació la venta. Puede presionar 'Deshacer' para restaurarla.", true);
-    }
+    [ObservableProperty]
+    private bool _isTicketModalOpen;
 
-    [RelayCommand]
-    public void UndoClearCart()
-    {
-        if (_lastClearedCart == null || _lastClearedCart.Count == 0) return;
-        foreach (var item in _lastClearedCart)
-        {
-            Cart.Add(item);
-        }
-        _lastClearedCart = null;
-        CanUndoClearCart = false;
-        RecalculateTotals();
-        ShowAlert("Se restauraron los productos de la venta.", true);
-    }
+    [ObservableProperty]
+    private string? _ticketStatusMessage;
 
-    public void RecalculateTotals()
-    {
-        TotalCartItems = Cart.Sum(c => c.Quantity);
-        TotalCartAmount = Cart.Sum(c => c.Subtotal);
-        HasCartItems = Cart.Count > 0;
-        OnPropertyChanged(nameof(ChangeDue));
-        OnPropertyChanged(nameof(HasChange));
-    }
+    [ObservableProperty]
+    private bool _isTicketPrinted;
 
-
-    [RelayCommand]
-    public async Task ProcessSaleAsync()
-    {
-        if (Cart.Count == 0)
-        {
-            if (IsEmbeddedInModal || IsConsultationCheckout)
-            {
-                // El médico quitó todos los cargos a propósito (consulta de cortesía): se termina
-                // la consulta sin registrar una venta en ceros
-                IsConsultationCheckout = false;
-                IsEmbeddedInModal = false;
-                OnSaleCompletedFromConsultation?.Invoke();
-                return;
-            }
-            ShowAlert("La venta no contiene ningún producto.", false);
-            return;
-        }
-
-        try
-        {
-            var saleLines = Cart
-                .Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name))
-                .ToList();
-            var patient = string.IsNullOrWhiteSpace(PatientName) ? "Público General" : PatientName.Trim();
-            string cashierName = !string.IsNullOrWhiteSpace(DoctorNameWithTitle) ? DoctorNameWithTitle : "Dr. Titular";
-
-            // Se registra primero: si falta stock no se genera ticket ni se vacía el carrito
-            var sale = await _inventoryService.RegisterSaleAsync(saleLines, patient, SelectedPaymentMethod, cashierName);
-
-            // Construir el recibo / ticket con los datos exactos cobrados y el folio persistido
-            var receipt = new SaleReceipt
-            {
-                Folio = sale?.Folio ?? $"TKT-{DateTime.Now:yyyyMMdd-HHmmss}",
-                Date = sale?.Date ?? DateTime.Now,
-                PatientName = patient,
-                PaymentMethod = SelectedPaymentMethod,
-                Cashier = cashierName,
-                Items = Cart.Select(c => new SaleReceiptItem
-                {
-                    ProductId = c.ProductId,
-                    Name = c.Name,
-                    GenericName = c.GenericName,
-                    Presentation = c.Presentation,
-                    Quantity = c.Quantity,
-                    UnitPrice = c.UnitPrice
-                }).ToList()
-            };
-
-            bool isFromConsultation = IsEmbeddedInModal || IsConsultationCheckout;
-
-            if (isFromConsultation)
-            {
-                IsConsultationCheckout = false;
-                IsEmbeddedInModal = false;
-                IsTicketModalOpen = false;
-                CurrentReceipt = receipt;
-                Cart.Clear();
-                RecalculateTotals();
-                PatientName = "Público General";
-
-                OnSaleCompletedFromConsultation?.Invoke();
-            }
-            else
-            {
-                // Presentar el ticket simulado en pantalla para ventas directas de farmacia
-                CurrentReceipt = receipt;
-                IsTicketModalOpen = true;
-                IsTicketPrinted = false;
-                TicketStatusMessage = null;
-
-                Cart.Clear();
-                RecalculateTotals();
-                PatientName = "Público General";
-
-                ShowAlert($"¡Venta procesada con éxito! Comprobante generado: {receipt.Folio}", true);
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error al procesar la venta", ex);
-            ShowAlert($"Error al procesar la venta: {ex.Message}", false);
-            // Refrescar existencias para que el carrito muestre el stock real
-            _ = LoadCatalogAsync();
-        }
-    }
+    /// <summary>Ticket de la venta recién cobrada (no una reimpresión desde el historial).</summary>
+    [ObservableProperty]
+    private bool _isFreshSaleTicket;
 
     [RelayCommand]
     public void CloseTicketModal()
@@ -977,6 +511,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         CurrentReceipt = null;
         TicketStatusMessage = null;
         IsTicketPrinted = false;
+        FocusSearchRequested?.Invoke();
     }
 
     [RelayCommand]
@@ -992,823 +527,130 @@ public partial class PosViewModel : ObservableObject, IDisposable
         if (_printingService != null)
         {
             bool printed = _printingService.PrintTicket(CurrentReceipt, profile);
-            if (printed)
-            {
-                IsTicketPrinted = true;
-                TicketStatusMessage = "¡Ticket enviado a la impresora térmica con éxito!";
-            }
-            else
-            {
-                TicketStatusMessage = "Impresión de ticket cancelada o no se seleccionó impresora.";
-            }
+            IsTicketPrinted = printed;
+            TicketStatusMessage = printed ? "Ticket enviado a la impresora." : "Impresión cancelada o sin impresora seleccionada.";
         }
         else
         {
             IsTicketPrinted = true;
-            TicketStatusMessage = "¡Ticket emitido correctamente!";
+            TicketStatusMessage = "Ticket emitido.";
         }
     }
 
-    // ==========================================
-    // MÉTODOS DE CORTE DE CAJA DIARIO
-    // ==========================================
-    [RelayCommand]
-    public async Task OpenCashCutModalAsync()
+    // ================================================================== consulta en curso
+
+    public bool HasActiveConsultation => _consultationService.HasActiveConsultation;
+    public ActiveConsultation? ActiveConsultation => _consultationService.CurrentConsultation;
+    public string ActiveConsultationFolio => _consultationService.CurrentConsultation?.Folio ?? string.Empty;
+    public string ActiveConsultationPatientName => _consultationService.CurrentConsultation?.PatientName ?? string.Empty;
+    public int ActiveConsultationItemsCount => _consultationService.CurrentConsultation?.TotalItems ?? 0;
+    public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
+    public bool CanAddToActiveConsultation => HasActiveConsultation && HasCartItems;
+
+    public string ActiveConsultationBannerText => HasActiveConsultation
+        ? $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}"
+        : string.Empty;
+
+    [ObservableProperty]
+    private string _activeConsultationElapsedTime = "00:00";
+
+    partial void OnActiveConsultationElapsedTimeChanged(string value) => OnPropertyChanged(nameof(ActiveConsultationBannerText));
+
+    private System.Threading.Timer? _consultationTimer;
+
+    public void SyncActiveConsultation()
     {
-        CashCutDate = DateTime.Today;
-        CashCutStatusMessage = null;
-        await LoadCashCutForDateAsync();
-        IsCashCutModalOpen = true;
+        OnPropertyChanged(nameof(HasActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultationFolio));
+        OnPropertyChanged(nameof(ActiveConsultationPatientName));
+        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
+        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
+        OnPropertyChanged(nameof(CanAddToActiveConsultation));
+        OnPropertyChanged(nameof(ActiveConsultationBannerText));
+
+        if (HasActiveConsultation) StartConsultationTimer();
+        else StopConsultationTimer();
     }
 
-    [RelayCommand]
-    public void CloseCashCutModal()
+    private void StartConsultationTimer()
     {
-        IsCashCutModalOpen = false;
-        CurrentCashCut = null;
-        CashCutStatusMessage = null;
-    }
-
-    [RelayCommand]
-    public async Task LoadCashCutForDateAsync()
-    {
-        var profile = _clinicProfileService?.CurrentProfile;
-        CurrentCashCut = await _inventoryService.GetDailyCashCutAsync(CashCutDate, profile);
-        CashCutStatusMessage = null;
-    }
-
-    [RelayCommand]
-    public void PrintCashCut()
-    {
-        if (CurrentCashCut == null) return;
-        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile();
-
-        if (_printingService != null)
+        _consultationTimer?.Dispose();
+        UpdateActiveConsultationTimer();
+        _consultationTimer = new System.Threading.Timer(_ => RunOnUi(() =>
         {
-            bool printed = _printingService.PrintCashCut(CurrentCashCut, profile);
-            CashCutStatusMessage = printed
-                ? "¡Corte de caja enviado a la impresora térmica con éxito!"
-                : "Impresión de corte cancelada.";
-        }
-        else
-        {
-            CashCutStatusMessage = "Servicio de impresión no disponible en este entorno.";
-        }
+            UpdateActiveConsultationTimer();
+            return Task.CompletedTask;
+        }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
-    [RelayCommand]
-    public async Task ExportCashCutCsvAsync()
+    private void StopConsultationTimer()
     {
-        if (CurrentCashCut == null) return;
-        try
-        {
-            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            if (string.IsNullOrEmpty(desktop) || !Directory.Exists(desktop))
-            {
-                desktop = Path.GetTempPath();
-            }
-            string filename = $"Corte_Caja_{CurrentCashCut.Date:yyyyMMdd_HHmmss}.csv";
-            string filePath = Path.Combine(desktop, filename);
-            string csv = _inventoryService.ExportDailyCashCutToCsv(CurrentCashCut);
-            await File.WriteAllTextAsync(filePath, csv, System.Text.Encoding.UTF8);
-            CashCutStatusMessage = $"¡Corte exportado a CSV exitosamente en:\n{filePath}";
-        }
-        catch (Exception ex)
-        {
-            CashCutStatusMessage = $"Error al exportar corte: {ex.Message}";
-        }
+        _consultationTimer?.Dispose();
+        _consultationTimer = null;
+        ActiveConsultationElapsedTime = "00:00";
     }
 
-    // ==========================================
-    // MÉTODOS DE HISTORIAL Y CANCELACIÓN DE TICKETS
-    // ==========================================
-    [RelayCommand]
-    public async Task OpenTicketHistoryModalAsync()
+    public void UpdateActiveConsultationTimer(DateTime? asOf = null)
     {
-        TicketSearchFolio = string.Empty;
-        TicketHistoryStatusMessage = null;
-        IsCancelConfirmModalOpen = false;
-        await LoadSalesHistoryAsync();
-        IsTicketHistoryModalOpen = true;
+        ActiveConsultationElapsedTime = _consultationService.CurrentConsultation?.GetFormattedElapsedTime(asOf) ?? "00:00";
     }
 
-    [RelayCommand]
-    public void CloseTicketHistoryModal()
-    {
-        IsTicketHistoryModalOpen = false;
-        IsCancelConfirmModalOpen = false;
-        TicketHistoryStatusMessage = null;
-        SelectedSaleForDetail = null;
-    }
-
-    [RelayCommand]
-    public async Task LoadSalesHistoryAsync()
-    {
-        var sales = await _inventoryService.GetSalesHistoryAsync(limit: 50);
-        RecentSales = new ObservableCollection<Sale>(sales);
-        SelectedSaleForDetail = RecentSales.FirstOrDefault();
-    }
-
-    [RelayCommand]
-    public async Task SearchTicketByFolioAsync()
-    {
-        if (string.IsNullOrWhiteSpace(TicketSearchFolio))
-        {
-            await LoadSalesHistoryAsync();
-            return;
-        }
-
-        var sale = await _inventoryService.GetSaleByFolioAsync(TicketSearchFolio.Trim());
-        if (sale != null)
-        {
-            RecentSales = new ObservableCollection<Sale> { sale };
-            SelectedSaleForDetail = sale;
-            TicketHistoryStatusMessage = $"Ticket {sale.Folio} localizado.";
-        }
-        else
-        {
-            TicketHistoryStatusMessage = $"No se encontró ningún ticket con el folio '{TicketSearchFolio}'.";
-        }
-    }
-
-    [RelayCommand]
-    public void SelectSaleForDetail(Sale? sale)
-    {
-        if (sale != null)
-        {
-            SelectedSaleForDetail = sale;
-        }
-    }
-
-    [RelayCommand]
-    public void ReprintSelectedTicket()
-    {
-        if (SelectedSaleForDetail == null) return;
-
-        var receipt = new SaleReceipt
-        {
-            Folio = SelectedSaleForDetail.Folio,
-            Date = SelectedSaleForDetail.Date,
-            PatientName = SelectedSaleForDetail.PatientName,
-            PaymentMethod = SelectedSaleForDetail.PaymentMethod,
-            Cashier = SelectedSaleForDetail.Cashier,
-            Items = SelectedSaleForDetail.Items.Select(i => new SaleReceiptItem
-            {
-                ProductId = i.ProductId ?? 0,
-                Name = i.ProductName,
-                Quantity = i.Quantity,
-                UnitPrice = i.UnitPrice
-            }).ToList()
-        };
-
-        CurrentReceipt = receipt;
-        IsTicketModalOpen = true;
-        IsTicketPrinted = false;
-        TicketStatusMessage = null;
-    }
-
-    [RelayCommand]
-    public void RequestCancelSale(Sale? sale = null)
-    {
-        if (sale != null) SelectedSaleForDetail = sale;
-        if (SelectedSaleForDetail == null) return;
-        if (SelectedSaleForDetail.IsCancelled)
-        {
-            TicketHistoryStatusMessage = "Este ticket ya se encuentra cancelado.";
-            return;
-        }
-
-        CancellationReason = "Devolución de producto solicitado por paciente";
-        IsCancelConfirmModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseCancelConfirmModal()
-    {
-        IsCancelConfirmModalOpen = false;
-    }
-
-    [RelayCommand]
-    public async Task ConfirmCancelSaleAsync()
-    {
-        if (SelectedSaleForDetail == null) return;
-        try
-        {
-            bool ok = await _inventoryService.CancelSaleAsync(SelectedSaleForDetail.Id, CancellationReason);
-            if (ok)
-            {
-                IsCancelConfirmModalOpen = false;
-                TicketHistoryStatusMessage = $"¡Ticket {SelectedSaleForDetail.Folio} cancelado! Mercancía devuelta al inventario con éxito.";
-                await LoadSalesHistoryAsync();
-                await LoadCatalogAsync();
-                ShowAlert($"Ticket {SelectedSaleForDetail.Folio} cancelado y stock reingresado a inventario.", true);
-            }
-            else
-            {
-                TicketHistoryStatusMessage = "No se pudo cancelar el ticket seleccionado.";
-            }
-        }
-        catch (Exception ex)
-        {
-            TicketHistoryStatusMessage = $"Error al cancelar ticket: {ex.Message}";
-        }
-    }
-
-    public void AddPrescriptionItem(string medicineName, int qty = 1)
-    {
-        if (string.IsNullOrWhiteSpace(medicineName)) return;
-        var cleanMed = medicineName.Trim();
-
-        var product = Products.FirstOrDefault(p => 
-            p.Name.Contains(cleanMed, StringComparison.OrdinalIgnoreCase) || 
-            cleanMed.Contains(p.Name, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && (p.GenericName.Contains(cleanMed, StringComparison.OrdinalIgnoreCase) || cleanMed.Contains(p.GenericName, StringComparison.OrdinalIgnoreCase))));
-
-        if (product != null)
-        {
-            AddToCartWithQuantity(product, Math.Max(1, qty));
-        }
-    }
-
-    // ==========================================
-    // INTEGRACIÓN CON CONSULTA MÉDICA ACTIVA
-    // ==========================================
+    /// <summary>
+    /// Pasa lo que hay en la venta a la cuenta de la consulta en curso (se cobra al terminarla).
+    /// Las consultas se inician en Pacientes: sin consulta en curso no hay a dónde mandarlo.
+    /// </summary>
     [RelayCommand]
     public void AddToActiveConsultation()
     {
         if (Cart.Count == 0)
         {
-            ShowAlert("La venta no contiene ningún producto para agregar a la consulta activa.", false);
+            ShowAlert("La venta no tiene productos para agregar a la consulta.", false);
             return;
         }
-
         if (!_consultationService.HasActiveConsultation)
         {
-            if (IsEmbeddedInModal)
-            {
-                ShowAlert("Solo se puede agregar insumos si existe una consulta médica activa.", false);
-                return;
-            }
-
-            AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-            if (SelectedPatientForConsultation == null || !AvailablePatientsForConsultation.Contains(SelectedPatientForConsultation))
-            {
-                SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
-            }
-            NewConsultationChiefComplaint = "Consulta Médica General";
-            IsSelectPatientModalOpen = true;
-            ShowAlert("Debe haber una consulta activa para agregar insumos. Seleccione el paciente para iniciarla.", false);
+            ShowAlert("No hay una consulta en curso. Las consultas se inician en Pacientes.", false);
             return;
         }
-
-        ExecuteAddCartToActiveConsultation();
-    }
-
-    private void ExecuteAddCartToActiveConsultation()
-    {
-        if (!_consultationService.HasActiveConsultation) return;
 
         int totalAdded = 0;
         foreach (var item in Cart)
         {
-            _consultationService.AddCartItemToActiveConsultation(
-                item.ProductId,
-                item.Code,
-                item.Name,
-                item.GenericName,
-                item.Presentation,
-                item.Unit,
-                item.UnitPrice,
-                item.Quantity
-            );
+            _consultationService.AddCartItemToActiveConsultation(item.ProductId, item.Code, item.Name, item.GenericName, item.Presentation, item.Unit, item.UnitPrice, item.Quantity);
             totalAdded += item.Quantity;
         }
 
-        var folio = _consultationService.CurrentConsultation?.Folio;
         var patientName = _consultationService.CurrentConsultation?.PatientName;
-
-        Cart.Clear();
-        RecalculateTotals();
+        Checkout.Reset();
         SyncActiveConsultation();
-
-        ShowAlert($"¡Se agregaron {totalAdded} insumo(s) a la consulta médica de {patientName} ({folio})! Quedan guardados para liquidarse al terminar.", true);
+        ShowAlert($"{totalAdded} artículo(s) agregados a la cuenta de la consulta de {patientName}", true, toast: true);
     }
 
-    [RelayCommand]
-    public void OpenSelectPatientModal()
-    {
-        AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-        SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
-        IsSelectPatientModalOpen = true;
-    }
+    // ================================================================== avisos
 
-    [RelayCommand]
-    public void CloseSelectPatientModal()
-    {
-        IsSelectPatientModalOpen = false;
-    }
+    [ObservableProperty]
+    private string? _alertMessage;
 
-    [RelayCommand]
-    public void ConfirmStartConsultationAndAddItems()
-    {
-        if (SelectedPatientForConsultation == null)
-        {
-            ShowAlert("Seleccione un paciente de la lista para iniciar la consulta.", false);
-            return;
-        }
+    [ObservableProperty]
+    private bool _isAlertVisible;
 
-        _consultationService.StartConsultation(SelectedPatientForConsultation, NewConsultationChiefComplaint);
-        IsSelectPatientModalOpen = false;
+    [ObservableProperty]
+    private bool _isSuccessAlert;
 
-        ExecuteAddCartToActiveConsultation();
-    }
-
-    [RelayCommand]
-    public void CheckoutActiveConsultation()
-    {
-        if (!_consultationService.HasActiveConsultation || _consultationService.CurrentConsultation == null)
-        {
-            ShowAlert("No hay ninguna consulta médica activa para cobrar.", false);
-            return;
-        }
-
-        IsConsultationCheckout = true;
-        var consult = _consultationService.CurrentConsultation;
-        if (consult.Items.Count == 0)
-        {
-            ShowAlert($"La consulta activa de {consult.PatientName} no tiene insumos guardados.", false);
-            return;
-        }
-
-        PatientName = consult.PatientName;
-        foreach (var cItem in consult.Items)
-        {
-            var prod = Products.FirstOrDefault(p => p.Id == cItem.ProductId);
-            var existing = Cart.FirstOrDefault(c => c.ProductId == cItem.ProductId);
-            if (existing != null)
-            {
-                existing.Quantity += cItem.Quantity;
-            }
-            else
-            {
-                Cart.Add(new CartItem
-                {
-                    ProductId = cItem.ProductId,
-                    Code = cItem.Code,
-                    Name = cItem.Name,
-                    GenericName = cItem.GenericName,
-                    Presentation = cItem.Presentation,
-                    Unit = cItem.Unit,
-                    AvailableStock = prod?.CurrentStock ?? 999,
-                    UnitPrice = cItem.UnitPrice,
-                    Quantity = cItem.Quantity,
-                    RequiresRefrigeration = prod?.RequiresRefrigeration ?? false,
-                    IsService = cItem.ProductId <= 0
-                });
-            }
-        }
-
-        _consultationService.CloseActiveConsultation();
-        RecalculateTotals();
-        SyncActiveConsultation();
-        ShowAlert($"Insumos de la consulta de {consult.PatientName} transferidos al carrito. Listos para cobro y ticket.", true);
-    }
-
-    [RelayCommand]
-    public void CancelActiveConsultation()
-    {
-        if (_consultationService.HasActiveConsultation)
-        {
-            var patient = _consultationService.CurrentConsultation?.PatientName;
-            _consultationService.CloseActiveConsultation();
-            SyncActiveConsultation();
-            ShowAlert($"La consulta médica activa de {patient} ha sido finalizada/cerrada.", true);
-        }
-    }
-
-    // ==========================================
-    // OPERACIONES DE SERVICIOS CLÍNICOS E INSUMOS
-    // ==========================================
-    [RelayCommand]
-    public async Task OpenServicesModalAsync()
-    {
-        await LoadServicesAsync();
-        IsServicesModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseServicesModal()
-    {
-        IsServicesModalOpen = false;
-    }
-
-    public async Task LoadServicesAsync()
-    {
-        try
-        {
-            var dbServices = await _inventoryService.GetClinicalServicesAsync();
-            if (dbServices != null && dbServices.Count > 0)
-            {
-                Services = new ObservableCollection<ClinicalService>(dbServices);
-            }
-            else
-            {
-                LoadFallbackServices();
-            }
-        }
-        catch
-        {
-            if (Services.Count == 0)
-            {
-                LoadFallbackServices();
-            }
-        }
-
-        ApplyServicesFilter();
-        if (SelectedService == null || !Services.Contains(SelectedService))
-        {
-            SelectedService = FilteredServices.FirstOrDefault() ?? Services.FirstOrDefault();
-        }
-    }
-
-    private void LoadFallbackServices()
-    {
-        var services = new List<ClinicalService>
-        {
-            new()
-            {
-                Id = 1,
-                Code = "SERV-001",
-                Name = "Consulta Médica General",
-                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
-                Category = "Consulta",
-                Price = 300.00m,
-                EstimatedDurationMinutes = 25,
-                DefaultProducts = new List<ServiceDefaultProduct>()
-            },
-            new()
-            {
-                Id = 2,
-                Code = "SERV-002",
-                Name = "Curación Menor y Asepsia",
-                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
-                Category = "Curaciones",
-                Price = 250.00m,
-                EstimatedDurationMinutes = 20,
-                DefaultProducts = new List<ServiceDefaultProduct>()
-            },
-            new()
-            {
-                Id = 3,
-                Code = "SERV-003",
-                Name = "Sutura de Herida Simple",
-                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
-                Category = "Procedimientos",
-                Price = 450.00m,
-                EstimatedDurationMinutes = 35,
-                DefaultProducts = new List<ServiceDefaultProduct>()
-            },
-            new()
-            {
-                Id = 4,
-                Code = "SERV-004",
-                Name = "Monitoreo de Glucemia Capilar",
-                Description = "Toma de muestra capilar y determinación cuantitativa inmediata de glucosa en sangre.",
-                Category = "Diagnóstico",
-                Price = 80.00m,
-                EstimatedDurationMinutes = 10,
-                DefaultProducts = new List<ServiceDefaultProduct>()
-            },
-            new()
-            {
-                Id = 5,
-                Code = "SERV-005",
-                Name = "Certificado Médico Oficial",
-                Description = "Examen médico integral, somatometría y expedición de certificado de salud.",
-                Category = "Certificados",
-                Price = 200.00m,
-                EstimatedDurationMinutes = 20,
-                DefaultProducts = new List<ServiceDefaultProduct>()
-            }
-        };
-
-        Services = new ObservableCollection<ClinicalService>(services);
-    }
-
-    partial void OnServiceCategoryFilterChanged(string value) => ApplyServicesFilter();
-    partial void OnServiceSearchTextChanged(string value) => ApplyServicesFilter();
-
-    [RelayCommand]
-    public void FilterServiceCategory(string category)
-    {
-        ServiceCategoryFilter = category;
-    }
-
-    private void ApplyServicesFilter()
-    {
-        var query = Services.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(ServiceCategoryFilter) && ServiceCategoryFilter != "Todos")
-        {
-            query = query.Where(s => s.Category.Equals(ServiceCategoryFilter, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(ServiceSearchText))
-        {
-            var search = TextSearch.Normalize(ServiceSearchText);
-            query = query.Where(s => TextSearch.Matches(search, s.Name, s.Code, s.Category, s.Description));
-        }
-
-        FilteredServices = new ObservableCollection<ClinicalService>(query.OrderBy(s => s.Category).ThenBy(s => s.Name));
-        if (SelectedService == null || !FilteredServices.Contains(SelectedService))
-        {
-            SelectedService = FilteredServices.FirstOrDefault();
-        }
-    }
-
-    [RelayCommand]
-    public void SelectService(ClinicalService? service)
-    {
-        SelectedService = service;
-    }
-
-    [RelayCommand]
-    public void AddServiceToCart(ClinicalService? service)
-    {
-        AddServiceToCartInternal(service, includeDefaultSupplies: true);
-    }
-
-    [RelayCommand]
-    public void AddServiceOnlyToCart(ClinicalService? service)
-    {
-        AddServiceToCartInternal(service, includeDefaultSupplies: false);
-    }
-
-    private void AddServiceToCartInternal(ClinicalService? service, bool includeDefaultSupplies)
-    {
-        service ??= SelectedService;
-        if (service == null)
-        {
-            ShowAlert("Por favor seleccione un servicio clínico para agregar.", false);
-            return;
-        }
-
-        var serviceId = -service.Id;
-        var existingService = Cart.FirstOrDefault(c => c.ProductId == serviceId || (c.IsService && c.Code == service.Code));
-        if (existingService != null)
-        {
-            existingService.Quantity++;
-        }
-        else
-        {
-            Cart.Add(new CartItem
-            {
-                ProductId = serviceId,
-                Code = service.Code,
-                Name = service.Name,
-                GenericName = $"Servicio Clínico • {service.Category}",
-                Presentation = $"Honorario • {service.EstimatedDurationMinutes} min",
-                Unit = "Servicio",
-                AvailableStock = 999,
-                UnitPrice = service.Price,
-                RequiresRefrigeration = false,
-                Quantity = 1,
-                IsService = true
-            });
-        }
-
-        int addedSuppliesCount = 0;
-        int failedSuppliesCount = 0;
-
-        if (includeDefaultSupplies && service.DefaultProducts != null && service.DefaultProducts.Count > 0)
-        {
-            foreach (var dp in service.DefaultProducts)
-            {
-                var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
-                if (prod != null)
-                {
-                    if (prod.CurrentStock > 0)
-                    {
-                        var existingProd = Cart.FirstOrDefault(c => c.ProductId == prod.Id);
-                        int qtyToAdd = dp.Quantity;
-                        if (existingProd != null)
-                        {
-                            int allowed = Math.Min(existingProd.Quantity + qtyToAdd, prod.CurrentStock);
-                            existingProd.Quantity = allowed;
-                        }
-                        else
-                        {
-                            int allowed = Math.Min(qtyToAdd, prod.CurrentStock);
-                            Cart.Add(new CartItem
-                            {
-                                ProductId = prod.Id,
-                                Code = prod.Code,
-                                Name = prod.Name,
-                                GenericName = prod.GenericName,
-                                Presentation = prod.Presentation,
-                                Unit = prod.Unit,
-                                AvailableStock = prod.CurrentStock,
-                                UnitPrice = prod.Price,
-                                RequiresRefrigeration = prod.RequiresRefrigeration,
-                                Quantity = allowed,
-                                IsService = false
-                            });
-                        }
-                        addedSuppliesCount++;
-                    }
-                    else
-                    {
-                        failedSuppliesCount++;
-                    }
-                }
-            }
-        }
-
-        RecalculateTotals();
-
-        string msg = includeDefaultSupplies && addedSuppliesCount > 0
-            ? $"¡Servicio '{service.Name}' y {addedSuppliesCount} insumos cargados a la venta!"
-            : $"¡Servicio '{service.Name}' cargado a la venta!";
-
-        if (failedSuppliesCount > 0)
-        {
-            msg += $" ({failedSuppliesCount} insumos sin stock fueron omitidos)";
-        }
-
-        ShowAlert(msg, true);
-        IsServicesModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void AddServiceToActiveConsultation(ClinicalService? service)
-    {
-        service ??= SelectedService;
-        if (service == null)
-        {
-            ShowAlert("Por favor seleccione un servicio clínico para agregar.", false);
-            return;
-        }
-
-        if (!_consultationService.HasActiveConsultation)
-        {
-            AvailablePatientsForConsultation = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-            if (SelectedPatientForConsultation == null || !AvailablePatientsForConsultation.Contains(SelectedPatientForConsultation))
-            {
-                SelectedPatientForConsultation = AvailablePatientsForConsultation.FirstOrDefault();
-            }
-            NewConsultationChiefComplaint = $"Atención: {service.Name}";
-            IsSelectPatientModalOpen = true;
-            ShowAlert("Debe haber una consulta activa para transferir servicios. Seleccione el paciente para iniciarla.", false);
-            return;
-        }
-
-        // Agregar honorario a la consulta activa
-        _consultationService.AddCartItemToActiveConsultation(
-            -service.Id,
-            service.Code,
-            service.Name,
-            $"Servicio Clínico • {service.Category}",
-            $"Honorario • {service.EstimatedDurationMinutes} min",
-            "Servicio",
-            service.Price,
-            1
-        );
-
-        int addedSupplies = 0;
-        if (service.DefaultProducts != null)
-        {
-            foreach (var dp in service.DefaultProducts)
-            {
-                var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
-                if (prod != null)
-                {
-                    _consultationService.AddCartItemToActiveConsultation(
-                        prod.Id,
-                        prod.Code,
-                        prod.Name,
-                        prod.GenericName,
-                        prod.Presentation,
-                        prod.Unit,
-                        prod.Price,
-                        dp.Quantity
-                    );
-                    addedSupplies++;
-                }
-            }
-        }
-
-        ShowAlert($"¡Servicio '{service.Name}' ({addedSupplies} insumos) guardado en la consulta activa de {_consultationService.CurrentConsultation?.PatientName}!", true);
-        IsServicesModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void OpenCreateServiceModal()
-    {
-        NewServiceCode = $"SERV-{Services.Count + 1:D3}";
-        NewServiceName = string.Empty;
-        NewServiceDescription = string.Empty;
-        NewServiceCategory = "Consulta";
-        NewServicePrice = 300.00m;
-        NewServiceDuration = 20;
-        NewProductQuantity = 1;
-        NewProductInstructions = string.Empty;
-        NewServiceDefaultProducts.Clear();
-
-        AvailableProductsForService = new ObservableCollection<Product>(Products.OrderBy(p => p.Name));
-        SelectedProductForService = AvailableProductsForService.FirstOrDefault();
-
-        IsCreateServiceModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseCreateServiceModal()
-    {
-        IsCreateServiceModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void AddProductToNewService()
-    {
-        if (SelectedProductForService == null) return;
-
-        var existing = NewServiceDefaultProducts.FirstOrDefault(dp => dp.ProductId == SelectedProductForService.Id);
-        if (existing != null)
-        {
-            existing.Quantity += Math.Max(1, NewProductQuantity);
-            if (!string.IsNullOrWhiteSpace(NewProductInstructions))
-            {
-                existing.Instructions = NewProductInstructions.Trim();
-            }
-        }
-        else
-        {
-            NewServiceDefaultProducts.Add(new ServiceDefaultProduct
-            {
-                ProductId = SelectedProductForService.Id,
-                Product = SelectedProductForService,
-                Quantity = Math.Max(1, NewProductQuantity),
-                Instructions = string.IsNullOrWhiteSpace(NewProductInstructions) ? null : NewProductInstructions.Trim()
-            });
-        }
-
-        NewProductQuantity = 1;
-        NewProductInstructions = string.Empty;
-    }
-
-    [RelayCommand]
-    public void RemoveProductFromNewService(ServiceDefaultProduct item)
-    {
-        NewServiceDefaultProducts.Remove(item);
-    }
-
-    [RelayCommand]
-    public async Task SaveNewServiceAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewServiceName))
-        {
-            ShowAlert("El nombre del servicio clínico es obligatorio.", false);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(NewServiceCode))
-        {
-            NewServiceCode = $"SERV-{Services.Count + 1:D3}";
-        }
-
-        var newService = new ClinicalService
-        {
-            Code = NewServiceCode.Trim().ToUpper(),
-            Name = NewServiceName.Trim(),
-            Description = NewServiceDescription.Trim(),
-            Category = NewServiceCategory,
-            Price = NewServicePrice,
-            EstimatedDurationMinutes = NewServiceDuration,
-            IsActive = true
-        };
-
-        var defaultItems = NewServiceDefaultProducts
-            .Select(p => (p.ProductId, p.Quantity, p.Instructions))
-            .ToList();
-
-        try
-        {
-            var saved = await _inventoryService.SaveClinicalServiceAsync(newService, defaultItems);
-            await LoadServicesAsync();
-            SelectedService = Services.FirstOrDefault(s => s.Id == saved.Id) ?? saved;
-            IsCreateServiceModalOpen = false;
-            ShowAlert($"¡Servicio '{saved.Name}' guardado exitosamente!", true);
-        }
-        catch (Exception ex)
-        {
-            ShowAlert($"Error al guardar el servicio: {ex.Message}", false);
-        }
-    }
-
-    private void ShowAlert(string message, bool isSuccess)
+    /// <summary>
+    /// Último aviso (lo leen las pruebas) y, con servicio de avisos, un aviso breve: los problemas
+    /// siempre; las confirmaciones solo si importan (la cuenta ya muestra lo agregado).
+    /// </summary>
+    private void ShowAlert(string message, bool isSuccess, bool toast = false)
     {
         AlertMessage = message;
         IsSuccessAlert = isSuccess;
         IsAlertVisible = true;
+
+        if (_notifications == null) return;
+        if (!isSuccess) _notifications.Warning(message);
+        else if (toast) _notifications.Success(message);
     }
 
     [RelayCommand]

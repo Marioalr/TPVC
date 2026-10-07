@@ -306,11 +306,10 @@ public partial class MedicalRecordsViewModel
     /// </summary>
     private void BuildCheckoutCart()
     {
-        if (PosVM == null) return;
-
-        PosVM.Cart.Clear();
+        Checkout.Reset();
+        Checkout.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? CheckoutViewModel.DefaultClient;
         var fee = ConsultationFeeService;
-        PosVM.Cart.Add(new CartItem
+        Checkout.Cart.Add(new CartItem
         {
             ProductId = fee != null ? -fee.Id : -1,
             Code = fee?.Code ?? "SERV-001",
@@ -327,7 +326,7 @@ public partial class MedicalRecordsViewModel
         foreach (var item in _consultationService?.CurrentConsultation?.Items ?? Enumerable.Empty<ConsultationProductItem>())
         {
             var product = item.ProductId > 0 ? AvailableProducts.FirstOrDefault(p => p.Id == item.ProductId) : null;
-            PosVM.Cart.Add(new CartItem
+            Checkout.Cart.Add(new CartItem
             {
                 ProductId = item.ProductId,
                 Code = item.Code,
@@ -343,8 +342,7 @@ public partial class MedicalRecordsViewModel
             });
         }
 
-        PosVM.CashReceived = 0;
-        PosVM.RecalculateTotals();
+        Checkout.SelectedItem = null;
     }
 
     /// <summary>

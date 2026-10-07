@@ -56,6 +56,10 @@ public sealed class ConsultationDraft
     /// <summary>Consulta a la que pertenece la copia (evita reescribir una ya terminada).</summary>
     [JsonIgnore]
     public long Generation { get; set; }
+
+    /// <summary>Orden en que se tomó la copia (una más vieja no sobrescribe a una más nueva).</summary>
+    [JsonIgnore]
+    public long Sequence { get; set; }
 }
 
 /// <summary>

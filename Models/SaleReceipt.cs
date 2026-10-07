@@ -24,6 +24,11 @@ public class SaleReceipt
     public string Cashier { get; set; } = "Dr. Titular / Consultorio";
     public List<SaleReceiptItem> Items { get; set; } = new();
 
+    /// <summary>Efectivo recibido y cambio (solo pagos en efectivo; no se guardan en la base).</summary>
+    public decimal? CashReceived { get; set; }
+    public decimal? Change { get; set; }
+    public bool HasCashDetail => CashReceived.HasValue;
+
     public int TotalItems => Items.Sum(i => i.Quantity);
     public decimal TotalAmount => Items.Sum(i => i.Subtotal);
 }
