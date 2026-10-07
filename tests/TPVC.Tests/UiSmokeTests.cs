@@ -221,9 +221,11 @@ internal sealed class UiSmokeSession
             notificationService: notifications);
         main.IsFirstRunWizardOpen = false;
 
-        // La ventana real sin mostrarla: los cambios de tema llegan a todo su contenido
+        // El contenido de la ventana real, sin mostrarla: sigue siendo hijo lógico de la ventana
+        // (le llegan los cambios de tema y hereda su color de texto) y se mide y dibuja aparte,
+        // porque una ventana que no se muestra no se dibuja
         var window = new MainWindow(main) { Width = Width, Height = Height };
-        var host = window;
+        var host = (System.Windows.FrameworkElement)window.Content;
 
         WaitFor(main.MedicalRecordsVM.InitialLoad);
         notifications.Success("Expediente guardado");
@@ -273,13 +275,13 @@ internal sealed class UiSmokeSession
         }
     }
 
-    private void Show(System.Windows.Window host, MainViewModel main, string screen, string name)
+    private void Show(System.Windows.FrameworkElement host, MainViewModel main, string screen, string name)
     {
         main.NavigateTo(screen);
         Capture(host, name);
     }
 
-    private void Capture(System.Windows.Window host, string name)
+    private void Capture(System.Windows.FrameworkElement host, string name)
     {
         _bindingErrors.Screen = name;
         Pump();
@@ -290,6 +292,12 @@ internal sealed class UiSmokeSession
         if (string.IsNullOrEmpty(_screenshotDir)) return;
         Directory.CreateDirectory(_screenshotDir);
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Width, (int)Height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+        var background = new System.Windows.Media.DrawingVisual();
+        using (var dc = background.RenderOpen())
+        {
+            dc.DrawRectangle((System.Windows.Media.Brush)_app.Resources["ThemeBackground"], null, new System.Windows.Rect(0, 0, Width, Height));
+        }
+        bitmap.Render(background);
         bitmap.Render(host);
         var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
