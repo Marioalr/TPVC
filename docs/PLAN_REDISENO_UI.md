@@ -125,6 +125,13 @@ modo oscuro, un acento distinto al azul y el modo personalizado**:
 - [ ] Distintivos de alergia, sin existencias, vencidos y avisos de signos vitales legibles en ambos modos.
 - [ ] Gráfica de signos vitales, ticket, receta impresa y PDF (la impresión siempre en claro).
 - [ ] Cambiar de tema con la app abierta actualiza todo sin reiniciar.
+- Hallazgos ya identificados (2026-10-07):
+  - El acento por defecto `#0284C7` con texto blanco tiene contraste **4.1:1** (menos de 4.5:1) en
+    botones principales. Propuesta: `#0369A1` (5.9:1).
+  - En modo oscuro `ThemeSurfaceSubtle` es igual a `ThemeSurface` (`#1E293B`): filas alternas, chips y
+    encabezados no se distinguen. Propuesta: `#273449`.
+  - Cajas de aviso con colores pastel fijos (nota guardada, signos fuera de rango, alertas del cobro) se
+    ven deslumbrantes en oscuro: pasarlas a variantes `…Subtle` del tema.
 - Automático desde v1.11: la prueba `ThemeResourceTests` falla si una pantalla usa un color de tema que
   no existe o si un color de la paleta no cambia con el tema (así se encontraron `ThemeCard`,
   `ThemeError` y `ThemeSurfaceHighlight`, que nunca estuvieron definidos).
