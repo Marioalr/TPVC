@@ -2,6 +2,22 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.13.0] - 2026-10-07
+
+### Añadido — Fase 1 del rediseño: lenguaje visual común
+* **Paleta calculada con contraste garantizado**: todos los colores salen de `ThemePalette`; el texto sobre botones, selección y avisos se ajusta solo hasta 4.5:1 con cualquier acento (también los personalizados). El acento por defecto pasa a `#0369A1`; con el anterior (`#0284C7`) los botones usan una versión más oscura para el texto blanco.
+* Modo oscuro: el gris suave ya se distingue de la superficie; avisos y distintivos con variantes del tema (antes colores pastel fijos).
+* Componentes compartidos para las pantallas nuevas (Pacientes, POS y Configuración): 6 tamaños de letra, botones (principal, secundario, discreto, peligro, icono), campos con texto de ejemplo y anillo de foco, lista desplegable con tema (antes se veía clara en modo oscuro), casillas, chips, tarjetas, distintivos, avisos, hojas con fondo difuso, panel lateral y filas de lista ligeras.
+* Juego único de iconos de trazo (`helpers:Icon`), sin emoji.
+* **Avisos breves** en la esquina ("Expediente guardado") que se van solos, para reemplazar las ventanas que piden "Aceptar".
+* Configuración → **Componentes**: muestra de todo lo anterior con botones para cambiar entre claro y oscuro.
+* **Prueba de humo de la interfaz** en la CI de Windows: carga cada pantalla con datos de demostración, falla ante bindings rotos o recursos inexistentes, comprueba colores reales y guarda capturas en claro y oscuro como artefacto.
+
+### Corregido
+* **Cinco botones que no hacían nada** porque apuntaban a comandos inexistentes: guardar servicio nuevo (POS y Pacientes), guardar signos vitales rápidos, "recetar de todos modos" en la alerta de alergia y **guardar una cita** desde la agenda.
+* El estilo `GhostButton` (agenda y citas) no existía y esos botones salían con el gris de Windows.
+* El texto dentro de botones principales, distintivos y avisos salía siempre del color normal del texto (un estilo global lo forzaba); ahora toma el color de su contenedor.
+
 ## [1.12.0] - 2026-10-07
 
 ### Añadido

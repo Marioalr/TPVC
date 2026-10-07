@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-07 (TPVC v1.12.0).
+Estado al 2026-10-07 (TPVC v1.13.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -39,7 +39,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Consulta en curso, cuenta y cobro sin pasar por el POS (v1.10) · guardado automático (v1.11) | ✅ Hecho |
-| 1 | Fundamentos comunes de diseño | Pendiente |
+| 1 | Fundamentos comunes de diseño | ✅ Hecho (v1.13) |
 | 2 | Pacientes y consulta (expediente) | Propuesta para revisión |
 | 3 | Punto de venta (POS) | Pendiente |
 | 4 | Configuración | Pendiente |
@@ -63,6 +63,10 @@ Se hace antes que las pantallas para que el expediente, el POS y la configuraci�
   ventana con fondo difuso (hoja); aviso breve (toast); distintivos (alergia, crónico, estado de cita,
   existencias).
 - Criterio de terminado: una página de muestra con todos los componentes en tema claro y oscuro.
+- Hecho en v1.13: `Services/ThemePalette.cs` (colores calculados con contraste), `Styles/DesignSystem.xaml`
+  (componentes), `Helpers/Icon.cs` (iconos), avisos breves (`NotificationService`), Configuración →
+  Componentes, y la prueba de humo de la interfaz en Windows con capturas en claro y oscuro
+  (artefacto `capturas-interfaz` de la CI).
 
 ### Fase 2 · Pacientes y consulta (expediente)
 
