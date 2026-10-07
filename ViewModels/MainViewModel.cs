@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.11.0";
+    private string _appVersion = "1.12.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -455,14 +455,12 @@ public partial class MainViewModel : ObservableObject
 
             foreach (var p in patients)
             {
-                var hasAllergies = !string.IsNullOrWhiteSpace(p.Allergies) &&
-                                   !p.Allergies.Equals("Ninguna", StringComparison.OrdinalIgnoreCase) &&
-                                   !p.Allergies.Equals("Ninguna conocida", StringComparison.OrdinalIgnoreCase);
+                var hasAllergies = p.HasAllergies;
 
                 list.Add(new CommandPaletteItem
                 {
                     Title = p.FullName,
-                    Subtitle = $"Exp: {p.RecordNumber} • Tel: {p.FormattedPhone} • {p.Age} años • Diagnóstico: {p.LastDiagnosis}",
+                    Subtitle = $"Exp: {p.RecordNumber} • Tel: {p.FormattedPhone} • {p.AgeDisplay} • Diagnóstico: {p.LastDiagnosis}",
                     Category = "Pacientes",
                     Icon = "👤",
                     Badge = hasAllergies ? "⚠️ Alergias" : p.RecordNumber,

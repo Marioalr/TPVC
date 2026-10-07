@@ -642,7 +642,8 @@ public class DataImportService
         // --- Fila de alergias y signos vitales ---
         int vitalsRow = FindRowStartingWith(sheet, "Alergias");
         string allergies = vitalsRow > 0 ? ValueAfterLabel(sheet, vitalsRow, "Alergias") : string.Empty;
-        if (string.IsNullOrWhiteSpace(allergies)) allergies = "Ninguna conocida";
+        // Vacío = no se anotó (no se supone "ninguna"); el expediente lo muestra como sin interrogar
+        allergies = allergies?.Trim() ?? string.Empty;
 
         var vitals = new List<string>();
         if (vitalsRow > 0)
@@ -729,7 +730,7 @@ public class DataImportService
         else
         {
             if (age > 0) patient.Age = age;
-            patient.Allergies = allergies;
+            if (!string.IsNullOrWhiteSpace(allergies)) patient.Allergies = allergies;
             if (!string.IsNullOrWhiteSpace(vitalsSummary)) patient.VitalSigns = vitalsSummary;
             patient.IsActive = true;
         }

@@ -981,6 +981,8 @@ public class InventoryTests
         recordsVm.FormPhone = "55 0011 2233";
         recordsVm.FormBloodType = "A+";
         recordsVm.FormAllergies = "Ninguna";
+        recordsVm.FormGender = "Femenino";
+        recordsVm.FormBirthDateText = "10/05/1990";
         await recordsVm.SavePatientModalAsync();
 
         Assert.IsFalse(recordsVm.IsPatientModalOpen);
@@ -1513,6 +1515,7 @@ public class InventoryTests
         recordsVm.FormFirstName = "Juan";
         recordsVm.FormLastName = "Pérez";
         recordsVm.FormMaternalLastName = "";
+        FillRequiredIdentity(recordsVm);
         await recordsVm.SavePatientModalAsync();
         Assert.IsFalse(recordsVm.IsPatientModalOpen);
         Assert.IsNotNull(recordsVm.SelectedPatient);
@@ -1523,6 +1526,7 @@ public class InventoryTests
         recordsVm.FormFirstName = "María del Carmen";
         recordsVm.FormLastName = "González";
         recordsVm.FormMaternalLastName = "Trejo";
+        FillRequiredIdentity(recordsVm);
         await recordsVm.SavePatientModalAsync();
         Assert.IsFalse(recordsVm.IsPatientModalOpen);
         Assert.AreEqual("María del Carmen González Trejo", recordsVm.SelectedPatient.FullName);
@@ -1583,6 +1587,7 @@ public class InventoryTests
         await recordsVm.NewPatientAsync();
         recordsVm.FormFirstName = "Laura";
         recordsVm.FormLastName = "Mora";
+        FillRequiredIdentity(recordsVm);
         recordsVm.FormEmail = "correo-invalido";
 
         await recordsVm.SavePatientModalAsync();
@@ -1603,6 +1608,7 @@ public class InventoryTests
         recordsVm.FormFirstName = "Laura";
         recordsVm.FormLastName = "Mora";
         recordsVm.FormRecordNumber = "EXP-2026-999";
+        FillRequiredIdentity(recordsVm);
         recordsVm.FormEmail = "laura.mora@correo.com";
         await recordsVm.SavePatientModalAsync();
         Assert.IsFalse(recordsVm.IsPatientModalOpen);
@@ -1645,14 +1651,14 @@ public class InventoryTests
         var recordsVm = new MedicalRecordsViewModel();
         await recordsVm.NewPatientAsync();
 
-        // Verificar valores por defecto
-        Assert.AreEqual("120/80", recordsVm.FormVitalTA);
-        Assert.AreEqual("75", recordsVm.FormVitalFC);
-        Assert.AreEqual("18", recordsVm.FormVitalFR);
-        Assert.AreEqual("36.5", recordsVm.FormVitalTemp);
-        Assert.AreEqual("70.0", recordsVm.FormVitalWeight);
-        Assert.AreEqual("1.70", recordsVm.FormVitalHeight);
-        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("24.2"));
+        // Sin valores de ejemplo: un 120/80 prellenado se guardaba como si se hubiera medido
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalTA);
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalFC);
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalFR);
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalTemp);
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalWeight);
+        Assert.AreEqual(string.Empty, recordsVm.FormVitalHeight);
+        Assert.AreEqual("Valores no disponibles", recordsVm.FormVitalIMC);
 
         // Modificar peso y talla para recalcular IMC
         recordsVm.FormVitalWeight = "85.0";
@@ -1664,6 +1670,7 @@ public class InventoryTests
         // Guardar paciente con signos individuales
         recordsVm.FormFirstName = "Carlos";
         recordsVm.FormLastName = "Hernández";
+        FillRequiredIdentity(recordsVm);
         recordsVm.FormVitalTA = "130/85";
         recordsVm.FormVitalFC = "80";
         recordsVm.FormVitalFR = "20";
@@ -2775,12 +2782,24 @@ public class InventoryTests
         Assert.IsFalse(vm.FormIsPediatric, "A los 45 años no es pediátrico");
     }
 
+    /// <summary>Datos obligatorios del alta (sexo, edad o fecha y alergias) sin valores supuestos.</summary>
+    private static void FillRequiredIdentity(MedicalRecordsViewModel vm)
+    {
+        vm.FormGender = "Masculino";
+        vm.FormAgeText = "40";
+        vm.FormAllergies = "Negadas";
+    }
+
     [TestMethod]
     public void MedicalRecordsViewModel_StepNavigationCommands_CycleTabsCorrectly()
     {
         var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
 
         Assert.AreEqual("Identificacion", vm.FormPatientActiveTab);
+
+        // Mujer adulta: el paso de gineco-obstétricos sí aplica
+        vm.FormGender = "Femenino";
+        vm.FormAgeText = "30";
 
         // Next -> Patologicos
         vm.NextFormPatientStepCommand.Execute(null);

@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.11.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.12.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -45,7 +45,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - **Simulador de Ticket de Compra al Despachar**: Al presionar *"Cobrar y Despachar Venta"*, se despliega automáticamente una ventana que simula un **ticket térmico de consultorio y farmacia** con encabezado oficial, RFC, cédula profesional, folio secuencial, fecha/hora, desglose de medicamentos con presentación y cantidades, subtotal, IVA tasa 0%, total cobrado, código de barras simulado y opciones interactivas para **Imprimir Ticket** o **Finalizar / Nueva Venta**.
 
 ### 3. Expedientes Clínicos y Consultas Médicas (NOM-004-SSA3-2012)
-- **Gestión Completa de Expedientes en SQLite**: Alta y edición de fichas de pacientes con generación automática de folio (`EXP-YYYY-NNN`), datos demográficos completos, tipo de sangre, contactos de emergencia y antecedentes heredofamiliares/patológicos.
+- **Gestión Completa de Expedientes en SQLite**: Alta y edición de fichas de pacientes con generación automática de folio (`EXP-YYYY-NNN`), fecha de nacimiento con edad calculada (meses en bebés), tipo de sangre, contactos de emergencia y antecedentes heredofamiliares/patológicos. Solo se piden los antecedentes que corresponden al sexo y la edad (gineco-obstétricos en mujeres de 10 años o más, desarrollo en menores) y nada se llena con valores supuestos.
 - **Alerta Roja de Alergias Medicamentosas**: Resalta prominentemente en el expediente cualquier hipersensibilidad o alergia a fármacos para prevenir prescripciones de riesgo.
 - **Pantalla de Consulta en Curso (v1.10)**: cinco secciones en el orden de la entrevista (motivo, signos vitales, exploración, diagnóstico CIE-10 y tratamiento) que se abren una a la vez, con frases frecuentes de un clic, aviso de signos vitales fuera de rango, IMC automático y atajos **Ctrl + ↓/↑** (sección) y **Ctrl + Enter** (terminar).
 - **Guardado automático (v1.11)**: la consulta en curso se guarda sola mientras se escribe; si se cierra el programa o se va la luz, se retoma al abrir con su nota, signos, receta, cuenta y hora de inicio.
@@ -118,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **173 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **181 pruebas** unitarias y de integración
 
 ---
 

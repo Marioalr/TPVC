@@ -2394,7 +2394,7 @@
                                         <TextBlock Text=" • " Foreground="{DynamicResource ThemeTextSecondary}" />
                                         <TextBlock Text="{Binding RecordNumber}" FontFamily="Consolas" Foreground="{DynamicResource ThemeTextSecondary}" />
                                         <TextBlock Text=" (" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding Age, StringFormat='{}{0} años'}" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding AgeDisplay}" Foreground="{DynamicResource ThemeTextSecondary}" />
                                         <TextBlock Text=")" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     </StackPanel>
                                 </DataTemplate>

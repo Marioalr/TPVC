@@ -182,7 +182,15 @@ public partial class MedicalRecordsViewModel
             : "No se pudo guardar automáticamente";
         PostToUi(() =>
         {
-            if (HasActiveConsultation) AutosaveStatus = status;
+            // Bajo el mismo candado que el cierre: un guardado que termina justo al cobrar no
+            // deja el indicador "Guardado" en una consulta ya cerrada
+            lock (_draftGate)
+            {
+                if (draft.Generation == Interlocked.Read(ref _draftGeneration) && HasActiveConsultation)
+                {
+                    AutosaveStatus = status;
+                }
+            }
         });
     }
 
@@ -195,9 +203,9 @@ public partial class MedicalRecordsViewModel
             _autosaveTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             _draftStore?.Delete();
             _lastDraftWriteUtc = DateTime.MinValue;
+            AutosaveStatus = string.Empty;
+            IsConsultationRecovered = false;
         }
-        AutosaveStatus = string.Empty;
-        IsConsultationRecovered = false;
     }
 
     /// <summary>

@@ -2,6 +2,22 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.12.0] - 2026-10-07
+
+### Añadido
+* **Fecha de nacimiento** en el alta y la edición del paciente: la edad se calcula sola y se mantiene al día (antes se quedaba congelada en la del alta); en bebés se muestra en días o meses ("8 meses", "2 años 6 meses") en la ficha, la consulta, las listas y la receta. La edad en años solo se captura si no se conoce la fecha.
+* **Solo los antecedentes que corresponden a la ficha de identificación**: el paso 3 del alta aparece como "Gineco-obstétricos" (mujeres de 10 años o más), "Desarrollo" (menores de 18) o ambos, y **no aparece** para un hombre adulto; "Siguiente" lo salta. Una niña pequeña ya no ve menarca, gestas ni Papanicolaou.
+* Alergias en tres estados en ficha, consulta y visor de expedientes: rojo (cuáles), verde ("Negadas") y ámbar ("sin interrogar"); botón **Negadas** de un clic en el formulario.
+* Plan de rediseño: decisiones del doctor (fecha de nacimiento, agenda como panel, apartado "Pacientes"), **consulta entre equipos PC ↔ tablet** (Fase E) y la regla de mostrar solo lo que corresponde a sexo y edad también en la consulta.
+
+### Corregido — datos clínicos supuestos
+* Cada **paciente nuevo** se guardaba con signos vitales de ejemplo (**T/A 120/80, FC 75, FR 18, 36.5 °C, 70 kg, 1.70 m**) aunque el formulario no los muestra; aparecían como sus últimos signos y en la **receta impresa**.
+* El alta empezaba con **edad 30, sexo masculino, grupo sanguíneo O+ y alergias "Ninguna conocida"**: si no se cambiaban, quedaban registrados como si se hubieran preguntado. Ahora empieza vacío y pide fecha de nacimiento (o edad), sexo y alergias ("Negadas" si no tiene).
+* Una nota de consulta sin signos vitales **copiaba los últimos signos del expediente** como si se hubieran medido en esa consulta (y duplicaba puntos en la gráfica de evolución).
+* Al importar el Excel, una receta sin alergias anotadas ya no se registra como "Ninguna conocida", ni borra las alergias ya capturadas del paciente.
+* La receta siempre indica las alergias ("Negadas", "No interrogadas" o cuáles) y la edad legible.
+* Guardado automático: si un guardado terminaba justo al cobrar, el indicador podía quedarse en "Guardado …" con la consulta ya cerrada.
+
 ## [1.11.0] - 2026-10-07
 
 ### Añadido

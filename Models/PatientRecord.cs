@@ -239,14 +239,26 @@ public class PatientRecord : ISyncEntity
     public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     public string RecordNumber { get; set; } = string.Empty; // ej. EXP-2026-001
     public string FullName { get; set; } = string.Empty;
-    public int Age { get; set; }
+
+    // Con fecha de nacimiento la edad se calcula al día (no se queda congelada en la del alta);
+    // sin ella se usa la edad capturada. El campo no sigue la convención _age a propósito: así EF
+    // guarda la edad vigente en cada escritura.
+    private int _storedAge;
+    public int Age
+    {
+        get => BirthDate is { } birth ? CalculateAge(birth, DateTime.Today) : _storedAge;
+        set => _storedAge = value;
+    }
+
     public string Gender { get; set; } = "No especificado";
     public string Phone { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
-    public string BloodType { get; set; } = "O+";
-    public string Allergies { get; set; } = "Ninguna conocida";
-    public string ChronicDiseases { get; set; } = "Ninguna";
+    // Sin valores supuestos: vacío = no se ha preguntado (antes O+ y "Ninguna conocida" se
+    // guardaban aunque nadie lo hubiera interrogado)
+    public string BloodType { get; set; } = string.Empty;
+    public string Allergies { get; set; } = string.Empty;
+    public string ChronicDiseases { get; set; } = string.Empty;
     public string EmergencyContactName { get; set; } = string.Empty;
     public string EmergencyContactPhone { get; set; } = string.Empty;
 
@@ -290,6 +302,46 @@ public class PatientRecord : ISyncEntity
 
     [NotMapped]
     public bool IsPediatric => Age < 18;
+
+    /// <summary>Antecedentes gineco-obstétricos: solo mujeres de 10 años en adelante.</summary>
+    [NotMapped]
+    public bool ShowsGynecoObstetric => IsFemale && Age >= GynecoObstetricMinAge;
+
+    public const int GynecoObstetricMinAge = 10;
+
+    /// <summary>"34 años", "2 años 6 meses", "8 meses" o "12 días".</summary>
+    [NotMapped]
+    public string AgeDisplay => FormatAge(BirthDate, Age, DateTime.Today);
+
+    public static int CalculateAge(DateTime birthDate, DateTime today) => TotalMonths(birthDate, today) / 12;
+
+    public static int TotalMonths(DateTime birthDate, DateTime today)
+    {
+        var months = (today.Year - birthDate.Year) * 12 + today.Month - birthDate.Month;
+        if (today.Day < birthDate.Day) months--;
+        return Math.Max(0, months);
+    }
+
+    public static string FormatAge(DateTime? birthDate, int age, DateTime today)
+    {
+        if (birthDate is not { } birth)
+        {
+            return age == 1 ? "1 año" : $"{Math.Max(0, age)} años";
+        }
+
+        var months = TotalMonths(birth, today);
+        if (months < 1)
+        {
+            var days = Math.Max(0, (today.Date - birth.Date).Days);
+            return days == 1 ? "1 día" : $"{days} días";
+        }
+        if (months < 24) return months == 1 ? "1 mes" : $"{months} meses";
+
+        int years = months / 12, rest = months % 12;
+        // Hasta los 6 años los meses importan (desarrollo, dosis); después solo los años
+        if (years < 6 && rest > 0) return $"{years} años {rest} {(rest == 1 ? "mes" : "meses")}";
+        return $"{years} años";
+    }
 
     [NotMapped]
     public string FormattedPhone => FormatPhoneNumber(Phone);
@@ -473,9 +525,35 @@ public class PatientRecord : ISyncEntity
         ActiveServicesJson = JsonSerializer.Serialize(ActiveServices, _jsonOptions);
     }
 
-    public bool HasAllergies => !string.IsNullOrWhiteSpace(Allergies) && 
-                                !Allergies.Equals("Ninguna", StringComparison.OrdinalIgnoreCase) && 
-                                !Allergies.Equals("Ninguna conocida", StringComparison.OrdinalIgnoreCase);
+    public bool HasAllergies => !string.IsNullOrWhiteSpace(Allergies) && !DeniesAllergies(Allergies);
+
+    /// <summary>No se ha interrogado: no es lo mismo que "negadas".</summary>
+    [NotMapped]
+    public bool AllergiesNotAsked => string.IsNullOrWhiteSpace(Allergies);
+
+    /// <summary>Para la receta y resúmenes: cuáles, "Negadas" o "No interrogadas".</summary>
+    [NotMapped]
+    public string AllergySummary => HasAllergies
+        ? Allergies.Trim()
+        : AllergiesNotAsked ? "No interrogadas" : "Negadas";
+
+    [NotMapped]
+    public string AllergyBadgeText => HasAllergies
+        ? $"ALERGIAS: {Allergies.Trim()}"
+        : AllergiesNotAsked ? "Alergias sin interrogar" : "Alergias negadas";
+
+    private static readonly string[] DeniedAllergyAnswers =
+    {
+        "ninguna", "ninguna conocida", "ningunas", "negadas", "negada", "niega", "niega alergias",
+        "no", "sin alergias", "no conocidas", "no conocida", "negativas", "nada"
+    };
+
+    /// <summary>Respuestas que significan "sin alergias" ("Negadas", "Ninguna conocida"...).</summary>
+    public static bool DeniesAllergies(string? text)
+    {
+        var normalized = TPVC.Services.TextSearch.Normalize(text).TrimEnd('.');
+        return normalized.Length > 0 && DeniedAllergyAnswers.Contains(normalized);
+    }
 
     [NotMapped]
     public string GeneralIndications { get; set; } = string.Empty;

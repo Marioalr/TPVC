@@ -1693,9 +1693,7 @@ public class InventoryService
         var allergyTokens = patient.Allergies
             .Split(new[] { ',', ';', '/', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(a => a.Trim())
-            .Where(a => !string.IsNullOrWhiteSpace(a) && 
-                        !a.Equals("Ninguna", StringComparison.OrdinalIgnoreCase) && 
-                        !a.Equals("Ninguna conocida", StringComparison.OrdinalIgnoreCase))
+            .Where(a => !string.IsNullOrWhiteSpace(a) && !PatientRecord.DeniesAllergies(a))
             .ToList();
 
         // Familias farmacológicas con reactividad cruzada común

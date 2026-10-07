@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-07 (TPVC v1.11.0).
+Estado al 2026-10-07 (TPVC v1.12.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -43,6 +43,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 2 | Pacientes y consulta (expediente) | Propuesta para revisión |
 | 3 | Punto de venta (POS) | Pendiente |
 | 4 | Configuración | Pendiente |
+| E | Consulta entre equipos (PC ↔ tablet) | Pendiente (con la app de la tablet) |
 | 5 | Revisión de la visualización de los temas | Pendiente (casi al final) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | Pendiente |
 
@@ -83,16 +84,26 @@ Detalle visual en la propuesta enlazada arriba. Resumen:
   **alergias explícitas** ("Negadas" o cuáles: no se confunde "no preguntado" con "ninguna"), fecha de
   nacimiento con edad calculada (meses en bebés), folio automático, resto de secciones plegables
   opcionales y guardado automático del formulario. "Guardar e iniciar consulta" en un paso.
-- **Agenda**: citas de hoy en el inicio; semana en su propia pantalla; agendar en una hoja lateral con
-  horarios libres sugeridos; recordatorio de WhatsApp y Google Calendar en el menú de cada cita.
+- **Solo lo que corresponde a la ficha de identificación** (sexo y edad), en el alta, la edición, la
+  ficha y la consulta. Lo que no aplica no aparece (ni vacío ni con un aviso de "no aplica"):
+  - Gineco-obstétricos (menarca, ciclos, gestas, Papanicolaou, embarazo): solo mujeres de 10 años o más.
+  - Desarrollo psicomotor, esquema de vacunación por edad y datos del tutor: solo menores de 18.
+  - En la consulta: perímetro cefálico y percentiles en menores de 2 años; FUM, embarazo y semanas de
+    gestación en mujeres de 10 a 55 años; dosis pediátrica por peso solo en menores.
+  - Si se corrige el sexo o la fecha, lo capturado antes no se borra: solo deja de mostrarse.
+  - Ya aplicado en el formulario actual desde v1.12 (gineco y desarrollo); el resto con el rediseño.
+- **Agenda como panel** (decidido): un panel lateral que se abre sobre cualquier pantalla de Pacientes
+  sin cambiar de pantalla, con la semana arriba, las citas del día con los huecos libres entre ellas y
+  el formulario de "Agendar" dentro del mismo panel (horarios libres sugeridos, motivo frecuente,
+  recordatorio de WhatsApp y Google Calendar). Las citas de hoy también se ven en el inicio.
 - **Se eliminan**: ventana de signos vitales rápidos (se capturan en la consulta), formulario antiguo de
   consulta (código muerto desde v1.11), mensajes "¡Guardado exitosamente!" en ventana.
 - **Recursos**: dividir `MedicalRecordsView` (~7,000 líneas, ~20 ventanas creadas aunque estén ocultas)
   y `MedicalRecordsViewModel` (~5,000 líneas) en pantallas y ViewModels por función (inicio, ficha,
   alta, consulta, agenda), creados al abrirse.
-- Decisiones para el doctor: (a) ¿guardar fecha de nacimiento en lugar de edad? (el modelo ya tiene
-  `BirthDate`); (b) ¿la agenda semanal como pantalla propia o como panel?; (c) nombre del apartado en el
-  inicio: "Pacientes" o "Consulta".
+- Decisiones del doctor (2026-10-07): **fecha de nacimiento** en lugar de edad (aplicada desde v1.12;
+  la edad se captura solo si no se conoce la fecha), **agenda como panel** y el apartado se llama
+  **Pacientes**.
 
 ### Fase 3 · Punto de venta (POS)
 
@@ -113,6 +124,31 @@ Mismos principios, sin obligación de reutilizar la pantalla actual:
 - Inventario, lotes y kardex con listas virtualizadas, filtros como chips y edición en hoja lateral.
 - Importar Excel / restaurar base con pasos claros y confirmación solo en lo irreversible.
 - Apariencia con vista previa en vivo del tema.
+
+### Fase E · Consulta entre equipos (PC ↔ tablet)
+
+Poder **mandar una consulta en curso de la PC a la tablet y de la tablet a la PC** (por ejemplo,
+empezar el interrogatorio en el escritorio y terminar la exploración en el consultorio con la tablet).
+
+- **Qué viaja**: la misma copia de trabajo del guardado automático (v1.11): nota, signos, receta,
+  cuenta, folio y hora de inicio. Así no hay un segundo formato que mantener.
+- **Un solo dueño a la vez**: al enviarla, el equipo que la manda la deja en **solo lectura** ("Enviada
+  a la tablet · Recuperar"); el otro la acepta y desde ese momento es el único que la edita. "Recuperar"
+  antes de que la acepten cancela el envío. Nunca dos equipos escriben la misma consulta.
+- **Cómo llega**: una tabla `consultation_handoffs` en Turso (de, para, paciente, folio, copia, estado:
+  enviada / aceptada / cancelada). El equipo que espera revisa solo esa tabla cada pocos segundos
+  mientras está en Pacientes (una consulta pequeña, sin sincronizar todo). Aviso al recibirla:
+  "La PC te envió la consulta de … · Continuar aquí".
+- **Antes de enviar** se suben los cambios pendientes del paciente (expediente y receta) para que el
+  otro equipo lo tenga completo. Los cargos de la cuenta viajan con el `SyncId` del producto o servicio
+  (el `Id` local no sirve en otro equipo). El folio se conserva (no se le agrega `-R1`).
+- **Sin conexión**: el botón se desactiva y dice por qué; la consulta sigue en el equipo actual.
+- **Cobro**: cobra el equipo que termina la consulta; el descuento de inventario se sincroniza como
+  cualquier venta (ver el pendiente de existencias en `docs/PENDIENTES_ANDROID.md`).
+- **Interfaz**: "Enviar a…" en la barra de la consulta abre una hoja con los equipos enlazados y su
+  última conexión; en el otro equipo, el aviso y "Continuar aquí". Detalle visual en la propuesta.
+- Se construye junto con la app de la tablet; la parte de la PC (enviar, recibir, solo lectura) puede
+  ir antes y probarse entre dos PC.
 
 ### Fase 5 · Revisión de la visualización de los temas (casi al final)
 

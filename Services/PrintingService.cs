@@ -149,6 +149,9 @@ public class PrintingService
     /// <summary>Texto seguro para HTML (un "&lt;" en una dosis o un nombre ya no rompe el documento).</summary>
     private static string H(string? text) => System.Net.WebUtility.HtmlEncode(text ?? string.Empty);
 
+    /// <summary>La receta siempre dice algo de alergias: cuáles, "Negadas" o "No interrogadas".</summary>
+    public static string PrescriptionAllergyText(PatientRecord patient) => patient.AllergySummary;
+
     public string? ExportPrescriptionDocument(
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
@@ -212,10 +215,10 @@ public class PrintingService
             sb.AppendLine("<div class=\"patient-box\">");
             sb.AppendLine("  <div class=\"patient-grid\">");
             sb.AppendLine($"    <div><strong>Paciente:</strong> {H(patient.FullName)}</div>");
-            sb.AppendLine($"    <div><strong>Edad:</strong> {patient.Age} años</div>");
+            sb.AppendLine($"    <div><strong>Edad:</strong> {H(patient.AgeDisplay)}</div>");
             sb.AppendLine($"    <div><strong>Sexo:</strong> {H(patient.Gender)}</div>");
-            sb.AppendLine($"    <div><strong>Signos:</strong> {H(patient.VitalSigns ?? "No registrados")}</div>");
-            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"color:#dc2626; font-weight:600;\">{H(patient.Allergies ?? "Ninguna reportada")}</span></div>");
+            sb.AppendLine($"    <div><strong>Signos:</strong> {H(string.IsNullOrWhiteSpace(patient.VitalSigns) ? "No registrados" : patient.VitalSigns)}</div>");
+            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"color:#dc2626; font-weight:600;\">{H(PrescriptionAllergyText(patient))}</span></div>");
             if (!string.IsNullOrWhiteSpace(patient.LastDiagnosis))
             {
                 sb.AppendLine($"    <div style=\"grid-column: span 3;\"><strong>Diagnóstico:</strong> {H(patient.LastDiagnosis)}</div>");
@@ -402,7 +405,7 @@ public class PrintingService
         patientPara.Inlines.Add(new Bold(new Run("Paciente: ")) { });
         patientPara.Inlines.Add(new Run(patient.FullName + "   "));
         patientPara.Inlines.Add(new Bold(new Run("Edad: ")));
-        patientPara.Inlines.Add(new Run($"{patient.Age} años   "));
+        patientPara.Inlines.Add(new Run($"{patient.AgeDisplay}   "));
         patientPara.Inlines.Add(new Bold(new Run("Sexo: ")));
         patientPara.Inlines.Add(new Run($"{patient.Gender}   "));
         patientPara.Inlines.Add(new Bold(new Run("Fecha: ")));
@@ -412,11 +415,9 @@ public class PrintingService
             patientPara.Inlines.Add(new Bold(new Run("Signos Vitales: ")));
             patientPara.Inlines.Add(new Run(patient.VitalSigns + "\n"));
         }
-        if (!string.IsNullOrWhiteSpace(patient.Allergies))
-        {
-            patientPara.Inlines.Add(new Bold(new Run("Alergias: ")) { Foreground = Brushes.Crimson });
-            patientPara.Inlines.Add(new Run(patient.Allergies + "\n") { Foreground = Brushes.Crimson });
-        }
+        var allergyBrush = patient.HasAllergies ? Brushes.Crimson : Brushes.Black;
+        patientPara.Inlines.Add(new Bold(new Run("Alergias: ")) { Foreground = allergyBrush });
+        patientPara.Inlines.Add(new Run(PrescriptionAllergyText(patient) + "\n") { Foreground = allergyBrush });
         if (!string.IsNullOrWhiteSpace(patient.LastDiagnosis))
         {
             patientPara.Inlines.Add(new Bold(new Run("Diagnóstico: ")));

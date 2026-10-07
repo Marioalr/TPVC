@@ -237,10 +237,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty]
-    private string _formAgeText = "30";
+    private string _formAgeText = string.Empty;
 
     [ObservableProperty]
-    private int _formAge = 30;
+    private int _formAge;
 
     partial void OnFormAgeTextChanged(string value)
     {
@@ -251,33 +251,25 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (int.TryParse(digitsOnly, out var age))
-        {
-            FormAge = age;
-        }
-        else if (string.IsNullOrEmpty(digitsOnly))
-        {
-            FormAge = 0;
-        }
+        FormAge = int.TryParse(digitsOnly, out var age) ? age : 0;
+        RecomputeFormProfile();
     }
 
     partial void OnFormAgeChanged(int value)
     {
+        // Vacío = edad sin capturar (no "0 años", que lo volvería recién nacido)
         var str = value.ToString();
-        if (FormAgeText != str)
+        if (FormAgeText != str && !(value == 0 && string.IsNullOrEmpty(FormAgeText)))
         {
             FormAgeText = str;
         }
-        FormIsPediatric = value < 18;
+        RecomputeFormProfile();
     }
 
     [ObservableProperty]
-    private string _formGender = "Masculino";
+    private string _formGender = string.Empty;
 
-    partial void OnFormGenderChanged(string value)
-    {
-        FormIsFemale = !string.IsNullOrWhiteSpace(value) && value.StartsWith("Fem", StringComparison.OrdinalIgnoreCase);
-    }
+    partial void OnFormGenderChanged(string value) => RecomputeFormProfile();
 
     [ObservableProperty]
     private DateTime? _formBirthDate;
@@ -366,6 +358,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void SetFormPatientStepTab(string tab)
     {
         if (string.IsNullOrWhiteSpace(tab)) return;
+        if (tab == "GinecoHitos" && !FormHasConditionalStep) return;
         FormPatientActiveTab = tab;
     }
 
@@ -375,7 +368,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormPatientActiveTab = FormPatientActiveTab switch
         {
             "Identificacion" => "Patologicos",
-            "Patologicos" => "GinecoHitos",
+            "Patologicos" => FormHasConditionalStep ? "GinecoHitos" : "NoPatologicos",
             "GinecoHitos" => "NoPatologicos",
             _ => "NoPatologicos"
         };
@@ -386,7 +379,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         FormPatientActiveTab = FormPatientActiveTab switch
         {
-            "NoPatologicos" => "GinecoHitos",
+            "NoPatologicos" => FormHasConditionalStep ? "GinecoHitos" : "Patologicos",
             "GinecoHitos" => "Patologicos",
             "Patologicos" => "Identificacion",
             _ => "Identificacion"
@@ -412,13 +405,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string _formAddress = string.Empty;
 
     [ObservableProperty]
-    private string _formBloodType = "O+";
+    private string _formBloodType = BloodTypeUnknown;
 
     [ObservableProperty]
-    private string _formAllergies = "Ninguna conocida";
+    private string _formAllergies = string.Empty;
 
     [ObservableProperty]
-    private string _formChronicDiseases = "Ninguna";
+    private string _formChronicDiseases = string.Empty;
 
     [ObservableProperty]
     private string _formEmergencyContactName = string.Empty;
@@ -439,7 +432,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // SIGNOS VITALES INDIVIDUALES (FORMULARIO DE EXPEDIENTE)
     // ==========================================
     [ObservableProperty]
-    private string _formVitalTA = "120/80";
+    private string _formVitalTA = string.Empty;
 
     partial void OnFormVitalTAChanged(string value)
     {
@@ -451,22 +444,22 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty]
-    private string _formVitalFC = "75";
+    private string _formVitalFC = string.Empty;
 
     [ObservableProperty]
-    private string _formVitalFR = "18";
+    private string _formVitalFR = string.Empty;
 
     [ObservableProperty]
-    private string _formVitalTemp = "36.5";
+    private string _formVitalTemp = string.Empty;
 
     [ObservableProperty]
-    private string _formVitalWeight = "70.0";
+    private string _formVitalWeight = string.Empty;
 
     [ObservableProperty]
-    private string _formVitalHeight = "1.70";
+    private string _formVitalHeight = string.Empty;
 
     [ObservableProperty]
-    private string _formVitalIMC = "24.2 kg/m² (Peso normal)";
+    private string _formVitalIMC = "Valores no disponibles";
 
     partial void OnFormVitalWeightChanged(string value) => RecalculateFormIMC();
     partial void OnFormVitalHeightChanged(string value) => RecalculateFormIMC();
@@ -623,12 +616,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     private void ParseVitalSigns(string? vitalsString)
     {
-        FormVitalTA = "120/80";
-        FormVitalFC = "75";
-        FormVitalFR = "18";
-        FormVitalTemp = "36.5";
-        FormVitalWeight = "70.0";
-        FormVitalHeight = "1.70";
+        FormVitalTA = string.Empty;
+        FormVitalFC = string.Empty;
+        FormVitalFR = string.Empty;
+        FormVitalTemp = string.Empty;
+        FormVitalWeight = string.Empty;
+        FormVitalHeight = string.Empty;
 
         if (string.IsNullOrWhiteSpace(vitalsString))
         {
@@ -691,7 +684,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string? _formErrorMessage;
 
     public List<string> GenderOptions { get; } = new() { "Masculino", "Femenino", "Otro / No especificado" };
-    public List<string> BloodTypeOptions { get; } = new() { "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
+    public const string BloodTypeUnknown = "No determinado";
+
+    public List<string> BloodTypeOptions { get; } = new() { BloodTypeUnknown, "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
     public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
 
     // ==========================================
@@ -707,7 +702,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string _consultationChiefComplaint = string.Empty;
 
     [ObservableProperty]
-    private string _consultationTA = "120/80";
+    private string _consultationTA = string.Empty;
 
     partial void OnConsultationTAChanged(string value)
     {
@@ -721,22 +716,22 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty]
-    private string _consultationFC = "75";
+    private string _consultationFC = string.Empty;
 
     [ObservableProperty]
-    private string _consultationFR = "18";
+    private string _consultationFR = string.Empty;
 
     [ObservableProperty]
-    private string _consultationTemp = "36.5";
+    private string _consultationTemp = string.Empty;
 
     [ObservableProperty]
-    private string _consultationWeight = "70.0";
+    private string _consultationWeight = string.Empty;
 
     [ObservableProperty]
-    private string _consultationHeight = "1.70";
+    private string _consultationHeight = string.Empty;
 
     [ObservableProperty]
-    private string _consultationIMC = "24.2 kg/m² (Peso normal)";
+    private string _consultationIMC = "Valores no disponibles";
 
     [ObservableProperty]
     private string _consultationGlucose = string.Empty;
@@ -2141,15 +2136,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormLastName = string.Empty;
         FormMaternalLastName = string.Empty;
         FormFullName = string.Empty;
-        FormAge = 30;
-        FormAgeText = "30";
-        FormGender = "Masculino";
+        FormBirthDateText = string.Empty;
+        FormBirthDate = null;
+        FormAgeText = string.Empty;
+        FormAge = 0;
+        FormGender = string.Empty;
         FormPhone = string.Empty;
         FormEmail = string.Empty;
         FormAddress = string.Empty;
-        FormBloodType = "O+";
-        FormAllergies = "Ninguna conocida";
-        FormChronicDiseases = "Ninguna";
+        FormBloodType = BloodTypeUnknown;
+        FormAllergies = string.Empty;
+        FormChronicDiseases = string.Empty;
         FormEmergencyContactName = string.Empty;
         FormEmergencyContactPhone = string.Empty;
 
@@ -2180,15 +2177,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormIsFemale = false;
         FormIsPediatric = false;
 
-        FormVitalTA = "120/80";
-        FormVitalFC = "75";
-        FormVitalFR = "18";
-        FormVitalTemp = "36.5";
-        FormVitalWeight = "70.0";
-        FormVitalHeight = "1.70";
-        RecalculateFormIMC();
-
-        FormInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
+        ParseVitalSigns(null);
+        FormInitialVitalSigns = string.Empty;
         FormClinicalNotes = string.Empty;
 
         IsPatientModalOpen = true;
@@ -2216,13 +2206,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormLastName = last;
         FormMaternalLastName = maternal;
 
+        FormBirthDateText = SelectedPatient.BirthDate?.ToString("dd/MM/yyyy") ?? string.Empty;
         FormAge = SelectedPatient.Age;
         FormAgeText = SelectedPatient.Age.ToString();
         FormGender = SelectedPatient.Gender;
         FormPhone = FormatPhoneNumber(SelectedPatient.Phone);
         FormEmail = SelectedPatient.Email;
         FormAddress = SelectedPatient.Address;
-        FormBloodType = SelectedPatient.BloodType;
+        FormBloodType = string.IsNullOrWhiteSpace(SelectedPatient.BloodType) ? BloodTypeUnknown : SelectedPatient.BloodType;
         FormAllergies = SelectedPatient.Allergies;
         FormChronicDiseases = SelectedPatient.ChronicDiseases;
         FormEmergencyContactName = SelectedPatient.EmergencyContactName;
@@ -2253,6 +2244,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormZoonosis = SelectedPatient.Zoonosis ?? string.Empty;
         FormIsFemale = SelectedPatient.IsFemale;
         FormIsPediatric = SelectedPatient.IsPediatric;
+        NotifyFormProfileChanged();
         FormPatientActiveTab = "Identificacion";
 
         ParseVitalSigns(SelectedPatient.VitalSigns);
@@ -2298,9 +2290,32 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!int.TryParse(FormAgeText, out var parsedAge) || parsedAge < 0 || parsedAge > 130)
+        if (!string.IsNullOrWhiteSpace(FormBirthDateText) && FormBirthDate == null)
         {
-            FormErrorMessage = "La edad debe ser un número válido entre 0 y 130 años.";
+            FormErrorMessage = "La fecha de nacimiento no es válida: use día/mes/año (por ejemplo 14/03/1992) y que no sea futura.";
+            return;
+        }
+
+        int parsedAge;
+        if (FormBirthDate is { } birthDate)
+        {
+            parsedAge = PatientRecord.CalculateAge(birthDate, DateTime.Today);
+        }
+        else if (!int.TryParse(FormAgeText, out parsedAge) || parsedAge < 0 || parsedAge > 130)
+        {
+            FormErrorMessage = "Capture la fecha de nacimiento (o la edad en años si no se conoce).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormGender))
+        {
+            FormErrorMessage = "Seleccione el sexo del paciente.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormAllergies))
+        {
+            FormErrorMessage = "Indique las alergias del paciente o escriba \"Negadas\" (no es lo mismo que no haber preguntado).";
             return;
         }
 
@@ -2346,9 +2361,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
         patient.Email = FormEmail?.Trim() ?? string.Empty;
         patient.Address = FormAddress?.Trim() ?? string.Empty;
-        patient.BloodType = FormBloodType;
-        patient.Allergies = string.IsNullOrWhiteSpace(FormAllergies) ? "Ninguna conocida" : FormAllergies.Trim();
-        patient.ChronicDiseases = string.IsNullOrWhiteSpace(FormChronicDiseases) ? "Ninguna" : FormChronicDiseases.Trim();
+        patient.BloodType = string.IsNullOrWhiteSpace(FormBloodType) ? BloodTypeUnknown : FormBloodType;
+        patient.Allergies = FormAllergies.Trim();
+        patient.ChronicDiseases = FormChronicDiseases?.Trim() ?? string.Empty;
         patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
         patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
 
@@ -2386,9 +2401,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(FormVitalHeight)) vitalsParts.Add($"Talla: {FormVitalHeight.Trim()} m");
         if (!string.IsNullOrWhiteSpace(FormVitalIMC) && !FormVitalIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {FormVitalIMC.Trim()}");
 
-        patient.VitalSigns = vitalsParts.Count > 0 
-            ? string.Join(" | ", vitalsParts) 
-            : (string.IsNullOrWhiteSpace(FormInitialVitalSigns) ? "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C" : FormInitialVitalSigns.Trim());
+        // Solo signos realmente capturados; sin ellos se conservan los últimos registrados
+        patient.VitalSigns = vitalsParts.Count > 0
+            ? string.Join(" | ", vitalsParts)
+            : (FormInitialVitalSigns ?? string.Empty).Trim();
 
         FormInitialVitalSigns = patient.VitalSigns;
         patient.ClinicalNotes = FormClinicalNotes.Trim();
@@ -2681,9 +2697,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(ConsultationSpO2)) vitalsParts.Add($"SpO2: {ConsultationSpO2.Trim().TrimEnd('%')}%");
         if (!string.IsNullOrWhiteSpace(ConsultationIMC) && !ConsultationIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {ConsultationIMC.Trim()}");
 
-        var vitalSignsFormatted = vitalsParts.Count > 0 
-            ? string.Join(" | ", vitalsParts) 
-            : (SelectedPatient.VitalSigns ?? string.Empty);
+        // Sin signos capturados la nota queda sin signos: copiar los del expediente los haría
+        // pasar por medidos en esta consulta (y duplicaría puntos en la gráfica de evolución)
+        var vitalSignsFormatted = string.Join(" | ", vitalsParts);
 
         var chiefComplaint = !string.IsNullOrWhiteSpace(ConsultationChiefComplaint)
             ? ConsultationChiefComplaint.Trim()

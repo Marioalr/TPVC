@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-07 (TPVC v1.11.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-07 (TPVC v1.12.0). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -35,12 +35,20 @@ luego la preparación del código; al final lo que se construye en la propia app
 |---|---|---|
 | C1 | **Enlace por QR** | La PC ya genera el paquete de emparejamiento (`SyncProtocolVersion = 2`). Falta mostrarlo como QR y leerlo en Android. El paquete contiene el token: generar un token propio para la tablet en Turso (revocable). |
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). En Android: receta por PDF/HTML (el exportador HTML ya existe) y ticket en impresora térmica Bluetooth (ESC/POS). |
-| C3a | **Consulta en curso por equipo** | El guardado automático (v1.11) es un archivo local de cada equipo (`consulta-en-curso.json`), no se sincroniza: una consulta iniciada en la PC no se ve en la tablet hasta terminarla. Decidir si hace falta continuar en otro equipo. |
+| C3a | **Consulta entre equipos** | Decidido (2026-10-07): se podrá **mandar la consulta en curso de la PC a la tablet y viceversa**, con un solo dueño a la vez. El guardado automático (v1.11) es local de cada equipo; su copia de trabajo es lo que viaja, por una tabla `consultation_handoffs` en Turso. Diseño completo en `docs/PLAN_REDISENO_UI.md` (Fase E). |
 | C3 | **Modo sin conexión** | La tablet trabaja sobre su SQLite local y sincroniza al recuperar red (mismo diseño que la PC). Indicador visible de "pendiente por subir". |
 | C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.12.0 (ficha de identificación)
+
+- [ ] Nuevo paciente: el formulario empieza vacío (sin edad 30, sexo, O+, "Ninguna conocida" ni signos de ejemplo) y no deja guardar sin fecha de nacimiento (o edad), sexo y alergias.
+- [ ] Escribir la fecha de nacimiento (14/03/1992) muestra la edad al lado y deja la edad en solo lectura; un bebé muestra meses.
+- [ ] Hombre adulto: el paso 3 (gineco / desarrollo) no aparece y "Siguiente" pasa de Patológicos a No patológicos. Mujer adulta: "Gineco-obstétricos". Niña de 6 años: "Desarrollo".
+- [ ] Distintivo de alergias en ficha, consulta y visor: rojo (alergias), verde (negadas), ámbar (sin interrogar).
+- [ ] Receta impresa: edad legible y "Alergias: Negadas / No interrogadas / cuáles"; sin signos inventados.
 
 ### v1.11.0 (guardado automático y temas)
 

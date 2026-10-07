@@ -153,6 +153,38 @@
         </Setter>
     </Style>
 
+    <!-- Distintivo de alergias del paciente (DataContext = el paciente). Tres estados: tiene
+         alergias (rojo), negadas (verde) y sin interrogar (ámbar): vacío no es "sin alergias".
+         Colores con su propio fondo y texto para que se lean igual en modo claro y oscuro. -->
+    <Style x:Key="AllergyBadge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="Background" Value="#DCFCE7" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding AllergiesNotAsked}" Value="True">
+                <Setter Property="Background" Value="#FEF3C7" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HasAllergies}" Value="True">
+                <Setter Property="Background" Value="#B91C1C" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="AllergyBadgeText" TargetType="TextBlock">
+        <Setter Property="Text" Value="{Binding AllergyBadgeText}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="#166534" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding AllergiesNotAsked}" Value="True">
+                <Setter Property="Foreground" Value="#78350F" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HasAllergies}" Value="True">
+                <Setter Property="Foreground" Value="#FFFFFF" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Botón de Acción Rápida (Consumo / Éxito) -->
     <Style x:Key="SuccessButton" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
