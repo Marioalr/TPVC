@@ -1,0 +1,242 @@
+<UserControl x:Class="TPVC.Views.PrescriptionPreviewSheetView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: VISTA PREVIA Y GENERACIÓN DE RECETA MÉDICA OFICIAL (NOM-004-SSA3)  -->
+    <!-- ========================================================================= -->
+    <Border Background="{DynamicResource ThemeOverlay}" 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch">
+        <Border Background="{DynamicResource ThemeCard}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1.5" 
+                CornerRadius="14" 
+                MaxWidth="750" 
+                MaxHeight="680" 
+                Margin="20" 
+                Padding="22">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Cabecera de la Modal -->
+                <Grid Grid.Row="0" Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource ThemeAccent}" 
+                                    CornerRadius="6" 
+                                    Width="28" Height="28" 
+                                    Margin="0,0,10,0">
+                                <TextBlock Text="📄" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Receta Médica - Vista Previa Oficial (NOM-004-SSA3)" 
+                                       FontSize="17" 
+                                       FontWeight="Bold" 
+                                       Foreground="{DynamicResource ThemeText}" />
+                        </StackPanel>
+                        <TextBlock Text="Formato estandarizado de prescripción médica conforme a la legislación sanitaria vigente." 
+                                   FontSize="11" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   Margin="38,4,0,0" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" 
+                            Style="{DynamicResource OutlineButton}" 
+                            Command="{Binding ClosePrescriptionPdfPreviewCommand}" 
+                            Padding="8,5" 
+                            VerticalAlignment="Top">
+                        <TextBlock Text="✕" FontWeight="Bold" FontSize="13" />
+                    </Button>
+                </Grid>
+
+                <!-- Documento Simulado (Hoja de Receta) -->
+                <Border Grid.Row="1" 
+                        Background="{DynamicResource ThemeSurface}" 
+                        BorderBrush="{DynamicResource ThemeBorder}" 
+                        BorderThickness="1" 
+                        CornerRadius="8" 
+                        Padding="20">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- Membrete Institucional y Médico -->
+                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1.5" Padding="0,0,0,12" Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccent}" />
+                                        <TextBlock Text="{Binding DoctorName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeAccent}" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                                            <TextBlock Text="RECETA MÉDICA INDIVIDUAL" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccent}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding SelectedPatient.RecordNumber, StringFormat='Exp: {0}'}" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Ficha de Identificación del Paciente -->
+                            <Border Background="{DynamicResource ThemeBackground}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="1*" />
+                                        <ColumnDefinition Width="1*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,6">
+                                        <TextBlock Text="Nombre del Paciente:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding SelectedPatient.FullName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,8,6">
+                                        <TextBlock Text="Edad:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding SelectedPatient.AgeDisplay}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,6">
+                                        <TextBlock Text="Sexo:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding SelectedPatient.Gender}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,8,0">
+                                        <TextBlock Text="Signos Vitales Registrados:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding SelectedPatient.VitalSigns}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Grid.Column="2">
+                                        <TextBlock Text="Alergias:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeError}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Símbolo Rp y Lista de Fármacos Prescritos -->
+                            <Border Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                                    <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="0,6,0,8" Margin="0,0,0,4">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="● " FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Dosage, StringFormat='   Indicaciones: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                        <Border Grid.Column="1" Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Top">
+                                                            <TextBlock Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Indicaciones de Cuidados Generales y Alarma -->
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="12,8" Margin="0,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="⚠️ MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="{Binding PrescriptionGeneralInstructions}" Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource BoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas." Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource InverseBoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Firma y Cédula del Médico Tratante -->
+                            <Grid Margin="0,10,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="260" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <Border BorderBrush="{DynamicResource ThemeTextSecondary}" BorderThickness="0,1,0,0" Width="220" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding DoctorName}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Text="{Binding DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="10" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="Firma y Sello del Médico Tratante" FontSize="10" FontStyle="Italic" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Pie de la Modal con Acciones -->
+                <Grid Grid.Row="2" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" 
+                               Text="Cumplimiento con NOM-004-SSA3-2012 y Ley General de Salud." 
+                               FontSize="11" 
+                               Foreground="{DynamicResource ThemeTextSecondary}" 
+                               VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding ClosePrescriptionPdfPreviewCommand}" 
+                                Padding="16,7" 
+                                Margin="0,0,10,0">
+                            <TextBlock Text="Cerrar" FontWeight="SemiBold" FontSize="12" />
+                        </Button>
+
+
+                        <Button Style="{DynamicResource OutlineButton}" 
+                                Command="{Binding ExportPrescriptionDocumentCommand}" 
+                                Padding="14,7" 
+                                Margin="0,0,10,0" 
+                                ToolTip="Exportar receta a documento digital HTML/PDF">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="💾" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Exportar Documento" FontSize="12" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{DynamicResource AccentButton}" 
+                                Command="{Binding PrintOrExportPrescriptionPdfCommand}" 
+                                Padding="18,7"
+                                ToolTip="Imprimir receta oficial en impresora física">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🖨️" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Imprimir Receta" FontSize="12" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

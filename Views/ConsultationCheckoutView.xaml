@@ -1,0 +1,246 @@
+<UserControl x:Class="TPVC.Views.ConsultationCheckoutView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: TERMINAR CONSULTA Y COBRAR (la cuenta se arma con lo usado en la   -->
+    <!-- consulta; "Volver a la consulta" permite agregar algo que faltó)          -->
+    <!-- ========================================================================= -->
+    <Border Background="{DynamicResource ThemeOverlay}" 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch">
+        <Border Background="{DynamicResource ThemeCard}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1.5" 
+                CornerRadius="14" 
+                MaxWidth="780" 
+                Margin="18,12" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Center">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Encabezado -->
+                <Border Grid.Row="0" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="24,18">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Terminar consulta" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" />
+                            <TextBlock FontSize="13" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0} · duración {1}">
+                                        <Binding Path="ActiveConsultationPatientName" />
+                                        <Binding Path="ActiveConsultationElapsedTime" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                        <Button Grid.Column="1" 
+                                Style="{StaticResource ButtonSecondary}" 
+                                Command="{Binding ClosePosModalCommand}" 
+                                Padding="12,7" 
+                                VerticalAlignment="Center"
+                                Content="Volver a la consulta"
+                                ToolTip="Regresar a la nota para agregar o corregir algo antes de cobrar" />
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="560">
+                    <StackPanel Margin="24,18,24,10">
+                        <!-- Nota guardada y receta -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource ThemeSuccessSubtle}" BorderThickness="0" CornerRadius="10" Padding="14,12">
+                                <StackPanel>
+                                    <TextBlock Text="✓ Nota médica guardada" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource ThemeSuccessText}" />
+                                    <TextBlock Text="{Binding ConsultationDiagnosis, TargetNullValue='Sin diagnóstico capturado'}" FontSize="12.5" Foreground="{DynamicResource ThemeSuccessText}" TextWrapping="Wrap" Margin="0,4,0,0" MaxHeight="54" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding SelectedPatient.ActivePrescription.Count, StringFormat='Receta · {0} medicamento(s)'}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                    <WrapPanel Margin="0,8,0,0" Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource BoolToVis}}">
+                                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding PrintOrExportPrescriptionPdfCommand}" Padding="10,5" Margin="0,0,6,0" FontSize="12" Content="Imprimir" />
+                                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenPrescriptionPdfPreviewCommand}" Padding="10,5" Margin="0,0,6,0" FontSize="12" Content="Vista previa" />
+                                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ExportPrescriptionDocumentCommand}" Padding="10,5" FontSize="12" Content="Guardar PDF" />
+                                    </WrapPanel>
+                                    <TextBlock Text="Sin medicamentos recetados." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,0"
+                                               Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Cuenta -->
+                        <TextBlock Text="Cuenta" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,8" />
+                        <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Margin="0,0,0,16">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding PosVM.Cart}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontSize="13.5" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding UnitPrice, StringFormat='${0:N2} c/u'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0">
+                                                        <Button Style="{StaticResource ButtonSecondary}" Padding="8,1" FontSize="12" Content="−"
+                                                                Command="{Binding DataContext.PosVM.DecreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                        <TextBlock Text="{Binding Quantity}" FontSize="13.5" FontWeight="SemiBold" MinWidth="28" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
+                                                        <Button Style="{StaticResource ButtonSecondary}" Padding="8,1" FontSize="12" Content="+"
+                                                                Command="{Binding DataContext.PosVM.IncreaseQuantityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Subtotal, StringFormat='${0:N2}'}" FontSize="13.5" FontFamily="Consolas" TextAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
+                                                    <Button Grid.Column="3" Style="{StaticResource ButtonSecondary}" Padding="7,1" Margin="10,0,0,0" FontSize="11" Content="✕"
+                                                            Command="{Binding DataContext.PosVM.RemoveFromCartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Quitar de la cuenta" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Grid Background="{DynamicResource ThemeSurfaceSubtle}">
+                                    <Grid Margin="14,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Total" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding PosVM.TotalCartAmount, StringFormat='${0:N2}'}" FontSize="16" FontWeight="Bold" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" />
+                                    </Grid>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Forma de pago -->
+                        <WrapPanel>
+                            <StackPanel Margin="0,0,20,8">
+                                <TextBlock Text="Forma de pago" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,5" />
+                                <ListBox ItemsSource="{Binding PosVM.PaymentMethods}"
+                                         SelectedItem="{Binding PosVM.SelectedPaymentMethod, Mode=TwoWay}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,8" Margin="0,0,6,0">
+                                                            <TextBlock x:Name="Txt" Text="{Binding}" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                                                <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                </ListBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                        Visibility="{Binding PosVM.SelectedPaymentMethod, Converter={StaticResource ComparisonToVis}, ConverterParameter=Efectivo}">
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="Recibido" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,5" />
+                                    <TextBox Style="{StaticResource FieldTextBox}"
+                                             Text="{Binding PosVM.CashReceived, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                             Width="130" Padding="8,6" FontSize="15" FontFamily="Consolas" />
+                                </StackPanel>
+                                <StackPanel Visibility="{Binding PosVM.HasChange, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Cambio" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,5" />
+                                    <TextBlock Text="{Binding PosVM.ChangeDue, StringFormat='${0:N2}'}" FontSize="20" FontWeight="Bold" FontFamily="Consolas" Foreground="{DynamicResource ThemeSuccess}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </WrapPanel>
+
+                        <!-- Avisos del cobro (stock insuficiente, errores) -->
+                        <Border CornerRadius="8" Padding="12,8" Margin="0,4,0,0" Visibility="{Binding PosVM.IsAlertVisible, Converter={StaticResource BoolToVis}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PosVM.IsSuccessAlert}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding PosVM.AlertMessage}" FontSize="12.5" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Pie: una sola acción principal -->
+                <Border Grid.Row="2" Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" CornerRadius="0,0,14,14" Padding="24,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Al cobrar se descuentan del inventario los medicamentos e insumos entregados." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0" />
+                        <Button Grid.Column="1" 
+                                Style="{StaticResource ButtonPrimary}" 
+                                Command="{Binding PosVM.ProcessSaleCommand}" 
+                                Padding="20,10" 
+                                FontSize="14"
+                                FontWeight="SemiBold">
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding PosVM.TotalCartAmount, StringFormat='Cobrar ${0:N2} y terminar'}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PosVM.HasCartItems}" Value="False">
+                                                <Setter Property="Text" Value="Terminar consulta (sin cargos)" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

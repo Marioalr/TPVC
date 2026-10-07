@@ -142,6 +142,7 @@ public partial class MedicalRecordsViewModel
 
     partial void OnConsultationsHistoryChanged(System.Collections.ObjectModel.ObservableCollection<PatientConsultation> value)
     {
+        ObserveConsultationsHistory(value);
         OnPropertyChanged(nameof(PreviousConsultation));
     }
 
@@ -377,9 +378,11 @@ public partial class MedicalRecordsViewModel
 
         _consultationService?.CloseActiveConsultation();
         _isCurrentConsultationSaved = false;
+        _attendingAppointmentId = null;
         SyncActiveConsultation();
         StopConsultationTimer();
         ClearConsultationFields();
+        PatientsPage = SelectedPatient != null ? PageChart : PageHome;
     }
 
     private void ClearConsultationFields()

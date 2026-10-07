@@ -1,0 +1,227 @@
+<UserControl x:Class="TPVC.Views.AgendaPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}"
+             d:DesignHeight="800" d:DesignWidth="480">
+
+    <UserControl.Resources>
+        <Style x:Key="DayButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+            <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0,6" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SidePanel}" Width="480">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Encabezado -->
+            <Grid Margin="20,16,16,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TextHeading}" Text="Agenda" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding AgendaWeekTitle}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource ButtonSecondary}" Content="Hoy" Command="{Binding AgendaPanelTodayCommand}" Padding="12,5" MinHeight="0" Margin="0,0,6,0" />
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding AgendaPanelPreviousWeekCommand}" ToolTip="Semana anterior" AutomationProperties.Name="Semana anterior">
+                        <helpers:Icon Data="{StaticResource IcoChevronLeft}" />
+                    </Button>
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding AgendaPanelNextWeekCommand}" ToolTip="Semana siguiente" AutomationProperties.Name="Semana siguiente">
+                        <helpers:Icon Data="{StaticResource IcoChevronRight}" />
+                    </Button>
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding CloseAgendaPanelCommand}" ToolTip="Cerrar agenda (Esc)" AutomationProperties.Name="Cerrar agenda" Margin="4,0,0,0">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Semana -->
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding AgendaWeek}" Margin="16,4,12,12">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="7" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type models:AgendaDayItem}">
+                        <Button x:Name="Day" Style="{StaticResource DayButton}"
+                                Command="{Binding DataContext.SelectAgendaDayCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock x:Name="Name" Text="{Binding DayName}" FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                <TextBlock x:Name="Number" Text="{Binding DayNumber}" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="Count" Text="{Binding CountText}" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            </StackPanel>
+                        </Button>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource ThemeAccentForeground}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Day" Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Day" Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                <Setter TargetName="Count" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Día elegido -->
+            <Border Grid.Row="2" Padding="20,10" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,1">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding AgendaPanelTitle}" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding AgendaDaySummary}" />
+                    <Border Style="{StaticResource NoticeWarning}" Margin="0,8,0,0" Visibility="{Binding IsMovingAppointment, Converter={StaticResource BoolToVis}}">
+                        <Grid>
+                            <TextBlock Text="{Binding MovingAppointmentText}" TextWrapping="Wrap" Margin="0,0,80,0" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,2" MinHeight="0" Content="Cancelar" Command="{Binding CancelMovingAppointmentCommand}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Citas y huecos libres -->
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding AgendaSlots}" Margin="16,8,16,16">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:AgendaSlot}">
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="54" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource TextMono}" FontSize="13" FontWeight="SemiBold" Text="{Binding TimeText}" Margin="0,9,0,0" VerticalAlignment="Top" />
+
+                                <!-- Cita -->
+                                <Border x:Name="AppointmentCard" Grid.Column="1" CornerRadius="8" Padding="12,8" Background="{DynamicResource ThemeInfoSubtle}"
+                                        Visibility="{Binding HasAppointment, Converter={StaticResource BoolToVis}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="StatusText" Text="{Binding Status}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeInfoText}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Width="32" Height="32" Foreground="{DynamicResource ThemeInfoText}"
+                                                helpers:MenuOnClick.IsEnabled="True"
+                                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                ToolTip="Acciones de la cita" AutomationProperties.Name="Acciones de la cita">
+                                            <helpers:Icon Data="{StaticResource IcoMore}" StrokeThickness="3" />
+                                            <Button.ContextMenu>
+                                                <ContextMenu Style="{StaticResource DsContextMenu}">
+                                                    <MenuItem Header="Atender ahora" Command="{Binding PlacementTarget.Tag.AttendAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Marcar como confirmada" Command="{Binding PlacementTarget.Tag.ConfirmAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Recordar por WhatsApp" Command="{Binding PlacementTarget.Tag.RemindByWhatsAppCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Agregar a Google Calendar" Command="{Binding PlacementTarget.Tag.AddToGoogleCalendarCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Cambiar fecha u hora" Command="{Binding PlacementTarget.Tag.StartMovingAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Cancelar la cita" Command="{Binding PlacementTarget.Tag.CancelAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Hueco libre -->
+                                <StackPanel Grid.Column="1" Visibility="{Binding IsFree, Converter={StaticResource BoolToVis}}">
+                                    <Button x:Name="FreeButton" Style="{StaticResource ButtonSecondary}" HorizontalContentAlignment="Left" Padding="12,6" MinHeight="0"
+                                            BorderBrush="{DynamicResource ThemeBorder}"
+                                            Command="{Binding DataContext.OpenAgendaSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    </Button>
+
+                                    <!-- Formulario para agendar en este hueco -->
+                                    <Border x:Name="SlotForm" BorderBrush="{DynamicResource ThemeAccent}" BorderThickness="2" CornerRadius="10" Padding="14,12" Margin="0,6,0,0"
+                                            Background="{DynamicResource ThemeSurfaceSubtle}" Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold">
+                                                <Run Text="Agendar a las" />
+                                                <Run Text="{Binding TimeText, Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Paciente" Margin="0,10,0,6" />
+                                            <ComboBox Style="{StaticResource FieldComboBox}"
+                                                      ItemsSource="{Binding DataContext.Patients, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedItem="{Binding DataContext.AgendaFormPatient, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      DisplayMemberPath="FullName"
+                                                      helpers:TypeAhead.IsEnabled="True"
+                                                      ToolTip="Despliegue y escriba el nombre" />
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Motivo" Margin="0,10,0,6" />
+                                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding DataContext.AgendaFormReason, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                            <ItemsControl ItemsSource="{Binding DataContext.AgendaReasonPresets, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,6,0,0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Style="{StaticResource ButtonSecondary}" Padding="10,3" MinHeight="0" Margin="0,0,6,6" FontSize="12" Content="{Binding}"
+                                                                Command="{Binding DataContext.SetAgendaReasonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Duración (minutos)" Margin="0,6,0,6" />
+                                            <ListBox Style="{StaticResource ChipList}"
+                                                     ItemsSource="{Binding DataContext.AgendaDurations, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                     SelectedItem="{Binding DataContext.AgendaFormDuration, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <TextBlock Style="{StaticResource FieldError}" Text="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Visibility="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                                <Button Style="{StaticResource ButtonGhost}" Content="Cancelar" Command="{Binding DataContext.CloseAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0" />
+                                                <Button Style="{StaticResource ButtonPrimary}" Content="Agendar" Command="{Binding DataContext.SaveAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsFormOpen}" Value="True">
+                                    <Setter TargetName="SlotForm" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="FreeButton" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsAttended}" Value="True">
+                                    <Setter TargetName="AppointmentCard" Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsConfirmed}" Value="True">
+                                    <Setter TargetName="AppointmentCard" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter TargetName="AppointmentCard" Property="BorderThickness" Value="1" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

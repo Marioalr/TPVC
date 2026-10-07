@@ -309,6 +309,33 @@ public class PatientRecord : ISyncEntity
 
     public const int GynecoObstetricMinAge = 10;
 
+    /// <summary>Iniciales para el avatar ("García Morales, Juan Carlos" → "JG").</summary>
+    [NotMapped]
+    public string Initials
+    {
+        get
+        {
+            var name = (FullName ?? string.Empty).Trim();
+            if (name.Length == 0) return "?";
+            string first, second;
+            if (name.Contains(','))
+            {
+                var parts = name.Split(',', 2);
+                first = parts[1].Trim();
+                second = parts[0].Trim();
+            }
+            else
+            {
+                var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                first = words[0];
+                second = words.Length > 1 ? words[1] : string.Empty;
+            }
+            var a = first.Length > 0 ? char.ToUpperInvariant(first[0]).ToString() : string.Empty;
+            var b = second.Length > 0 ? char.ToUpperInvariant(second[0]).ToString() : string.Empty;
+            return a + b;
+        }
+    }
+
     /// <summary>"34 años", "2 años 6 meses", "8 meses" o "12 días".</summary>
     [NotMapped]
     public string AgeDisplay => FormatAge(BirthDate, Age, DateTime.Today);

@@ -814,6 +814,47 @@
         <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
     </Style>
 
+    <!-- ============================ MENÚS ============================ -->
+    <Style x:Key="DsMenuItem" TargetType="MenuItem">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUi}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}" MinWidth="200" SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DsContextMenu" TargetType="ContextMenu">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource DsMenuItem}" />
+        <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+        <Setter Property="HasDropShadow" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{DynamicResource ThemeCard}" BorderBrush="{DynamicResource ThemeBorderStrong}" BorderThickness="1" CornerRadius="8" Padding="4">
+                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Compatibilidad: pantallas anteriores que usan ModernComboBox reciben la lista con tema -->
     <Style x:Key="ModernComboBox" TargetType="ComboBox" BasedOn="{StaticResource FieldComboBox}" />
     <!-- Se usaba en la agenda y las citas sin existir (salía el botón gris de Windows) -->

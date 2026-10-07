@@ -1417,7 +1417,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public MedicalRecordsViewModel() : this(null, null, null, null, null, null)
+    public MedicalRecordsViewModel() : this(null, null, null, null, null, null, null)
     {
     }
 
@@ -1427,12 +1427,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PosViewModel? posViewModel = null,
         ClinicProfileService? clinicProfileService = null,
         PrintingService? printingService = null,
-        ConsultationDraftStore? consultationDraftStore = null)
+        ConsultationDraftStore? consultationDraftStore = null,
+        NotificationService? notificationService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         PosVM = posViewModel;
         InitializeAutosave(consultationDraftStore);
+        InitializePacientes(notificationService);
         _clinicProfileService = clinicProfileService;
         _printingService = printingService;
 
@@ -1502,6 +1504,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         await LoadPatientsAsync();
         await LoadServicesAsync();
         await LoadPrescriptionTemplatesAsync();
+        await LoadTodayAppointmentsAsync();
         TryRestoreConsultationDraft();
     }
 
@@ -1562,6 +1565,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         OnPropertyChanged(nameof(PatientActionButtonText));
         OnPropertyChanged(nameof(HasSelectedPatient));
+        RefreshChartData();
+        NotifyPatientsPageState();
         if (newValue != null)
         {
             var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
@@ -1656,6 +1661,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         OnActiveConsultationStateChangedForAutosave();
+        NotifyPatientsPageState();
     }
 
     private void StartConsultationTimer()
@@ -1731,6 +1737,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
         }
         StopConsultationTimer();
+        DisposePacientes();
         FlushConsultationDraft();
         _autosaveTimer?.Dispose();
         GC.SuppressFinalize(this);
@@ -2437,8 +2444,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         IsPatientModalOpen = false;
         FormErrorMessage = null;
-        InfoModalMessage = $"¡Expediente '{patient.FullName}' ({patient.RecordNumber}) guardado exitosamente!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"Expediente de {patient.FullName} guardado");
     }
 
     // ==========================================
@@ -2450,7 +2456,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (SelectedPatient == null)
         {
-            OpenSelectPatientModal();
+            GoToPatientsHome();
             return;
         }
 
@@ -2808,7 +2814,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (SelectedPatient == null)
         {
-            OpenSelectPatientModal();
+            GoToPatientsHome();
             return;
         }
 
@@ -2824,6 +2830,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             PatientDetailTab = "Resumen";
             NotifyAccountChanged();
             // La pantalla de consulta ya indica que está en curso: sin ventana emergente que interrumpa
+            PatientsPage = PageConsultation;
         }
     }
 
@@ -2987,8 +2994,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // 5. Si la venta se procesó en la vista independiente de POS, volver a la vista de Expedientes/Consulta
         OnNavigateToRecordsRequested?.Invoke();
 
-        // 6. Abrir inmediatamente la ventana modal de agregar paciente
-        OpenSelectPatientModal();
+        // 6. La cita que se atendía queda como atendida y se vuelve al inicio, listo para el siguiente
+        await CompleteAttendedAppointmentAsync();
+        GoToPatientsHome();
         }
         catch (Exception ex)
         {
@@ -3302,8 +3310,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         IsVitalSignsModalOpen = false;
         OnPropertyChanged(nameof(SelectedPatient));
-        InfoModalMessage = "¡Signos vitales guardados exitosamente en el expediente!";
-        IsInfoModalVisible = true;
+        ShowSuccess("¡Signos vitales guardados exitosamente en el expediente!");
     }
 
     private void ParseQuickVitalSigns(string? vitalsString)
@@ -3367,8 +3374,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _consultationService.CurrentConsultation.GeneralIndications = PrescriptionGeneralInstructions;
         }
 
-        InfoModalMessage = "¡Indicaciones generales vinculadas exitosamente a la receta médica!\n\nSe incluirán de forma destacada en la receta oficial NOM-004-SSA3 para impresión y PDF.";
-        IsInfoModalVisible = true;
+        ShowSuccess("¡Indicaciones generales vinculadas exitosamente a la receta médica!\n\nSe incluirán de forma destacada en la receta oficial NOM-004-SSA3 para impresión y PDF.");
     }
 
     [RelayCommand]
@@ -3491,8 +3497,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsPrescriptionModalOpen = false;
-        InfoModalMessage = $"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -3691,8 +3696,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsSuppliesModalOpen = false;
-        InfoModalMessage = $"¡Insumos y materiales clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"¡Insumos y materiales clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -3937,8 +3941,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsServicesModalOpen = false;
-        InfoModalMessage = $"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -4225,8 +4228,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             await LoadPatientAppointmentsAsync(SelectedPatient.Id);
         }
 
-        InfoModalMessage = $"¡Cita guardada correctamente para {appt.PatientName} el {appt.Date:dd/MM/yyyy} a las {appt.Time}!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"¡Cita guardada correctamente para {appt.PatientName} el {appt.Date:dd/MM/yyyy} a las {appt.Time}!");
     }
 
     [RelayCommand]
@@ -4242,8 +4244,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             {
                 await LoadPatientAppointmentsAsync(SelectedPatient.Id);
             }
-            InfoModalMessage = "Cita eliminada correctamente.";
-            IsInfoModalVisible = true;
+            ShowSuccess("Cita eliminada correctamente.");
         }
         catch (Exception ex)
         {
@@ -4802,7 +4803,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         SelectedService = newService;
         IsCreateServiceModalOpen = false;
-        InfoModalMessage = $"¡Servicio '{newService.Name}' creado exitosamente con {newService.DefaultProducts.Count} producto(s) por defecto!";
-        IsInfoModalVisible = true;
+        ShowSuccess($"¡Servicio '{newService.Name}' creado exitosamente con {newService.DefaultProducts.Count} producto(s) por defecto!");
     }
 }

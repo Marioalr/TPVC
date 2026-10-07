@@ -1,0 +1,245 @@
+<UserControl x:Class="TPVC.Views.VitalSignsChartView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- VISTA DE PESTAÑA 4: EVOLUCIÓN DE SIGNOS VITALES (GRÁFICA Y MÉTRICAS) -->
+    <StackPanel>
+        <!-- Tarjeta de Controles y Filtros -->
+        <Border Background="{DynamicResource ThemeSurface}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1" 
+                CornerRadius="10" 
+                Padding="16" 
+                Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="📈 Evolución Histórica de Signos Vitales" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource ThemeText}" />
+                    <TextBlock Text="Monitoreo de tendencias y curvas clínicas de peso, tensión arterial y glucosa entre consultas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Filtrar métrica:" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Todos" Padding="10,5" Margin="0,0,4,0">
+                        <TextBlock Text="● Todos" FontSize="11" FontWeight="SemiBold" />
+                    </Button>
+                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Peso" Padding="10,5" Margin="0,0,4,0">
+                        <TextBlock Text="⚖️ Peso" FontSize="11" FontWeight="SemiBold" Foreground="#3B82F6" />
+                    </Button>
+                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Presion" Padding="10,5" Margin="0,0,4,0">
+                        <TextBlock Text="❤️ Presión" FontSize="11" FontWeight="SemiBold" Foreground="#EF4444" />
+                    </Button>
+                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SetVitalSignsFilterCommand}" CommandParameter="Glucosa" Padding="10,5">
+                        <TextBlock Text="🩸 Glucosa" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Tarjetas KPI con Últimos Valores Registrados -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- KPI 1: Peso -->
+            <Border Grid.Column="0" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="Último Peso" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="{Binding LatestWeightFormatted}" FontSize="18" FontWeight="Bold" Foreground="#3B82F6" Margin="0,4,0,0" />
+                    <TextBlock Text="Escala normal: 18.5 - 24.9 IMC" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- KPI 2: Presión Arterial -->
+            <Border Grid.Column="2" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="Última T.A." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="{Binding LatestBPFormatted}" FontSize="18" FontWeight="Bold" Foreground="#EF4444" Margin="0,4,0,0" />
+                    <TextBlock Text="Óptima: &lt; 120/80 mmHg" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- KPI 3: Glucosa -->
+            <Border Grid.Column="4" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="Última Glucosa" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="{Binding LatestGlucoseFormatted}" FontSize="18" FontWeight="Bold" Foreground="#10B981" Margin="0,4,0,0" />
+                    <TextBlock Text="Ayuno normal: 70 - 100 mg/dL" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- KPI 4: IMC -->
+            <Border Grid.Column="6" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="Índice Masa (IMC)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    <TextBlock Text="{Binding LatestIMCFormatted}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" Margin="0,4,0,0" />
+                    <TextBlock Text="kg/m² somatometría" FontSize="9.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Gráfica Visual de Curvas -->
+        <Border Background="{DynamicResource ThemeSurface}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1" 
+                CornerRadius="10" 
+                Padding="16" 
+                Margin="0,0,0,12">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="📊 Gráfica de Tendencia Temporal" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <Border Background="#3B82F6" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                            <TextBlock Text="Peso (kg)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <Border Background="#EF4444" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                            <TextBlock Text="T.A. Sistólica" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <Border Background="#F59E0B" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                            <TextBlock Text="T.A. Diastólica" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Border Background="#10B981" Width="10" Height="10" CornerRadius="5" Margin="0,0,5,0" />
+                            <TextBlock Text="Glucosa (mg/dL)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Lienzo de Gráfica Renderizado en WPF Nativo -->
+                <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Height="220" ClipToBounds="True">
+                    <Grid>
+                        <!-- Mensaje si no hay puntos -->
+                        <TextBlock Text="No hay consultas registradas con signos vitales numéricos para este paciente." 
+                                   FontSize="12" 
+                                   Foreground="{DynamicResource ThemeTextSecondary}" 
+                                   HorizontalAlignment="Center" 
+                                   VerticalAlignment="Center" 
+                                   Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource InverseBoolToVis}}" />
+
+                        <!-- Curvas polilíneas y puntos -->
+                        <Canvas Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource BoolToVis}}">
+                            <!-- Líneas guía horizontales de fondo -->
+                            <Line X1="30" Y1="40" X2="620" Y2="40" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+                            <Line X1="30" Y1="100" X2="620" Y2="100" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+                            <Line X1="30" Y1="160" X2="620" Y2="160" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="0.8" />
+
+                            <!-- Curva Peso -->
+                            <Polyline Points="{Binding WeightPolylinePoints}" Stroke="#3B82F6" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                            <!-- Curva Presión Sistólica -->
+                            <Polyline Points="{Binding SystolicPolylinePoints}" Stroke="#EF4444" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                            <!-- Curva Presión Diastólica -->
+                            <Polyline Points="{Binding DiastolicPolylinePoints}" Stroke="#F59E0B" StrokeThickness="2" StrokeDashArray="2,2" StrokeLineJoin="Round" />
+                            <!-- Curva Glucosa -->
+                            <Polyline Points="{Binding GlucosePolylinePoints}" Stroke="#10B981" StrokeThickness="2.5" StrokeLineJoin="Round" />
+                        </Canvas>
+
+                        <!-- Puntos de datos y etiquetas -->
+                        <ItemsControl ItemsSource="{Binding ChartPoints}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Canvas Margin="-5,-5,0,0">
+                                        <Ellipse Width="10" Height="10" Fill="{Binding ColorHex}" Stroke="White" StrokeThickness="1.5" ToolTip="{Binding ValueLabel}" />
+                                    </Canvas>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Tabla Histórica Detallada de Mediciones -->
+        <Border Background="{DynamicResource ThemeSurface}" 
+                BorderBrush="{DynamicResource ThemeBorder}" 
+                BorderThickness="1" 
+                CornerRadius="10" 
+                Padding="16">
+            <StackPanel>
+                <TextBlock Text="📋 Historial Completo de Mediciones Clínicas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" Margin="0,0,0,10" />
+
+                <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="80" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Fecha" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="1" Text="Peso" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="2" Text="T.A." FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="3" Text="Glucosa" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="4" Text="F.C." FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="5" Text="Temp" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Grid.Column="6" Text="IMC" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                    </Grid>
+                </Border>
+
+                <ItemsControl ItemsSource="{Binding VitalSignsEvolutionPoints}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="10,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="80" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding FormattedDate}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding WeightText}" FontSize="12" Foreground="#3B82F6" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="2" Text="{Binding BloodPressureText}" FontSize="12" Foreground="#EF4444" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="3" Text="{Binding GlucoseText}" FontSize="12" Foreground="#10B981" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="4" Text="{Binding HeartRate, TargetNullValue='--'}" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Grid.Column="5" Text="{Binding TempText}" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Grid.Column="6" Text="{Binding BMI, StringFormat='{}{0:F1}', TargetNullValue='--'}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

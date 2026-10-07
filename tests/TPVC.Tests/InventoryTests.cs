@@ -1317,24 +1317,27 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MedicalRecordsViewModel_WhenNoPatientSelected_NewAndActiveConsultationOpenSelector()
+    public void MedicalRecordsViewModel_WhenNoPatientSelected_NewAndActiveConsultationGoToPatientsHome()
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
+        var focusRequests = 0;
+        recordsVm.FocusSearchRequested += () => focusRequests++;
 
         Assert.IsNull(recordsVm.SelectedPatient);
 
-        // Al presionar Nueva Consulta sin paciente, debe abrir el selector de paciente
+        // Sin paciente no hay consulta que abrir: vuelve al inicio de Pacientes con el buscador listo
+        recordsVm.PatientsPage = MedicalRecordsViewModel.PageChart;
         recordsVm.NewConsultation();
-        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
-        recordsVm.CloseSelectPatientModal();
-        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
+        Assert.IsTrue(recordsVm.IsHomePage);
+        Assert.IsFalse(consultService.HasActiveConsultation);
 
-        // Al presionar Iniciar Consulta Activa sin paciente, debe abrir el selector de paciente
+        recordsVm.PatientsPage = MedicalRecordsViewModel.PageChart;
         recordsVm.StartActiveConsultation();
-        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
-        recordsVm.CloseSelectPatientModal();
-        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
+        Assert.IsTrue(recordsVm.IsHomePage);
+        Assert.IsFalse(consultService.HasActiveConsultation);
+        Assert.AreEqual(2, focusRequests, "Cada vez debe pedir el foco en el buscador");
+        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen, "Ya no se usa el modal selector");
     }
 
     [TestMethod]
@@ -2537,7 +2540,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecords_FinalizeConsultation_ProcessSale_ExitsEverythingAndOpensSelectPatientModal()
+    public async Task MedicalRecords_FinalizeConsultation_ProcessSale_ExitsEverythingAndReturnsToPatientsHome()
     {
         var consultService = new ConsultationService();
         var mainVm = new MainViewModel(_inventoryService, consultService, new ThemeService(), new AppUpdateService());
@@ -2568,8 +2571,9 @@ public class InventoryTests
         Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "No debe haber consulta activa en curso");
         Assert.IsNull(mainVm.MedicalRecordsVM.SelectedPatient, "El paciente debe deseleccionarse para volver a la vista inicial");
 
-        // 2. Debe abrir inmediatamente la ventana modal de agregar paciente:
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Debe abrirse inmediatamente el modal de agregar paciente");
+        // 2. Debe volver al inicio de Pacientes (citas de hoy y buscador) para el siguiente paciente:
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsHomePage, "Debe volver al inicio de Pacientes");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.ShowsConsultationBanner);
     }
 
     [TestMethod]
@@ -2634,7 +2638,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MainViewModel_NavigateToRecords_WithoutPatient_OpensSelectPatientModalImmediately()
+    public void MainViewModel_NavigateToRecords_WithoutPatient_OpensPatientsHome()
     {
         var mainVm = new MainViewModel(_inventoryService, new ConsultationService(), new ThemeService(), new AppUpdateService());
         Assert.IsNull(mainVm.MedicalRecordsVM.SelectedPatient);
@@ -2642,7 +2646,8 @@ public class InventoryTests
         mainVm.NavigateTo("Records");
 
         Assert.AreEqual("Records", mainVm.ActiveViewName);
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Debe abrir inmediatamente el modal de agregar paciente al entrar a Records");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsHomePage, "Al entrar a Pacientes se ve el inicio (hoy, recientes y buscador)");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Ya no se abre un modal al entrar");
     }
 
     [TestMethod]

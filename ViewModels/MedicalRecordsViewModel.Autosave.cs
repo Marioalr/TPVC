@@ -280,6 +280,7 @@ public partial class MedicalRecordsViewModel
         }
 
         IsConsultationRecovered = true;
+        PatientsPage = PageConsultation;
         AutosaveStatus = $"Consulta recuperada · iniciada {draft.StartedAt:dd/MM HH:mm}";
         AppLogger.Info($"Consulta en curso recuperada: {draft.Folio} ({draft.PatientName}).");
     }

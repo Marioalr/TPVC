@@ -206,6 +206,26 @@ internal sealed class UiSmokeSession
         var tursoSync = new TursoSyncService(factory, tursoSettings, profile, inventory);
         var notifications = new NotificationService();
 
+        // Citas para que el inicio de Pacientes y la agenda tengan contenido
+        var seeded = WaitFor(inventory.GetPatientsAsync());
+        foreach (var (patient, day, time, reason) in new[]
+        {
+            (seeded[0], DateTime.Today, "23:00", "Control de presión"),
+            (seeded[1], DateTime.Today, "23:30", "Resultados de laboratorio"),
+            (seeded[2], DateTime.Today.AddDays(1), "10:00", "Consulta de seguimiento")
+        })
+        {
+            WaitFor(inventory.SaveAppointmentAsync(new PatientAppointment
+            {
+                PatientRecordId = patient.Id,
+                PatientName = patient.FullName,
+                PatientPhone = patient.Phone ?? string.Empty,
+                Date = day,
+                Time = time,
+                Reason = reason
+            }));
+        }
+
         var main = new MainViewModel(
             inventory,
             consultations,
@@ -241,36 +261,71 @@ internal sealed class UiSmokeSession
             Show(host, main, "Pos", $"02-pos-{suffix}");
 
             var records = main.MedicalRecordsVM;
-            Show(host, main, "Records", $"03-pacientes-seleccionar-{suffix}");
-            records.CloseSelectPatientModal();
-            records.SelectPatient(records.Patients.First());
-            Capture(host, $"04-pacientes-ficha-{suffix}");
+            Show(host, main, "Records", $"03-pacientes-inicio-{suffix}");
+            records.HomeSearchText = "mar";
+            Capture(host, $"04-pacientes-busqueda-{suffix}");
+            records.HomeSearchText = string.Empty;
 
-            records.StartActiveConsultation();
+            records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
+            Capture(host, $"05-ficha-{suffix}");
+            records.ToggleAntecedent(records.AntecedentSections.First());
+            if (records.Timeline.Count > 0) records.ToggleTimelineEntry(records.Timeline[0]);
+            records.IsVitalsChartVisible = true;
+            Capture(host, $"06-ficha-detalle-{suffix}");
+            records.IsVitalsChartVisible = false;
+
+            WaitFor(records.ScheduleForSelectedPatientAsync());
+            WaitFor(records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree)));
+            Capture(host, $"07-agenda-{suffix}");
+            records.CloseAgendaPanel();
+
+            records.ChartPrimaryAction();
             records.ConsultationChiefComplaint = "Fiebre y dolor de garganta de 2 días";
             records.ConsultationTA = "130/85";
             records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
-            Capture(host, $"05-consulta-{suffix}");
+            Capture(host, $"08-consulta-{suffix}");
 
             records.ConsultationSection = 5;
-            Capture(host, $"06-consulta-tratamiento-{suffix}");
+            Capture(host, $"09-consulta-tratamiento-{suffix}");
+
+            records.ShowChartFromConsultation();
+            Capture(host, $"10-ficha-con-consulta-{suffix}");
+            records.ShowConsultation();
 
             WaitFor(records.OpenPrescriptionModalAsync());
-            Capture(host, $"07-receta-{suffix}");
+            Capture(host, $"11-receta-{suffix}");
+            records.ClosePrescriptionModal();
+
+            WaitFor(records.OpenSuppliesModalAsync());
+            Capture(host, $"12-insumos-{suffix}");
+            records.CloseSuppliesModal();
+
+            WaitFor(records.OpenServicesModalAsync());
+            Capture(host, $"13-servicios-{suffix}");
+            records.CloseServicesModal();
+
+            WaitFor(records.OpenPrescriptionModalAsync());
+            WaitFor(records.OpenPrescriptionCatalogAsync());
+            Capture(host, $"14-catalogo-{suffix}");
+            records.CloseCatalogBrowser();
             records.ClosePrescriptionModal();
 
             WaitFor(records.FinalizeConsultationAsync());
-            Capture(host, $"08-terminar-consulta-{suffix}");
+            Capture(host, $"15-terminar-consulta-{suffix}");
             records.ClosePosModal();
             WaitFor(records.DiscardActiveConsultationAsync());
 
             WaitFor(records.NewPatientAsync());
-            Capture(host, $"09-alta-paciente-{suffix}");
-            records.ClosePatientModal();
+            Capture(host, $"16-alta-paciente-{suffix}");
+            records.FormGender = "Femenino";
+            records.FormBirthDateText = DateTime.Today.AddYears(-32).ToString("dd/MM/yyyy");
+            records.OpenFormSection("Gineco");
+            Capture(host, $"17-alta-gineco-{suffix}");
+            records.CancelPatientForm();
 
             foreach (var sub in new[] { "Dashboard", "Inventory", "Batches", "Movements", "ClinicProfile", "Settings", "TursoSync", "DesignSystem" })
             {
-                Show(host, main, sub, $"10-config-{sub.ToLowerInvariant()}-{suffix}");
+                Show(host, main, sub, $"20-config-{sub.ToLowerInvariant()}-{suffix}");
             }
         }
     }
@@ -330,6 +385,12 @@ internal sealed class UiSmokeSession
             System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
                 System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() => { }));
         }
+    }
+
+    private static T WaitFor<T>(Task<T> task)
+    {
+        WaitFor((Task)task);
+        return task.Result;
     }
 
     private static void WaitFor(Task task)

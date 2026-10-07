@@ -280,7 +280,7 @@
             </Button>
 
             <!-- ============================================ -->
-            <!-- CARD 2: NUEVA CONSULTA (Expedientes Clínicos - TODO) -->
+            <!-- CARD 2: PACIENTES (inicio del consultorio, fichas, agenda y consulta) -->
             <!-- ============================================ -->
             <Button Grid.Column="2" 
                     Style="{StaticResource BigActionCardStyle}" 
@@ -313,7 +313,7 @@
 
                     <!-- Título de la Card -->
                     <TextBlock Grid.Row="1" 
-                               Text="Nueva Consulta" 
+                               Text="Pacientes" 
                                FontWeight="Bold" 
                                FontSize="22" 
                                Foreground="{DynamicResource ThemeText}" 
@@ -321,7 +321,7 @@
 
                     <!-- Subtítulo y Badge Activo -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,12">
-                        <TextBlock Text="Expedientes Clínicos" 
+                        <TextBlock Text="Consulta, expedientes y agenda" 
                                    FontWeight="SemiBold" 
                                    FontSize="13" 
                                    Foreground="{DynamicResource ThemeAccent}" 
@@ -340,7 +340,7 @@
 
                     <!-- Descripción Explicativa -->
                     <TextBlock Grid.Row="3" 
-                               Text="Expedientes clínicos de pacientes, somatometría, notas médicas de evolución, recetas con código y enlace al punto de venta." 
+                               Text="Citas de hoy, búsqueda de pacientes, fichas NOM-004, consulta con receta y cobro en la misma pantalla." 
                                TextWrapping="Wrap" 
                                TextAlignment="Center" 
                                FontSize="12" 
@@ -356,7 +356,7 @@
                             Padding="18,10" 
                             HorizontalAlignment="Center">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Abrir Consulta y Expedientes" 
+                            <TextBlock Text="Abrir Pacientes" 
                                        FontWeight="Bold" 
                                        FontSize="13" 
                                        Foreground="{DynamicResource ThemeAccentText}" 

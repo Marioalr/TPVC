@@ -152,10 +152,12 @@ public partial class MainViewModel : ObservableObject
         MainHubVM = new MainHubViewModel(NavigateTo, inventoryService, _printingService);
         MainHubVM.OnOpenAgendaRequested = () =>
         {
-            MedicalRecordsVM?.OpenAgendaModal();
+            // La agenda es un panel del apartado Pacientes
+            NavigateTo("Records");
+            _ = MedicalRecordsVM?.OpenAgendaPanelAsync();
         };
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService, consultationDraftStore);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService, consultationDraftStore, Notifications);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
@@ -298,11 +300,23 @@ public partial class MainViewModel : ObservableObject
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
-            Title = "Expedientes y Consultas",
-            Subtitle = "Historial clínico NOM-004-SSA3, signos vitales y recetas",
+            Title = "Pacientes",
+            Subtitle = "Citas de hoy, búsqueda de pacientes, expedientes y consulta",
             Category = "Módulos",
             Icon = "📋",
             Action = () => NavigateTo("Records")
+        });
+        _staticCommandItems.Add(new CommandPaletteItem
+        {
+            Title = "Agenda",
+            Subtitle = "Citas de la semana y huecos libres para agendar",
+            Category = "Módulos",
+            Icon = "📅",
+            Action = () =>
+            {
+                NavigateTo("Records");
+                _ = MedicalRecordsVM.OpenAgendaPanelAsync();
+            }
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
@@ -372,8 +386,8 @@ public partial class MainViewModel : ObservableObject
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
-            Title = "Nueva Consulta Médica",
-            Subtitle = "Abrir la pantalla de consulta (pide el paciente si no hay uno abierto)",
+            Title = "Iniciar consulta",
+            Subtitle = "Con el paciente abierto; si no hay uno, lleva a buscarlo",
             Category = "Acciones Rápidas",
             Icon = "🩺",
             Action = () =>
@@ -386,8 +400,8 @@ public partial class MainViewModel : ObservableObject
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
-            Title = "Registrar Nuevo Paciente",
-            Subtitle = "Abrir formulario para dar de alta un nuevo expediente clínico",
+            Title = "Nuevo paciente",
+            Subtitle = "Dar de alta un expediente clínico",
             Category = "Acciones Rápidas",
             Icon = "👤",
             Action = () =>
@@ -620,10 +634,7 @@ public partial class MainViewModel : ObservableObject
                 break;
             case "Records":
                 CurrentView = MedicalRecordsVM;
-                if (MedicalRecordsVM.SelectedPatient == null && !MedicalRecordsVM.IsSelectPatientModalOpen)
-                {
-                    MedicalRecordsVM.OpenSelectPatientModal();
-                }
+                MedicalRecordsVM.EnterPatientsSection();
                 break;
             case "Config":
                 CurrentView = ConfigurationShellVM;

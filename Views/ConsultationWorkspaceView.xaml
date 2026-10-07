@@ -1,0 +1,706 @@
+<UserControl x:Class="TPVC.Views.ConsultationWorkspaceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- ===================================================================== -->
+    <!-- CONSULTA EN CURSO: secciones en el orden de la entrevista y cuenta de  -->
+    <!-- la consulta. Todo se agrega y se cobra aquí, sin ir al Punto de Venta. -->
+    <!-- ===================================================================== -->
+    <Grid x:Name="ConsultationWorkspace"
+          Background="{DynamicResource ThemeCard}"
+          PreviewKeyDown="ConsultationWorkspace_PreviewKeyDown"
+          >
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Barra superior: paciente, alergias, tiempo y un solo botón para terminar -->
+        <Border Grid.Row="0" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <WrapPanel VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SelectedPatient.FullName}" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource ThemeText}" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} · {1} · {2} · Folio de consulta {3}">
+                                    <Binding Path="SelectedPatient.AgeDisplay" />
+                                    <Binding Path="SelectedPatient.Gender" />
+                                    <Binding Path="SelectedPatient.RecordNumber" />
+                                    <Binding Path="ActiveConsultationFolio" />
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </StackPanel>
+                <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding SelectedPatient}" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
+                </Border>
+                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Duración de la consulta">
+                        <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccent}" />
+                    </Border>
+                </WrapPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowChartFromConsultationCommand}" Padding="10,6" Margin="0,0,6,0" Content="Expediente" ToolTip="Ver el expediente completo: antecedentes, historial y gráfica de signos" />
+                    <TextBlock Text="{Binding AutosaveStatus}"
+                               FontSize="11.5"
+                               Foreground="{DynamicResource ThemeTextSecondary}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               ToolTip="La consulta se guarda sola mientras escribe; si se cierra el programa o se va la luz, se recupera al abrir. Ctrl + S guarda al instante." />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DiscardActiveConsultationCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Paciente equivocado o se retiró: no guarda la nota ni cobra">
+                        <TextBlock Text="Descartar" Foreground="{DynamicResource ThemeError}" />
+                    </Button>
+                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding FinalizeConsultationCommand}" Padding="18,8" Content="Terminar consulta" ToolTip="Revisar la cuenta y cobrar (Ctrl + Enter)" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Contexto del paciente: lo necesario sin buscarlo -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="PACIENTE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                        <TextBlock Text="Grupo sanguíneo" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
+                        <TextBlock Text="{Binding SelectedPatient.BloodType}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        <TextBlock Text="Enfermedades crónicas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
+                        <TextBlock Text="{Binding SelectedPatient.ChronicDiseases}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        <TextBlock Text="Últimos signos vitales" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
+                        <TextBlock Text="{Binding SelectedPatient.VitalSigns}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,10"
+                            Visibility="{Binding PreviousConsultation, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="ÚLTIMA CONSULTA" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                            <TextBlock Text="{Binding PreviousConsultation.Date, StringFormat='dd/MM/yyyy'}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,4,0,2" />
+                            <TextBlock Text="{Binding PreviousConsultation.Diagnosis}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding PreviousConsultation.TreatmentPlan}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" MaxHeight="64" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,10">
+                        <StackPanel>
+                            <TextBlock Text="ATAJOS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
+                            <TextBlock Text="Ctrl + ↓  siguiente sección" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                            <TextBlock Text="Ctrl + ↑  sección anterior" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                            <TextBlock Text="Ctrl + Enter  terminar consulta" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                            <TextBlock Text="Ctrl + S  guardar ahora" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Nota de la consulta en el orden de la entrevista -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ConsultationSectionsPanel">
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=1}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding SetConsultationSectionCommand}" CommandParameter="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=1}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="1" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=1}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Motivo y padecimiento actual" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=1}">
+                                        <TextBlock Text="{Binding ConsultationChiefComplaint}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </Grid>
+                                </StackPanel>
+
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
+                            <TextBox Text="{Binding ConsultationChiefComplaint, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Motivo de consulta y padecimiento actual" />
+                            <WrapPanel>
+                                <TextBlock Text="Frecuentes:" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Fiebre" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Fiebre" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Tos" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Tos" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Dolor de garganta" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Dolor de garganta" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Rinorrea" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Rinorrea" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Dolor abdominal" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Dolor abdominal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Diarrea" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Diarrea" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Vómito" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Vómito" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Cefalea" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Cefalea" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Control de niño sano" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Control de niño sano" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendChiefComplaintChipCommand}" MinHeight="0" CommandParameter="Seguimiento" Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Seguimiento" />
+                            </WrapPanel>
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding NextConsultationSectionCommand}" Padding="14,6" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Siguiente  →" ToolTip="Ctrl + ↓" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=2}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding SetConsultationSectionCommand}" CommandParameter="2">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=2}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="2" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=2}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Signos vitales y somatometría" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=2}">
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="T/A {0} · FC {1} · FR {2} · Temp {3} · Peso {4} · Talla {5} · SpO₂ {6}">
+                                                    <Binding Path="ConsultationTA" />
+                                                    <Binding Path="ConsultationFC" />
+                                                    <Binding Path="ConsultationFR" />
+                                                    <Binding Path="ConsultationTemp" />
+                                                    <Binding Path="ConsultationWeight" />
+                                                    <Binding Path="ConsultationHeight" />
+                                                    <Binding Path="ConsultationSpO2" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
+                                <Border Grid.Column="2" CornerRadius="10" Padding="10,3" Margin="8,0,0,0" VerticalAlignment="Center" Background="{DynamicResource ThemeWarningSubtle}"
+                                        Visibility="{Binding HasVitalSignsWarning, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding VitalSignsWarning}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeWarningText}" TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                                </Border>
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
+                            <UniformGrid Columns="4">
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="T/A (mmHg)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationTA, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Tensión arterial, ej. 120/80" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="FC (lpm)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationFC, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Frecuencia cardiaca" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="FR (rpm)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationFR, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Frecuencia respiratoria" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="Temp (°C)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationTemp, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Temperatura" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="Peso (kg)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationWeight, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Peso en kilogramos" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="Talla (m)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationHeight, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Estatura en metros, ej. 1.70" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="SpO₂ (%)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationSpO2, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Saturación de oxígeno" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,10,10">
+                                    <TextBlock Text="Glucosa (mg/dL)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
+                                    <TextBox Text="{Binding ConsultationGlucose, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" Padding="8,6" FontSize="14" ToolTip="Glucosa capilar" />
+                                </StackPanel>
+                            </UniformGrid>
+                            <WrapPanel Margin="0,0,0,4">
+                                <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="10,4" Margin="0,0,8,6">
+                                    <TextBlock Text="{Binding ConsultationIMC, StringFormat='IMC: {0}'}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" />
+                                </Border>
+                                <Border Background="{DynamicResource ThemeWarningSubtle}" CornerRadius="6" Padding="10,4" Margin="0,0,8,6" Visibility="{Binding HasVitalSignsWarning, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding VitalSignsWarning}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeWarningText}" TextWrapping="Wrap" />
+                                </Border>
+                            </WrapPanel>
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding NextConsultationSectionCommand}" Padding="14,6" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Siguiente  →" ToolTip="Ctrl + ↓" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=3}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding SetConsultationSectionCommand}" CommandParameter="3">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=3}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="3" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=3}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Exploración por aparatos y sistemas" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=3}">
+                                        <TextBlock Text="{Binding ConsultationSystemsReview}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </Grid>
+                                </StackPanel>
+
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=3}">
+                            <TextBlock Text="Interrogatorio por aparatos y sistemas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
+                            <WrapPanel>
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Respiratorio: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Respiratorio normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Cardiovascular: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Cardiovascular normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Digestivo: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Digestivo normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Genitourinario: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Genitourinario normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Neurológico: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Neurológico normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Piel y anexos: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Piel normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Resto de aparatos y sistemas interrogados sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Resto sin alteraciones" />
+                            </WrapPanel>
+                            <TextBox Text="{Binding ConsultationSystemsReview, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Hallazgos por aparatos y sistemas" />
+                            <TextBlock Text="Exploración física" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
+                            <WrapPanel>
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendPhysicalExamLineCommand}" MinHeight="0" CommandParameter="Consciente, orientado, bien hidratado, sin facies de dolor." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Habitus normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendPhysicalExamLineCommand}" MinHeight="0" CommandParameter="Orofaringe sin hiperemia ni exudado." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Orofaringe normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendPhysicalExamLineCommand}" MinHeight="0" CommandParameter="Campos pulmonares bien ventilados, sin estertores ni sibilancias." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Pulmones limpios" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendPhysicalExamLineCommand}" MinHeight="0" CommandParameter="Ruidos cardiacos rítmicos, sin soplos." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Corazón normal" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendPhysicalExamLineCommand}" MinHeight="0" CommandParameter="Abdomen blando, depresible, no doloroso, peristalsis presente." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Abdomen normal" />
+                            </WrapPanel>
+                            <TextBox Text="{Binding ConsultationPhysicalExam, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Exploración física general" />
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding NextConsultationSectionCommand}" Padding="14,6" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Siguiente  →" ToolTip="Ctrl + ↓" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=4}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding SetConsultationSectionCommand}" CommandParameter="4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=4}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="4" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=4}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Diagnóstico (CIE-10)" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=4}">
+                                        <TextBlock Text="{Binding ConsultationDiagnosis}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </Grid>
+                                </StackPanel>
+
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=4}">
+                            <TextBox x:Name="ActiveConsultationDiagnosisTextBox"
+                                     Text="{Binding ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldTextBox}"
+                                     PreviewKeyDown="DiagnosisTextBox_PreviewKeyDown"
+                                     FontSize="14"
+                                     Padding="10,8"
+                                     ToolTip="Escriba la clave o el nombre (ej. J00, rinofaringitis) y elija con ↑ ↓ y Enter" />
+                            <TextBlock Text="Escriba la clave o el nombre: aparecen sugerencias del catálogo CIE-10 (↑ ↓ y Enter para elegir)." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,4,0,6" />
+                            <Border Background="{DynamicResource ThemeSurface}"
+                                    BorderBrush="{DynamicResource ThemeAccent}"
+                                    BorderThickness="1.5"
+                                    CornerRadius="8"
+                                    Margin="0,0,0,8"
+                                    MaxHeight="240"
+                                    Visibility="{Binding IsCie10DropdownOpen, Converter={StaticResource BoolToVis}}"
+                                    SnapsToDevicePixels="True">
+                                <ListBox x:Name="ActiveCie10SuggestionsListBox"
+                                         ItemsSource="{Binding Cie10Suggestions}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PreviewKeyDown="Cie10SuggestionsListBox_PreviewKeyDown"
+                                         PreviewMouseLeftButtonUp="Cie10SuggestionsListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="Margin" Value="1" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="8,6" SnapsToDevicePixels="True">
+                                                            <ContentPresenter />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding Code}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccentText}" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding Description}" FontSize="12.5" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Category}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding NextConsultationSectionCommand}" Padding="14,6" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Siguiente  →" ToolTip="Ctrl + ↓" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=5}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding SetConsultationSectionCommand}" CommandParameter="5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=5}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="5" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=5}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Tratamiento, receta e indicaciones" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=5}">
+                                        <TextBlock Text="{Binding ConsultationTreatmentPlan}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </Grid>
+                                </StackPanel>
+
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=5}">
+                            <TextBlock Text="Plan terapéutico, cuidados e indicaciones" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
+                            <WrapPanel>
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Hidratación" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Reposo relativo por 48 horas, evitar esfuerzos físicos pesados." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Reposo" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Dieta blanda" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Datos de alarma" />
+                                <ComboBox ItemsSource="{Binding GeneralMeasureTemplates}"
+                                          SelectedItem="{Binding SelectedGeneralMeasureTemplate, Mode=TwoWay}"
+                                          DisplayMemberPath="Title"
+                                          helpers:TypeAhead.IsEnabled="True"
+                                          ToolTip="Medidas generales del consultorio: despliegue y escriba para buscar"
+                                          MinWidth="240"
+                                          Height="28"
+                                          Margin="0,0,6,6"
+                                          Visibility="{Binding HasGeneralMeasureTemplates, Converter={StaticResource BoolToVis}}" />
+                            </WrapPanel>
+                            <TextBox Text="{Binding ConsultationTreatmentPlan, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Plan terapéutico e indicaciones" />
+                            <Grid Margin="0,4,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Receta" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenPrescriptionPdfPreviewCommand}" Padding="10,4" Margin="0,0,6,0" FontSize="11.5" Content="Vista previa" />
+                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding OpenPrescriptionModalCommand}" Padding="10,4" FontSize="11.5" Content="+ Medicamento" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding MedicineName}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Dosage}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <CheckBox Grid.Column="1"
+                                                              IsChecked="{Binding DispenseInClinic, Mode=TwoWay}"
+                                                              Command="{Binding DataContext.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              CommandParameter="{Binding}"
+                                                              VerticalAlignment="Center"
+                                                              Margin="12,0,0,0"
+                                                              ToolTip="Se entrega en el consultorio y se carga a la cuenta de la consulta">
+                                                        <TextBlock Text="Se surte aquí" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                    </CheckBox>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="Sin medicamentos en la receta." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"
+                                               Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
+                                </StackPanel>
+                            </Border>
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenScheduleAppointmentModalCommand}" Padding="12,6" HorizontalAlignment="Left" Margin="0,0,0,4" Content="Agendar próxima cita" />
+                            <Button Style="{StaticResource ButtonPrimary}" Command="{Binding FinalizeConsultationCommand}" Padding="16,7" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Terminar consulta" ToolTip="Ctrl + Enter" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Cuenta de la consulta: todo lo que se usó, listo para cobrar al terminar -->
+            <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="CUENTA DE LA CONSULTA" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,8" />
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding ConsultationFeeName}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Column="1" Text="{Binding ConsultationFeeAmount, StringFormat='${0:N2}'}" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" Margin="8,0,0,0" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding ActiveConsultation.Items}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} ×{1}">
+                                                        <Binding Path="Name" />
+                                                        <Binding Path="Quantity" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="1" Text="{Binding Subtotal, StringFormat='${0:N2}'}" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" Margin="8,0,4,0" />
+                                            <Button Grid.Column="2" Style="{StaticResource ButtonSecondary}" Padding="6,1" FontSize="11"
+                                                    Command="{Binding DataContext.RemoveItemFromActiveConsultationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Quitar de la cuenta"
+                                                    Content="✕" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Margin="0,6,0,8">
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenPrescriptionModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <helpers:Icon Data="{StaticResource IcoPill}" Margin="0,0,8,0" />
+                                        <TextBlock Text="Medicamento (receta)" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSuppliesModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
+                                        <TextBlock Text="Insumo o material" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenServicesModalCommand}" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <helpers:Icon Data="{StaticResource IcoSyringe}" Margin="0,0,8,0" />
+                                        <TextBlock Text="Servicio (inyección, curación…)" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Total" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding ConsultationAccountTotal, StringFormat='${0:N2}'}" FontSize="15" FontWeight="Bold" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="Se cobra todo al terminar la consulta." FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource ThemeSelectionBackground}" CornerRadius="10" Padding="14,10">
+                        <TextBlock Text="¿Aplicó algo más? Inyección, nebulización, curación, sutura o una revisión especial: agréguelo aquí en cuanto lo haga para no olvidar cobrarlo." FontSize="12" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,250 @@
+<UserControl x:Class="TPVC.Views.PatientsHomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}"
+             d:DesignHeight="760" d:DesignWidth="1300">
+
+    <UserControl.Resources>
+        <!-- Tarjeta o fila completa que abre la ficha del paciente -->
+        <Style x:Key="PatientButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+            <Setter Property="Background" Value="{DynamicResource ThemeCard}" />
+            <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="AllergyMark" DataType="{x:Type models:PatientRecord}">
+            <Border Style="{StaticResource BadgeDangerSolid}" Visibility="{Binding HasAllergies, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Alergia" />
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="24,16,24,20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ======================= CITAS DE HOY ======================= -->
+        <Border Style="{StaticResource Card}" Padding="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
+                    <Grid>
+                        <TextBlock Style="{StaticResource TextSection}" Text="{Binding TodayTitle}" />
+                        <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,4" MinHeight="0"
+                                Command="{Binding OpenAgendaPanelCommand}" Content="Agenda" ToolTip="Abrir la agenda de la semana" />
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding TodayAppointments}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:PatientAppointment}">
+                                    <Border Padding="18,12" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource TextMono}" Text="{Binding Time}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding PatientName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Reason}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                            <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                <Button x:Name="AttendButton"
+                                                        Style="{StaticResource ButtonPrimary}"
+                                                        Padding="12,5" MinHeight="0"
+                                                        Content="Atender"
+                                                        Command="{Binding DataContext.AttendAppointmentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Abrir la consulta con el motivo de la cita" />
+                                                <Border x:Name="AttendedBadge" Style="{StaticResource BadgeSuccess}" Visibility="Collapsed">
+                                                    <TextBlock Text="Atendida" />
+                                                </Border>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsAttended}" Value="True">
+                                            <Setter TargetName="AttendButton" Property="Visibility" Value="Collapsed" />
+                                            <Setter TargetName="AttendedBadge" Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <StackPanel Margin="18,24" Visibility="{Binding HasTodayAppointments, Converter={StaticResource InverseBoolToVis}}">
+                            <helpers:Icon Data="{StaticResource IcoCalendar}" Width="28" Height="28" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Left" />
+                            <TextBlock Style="{StaticResource TextBody}" Text="Sin citas para hoy." Margin="0,10,0,4" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="Puede agendar desde la agenda o desde la ficha de un paciente." />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" Padding="18,10" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0">
+                    <TextBlock Style="{StaticResource TextCaption}" Text="Atender abre la consulta con el motivo de la cita ya escrito." />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ======================= PACIENTES ======================= -->
+        <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
+            <Grid>
+                <!-- Sin búsqueda: atendidos recientemente -->
+                <Grid Visibility="{Binding HasHomeQuery, Converter={StaticResource InverseBoolToVis}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextSection}" Text="Atendidos recientemente" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="Escriba en el buscador de arriba en cualquier momento: nombre, folio o teléfono." Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding RecentPatients}" Margin="14,14,4,14">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:PatientRecord}">
+                                    <Button Style="{StaticResource PatientButton}" Margin="0,0,10,10"
+                                            Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding FullName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                <ContentPresenter Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource AllergyMark}" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,0">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                                                        <Binding Path="AgeDisplay" />
+                                                        <Binding Path="Gender" />
+                                                        <Binding Path="RecordNumber" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                            <TextBlock Style="{StaticResource TextDetail}" Foreground="{DynamicResource ThemeText}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}Última: {0:dd/MM/yyyy} · {1}">
+                                                        <Binding Path="LastVisit" />
+                                                        <Binding Path="LastDiagnosis" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- Con búsqueda: resultados al escribir -->
+                <Grid Visibility="{Binding HasHomeQuery, Converter={StaticResource BoolToVis}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource TextSection}" Text="Resultados" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding HomeResultsSummary}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="· Enter abre el primero" VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <ItemsControl ItemsSource="{Binding HomeResults}" AlternationCount="10000">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:PatientRecord}">
+                                        <Button x:Name="Row" Style="{StaticResource PatientButton}" BorderThickness="0" Margin="0,0,0,4" Padding="12,10"
+                                                Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Style="{StaticResource Avatar}" Margin="0,0,14,0">
+                                                    <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding FullName}" />
+                                                    <TextBlock Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
+                                                        <TextBlock.Text>
+                                                            <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                                                                <Binding Path="AgeDisplay" />
+                                                                <Binding Path="FormattedPhone" />
+                                                                <Binding Path="LastDiagnosis" />
+                                                            </MultiBinding>
+                                                        </TextBlock.Text>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <ContentPresenter Grid.Column="2" Content="{Binding}" ContentTemplate="{StaticResource AllergyMark}" Margin="12,0" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="3" Style="{StaticResource TextMono}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Text="{Binding RecordNumber}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Button>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}}" Value="0">
+                                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource TextDetail}" Margin="12,8,0,8" Text="No hay pacientes que coincidan."
+                                       Visibility="{Binding HasNoHomeResults, Converter={StaticResource BoolToVis}}" />
+
+                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Margin="4,8,0,0" Command="{Binding CreatePatientFromSearchCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <helpers:Icon Data="{StaticResource IcoUserPlus}" Width="18" Height="18" Margin="0,0,10,0" />
+                                    <TextBlock Text="{Binding CreateFromSearchText}" FontWeight="SemiBold" />
+                                    <TextBlock Text="  abre el alta con el nombre ya escrito" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
