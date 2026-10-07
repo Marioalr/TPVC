@@ -93,9 +93,27 @@ jobs:
             "publish/TPVC-v$version-win-x64.zip",
             "publish/SHA256SUMS-v$version.txt"
           )
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag @assets --clobber
-          } else {
-            gh release create $tag @assets --title "TPVC v$version" --notes-file release-notes.md --verify-tag
+          # La API de GitHub a veces responde HTTP 5xx de forma pasajera (pasó al publicar v1.9.0):
+          # se reintenta solo ante errores del servidor; cualquier otro error falla de inmediato.
+          # Si un intento creó el release pero no subió los archivos, el siguiente los sube con --clobber.
+          $maxAttempts = 6
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            gh release view $tag *> $null
+            if ($LASTEXITCODE -eq 0) {
+              $output = gh release upload $tag @assets --clobber 2>&1
+            } else {
+              $output = gh release create $tag @assets --title "TPVC v$version" --notes-file release-notes.md --verify-tag 2>&1
+            }
+            $exitCode = $LASTEXITCODE
+            $output | Write-Host
+            if ($exitCode -eq 0) { exit 0 }
+
+            if (-not ($output -match 'HTTP 5\d\d') -or $attempt -eq $maxAttempts) {
+              Write-Error "No se pudo publicar el release (intento $attempt de $maxAttempts)."
+              exit 1
+            }
+
+            $delay = [Math]::Min(30 * [Math]::Pow(2, $attempt - 1), 300)
+            Write-Warning "GitHub respondió un error de servidor; reintento $($attempt + 1) de $maxAttempts en $delay s."
+            Start-Sleep -Seconds $delay
           }
