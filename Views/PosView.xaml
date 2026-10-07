@@ -1942,7 +1942,7 @@
                         </Button>
 
                         <Button Style="{DynamicResource AccentButton}" 
-                                Command="{Binding SaveNewServiceAsyncCommand}" 
+                                Command="{Binding SaveNewServiceCommand}" 
                                 Padding="20,8">
                             <TextBlock Text="Guardar Servicio" FontWeight="Bold" FontSize="13" />
                         </Button>

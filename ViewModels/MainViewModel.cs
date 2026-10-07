@@ -634,6 +634,7 @@ public partial class MainViewModel : ObservableObject
             case "Movements":
             case "Settings":
             case "TursoSync":
+            case "DesignSystem":
                 ConfigurationShellVM.NavigateSubView(viewName);
                 CurrentView = ConfigurationShellVM;
                 break;

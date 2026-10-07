@@ -593,7 +593,7 @@
                                     Width="28" Height="28"
                                     Margin="8,0,-4,0"
                                     Foreground="{DynamicResource ThemeToastText}"
-                                    Command="{Binding DataContext.DismissNotificationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Command="{Binding DataContext.DismissNotificationCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                     CommandParameter="{Binding}"
                                     ToolTip="Cerrar aviso"
                                     AutomationProperties.Name="Cerrar aviso">

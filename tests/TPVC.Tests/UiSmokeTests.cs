@@ -221,11 +221,9 @@ internal sealed class UiSmokeSession
             notificationService: notifications);
         main.IsFirstRunWizardOpen = false;
 
-        var window = new MainWindow(main);
-        var root = (System.Windows.FrameworkElement)window.Content;
-        window.Content = null;
-        var host = Host(root);
-        host.DataContext = main;
+        // La ventana real sin mostrarla: los cambios de tema llegan a todo su contenido
+        var window = new MainWindow(main) { Width = Width, Height = Height };
+        var host = window;
 
         WaitFor(main.MedicalRecordsVM.InitialLoad);
         notifications.Success("Expediente guardado");
@@ -275,13 +273,13 @@ internal sealed class UiSmokeSession
         }
     }
 
-    private void Show(System.Windows.FrameworkElement host, MainViewModel main, string screen, string name)
+    private void Show(System.Windows.Window host, MainViewModel main, string screen, string name)
     {
         main.NavigateTo(screen);
         Capture(host, name);
     }
 
-    private void Capture(System.Windows.FrameworkElement host, string name)
+    private void Capture(System.Windows.Window host, string name)
     {
         _bindingErrors.Screen = name;
         Pump();

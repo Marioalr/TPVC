@@ -104,4 +104,16 @@ public class ThemeResourceTests
 
         Assert.IsEmpty(missing.Distinct().ToList(), "Recursos sin definir: " + string.Join("; ", missing.Distinct()));
     }
+    [TestMethod]
+    public void NoBindingUsesAsyncCommandNames()
+    {
+        // CommunityToolkit genera GuardarCommand para "GuardarAsync": un binding a
+        // GuardarAsyncCommand no existe y el botón no hace nada (pasaba con 5 botones)
+        var root = RepoRoot();
+        var wrong = AppXamlFiles(root)
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), "\\b(\\w+AsyncCommand)\\b").Select(m => $"{m.Groups[1].Value} en {Path.GetRelativePath(root, f)}"))
+            .Distinct()
+            .ToList();
+        Assert.IsEmpty(wrong, "Comandos inexistentes: " + string.Join("; ", wrong));
+    }
 }
