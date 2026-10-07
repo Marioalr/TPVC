@@ -1,30 +1,52 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Valores por defecto (Modo Claro + Acento Azul Médico) -->
+    <!-- Valores iniciales = modo claro con el acento por defecto. Al arrancar, ThemeService los
+         reemplaza con ThemePalette.Build (la prueba ThemePaletteTests verifica que coincidan).
+         Las pantallas usan solo estas claves, siempre con DynamicResource. -->
+
+    <!-- Fondos y texto -->
     <SolidColorBrush x:Key="ThemeBackground" Color="#F8FAFC" />
     <SolidColorBrush x:Key="ThemeSurface" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ThemeCard" Color="#FFFFFF" />
     <SolidColorBrush x:Key="ThemeSurfaceSubtle" Color="#F1F5F9" />
     <SolidColorBrush x:Key="ThemeText" Color="#0F172A" />
-    <SolidColorBrush x:Key="ThemeTextSecondary" Color="#64748B" />
+    <SolidColorBrush x:Key="ThemeTextSecondary" Color="#5A687D" />
     <SolidColorBrush x:Key="ThemeBorder" Color="#E2E8F0" />
-    <SolidColorBrush x:Key="ThemeAccent" Color="#0284C7" />
-    <SolidColorBrush x:Key="ThemeAccentHover" Color="#0369A1" />
-    <SolidColorBrush x:Key="ThemeAccentPressed" Color="#075985" />
+    <SolidColorBrush x:Key="ThemeBorderStrong" Color="#C4CBD4" />
+
+    <!-- Acento: ThemeAccent para bordes e iconos; Strong lleva texto blanco encima; Foreground es
+         texto del color del acento sobre la superficie -->
+    <SolidColorBrush x:Key="ThemeAccent" Color="#0369A1" />
+    <SolidColorBrush x:Key="ThemeAccentStrong" Color="#0369A1" />
+    <SolidColorBrush x:Key="ThemeAccentHover" Color="#035C8E" />
+    <SolidColorBrush x:Key="ThemeAccentPressed" Color="#02507A" />
     <SolidColorBrush x:Key="ThemeAccentText" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ThemeAccentForeground" Color="#0369A1" />
+    <SolidColorBrush x:Key="ThemeFocus" Color="#0369A1" />
+    <SolidColorBrush x:Key="ThemePrimary" Color="#0369A1" />
+    <SolidColorBrush x:Key="ThemePrimaryTransparent" Color="#150369A1" />
+    <SolidColorBrush x:Key="ThemeSelectionBackground" Color="#DCEAF2" />
+    <SolidColorBrush x:Key="ThemeOverlay" Color="#730F172A" />
 
-    <!-- Fondo de tarjetas y ventanas con fondo difuso (antes no existía y quedaban transparentes) -->
-    <SolidColorBrush x:Key="ThemeCard" Color="#FFFFFF" />
+    <!-- Estados sólidos (texto blanco encima) -->
+    <SolidColorBrush x:Key="ThemeSuccess" Color="#047857" />
+    <SolidColorBrush x:Key="ThemeWarning" Color="#B45309" />
+    <SolidColorBrush x:Key="ThemeDanger" Color="#B91C1C" />
+    <SolidColorBrush x:Key="ThemeError" Color="#B91C1C" />
 
-    <SolidColorBrush x:Key="ThemeSuccess" Color="#10B981" />
-    <SolidColorBrush x:Key="ThemeWarning" Color="#F59E0B" />
-    <SolidColorBrush x:Key="ThemeDanger" Color="#EF4444" />
-    <!-- Alias de ThemeDanger usado por varias pantallas (alergias, sin existencias, vencidos) -->
-    <SolidColorBrush x:Key="ThemeError" Color="#EF4444" />
+    <!-- Cajas de aviso y distintivos: fondo suave con texto del mismo tono -->
+    <SolidColorBrush x:Key="ThemeSuccessSubtle" Color="#DCFCE7" />
+    <SolidColorBrush x:Key="ThemeSuccessText" Color="#166534" />
+    <SolidColorBrush x:Key="ThemeWarningSubtle" Color="#FEF3C7" />
+    <SolidColorBrush x:Key="ThemeWarningText" Color="#78350F" />
+    <SolidColorBrush x:Key="ThemeDangerSubtle" Color="#FEE2E2" />
+    <SolidColorBrush x:Key="ThemeDangerText" Color="#991B1B" />
+    <SolidColorBrush x:Key="ThemeInfoSubtle" Color="#E0F2FE" />
+    <SolidColorBrush x:Key="ThemeInfoText" Color="#075985" />
 
-    <!-- Compatibilidad y resaltado de selección -->
-    <SolidColorBrush x:Key="ThemePrimary" Color="#0284C7" />
-    <SolidColorBrush x:Key="ThemePrimaryTransparent" Color="#150284C7" />
-    <SolidColorBrush x:Key="ThemeSelectionBackground" Color="#E0F2FE" />
+    <!-- Avisos breves -->
+    <SolidColorBrush x:Key="ThemeToastBackground" Color="#0F172A" />
+    <SolidColorBrush x:Key="ThemeToastText" Color="#F8FAFC" />
 
 </ResourceDictionary>

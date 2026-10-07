@@ -5,12 +5,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:TPVC.ViewModels"
         xmlns:views="clr-namespace:TPVC.Views"
+        xmlns:helpers="clr-namespace:TPVC.Helpers"
+        xmlns:services="clr-namespace:TPVC.Services"
         mc:Ignorable="d"
         Title="TPVC - Control de Inventario para Consultorio Médico" 
         Height="800" Width="1280"
         MinHeight="680" MinWidth="1024"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource ThemeBackground}">
+        Background="{DynamicResource ThemeBackground}"
+        Foreground="{DynamicResource ThemeText}">
 
     <Window.InputBindings>
         <KeyBinding Key="K" Modifiers="Control" Command="{Binding ToggleCommandPaletteCommand}" />
@@ -563,5 +566,54 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- ============================================ -->
+        <!-- AVISOS BREVES (se van solos, no piden clic)  -->
+        <!-- ============================================ -->
+        <ItemsControl Grid.Row="0" Grid.RowSpan="2"
+                      Panel.ZIndex="1100"
+                      ItemsSource="{Binding Notifications.Items}"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Bottom"
+                      Margin="0,0,24,48"
+                      Focusable="False">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type services:Notification}">
+                    <Border Style="{StaticResource Toast}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <helpers:Icon x:Name="KindIcon" Data="{StaticResource IcoCheck}" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource ButtonIcon}"
+                                    Width="28" Height="28"
+                                    Margin="8,0,-4,0"
+                                    Foreground="{DynamicResource ThemeToastText}"
+                                    Command="{Binding DataContext.DismissNotificationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip="Cerrar aviso"
+                                    AutomationProperties.Name="Cerrar aviso">
+                                <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsInfo}" Value="True">
+                            <Setter TargetName="KindIcon" Property="Data" Value="{StaticResource IcoInfo}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                            <Setter TargetName="KindIcon" Property="Data" Value="{StaticResource IcoAlert}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                            <Setter TargetName="KindIcon" Property="Data" Value="{StaticResource IcoAlert}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Grid>
 </Window>

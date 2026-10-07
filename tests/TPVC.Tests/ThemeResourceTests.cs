@@ -65,15 +65,43 @@ public class ThemeResourceTests
     public void ThemeService_UpdatesEveryColorOfThePalette()
     {
         var root = RepoRoot();
-        var palette = Regex.Matches(File.ReadAllText(Path.Combine(root, "Styles", "ThemeColors.xaml")), "x:Key=\"(Theme\\w+)\"")
+        var dictionary = Regex.Matches(File.ReadAllText(Path.Combine(root, "Styles", "ThemeColors.xaml")), "x:Key=\"(Theme\\w+)\"")
             .Select(m => m.Groups[1].Value)
             .ToList();
-        var service = File.ReadAllText(Path.Combine(root, "Services", "ThemeService.cs"));
 
-        // Si un color no se actualiza al cambiar a modo oscuro o de acento, conserva el del modo claro
-        var notUpdated = palette.Where(key => !service.Contains($"resources[\"{key}\"]", StringComparison.Ordinal)).ToList();
+        // ThemeService publica exactamente ThemePalette.Build: si un color no está ahí, no cambia
+        // al pasar a modo oscuro o a otro acento
+        foreach (var settings in new[] { new TPVC.Models.ThemeSettings(), new TPVC.Models.ThemeSettings { ThemeMode = "Oscuro", BackgroundColor = "#0F172A", SurfaceColor = "#1E293B" } })
+        {
+            var palette = TPVC.Services.ThemePalette.Build(settings);
+            var notUpdated = dictionary.Where(key => !palette.ContainsKey(key)).ToList();
+            Assert.IsEmpty(notUpdated, "No cambian con el tema: " + string.Join(", ", notUpdated));
+        }
+        Assert.IsNotEmpty(dictionary);
+    }
+    [TestMethod]
+    public void EveryResourceKeyUsedInScreens_IsDefined()
+    {
+        // Un StaticResource inexistente cierra la pantalla al abrirla (XamlParseException) y no
+        // falla al compilar; un DynamicResource inexistente deja el elemento sin estilo
+        var root = RepoRoot();
+        var shared = Directory.GetFiles(Path.Combine(root, "Styles"), "*.xaml").Append(Path.Combine(root, "App.xaml"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), "x:Key=\"([^\"]+)\"").Select(m => m.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.IsNotEmpty(palette);
-        Assert.IsEmpty(notUpdated, "No cambian con el tema: " + string.Join(", ", notUpdated));
+        var missing = new List<string>();
+        foreach (var file in AppXamlFiles(root))
+        {
+            var text = File.ReadAllText(file);
+            var local = Regex.Matches(text, "x:Key=\"([^\"]+)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+            foreach (Match m in Regex.Matches(text, "\\{(?:StaticResource|DynamicResource)\\s+([^}\\s]+)\\}"))
+            {
+                var key = m.Groups[1].Value;
+                if (key.StartsWith("{", StringComparison.Ordinal) || key.StartsWith("x:", StringComparison.Ordinal)) continue;
+                if (!shared.Contains(key) && !local.Contains(key)) missing.Add($"{key} en {Path.GetRelativePath(root, file)}");
+            }
+        }
+
+        Assert.IsEmpty(missing.Distinct().ToList(), "Recursos sin definir: " + string.Join("; ", missing.Distinct()));
     }
 }

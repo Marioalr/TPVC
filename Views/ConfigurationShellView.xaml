@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:ConfigurationShellViewModel}"
              d:DesignHeight="750" d:DesignWidth="1100">
@@ -196,6 +197,18 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="☁️" FontSize="13" Margin="0,0,10,0" VerticalAlignment="Center" />
                                 <TextBlock Text="Nube y Turso Cloud" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- 8. Muestra del lenguaje visual (revisión de temas) -->
+                        <RadioButton Style="{DynamicResource NavRadioButton}" 
+                                     GroupName="ConfigNav"
+                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=DesignSystem, Mode=OneWay}"
+                                     Command="{Binding NavigateSubViewCommand}" 
+                                     CommandParameter="DesignSystem">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSun}" Width="15" Height="15" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Componentes" />
                             </StackPanel>
                         </RadioButton>
                     </StackPanel>

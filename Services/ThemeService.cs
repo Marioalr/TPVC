@@ -100,97 +100,20 @@ public class ThemeService
         SaveTheme(CurrentSettings);
     }
 
+    /// <summary>
+    /// Publica la paleta completa (ver <see cref="ThemePalette"/>) como pinceles congelados: las
+    /// pantallas usan solo estos colores con DynamicResource y cambian al instante con el tema.
+    /// </summary>
     public void ApplyTheme(ThemeSettings settings)
     {
         if (Application.Current == null) return;
 
         var resources = Application.Current.Resources;
-
-        var bg = ParseColor(settings.BackgroundColor, Colors.White);
-        var surface = ParseColor(settings.SurfaceColor, Colors.White);
-        var text = ParseColor(settings.TextColor, Colors.Black);
-        var secText = ParseColor(settings.SecondaryTextColor, Colors.Gray);
-        var border = ParseColor(settings.BorderColor, Color.FromRgb(226, 232, 240));
-        var accent = ParseColor(settings.AccentColor, Color.FromRgb(2, 132, 199));
-
-        // Hover & Pressed accents
-        var accentHover = ChangeColorBrightness(accent, 0.15f);
-        var accentPressed = ChangeColorBrightness(accent, -0.15f);
-
-        // Surface subtle (zebra rows, toolbars)
-        var surfaceSubtle = settings.ThemeMode == "Oscuro" 
-            ? Color.FromRgb(30, 41, 59) 
-            : Color.FromRgb(241, 245, 249);
-
-        // Set DynamicResource Brushes
-        resources["ThemeBackground"] = new SolidColorBrush(bg);
-        resources["ThemeSurface"] = new SolidColorBrush(surface);
-        resources["ThemeSurfaceSubtle"] = new SolidColorBrush(surfaceSubtle);
-        resources["ThemeText"] = new SolidColorBrush(text);
-        resources["ThemeTextSecondary"] = new SolidColorBrush(secText);
-        resources["ThemeBorder"] = new SolidColorBrush(border);
-        resources["ThemeAccent"] = new SolidColorBrush(accent);
-        resources["ThemeAccentHover"] = new SolidColorBrush(accentHover);
-        resources["ThemeAccentPressed"] = new SolidColorBrush(accentPressed);
-        resources["ThemeAccentText"] = new SolidColorBrush(Colors.White);
-
-        resources["ThemeCard"] = new SolidColorBrush(surface);
-
-        // Selección y acento secundario: siguen al acento y al modo (en oscuro, el azul claro fijo
-        // dejaba texto claro sobre fondo claro)
-        bool isDark = settings.ThemeMode == "Oscuro" || Luminance(bg) < 0.4;
-        resources["ThemePrimary"] = new SolidColorBrush(accent);
-        resources["ThemePrimaryTransparent"] = new SolidColorBrush(Color.FromArgb(0x15, accent.R, accent.G, accent.B));
-        resources["ThemeSelectionBackground"] = new SolidColorBrush(Blend(surface, accent, isDark ? 0.35 : 0.14));
-
-        // Semaphores / Statuses
-        var danger = Color.FromRgb(239, 68, 68);
-        resources["ThemeSuccess"] = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-        resources["ThemeWarning"] = new SolidColorBrush(Color.FromRgb(245, 158, 11));
-        resources["ThemeDanger"] = new SolidColorBrush(danger);
-        resources["ThemeError"] = new SolidColorBrush(danger);
-    }
-
-    private static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
-
-    private static Color Blend(Color baseColor, Color overlay, double amount) => Color.FromRgb(
-        (byte)Math.Round(baseColor.R + (overlay.R - baseColor.R) * amount),
-        (byte)Math.Round(baseColor.G + (overlay.G - baseColor.G) * amount),
-        (byte)Math.Round(baseColor.B + (overlay.B - baseColor.B) * amount));
-
-    private static Color ParseColor(string hex, Color fallback)
-    {
-        try
+        foreach (var (key, color) in ThemePalette.Build(settings))
         {
-            if (string.IsNullOrWhiteSpace(hex)) return fallback;
-            var obj = ColorConverter.ConvertFromString(hex);
-            return obj is Color c ? c : fallback;
+            var brush = new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+            brush.Freeze();
+            resources[key] = brush;
         }
-        catch
-        {
-            return fallback;
-        }
-    }
-
-    private static Color ChangeColorBrightness(Color color, float factor)
-    {
-        float r = color.R;
-        float g = color.G;
-        float b = color.B;
-
-        if (factor > 0)
-        {
-            r += (255 - r) * factor;
-            g += (255 - g) * factor;
-            b += (255 - b) * factor;
-        }
-        else
-        {
-            r += r * factor;
-            g += g * factor;
-            b += b * factor;
-        }
-
-        return Color.FromArgb(color.A, (byte)Math.Clamp((int)r, 0, 255), (byte)Math.Clamp((int)g, 0, 255), (byte)Math.Clamp((int)b, 0, 255));
     }
 }

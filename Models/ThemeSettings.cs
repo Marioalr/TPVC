@@ -3,7 +3,7 @@ namespace TPVC.Models;
 public class ThemeSettings
 {
     public string ThemeMode { get; set; } = "Claro"; // Claro, Oscuro, Personalizado
-    public string AccentColor { get; set; } = "#0284C7"; // Azul cielo médico por defecto
+    public string AccentColor { get; set; } = "#0369A1"; // Azul médico (con texto blanco: 5.9:1)
     public string BackgroundColor { get; set; } = "#F8FAFC"; // Fondo claro suave
     public string SurfaceColor { get; set; } = "#FFFFFF"; // Superficie de tarjetas/contenedores
     public string TextColor { get; set; } = "#0F172A"; // Texto principal

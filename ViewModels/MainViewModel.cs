@@ -129,8 +129,10 @@ public partial class MainViewModel : ObservableObject
         TursoSyncService? tursoSyncService = null,
         TursoSettingsService? tursoSettingsService = null,
         DataImportService? dataImportService = null,
-        ConsultationDraftStore? consultationDraftStore = null)
+        ConsultationDraftStore? consultationDraftStore = null,
+        NotificationService? notificationService = null)
     {
+        Notifications = notificationService ?? new NotificationService();
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         _themeService = themeService;
@@ -213,7 +215,8 @@ public partial class MainViewModel : ObservableObject
             ClinicProfileVM,
             SettingsVM,
             TursoSyncVM,
-            AppVersion);
+            AppVersion,
+            new DesignSystemViewModel(themeService, Notifications));
 
         // Suscribir eventos del estado de Turso
         _tursoSyncService.StatusChanged += (st, msg) => UpdateTursoStatus(st, msg);
@@ -594,6 +597,12 @@ public partial class MainViewModel : ObservableObject
 
         if (MedicalRecordsVM.IsConsultationRecovered) NavigateTo("Records");
     }
+
+    /// <summary>Avisos breves de toda la aplicación (esquina inferior derecha).</summary>
+    public NotificationService Notifications { get; }
+
+    [RelayCommand]
+    public void DismissNotification(Notification? notification) => Notifications.Dismiss(notification);
 
     public void NavigateTo(string viewName)
     {

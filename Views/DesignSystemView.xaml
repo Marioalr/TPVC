@@ -1,0 +1,286 @@
+<UserControl x:Class="TPVC.Views.DesignSystemView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:DesignSystemViewModel}"
+             d:DesignHeight="900" d:DesignWidth="1100">
+
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24" MaxWidth="1100">
+
+                <!-- Encabezado -->
+                <Grid Margin="0,0,0,24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextTitle}" Text="Componentes" />
+                        <TextBlock Style="{StaticResource TextDetail}" Margin="0,4,0,0"
+                                   Text="Muestra del lenguaje visual común de TPVC. Sirve para revisar cómo se ve cada pieza en modo claro y oscuro." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding UseLightThemeCommand}" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSun}" Margin="0,0,8,0" />
+                                <TextBlock Text="Claro" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding UseDarkThemeCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoMoon}" Margin="0,0,8,0" />
+                                <TextBlock Text="Oscuro" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Colores -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Colores del tema" Margin="0,0,0,12" />
+                <ItemsControl ItemsSource="{Binding ColorTokens}" Margin="0,0,0,28">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Width="150" Margin="0,0,12,12">
+                                <Border Height="44" CornerRadius="8" BorderThickness="1"
+                                        BorderBrush="{DynamicResource ThemeBorderStrong}"
+                                        Background="{Binding Converter={StaticResource ResourceLookup}}" />
+                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Tipografía -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Letra (6 tamaños)" Margin="0,0,0,12" />
+                <Border Style="{StaticResource Card}" Margin="0,0,0,28">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextTitle}" Text="24 · Título de pantalla" />
+                        <TextBlock Style="{StaticResource TextHeading}" Text="20 · Encabezado" Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextSection}" Text="16 · Sección" Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextBody}" Text="14 · Texto y campos: la consulta se guarda sola mientras escribe." Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextDetail}" Text="13 · Detalle: 34 años · Femenino · EXP-2026-031" Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="12 · Etiquetas y ayudas" Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextLabel}" Text="RÓTULO DE GRUPO" Margin="0,8,0,0" />
+                        <TextBlock Style="{StaticResource TextMono}" Text="$465.00 · CNS-20261007-103200" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Botones -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Botones (uno principal por pantalla)" Margin="0,0,0,12" />
+                <WrapPanel Margin="0,0,0,28">
+                    <Button Style="{StaticResource ButtonPrimary}" Content="Iniciar consulta" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonSecondary}" Content="Agendar cita" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonGhost}" Content="Ver historial" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonDanger}" Content="Dar de baja" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonDangerGhost}" Content="Descartar" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonPrimary}" Margin="0,0,8,8">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
+                            <TextBlock Text="Nuevo paciente" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ButtonIcon}" ToolTip="Más acciones" AutomationProperties.Name="Más acciones" Margin="0,0,8,8">
+                        <helpers:Icon Data="{StaticResource IcoMore}" StrokeThickness="3" />
+                    </Button>
+                    <Button Style="{StaticResource ButtonIconSecondary}" ToolTip="Imprimir" AutomationProperties.Name="Imprimir" Margin="0,0,8,8">
+                        <helpers:Icon Data="{StaticResource IcoPrint}" />
+                    </Button>
+                    <Button Style="{StaticResource ButtonPrimary}" Content="Deshabilitado" IsEnabled="False" Margin="0,0,8,8" />
+                </WrapPanel>
+
+                <!-- Campos -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Campos" Margin="0,0,0,12" />
+                <Border Style="{StaticResource Card}" Margin="0,0,0,28">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="24" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre completo" />
+                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding SampleName, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldHint}" Text="Ayuda: así se ve una pista debajo del campo." />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Fecha de nacimiento *" Margin="0,16,0,6" />
+                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding SampleEmpty, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="dd/mm/aaaa" />
+                            <TextBlock Style="{StaticResource FieldError}" Text="Error: capture la fecha de nacimiento." />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Notas" Margin="0,16,0,6" />
+                            <TextBox Style="{StaticResource FieldMultiline}" Text="{Binding SampleNotes, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Escriba aquí…" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Posología (despliegue y escriba)" />
+                            <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding SampleOptions}" SelectedItem="{Binding SelectedOption}" helpers:TypeAhead.IsEnabled="True" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Opciones" Margin="0,16,0,8" />
+                            <CheckBox Style="{StaticResource FieldCheckBox}" IsChecked="{Binding SampleChecked}" Content="Se surte aquí" Margin="0,0,0,8" />
+                            <RadioButton Style="{StaticResource FieldRadio}" GroupName="DsSample" IsChecked="{Binding SampleOptionA}" Content="Negadas" Margin="0,0,0,8" />
+                            <RadioButton Style="{StaticResource FieldRadio}" GroupName="DsSample" Content="Sí, a:" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Chips -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Chips" Margin="0,0,0,12" />
+                <WrapPanel Margin="0,0,0,28">
+                    <ListBox Style="{StaticResource ChipList}" ItemsSource="{Binding SampleFilters}" SelectedItem="{Binding SelectedFilter}" />
+                    <ToggleButton Style="{StaticResource ChipToggle}" IsChecked="{Binding IsChartVisible}" Margin="12,0,0,6" VerticalAlignment="Top">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoChart}" Width="14" Height="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Gráfica de signos" />
+                        </StackPanel>
+                    </ToggleButton>
+                </WrapPanel>
+
+                <!-- Distintivos y avisos -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Distintivos y avisos" Margin="0,0,0,12" />
+                <WrapPanel Margin="0,0,0,12">
+                    <Border Style="{StaticResource BadgeDangerSolid}" Margin="0,0,8,8"><TextBlock Text="ALERGIAS: Penicilina" /></Border>
+                    <Border Style="{StaticResource BadgeWarning}" Margin="0,0,8,8"><TextBlock Text="Hipertensión" /></Border>
+                    <Border Style="{StaticResource BadgeSuccess}" Margin="0,0,8,8"><TextBlock Text="Atendida" /></Border>
+                    <Border Style="{StaticResource BadgeInfo}" Margin="0,0,8,8"><TextBlock Text="En consulta" /></Border>
+                    <Border Style="{StaticResource BadgeDanger}" Margin="0,0,8,8"><TextBlock Text="Sin existencias" /></Border>
+                    <Border Style="{StaticResource Badge}" Margin="0,0,8,8"><TextBlock Text="Programada" /></Border>
+                </WrapPanel>
+                <StackPanel Margin="0,0,0,28">
+                    <Border Style="{StaticResource Notice}" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoInfo}" Margin="0,0,10,0" />
+                            <TextBlock Text="La PC te envió una consulta · Continuar aquí" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource NoticeSuccess}" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoCheck}" Margin="0,0,10,0" />
+                            <TextBlock Text="Nota médica guardada" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource NoticeWarning}" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoAlert}" Margin="0,0,10,0" />
+                            <TextBlock Text="Signos fuera de rango: T/A 160/100" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource NoticeDanger}">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoAlert}" Margin="0,0,10,0" />
+                            <TextBlock Text="No hay existencias suficientes de Amoxicilina 500 mg" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Tarjetas y secciones plegables -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Tarjetas y secciones plegables" Margin="0,0,0,12" />
+                <Grid Margin="0,0,0,28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TextLabel}" Text="LO ESENCIAL" />
+                                <TextBlock Style="{StaticResource TextBody}" Text="Tarjeta: fondo de tarjeta, borde suave y radio 12." Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardSubtle}">
+                            <TextBlock Style="{StaticResource TextBody}" Text="Tarjeta suave: para agrupar dentro de otra tarjeta." />
+                        </Border>
+                    </StackPanel>
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
+                        <StackPanel>
+                            <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding ToggleSectionCommand}" CommandParameter="1">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Personales patológicos" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="Hipertensión desde 2022 · Apendicectomía 2015" />
+                                </StackPanel>
+                            </Button>
+                            <Border Padding="14,0,14,12" Visibility="{Binding OpenSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
+                                <TextBlock Style="{StaticResource TextDetail}" Text="Contenido de la sección abierta. Las demás muestran un resumen de una línea." />
+                            </Border>
+                            <Border Style="{StaticResource Divider}" />
+                            <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding ToggleSectionCommand}" CommandParameter="2">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="No patológicos" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="No fuma · alcohol ocasional" />
+                                </StackPanel>
+                            </Button>
+                            <Border Padding="14,0,14,12" Visibility="{Binding OpenSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
+                                <TextBlock Style="{StaticResource TextDetail}" Text="Segunda sección abierta." />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Hoja y avisos breves -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Hoja con fondo difuso y avisos breves" Margin="0,0,0,12" />
+                <WrapPanel Margin="0,0,0,28">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSheetCommand}" Content="Abrir hoja" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowToastCommand}" CommandParameter="Success" Content="Aviso: guardado" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowToastCommand}" CommandParameter="Info" Content="Aviso: información" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowToastCommand}" CommandParameter="Warning" Content="Aviso: atención" Margin="0,0,8,8" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowToastCommand}" CommandParameter="Error" Content="Aviso: error" Margin="0,0,8,8" />
+                </WrapPanel>
+
+                <!-- Iconos -->
+                <TextBlock Style="{StaticResource TextSection}" Text="Iconos" Margin="0,0,0,12" />
+                <ItemsControl ItemsSource="{Binding Icons}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Width="110" Margin="0,0,8,16">
+                                <helpers:Icon Data="{Binding Converter={StaticResource ResourceLookup}}" Width="24" Height="24" HorizontalAlignment="Center" />
+                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Hoja de ejemplo -->
+        <Grid Visibility="{Binding IsSheetOpen, Converter={StaticResource BoolToVis}}">
+            <Border Style="{StaticResource SheetScrim}">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding CloseSheetCommand}" />
+                </Border.InputBindings>
+            </Border>
+            <Border Style="{StaticResource SheetCard}" Width="460">
+                <StackPanel>
+                    <Border Padding="20,16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <TextBlock Style="{StaticResource TextHeading}" Text="Hoja de ejemplo" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource ButtonIcon}" HorizontalAlignment="Right" Command="{Binding CloseSheetCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar">
+                                <helpers:Icon Data="{StaticResource IcoClose}" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <TextBlock Style="{StaticResource TextBody}" Margin="20,16"
+                               Text="Las tareas enfocadas (agregar a la cuenta, cobrar, agendar) se abren sobre la pantalla con el fondo oscurecido. Clic fuera o Esc la cierran." />
+                    <Border Padding="20,14" Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="0,0,16,16">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource ButtonSecondary}" Content="Cancelar" Command="{Binding CloseSheetCommand}" Margin="0,0,8,0" />
+                            <Button Style="{StaticResource ButtonPrimary}" Content="Aceptar" Command="{Binding CloseSheetCommand}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
