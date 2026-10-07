@@ -18,6 +18,7 @@ public static class ServiceRegistration
         // InventoryService tiene un constructor de compatibilidad que lo recibe.
         services.AddSingleton(sp => new InventoryService(sp.GetRequiredService<IDbContextFactory<AppDbContext>>()));
         services.AddSingleton(_ => new ConsultationService(seedDemoPatients: false));
+        services.AddSingleton(_ => new ConsultationDraftStore());
         services.AddSingleton<ThemeService>();
         services.AddSingleton<AppUpdateService>();
         services.AddSingleton(_ => new BackupService());

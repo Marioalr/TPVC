@@ -116,7 +116,7 @@ public partial class MedicalRecordsView : UserControl
     }
 
     /// <summary>
-    /// Atajos de la consulta: Ctrl+↓/↑ cambian de sección y Ctrl+Enter termina. Se atienden en
+    /// Atajos de la consulta: Ctrl+↓/↑ cambian de sección, Ctrl+Enter termina y Ctrl+S guarda. Se atienden en
     /// Preview porque dentro de un cuadro multilínea Ctrl+↑/↓ mueven por párrafos y no llegarían.
     /// </summary>
     private void ConsultationWorkspace_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -128,6 +128,7 @@ public partial class MedicalRecordsView : UserControl
             Key.Down => vm.NextConsultationSectionCommand,
             Key.Up => vm.PreviousConsultationSectionCommand,
             Key.Enter => vm.FinalizeConsultationCommand,
+            Key.S => vm.SaveConsultationDraftNowCommand,
             _ => null
         };
         if (command == null) return;

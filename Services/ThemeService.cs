@@ -134,11 +134,29 @@ public class ThemeService
         resources["ThemeAccentPressed"] = new SolidColorBrush(accentPressed);
         resources["ThemeAccentText"] = new SolidColorBrush(Colors.White);
 
+        resources["ThemeCard"] = new SolidColorBrush(surface);
+
+        // Selección y acento secundario: siguen al acento y al modo (en oscuro, el azul claro fijo
+        // dejaba texto claro sobre fondo claro)
+        bool isDark = settings.ThemeMode == "Oscuro" || Luminance(bg) < 0.4;
+        resources["ThemePrimary"] = new SolidColorBrush(accent);
+        resources["ThemePrimaryTransparent"] = new SolidColorBrush(Color.FromArgb(0x15, accent.R, accent.G, accent.B));
+        resources["ThemeSelectionBackground"] = new SolidColorBrush(Blend(surface, accent, isDark ? 0.35 : 0.14));
+
         // Semaphores / Statuses
+        var danger = Color.FromRgb(239, 68, 68);
         resources["ThemeSuccess"] = new SolidColorBrush(Color.FromRgb(16, 185, 129));
         resources["ThemeWarning"] = new SolidColorBrush(Color.FromRgb(245, 158, 11));
-        resources["ThemeDanger"] = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+        resources["ThemeDanger"] = new SolidColorBrush(danger);
+        resources["ThemeError"] = new SolidColorBrush(danger);
     }
+
+    private static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+
+    private static Color Blend(Color baseColor, Color overlay, double amount) => Color.FromRgb(
+        (byte)Math.Round(baseColor.R + (overlay.R - baseColor.R) * amount),
+        (byte)Math.Round(baseColor.G + (overlay.G - baseColor.G) * amount),
+        (byte)Math.Round(baseColor.B + (overlay.B - baseColor.B) * amount));
 
     private static Color ParseColor(string hex, Color fallback)
     {

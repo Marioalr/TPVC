@@ -13,9 +13,14 @@
     <SolidColorBrush x:Key="ThemeAccentPressed" Color="#075985" />
     <SolidColorBrush x:Key="ThemeAccentText" Color="#FFFFFF" />
 
+    <!-- Fondo de tarjetas y ventanas con fondo difuso (antes no existía y quedaban transparentes) -->
+    <SolidColorBrush x:Key="ThemeCard" Color="#FFFFFF" />
+
     <SolidColorBrush x:Key="ThemeSuccess" Color="#10B981" />
     <SolidColorBrush x:Key="ThemeWarning" Color="#F59E0B" />
     <SolidColorBrush x:Key="ThemeDanger" Color="#EF4444" />
+    <!-- Alias de ThemeDanger usado por varias pantallas (alergias, sin existencias, vencidos) -->
+    <SolidColorBrush x:Key="ThemeError" Color="#EF4444" />
 
     <!-- Compatibilidad y resaltado de selección -->
     <SolidColorBrush x:Key="ThemePrimary" Color="#0284C7" />

@@ -213,6 +213,24 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
+    public async Task LegacyConsultationForm_DoesNotPrefillExampleVitalSigns()
+    {
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = new MedicalRecordsViewModel(_service, consultations);
+        await records.InitialLoad;
+        records.SelectPatient(records.Patients.First());
+
+        records.NewConsultation();
+
+        // Un 120/80 o 70 kg de ejemplo se guardaría como si se hubiera medido
+        Assert.AreEqual(string.Empty, records.ConsultationTA);
+        Assert.AreEqual(string.Empty, records.ConsultationFC);
+        Assert.AreEqual(string.Empty, records.ConsultationTemp);
+        Assert.AreEqual(string.Empty, records.ConsultationWeight);
+        Assert.AreEqual(string.Empty, records.ConsultationHeight);
+    }
+
+    [TestMethod]
     public async Task ConsultationSections_NavigateWithinBounds()
     {
         var (records, _, _, _) = await StartConsultationAsync();

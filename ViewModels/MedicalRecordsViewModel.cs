@@ -1422,7 +1422,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public MedicalRecordsViewModel() : this(null, null, null, null, null)
+    public MedicalRecordsViewModel() : this(null, null, null, null, null, null)
     {
     }
 
@@ -1431,11 +1431,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ConsultationService? consultationService = null, 
         PosViewModel? posViewModel = null,
         ClinicProfileService? clinicProfileService = null,
-        PrintingService? printingService = null)
+        PrintingService? printingService = null,
+        ConsultationDraftStore? consultationDraftStore = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         PosVM = posViewModel;
+        InitializeAutosave(consultationDraftStore);
         _clinicProfileService = clinicProfileService;
         _printingService = printingService;
 
@@ -1472,7 +1474,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 _ = LoadPatientsAsync();
             };
             _inventoryService.OnPatientsChanged += _onInventoryChangedHandler;
-            _ = LoadInitialDataAsync();
+            InitialLoad = LoadInitialDataAsync();
         }
         else
         {
@@ -1505,6 +1507,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         await LoadPatientsAsync();
         await LoadServicesAsync();
         await LoadPrescriptionTemplatesAsync();
+        TryRestoreConsultationDraft();
     }
 
     public async Task LoadPatientsAsync()
@@ -1656,6 +1659,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             StopConsultationTimer();
         }
+
+        OnActiveConsultationStateChangedForAutosave();
     }
 
     private void StartConsultationTimer()
@@ -1731,6 +1736,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _clinicProfileService.ProfileChanged -= _onProfileChangedHandler;
         }
         StopConsultationTimer();
+        FlushConsultationDraft();
+        _autosaveTimer?.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -2435,13 +2442,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ConsultationFolio = $"CNS-{DateTime.Today:yyyyMMdd}-{(SelectedPatient.Consultations.Count + 1):D3}";
         ConsultationChiefComplaint = string.Empty;
 
-        // Extraer valores o inicializar
-        ConsultationTA = "120/80";
-        ConsultationFC = "75";
-        ConsultationFR = "18";
-        ConsultationTemp = "36.5";
-        ConsultationWeight = "70.0";
-        ConsultationHeight = "1.70";
+        // Sin valores de ejemplo: un signo vital prellenado se guardaría como si se hubiera medido
+        ConsultationTA = string.Empty;
+        ConsultationFC = string.Empty;
+        ConsultationFR = string.Empty;
+        ConsultationTemp = string.Empty;
+        ConsultationWeight = string.Empty;
+        ConsultationHeight = string.Empty;
+        ConsultationSpO2 = string.Empty;
+        ConsultationGlucose = string.Empty;
         RecalculateIMC();
 
         ConsultationPhysicalExam = string.Empty;

@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.10.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.11.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -18,6 +18,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * 🏗️ **[Arquitectura Técnica (docs/ARQUITECTURA_TECNICA.md)](docs/ARQUITECTURA_TECNICA.md)**: Diagramas Mermaid, modelo de base de datos relacional, algoritmo de venta POS FEFO y especificaciones de ingeniería.
 * ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2 multi-dispositivo (Windows / Android), esquema remoto y garantías.
 * 📱 **[Pendientes antes de la app Android (docs/PENDIENTES_ANDROID.md)](docs/PENDIENTES_ANDROID.md)**: Bloqueantes de datos, preparación del código compartido y alcance de la tablet.
+* 🎨 **[Plan de rediseño de la interfaz (docs/PLAN_REDISENO_UI.md)](docs/PLAN_REDISENO_UI.md)**: Principios, fases (expediente, POS, configuración, revisión de temas) y propuesta visual.
 * 📝 **[Historial de Versiones (CHANGELOG.md)](CHANGELOG.md)**: Registro de cambios detallado siguiendo *Semantic Versioning*.
 * ⚖️ **[Licencia MIT](LICENSE)**: Términos y condiciones de uso del software.
 
@@ -47,6 +48,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - **Gestión Completa de Expedientes en SQLite**: Alta y edición de fichas de pacientes con generación automática de folio (`EXP-YYYY-NNN`), datos demográficos completos, tipo de sangre, contactos de emergencia y antecedentes heredofamiliares/patológicos.
 - **Alerta Roja de Alergias Medicamentosas**: Resalta prominentemente en el expediente cualquier hipersensibilidad o alergia a fármacos para prevenir prescripciones de riesgo.
 - **Pantalla de Consulta en Curso (v1.10)**: cinco secciones en el orden de la entrevista (motivo, signos vitales, exploración, diagnóstico CIE-10 y tratamiento) que se abren una a la vez, con frases frecuentes de un clic, aviso de signos vitales fuera de rango, IMC automático y atajos **Ctrl + ↓/↑** (sección) y **Ctrl + Enter** (terminar).
+- **Guardado automático (v1.11)**: la consulta en curso se guarda sola mientras se escribe; si se cierra el programa o se va la luz, se retoma al abrir con su nota, signos, receta, cuenta y hora de inicio.
 - **Cuenta de la Consulta**: honorario, medicamentos que se surten en el consultorio (casilla *"Se surte aquí"*, marcada por defecto si hay existencias), insumos y servicios (inyección, curación, revisión especial) se agregan en cuanto se usan; al **Terminar consulta** se revisa la cuenta y se cobra en una sola ventana.
 - **Listas que buscan al escribir**: en posología, dosis pediátrica y medidas generales se despliega la lista, se escribe y el cursor salta a la opción (sin acentos ni mayúsculas), Enter la elige.
 - **Historial Cronológico de Consultas**: Pestaña dedicada para revisar todas las evoluciones y notas clínicas previas del paciente.
@@ -116,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **165 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **173 pruebas** unitarias y de integración
 
 ---
 

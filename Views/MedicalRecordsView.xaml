@@ -1273,7 +1273,12 @@
                                 </WrapPanel>
                                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
                                     <Button Style="{DynamicResource OutlineButton}" Command="{Binding ViewSelectedPatientRecordCommand}" Padding="10,6" Margin="0,0,6,0" Content="Expediente" ToolTip="Ver el expediente completo: antecedentes, historial y gráfica de signos" />
-                                    <Button Style="{DynamicResource OutlineButton}" Command="{Binding SaveActiveConsultationNoteCommand}" Padding="10,6" Margin="0,0,6,0" Content="Guardar avance" ToolTip="Guarda la nota sin terminar la consulta" />
+                                    <TextBlock Text="{Binding AutosaveStatus}"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource ThemeTextSecondary}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,12,0"
+                                               ToolTip="La consulta se guarda sola mientras escribe; si se cierra el programa o se va la luz, se recupera al abrir. Ctrl + S guarda al instante." />
                                     <Button Style="{DynamicResource OutlineButton}" Command="{Binding DiscardActiveConsultationCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Paciente equivocado o se retiró: no guarda la nota ni cobra">
                                         <TextBlock Text="Descartar" Foreground="{DynamicResource ThemeError}" />
                                     </Button>
@@ -1320,6 +1325,7 @@
                                             <TextBlock Text="Ctrl + ↓  siguiente sección" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                             <TextBlock Text="Ctrl + ↑  sección anterior" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                             <TextBlock Text="Ctrl + Enter  terminar consulta" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                            <TextBlock Text="Ctrl + S  guardar ahora" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -3669,7 +3675,7 @@
                             </Grid>
 
                             <!-- Indicador de atajos de teclado -->
-                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
                                     BorderBrush="{DynamicResource ThemeBorder}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 
@@ -4060,7 +4066,7 @@
                             </Grid>
 
                             <!-- Indicador de atajos de teclado -->
-                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
                                     BorderBrush="{DynamicResource ThemeBorder}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 
@@ -4424,7 +4430,7 @@
                             </Grid>
 
                             <!-- Indicador de atajos de teclado -->
-                            <Border Background="{DynamicResource ThemeSurfaceHighlight}" 
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" 
                                     BorderBrush="{DynamicResource ThemeBorder}" 
                                     BorderThickness="1" 
                                     CornerRadius="6" 

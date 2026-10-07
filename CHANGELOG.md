@@ -2,6 +2,20 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.11.0] - 2026-10-07
+
+### Añadido
+* **Guardado automático de la consulta en curso**: se guarda sola tras una pausa al escribir (y cada 10 s como máximo si no se deja de escribir), al cerrar el programa y al apagar Windows. Si el programa se cierra o se va la luz, al abrir se retoma la consulta con su nota, signos vitales, receta, cuenta, folio y hora de inicio, directo en la pantalla de consulta. Es un archivo local: no escribe en la base ni genera tráfico de sincronización mientras se escribe.
+* Indicador discreto "Guardado 10:42:15" en la barra de la consulta (sustituye al botón "Guardar avance") y **Ctrl + S** para guardar al instante.
+* Al cobrar o descartar la consulta se borra la copia de trabajo: una consulta terminada nunca se recupera.
+* Plan de rediseño de toda la interfaz (`docs/PLAN_REDISENO_UI.md`): expediente, POS, configuración y revisión de temas.
+
+### Corregido
+* **Colores de tema que no existían**: `ThemeCard` (fondo de tarjetas y de las ventanas con fondo difuso), `ThemeError` (distintivo de alergias, sin existencias, vencidos) y `ThemeSurfaceHighlight` se usaban en muchas pantallas sin estar definidos, por lo que se veían transparentes. El distintivo de **alergias** de la consulta quedaba con texto blanco sobre fondo transparente.
+* En modo oscuro el color de selección y el acento secundario se quedaban con los valores del modo claro.
+* La paleta de comandos ("Nueva Consulta Médica") abría el formulario antiguo de consulta con **signos vitales de ejemplo prellenados** (120/80, 75 lpm, 36.5 °C, 70 kg, 1.70 m) que podían guardarse como medidos; ahora abre la pantalla de consulta.
+* Nueva prueba automática que falla si una pantalla usa un color de tema inexistente o si un color no cambia con el tema.
+
 ## [1.10.0] - 2026-10-07
 
 ### Cambiado — Pantalla de consulta

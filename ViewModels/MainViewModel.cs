@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.10.0";
+    private string _appVersion = "1.11.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -128,7 +128,8 @@ public partial class MainViewModel : ObservableObject
         PrintingService? printingService = null,
         TursoSyncService? tursoSyncService = null,
         TursoSettingsService? tursoSettingsService = null,
-        DataImportService? dataImportService = null)
+        DataImportService? dataImportService = null,
+        ConsultationDraftStore? consultationDraftStore = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -152,7 +153,7 @@ public partial class MainViewModel : ObservableObject
             MedicalRecordsVM?.OpenAgendaModal();
         };
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, PosVM, _clinicProfileService, _printingService, consultationDraftStore);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
@@ -191,6 +192,9 @@ public partial class MainViewModel : ObservableObject
         {
             NavigateTo("Pos");
         };
+
+        // Si quedó una consulta sin terminar (cierre o apagón), se abre directo en ella
+        _ = OpenRecoveredConsultationAsync();
 
         DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
         InventoryVM = new InventoryViewModel(inventoryService);
@@ -366,13 +370,15 @@ public partial class MainViewModel : ObservableObject
         _staticCommandItems.Add(new CommandPaletteItem
         {
             Title = "Nueva Consulta Médica",
-            Subtitle = "Iniciar formulario de atención clínica NOM-004-SSA3",
+            Subtitle = "Abrir la pantalla de consulta (pide el paciente si no hay uno abierto)",
             Category = "Acciones Rápidas",
             Icon = "🩺",
             Action = () =>
             {
                 NavigateTo("Records");
-                MedicalRecordsVM.NewConsultation();
+                // Misma pantalla de consulta que el botón del expediente (antes abría un formulario
+                // antiguo con signos vitales de ejemplo prellenados)
+                if (!MedicalRecordsVM.HasActiveConsultation) MedicalRecordsVM.StartActiveConsultation();
             }
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -576,6 +582,21 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task OpenRecoveredConsultationAsync()
+    {
+        try
+        {
+            await MedicalRecordsVM.InitialLoad;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Fallo la carga inicial de expedientes", ex);
+            return;
+        }
+
+        if (MedicalRecordsVM.IsConsultationRecovered) NavigateTo("Records");
+    }
+
     public void NavigateTo(string viewName)
     {
         ActiveViewName = viewName;

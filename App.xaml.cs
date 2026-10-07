@@ -32,6 +32,31 @@ public partial class App : Application
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        // Apagado o cierre de sesión de Windows: no perder lo último escrito en la consulta
+        FlushConsultationDraft();
+        base.OnSessionEnding(e);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        FlushConsultationDraft();
+        base.OnExit(e);
+    }
+
+    private void FlushConsultationDraft()
+    {
+        try
+        {
+            (MainWindow?.DataContext as MainViewModel)?.MedicalRecordsVM.FlushConsultationDraft();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo guardar la consulta en curso al cerrar", ex);
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
