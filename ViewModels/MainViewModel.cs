@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.13.0";
+    private string _appVersion = "1.14.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";

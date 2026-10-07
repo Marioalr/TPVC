@@ -15,7 +15,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = "Dashboard";
 
     [ObservableProperty]
-    private string _appVersion = "v1.13.0";
+    private string _appVersion = "v1.14.0";
 
     public DashboardViewModel DashboardVM { get; }
     public InventoryViewModel InventoryVM { get; }
@@ -47,7 +47,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         SettingsVM = settingsVM;
         TursoSyncVM = tursoSyncVM;
         DesignSystemVM = designSystemVM ?? new DesignSystemViewModel();
-        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.13.0" : appVersion;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.14.0" : appVersion;
 
         // Iniciar en el Panel y Métricas por defecto
         NavigateSubView("Dashboard");

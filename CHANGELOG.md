@@ -2,6 +2,32 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.14.0] - 2026-10-07
+
+### Cambiado — Fase 2 del rediseño: Pacientes
+* El apartado **Expedientes y consultas** se llama **Pacientes** (tarjeta del inicio, paleta de comandos) y ya no abre la ventana "Seleccionar paciente": abre un **inicio** con las **citas de hoy** ("Atender" abre la consulta con el motivo de la cita ya escrito y al cobrar la cita queda como atendida), los **atendidos recientemente** y un buscador siempre arriba. Escribir en cualquier momento busca (sin acentos ni mayúsculas; por nombre, folio, teléfono o diagnóstico) y **Enter abre el primero**; si no existe, "Crear paciente" abre el alta con el nombre ya escrito.
+* **Una sola ficha del paciente** (sustituye el visor de expedientes y las pestañas): encabezado con alergias, crónicos y próxima cita; un botón principal (**Iniciar consulta** / **Volver a la consulta**), "Agendar cita" y un menú (editar, ver receta, dar de baja). A la izquierda **lo esencial** (últimos signos con tendencia y última receta) y los **antecedentes** en secciones plegables con resumen y "Editar esta sección" (solo los que corresponden al sexo y la edad); a la derecha un **historial único** de consultas, signos, recetas y citas, con filtros, búsqueda y la gráfica de signos a un clic.
+* **Alta y edición en pantalla completa** por secciones numeradas (las obligatorias marcadas, gineco-obstétricos y desarrollo solo si aplican), con "Guardar y abrir ficha" o **"Guardar e iniciar consulta"**. Un error lleva directo a la sección del dato que falta.
+* **Agenda como panel lateral** que se abre sobre Pacientes sin cambiar de pantalla: semana arriba, citas del día con los **huecos libres de 30 min** entre ellas (8:00–20:00; ocupados según la duración de cada cita; hoy sin horas pasadas) y el formulario de "Agendar" dentro del mismo hueco (motivos frecuentes y duración de un clic). Menú de cada cita: atender, confirmar, **cambiar de horario** (se elige el nuevo hueco), recordatorio por WhatsApp, Google Calendar y cancelar. Al abrir, siempre empieza en hoy.
+* Mientras hay una consulta en curso, un aviso arriba lleva de vuelta a ella desde cualquier pantalla de Pacientes; el botón "Expediente" de la consulta abre la ficha sin cerrarla.
+* Los "¡Guardado exitosamente!" del expediente (paciente, receta, insumos, servicios, citas) son avisos breves que se van solos.
+* La pantalla se dividió en piezas que se crean al abrirse (antes ~7,000 líneas y ~20 ventanas creadas aunque estuvieran ocultas).
+
+### Añadido
+* **El alta o edición de un paciente se guarda sola**: si el programa se cierra o se va la luz a mitad del alta, al abrir se retoma tal cual. Un formulario sin cambios no deja nada que recuperar.
+* **"Repetir receta anterior"** en la consulta y en la ventana de receta: copia los medicamentos de la última receta que falten, revisando otra vez alergias y existencias ("Se surte aquí").
+* Dosis pediátrica por peso solo se ofrece con pacientes menores de edad.
+
+### Corregido
+* **Cada consulta nueva arrastraba la receta anterior**: aparecía en la receta de la consulta, se **imprimía** y se guardaba en la nota como si se hubiera recetado ese día, salvo que se borrara a mano. Ahora la receta empieza vacía; si la consulta termina sin receta, la última emitida sigue siendo la del expediente.
+* Un medicamento **quitado** de la receta seguía guardándose en la nota de la consulta.
+* **Descartar una consulta** después de "Terminar consulta" → "Volver a la consulta" dejaba en el expediente su diagnóstico, signos vitales y notas como "última consulta" (y en el historial y la gráfica). Ahora el expediente queda exactamente como estaba antes de empezarla.
+* Las listas de sugerencias de la receta y de insumos mostraban las existencias en blanco (apuntaban a un dato que no existe).
+* "Ninguna relevante" en enfermedades crónicas ya no aparece como distintivo de enfermedad crónica en la ficha.
+* Los campos de texto aplicaban dos veces su margen interior: el texto escrito no coincidía con el texto de ejemplo y los campos eran más altos de lo previsto.
+* Barras de desplazamiento delgadas con los colores del tema en toda la aplicación (en modo oscuro salían las grises claras de Windows).
+* El modelo de paciente ya no trae signos vitales de ejemplo como valor por defecto.
+
 ## [1.13.0] - 2026-10-07
 
 ### Añadido — Fase 1 del rediseño: lenguaje visual común

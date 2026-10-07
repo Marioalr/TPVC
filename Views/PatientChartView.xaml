@@ -58,7 +58,7 @@
                         <Button.ContextMenu>
                             <ContextMenu Style="{StaticResource DsContextMenu}">
                                 <MenuItem Header="Editar expediente" Command="{Binding EditPatientCommand}" />
-                                <MenuItem Header="Ver receta activa" Command="{Binding OpenPrescriptionPdfPreviewCommand}" />
+                                <MenuItem Header="Ver receta" Command="{Binding OpenPrescriptionPdfPreviewCommand}" />
                                 <MenuItem Header="Dar de baja el expediente" Command="{Binding DeactivateSelectedPatientCommand}" />
                             </ContextMenu>
                         </Button.ContextMenu>

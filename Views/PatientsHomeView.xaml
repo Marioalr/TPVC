@@ -190,7 +190,7 @@
                     </Border>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12">
-                            <ItemsControl ItemsSource="{Binding HomeResults}" AlternationCount="10000">
+                            <ItemsControl ItemsSource="{Binding HomeResults}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientRecord}">
                                         <Button x:Name="Row" Style="{StaticResource PatientButton}" BorderThickness="0" Margin="0,0,0,4" Padding="12,10"
@@ -223,8 +223,8 @@
                                             </Grid>
                                         </Button>
                                         <DataTemplate.Triggers>
-                                            <!-- El contenedor del elemento (no un ContentPresenter más arriba, como el del ScrollViewer) -->
-                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource TemplatedParent}}" Value="0">
+                                            <!-- El primero (sin elemento anterior) es el que abre Enter -->
+                                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
                                                 <Setter TargetName="Row" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
                                             </DataTrigger>
                                         </DataTemplate.Triggers>

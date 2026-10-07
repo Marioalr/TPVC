@@ -84,9 +84,9 @@ public partial class MedicalRecordsViewModel
             // Si el formulario se cerró mientras esperaba, no se resucita su borrador
             if (generation != Interlocked.Read(ref _formDraftGeneration)) return;
 
-            // Tal como se abrió: no hay nada que recuperar
+            // Tal como se abrió (cambiar de sección no es un cambio): no hay nada que recuperar
             var baseline = _patientFormBaseline;
-            if (baseline != null && fields.All(f => baseline.TryGetValue(f.Key, out var v) && v == f.Value))
+            if (baseline != null && fields.All(f => f.Key == nameof(FormOpenSection) || (baseline.TryGetValue(f.Key, out var v) && v == f.Value)))
             {
                 _draftStore.DeletePatientForm();
                 return;

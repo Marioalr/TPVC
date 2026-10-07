@@ -671,9 +671,9 @@ public class PacientesTests
         records.CancelPatientForm();
 
         records.OpenPatientChart(records.Patients.First());
-        records.EditPatient();
+        records.EditAntecedent(records.AntecedentSections.First());
         records.FlushConsultationDraft();
-        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Abrir la edición sin cambiar nada no se recupera");
+        Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Abrir la edición (en una sección) sin cambiar nada no se recupera");
         records.Dispose();
     }
 

@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-07 (TPVC v1.13.0).
+Estado al 2026-10-07 (TPVC v1.14.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -40,7 +40,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 |---|---|---|
 | 0 | Consulta en curso, cuenta y cobro sin pasar por el POS (v1.10) · guardado automático (v1.11) | ✅ Hecho |
 | 1 | Fundamentos comunes de diseño | ✅ Hecho (v1.13) |
-| 2 | Pacientes y consulta (expediente) | Propuesta para revisión |
+| 2 | Pacientes y consulta (expediente) | ✅ Hecho (v1.14) · pendientes al final de su sección |
 | 3 | Punto de venta (POS) | Pendiente |
 | 4 | Configuración | Pendiente |
 | E | Consulta entre equipos (PC ↔ tablet) | Pendiente (con la app de la tablet) |
@@ -108,6 +108,28 @@ Detalle visual en la propuesta enlazada arriba. Resumen:
 - Decisiones del doctor (2026-10-07): **fecha de nacimiento** en lugar de edad (aplicada desde v1.12;
   la edad se captura solo si no se conoce la fecha), **agenda como panel** y el apartado se llama
   **Pacientes**.
+
+**Hecho en v1.14:** inicio de Pacientes (citas de hoy con "Atender", recientes, buscador con Enter y
+"Crear paciente …"), ficha única (lo esencial, antecedentes plegables según sexo y edad, historial
+único con filtros y gráfica), alta y edición por secciones en pantalla con guardado automático,
+agenda como panel lateral (huecos libres, agendar en el hueco, cambiar de horario, WhatsApp, Google
+Calendar), aviso de consulta en curso, avisos breves en lugar de ventanas de "guardado", la receta de
+la consulta empieza vacía con "Repetir receta anterior", y descartar una consulta deja el expediente
+como estaba. La vista se dividió en 16 piezas que se crean al abrirse (`Views/Patients*`,
+`AgendaPanelView`, `ConsultationWorkspaceView`, hojas). La prueba de humo de Windows recorre y
+fotografía todas estas pantallas en claro y oscuro.
+
+**Pendiente de la Fase 2** (no entró en v1.14):
+- **Imprimir el expediente completo** desde el menú de la ficha (hoy solo se imprime la receta).
+- **Campos de la consulta según edad y sexo**: perímetro cefálico y percentiles (< 2 años), FUM,
+  embarazo y semanas de gestación (mujeres de 10 a 55). Requieren columnas nuevas en la nota de
+  consulta y en la sincronización (afecta a la tablet), así que se harán junto con la Fase E.
+- **Hojas de receta, insumos, servicios, catálogo y vista previa** con los componentes comunes: hoy
+  conservan su estilo anterior (iconos emoji, botones de contorno). Se rehacen con la Fase 3, porque
+  comparten el catálogo con el Punto de Venta.
+- **Separar `MedicalRecordsViewModel`** (~5,000 líneas) en ViewModels por función (inicio, ficha, alta,
+  consulta, agenda): la vista ya está dividida; el ViewModel se divide en la Fase 6 junto con la
+  limpieza de código muerto.
 
 ### Fase 3 · Punto de venta (POS)
 
@@ -181,5 +203,13 @@ modo oscuro, un acento distinto al azul y el modo personalizado**:
 - Medir antes/después: tiempo de arranque, memoria tras recorrer todas las pantallas, tiempo al cambiar
   de pantalla y al abrir un expediente con muchas consultas.
 - Quitar código y estilos sin uso; pruebas de humo de la interfaz en el runner de Windows.
+- Código sin pantalla desde v1.14 (ya no lo llama nada; se borra con sus pruebas): ventana
+  "Seleccionar paciente" del expediente (`OpenSelectPatientModal`, `IsSelectPatientModalOpen`), visor
+  de expedientes (`OpenRecordsViewerModal`, `ViewSelectedPatientRecord`), signos vitales rápidos
+  (`OpenVitalSignsModal`), formulario antiguo de consulta (`NewConsultation`, `IsConsultationModalOpen`,
+  `ConsultationPrescriptions`), ventanas de agendar / agenda / editar cita (`OpenScheduleAppointmentModal`,
+  `OpenAgendaModal`, `OpenNewAppointmentModal`, `OpenEditAppointmentModal`), pendientes de WhatsApp y
+  Google Calendar (`OpenWhatsAppTodo`, `OpenGoogleCalendarTodo`) y los pasos del alta antigua
+  (`FormPatientActiveTab`).
 - Actualizar README, manual y `docs/PENDIENTES_ANDROID.md` (los ViewModels separados son la base de la
   app de la tablet).

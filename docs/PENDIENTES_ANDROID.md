@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-07 (TPVC v1.12.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-07 (TPVC v1.14.0). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -25,9 +25,9 @@ luego la preparación del código; al final lo que se construye en la propia app
 |---|---|---|
 | B1 | **Decidir tecnología** | Recomendado: **.NET MAUI** para reutilizar modelos, base de datos, sincronización e importador (ya son .NET puro). Kotlin nativo obligaría a reimplementar el protocolo v2 completo. |
 | B2 | **Extraer `TPVC.Core` (sin WPF)** | Mover `Models/`, `Data/`, `TextSearch`, `XlsxReader`, `TursoClient`, `TursoSyncService`, `InventoryService`, `DataImportService` a una biblioteca `net10.0`. Abstraer lo que hoy depende de Windows: `Application.Current.Dispatcher` (sync, impresión), `DialogService` (MessageBox), ruta de datos `%LocalAppData%` (en Android `FileSystem.AppDataDirectory`), DPAPI de tokens (en Android `SecureStorage`/Keystore). |
-| B3 | **Dividir los ViewModels gigantes** | `MedicalRecordsViewModel` (~5,000 líneas) y su vista (~6,900) mezclan expediente, consulta, receta, insumos, servicios, agenda y POS. Separarlos por función permite reutilizarlos en MAUI y probarlos. |
+| B3 | **Dividir los ViewModels gigantes** | La vista de Pacientes ya se dividió en piezas (v1.14). Falta `MedicalRecordsViewModel` (~5,000 líneas, en archivos parciales por tema): separarlo en ViewModels por función (inicio, ficha, alta, consulta, agenda) permite reutilizarlos en MAUI. Previsto en la Fase 6 del plan de rediseño. |
 | B4 | **Reglas de permisos por rol** | `DevicePermissions` ya define la matriz (PC / tablet / celular), pero solo es informativa: aplicarla en los servicios, no solo en la UI. |
-| B5 | **Pruebas en Windows de la interfaz** | La UI no se puede ejecutar en Linux; agregar una lista de verificación manual o pruebas de humo en el runner de Windows antes de cada release. |
+| B5 | **Pruebas en Windows de la interfaz** | ✅ Desde v1.13 la CI de Windows recorre las pantallas (bindings rotos, recursos inexistentes, colores) y guarda capturas en claro y oscuro (artefacto `capturas-interfaz`). La lista de la sección D cubre lo que necesita interacción real. |
 
 ## C. Lo que la app de la tablet debe resolver
 
@@ -37,10 +37,21 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). En Android: receta por PDF/HTML (el exportador HTML ya existe) y ticket en impresora térmica Bluetooth (ESC/POS). |
 | C3a | **Consulta entre equipos** | Decidido (2026-10-07): se podrá **mandar la consulta en curso de la PC a la tablet y viceversa**, con un solo dueño a la vez. El guardado automático (v1.11) es local de cada equipo; su copia de trabajo es lo que viaja, por una tabla `consultation_handoffs` en Turso. Diseño completo en `docs/PLAN_REDISENO_UI.md` (Fase E). |
 | C3 | **Modo sin conexión** | La tablet trabaja sobre su SQLite local y sincroniza al recuperar red (mismo diseño que la PC). Indicador visible de "pendiente por subir". |
-| C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
+| C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*) y Pacientes de v1.14 (inicio con citas de hoy, ficha única, alta por secciones, agenda en panel; las reglas están en `MedicalRecordsViewModel.Pacientes.cs` como funciones puras: `RankPatients`, `BuildTimeline`, `BuildAntecedentSections`, `BuildSlots`); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.14.0 (Pacientes)
+
+- [ ] Entrar a Pacientes: inicio con citas de hoy y recientes, sin ventana "Seleccionar paciente". Escribir un nombre (con el foco en cualquier parte) busca; Enter abre la ficha del primero.
+- [ ] "Atender" en una cita de hoy abre la consulta con el motivo escrito; al cobrar, la cita aparece como atendida y se vuelve al inicio.
+- [ ] Ficha: antecedentes plegables (un hombre adulto no ve gineco-obstétricos), historial con filtros y "Gráfica de signos"; "Ninguna relevante" no sale como distintivo de crónicos.
+- [ ] Iniciar consulta de un paciente con receta previa: la receta empieza **vacía** y aparece "Receta anterior · Repetir"; repetir respeta alergias. La receta impresa solo trae lo de esta consulta.
+- [ ] Terminar consulta → Volver a la consulta → Descartar: la ficha conserva el diagnóstico, signos y receta de antes (no los de la consulta descartada).
+- [ ] Agenda (botón arriba o desde la ficha "Agendar cita"): panel lateral, elegir un hueco, motivo y duración, Agendar; "Cambiar de horario" y luego otro hueco mueve la misma cita.
+- [ ] Alta: cerrar el programa a mitad del alta y reabrir: el formulario vuelve con lo escrito. Guardar o Cancelar y reabrir: no vuelve nada.
+- [ ] Los campos de texto: lo escrito empieza en el mismo lugar que el texto de ejemplo.
 
 ### v1.12.0 (ficha de identificación)
 
