@@ -124,9 +124,9 @@ fotografía todas estas pantallas en claro y oscuro.
 - **Campos de la consulta según edad y sexo**: perímetro cefálico y percentiles (< 2 años), FUM,
   embarazo y semanas de gestación (mujeres de 10 a 55). Requieren columnas nuevas en la nota de
   consulta y en la sincronización (afecta a la tablet), así que se harán junto con la Fase E.
-- **Hojas de receta, insumos, servicios, catálogo y vista previa** con los componentes comunes: hoy
-  conservan su estilo anterior (iconos emoji, botones de contorno). Se rehacen con la Fase 3, porque
-  comparten el catálogo con el Punto de Venta.
+- **Hojas de receta, insumos, servicios, catálogo y vista previa, y la gráfica de signos** con los
+  componentes comunes: hoy conservan su estilo anterior (iconos emoji, botones de contorno). Se rehacen
+  con la Fase 3, porque comparten el catálogo con el Punto de Venta.
 - **Separar `MedicalRecordsViewModel`** (~5,000 líneas) en ViewModels por función (inicio, ficha, alta,
   consulta, agenda): la vista ya está dividida; el ViewModel se divide en la Fase 6 junto con la
   limpieza de código muerto.
