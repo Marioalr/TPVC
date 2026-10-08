@@ -159,16 +159,26 @@ internal sealed class UiPerfSession
         }
         _rows.Add(("Cambio de pantalla", "Promedio", $"{cold.Values.Average():0} ms la primera vez · {Screens.Average(s => Median(warm[s])):0} ms después"));
 
-        // Expediente con muchas consultas: la primera vez se leen de la base; la segunda ya están en memoria
+        // Expediente: la primera ficha crea la pantalla; luego una con cientos de consultas (se leen de
+        // la base la primera vez) y la misma otra vez (ya en memoria)
         var records = main.MedicalRecordsVM;
         main.NavigateTo("Records");
         Settle(host);
-        var big = records.Patients.First(p => p.Id == bigPatientId);
+        var regular = records.Patients.First(p => p.Id != bigPatientId);
         var open = Stopwatch.StartNew();
+        records.OpenPatientChart(regular);
+        PumpUntil(() => records.ConsultationsHistory.Count >= regular.ConsultationCount);
+        Draw(host);
+        Add("Expediente", "Abrir la primera ficha (crea la pantalla)", open);
+
+        records.GoToPatientsHome();
+        Settle(host);
+        var big = records.Patients.First(p => p.Id == bigPatientId);
+        open.Restart();
         records.OpenPatientChart(big);
         PumpUntil(() => records.ConsultationsHistory.Count >= ManyConsultations);
         Draw(host);
-        Add("Expediente", $"Abrir uno con {ManyConsultations} consultas (primera vez)", open);
+        Add("Expediente", $"Abrir uno con {ManyConsultations} consultas", open);
 
         records.GoToPatientsHome();
         Settle(host);
@@ -176,15 +186,6 @@ internal sealed class UiPerfSession
         records.OpenPatientChart(big);
         Draw(host);
         Add("Expediente", "Abrirlo otra vez", open);
-
-        records.GoToPatientsHome();
-        Settle(host);
-        var regular = records.Patients.First(p => p.Id != bigPatientId);
-        open.Restart();
-        records.OpenPatientChart(regular);
-        PumpUntil(() => records.ConsultationsHistory.Count >= regular.ConsultationCount);
-        Draw(host);
-        Add("Expediente", "Abrir uno con pocas consultas", open);
 
         Settle(host);
         open.Restart();
