@@ -28,9 +28,10 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Resultado de búsqueda: sin borde; el que abre Enter lleva el borde de foco (el hover sigue funcionando) -->
+        <!-- Resultado de búsqueda: sin borde; el que abre Enter lleva una barra a la izquierda (el anillo
+             completo es el foco de teclado, y el fondo de hover sigue funcionando) -->
         <Style x:Key="PatientResultRow" TargetType="Button" BasedOn="{StaticResource PatientButton}">
-            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
@@ -204,7 +205,7 @@
                             <ItemsControl ItemsSource="{Binding HomeResults}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientRecord}">
-                                        <Button x:Name="Row" Style="{StaticResource PatientResultRow}" Margin="0,0,0,4" Padding="10,8"
+                                        <Button x:Name="Row" Style="{StaticResource PatientResultRow}" Margin="0,0,0,4" Padding="9,10,12,10"
                                                 Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}">
                                             <Grid>

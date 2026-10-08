@@ -16,8 +16,17 @@ public static class TitleBar
     private const int UseImmersiveDarkMode = 20;
     private const int UseImmersiveDarkModeBefore20H1 = 19;
 
+    private const int WmNcActivate = 0x0086;
+    private const int FirstWindows11Build = 22000;
+
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetActiveWindow();
 
     /// <summary>Aplica el modo del tema actual a la ventana y lo sigue en cada cambio de tema.</summary>
     public static void Follow(Window window, ThemeService themes)
@@ -41,6 +50,15 @@ public static class TitleBar
             if (DwmSetWindowAttribute(handle, UseImmersiveDarkMode, ref value, sizeof(int)) != 0)
             {
                 DwmSetWindowAttribute(handle, UseImmersiveDarkModeBefore20H1, ref value, sizeof(int));
+            }
+
+            // Windows 10 no repinta la barra con la ventana ya abierta hasta que cambia el foco:
+            // se le pide que la dibuje inactiva y otra vez como estaba
+            if (window.IsVisible && Environment.OSVersion.Version.Build < FirstWindows11Build)
+            {
+                bool active = GetActiveWindow() == handle;
+                SendMessage(handle, WmNcActivate, active ? IntPtr.Zero : new IntPtr(1), IntPtr.Zero);
+                SendMessage(handle, WmNcActivate, active ? new IntPtr(1) : IntPtr.Zero, IntPtr.Zero);
             }
         }
         catch (DllNotFoundException)

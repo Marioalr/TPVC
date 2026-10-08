@@ -31,7 +31,7 @@ public partial class DesignSystemViewModel : ObservableObject
         "IcoEdit", "IcoTrash", "IcoPrint", "IcoAlert", "IcoInfo", "IcoPulse", "IcoPill", "IcoSyringe", "IcoClipboard",
         "IcoFile", "IcoHistory", "IcoChart", "IcoPhone", "IcoMessage", "IcoSend", "IcoLock", "IcoHome", "IcoSave",
         "IcoDroplet", "IcoFilter", "IcoRefresh", "IcoTablet", "IcoMonitor", "IcoCart", "IcoSun", "IcoMoon",
-        "IcoSettings", "IcoCloud"
+        "IcoSettings", "IcoCloud", "IcoSnowflake"
     };
 
     public DesignSystemViewModel(ThemeService? themeService = null, NotificationService? notifications = null)

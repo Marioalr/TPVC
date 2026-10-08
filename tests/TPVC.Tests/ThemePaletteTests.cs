@@ -105,6 +105,14 @@ public class ThemePaletteTests
                 AssertContrast(name, p, "ThemeControlBorder", surface, 3.0);
             }
             AssertContrast(name, p, "ThemeToastText", "ThemeToastBackground", 4.5);
+            // Puntos de estado de la sincronización: se ven sobre la tarjeta y el gris suave
+            foreach (var dot in new[] { "ThemeStatusSuccess", "ThemeStatusWarning", "ThemeStatusDanger" })
+            {
+                AssertContrast(name, p, dot, "ThemeSurface", 3.0);
+                AssertContrast(name, p, dot, "ThemeSurfaceSubtle", 3.0);
+            }
+            // Lo seleccionado se distingue de la tarjeta (además lleva barra o borde de foco)
+            Assert.IsGreaterThan(1.1, ThemeColor.Contrast(p["ThemeSelectionBackground"], p["ThemeSurface"]), $"{name}: la selección es igual a la tarjeta");
             // El texto principal y el secundario se distinguen (antes, en personalizado, quedaban iguales)
             Assert.IsGreaterThan(1.5, ThemeColor.Contrast(p["ThemeText"], p["ThemeTextSecondary"]), $"{name}: texto y texto secundario iguales");
             foreach (var solid in new[] { "ThemeSuccess", "ThemeWarning", "ThemeDanger", "ThemeError" })
@@ -117,6 +125,19 @@ public class ThemePaletteTests
             }
             AssertContrast(name, p, "ThemeToastText", "ThemeToastBackground", 4.5);
             Assert.AreNotEqual(p["ThemeSurface"], p["ThemeSurfaceSubtle"], $"{name}: el gris suave debe distinguirse de la superficie");
+        }
+    }
+
+    [TestMethod]
+    public void DarkCustom_WithMidGreyCards_KeepsTheSelectionVisible()
+    {
+        // Con tarjetas gris medio la selección oscura se aclaraba hasta ser igual a la tarjeta
+        foreach (var accent in new[] { "#FDE047", "#0369A1", "#475569" })
+        {
+            var p = ThemePalette.Build(Custom(Dark("#0369A1"), "#111827", "#4B5563", accent));
+            Assert.IsGreaterThan(1.1, ThemeColor.Contrast(p["ThemeSelectionBackground"], p["ThemeSurface"]), $"{accent}: la selección es igual a la tarjeta");
+            AssertContrast(accent, p, "ThemeText", "ThemeSelectionBackground", 4.5);
+            AssertContrast(accent, p, "ThemeFocus", "ThemeSelectionBackground", 3.0);
         }
     }
 

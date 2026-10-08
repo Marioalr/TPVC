@@ -87,10 +87,19 @@ public static class ThemePalette
         // En oscuro, un acento muy claro (amarillo) haría la selección tan clara que el texto secundario
         // tendría que aclararse hasta confundirse con el principal: se mezcla menos
         var selection = ThemeColor.Blend(surface, accent, dark ? 0.35 : 0.14);
-        for (double amount = 0.30; dark && selection.Luminance > 0.07 && amount > 0; amount -= 0.05)
+        // Nunca por debajo de 0.15: con una tarjeta gris media la selección acababa igual a la tarjeta
+        for (double amount = 0.30; dark && selection.Luminance > 0.07 && amount >= 0.15 - 1e-9; amount -= 0.05)
         {
             selection = ThemeColor.Blend(surface, accent, amount);
         }
+        // En claro, un acento muy luminoso (amarillo) apenas tiñe el blanco: se mezcla más hasta que se note
+        for (double amount = 0.18; !dark && ThemeColor.Contrast(selection, surface) < 1.1 && amount <= 0.40 + 1e-9; amount += 0.04)
+        {
+            selection = ThemeColor.Blend(surface, accent, amount);
+        }
+        // Si el tono del acento tiene la misma luminosidad que la tarjeta (azul sobre gris medio), el tinte
+        // no se nota: se separa un poco en claridad
+        selection = EnsureContrast(selection, new[] { surface }, 1.1);
         var textSurfaces = new[] { bg, surface, subtle, selection };
 
         // Colores guardados del otro modo (p. ej. "Personalizado" claro con el texto que dejó el modo

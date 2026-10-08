@@ -489,9 +489,9 @@ public partial class MainViewModel : ObservableObject
                 list.Add(new CommandPaletteItem
                 {
                     Title = prod.Name,
-                    Subtitle = $"Código: {prod.Code} • Stock: {prod.CurrentStock} {prod.Unit} • ${prod.Price:N2}",
+                    Subtitle = $"Código: {prod.Code} • Stock: {prod.CurrentStock} {prod.Unit} • ${prod.Price:N2}{(prod.RequiresRefrigeration ? " • Refrigerado" : string.Empty)}",
                     Category = "Medicamentos",
-                    Icon = prod.RequiresRefrigeration ? "❄️" : "💊",
+                    Icon = prod.RequiresRefrigeration ? "IcoSnowflake" : "IcoPill",
                     Badge = $"${prod.Price:N2}",
                     Action = () =>
                     {

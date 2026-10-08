@@ -70,6 +70,7 @@
     <Geometry x:Key="IcoCart">M9 21 A1 1 0 1 1 9 19 A1 1 0 1 1 9 21 Z M20 21 A1 1 0 1 1 20 19 A1 1 0 1 1 20 21 Z M1 1 H5 L7.7 14.4 A2 2 0 0 0 9.7 16 H19.4 A2 2 0 0 0 21.4 14.4 L23 6 H6</Geometry>
     <Geometry x:Key="IcoSun">M12 16 A4 4 0 1 1 12 8 A4 4 0 1 1 12 16 Z M12 2 V4 M12 20 V22 M4.9 4.9 L6.3 6.3 M17.7 17.7 L19.1 19.1 M2 12 H4 M20 12 H22 M4.9 19.1 L6.3 17.7 M17.7 6.3 L19.1 4.9</Geometry>
     <Geometry x:Key="IcoSettings">M4 21 V14 M4 10 V3 M12 21 V12 M12 8 V3 M20 21 V16 M20 12 V3 M1 14 H7 M9 8 H15 M17 16 H23</Geometry>
+    <Geometry x:Key="IcoSnowflake">M12 2 V22 M3.3 7 L20.7 17 M20.7 7 L3.3 17 M9.5 3.5 L12 6 L14.5 3.5 M9.5 20.5 L12 18 L14.5 20.5</Geometry>
     <Geometry x:Key="IcoCloud">M18 10 H16.7 A8 8 0 1 0 9 20 H18 A5 5 0 0 0 18 10 Z</Geometry>
     <Geometry x:Key="IcoMoon">M21 12.8 A9 9 0 1 1 11.2 3 A7 7 0 0 0 21 12.8 Z</Geometry>
 
@@ -160,17 +161,27 @@
     <!-- Botones de relleno sólido: deshabilitados no se desvanecen (el texto blanco quedaba en 2:1),
          pasan a gris suave con texto secundario, que se lee en cualquier tema -->
     <ControlTemplate x:Key="DsSolidButtonTemplate" TargetType="ButtonBase">
-        <Border x:Name="Bd"
-                Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="8"
-                SnapsToDevicePixels="True">
-            <ContentPresenter Margin="{TemplateBinding Padding}"
-                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                              RecognizesAccessKey="True" />
-        </Border>
+        <Grid>
+            <Border x:Name="Bd"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"
+                    SnapsToDevicePixels="True">
+                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                  RecognizesAccessKey="True" />
+            </Border>
+            <!-- Contorno de deshabilitado encima: no cambia el tamaño del botón -->
+            <Border x:Name="DisabledOutline" BorderThickness="1" BorderBrush="{DynamicResource ThemeBorder}" CornerRadius="8"
+                    SnapsToDevicePixels="True" IsHitTestVisible="False" Visibility="Collapsed" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="DisabledOutline" Property="Visibility" Value="Visible" />
+            </Trigger>
+        </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <Style x:Key="ButtonBase" TargetType="Button">
@@ -202,8 +213,6 @@
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                 <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
-                <Setter Property="BorderThickness" Value="1" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -253,8 +262,6 @@
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                 <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
-                <Setter Property="BorderThickness" Value="1" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -263,7 +270,10 @@
     <Style x:Key="ButtonDangerGhost" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource ThemeDangerText}" />
-        <Setter Property="Padding" Value="10,7" />
+        <!-- Borde fijo de 1 (transparente): al pulsar solo cambia de color y el botón no crece -->
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="9,6" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
@@ -271,7 +281,6 @@
             <Trigger Property="IsPressed" Value="True">
                 <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
                 <Setter Property="BorderBrush" Value="{DynamicResource ThemeDangerText}" />
-                <Setter Property="BorderThickness" Value="1" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -709,12 +718,12 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                         </Trigger>
-                        <!-- En modo oscuro el relleno de acento casi no se separa de la tarjeta: el borde de foco y la negrita marcan la elección -->
+                        <!-- En modo oscuro el relleno de acento casi no se separa de la tarjeta: el borde de foco
+                             (3:1) marca la elección. Sin negrita: cambiaría el ancho y movería los demás chips -->
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                             <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -779,7 +788,6 @@
                 <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                 <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                 <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
-                <Setter Property="FontWeight" Value="SemiBold" />
             </Trigger>
         </Style.Triggers>
     </Style>
