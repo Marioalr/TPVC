@@ -1,0 +1,72 @@
+name: Rendimiento / Comparar
+
+# Compila la versión de referencia y la de esta rama en el mismo equipo y las mide alternadas, varias
+# rondas: los tiempos de los equipos de la CI varían mucho de una ejecución a otra, así que solo se
+# comparan mediciones hechas juntas. Para correrla desde una rama sin pasar por main:
+#   git push -f origin HEAD:perf-compare/run
+on:
+  push:
+    branches: [ "perf-compare/**" ]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Rama o etiqueta de referencia ("antes")
+        required: true
+        default: perf/antes-v1.18
+      rounds:
+        description: Rondas por versión
+        required: true
+        default: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Comparar rendimiento
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout (después)
+        uses: actions/checkout@v4
+        with:
+          path: despues
+
+      - name: Checkout (antes)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.base || 'perf/antes-v1.18' }}
+          path: antes
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build both
+        shell: pwsh
+        run: |
+          dotnet build antes/TPVC.sln --configuration Release
+          dotnet build despues/TPVC.sln --configuration Release
+
+      - name: Measure
+        shell: pwsh
+        run: |
+          $root = Join-Path $pwd 'medidas'
+          for ($round = 1; $round -le [int]'${{ github.event.inputs.rounds || '3' }}'; $round++) {
+            foreach ($side in 'antes', 'despues') {
+              $env:TPVC_PERF_DIR = Join-Path $root "$side/$round"
+              dotnet test "$side/TPVC.sln" --configuration Release --no-build --verbosity minimal --filter "TestCategory=Rendimiento"
+              ./despues/scripts/measure-startup.ps1 -Exe "$side/bin/Release/net10.0-windows/TPVC.exe" -OutDir $env:TPVC_PERF_DIR -Launches 3
+            }
+          }
+          ./despues/scripts/compare-performance.ps1 -Root $root -Out (Join-Path $root 'comparacion.md')
+          Get-Content (Join-Path $root 'comparacion.md') | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendimiento-comparacion
+          path: ./medidas
+          if-no-files-found: ignore
