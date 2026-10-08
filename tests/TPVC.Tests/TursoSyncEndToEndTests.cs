@@ -23,8 +23,21 @@ namespace TPVC.Tests;
 internal sealed class FakeHranaServer : HttpMessageHandler
 {
     private readonly SqliteConnection _connection;
+
+    // Turso atiende las escrituras de una en una; dos equipos a la vez no comparten la conexión
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     public int RequestCount { get; private set; }
     public int StatementCount { get; private set; }
+
+    /// <summary>Sin red: la petición falla antes de llegar.</summary>
+    public bool IsOffline { get; set; }
+
+    /// <summary>La petición se aplica pero la respuesta se pierde (la red cae justo después).</summary>
+    public Func<string, bool>? DropResponseAfterExecute { get; set; }
+
+    /// <summary>Se espera antes de aplicar la petición (para forzar el orden entre dos equipos).</summary>
+    public Func<string, Task>? BeforeExecuteAsync { get; set; }
 
     public FakeHranaServer(string dbPath)
     {
@@ -36,8 +49,34 @@ internal sealed class FakeHranaServer : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (IsOffline) throw new HttpRequestException("Sin red (simulada)");
+        var text = await request.Content!.ReadAsStringAsync(cancellationToken);
+
+        // Los ganchos ven el SQL tal cual (en el JSON las comillas simples van escapadas)
+        var sql = string.Join("\n", JsonNode.Parse(text)!["requests"]!.AsArray()
+            .Select(r => r?["stmt"]?["sql"]?.GetValue<string>())
+            .Where(q => q != null));
+        if (BeforeExecuteAsync != null) await BeforeExecuteAsync(sql);
+
+        HttpResponseMessage response;
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            response = Process(text);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (DropResponseAfterExecute?.Invoke(sql) == true) throw new HttpRequestException("Se perdió la respuesta (simulada)");
+        return response;
+    }
+
+    private HttpResponseMessage Process(string text)
+    {
         RequestCount++;
-        var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!;
+        var body = JsonNode.Parse(text)!;
         var results = new JsonArray();
 
         foreach (var req in body["requests"]!.AsArray())

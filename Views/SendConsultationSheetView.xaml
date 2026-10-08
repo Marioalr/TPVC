@@ -1,0 +1,165 @@
+<UserControl x:Class="TPVC.Views.SendConsultationSheetView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- "Enviar a…": los equipos enlazados a la misma nube con su última conexión. Mientras el otro -->
+    <!-- no la acepte, aquí queda en solo lectura y se puede recuperar.                            -->
+    <UserControl.Resources>
+        <Style x:Key="DeviceOption" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Card" Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}"
+                                BorderThickness="1" CornerRadius="10" Padding="12,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Ellipse x:Name="Ring" Stroke="{DynamicResource ThemeBorderStrong}" StrokeThickness="2" />
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{DynamicResource ThemeAccentStrong}" Visibility="Collapsed" />
+                                </Grid>
+                                <ContentPresenter Grid.Column="1" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Card" Property="BorderThickness" Value="2" />
+                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Card" Property="Opacity" Value="0.6" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="520" MaxHeight="620" Padding="0" AutomationProperties.Name="Enviar la consulta a otro equipo">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="24,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextHeading}" Text="Enviar la consulta a otro equipo" />
+                            <TextBlock Style="{StaticResource TextDetail}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       Text="Se envían la nota, los signos, la receta y la cuenta, con el mismo folio y hora de inicio." />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseSendConsultationSheetCommand}"
+                                ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top"
+                                IsEnabled="{Binding IsSendingHandoff, Converter={StaticResource InverseBool}}">
+                            <helpers:Icon Data="{StaticResource IcoClose}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,16">
+                        <TextBlock Style="{StaticResource TextDetail}" Text="Buscando equipos enlazados…" Margin="0,0,0,12"
+                                   Visibility="{Binding IsLoadingHandoffDevices, Converter={StaticResource BoolToVis}}" />
+
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,12"
+                                Visibility="{Binding HandoffSheetError, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding HandoffSheetError}" TextWrapping="Wrap" />
+                        </Border>
+
+                        <Border Style="{StaticResource Notice}" Margin="0,0,0,12"
+                                Visibility="{Binding HasNoHandoffDevices, Converter={StaticResource BoolToVis}}">
+                            <TextBlock TextWrapping="Wrap"
+                                       Text="No hay otro equipo enlazado a esta nube. Vincule la tablet u otra computadora en Configuración › Nube y dispositivos." />
+                        </Border>
+
+                        <ListBox ItemsSource="{Binding HandoffDevices}" SelectedItem="{Binding SelectedHandoffDevice, Mode=TwoWay}"
+                                 ItemContainerStyle="{StaticResource DeviceOption}" BorderThickness="0" Background="Transparent" Padding="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Equipos enlazados">
+                            <ListBox.Template>
+                                <ControlTemplate TargetType="ListBox">
+                                    <ItemsPresenter />
+                                </ControlTemplate>
+                            </ListBox.Template>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:LinkedDevice}">
+                                    <StackPanel>
+                                        <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{Binding DeviceName, Mode=OneWay}" />
+                                            <Run Text="{Binding RoleText, Mode=OneWay, StringFormat=' · {0}'}" FontWeight="Normal" Foreground="{DynamicResource ThemeTextSecondary}" FontSize="13" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsOnline}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Text="Mientras el otro equipo no la acepte, en este queda en solo lectura y se puede recuperar." />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Background="{DynamicResource ThemeSurfaceSubtle}" Padding="24,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource TextDetail}" Text="Subiendo el expediente y enviando…" VerticalAlignment="Center"
+                                   Visibility="{Binding IsSendingHandoff, Converter={StaticResource BoolToVis}}" />
+                        <Button Grid.Column="1" Style="{StaticResource ButtonGhost}" Command="{Binding CloseSendConsultationSheetCommand}" Content="Cancelar" Margin="0,0,8,0"
+                                IsEnabled="{Binding IsSendingHandoff, Converter={StaticResource InverseBool}}" />
+                        <Button Grid.Column="2" Style="{StaticResource ButtonPrimary}" Command="{Binding SendConsultationToSelectedDeviceCommand}"
+                                IsEnabled="{Binding CanConfirmSendHandoff}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSend}" Width="16" Height="16" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding SendHandoffButtonText}" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

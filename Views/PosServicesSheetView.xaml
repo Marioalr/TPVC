@@ -156,7 +156,7 @@
                                 <Button Style="{StaticResource ButtonSecondary}" Margin="0,8,0,0"
                                         Command="{Binding DataContext.AddServiceToActiveConsultationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"
-                                        Visibility="{Binding DataContext.HasActiveConsultation, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
+                                        Visibility="{Binding DataContext.CanChargeToActiveConsultation, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
                                         ToolTip="Se cobra al terminar la consulta">
                                     <TextBlock Text="{Binding DataContext.ActiveConsultationPatientName, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat='Agregar a la consulta de {0}'}"
                                                TextTrimming="CharacterEllipsis" />

@@ -131,6 +131,32 @@ public partial class MedicalRecordsViewModel
         WritePendingDraft();
     }
 
+    /// <summary>
+    /// Escribe ya la copia y dice si quedó en disco. Lo usan los pasos que no deben seguir sin ella
+    /// (enviar la consulta a otro equipo, recibirla): una copia vieja pendiente ya no la sobrescribe.
+    /// </summary>
+    private bool SaveConsultationDraftChecked()
+    {
+        if (_draftStore == null) return true;
+        var draft = BuildConsultationDraft();
+        if (draft == null) return false;
+
+        bool saved;
+        lock (_draftGate)
+        {
+            if (draft.Generation != Interlocked.Read(ref _draftGeneration)) return false;
+            draft.SavedAt = DateTime.Now;
+            saved = _draftStore.Save(draft);
+            if (saved)
+            {
+                _lastDraftWriteUtc = DateTime.UtcNow;
+                _lastWrittenDraftSequence = Math.Max(_lastWrittenDraftSequence, draft.Sequence);
+                _draftSessionActive = true;
+            }
+        }
+        return saved;
+    }
+
     /// <summary>Al cerrar el programa o apagar Windows: consulta y alta de paciente en curso.</summary>
     public void FlushConsultationDraft()
     {
@@ -174,7 +200,11 @@ public partial class MedicalRecordsViewModel
             Prescriptions = ((_consultationRecordPatient ?? SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
                 .Select(ClonePrescription).ToList(),
             PreviousPrescriptions = _previousPrescriptionKnown ? _previousPrescription.Select(ClonePrescription).ToList() : null,
-            PatientBefore = _summaryBeforeConsultation
+            PatientBefore = _summaryBeforeConsultation,
+            AttendingAppointmentId = _attendingAppointmentId,
+            // La marca de "enviada a otro equipo" va en TODAS las copias (también al cerrar el
+            // programa): sin ella, al volver a abrir la consulta sería editable aquí y allá
+            Handoff = CloneMarker(_outgoingHandoff)
         };
     }
 
@@ -231,7 +261,8 @@ public partial class MedicalRecordsViewModel
 
     /// <summary>
     /// Al abrir la app: si quedó una consulta sin terminar, se retoma con su nota, signos, receta,
-    /// cuenta, folio y hora de inicio.
+    /// cuenta, folio y hora de inicio. Si se había enviado a otro equipo, vuelve en solo lectura y
+    /// el envío se resuelve contra la nube.
     /// </summary>
     private void TryRestoreConsultationDraft()
     {
@@ -245,16 +276,42 @@ public partial class MedicalRecordsViewModel
         var patient = Patients.FirstOrDefault(p => p.Id == draft.PatientId);
         if (patient == null)
         {
-            AppLogger.Warn($"Se descartó la consulta en curso {draft.Folio}: el expediente {draft.PatientId} ya no existe.");
+            if (draft.Handoff != null)
+            {
+                // Enviada a otro equipo: no se puede volver a abrir aquí, pero tampoco se borra sin rastro
+                _draftStore.ArchiveDraft($"{draft.Handoff.Id}-sin-expediente");
+                AppLogger.Warn($"Consulta enviada {draft.Folio} apartada: el expediente {draft.PatientId} ya no está activo en este equipo.");
+            }
+            else
+            {
+                AppLogger.Warn($"Se descartó la consulta en curso {draft.Folio}: el expediente {draft.PatientId} ya no existe.");
+            }
             _draftStore.Delete();
             return;
         }
 
+        ApplyConsultationDraft(patient, draft);
+        if (draft.Handoff != null) RestoreOutgoingHandoff(draft.Handoff);
+
+        IsConsultationRecovered = true;
+        PatientsPage = PageConsultation;
+        AutosaveStatus = draft.Handoff != null
+            ? $"Enviada a {draft.Handoff.ToDeviceName}"
+            : $"Consulta recuperada · iniciada {draft.StartedAt:dd/MM HH:mm}";
+        AppLogger.Info($"Consulta en curso recuperada: {draft.Folio} ({draft.PatientName}).");
+    }
+
+    /// <summary>
+    /// Pone en pantalla una copia de la consulta: al recuperarla tras un cierre o al recibirla de otro
+    /// equipo (con los Id ya traducidos a los de este equipo).
+    /// </summary>
+    private void ApplyConsultationDraft(PatientRecord patient, ConsultationDraft draft)
+    {
         _suspendAutosave = true;
         try
         {
             SelectPatient(patient);
-            var active = _consultationService.StartConsultation(patient, draft.ChiefComplaintLabel);
+            var active = _consultationService!.StartConsultation(patient, draft.ChiefComplaintLabel);
             if (!string.IsNullOrWhiteSpace(draft.Folio)) active.Folio = draft.Folio;
             if (draft.StartedAt != default) active.StartedAt = draft.StartedAt;
             foreach (var item in draft.Items.Where(i => i.Quantity > 0))
@@ -285,6 +342,7 @@ public partial class MedicalRecordsViewModel
 
             ConsultationSection = Math.Clamp(draft.Section, 1, ConsultationSectionCount);
             _isCurrentConsultationSaved = draft.SavedToRecord;
+            _attendingAppointmentId = draft.AttendingAppointmentId;
             _draftSessionActive = true;
             SyncActiveConsultation();
         }
@@ -292,11 +350,6 @@ public partial class MedicalRecordsViewModel
         {
             _suspendAutosave = false;
         }
-
-        IsConsultationRecovered = true;
-        PatientsPage = PageConsultation;
-        AutosaveStatus = $"Consulta recuperada · iniciada {draft.StartedAt:dd/MM HH:mm}";
-        AppLogger.Info($"Consulta en curso recuperada: {draft.Folio} ({draft.PatientName}).");
     }
 
     private void PostToUi(Action action)
@@ -315,7 +368,24 @@ public partial class MedicalRecordsViewModel
         Unit = item.Unit,
         UnitPrice = item.UnitPrice,
         Quantity = item.Quantity,
-        AddedAt = item.AddedAt
+        AddedAt = item.AddedAt,
+        CatalogSyncId = item.CatalogSyncId,
+        LineKind = item.LineKind
+    };
+
+    private static ConsultationHandoffMarker? CloneMarker(ConsultationHandoffMarker? marker) => marker == null ? null : new()
+    {
+        Id = marker.Id,
+        ToDeviceId = marker.ToDeviceId,
+        ToDeviceName = marker.ToDeviceName,
+        FromDeviceId = marker.FromDeviceId,
+        FromDeviceName = marker.FromDeviceName,
+        DatabaseUrl = marker.DatabaseUrl,
+        PatientSyncId = marker.PatientSyncId,
+        PatientName = marker.PatientName,
+        Folio = marker.Folio,
+        Phase = marker.Phase,
+        CreatedAt = marker.CreatedAt
     };
 
     private static PatientPrescriptionItem ClonePrescription(PatientPrescriptionItem item) => new()

@@ -89,6 +89,7 @@ internal sealed class UiSmokeSession
     private readonly List<string> _failures = new();
     private System.Windows.Application _app = null!;
     private ThemeService _themes = null!;
+    private FakeHranaServer? _cloud;
 
     public void Execute()
     {
@@ -104,6 +105,7 @@ internal sealed class UiSmokeSession
         finally
         {
             System.Diagnostics.PresentationTraceSources.DataBindingSource.Listeners.Remove(_bindingErrors);
+            _cloud?.Dispose();
             SqliteConnection.ClearAllPools();
             try { Directory.Delete(_workDir, recursive: true); } catch { }
         }
@@ -204,6 +206,24 @@ internal sealed class UiSmokeSession
         var profile = new ClinicProfileService(Path.Combine(_workDir, "clinic_profile.json"));
         var tursoSettings = new TursoSettingsService(Path.Combine(_workDir, "turso.json"));
         var tursoSync = new TursoSyncService(factory, tursoSettings, profile, inventory);
+
+        // Nube simulada: "Enviar a…" con equipos enlazados y el aviso de una consulta recibida
+        _cloud = new FakeHranaServer(Path.Combine(_workDir, "nube.db"));
+        var ts = tursoSettings.CurrentSettings;
+        ts.IsSyncEnabled = true;
+        ts.AutoSyncOnChanges = false;
+        ts.AutoSyncOnStartup = false;
+        ts.DatabaseUrl = "https://tpvc-smoke.turso.io";
+        ts.AuthToken = "smoke";
+        ts.DeviceId = "device-pc";
+        ts.DeviceName = "PC del consultorio";
+        tursoSettings.SaveSettings(ts);
+        tursoSync.ClientFactory = (url, token) => new TursoClient(url, token, new System.Net.Http.HttpClient(_cloud, disposeHandler: false));
+        var handoff = new ConsultationHandoffService(tursoSync, tursoSettings) { AutoPoll = false };
+        WaitFor(tursoSync.SyncAsync());
+        ExecuteCloud("INSERT INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc) VALUES " +
+                     "('device-tablet', 'Tablet del consultorio', 'AndroidTablet', '1.17.0', strftime('%Y-%m-%d %H:%M:%f','now','-4 seconds')), " +
+                     "('device-recepcion', 'PC de recepción', 'WindowsDesktop', '1.15.0', strftime('%Y-%m-%d %H:%M:%f','now','-1 day'))");
         var notifications = new NotificationService();
 
         // Citas para que el inicio de Pacientes y la agenda tengan contenido
@@ -238,7 +258,8 @@ internal sealed class UiSmokeSession
             tursoSettingsService: tursoSettings,
             dataImportService: null,
             consultationDraftStore: new ConsultationDraftStore(Path.Combine(_workDir, "consulta.json")),
-            notificationService: notifications);
+            notificationService: notifications,
+            consultationHandoffService: handoff);
         main.IsFirstRunWizardOpen = false;
 
         // El contenido de la ventana real, sin mostrarla: sigue siendo hijo lógico de la ventana
@@ -321,6 +342,15 @@ internal sealed class UiSmokeSession
             records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
             Capture(host, $"08-consulta-{suffix}");
 
+            // Enviar a otro equipo: la hoja con los equipos enlazados y la consulta en solo lectura
+            WaitFor(records.OpenSendConsultationSheetAsync());
+            Capture(host, $"08c-consulta-enviar-a-{suffix}");
+            WaitFor(records.SendConsultationToSelectedDeviceAsync());
+            Capture(host, $"08d-consulta-enviada-{suffix}");
+            Show(host, main, "Pos", $"08e-pos-consulta-enviada-{suffix}");
+            main.NavigateTo("Records");
+            WaitFor(records.RecoverHandedOffConsultationAsync());
+
             // El POS con una consulta en curso (se puede abrir o pasarle la venta)
             Show(host, main, "Pos", $"08b-pos-con-consulta-{suffix}");
             main.NavigateTo("Records");
@@ -372,6 +402,13 @@ internal sealed class UiSmokeSession
             records.ClosePosModal();
             WaitFor(records.DiscardActiveConsultationAsync());
 
+            // Una consulta que la tablet mandó a esta PC: el aviso en Pacientes
+            InsertIncomingHandoff(records.Patients.First(), suffix);
+            WaitFor(records.PollHandoffsOnceAsync());
+            Show(host, main, "Records", $"15b-pacientes-consulta-recibida-{suffix}");
+            ExecuteCloud("UPDATE ConsultationHandoffs SET State = 'cancelada', Payload = '' WHERE FromDeviceId = 'device-tablet'");
+            WaitFor(records.PollHandoffsOnceAsync());
+
             WaitFor(records.NewPatientAsync());
             Capture(host, $"16-alta-paciente-{suffix}");
             records.FormGender = "Femenino";
@@ -414,6 +451,37 @@ internal sealed class UiSmokeSession
             Capture(host, $"25-config-restaurar-{suffix}");
             shell.DataVM.CloseImportSheet();
         }
+    }
+
+    private void ExecuteCloud(string sql)
+    {
+        using var cmd = _cloud!.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private void InsertIncomingHandoff(PatientRecord patient, string suffix)
+    {
+        var payload = new ConsultationDraft
+        {
+            PatientSyncId = patient.SyncId,
+            PatientName = patient.FullName,
+            Folio = $"CNS-SMOKE-{suffix}",
+            StartedAt = DateTime.Today.AddHours(10).AddMinutes(32),
+            ChiefComplaint = "Tos y fiebre",
+            Diagnosis = "J00 Rinofaringitis aguda",
+            Items = { new ConsultationProductItem { Code = "MED-001", Name = "Paracetamol 500 mg", UnitPrice = 45m, Quantity = 2, LineKind = "libre" } }
+        };
+        using var cmd = _cloud!.Connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO ConsultationHandoffs (Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, Folio, " +
+                          "Payload, PayloadVersion, State, CreatedAtUtc, UpdatedAtUtc) VALUES ($id, 'device-tablet', 'Tablet del consultorio', 'device-pc', " +
+                          "'PC del consultorio', $patient, $name, $folio, $payload, 1, 'enviada', strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'))";
+        cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+        cmd.Parameters.AddWithValue("$patient", TursoSyncService.FormatGuid(patient.SyncId));
+        cmd.Parameters.AddWithValue("$name", patient.FullName);
+        cmd.Parameters.AddWithValue("$folio", payload.Folio);
+        cmd.Parameters.AddWithValue("$payload", ConsultationDraftStore.Serialize(payload));
+        cmd.ExecuteNonQuery();
     }
 
     private void Show(System.Windows.FrameworkElement host, MainViewModel main, string screen, string name)

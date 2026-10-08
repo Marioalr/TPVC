@@ -1252,6 +1252,7 @@ public class InventoryService
         patient.SyncServicesJson();
 
         await using var db = CreateContext();
+        PatientRecord? tracked = null;
 
         if (patient.Id == 0)
         {
@@ -1261,6 +1262,7 @@ public class InventoryService
         else
         {
             var existing = await db.Patients.FirstOrDefaultAsync(p => p.Id == patient.Id);
+            tracked = existing;
             if (existing != null)
             {
                 // Copia todas las columnas escalares (incluye los JSON de receta/insumos/servicios)
@@ -1278,8 +1280,65 @@ public class InventoryService
         }
 
         await db.SaveChangesAsync();
+        // La instancia en memoria lleva la versión guardada: así una descarga posterior de otro
+        // equipo se distingue de lo que este mismo equipo acaba de guardar
+        if (tracked != null) patient.UpdatedAtUtc = tracked.UpdatedAtUtc;
         NotifyPatientsChanged();
         return patient;
+    }
+
+    // =========================================================================
+    // CONSULTA ENVIADA ENTRE EQUIPOS (identificadores que valen en cualquier equipo)
+    // =========================================================================
+
+    /// <summary>Versión guardada del expediente (para que el otro equipo sepa si ya la tiene).</summary>
+    public async Task<DateTime?> GetPatientUpdatedAtAsync(int patientId)
+    {
+        await using var db = CreateContext();
+        return await db.Patients.AsNoTracking().Where(p => p.Id == patientId).Select(p => (DateTime?)p.UpdatedAtUtc).FirstOrDefaultAsync();
+    }
+
+    /// <summary>Avance de nota ya guardado con ese folio, si existe.</summary>
+    public async Task<Guid?> FindConsultationNoteSyncIdAsync(int patientId, string folio)
+    {
+        if (string.IsNullOrWhiteSpace(folio)) return null;
+        await using var db = CreateContext();
+        return await db.PatientConsultations.AsNoTracking()
+            .Where(c => c.PatientRecordId == patientId && c.Folio == folio)
+            .Select(c => (Guid?)c.SyncId)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<bool> ConsultationNoteExistsAsync(Guid syncId)
+    {
+        await using var db = CreateContext();
+        return await db.PatientConsultations.AsNoTracking().AnyAsync(c => c.SyncId == syncId);
+    }
+
+    /// <summary>Productos y servicios (también los dados de baja) con sus identificadores.</summary>
+    public async Task<List<CatalogRef>> GetCatalogRefsAsync()
+    {
+        await using var db = CreateContext();
+        var products = await db.Products.AsNoTracking()
+            .Select(p => new CatalogRef(CatalogRefKind.Product, p.Id, p.SyncId, p.Code, p.Name, p.IsActive))
+            .ToListAsync();
+        var services = await db.ClinicalServices.AsNoTracking()
+            .Select(s => new CatalogRef(CatalogRefKind.Service, s.Id, s.SyncId, s.Code, s.Name, s.IsActive))
+            .ToListAsync();
+        products.AddRange(services);
+        return products;
+    }
+
+    public async Task<Guid?> GetAppointmentSyncIdAsync(int appointmentId)
+    {
+        await using var db = CreateContext();
+        return await db.Appointments.AsNoTracking().Where(a => a.Id == appointmentId).Select(a => (Guid?)a.SyncId).FirstOrDefaultAsync();
+    }
+
+    public async Task<int?> FindAppointmentIdAsync(Guid syncId)
+    {
+        await using var db = CreateContext();
+        return await db.Appointments.AsNoTracking().Where(a => a.SyncId == syncId).Select(a => (int?)a.Id).FirstOrDefaultAsync();
     }
 
     public async Task DeletePatientAsync(int id)
@@ -1744,3 +1803,11 @@ public class InventoryService
     }
 }
 
+public enum CatalogRefKind
+{
+    Product,
+    Service
+}
+
+/// <summary>Producto o servicio del catálogo con su Id local y su identificador de sincronización.</summary>
+public sealed record CatalogRef(CatalogRefKind Kind, int Id, Guid SyncId, string Code, string Name, bool IsActive);

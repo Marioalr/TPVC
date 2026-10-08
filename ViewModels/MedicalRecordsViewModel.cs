@@ -1423,7 +1423,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ClinicProfileService? clinicProfileService = null,
         PrintingService? printingService = null,
         ConsultationDraftStore? consultationDraftStore = null,
-        NotificationService? notificationService = null)
+        NotificationService? notificationService = null,
+        ConsultationHandoffService? consultationHandoffService = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -1439,6 +1440,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         };
         InitializeAutosave(consultationDraftStore);
         InitializePacientes(notificationService);
+        InitializeHandoff(consultationHandoffService);
         _clinicProfileService = clinicProfileService;
         _printingService = printingService;
 
@@ -1525,14 +1527,28 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             // Se conserva la misma instancia del paciente seleccionado (la UI y los formularios
             // abiertos trabajan sobre ella); solo se toma de la base su historial de consultas.
             PatientRecord? keptSelected = null;
+            bool replacedSelected = false;
             if (prevSelected != null && prevSelectedId > 0)
             {
                 var index = dbPatients.FindIndex(p => p.Id == prevSelectedId);
                 if (index >= 0)
                 {
-                    prevSelected.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
-                    dbPatients[index] = prevSelected;
-                    keptSelected = prevSelected;
+                    // Si otro equipo cambió el expediente (llegó con la sincronización), se toma la
+                    // versión de la base: guardar después la instancia vieja borraría esos cambios
+                    var fresh = dbPatients[index];
+                    bool forced = _forceFreshPatientIds.Remove(prevSelectedId);
+                    if ((forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc) && CanReplaceSelectedPatientInstance(prevSelected))
+                    {
+                        fresh.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
+                        keptSelected = fresh;
+                        replacedSelected = true;
+                    }
+                    else
+                    {
+                        prevSelected.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
+                        dbPatients[index] = prevSelected;
+                        keptSelected = prevSelected;
+                    }
                 }
             }
 
@@ -1548,6 +1564,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 {
                     SelectedPatient = null; // El expediente fue dado de baja
                 }
+                else if (replacedSelected)
+                {
+                    SelectedPatient = keptSelected;
+                }
                 else
                 {
                     RefreshConsultationsHistory(keptSelected);
@@ -1560,6 +1580,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// La instancia abierta se puede cambiar por la de la base salvo que alguien trabaje sobre ella
+    /// (alta o edición abierta, o es el paciente de la consulta en curso).
+    /// </summary>
+    private bool CanReplaceSelectedPatientInstance(PatientRecord patient) =>
+        !IsPatientModalOpen
+        && (_consultationRecordPatient == null || _consultationRecordPatient.Id != patient.Id)
+        && !(HasActiveConsultation && ActiveConsultation?.PatientId == patient.Id);
 
     partial void OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
@@ -1664,6 +1693,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else
         {
             StopConsultationTimer();
+            _feeServiceOverrideId = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (_consultationRecordPatient != null) _ = EndConsultationOnRecordAsync(discarded: false);
         }
@@ -1671,6 +1701,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         OnActiveConsultationStateChangedForAutosave();
         NotifyPatientsPageState();
         NotifyPrescriptionStateChanged();
+        NotifyHandoffState();
     }
 
     private void StartConsultationTimer()
@@ -1747,6 +1778,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         StopConsultationTimer();
         DisposePacientes();
+        DisposeHandoff();
         FlushConsultationDraft();
         _autosaveTimer?.Dispose();
         _formDraftTimer?.Dispose();
@@ -2204,6 +2236,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void EditPatient()
     {
+        if (BlockIfPatientHandedOff(SelectedPatient)) return;
         if (SelectedPatient == null)
         {
             InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
@@ -2803,6 +2836,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void StartActiveConsultation()
     {
+        if (BlockIfReceivingHandoff()) return;
         if (SelectedPatient == null)
         {
             GoToPatientsHome();
@@ -2829,6 +2863,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SaveActiveConsultationNoteAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null || !HasActiveConsultation)
         {
             InfoModalMessage = "No hay ninguna consulta activa en curso.";
@@ -2861,6 +2896,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task FinalizeConsultationAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (_consultationService == null || !_consultationService.HasActiveConsultation)
         {
             InfoModalMessage = "No hay ninguna consulta médica activa para terminar.";
@@ -3124,6 +3160,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddPrescriptionItemToPos(PatientPrescriptionItem? item)
     {
+        if (BlockIfConsultationReadOnly() || BlockIfReceivingHandoff()) return;
         // Compatibilidad: equivale a marcar "Se surte aquí" (cargo a la cuenta de la consulta)
         if (item == null || item.DispenseInClinic) return;
 
@@ -3148,7 +3185,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void AddServiceToActiveConsultation(ClinicalService? service)
     {
-        if (service == null) return;
+        if (service == null || BlockIfConsultationReadOnly() || BlockIfReceivingHandoff()) return;
 
         if (!HasActiveConsultation)
         {
@@ -3194,7 +3231,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void RemoveItemFromActiveConsultation(ConsultationProductItem? item)
     {
-        if (_consultationService?.CurrentConsultation == null || item == null) return;
+        if (_consultationService?.CurrentConsultation == null || item == null || BlockIfConsultationReadOnly()) return;
 
         _consultationService.CurrentConsultation.Items.Remove(item);
         _consultationService.CurrentConsultation.NotifyItemsChanged();
@@ -3224,7 +3261,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SaveVitalSignsAsync()
     {
-        if (SelectedPatient == null) return;
+        if (SelectedPatient == null || BlockIfPatientHandedOff(SelectedPatient)) return;
 
         var parts = new List<string>();
         var cleanTA = (VitalSignTA ?? string.Empty).Trim().TrimEnd('/');
@@ -3385,6 +3422,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void OpenPrescriptionModal()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
             InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar su receta médica.";
@@ -3409,6 +3447,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task OpenPrescriptionCatalogAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
@@ -3468,6 +3507,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void OpenSuppliesModal()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
             InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar sus insumos y material clínico.";
@@ -3487,6 +3527,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task OpenSupplyCatalogAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
@@ -3667,6 +3708,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public void OpenServicesModal()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
             InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar los servicios y procedimientos clínicos.";
@@ -3686,6 +3728,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task OpenServiceCatalogAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (Services.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();

@@ -53,6 +53,31 @@ public sealed class ConsultationDraft
     /// <summary>Resumen del expediente antes de la consulta (vuelve tal cual si se descarta).</summary>
     public PatientSummarySnapshot? PatientBefore { get; set; }
 
+    /// <summary>Cita que se está atendiendo (queda "Atendida" al cobrar). Id local de este equipo.</summary>
+    public int? AttendingAppointmentId { get; set; }
+
+    // ---- Consulta enviada a otro equipo (fase E): identificadores que valen en cualquier equipo ----
+
+    /// <summary>Expediente por su identificador de sincronización (el Id local no sirve en otro equipo).</summary>
+    public Guid? PatientSyncId { get; set; }
+
+    /// <summary>Versión del expediente en el equipo que envía: el que recibe espera tenerla tras descargar.</summary>
+    public DateTime? PatientUpdatedAtUtc { get; set; }
+
+    /// <summary>Avance de la nota ya guardado con este folio (debe llegar antes de continuar en el otro equipo).</summary>
+    public Guid? ProgressNoteSyncId { get; set; }
+
+    public Guid? AttendingAppointmentSyncId { get; set; }
+
+    /// <summary>Honorario de consulta que usaba el equipo que envía.</summary>
+    public Guid? FeeServiceSyncId { get; set; }
+
+    /// <summary>
+    /// Solo en el archivo local del equipo que envía: la consulta se mandó a otro equipo y aquí queda
+    /// en solo lectura hasta que se acepte (se cierra) o se recupere. Nunca viaja en la copia enviada.
+    /// </summary>
+    public ConsultationHandoffMarker? Handoff { get; set; }
+
     /// <summary>Consulta a la que pertenece la copia (evita reescribir una ya terminada).</summary>
     [JsonIgnore]
     public long Generation { get; set; }

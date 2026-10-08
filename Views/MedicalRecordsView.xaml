@@ -31,6 +31,7 @@
         <DataTemplate x:Key="CheckoutSheet"><views:ConsultationCheckoutView /></DataTemplate>
         <DataTemplate x:Key="AllergyDialog"><views:AllergyAlertView /></DataTemplate>
         <DataTemplate x:Key="InfoDialog"><views:InfoDialogView /></DataTemplate>
+        <DataTemplate x:Key="SendConsultationSheet"><views:SendConsultationSheetView /></DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -93,8 +94,34 @@
             </Grid>
         </Border>
 
+        <StackPanel Grid.Row="1">
+        <!-- ======================= CONSULTA RECIBIDA DE OTRO EQUIPO ======================= -->
+        <Border Style="{StaticResource Notice}" Margin="24,12,24,0" Padding="16,12"
+                Visibility="{Binding ShowsIncomingHandoffNotice, Converter={StaticResource BoolToVis}}"
+                AutomationProperties.Name="Consulta recibida de otro equipo">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <helpers:Icon Data="{StaticResource IcoMonitor}" Width="20" Height="20" Margin="0,0,12,0" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding IncomingHandoffTitle}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding IncomingHandoffDetail}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding IncomingHandoffBlockedReason}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Visibility="{Binding IncomingHandoffBlockedReason, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DismissIncomingHandoffCommand}" Content="Más tarde" Margin="0,0,8,0" />
+                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding AcceptIncomingHandoffCommand}" IsEnabled="{Binding CanAcceptIncomingHandoff}"
+                            Content="Continuar aquí" ToolTip="Abrir la consulta en este equipo (el otro la deja de editar)" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- ======================= CONSULTA EN CURSO (fuera de ella) ======================= -->
-        <Border Grid.Row="1" Style="{StaticResource NoticeWarning}" Margin="24,12,24,0" Padding="14,8"
+        <Border Style="{StaticResource NoticeWarning}" Margin="24,12,24,0" Padding="14,8"
                 Visibility="{Binding ShowsConsultationBanner, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -107,6 +134,7 @@
                 <Button Grid.Column="2" Style="{StaticResource ButtonPrimary}" Padding="14,5" MinHeight="0" Content="Volver a la consulta" Command="{Binding ShowConsultationCommand}" />
             </Grid>
         </Border>
+        </StackPanel>
 
         <!-- ======================= PÁGINAS ======================= -->
         <Grid Grid.Row="2">
@@ -140,6 +168,8 @@
                         Visibility="{Binding IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="360" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CreateServiceSheet}"
                         Visibility="{Binding IsCreateServiceModalOpen, Converter={StaticResource BoolToVis}}" />
+        <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource SendConsultationSheet}"
+                        Visibility="{Binding IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource AllergyDialog}"
                         Visibility="{Binding IsAllergyAlertOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="500" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource InfoDialog}"

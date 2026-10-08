@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using TPVC.Models;
@@ -33,6 +35,132 @@ public sealed class ConsultationDraftStore
     }
 
     public bool Exists => File.Exists(FilePath);
+
+    /// <summary>La copia de la consulta como texto (la misma forma que el archivo local).</summary>
+    public static string Serialize(ConsultationDraft draft) => JsonSerializer.Serialize(draft, JsonOptions);
+
+    public static ConsultationDraft? Deserialize(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ConsultationDraft>(json, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo leer la copia de la consulta recibida", ex);
+            return null;
+        }
+    }
+
+    // ================================================================== consultas recibidas de otro equipo
+
+    /// <summary>Fichas de cada intento de tomar una consulta y las ya guardadas en este equipo.</summary>
+    public string HandoffJournalPath => Path.Combine(Path.GetDirectoryName(FilePath) ?? string.Empty, "consultas-recibidas.json");
+
+    private sealed class HandoffJournal
+    {
+        public Dictionary<string, string> Tokens { get; set; } = new();
+        public List<string> Applied { get; set; } = new();
+    }
+
+    private readonly object _journalGate = new();
+
+    private HandoffJournal LoadJournal()
+    {
+        try
+        {
+            if (File.Exists(HandoffJournalPath))
+            {
+                return JsonSerializer.Deserialize<HandoffJournal>(File.ReadAllText(HandoffJournalPath), JsonOptions) ?? new HandoffJournal();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("El registro de consultas recibidas está dañado; se empieza de nuevo", ex);
+        }
+        return new HandoffJournal();
+    }
+
+    private bool SaveJournal(HandoffJournal journal)
+    {
+        try
+        {
+            // Solo lo reciente: los envíos terminados se borran de la nube en días
+            while (journal.Applied.Count > 50) journal.Applied.RemoveAt(0);
+            if (journal.Tokens.Count > 50)
+            {
+                foreach (var key in journal.Tokens.Keys.Take(journal.Tokens.Count - 50).ToList()) journal.Tokens.Remove(key);
+            }
+            WriteAtomically(HandoffJournalPath, JsonSerializer.Serialize(journal, JsonOptions));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo guardar el registro de consultas recibidas", ex);
+            return false;
+        }
+    }
+
+    /// <summary>Se guarda ANTES de intentar tomarla: si el intento llega pero la respuesta no, se reconoce después.</summary>
+    public bool RememberAcceptToken(string handoffId, string token)
+    {
+        lock (_journalGate)
+        {
+            var journal = LoadJournal();
+            journal.Tokens[handoffId] = token;
+            return SaveJournal(journal);
+        }
+    }
+
+    public string? GetAcceptToken(string handoffId)
+    {
+        lock (_journalGate)
+        {
+            return LoadJournal().Tokens.TryGetValue(handoffId, out var token) ? token : null;
+        }
+    }
+
+    public bool IsAcceptToken(string handoffId, string? token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        return GetAcceptToken(handoffId) == token;
+    }
+
+    /// <summary>La consulta recibida ya está guardada en este equipo (no se vuelve a ofrecer).</summary>
+    public bool MarkHandoffApplied(string handoffId)
+    {
+        lock (_journalGate)
+        {
+            var journal = LoadJournal();
+            if (!journal.Applied.Contains(handoffId)) journal.Applied.Add(handoffId);
+            return SaveJournal(journal);
+        }
+    }
+
+    public bool IsHandoffApplied(string handoffId)
+    {
+        lock (_journalGate)
+        {
+            return LoadJournal().Applied.Contains(handoffId);
+        }
+    }
+
+    /// <summary>"Liberar este equipo": se aparta la copia (para revisión) sin borrarla.</summary>
+    public string? ArchiveDraft(string suffix)
+    {
+        try
+        {
+            if (!File.Exists(FilePath)) return null;
+            var target = Path.Combine(Path.GetDirectoryName(FilePath) ?? string.Empty, $"consulta-enviada-{suffix}.json");
+            File.Copy(FilePath, target, overwrite: true);
+            return target;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo apartar la copia de la consulta enviada", ex);
+            return null;
+        }
+    }
 
     /// <summary>Alta o edición de paciente en curso (junto al de la consulta).</summary>
     public string PatientFormPath => Path.Combine(Path.GetDirectoryName(FilePath) ?? string.Empty, "alta-paciente-en-curso.json");

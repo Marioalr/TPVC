@@ -107,7 +107,7 @@ public class AppDbContext : DbContext
                     entry.Entity.UpdatedAtUtc = now;
                     break;
                 case EntityState.Modified:
-                    entry.Entity.UpdatedAtUtc = now;
+                    entry.Entity.UpdatedAtUtc = AfterStoredStamp(entry, now);
                     break;
                 case EntityState.Deleted:
                     if (entry.Entity.SyncId != Guid.Empty)
@@ -116,12 +116,23 @@ public class AppDbContext : DbContext
                         {
                             EntityType = entry.Metadata.ClrType.Name,
                             SyncId = entry.Entity.SyncId,
-                            DeletedAtUtc = now
+                            DeletedAtUtc = AfterStoredStamp(entry, now)
                         });
                     }
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// La marca de un cambio siempre queda después de la que ya tenía el registro. Si la última
+    /// versión vino de un equipo con el reloj adelantado (p. ej. la tablet que mandó la consulta),
+    /// una edición hecha aquí "después" tendría una marca anterior y la nube la descartaría.
+    /// </summary>
+    private static DateTime AfterStoredStamp(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<ISyncEntity> entry, DateTime now)
+    {
+        var stored = (DateTime)entry.Property(nameof(ISyncEntity.UpdatedAtUtc)).OriginalValue!;
+        return stored >= now ? stored.AddMilliseconds(1) : now;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

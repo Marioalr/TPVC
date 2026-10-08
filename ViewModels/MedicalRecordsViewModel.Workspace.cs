@@ -121,7 +121,9 @@ public partial class MedicalRecordsViewModel
 
     /// <summary>Servicio de "consulta" del catálogo que se cobra como honorario al terminar.</summary>
     public ClinicalService? ConsultationFeeService =>
-        Services.FirstOrDefault(s => s.IsActive && s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase))
+        // Consulta recibida de otro equipo: el honorario que ya usaba aquel
+        (_feeServiceOverrideId is int feeId ? Services.FirstOrDefault(s => s.IsActive && s.Id == feeId) : null)
+        ?? Services.FirstOrDefault(s => s.IsActive && s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase))
         ?? Services.FirstOrDefault(s => s.IsActive && s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase))
         ?? Services.FirstOrDefault(s => s.IsActive && s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
 
@@ -243,6 +245,12 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task ToggleDispenseInClinicAsync(PatientPrescriptionItem? item)
     {
+        if (item != null && BlockIfConsultationReadOnly())
+        {
+            // La casilla ya cambió el valor antes de llegar aquí
+            item.DispenseInClinic = !item.DispenseInClinic;
+            return;
+        }
         if (item == null || SelectedPatient == null) return;
 
         if (item.DispenseInClinic)
@@ -352,7 +360,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task DiscardActiveConsultationAsync()
     {
-        if (!HasActiveConsultation) return;
+        if (!HasActiveConsultation || BlockIfConsultationReadOnly()) return;
 
         if (!DialogService.Confirm(
                 "¿Descartar la consulta en curso?\n\nNo se guardará la nota médica ni se cobrará nada de la cuenta.",

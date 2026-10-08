@@ -145,6 +145,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task RepeatPreviousPrescriptionAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (!HasActiveConsultation || SelectedPatient == null) return;
 
         var skipped = new List<string>();

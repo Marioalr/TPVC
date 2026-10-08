@@ -135,9 +135,11 @@ public partial class MedicalRecordsViewModel
     /// <summary>Aviso "Consulta en curso · Volver" cuando se está fuera de la consulta.</summary>
     public bool ShowsConsultationBanner => HasActiveConsultation && !IsConsultationPage && !IsFormPage;
 
-    public string ConsultationBannerText => HasActiveConsultation
-        ? $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}"
-        : string.Empty;
+    public string ConsultationBannerText => !HasActiveConsultation
+        ? string.Empty
+        : IsConsultationHandedOff
+            ? $"Consulta de {ActiveConsultationPatientName} enviada a {HandoffTargetName}: esperando que la acepte"
+            : $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}";
 
     partial void OnActiveConsultationElapsedTimeChanged(string value) => OnPropertyChanged(nameof(ConsultationBannerText));
 
@@ -157,11 +159,15 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(ConsultationBannerText));
         OnPropertyChanged(nameof(IsConsultationForSelectedPatient));
         OnPropertyChanged(nameof(ChartPrimaryActionText));
+        OnPropertyChanged(nameof(CanAcceptIncomingHandoff));
+        OnPropertyChanged(nameof(IncomingHandoffBlockedReason));
+        OnPropertyChanged(nameof(ShowsIncomingHandoffNotice));
     }
 
     /// <summary>Al entrar desde el inicio de la app: a la consulta si hay una en curso, si no al inicio.</summary>
     public void EnterPatientsSection()
     {
+        OnEnterPatientsSectionForHandoff();
         if (HasActiveConsultation)
         {
             ShowConsultation();
@@ -217,7 +223,9 @@ public partial class MedicalRecordsViewModel
         }
         else if (HasActiveConsultation)
         {
-            InfoModalMessage = $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de iniciar otra.";
+            InfoModalMessage = IsConsultationHandedOff
+                ? $"La consulta de {ActiveConsultationPatientName} está enviada a {HandoffTargetName}. Recupérela o espere a que la acepte antes de iniciar otra."
+                : $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de iniciar otra.";
             IsInfoModalVisible = true;
         }
         else
@@ -574,6 +582,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public void EditAntecedent(AntecedentSection? section)
     {
+        if (BlockIfPatientHandedOff(SelectedPatient)) return;
         EditPatient();
         if (section != null) FormOpenSection = section.Key;
     }
@@ -1241,7 +1250,7 @@ public partial class MedicalRecordsViewModel
     public async Task DeactivateSelectedPatientAsync()
     {
         var patient = SelectedPatient;
-        if (patient == null) return;
+        if (patient == null || BlockIfPatientHandedOff(patient)) return;
         if (HasActiveConsultation && ActiveConsultation?.PatientId == patient.Id)
         {
             InfoModalMessage = "Termine o descarte la consulta en curso antes de dar de baja el expediente.";

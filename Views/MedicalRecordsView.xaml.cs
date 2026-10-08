@@ -76,7 +76,7 @@ public partial class MedicalRecordsView : UserControl
     private static bool IsAnySheetOpen(MedicalRecordsViewModel vm) =>
         vm.IsInfoModalVisible || vm.IsAllergyAlertOpen || vm.IsCreateServiceModalOpen || vm.IsCatalogBrowserModalOpen
         || vm.IsPrescriptionPdfModalOpen || vm.IsPosModalOpen || vm.IsPrescriptionModalOpen || vm.IsSuppliesModalOpen
-        || vm.IsServicesModalOpen;
+        || vm.IsServicesModalOpen || vm.IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, teclear con el foco fuera de un campo escribe en el buscador.</summary>
     private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
@@ -106,6 +106,8 @@ public partial class MedicalRecordsView : UserControl
         else if (vm.IsCreateServiceModalOpen) vm.CloseCreateServiceModal();
         else if (vm.IsCatalogBrowserModalOpen) vm.CloseCatalogBrowser();
         else if (vm.IsPrescriptionPdfModalOpen) vm.ClosePrescriptionPdfPreview();
+        // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
+        else if (vm.IsSendConsultationSheetOpen) vm.CloseSendConsultationSheet();
         else if (vm.IsCie10DropdownOpen) vm.IsCie10DropdownOpen = false;
         // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
         else if (vm.IsPosModalOpen) vm.ClosePosModal();

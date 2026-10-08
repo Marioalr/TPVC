@@ -33,7 +33,8 @@ public class TursoSyncService
 {
     public const int RemoteSchemaVersion = 2;
 
-    private const string ServerNowSql = "strftime('%Y-%m-%d %H:%M:%f','now')";
+    /// <summary>Hora del servidor (UTC) en el formato de las marcas de sincronización.</summary>
+    public const string ServerNowSql = "strftime('%Y-%m-%d %H:%M:%f','now')";
     private const string TombstonesTable = "SyncTombstones";
     private const string MetaTable = "_tpvc_meta";
     private const int PushChunkSize = 80;
@@ -60,6 +61,14 @@ public class TursoSyncService
     private string? _verifiedSchemaUrl;
     private string? _registeredDeviceUrl;
     private int _suppressAutoSync;
+
+    // Una sincronización automática que encontró otra en curso se repite al terminar esa (antes se
+    // perdía y lo guardado después del corte de la otra no subía hasta el siguiente cambio)
+    private int _autoSyncSkipped;
+
+    // Lecturas y escrituras de otras partes (revisión de consultas enviadas) para el monitor de cuota
+    private long _externalRowsRead;
+    private long _externalRowsWritten;
 
     /// <summary>Crea el cliente HTTP de Turso (reemplazable en pruebas por un servidor simulado).</summary>
     public Func<string, string, TursoClient> ClientFactory { get; set; } = (url, token) => new TursoClient(url, token);
@@ -142,8 +151,11 @@ public class TursoSyncService
         }, delayMs: 4000);
     }
 
-    /// <summary>Sincronización incremental (sube cambios locales y descarga los remotos).</summary>
-    public Task<TursoSyncResult> SyncAsync(bool isBackgroundAutoSync = false, CancellationToken ct = default)
+    /// <summary>
+    /// Sincronización incremental (sube cambios locales y descarga los remotos). <paramref name="lockWait"/>
+    /// es cuánto esperar si ya hay otra en curso (por defecto 5 s, o nada si es automática).
+    /// </summary>
+    public Task<TursoSyncResult> SyncAsync(bool isBackgroundAutoSync = false, CancellationToken ct = default, TimeSpan? lockWait = null)
     {
         var settings = _settingsService.CurrentSettings;
         if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
@@ -155,7 +167,14 @@ public class TursoSyncService
             });
         }
 
-        return RunExclusiveAsync(isBackgroundAutoSync, fullResync: false, ct);
+        return RunExclusiveAsync(isBackgroundAutoSync, fullResync: false, ct, lockWait);
+    }
+
+    /// <summary>Suma al monitor de cuota lo leído y escrito fuera de la sincronización.</summary>
+    public void AddExternalUsage(long rowsRead, long rowsWritten)
+    {
+        Interlocked.Add(ref _externalRowsRead, rowsRead);
+        Interlocked.Add(ref _externalRowsWritten, rowsWritten);
     }
 
     /// <summary>
@@ -173,10 +192,12 @@ public class TursoSyncService
         return RunExclusiveAsync(isBackgroundAutoSync: false, fullResync: true, ct);
     }
 
-    private async Task<TursoSyncResult> RunExclusiveAsync(bool isBackgroundAutoSync, bool fullResync, CancellationToken ct)
+    private async Task<TursoSyncResult> RunExclusiveAsync(bool isBackgroundAutoSync, bool fullResync, CancellationToken ct, TimeSpan? lockWait = null)
     {
-        if (!await _syncLock.WaitAsync(isBackgroundAutoSync ? 0 : 5000, ct))
+        var wait = lockWait ?? (isBackgroundAutoSync ? TimeSpan.Zero : TimeSpan.FromSeconds(5));
+        if (!await _syncLock.WaitAsync(wait, ct))
         {
+            if (isBackgroundAutoSync) Interlocked.Exchange(ref _autoSyncSkipped, 1);
             return new TursoSyncResult
             {
                 Success = false,
@@ -235,6 +256,7 @@ public class TursoSyncService
         finally
         {
             _syncLock.Release();
+            if (Interlocked.Exchange(ref _autoSyncSkipped, 0) == 1) OnLocalDataChanged();
         }
     }
 
@@ -269,7 +291,8 @@ public class TursoSyncService
         settings.LastPushedLocalUtc = cutoffUtc;
         if (!string.IsNullOrWhiteSpace(newWatermark)) settings.LastPulledServerWatermark = newWatermark;
         settings.LastSyncUtc = DateTime.UtcNow;
-        _settingsService.RecordUsage(rowsRead + 3, pushed + 1);
+        _settingsService.RecordUsage(rowsRead + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
+            pushed + 1 + Interlocked.Exchange(ref _externalRowsWritten, 0));
         _settingsService.SaveSettings(settings);
 
         return (pushed, pulled);
@@ -460,6 +483,9 @@ public class TursoSyncService
                      "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)";
         yield return "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, " +
                      "AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)";
+
+        // Consultas enviadas entre equipos (no se replica: cada equipo la consulta directamente)
+        foreach (var ddl in ConsultationHandoffService.HandoffTableDdl) yield return ddl;
     }
 
     /// <summary>
@@ -542,6 +568,9 @@ public class TursoSyncService
         _verifiedSchemaUrl = client.DatabaseUrl;
     }
 
+    /// <summary>Versión del programa (x.y.z) que se registra para cada equipo.</summary>
+    public static string AppVersionText => typeof(TursoSyncService).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+
     private static async Task RegisterDeviceAsync(TursoClient client, TursoSettings settings, CancellationToken ct)
     {
         const string sql = @"
@@ -553,13 +582,13 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     AppVersion = excluded.AppVersion,
     LastSeenUtc = excluded.LastSeenUtc;";
 
-        await client.ExecuteAsync(sql, new object?[]
+        // Hora del servidor: "última conexión" no depende del reloj de cada equipo
+        await client.ExecuteAsync(sql.Replace("VALUES (?, ?, ?, ?, ?)", $"VALUES (?, ?, ?, ?, {ServerNowSql})"), new object?[]
         {
             settings.DeviceId,
             settings.DeviceName,
             settings.DeviceRole.ToString(),
-            typeof(TursoSyncService).Assembly.GetName().Version?.ToString(3) ?? "1",
-            FormatDate(DateTime.UtcNow)
+            AppVersionText
         }, ct);
     }
 
@@ -622,8 +651,9 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         }
 
         // Borrados físicos: se registran y se aplican en la nube salvo que allá exista una versión más nueva
+        // Sin tope superior: un borrado con marca adelantada al reloj (ver AppDbContext) también sube
         var tombstones = await db.SyncTombstones.AsNoTracking()
-            .Where(t => t.DeletedAtUtc > fromUtc && t.DeletedAtUtc <= toUtc)
+            .Where(t => t.DeletedAtUtc > fromUtc)
             .ToListAsync(ct);
         var tablesByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m.Table);
         foreach (var t in tombstones)
@@ -659,9 +689,11 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     private static async Task<List<ISyncEntity>> LoadChangedGenericAsync<T>(AppDbContext db, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
         where T : class, ISyncEntity
     {
+        // Sin tope superior: un registro con marca posterior al corte (guardado durante la subida o
+        // con marca adelantada para ganarle a un equipo con el reloj adelantado) sube igual; la nube
+        // descarta lo que no sea más nuevo, así que volver a subirlo no cambia nada
         var list = await db.Set<T>().AsNoTracking()
-            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc
-                        && EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) <= toUtc)
+            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc)
             .ToListAsync(ct);
         return list.Cast<ISyncEntity>().ToList();
     }

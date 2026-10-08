@@ -44,7 +44,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.16.0";
+    private string _appVersion = "1.17.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -133,7 +133,8 @@ public partial class MainViewModel : ObservableObject
         TursoSettingsService? tursoSettingsService = null,
         DataImportService? dataImportService = null,
         ConsultationDraftStore? consultationDraftStore = null,
-        NotificationService? notificationService = null)
+        NotificationService? notificationService = null,
+        ConsultationHandoffService? consultationHandoffService = null)
     {
         Notifications = notificationService ?? new NotificationService();
         _inventoryService = inventoryService;
@@ -162,7 +163,8 @@ public partial class MainViewModel : ObservableObject
         // Cada uno con su propia cuenta y el mismo cobro: terminar una consulta ya no vacía la venta
         // a medias del mostrador. El POS solo manda a la consulta ("Abrir consulta"), nunca al revés.
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, Notifications);
-        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, consultationDraftStore, Notifications);
+        MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, consultationDraftStore, Notifications,
+            consultationHandoffService);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
@@ -230,6 +232,10 @@ public partial class MainViewModel : ObservableObject
 
         // Iniciar en la Vista Principal (las 3 cards: Nueva Venta, Nueva Consulta y Configuración)
         NavigateTo("MainHub");
+
+        // Consultas enviadas entre equipos: se revisa la nube cada pocos segundos en Pacientes y con
+        // menos frecuencia en el resto (solo con el servicio que entrega la aplicación, no en pruebas)
+        if (consultationHandoffService != null) MedicalRecordsVM.StartHandoffPolling();
     }
 
     [RelayCommand]
@@ -602,6 +608,7 @@ public partial class MainViewModel : ObservableObject
     public void NavigateTo(string viewName)
     {
         ActiveViewName = viewName;
+        if (viewName != "Records") MedicalRecordsVM?.LeavePatientsSection();
 
         switch (viewName)
         {

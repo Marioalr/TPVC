@@ -22,6 +22,15 @@ public partial class ConsultationProductItem : ObservableObject
     public decimal Subtotal => Quantity * UnitPrice;
     public string ProductName => Name;
     public DateTime AddedAt { get; set; } = DateTime.Now;
+
+    /// <summary>
+    /// Copia enviada a otro equipo: producto o servicio por su identificador de sincronización
+    /// (ProductId es local). Vacío en cargos libres.
+    /// </summary>
+    public Guid? CatalogSyncId { get; set; }
+
+    /// <summary>Copia enviada a otro equipo: "producto", "servicio" o "libre" (ProductId va en 0).</summary>
+    public string? LineKind { get; set; }
 }
 
 public partial class ActiveConsultation : ObservableObject
@@ -36,6 +45,10 @@ public partial class ActiveConsultation : ObservableObject
     
     [ObservableProperty]
     private DateTime? _endedAt;
+
+    /// <summary>Enviada a otro equipo: aquí queda en solo lectura (no se le agregan cargos).</summary>
+    [ObservableProperty]
+    private bool _isHandedOff;
 
     [ObservableProperty]
     private string _vitalSigns = string.Empty;

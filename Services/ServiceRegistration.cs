@@ -31,6 +31,9 @@ public static class ServiceRegistration
             sp.GetRequiredService<TursoSettingsService>(),
             sp.GetRequiredService<ClinicProfileService>(),
             sp.GetRequiredService<InventoryService>()));
+        services.AddSingleton(sp => new ConsultationHandoffService(
+            sp.GetRequiredService<TursoSyncService>(),
+            sp.GetRequiredService<TursoSettingsService>()));
         services.AddSingleton(sp => new DataImportService(
             sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
             sp.GetRequiredService<BackupService>(),

@@ -215,8 +215,12 @@ public partial class PosViewModel
             return;
         }
 
-        _consultationService.AddCartItemToActiveConsultation(-service.Id, service.Code, service.Name, $"Servicio Clínico • {service.Category}",
-            $"Honorario • {service.EstimatedDurationMinutes} min", "Servicio", service.Price, 1);
+        if (!_consultationService.AddCartItemToActiveConsultation(-service.Id, service.Code, service.Name, $"Servicio Clínico • {service.Category}",
+                $"Honorario • {service.EstimatedDurationMinutes} min", "Servicio", service.Price, 1))
+        {
+            ShowAlert("La consulta en curso se envió a otro equipo: se cobra allá.", false);
+            return;
+        }
 
         int addedSupplies = 0;
         foreach (var dp in service.DefaultProducts ?? new List<ServiceDefaultProduct>())

@@ -168,7 +168,8 @@ public class ConsultationService
 
     public bool AddCartItemToActiveConsultation(int productId, string code, string name, string? genericName, string? presentation, string unit, decimal unitPrice, int quantity)
     {
-        if (_currentConsultation == null || quantity <= 0)
+        // Una consulta enviada a otro equipo se edita solo allá
+        if (_currentConsultation == null || quantity <= 0 || _currentConsultation.IsHandedOff)
             return false;
 
         var existing = _currentConsultation.Items.FirstOrDefault(i => i.ProductId == productId);
@@ -195,6 +196,14 @@ public class ConsultationService
         _currentConsultation.NotifyItemsChanged();
         OnActiveConsultationChanged?.Invoke();
         return true;
+    }
+
+    /// <summary>La consulta se mandó a otro equipo (solo lectura aquí) o volvió a este.</summary>
+    public void SetActiveConsultationHandedOff(bool handedOff)
+    {
+        if (_currentConsultation == null || _currentConsultation.IsHandedOff == handedOff) return;
+        _currentConsultation.IsHandedOff = handedOff;
+        OnActiveConsultationChanged?.Invoke();
     }
 
     public void CloseActiveConsultation()

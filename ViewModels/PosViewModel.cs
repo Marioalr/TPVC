@@ -547,11 +547,16 @@ public partial class PosViewModel : ObservableObject, IDisposable
     public string ActiveConsultationPatientName => _consultationService.CurrentConsultation?.PatientName ?? string.Empty;
     public int ActiveConsultationItemsCount => _consultationService.CurrentConsultation?.TotalItems ?? 0;
     public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
-    public bool CanAddToActiveConsultation => HasActiveConsultation && HasCartItems;
+    /// <summary>Hay consulta en curso que se cobra en este equipo (no la que se envió a otro).</summary>
+    public bool CanChargeToActiveConsultation => HasActiveConsultation && _consultationService.CurrentConsultation?.IsHandedOff != true;
 
-    public string ActiveConsultationBannerText => HasActiveConsultation
-        ? $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}"
-        : string.Empty;
+    public bool CanAddToActiveConsultation => CanChargeToActiveConsultation && HasCartItems;
+
+    public string ActiveConsultationBannerText => !HasActiveConsultation
+        ? string.Empty
+        : _consultationService.CurrentConsultation?.IsHandedOff == true
+            ? $"Consulta de {ActiveConsultationPatientName} enviada a otro equipo: se cobra allá"
+            : $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}";
 
     [ObservableProperty]
     private string _activeConsultationElapsedTime = "00:00";
@@ -569,6 +574,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
         OnPropertyChanged(nameof(CanAddToActiveConsultation));
+        OnPropertyChanged(nameof(CanChargeToActiveConsultation));
         OnPropertyChanged(nameof(ActiveConsultationBannerText));
 
         if (HasActiveConsultation) StartConsultationTimer();
@@ -615,11 +621,22 @@ public partial class PosViewModel : ObservableObject, IDisposable
             ShowAlert("No hay una consulta en curso. Las consultas se inician en Pacientes.", false);
             return;
         }
+        if (!CanChargeToActiveConsultation)
+        {
+            ShowAlert("La consulta en curso se envió a otro equipo: se cobra allá.", false);
+            return;
+        }
 
         int totalAdded = 0;
         foreach (var item in Cart)
         {
-            _consultationService.AddCartItemToActiveConsultation(item.ProductId, item.Code, item.Name, item.GenericName, item.Presentation, item.Unit, item.UnitPrice, item.Quantity);
+            if (!_consultationService.AddCartItemToActiveConsultation(item.ProductId, item.Code, item.Name, item.GenericName, item.Presentation, item.Unit, item.UnitPrice, item.Quantity))
+            {
+                // No se vacía la venta si la consulta dejó de aceptar cargos
+                ShowAlert("No se pudo agregar a la consulta en curso. La venta sigue aquí.", false);
+                SyncActiveConsultation();
+                return;
+            }
             totalAdded += item.Quantity;
         }
 
