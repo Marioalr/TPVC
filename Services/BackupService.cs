@@ -72,18 +72,47 @@ public class BackupService
         Directory.CreateDirectory(BackupDirectory);
         var tempPath = targetPath + ".tmp";
 
-        using (var source = new SqliteConnection($"Data Source={_databasePath};Mode=ReadOnly;Pooling=False"))
-        using (var destination = new SqliteConnection($"Data Source={tempPath};Pooling=False"))
-        {
-            source.Open();
-            destination.Open();
-            source.BackupDatabase(destination);
-        }
+        CopyDatabase(_databasePath, tempPath, sourceReadOnly: true);
 
         File.Move(tempPath, targetPath, overwrite: true);
         PruneOldBackups();
         AppLogger.Info($"Respaldo creado: {targetPath}");
         return targetPath;
+    }
+
+    /// <summary>
+    /// Copia consistente de una base SQLite a otra con la API de backup. Si otra conexión está
+    /// escribiendo o cerrando la base en ese instante (SQLITE_BUSY/LOCKED), espera y reintenta en
+    /// lugar de fallar: antes un respaldo podía fallar solo por coincidir con un guardado.
+    /// </summary>
+    public static void CopyDatabase(string sourcePath, string destinationPath, bool sourceReadOnly)
+    {
+        var sourceMode = sourceReadOnly ? "Mode=ReadOnly;" : string.Empty;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                using var source = new SqliteConnection($"Data Source={sourcePath};{sourceMode}Pooling=False");
+                using var destination = new SqliteConnection($"Data Source={destinationPath};Pooling=False");
+                source.Open();
+                destination.Open();
+                SetBusyTimeout(source);
+                SetBusyTimeout(destination);
+                source.BackupDatabase(destination);
+                return;
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6 && attempt < 10)
+            {
+                System.Threading.Thread.Sleep(100 * attempt);
+            }
+        }
+    }
+
+    private static void SetBusyTimeout(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA busy_timeout = 3000;";
+        command.ExecuteNonQuery();
     }
 
     private void PruneOldBackups()

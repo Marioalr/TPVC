@@ -176,11 +176,7 @@ public class DataImportService
         var stagedPath = Path.Combine(Path.GetTempPath(), $"tpvc-restore-{Guid.NewGuid():N}.db");
         try
         {
-            using var source = new SqliteConnection($"Data Source={sqliteDbFilePath};Mode=ReadOnly;Pooling=False");
-            using var staged = new SqliteConnection($"Data Source={stagedPath};Pooling=False");
-            source.Open();
-            staged.Open();
-            source.BackupDatabase(staged);
+            BackupService.CopyDatabase(sqliteDbFilePath, stagedPath, sourceReadOnly: true);
         }
         catch (Exception ex)
         {
@@ -219,13 +215,7 @@ public class DataImportService
 
             // API de respaldo en línea de SQLite: copia consistente aunque el origen tenga cambios en
             // su archivo -wal y sin corromper la base destino (a diferencia de File.Copy con WAL activo)
-            using (var source = new SqliteConnection($"Data Source={stagedPath};Mode=ReadOnly;Pooling=False"))
-            using (var destination = new SqliteConnection($"Data Source={targetDbPath};Pooling=False"))
-            {
-                source.Open();
-                destination.Open();
-                source.BackupDatabase(destination);
-            }
+            BackupService.CopyDatabase(stagedPath, targetDbPath, sourceReadOnly: true);
             SqliteConnection.ClearAllPools();
 
             // 5. Migración aditiva automática para asegurar columnas e índices faltantes

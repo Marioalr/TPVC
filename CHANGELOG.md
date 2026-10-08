@@ -19,6 +19,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * **"Médico y consultorio" no abría su página** desde los accesos del inicio y la paleta de comandos (se quedaba en la anterior).
 * **Volver al respaldo más antiguo fallaba** con los 14 respaldos guardados: el respaldo previo a restaurar borraba justo ese archivo al limpiar los viejos. Ahora se copia antes de respaldar.
 * Dos respaldos en el mismo segundo se pisaban (el segundo lleva "-2").
+* Un respaldo (también el previo a importar o restaurar) podía fallar con "database is locked" si coincidía con un guardado; ahora espera un momento y reintenta.
 
 ## [1.15.0] - 2026-10-07
 
