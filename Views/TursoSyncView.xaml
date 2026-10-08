@@ -39,30 +39,8 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Ellipse Width="12" Height="12" Margin="2,0,14,0" VerticalAlignment="Center">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{DynamicResource ThemeTextSecondary}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TursoSyncStatus.Success}">
-                                                <Setter Property="Fill" Value="{DynamicResource ThemeSuccess}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TursoSyncStatus.Idle}">
-                                                <Setter Property="Fill" Value="{DynamicResource ThemeSuccess}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TursoSyncStatus.Syncing}">
-                                                <Setter Property="Fill" Value="{DynamicResource ThemeAccentStrong}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TursoSyncStatus.Offline}">
-                                                <Setter Property="Fill" Value="{DynamicResource ThemeWarning}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TursoSyncStatus.Error}">
-                                                <Setter Property="Fill" Value="{DynamicResource ThemeDanger}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
+                            <Ellipse Width="12" Height="12" Margin="2,0,14,0" VerticalAlignment="Center"
+                                     Style="{StaticResource SyncStatusDot}" Tag="{Binding Status}" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource TextSection}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                                 <TextBlock Style="{StaticResource TextCaption}" Text="{Binding LastSyncText}" Margin="0,2,0,0" />
@@ -111,7 +89,7 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" Height="36" VerticalContentAlignment="Center" helpers:PasswordBoxHelper.BindPassword="True"
+                            <PasswordBox Style="{StaticResource FieldPasswordBox}" helpers:PasswordBoxHelper.BindPassword="True"
                                          helpers:PasswordBoxHelper.BoundPassword="{Binding AuthToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          Visibility="{Binding IsAuthTokenVisible, Converter={StaticResource InverseBoolToVis}}" AutomationProperties.Name="Token de Turso" />
                             <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding AuthToken, UpdateSourceTrigger=PropertyChanged}"
@@ -294,6 +272,7 @@
                     <Border Style="{StaticResource CardSubtle}" Padding="12" MaxHeight="260">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <TextBox Text="{Binding PairingJsonPayload, Mode=OneWay}" IsReadOnly="True" Background="Transparent" BorderThickness="0"
+                                     CaretBrush="{DynamicResource ThemeText}" SelectionBrush="{DynamicResource ThemeAccent}"
                                      FontFamily="{StaticResource FontFamilyMono}" FontSize="12" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap"
                                      AutomationProperties.Name="Código de vinculación" />
                         </ScrollViewer>

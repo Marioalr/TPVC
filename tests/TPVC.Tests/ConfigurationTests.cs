@@ -202,6 +202,18 @@ public class ConfigurationTests
     }
 
     [TestMethod]
+    public void Appearance_RejectsMixingADarkBackgroundWithLightCards()
+    {
+        var theme = NewThemeService();
+        var vm = new AppearanceViewModel(theme);
+        vm.CustomBgHex = "#111827";
+        vm.CustomSurfaceHex = "#FFFFFF";
+        vm.ApplyCustomColorsCommand.Execute(null);
+        StringAssert.Contains(vm.CustomError, "los dos claros o los dos oscuros");
+        Assert.AreEqual("Claro", theme.CurrentSettings.ThemeMode, "No se aplica");
+    }
+
+    [TestMethod]
     public void Appearance_SelectAccentMarksOnlyThatSwatch()
     {
         if (!OperatingSystem.IsWindows()) return; // aplicar el tema usa los recursos de WPF

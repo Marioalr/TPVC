@@ -146,7 +146,7 @@
                                                 </TextBlock>
                                             </StackPanel>
                                             <Border Grid.Column="1" Style="{StaticResource StockBadge}" Margin="12,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding CurrentStock, StringFormat='Existencias: {0}'}" />
+                                                <TextBlock Text="{Binding StockBadgeText}" />
                                             </Border>
                                             <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
                                                        Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />

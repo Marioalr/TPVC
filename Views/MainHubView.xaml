@@ -18,6 +18,7 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Padding" Value="26,28" />
             <Setter Property="MinHeight" Value="370" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DsFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -37,7 +38,7 @@
                                 <Setter TargetName="cardBorder" Property="BorderThickness" Value="2" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="cardBorder" Property="Opacity" Value="0.9" />
+                                <Setter TargetName="cardBorder" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -101,68 +102,74 @@
                         <!-- Botones de Acción Directa para Atender Alertas -->
                         <WrapPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                             <!-- Citas de hoy -->
-                            <Button Style="{DynamicResource AccentButton}" 
+                            <Button Style="{StaticResource ButtonPrimary}" 
                                     Command="{Binding NavigateToAppointmentsCommand}" 
                                     Visibility="{Binding TodayAppointmentsCount, Converter={StaticResource BoolToVis}}" 
-                                    Padding="10,6" Margin="0,2,8,2">
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📅 Citas Hoy (" FontSize="11.5" />
+                                    <helpers:Icon Data="{StaticResource IcoCalendar}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Citas Hoy (" FontSize="11.5" />
                                     <TextBlock Text="{Binding TodayAppointmentsCount}" FontWeight="Bold" FontSize="11.5" />
                                     <TextBlock Text=")" FontSize="11.5" />
                                 </StackPanel>
                             </Button>
 
                             <!-- Stock bajo -->
-                            <Button Style="{DynamicResource OutlineButton}" 
+                            <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding NavigateToLowStockCommand}" 
                                     Visibility="{Binding LowStockCount, Converter={StaticResource BoolToVis}}" 
-                                    Padding="10,6" Margin="0,2,8,2">
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⚠️ Stock Bajo (" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
+                                    <helpers:Icon Data="{StaticResource IcoAlert}" Width="14" Height="14" Margin="0,0,6,0" Foreground="{DynamicResource ThemeWarningText}" />
+                                    <TextBlock Text="Stock Bajo (" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
                                     <TextBlock Text="{Binding LowStockCount}" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
                                     <TextBlock Text=")" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
                                 </StackPanel>
                             </Button>
 
                             <!-- Lotes caducados -->
-                            <Button Style="{DynamicResource DangerButton}" 
+                            <Button Style="{StaticResource ButtonDanger}" 
                                     Command="{Binding NavigateToBatchesCommand}" 
                                     Visibility="{Binding ExpiredBatchesCount, Converter={StaticResource BoolToVis}}" 
-                                    Padding="10,6" Margin="0,2,8,2">
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⛔ Caducados (" FontSize="11.5" />
+                                    <helpers:Icon Data="{StaticResource IcoAlert}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Caducados (" FontSize="11.5" />
                                     <TextBlock Text="{Binding ExpiredBatchesCount}" FontWeight="Bold" FontSize="11.5" />
                                     <TextBlock Text=")" FontSize="11.5" />
                                 </StackPanel>
                             </Button>
 
                             <!-- Lotes por vencer -->
-                            <Button Style="{DynamicResource OutlineButton}" 
+                            <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding NavigateToBatchesCommand}" 
                                     Visibility="{Binding NearExpiryBatchesCount, Converter={StaticResource BoolToVis}}" 
-                                    Padding="10,6" Margin="0,2,8,2">
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⏳ Por Vencer (" FontSize="11.5" />
+                                    <helpers:Icon Data="{StaticResource IcoClock}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Por Vencer (" FontSize="11.5" />
                                     <TextBlock Text="{Binding NearExpiryBatchesCount}" FontWeight="Bold" FontSize="11.5" />
                                     <TextBlock Text=")" FontSize="11.5" />
                                 </StackPanel>
                             </Button>
 
                             <!-- Lista sugerida de compras -->
-                            <Button Style="{DynamicResource AccentButton}" 
+                            <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding OpenSuggestedPurchasesCommand}" 
-                                    Padding="10,6" Margin="0,2,8,2">
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📋 Compras Sugeridas" FontSize="11.5" />
+                                    <helpers:Icon Data="{StaticResource IcoClipboard}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Compras Sugeridas" FontSize="11.5" />
                                 </StackPanel>
                             </Button>
 
                             <!-- Refrescar -->
-                            <Button Style="{DynamicResource OutlineButton}" 
+                            <Button Style="{StaticResource ButtonIconSecondary}" 
                                     Command="{Binding RefreshAlertsCommand}" 
                                     ToolTip="Refrescar estado de alertas" 
-                                    Padding="8,6" Margin="0,2,0,2">
-                                <TextBlock Text="🔄" FontSize="12" />
+                                    AutomationProperties.Name="Refrescar avisos"
+                                    Width="30" Height="30" Margin="0,2,0,2">
+                                <helpers:Icon Data="{StaticResource IcoRefresh}" Width="14" Height="14" />
                             </Button>
                         </WrapPanel>
                     </Grid>
@@ -180,13 +187,14 @@
                                Foreground="{DynamicResource ThemeTextSecondary}" 
                                HorizontalAlignment="Center" 
                                Margin="0,8,0,0" />
-                    <Button Style="{DynamicResource OutlineButton}" 
+                    <Button Style="{StaticResource ButtonSecondary}" 
                             Command="{Binding OpenSuggestedPurchasesCommand}" 
                             HorizontalAlignment="Center" 
                             Margin="0,12,0,0" 
-                            Padding="12,5">
+                            MinHeight="0" Padding="12,5">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📋 Ver Lista Sugerida de Compras y Resurtido de Stock" FontSize="11.5" />
+                            <helpers:Icon Data="{StaticResource IcoClipboard}" Width="14" Height="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Ver Lista Sugerida de Compras y Resurtido de Stock" FontSize="11.5" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -305,7 +313,7 @@
                             HorizontalAlignment="Center" 
                             Margin="0,0,0,18">
                         <Path Data="{StaticResource IconFileMedical}" 
-                              Fill="{DynamicResource ThemeAccentStrong}" 
+                              Fill="{DynamicResource ThemeAccentForeground}" 
                               Width="30" Height="30" 
                               Stretch="Uniform" 
                               HorizontalAlignment="Center" 
@@ -396,7 +404,7 @@
                             HorizontalAlignment="Center" 
                             Margin="0,0,0,18">
                         <Path Data="{StaticResource IconSettings}" 
-                              Fill="{DynamicResource ThemeAccentStrong}" 
+                              Fill="{DynamicResource ThemeAccentForeground}" 
                               Width="30" Height="30" 
                               Stretch="Uniform" 
                               HorizontalAlignment="Center" 
@@ -494,7 +502,8 @@
 
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="📋 Lista Sugerida de Compras y Resurtido" 
+                                <helpers:Icon Data="{StaticResource IcoClipboard}" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource ThemeAccentForeground}" />
+                                <TextBlock Text="Lista Sugerida de Compras y Resurtido" 
                                            FontWeight="Bold" 
                                            FontSize="18" 
                                            Foreground="{DynamicResource ThemeText}" />
@@ -510,13 +519,13 @@
 
                         <!-- Botón de Cerrar (X) -->
                         <Button Grid.Column="1" 
-                                Style="{DynamicResource OutlineButton}" 
+                                Style="{StaticResource ButtonIconSecondary}" 
                                 Command="{Binding CloseSuggestedPurchasesCommand}" 
-                                Width="34" Height="34" 
-                                Padding="0" 
+                                ToolTip="Cerrar" 
+                                AutomationProperties.Name="Cerrar la lista sugerida"
                                 HorizontalAlignment="Right" 
                                 VerticalAlignment="Top">
-                            <TextBlock Text="✕" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <helpers:Icon Data="{StaticResource IcoClose}" />
                         </Button>
                     </Grid>
 
@@ -623,25 +632,27 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{DynamicResource OutlineButton}" 
+                            <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding ExportSuggestedPurchasesCsvCommand}" 
                                     Padding="14,8" 
                                     Margin="0,0,10,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📥 Exportar a CSV (Excel)" FontWeight="SemiBold" FontSize="12" />
+                                    <helpers:Icon Data="{StaticResource IcoFile}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Exportar a CSV (Excel)" FontWeight="SemiBold" FontSize="12" />
                                 </StackPanel>
                             </Button>
-                            <Button Style="{DynamicResource OutlineButton}" 
+                            <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding PrintSuggestedPurchasesCommand}" 
                                     Padding="14,8">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🖨️ Imprimir / Guardar Informe" FontWeight="SemiBold" FontSize="12" />
+                                    <helpers:Icon Data="{StaticResource IcoPrint}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Imprimir / Guardar Informe" FontWeight="SemiBold" FontSize="12" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>
 
                         <Button Grid.Column="1" 
-                                Style="{DynamicResource AccentButton}" 
+                                Style="{StaticResource ButtonPrimary}" 
                                 Command="{Binding CloseSuggestedPurchasesCommand}" 
                                 Padding="24,8">
                             <TextBlock Text="Cerrar" FontWeight="Bold" FontSize="13" />

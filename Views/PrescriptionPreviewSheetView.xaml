@@ -112,7 +112,19 @@
 
                                     <StackPanel Grid.Row="1" Grid.Column="2">
                                         <TextBlock Text="Alergias:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeDangerText}" TextWrapping="Wrap" />
+                                        <!-- En rojo solo si tiene alergias: "Negadas" o "No interrogadas" no son una alarma -->
+                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SelectedPatient.HasAllergies}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource ThemeDangerText}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Grid>
                             </Border>

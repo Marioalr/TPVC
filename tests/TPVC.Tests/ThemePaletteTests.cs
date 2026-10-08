@@ -16,7 +16,35 @@ namespace TPVC.Tests;
 [TestClass]
 public class ThemePaletteTests
 {
-    private static readonly string[] Accents = { "#0369A1", "#0284C7", "#7C3AED", "#10B981", "#F59E0B", "#EC4899", "#FDE047", "#E11D48" };
+    // Los 8 acentos de Apariencia y algunos extremos (muy claros o saturados)
+    private static readonly string[] Accents =
+    {
+        "#0369A1", "#2563EB", "#0D9488", "#059669", "#7C3AED", "#E11D48", "#D97706", "#475569",
+        "#0284C7", "#10B981", "#F59E0B", "#EC4899", "#FDE047"
+    };
+
+    private static ThemeSettings Light(string accent) => new() { AccentColor = accent };
+
+    private static ThemeSettings Dark(string accent) => new()
+    {
+        ThemeMode = "Oscuro",
+        AccentColor = accent,
+        BackgroundColor = "#0F172A",
+        SurfaceColor = "#1E293B",
+        TextColor = "#F8FAFC",
+        SecondaryTextColor = "#94A3B8",
+        BorderColor = "#334155"
+    };
+
+    /// <summary>Personalizado como queda tras "Aplicar colores" desde el modo indicado (texto y bordes del modo anterior).</summary>
+    private static ThemeSettings Custom(ThemeSettings from, string background, string surface, string accent)
+    {
+        from.ThemeMode = "Personalizado";
+        from.BackgroundColor = background;
+        from.SurfaceColor = surface;
+        from.AccentColor = accent;
+        return from;
+    }
 
     private static IEnumerable<(string Name, ThemeSettings Settings)> Themes()
     {
@@ -35,6 +63,12 @@ public class ThemePaletteTests
             });
         }
         yield return ("Personalizado crema", new ThemeSettings { ThemeMode = "Personalizado", BackgroundColor = "#FFF7ED", SurfaceColor = "#FFFBF5", AccentColor = "#C2410C" });
+        foreach (var (label, from) in new (string, Func<ThemeSettings>)[] { ("desde Claro", () => Light("#0369A1")), ("desde Oscuro", () => Dark("#0369A1")) })
+        {
+            yield return ($"Crema {label}", Custom(from(), "#FFF7ED", "#FFFFFF", "#0D9488"));
+            yield return ($"Menta {label}", Custom(from(), "#ECFDF5", "#FFFFFF", "#059669"));
+            yield return ($"Pizarra {label}", Custom(from(), "#111827", "#1F2937", "#D97706"));
+        }
     }
 
     private static void AssertContrast(string theme, IReadOnlyDictionary<string, ThemeColor> p, string fg, string bg, double min)
@@ -54,13 +88,25 @@ public class ThemePaletteTests
                 AssertContrast(name, p, "ThemeText", surface, 4.5);
                 AssertContrast(name, p, "ThemeTextSecondary", surface, 4.5);
             }
-            foreach (var surface in new[] { "ThemeBackground", "ThemeSurface", "ThemeSurfaceSubtle" })
+            foreach (var surface in new[] { "ThemeBackground", "ThemeSurface", "ThemeSurfaceSubtle", "ThemeSelectionBackground" })
             {
                 AssertContrast(name, p, "ThemeAccentForeground", surface, 4.5);
             }
             AssertContrast(name, p, "ThemeAccentText", "ThemeAccentStrong", 4.5);
             AssertContrast(name, p, "ThemeAccentText", "ThemeAccentHover", 4.5);
-            AssertContrast(name, p, "ThemeFocus", "ThemeSurface", 3.0);
+            // Foco y bordes de estado (3:1, WCAG 1.4.11) en todo lo que puede rodear
+            foreach (var surface in new[] { "ThemeBackground", "ThemeSurface", "ThemeSurfaceSubtle", "ThemeSelectionBackground",
+                         "ThemeSuccessSubtle", "ThemeWarningSubtle", "ThemeDangerSubtle", "ThemeInfoSubtle" })
+            {
+                AssertContrast(name, p, "ThemeFocus", surface, 3.0);
+            }
+            foreach (var surface in new[] { "ThemeBackground", "ThemeSurface", "ThemeSurfaceSubtle" })
+            {
+                AssertContrast(name, p, "ThemeControlBorder", surface, 3.0);
+            }
+            AssertContrast(name, p, "ThemeToastText", "ThemeToastBackground", 4.5);
+            // El texto principal y el secundario se distinguen (antes, en personalizado, quedaban iguales)
+            Assert.IsGreaterThan(1.5, ThemeColor.Contrast(p["ThemeText"], p["ThemeTextSecondary"]), $"{name}: texto y texto secundario iguales");
             foreach (var solid in new[] { "ThemeSuccess", "ThemeWarning", "ThemeDanger", "ThemeError" })
             {
                 AssertContrast(name, p, "ThemeAccentText", solid, 4.5);
@@ -72,6 +118,20 @@ public class ThemePaletteTests
             AssertContrast(name, p, "ThemeToastText", "ThemeToastBackground", 4.5);
             Assert.AreNotEqual(p["ThemeSurface"], p["ThemeSurfaceSubtle"], $"{name}: el gris suave debe distinguirse de la superficie");
         }
+    }
+
+    [TestMethod]
+    public void CustomColors_TakeTextAndBordersFromTheirOwnSide()
+    {
+        // De Oscuro a un personalizado claro: el texto y los bordes son los del modo claro
+        var fromDark = ThemePalette.Build(Custom(Dark("#0369A1"), "#FFF7ED", "#FFFFFF", "#0D9488"));
+        Assert.AreEqual("#0F172A", fromDark["ThemeText"].ToHex());
+        Assert.AreEqual("#E2E8F0", fromDark["ThemeBorder"].ToHex());
+
+        // De Claro a un personalizado oscuro: los del modo oscuro
+        var fromLight = ThemePalette.Build(Custom(Light("#0369A1"), "#111827", "#1F2937", "#D97706"));
+        Assert.AreEqual("#F8FAFC", fromLight["ThemeText"].ToHex());
+        Assert.AreEqual("#334155", fromLight["ThemeBorder"].ToHex());
     }
 
     [TestMethod]

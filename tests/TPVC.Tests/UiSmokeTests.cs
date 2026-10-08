@@ -543,6 +543,7 @@ internal sealed class UiSmokeSession
     /// <summary>
     /// Cada texto visible contra el fondo que realmente tiene detrás (el primer fondo opaco de sus
     /// contenedores, mezclando los semitransparentes): 4.5:1, o 3:1 en títulos grandes (WCAG 2.1).
+    /// Los iconos, como gráficos que dan información: 3:1 (WCAG 1.4.11).
     /// Lo deshabilitado o atenuado a propósito no cuenta.
     /// </summary>
     private void CheckContrast(System.Windows.DependencyObject root, string screen)
@@ -559,6 +560,9 @@ internal sealed class UiSmokeSession
                 break;
             case System.Windows.Controls.TextBox box when !string.IsNullOrWhiteSpace(box.Text) && box.Foreground is System.Windows.Media.SolidColorBrush boxBrush:
                 Report(screen, box, box.Text, boxBrush.Color, box.FontSize, box.FontWeight);
+                break;
+            case TPVC.Helpers.Icon icon when icon.ActualWidth >= 1 && icon.Data != null && icon.Foreground is System.Windows.Media.SolidColorBrush iconBrush:
+                Report(screen, icon, IconLabel(icon), iconBrush.Color, 0, System.Windows.FontWeights.Normal, required: 3.0);
                 break;
         }
 
@@ -590,14 +594,14 @@ internal sealed class UiSmokeSession
     }
 
     private void Report(string screen, System.Windows.DependencyObject element, string content, System.Windows.Media.Color foreground,
-        double fontSize, System.Windows.FontWeight weight)
+        double fontSize, System.Windows.FontWeight weight, double? required = null)
     {
         var background = EffectiveBackground(element);
         if (background == null) return;
         var fg = Composite(foreground, background.Value);
         double ratio = ThemeColor.Contrast(ToTheme(fg), ToTheme(background.Value));
         bool large = fontSize >= 24 || (fontSize >= 18.66 && weight.ToOpenTypeWeight() >= 700);
-        double required = large ? 3.0 : 4.5;
+        required ??= large ? 3.0 : 4.5;
         if (ratio >= required - 0.005) return;
 
         var snippet = content.Replace("\n", " ").Trim();
@@ -605,10 +609,28 @@ internal sealed class UiSmokeSession
         var key = $"{snippet}|{fg}|{background}";
         if (!_contrastIssues.TryGetValue(key, out var issue))
         {
-            issue = ($"\"{snippet}\" {ToHex(fg)} sobre {ToHex(background.Value)} = {ratio:0.00}:1 (mínimo {required:0.#}:1, {fontSize:0.#}px)", new List<string>());
+            var size = fontSize > 0 ? $", {fontSize:0.#}px" : string.Empty;
+            issue = ($"\"{snippet}\" {ToHex(fg)} sobre {ToHex(background.Value)} = {ratio:0.00}:1 (mínimo {required:0.#}:1{size})", new List<string>());
             _contrastIssues[key] = issue;
         }
         if (!issue.Screens.Contains(screen)) issue.Screens.Add(screen);
+    }
+
+    /// <summary>Nombre legible del icono para el informe: el del control que lo contiene, si lo tiene.</summary>
+    private static string IconLabel(TPVC.Helpers.Icon icon)
+    {
+        for (System.Windows.DependencyObject? current = icon; current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        {
+            var name = System.Windows.Automation.AutomationProperties.GetName(current);
+            if (!string.IsNullOrWhiteSpace(name)) return $"icono de {name}";
+            if (current is System.Windows.FrameworkElement { ToolTip: string tip } && !string.IsNullOrWhiteSpace(tip)) return $"icono de {tip}";
+            if (current is System.Windows.Controls.Panel panel)
+            {
+                var label = panel.Children.OfType<System.Windows.Controls.TextBlock>().Select(t => t.Text).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+                if (label != null) return $"icono junto a {label}";
+            }
+        }
+        return "icono";
     }
 
     /// <summary>Fondo pintado detrás del elemento: mezcla los semitransparentes hasta uno opaco.</summary>

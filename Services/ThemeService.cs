@@ -102,10 +102,24 @@ public class ThemeService
 
     public void SetCustomBackground(string bgHex, string surfaceHex)
     {
-        CurrentSettings.ThemeMode = "Personalizado";
-        CurrentSettings.BackgroundColor = bgHex;
-        CurrentSettings.SurfaceColor = surfaceHex;
+        WithCustomColors(CurrentSettings, bgHex, surfaceHex);
         SaveTheme(CurrentSettings);
+    }
+
+    /// <summary>
+    /// Colores propios: el texto y los bordes se toman del lado (claro u oscuro) del fondo nuevo, no
+    /// del modo anterior. La vista previa de Apariencia usa lo mismo para mostrar exactamente el resultado.
+    /// </summary>
+    public static ThemeSettings WithCustomColors(ThemeSettings settings, string bgHex, string surfaceHex)
+    {
+        settings.ThemeMode = "Personalizado";
+        settings.BackgroundColor = bgHex;
+        settings.SurfaceColor = surfaceHex;
+        bool dark = ThemePalette.IsDark(settings);
+        settings.TextColor = dark ? "#F8FAFC" : "#0F172A";
+        settings.SecondaryTextColor = dark ? "#94A3B8" : "#64748B";
+        settings.BorderColor = dark ? "#334155" : "#E2E8F0";
+        return settings;
     }
 
     /// <summary>

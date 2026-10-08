@@ -93,6 +93,10 @@
                                         <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Location}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <Border Grid.Column="2" Style="{StaticResource StockBadge}" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                        <!-- Bajo el mínimo o agotado: además del color, el icono de aviso -->
+                                        <helpers:Icon Data="{StaticResource IcoAlert}" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                      Visibility="{Binding IsLowStock, Converter={StaticResource BoolToVis}}" />
                                         <TextBlock>
                                             <TextBlock.Text>
                                                 <MultiBinding StringFormat="{}{0} {1}">
@@ -101,6 +105,7 @@
                                                 </MultiBinding>
                                             </TextBlock.Text>
                                         </TextBlock>
+                                        </StackPanel>
                                     </Border>
                                     <TextBlock Grid.Column="3" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
                                                Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />

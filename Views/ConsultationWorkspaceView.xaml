@@ -98,6 +98,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                     <Button Style="{StaticResource ButtonGhost}" Command="{Binding ReleaseHandoffLocallyCommand}" Padding="10,5" MinHeight="0" Margin="0,0,8,0"
+                            Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold"
                             Content="Liberar este equipo" ToolTip="Dejar de esperar aquí sin confirmar con la nube"
                             IsEnabled="{Binding IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
                             Visibility="{Binding CanReleaseHandoffLocally, Converter={StaticResource BoolToVis}}" />
@@ -505,15 +506,21 @@
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="ListBoxItem">
-                                                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="8,6" SnapsToDevicePixels="True">
-                                                            <ContentPresenter />
-                                                        </Border>
+                                                        <Grid>
+                                                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="10,6,8,6" SnapsToDevicePixels="True">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <!-- La sugerencia que toma Enter lleva barra, no solo tinte -->
+                                                            <Border x:Name="Mark" Width="3" CornerRadius="2" Margin="2,6" HorizontalAlignment="Left"
+                                                                    Background="{DynamicResource ThemeFocus}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                                        </Grid>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                                             </Trigger>
                                                             <Trigger Property="IsSelected" Value="True">
                                                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
                                                             </Trigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>
@@ -603,13 +610,16 @@
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Reposo relativo por 48 horas, evitar esfuerzos físicos pesados." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Reposo" />
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Dieta blanda" />
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Datos de alarma" />
-                                <ComboBox ItemsSource="{Binding GeneralMeasureTemplates}"
+                                <ComboBox Style="{StaticResource FieldComboBox}"
+                                          ItemsSource="{Binding GeneralMeasureTemplates}"
                                           SelectedItem="{Binding SelectedGeneralMeasureTemplate, Mode=TwoWay}"
                                           DisplayMemberPath="Title"
                                           helpers:TypeAhead.IsEnabled="True"
                                           ToolTip="Medidas generales del consultorio: despliegue y escriba para buscar"
                                           MinWidth="240"
-                                          Height="28"
+                                          MinHeight="0"
+                                          Padding="10,3,32,3"
+                                          FontSize="12.5"
                                           Margin="0,0,6,6"
                                           Visibility="{Binding HasGeneralMeasureTemplates, Converter={StaticResource BoolToVis}}" />
                             </WrapPanel>
@@ -656,13 +666,14 @@
                                                         <TextBlock Text="{Binding Dosage}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" />
                                                     </StackPanel>
                                                     <CheckBox Grid.Column="1"
+                                                              Style="{StaticResource FieldCheckBox}"
                                                               IsChecked="{Binding DispenseInClinic, Mode=TwoWay}"
                                                               Command="{Binding DataContext.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                               CommandParameter="{Binding}"
                                                               VerticalAlignment="Center"
                                                               Margin="12,0,0,0"
                                                               ToolTip="Se entrega en el consultorio y se carga a la cuenta de la consulta">
-                                                        <TextBlock Text="Se surte aquí" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                                        <TextBlock Text="Se surte aquí" FontSize="12" />
                                                     </CheckBox>
                                                 </Grid>
                                             </DataTemplate>

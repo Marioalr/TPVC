@@ -133,9 +133,9 @@
                                    Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource InverseBoolToVis}}" />
 
                         <Canvas Visibility="{Binding HasEnoughPointsForChart, Converter={StaticResource BoolToVis}}">
-                            <Line X1="30" Y1="40" X2="620" Y2="40" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="1" />
-                            <Line X1="30" Y1="100" X2="620" Y2="100" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="1" />
-                            <Line X1="30" Y1="160" X2="620" Y2="160" Stroke="{DynamicResource ThemeBorder}" StrokeDashArray="3,3" StrokeThickness="1" />
+                            <Line X1="30" Y1="40" X2="620" Y2="40" Stroke="{DynamicResource ThemeBorderStrong}" StrokeDashArray="3,3" StrokeThickness="1" />
+                            <Line X1="30" Y1="100" X2="620" Y2="100" Stroke="{DynamicResource ThemeBorderStrong}" StrokeDashArray="3,3" StrokeThickness="1" />
+                            <Line X1="30" Y1="160" X2="620" Y2="160" Stroke="{DynamicResource ThemeBorderStrong}" StrokeDashArray="3,3" StrokeThickness="1" />
                             <Polyline Points="{Binding WeightPolylinePoints}" Stroke="{DynamicResource ThemeChartWeight}" StrokeThickness="2.5" StrokeLineJoin="Round" />
                             <Polyline Points="{Binding SystolicPolylinePoints}" Stroke="{DynamicResource ThemeChartSystolic}" StrokeThickness="2.5" StrokeLineJoin="Round" />
                             <Polyline Points="{Binding DiastolicPolylinePoints}" Stroke="{DynamicResource ThemeChartDiastolic}" StrokeThickness="2" StrokeDashArray="2,2" StrokeLineJoin="Round" />

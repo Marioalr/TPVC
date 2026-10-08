@@ -16,6 +16,7 @@ public class CommandPaletteItem
     public string Title { get; set; } = string.Empty;
     public string Subtitle { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    /// <summary>Clave de una geometría Ico* del sistema de diseño (se pinta con el color del tema).</summary>
     public string Icon { get; set; } = string.Empty;
     public string Badge { get; set; } = string.Empty;
     public Action Action { get; set; } = () => { };
@@ -52,8 +53,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _tursoStatusToolTip = "Almacenamiento local SQLite (0 latencia). Clic para configurar Turso Cloud.";
 
+    // El color del punto lo pone el tema (SyncStatusDot) según este estado
     [ObservableProperty]
-    private string _tursoStatusColorHex = "#64748B";
+    private TursoSyncStatus _tursoStatus = TursoSyncStatus.NotConfigured;
 
     // ==========================================
     // ASISTENTE DE PRIMER ARRANQUE (BIENVENIDA)
@@ -282,7 +284,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Punto de Venta (POS)",
             Subtitle = "Cobro en caja, venta de medicamentos y ticket",
             Category = "Módulos",
-            Icon = "🛒",
+            Icon = "IcoCart",
             Action = () => NavigateTo("Pos")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -290,7 +292,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Pacientes",
             Subtitle = "Citas de hoy, búsqueda de pacientes, expedientes y consulta",
             Category = "Módulos",
-            Icon = "📋",
+            Icon = "IcoClipboard",
             Action = () => NavigateTo("Records")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -298,7 +300,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Agenda",
             Subtitle = "Citas de la semana y huecos libres para agendar",
             Category = "Módulos",
-            Icon = "📅",
+            Icon = "IcoCalendar",
             Action = () =>
             {
                 NavigateTo("Records");
@@ -310,7 +312,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Inventario de Medicamentos",
             Subtitle = "Catálogo general de medicamentos, existencias y precios",
             Category = "Módulos",
-            Icon = "📦",
+            Icon = "IcoPill",
             Action = () => NavigateTo("Inventory")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -318,7 +320,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Control de Lotes y Caducidades",
             Subtitle = "Semáforo FEFO, lotes próximos a vencer y vencidos",
             Category = "Módulos",
-            Icon = "⏳",
+            Icon = "IcoClock",
             Action = () => NavigateTo("Batches")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -326,7 +328,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Movimientos de Stock",
             Subtitle = "Historial de entradas, salidas, mermas y ajustes",
             Category = "Módulos",
-            Icon = "🔄",
+            Icon = "IcoHistory",
             Action = () => NavigateTo("Movements")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -334,7 +336,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Métricas y Rendimiento",
             Subtitle = "Indicadores clave del consultorio y estadísticas",
             Category = "Módulos",
-            Icon = "📊",
+            Icon = "IcoChart",
             Action = () => NavigateTo("Dashboard")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -342,7 +344,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Configuración y Temas",
             Subtitle = "Personalización visual, colores y actualizaciones",
             Category = "Módulos",
-            Icon = "⚙️",
+            Icon = "IcoSettings",
             Action = () => NavigateTo("Settings")
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -350,7 +352,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Nube y Turso Cloud",
             Subtitle = "Configuración de sincronización multi-dispositivo y plan gratis",
             Category = "Módulos",
-            Icon = "☁️",
+            Icon = "IcoCloud",
             Action = OpenTursoSync
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -358,7 +360,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Menú Principal (Hub)",
             Subtitle = "Pantalla inicial con accesos principales",
             Category = "Módulos",
-            Icon = "🏠",
+            Icon = "IcoHome",
             Action = () => NavigateTo("MainHub")
         });
 
@@ -368,7 +370,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Sincronizar con Turso Cloud",
             Subtitle = "Enviar y recibir cambios con la base en la nube",
             Category = "Acciones Rápidas",
-            Icon = "🔄",
+            Icon = "IcoRefresh",
             Action = () => _ = SyncTursoNowAsync()
         });
         _staticCommandItems.Add(new CommandPaletteItem
@@ -376,7 +378,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Iniciar consulta",
             Subtitle = "Con el paciente abierto; si no hay uno, lleva a buscarlo",
             Category = "Acciones Rápidas",
-            Icon = "🩺",
+            Icon = "IcoPulse",
             Action = () =>
             {
                 NavigateTo("Records");
@@ -390,7 +392,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Nuevo paciente",
             Subtitle = "Dar de alta un expediente clínico",
             Category = "Acciones Rápidas",
-            Icon = "👤",
+            Icon = "IcoUserPlus",
             Action = () =>
             {
                 NavigateTo("Records");
@@ -402,7 +404,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Servicios Clínicos y Procedimientos",
             Subtitle = "Explorar y administrar servicios médicos en POS",
             Category = "Acciones Rápidas",
-            Icon = "💉",
+            Icon = "IcoSyringe",
             Action = () =>
             {
                 NavigateTo("Pos");
@@ -414,7 +416,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Ver Lotes Próximos a Vencer (≤60 días)",
             Subtitle = "Revisar medicamentos próximos a caducar para venta prioritaria FEFO",
             Category = "Acciones Rápidas",
-            Icon = "⚠️",
+            Icon = "IcoAlert",
             Action = () =>
             {
                 NavigateTo("Batches");
@@ -426,7 +428,7 @@ public partial class MainViewModel : ObservableObject
             Title = "Ver Lotes Vencidos",
             Subtitle = "Revisar medicamentos expirados para merma o devolución",
             Category = "Acciones Rápidas",
-            Icon = "🛑",
+            Icon = "IcoAlert",
             Action = () =>
             {
                 NavigateTo("Batches");
@@ -466,7 +468,7 @@ public partial class MainViewModel : ObservableObject
                     Title = p.FullName,
                     Subtitle = $"Exp: {p.RecordNumber} • Tel: {p.FormattedPhone} • {p.AgeDisplay} • Diagnóstico: {p.LastDiagnosis}",
                     Category = "Pacientes",
-                    Icon = "👤",
+                    Icon = "IcoUser",
                     Badge = hasAllergies ? "⚠️ Alergias" : p.RecordNumber,
                     Action = () =>
                     {
@@ -672,32 +674,28 @@ public partial class MainViewModel : ObservableObject
         }
         catch { }
 
+        TursoStatus = status;
         switch (status)
         {
             case TursoSyncStatus.NotConfigured:
                 TursoStatusText = "Modo Local (SQLite)";
-                TursoStatusColorHex = "#64748B"; // Gris pizarra
                 TursoStatusToolTip = "Almacenamiento local SQLite (0 latencia). Clic para configurar Turso Cloud y sincronizar con Android.";
                 break;
             case TursoSyncStatus.Idle:
                 TursoStatusText = "Turso: Conectado";
-                TursoStatusColorHex = "#0284C7"; // Azul cielo
                 TursoStatusToolTip = $"Base de datos en la nube Turso activa.\n{message}";
                 break;
             case TursoSyncStatus.Syncing:
                 TursoStatusText = "Turso: Sincronizando...";
-                TursoStatusColorHex = "#F59E0B"; // Ámbar
                 TursoStatusToolTip = "Sincronizando cambios en segundo plano con Turso Cloud...";
                 break;
             case TursoSyncStatus.Success:
                 TursoStatusText = "Turso: Sincronizado";
-                TursoStatusColorHex = "#10B981"; // Verde esmeralda
                 TursoStatusToolTip = $"Datos actualizados en la nube Turso.\n{message}";
                 break;
             case TursoSyncStatus.Offline:
             case TursoSyncStatus.Error:
                 TursoStatusText = "Turso: Sin conexión";
-                TursoStatusColorHex = "#EF4444"; // Rojo suave
                 TursoStatusToolTip = $"Operando localmente sin riesgo de pérdida de datos.\n{message}";
                 break;
         }

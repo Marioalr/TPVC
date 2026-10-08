@@ -381,6 +381,16 @@ public class DataLayerTests
     }
 
     [TestMethod]
+    public void StockBadgeText_SaysTheStateInWordsNotOnlyColor()
+    {
+        Assert.AreEqual("Existencias: 12", new Product { MinStock = 5, CurrentStock = 12 }.StockBadgeText);
+        Assert.AreEqual("Stock bajo: 3", new Product { MinStock = 5, CurrentStock = 3 }.StockBadgeText);
+        Assert.AreEqual("Sin existencias", new Product { MinStock = 5, CurrentStock = 0 }.StockBadgeText);
+        Assert.AreEqual("Sin existencias", new Product { MinStock = 0, CurrentStock = 0 }.StockBadgeText);
+        Assert.AreEqual("Existencias: 2", new Product { MinStock = 0, CurrentStock = 2 }.StockBadgeText, "Sin mínimo no hay alerta");
+    }
+
+    [TestMethod]
     public async Task AddConsultationNote_SameFolioOnAnotherPatient_DoesNotOverwriteIt()
     {
         var patients = await _service.GetPatientsAsync();

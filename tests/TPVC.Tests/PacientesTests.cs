@@ -384,7 +384,7 @@ public class PacientesTests
 
         var pressure = vitals.Single(v => v.Label.StartsWith("T/A"));
         Assert.AreEqual("120/80", pressure.Value);
-        Assert.AreEqual("antes 130/85", pressure.Trend);
+        Assert.AreEqual("↓ antes 130/85", pressure.Trend, "La flecha marca la bajada sin depender del color");
         Assert.IsTrue(pressure.IsDown);
 
         var weight = vitals.Single(v => v.Label.StartsWith("Peso"));

@@ -47,7 +47,7 @@
             </Border>
 
             <!-- Versión nueva disponible -->
-            <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16" BorderBrush="{DynamicResource ThemeAccentStrong}"
+            <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16" BorderBrush="{DynamicResource ThemeFocus}"
                     Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
                     <Grid>
@@ -156,7 +156,7 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" Height="36" VerticalContentAlignment="Center" helpers:PasswordBoxHelper.BindPassword="True"
+                            <PasswordBox Style="{StaticResource FieldPasswordBox}" helpers:PasswordBoxHelper.BindPassword="True"
                                          helpers:PasswordBoxHelper.BoundPassword="{Binding GitHubToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          Visibility="{Binding IsGitHubTokenVisible, Converter={StaticResource InverseBoolToVis}}" AutomationProperties.Name="Token de GitHub" />
                             <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"

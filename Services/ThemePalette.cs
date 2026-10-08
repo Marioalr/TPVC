@@ -84,13 +84,23 @@ public static class ThemePalette
             : surface == DefaultDarkSurface && dark ? ThemeColor.Rgb(0x27, 0x34, 0x49)
             : ThemeColor.Blend(surface, dark ? White : Black, dark ? 0.06 : 0.04);
 
+        // En oscuro, un acento muy claro (amarillo) haría la selección tan clara que el texto secundario
+        // tendría que aclararse hasta confundirse con el principal: se mezcla menos
         var selection = ThemeColor.Blend(surface, accent, dark ? 0.35 : 0.14);
+        for (double amount = 0.30; dark && selection.Luminance > 0.07 && amount > 0; amount -= 0.05)
+        {
+            selection = ThemeColor.Blend(surface, accent, amount);
+        }
         var textSurfaces = new[] { bg, surface, subtle, selection };
 
-        var text = EnsureContrast(ThemeColor.Parse(settings.TextColor, dark ? ThemeColor.Rgb(0xF8, 0xFA, 0xFC) : ThemeColor.Rgb(0x0F, 0x17, 0x2A)), textSurfaces, TextContrast);
-        var textSecondary = EnsureContrast(ThemeColor.Parse(settings.SecondaryTextColor, dark ? ThemeColor.Rgb(0x94, 0xA3, 0xB8) : ThemeColor.Rgb(0x64, 0x74, 0x8B)), textSurfaces, TextContrast);
-        var border = ThemeColor.Parse(settings.BorderColor, dark ? ThemeColor.Rgb(0x33, 0x41, 0x55) : ThemeColor.Rgb(0xE2, 0xE8, 0xF0));
+        // Colores guardados del otro modo (p. ej. "Personalizado" claro con el texto que dejó el modo
+        // oscuro) no se usan: el texto principal y el secundario quedaban del mismo gris
+        var text = EnsureContrast(OwnSide(settings.TextColor, dark ? ThemeColor.Rgb(0xF8, 0xFA, 0xFC) : ThemeColor.Rgb(0x0F, 0x17, 0x2A)), textSurfaces, TextContrast);
+        var textSecondary = EnsureContrast(OwnSide(settings.SecondaryTextColor, dark ? ThemeColor.Rgb(0x94, 0xA3, 0xB8) : ThemeColor.Rgb(0x64, 0x74, 0x8B)), textSurfaces, TextContrast);
+        var border = OwnSide(settings.BorderColor, dark ? ThemeColor.Rgb(0x33, 0x41, 0x55) : ThemeColor.Rgb(0xE2, 0xE8, 0xF0));
         var borderStrong = ThemeColor.Blend(border, text, dark ? 0.18 : 0.14);
+        // Contorno de casillas, opciones, campos y barras de desplazamiento: 3:1 con lo que hay alrededor
+        var controlBorder = EnsureContrast(borderStrong, new[] { surface, bg, subtle }, FocusContrast);
 
         // Botón principal y seleccionados: texto blanco encima → el acento se oscurece si hace falta
         var accentStrong = EnsureContrast(accent, new[] { White }, TextContrast);
@@ -101,10 +111,22 @@ public static class ThemePalette
         // el gris suave en los dos modos (antes eran fijas y el verde quedaba en 2.5:1 sobre blanco)
         var chartSurfaces = new[] { surface, subtle };
         ThemeColor Series(ThemeColor light, ThemeColor darkColor) => EnsureContrast(dark ? darkColor : light, chartSurfaces, FocusContrast);
+        var red = Series(ThemeColor.Rgb(0xDC, 0x26, 0x26), ThemeColor.Rgb(0xF8, 0x71, 0x71));
+        var amber = Series(ThemeColor.Rgb(0xB4, 0x53, 0x09), ThemeColor.Rgb(0xFB, 0xBF, 0x24));
+        var green = Series(ThemeColor.Rgb(0x04, 0x78, 0x57), ThemeColor.Rgb(0x34, 0xD3, 0x99));
 
         var success = ThemeColor.Rgb(0x04, 0x78, 0x57);
         var warning = ThemeColor.Rgb(0xB4, 0x53, 0x09);
         var danger = ThemeColor.Rgb(0xB9, 0x1C, 0x1C);
+
+        var successSubtle = dark ? ThemeColor.Rgb(0x14, 0x53, 0x2D) : ThemeColor.Rgb(0xDC, 0xFC, 0xE7);
+        var warningSubtle = dark ? ThemeColor.Rgb(0x78, 0x35, 0x0F) : ThemeColor.Rgb(0xFE, 0xF3, 0xC7);
+        var dangerSubtle = dark ? ThemeColor.Rgb(0x7F, 0x1D, 0x1D) : ThemeColor.Rgb(0xFE, 0xE2, 0xE2);
+        var infoSubtle = dark ? ThemeColor.Rgb(0x0C, 0x4A, 0x6E) : ThemeColor.Rgb(0xE0, 0xF2, 0xFE);
+
+        // Anillo de foco y bordes de estado: 3:1 también sobre el gris suave, lo seleccionado y los avisos
+        var focus = EnsureContrast(accent, new[] { surface, bg, subtle, selection, successSubtle, warningSubtle, dangerSubtle, infoSubtle }, FocusContrast);
+        var toastText = dark ? ThemeColor.Rgb(0x0F, 0x17, 0x2A) : ThemeColor.Rgb(0xF8, 0xFA, 0xFC);
 
         var palette = new Dictionary<string, ThemeColor>(StringComparer.Ordinal)
         {
@@ -116,13 +138,14 @@ public static class ThemePalette
             ["ThemeTextSecondary"] = textSecondary,
             ["ThemeBorder"] = border,
             ["ThemeBorderStrong"] = borderStrong,
+            ["ThemeControlBorder"] = controlBorder,
             ["ThemeAccent"] = accent,
             ["ThemeAccentStrong"] = accentStrong,
             ["ThemeAccentHover"] = ThemeColor.Blend(accentStrong, Black, 0.12),
             ["ThemeAccentPressed"] = ThemeColor.Blend(accentStrong, Black, 0.24),
             ["ThemeAccentText"] = White,
             ["ThemeAccentForeground"] = accentForeground,
-            ["ThemeFocus"] = EnsureContrast(accent, new[] { surface, bg }, FocusContrast),
+            ["ThemeFocus"] = focus,
             ["ThemePrimary"] = accentStrong,
             ["ThemePrimaryTransparent"] = accent.WithAlpha(0x15),
             ["ThemeSelectionBackground"] = selection,
@@ -135,25 +158,41 @@ public static class ThemePalette
             ["ThemeError"] = danger,
 
             // Cajas de aviso y distintivos: fondo suave + texto del mismo tono, legibles en ambos modos
-            ["ThemeSuccessSubtle"] = dark ? ThemeColor.Rgb(0x14, 0x53, 0x2D) : ThemeColor.Rgb(0xDC, 0xFC, 0xE7),
+            ["ThemeSuccessSubtle"] = successSubtle,
             ["ThemeSuccessText"] = dark ? ThemeColor.Rgb(0xDC, 0xFC, 0xE7) : ThemeColor.Rgb(0x16, 0x65, 0x34),
-            ["ThemeWarningSubtle"] = dark ? ThemeColor.Rgb(0x78, 0x35, 0x0F) : ThemeColor.Rgb(0xFE, 0xF3, 0xC7),
+            ["ThemeWarningSubtle"] = warningSubtle,
             ["ThemeWarningText"] = dark ? ThemeColor.Rgb(0xFE, 0xF3, 0xC7) : ThemeColor.Rgb(0x78, 0x35, 0x0F),
-            ["ThemeDangerSubtle"] = dark ? ThemeColor.Rgb(0x7F, 0x1D, 0x1D) : ThemeColor.Rgb(0xFE, 0xE2, 0xE2),
+            ["ThemeDangerSubtle"] = dangerSubtle,
             ["ThemeDangerText"] = dark ? ThemeColor.Rgb(0xFE, 0xE2, 0xE2) : ThemeColor.Rgb(0x99, 0x1B, 0x1B),
-            ["ThemeInfoSubtle"] = dark ? ThemeColor.Rgb(0x0C, 0x4A, 0x6E) : ThemeColor.Rgb(0xE0, 0xF2, 0xFE),
+            ["ThemeInfoSubtle"] = infoSubtle,
             ["ThemeInfoText"] = dark ? ThemeColor.Rgb(0xE0, 0xF2, 0xFE) : ThemeColor.Rgb(0x07, 0x59, 0x85),
 
             ["ThemeChartWeight"] = Series(ThemeColor.Rgb(0x25, 0x63, 0xEB), ThemeColor.Rgb(0x60, 0xA5, 0xFA)),
-            ["ThemeChartSystolic"] = Series(ThemeColor.Rgb(0xDC, 0x26, 0x26), ThemeColor.Rgb(0xF8, 0x71, 0x71)),
-            ["ThemeChartDiastolic"] = Series(ThemeColor.Rgb(0xB4, 0x53, 0x09), ThemeColor.Rgb(0xFB, 0xBF, 0x24)),
-            ["ThemeChartGlucose"] = Series(ThemeColor.Rgb(0x04, 0x78, 0x57), ThemeColor.Rgb(0x34, 0xD3, 0x99)),
+            ["ThemeChartSystolic"] = red,
+            ["ThemeChartDiastolic"] = amber,
+            ["ThemeChartGlucose"] = green,
+
+            // Puntos de estado (sincronización): el tono se reconoce y contrastan 3:1 con la tarjeta.
+            // Los sólidos (ThemeSuccess…) son para fondos con texto blanco y en oscuro se pierden.
+            ["ThemeStatusSuccess"] = green,
+            ["ThemeStatusWarning"] = amber,
+            ["ThemeStatusDanger"] = red,
 
             // Avisos breves (toast): contrastan con todo lo que hay debajo
             ["ThemeToastBackground"] = dark ? ThemeColor.Rgb(0xF8, 0xFA, 0xFC) : ThemeColor.Rgb(0x0F, 0x17, 0x2A),
-            ["ThemeToastText"] = dark ? ThemeColor.Rgb(0x0F, 0x17, 0x2A) : ThemeColor.Rgb(0xF8, 0xFA, 0xFC)
+            ["ThemeToastText"] = toastText,
+            // El botón de cerrar del aviso: el fondo al pasar el cursor es del color del aviso, no de la página
+            ["ThemeToastHover"] = toastText.WithAlpha(0x26),
+            ["ThemeToastPressed"] = toastText.WithAlpha(0x40)
         };
         return palette;
+    }
+
+    /// <summary>El color guardado si es del mismo lado (claro u oscuro) que el del modo; si no, el del modo.</summary>
+    private static ThemeColor OwnSide(string? hex, ThemeColor modeDefault)
+    {
+        var color = ThemeColor.Parse(hex, modeDefault);
+        return (color.Luminance > 0.18) == (modeDefault.Luminance > 0.18) ? color : modeDefault;
     }
 
     /// <summary>

@@ -16,7 +16,8 @@
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <!-- El foco va por fuera de la tarjeta: así no se confunde con el borde del equipo elegido -->
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DsFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -28,8 +29,8 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Grid Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
-                                    <Ellipse x:Name="Ring" Stroke="{DynamicResource ThemeBorderStrong}" StrokeThickness="2" />
-                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{DynamicResource ThemeAccentStrong}" Visibility="Collapsed" />
+                                    <Ellipse x:Name="Ring" Stroke="{DynamicResource ThemeControlBorder}" StrokeThickness="2" />
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{DynamicResource ThemeAccentForeground}" Visibility="Collapsed" />
                                 </Grid>
                                 <ContentPresenter Grid.Column="1" />
                             </Grid>
@@ -39,14 +40,11 @@
                                 <Setter TargetName="Card" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 <Setter TargetName="Card" Property="BorderThickness" Value="2" />
                                 <Setter TargetName="Card" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
-                                <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource ThemeAccentForeground}" />
                                 <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Card" Property="Opacity" Value="0.6" />
@@ -148,7 +146,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource TextDetail}" Text="Subiendo el expediente y enviando…" VerticalAlignment="Center"
                                    Visibility="{Binding IsSendingHandoff, Converter={StaticResource BoolToVis}}" />
-                        <Button Grid.Column="1" Style="{StaticResource ButtonGhost}" Command="{Binding CloseSendConsultationSheetCommand}" Content="Cancelar" Margin="0,0,8,0"
+                        <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding CloseSendConsultationSheetCommand}" Content="Cancelar" Margin="0,0,8,0"
                                 IsEnabled="{Binding IsSendingHandoff, Converter={StaticResource InverseBool}}" />
                         <Button Grid.Column="2" Style="{StaticResource ButtonPrimary}" Command="{Binding SendConsultationToSelectedDeviceCommand}"
                                 IsEnabled="{Binding CanConfirmSendHandoff}">

@@ -13,6 +13,7 @@
     <SolidColorBrush x:Key="ThemeText" Color="#0F172A" />
     <SolidColorBrush x:Key="ThemeTextSecondary" Color="#5A687D" />
     <SolidColorBrush x:Key="ThemeBorder" Color="#E2E8F0" />
+    <SolidColorBrush x:Key="ThemeControlBorder" Color="#898E94" />
     <SolidColorBrush x:Key="ThemeBorderStrong" Color="#C4CBD4" />
 
     <!-- Acento: ThemeAccent para bordes e iconos; Strong lleva texto blanco encima; Foreground es
@@ -48,9 +49,14 @@
     <SolidColorBrush x:Key="ThemeChartSystolic" Color="#DC2626" />
     <SolidColorBrush x:Key="ThemeChartDiastolic" Color="#B45309" />
     <SolidColorBrush x:Key="ThemeChartGlucose" Color="#047857" />
+    <SolidColorBrush x:Key="ThemeStatusSuccess" Color="#047857" />
+    <SolidColorBrush x:Key="ThemeStatusWarning" Color="#B45309" />
+    <SolidColorBrush x:Key="ThemeStatusDanger" Color="#DC2626" />
 
     <!-- Avisos breves -->
     <SolidColorBrush x:Key="ThemeToastBackground" Color="#0F172A" />
+    <SolidColorBrush x:Key="ThemeToastHover" Color="#26F8FAFC" />
+    <SolidColorBrush x:Key="ThemeToastPressed" Color="#40F8FAFC" />
     <SolidColorBrush x:Key="ThemeToastText" Color="#F8FAFC" />
 
 </ResourceDictionary>

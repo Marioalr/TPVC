@@ -728,8 +728,10 @@ public partial class MedicalRecordsViewModel
         if (last != null)
         {
             var prev = list.Where(p => p.Systolic.HasValue && p.Diastolic.HasValue && p != last).LastOrDefault();
-            var trend = prev == null ? string.Empty : $"antes {prev.BloodPressureText}";
-            result.Add(new VitalSummary("T/A (mmHg)", last.BloodPressureText, trend, prev != null && last.Systolic > prev.Systolic, prev != null && last.Systolic < prev.Systolic));
+            bool up = prev != null && last.Systolic > prev.Systolic, down = prev != null && last.Systolic < prev.Systolic;
+            // La flecha dice si subió o bajó sin depender del color (en oscuro el ámbar se confunde con el texto)
+            var trend = prev == null ? string.Empty : $"{(up ? "↑ " : down ? "↓ " : string.Empty)}antes {prev.BloodPressureText}";
+            result.Add(new VitalSummary("T/A (mmHg)", last.BloodPressureText, trend, up, down));
         }
         if (Summary("Peso", p => p.Weight, v => v.ToString("0.0", CultureInfo.InvariantCulture), " (kg)") is { } weight) result.Add(weight);
         if (Summary("IMC", p => p.BMI, v => v.ToString("0.0", CultureInfo.InvariantCulture), string.Empty) is { } bmi) result.Add(bmi);

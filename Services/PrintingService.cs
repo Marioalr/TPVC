@@ -178,13 +178,13 @@ public class PrintingService
             sb.AppendLine($"<title>Receta Médica - {H(patient.FullName)}</title>");
             sb.AppendLine("<style>");
             sb.AppendLine("body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1e293b; line-height: 1.5; }");
-            sb.AppendLine(".header { border-bottom: 2px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }");
-            sb.AppendLine(".clinic-title { font-size: 22px; font-weight: bold; color: #0284c7; margin: 0; }");
+            sb.AppendLine(".header { border-bottom: 2px solid #0369a1; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }");
+            sb.AppendLine(".clinic-title { font-size: 22px; font-weight: bold; color: #0369a1; margin: 0; }");
             sb.AppendLine(".doctor-name { font-size: 15px; font-weight: 600; color: #0f172a; margin: 3px 0; }");
             sb.AppendLine(".doctor-license { font-size: 13px; color: #64748b; margin: 0; }");
             sb.AppendLine(".patient-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 25px; }");
             sb.AppendLine(".patient-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; font-size: 13px; }");
-            sb.AppendLine(".rx-title { font-size: 18px; font-weight: bold; color: #0284c7; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 15px; }");
+            sb.AppendLine(".rx-title { font-size: 18px; font-weight: bold; color: #0369a1; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 15px; }");
             sb.AppendLine(".med-item { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px dashed #e2e8f0; }");
             sb.AppendLine(".med-name { font-weight: bold; font-size: 14px; color: #0f172a; }");
             sb.AppendLine(".med-dosage { font-size: 13px; color: #475569; margin-top: 3px; }");
@@ -218,7 +218,7 @@ public class PrintingService
             sb.AppendLine($"    <div><strong>Edad:</strong> {H(patient.AgeDisplay)}</div>");
             sb.AppendLine($"    <div><strong>Sexo:</strong> {H(patient.Gender)}</div>");
             sb.AppendLine($"    <div><strong>Signos:</strong> {H(string.IsNullOrWhiteSpace(patient.VitalSigns) ? "No registrados" : patient.VitalSigns)}</div>");
-            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"color:#dc2626; font-weight:600;\">{H(PrescriptionAllergyText(patient))}</span></div>");
+            sb.AppendLine($"    <div style=\"grid-column: span 2;\"><strong>Alergias:</strong> <span style=\"{(patient.HasAllergies ? "color:#991b1b; " : string.Empty)}font-weight:600;\">{H(PrescriptionAllergyText(patient))}</span></div>");
             if (!string.IsNullOrWhiteSpace(patient.LastDiagnosis))
             {
                 sb.AppendLine($"    <div style=\"grid-column: span 3;\"><strong>Diagnóstico:</strong> {H(patient.LastDiagnosis)}</div>");
@@ -287,6 +287,18 @@ public class PrintingService
 
     #region Constructores de FlowDocument para Impresión
 
+    // Colores de tinta sobre papel blanco (≥ 4.5:1, iguales a la vista previa de la receta)
+    private static readonly Brush PaperAccent = Frozen(Color.FromRgb(0x03, 0x69, 0xA1));
+    private static readonly Brush PaperSecondary = Frozen(Color.FromRgb(0x5A, 0x68, 0x7D));
+    private static readonly Brush PaperDanger = Frozen(Color.FromRgb(0x99, 0x1B, 0x1B));
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     private FlowDocument BuildTicketDocument(SaleReceipt receipt, ClinicProfile profile)
     {
         var doc = new FlowDocument
@@ -294,7 +306,10 @@ public class PrintingService
             PagePadding = new Thickness(10),
             FontFamily = new FontFamily("Consolas, Courier New, monospace"),
             FontSize = 10.5,
-            TextAlignment = TextAlignment.Left
+            TextAlignment = TextAlignment.Left,
+            // El papel siempre es blanco con tinta negra, sin importar el tema ni el contraste alto de Windows
+            Foreground = Brushes.Black,
+            Background = Brushes.White
         };
 
         string clinicName = !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "CONSULTORIO MÉDICO TPVC";
@@ -381,7 +396,10 @@ public class PrintingService
             PagePadding = new Thickness(36),
             FontFamily = new FontFamily("Segoe UI, Arial, sans-serif"),
             FontSize = 11.5,
-            TextAlignment = TextAlignment.Left
+            TextAlignment = TextAlignment.Left,
+            // El papel siempre es blanco con tinta negra, sin importar el tema ni el contraste alto de Windows
+            Foreground = Brushes.Black,
+            Background = Brushes.White
         };
 
         string clinicName = !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "CONSULTORIO MÉDICO INTEGRAL";
@@ -393,7 +411,7 @@ public class PrintingService
 
         // Membrete
         var headerPara = new Paragraph { Margin = new Thickness(0, 0, 0, 14) };
-        headerPara.Inlines.Add(new Bold(new Run(clinicName) { FontSize = 16, Foreground = new SolidColorBrush(Color.FromRgb(2, 132, 199)) }) { });
+        headerPara.Inlines.Add(new Bold(new Run(clinicName) { FontSize = 16, Foreground = PaperAccent }) { });
         headerPara.Inlines.Add(new Run("\n" + doctorName) { FontSize = 13, FontWeight = FontWeights.SemiBold });
         headerPara.Inlines.Add(new Run($" • {specialty}\n"));
         headerPara.Inlines.Add(new Run($"Cédula Profesional: {license} • {address} • Tel: {phone}\n"));
@@ -415,7 +433,7 @@ public class PrintingService
             patientPara.Inlines.Add(new Bold(new Run("Signos Vitales: ")));
             patientPara.Inlines.Add(new Run(patient.VitalSigns + "\n"));
         }
-        var allergyBrush = patient.HasAllergies ? Brushes.Crimson : Brushes.Black;
+        var allergyBrush = patient.HasAllergies ? PaperDanger : Brushes.Black;
         patientPara.Inlines.Add(new Bold(new Run("Alergias: ")) { Foreground = allergyBrush });
         patientPara.Inlines.Add(new Run(PrescriptionAllergyText(patient) + "\n") { Foreground = allergyBrush });
         if (!string.IsNullOrWhiteSpace(patient.LastDiagnosis))
@@ -426,7 +444,7 @@ public class PrintingService
         doc.Blocks.Add(patientPara);
 
         // Prescripción
-        var rxTitle = new Paragraph(new Bold(new Run("℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA") { FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(2, 132, 199)) }))
+        var rxTitle = new Paragraph(new Bold(new Run("℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA") { FontSize = 13, Foreground = PaperAccent }))
         {
             Margin = new Thickness(0, 0, 0, 10)
         };
@@ -435,7 +453,7 @@ public class PrintingService
         var itemList = items?.ToList() ?? new List<PatientPrescriptionItem>();
         if (itemList.Count == 0)
         {
-            doc.Blocks.Add(new Paragraph(new Run("Sin medicamentos activos prescritos.")) { FontStyle = FontStyles.Italic, Foreground = Brushes.Gray });
+            doc.Blocks.Add(new Paragraph(new Run("Sin medicamentos activos prescritos.")) { FontStyle = FontStyles.Italic, Foreground = PaperSecondary });
         }
         else
         {
@@ -464,7 +482,7 @@ public class PrintingService
         signPara.Inlines.Add(new Run("_________________________________________\n"));
         signPara.Inlines.Add(new Bold(new Run(doctorName + "\n")));
         signPara.Inlines.Add(new Run($"Cédula Profesional: {license}\n"));
-        signPara.Inlines.Add(new Run("Firma y Sello del Médico Tratante") { FontStyle = FontStyles.Italic, Foreground = Brushes.Gray });
+        signPara.Inlines.Add(new Run("Firma y Sello del Médico Tratante") { FontStyle = FontStyles.Italic, Foreground = PaperSecondary });
         doc.Blocks.Add(signPara);
 
         return doc;
@@ -477,7 +495,10 @@ public class PrintingService
             PagePadding = new Thickness(20),
             FontFamily = new FontFamily("Consolas, Courier New, monospace"),
             FontSize = 10,
-            TextAlignment = TextAlignment.Left
+            TextAlignment = TextAlignment.Left,
+            // El papel siempre es blanco con tinta negra, sin importar el tema ni el contraste alto de Windows
+            Foreground = Brushes.Black,
+            Background = Brushes.White
         };
 
         string clinicName = !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "CONSULTORIO MÉDICO TPVC";

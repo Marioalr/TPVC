@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TPVC.Data;
+using TPVC.Helpers;
 using TPVC.Services;
 using TPVC.ViewModels;
 
@@ -95,6 +96,7 @@ public partial class App : Application
 
         // Mostrar la ventana principal
         var mainWindow = Services.GetRequiredService<MainWindow>();
+        TitleBar.Follow(mainWindow, themeService);
         mainWindow.Show();
 
         // Respaldo diario y limpieza de bitácoras en segundo plano (no retrasa el arranque)

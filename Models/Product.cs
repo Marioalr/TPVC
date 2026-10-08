@@ -44,6 +44,8 @@ public class Product : ISyncEntity
     public bool IsLowStock => MinStock > 0 && CurrentStock <= MinStock;
     public bool IsOutOfStock => CurrentStock <= 0;
     public bool HasStock => CurrentStock > 0;
+    // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo)
+    public string StockBadgeText => IsOutOfStock ? "Sin existencias" : IsLowStock ? $"Stock bajo: {CurrentStock}" : $"Existencias: {CurrentStock}";
 
     public ProductBatch? NextExpiringBatch => Batches
         .Where(b => !b.IsDepleted && b.Quantity > 0)

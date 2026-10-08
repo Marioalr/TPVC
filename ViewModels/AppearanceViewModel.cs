@@ -31,6 +31,12 @@ public partial class AppearanceViewModel : ObservableObject
     {
         _themeService = themeService;
         LoadCurrentThemeSettings();
+        // Cambios hechos desde otra página (p. ej. Componentes): el resumen de Configuración no se queda atrás
+        _themeService.ThemeChanged += () =>
+        {
+            CurrentMode = _themeService.CurrentSettings.ThemeMode;
+            CurrentAccentHex = _themeService.CurrentSettings.AccentColor;
+        };
     }
 
     public IReadOnlyList<string> ModeOptions { get; } = new[] { "Claro", "Oscuro" };
@@ -147,9 +153,19 @@ public partial class AppearanceViewModel : ObservableObject
             return;
         }
 
+        // Un fondo oscuro con tarjetas claras (o al revés) deja textos y avisos sin contraste en uno de los dos
+        bool darkBackground = ThemeColor.Parse(Normalize(CustomBgHex), ThemePalette.White).Luminance < 0.2;
+        bool darkSurface = ThemeColor.Parse(Normalize(CustomSurfaceHex), ThemePalette.White).Luminance < 0.2;
+        if (darkBackground != darkSurface)
+        {
+            CustomError = "El fondo y las tarjetas deben ser los dos claros o los dos oscuros.";
+            return;
+        }
+
         CustomError = null;
+        var accent = Normalize(CustomAccentHex);
         _themeService.SetCustomBackground(Normalize(CustomBgHex), Normalize(CustomSurfaceHex));
-        _themeService.SetAccent(Normalize(CustomAccentHex));
+        _themeService.SetAccent(accent);
         LoadCurrentThemeSettings();
     }
 
@@ -164,16 +180,11 @@ public partial class AppearanceViewModel : ObservableObject
     private void RefreshPreview()
     {
         var current = _themeService.CurrentSettings;
-        var pending = new ThemeSettings
-        {
-            ThemeMode = current.ThemeMode,
-            AccentColor = IsValidHex(CustomAccentHex) ? Normalize(CustomAccentHex) : current.AccentColor,
-            BackgroundColor = IsValidHex(CustomBgHex) ? Normalize(CustomBgHex) : current.BackgroundColor,
-            SurfaceColor = IsValidHex(CustomSurfaceHex) ? Normalize(CustomSurfaceHex) : current.SurfaceColor,
-            TextColor = current.TextColor,
-            SecondaryTextColor = current.SecondaryTextColor,
-            BorderColor = current.BorderColor
-        };
+        // Lo mismo que hará "Aplicar colores" (modo personalizado con texto y bordes del lado del fondo)
+        var pending = ThemeService.WithCustomColors(
+            new ThemeSettings { AccentColor = IsValidHex(CustomAccentHex) ? Normalize(CustomAccentHex) : current.AccentColor },
+            IsValidHex(CustomBgHex) ? Normalize(CustomBgHex) : current.BackgroundColor,
+            IsValidHex(CustomSurfaceHex) ? Normalize(CustomSurfaceHex) : current.SurfaceColor);
         Preview = ThemePreview.From(pending);
     }
 }

@@ -83,7 +83,7 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                 <Setter TargetName="Day" Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
-                                <Setter TargetName="Day" Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Day" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
                                 <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
                                 <Setter TargetName="Count" Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
@@ -101,7 +101,8 @@
                     <Border Style="{StaticResource NoticeWarning}" Margin="0,8,0,0" Visibility="{Binding IsMovingAppointment, Converter={StaticResource BoolToVis}}">
                         <Grid>
                             <TextBlock Text="{Binding MovingAppointmentText}" TextWrapping="Wrap" Margin="0,0,80,0" VerticalAlignment="Center" />
-                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,2" MinHeight="0" Content="Cancelar" Command="{Binding CancelMovingAppointmentCommand}" />
+                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,2" MinHeight="0" Content="Cancelar" Command="{Binding CancelMovingAppointmentCommand}"
+                                    Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
                         </Grid>
                     </Border>
                 </StackPanel>
@@ -128,11 +129,11 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
-                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="TitleText" Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="SubtitleText" Text="{Binding Subtitle}" FontSize="12" Foreground="{DynamicResource ThemeInfoText}" TextTrimming="CharacterEllipsis" />
                                             <TextBlock x:Name="StatusText" Text="{Binding Status}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeInfoText}" />
                                         </StackPanel>
-                                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Width="32" Height="32" Foreground="{DynamicResource ThemeInfoText}"
+                                        <Button x:Name="MenuButton" Grid.Column="1" Style="{StaticResource ButtonIcon}" Width="32" Height="32" Foreground="{DynamicResource ThemeInfoText}"
                                                 helpers:MenuOnClick.IsEnabled="True"
                                                 Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 ToolTip="Acciones de la cita" AutomationProperties.Name="Acciones de la cita">
@@ -198,7 +199,7 @@
                                             <TextBlock Style="{StaticResource FieldError}" Text="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                        Visibility="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                                                <Button Style="{StaticResource ButtonGhost}" Content="Cancelar" Command="{Binding DataContext.CloseAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0" />
+                                                <Button Style="{StaticResource ButtonSecondary}" Content="Cancelar" Command="{Binding DataContext.CloseAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0" />
                                                 <Button Style="{StaticResource ButtonPrimary}" Content="Agendar" Command="{Binding DataContext.SaveAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                             </StackPanel>
                                         </StackPanel>
@@ -210,8 +211,13 @@
                                     <Setter TargetName="SlotForm" Property="Visibility" Value="Visible" />
                                     <Setter TargetName="FreeButton" Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
+                                <!-- Atendida: fondo verde con su propio texto verde (no el azul de la cita pendiente) -->
                                 <DataTrigger Binding="{Binding IsAttended}" Value="True">
                                     <Setter TargetName="AppointmentCard" Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
+                                    <Setter TargetName="TitleText" Property="Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                    <Setter TargetName="SubtitleText" Property="Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                    <Setter TargetName="StatusText" Property="Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                    <Setter TargetName="MenuButton" Property="Foreground" Value="{DynamicResource ThemeSuccessText}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsConfirmed}" Value="True">
                                     <Setter TargetName="AppointmentCard" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />

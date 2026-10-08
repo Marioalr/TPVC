@@ -37,15 +37,23 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="10,8" Margin="0,0,0,2">
-                            <ContentPresenter />
-                        </Border>
+                        <Grid Margin="0,0,0,2">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="12,8,10,8">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Mark" Width="3" CornerRadius="2" Margin="3,10" HorizontalAlignment="Left"
+                                    Background="{DynamicResource ThemeFocus}" Visibility="Collapsed" IsHitTestVisible="False" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                            </Trigger>
                             <DataTrigger Binding="{Binding IsActive}" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

@@ -19,6 +19,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="12" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DsFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -30,8 +31,8 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                             </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,6 +45,8 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Width" Value="44" />
             <Setter Property="Height" Value="44" />
+            <!-- Dibuja su propio anillo de foco -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -58,7 +61,7 @@
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Ring" Property="StrokeThickness" Value="2" />
-                                <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource ThemeAccentStrong}" />
+                                <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource ThemeFocus}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -97,7 +100,7 @@
                                         <Style TargetType="Button" BasedOn="{StaticResource ModeCard}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding CurrentMode}" Value="Claro">
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                                     <Setter Property="BorderThickness" Value="2" />
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -122,7 +125,7 @@
                                         <Style TargetType="Button" BasedOn="{StaticResource ModeCard}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding CurrentMode}" Value="Oscuro">
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentStrong}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                                     <Setter Property="BorderThickness" Value="2" />
                                                 </DataTrigger>
                                             </Style.Triggers>

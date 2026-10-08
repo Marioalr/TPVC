@@ -28,6 +28,17 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Resultado de búsqueda: sin borde; el que abre Enter lleva el borde de foco (el hover sigue funcionando) -->
+        <Style x:Key="PatientResultRow" TargetType="Button" BasedOn="{StaticResource PatientButton}">
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <DataTemplate x:Key="AllergyMark" DataType="{x:Type models:PatientRecord}">
             <Border Style="{StaticResource BadgeDangerSolid}" Visibility="{Binding HasAllergies, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="Alergia" />
@@ -193,7 +204,7 @@
                             <ItemsControl ItemsSource="{Binding HomeResults}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientRecord}">
-                                        <Button x:Name="Row" Style="{StaticResource PatientButton}" BorderThickness="0" Margin="0,0,0,4" Padding="12,10"
+                                        <Button x:Name="Row" Style="{StaticResource PatientResultRow}" Margin="0,0,0,4" Padding="10,8"
                                                 Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}">
                                             <Grid>
@@ -225,7 +236,7 @@
                                         <DataTemplate.Triggers>
                                             <!-- El primero (sin elemento anterior) es el que abre Enter -->
                                             <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
-                                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                                <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
