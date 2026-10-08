@@ -94,8 +94,8 @@ public static class ThemePalette
 
         // Botón principal y seleccionados: texto blanco encima → el acento se oscurece si hace falta
         var accentStrong = EnsureContrast(accent, new[] { White }, TextContrast);
-        // Texto, iconos y enlaces del color del acento sobre la superficie
-        var accentForeground = EnsureContrast(accent, new[] { surface, bg, subtle }, TextContrast);
+        // Texto, iconos y enlaces del color del acento sobre la superficie (también sobre lo seleccionado)
+        var accentForeground = EnsureContrast(accent, new[] { surface, bg, subtle, selection }, TextContrast);
 
         // Series de la gráfica de signos: se distinguen entre sí y contrastan 3:1 con la tarjeta y
         // el gris suave en los dos modos (antes eran fijas y el verde quedaba en 2.5:1 sobre blanco)

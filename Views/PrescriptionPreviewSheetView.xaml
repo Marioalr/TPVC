@@ -35,13 +35,25 @@
                     </Button>
                 </Grid>
 
-                <!-- Documento Simulado (Hoja de Receta) -->
+                <!-- Documento Simulado (Hoja de Receta): es papel, así que se ve como sale impresa (siempre
+                     en claro) con cualquier tema; estos colores tapan los del tema solo dentro de la hoja -->
                 <Border Grid.Row="1" 
                         Background="{DynamicResource ThemeSurface}" 
                         BorderBrush="{DynamicResource ThemeBorder}" 
                         BorderThickness="1" 
                         CornerRadius="8" 
                         Padding="20">
+                    <Border.Resources>
+                        <SolidColorBrush x:Key="ThemeSurface" Color="#FFFFFF" />
+                        <SolidColorBrush x:Key="ThemeBackground" Color="#F8FAFC" />
+                        <SolidColorBrush x:Key="ThemeSurfaceSubtle" Color="#F1F5F9" />
+                        <SolidColorBrush x:Key="ThemeText" Color="#0F172A" />
+                        <SolidColorBrush x:Key="ThemeTextSecondary" Color="#5A687D" />
+                        <SolidColorBrush x:Key="ThemeBorder" Color="#E2E8F0" />
+                        <SolidColorBrush x:Key="ThemeAccentForeground" Color="#0369A1" />
+                        <SolidColorBrush x:Key="ThemeFocus" Color="#0369A1" />
+                        <SolidColorBrush x:Key="ThemeDangerText" Color="#991B1B" />
+                    </Border.Resources>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <!-- Membrete Institucional y Médico -->

@@ -493,22 +493,22 @@
 
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <TextBlock Text="Nombre Completo del Médico:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding WizardDoctorName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardDoctorName, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="0" Grid.Column="2">
                                     <TextBlock Text="Cédula Profesional:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding WizardDoctorLicense, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardDoctorLicense, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
                                     <TextBlock Text="Especialidad:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding WizardDoctorSpecialty, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardDoctorSpecialty, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,8,0,0">
                                     <TextBlock Text="Teléfono Contacto:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding WizardClinicPhone, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardClinicPhone, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </Grid>
 
@@ -516,10 +516,10 @@
                             <TextBlock Text="2. DATOS DEL CONSULTORIO O CLÍNICA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,6,0,8" />
                             <StackPanel Margin="0,0,0,14">
                                 <TextBlock Text="Nombre del Consultorio / Clínica:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding WizardClinicName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" Margin="0,0,0,8" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardClinicName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
 
                                 <TextBlock Text="Dirección / Domicilio:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding WizardClinicAddress, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding WizardClinicAddress, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <!-- Sección 3: Modo de Inicio (Base Vacía vs Demostración) -->

@@ -615,12 +615,15 @@ internal sealed class UiSmokeSession
     private System.Windows.Media.Color? EffectiveBackground(System.Windows.DependencyObject element)
     {
         var layers = new List<System.Windows.Media.Color>();
-        for (var current = System.Windows.Media.VisualTreeHelper.GetParent(element); current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        // Un campo de texto pinta su propio fondo; un TextBlock, el de sus contenedores
+        var start = element is System.Windows.Controls.Control ? element : System.Windows.Media.VisualTreeHelper.GetParent(element);
+        for (var current = start; current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
         {
             var brush = current switch
             {
                 System.Windows.Controls.Border border => border.Background,
                 System.Windows.Controls.Panel panel => panel.Background,
+                System.Windows.Controls.Control control when ReferenceEquals(control, element) => control.Background,
                 _ => null
             };
             if (brush == null) continue;
