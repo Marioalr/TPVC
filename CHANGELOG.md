@@ -2,6 +2,23 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.17.0] - 2026-10-08
+
+### Añadido — Fase E del rediseño: consulta entre equipos (parte de la PC)
+* **Enviar a…** en la barra de la consulta: la manda a otro equipo enlazado a la misma nube (otra PC hoy; la tablet con su app). La hoja muestra los equipos con su última conexión ("En línea · hace 4 s", "Sin conexión desde ayer 19:40 · la verá al abrir Pacientes"); los de una versión anterior aparecen desactivados.
+* Se envían la nota, los signos, la receta y la cuenta, con el **mismo folio y hora de inicio**. Antes se sube lo pendiente del expediente; los productos y servicios viajan por su identificador de sincronización (los que no existan en el otro equipo se cobran como cargo libre, con aviso).
+* **Un solo dueño a la vez**: en el equipo que la envía queda en solo lectura ("Enviada a … · Recuperar"); el expediente de ese paciente tampoco se edita ahí. Cuando el otro la acepta, aquí se cierra sola sin descartar nada.
+* En el otro equipo, Pacientes muestra **"… te envió una consulta"** con paciente, hora de inicio, diagnóstico y cargos: **Continuar aquí** o *Más tarde* (y un aviso breve si está en otra pantalla o con otra consulta abierta).
+* A prueba de cortes: si se pierde la respuesta al enviar o al tomarla, se pregunta a la nube quién se quedó con ella; la copia no se borra de la nube hasta guardarla en el equipo que la recibe; al cerrar el programa con una consulta enviada, vuelve en solo lectura. Sin conexión, "Enviar a…" se desactiva y dice por qué, y **Liberar este equipo** deja de esperar una consulta que no se puede confirmar.
+
+### Corregido
+* **Relojes desfasados**: un cambio hecho después de recibir un registro de un equipo con el reloj adelantado tenía una marca anterior y la nube lo descartaba sin aviso. Ahora cada cambio (y cada borrado) queda después de la marca que ya tenía, y la subida ya no tiene tope superior (un registro guardado durante una sincronización también sube). La subida ya no puede volver a crear en la nube un registro que otro equipo borró, y "subidos" cuenta solo lo que la nube realmente cambió.
+* Una sincronización automática que encontraba otra en curso se perdía; ahora se repite al terminar la otra.
+* La ficha abierta se quedaba con los datos de antes cuando llegaban cambios de otro equipo, y guardarla después los borraba. Ahora se toma la versión de la base (salvo con el alta abierta o en la consulta de ese paciente), conservando la búsqueda del historial, la gráfica y las secciones abiertas.
+* La cita que se atendía se perdía al recuperar la consulta tras cerrar el programa (no quedaba como "Atendida").
+* "Pasar a la cuenta de la consulta" en el POS vaciaba la venta aunque la consulta no aceptara el cargo.
+* "Última conexión" de cada equipo usa la hora del servidor (antes la del propio equipo).
+
 ## [1.16.0] - 2026-10-07
 
 ### Cambiado — Fase 4 del rediseño: Configuración

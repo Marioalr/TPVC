@@ -99,8 +99,10 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                     <Button Style="{StaticResource ButtonGhost}" Command="{Binding ReleaseHandoffLocallyCommand}" Padding="10,5" MinHeight="0" Margin="0,0,8,0"
                             Content="Liberar este equipo" ToolTip="Dejar de esperar aquí sin confirmar con la nube"
+                            IsEnabled="{Binding IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
                             Visibility="{Binding CanReleaseHandoffLocally, Converter={StaticResource BoolToVis}}" />
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding RecoverHandedOffConsultationCommand}" Padding="14,5" MinHeight="0"
+                            IsEnabled="{Binding IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
                             Content="Recuperar" ToolTip="Seguir la consulta en este equipo (si el otro aún no la acepta)" />
                 </StackPanel>
             </Grid>
@@ -152,7 +154,7 @@
 
             <!-- Nota de la consulta en el orden de la entrevista -->
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="ConsultationSectionsPanel" IsEnabled="{Binding IsConsultationEditable}">
+                <StackPanel x:Name="ConsultationSectionsPanel">
                 <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
                     <Border.Style>
                         <Style TargetType="Border">
@@ -206,7 +208,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
                             <TextBox Text="{Binding ConsultationChiefComplaint, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Motivo de consulta y padecimiento actual" />
                             <WrapPanel>
                                 <TextBlock Text="Frecuentes:" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,6" />
@@ -293,7 +295,7 @@
                                 </Border>
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
                             <UniformGrid Columns="4">
                                 <StackPanel Margin="0,0,10,10">
                                     <TextBlock Text="T/A (mmHg)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
@@ -393,7 +395,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=3}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=3}">
                             <TextBlock Text="Interrogatorio por aparatos y sistemas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
                             <WrapPanel>
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Respiratorio: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Respiratorio normal" />
@@ -471,7 +473,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=4}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=4}">
                             <TextBox x:Name="ActiveConsultationDiagnosisTextBox"
                                      Text="{Binding ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource FieldTextBox}"
@@ -594,7 +596,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=5}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=5}">
                             <TextBlock Text="Plan terapéutico, cuidados e indicaciones" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
                             <WrapPanel>
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Hidratación" />

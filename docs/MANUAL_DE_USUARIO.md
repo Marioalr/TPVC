@@ -122,6 +122,14 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 * **Expediente** abre la ficha sin cerrar la consulta; un aviso arriba lleva de regreso.
 * **Terminar consulta** guarda la nota y abre el cobro (forma de pago, recibido, cambio). *Volver a la consulta* (o Esc) permite agregar algo que faltó. **Descartar** borra lo capturado sin cobrar y deja el expediente como estaba.
 
+### Pasar la consulta a otro equipo
+Con la nube activada (Configuración › Nube y dispositivos), la consulta puede seguir en otro equipo: por ejemplo, empezar el interrogatorio en el escritorio y terminar la exploración con la tablet.
+* **Enviar a…** (barra de la consulta) muestra los equipos enlazados con su última conexión. Se envían la nota, los signos, la receta y la cuenta, con el mismo folio y hora de inicio. Un equipo sin conexión también la recibe en cuanto abra Pacientes.
+* En el equipo que la envió queda **en solo lectura** con el aviso "Enviada a …". **Recuperar** la regresa mientras el otro no la acepte. Si el otro la acepta, aquí se cierra sola (sin descartar nada) y se puede seguir con otro paciente.
+* En el otro equipo aparece en Pacientes **"… te envió una consulta"** con **Continuar aquí** (o *Más tarde*). Quien la termina, la cobra. Si ese equipo tiene otra consulta abierta, primero hay que terminarla.
+* Nunca dos equipos editan la misma consulta. Sin conexión, "Enviar a…" se desactiva y dice por qué; si no se puede confirmar un envío, la consulta sigue en solo lectura hasta resolverlo, y **Liberar este equipo** deja de esperarla aquí (la copia se aparta en un archivo).
+* Mientras la consulta está en el otro equipo, el expediente de ese paciente se edita allá.
+
 ### Agenda (panel lateral)
 * Botón **Agenda** arriba (o *Agendar cita* en la ficha, que abre en el día siguiente). La semana arriba; abajo las citas del día y los **huecos libres** de 30 minutos (8:00 a 20:00).
 * Pulse un hueco libre, elija paciente, motivo y duración, y **Agendar**.

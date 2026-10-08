@@ -340,7 +340,10 @@ public class TursoSyncService
                 var values = string.Join(", ", new[] { "?", "?", ServerNowSql, "?" }.Concat(cols.Select(_ => "?")));
                 var updates = string.Join(", ", new[] { "UpdatedAtUtc", "SyncedAtUtc", "OriginDeviceId" }.Concat(cols)
                     .Select(c => $"{Q(c)} = excluded.{Q(c)}"));
-                return $"INSERT INTO {Q(Table)} ({insertCols}) VALUES ({values}) " +
+                // Un registro que otro equipo ya borró (y su borrado es igual o más nuevo) no se vuelve
+                // a crear: la subida reenvía filas con marca adelantada que pudieron borrarse en la nube
+                return $"INSERT INTO {Q(Table)} ({insertCols}) SELECT {values} " +
+                       $"WHERE NOT EXISTS (SELECT 1 FROM {Q(TombstonesTable)} WHERE \"EntityType\" = ? AND \"SyncId\" = ? AND \"DeletedAtUtc\" >= ?) " +
                        $"ON CONFLICT(\"SyncId\") DO UPDATE SET {updates} " +
                        $"WHERE excluded.\"UpdatedAtUtc\" > {Q(Table)}.\"UpdatedAtUtc\";";
             }
@@ -646,6 +649,9 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                     AppLogger.Warn($"Turso: {map.Table} {entity.SyncId} omitido (referencia requerida inexistente).");
                     continue;
                 }
+                args.Add(map.ClrType.Name);
+                args.Add(FormatGuid(entity.SyncId));
+                args.Add(FormatDate(entity.UpdatedAtUtc));
                 statements.Add((sql, args.ToArray()));
             }
         }
@@ -661,7 +667,8 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             statements.Add((
                 $"INSERT INTO {Q(TombstonesTable)} (\"EntityType\", \"SyncId\", \"DeletedAtUtc\", \"SyncedAtUtc\", \"OriginDeviceId\") " +
                 $"VALUES (?, ?, ?, {ServerNowSql}, ?) ON CONFLICT(\"EntityType\", \"SyncId\") DO UPDATE SET " +
-                "\"DeletedAtUtc\" = excluded.\"DeletedAtUtc\", \"SyncedAtUtc\" = excluded.\"SyncedAtUtc\", \"OriginDeviceId\" = excluded.\"OriginDeviceId\";",
+                "\"DeletedAtUtc\" = excluded.\"DeletedAtUtc\", \"SyncedAtUtc\" = excluded.\"SyncedAtUtc\", \"OriginDeviceId\" = excluded.\"OriginDeviceId\" " +
+                $"WHERE excluded.\"DeletedAtUtc\" > {Q(TombstonesTable)}.\"DeletedAtUtc\";",
                 new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }));
 
             if (tablesByType.TryGetValue(t.EntityType, out var table))
@@ -671,12 +678,14 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             }
         }
 
+        // Se cuentan las filas que la nube sí cambió: reenviar algo que ya tenía no cuenta como subido
+        int applied = 0;
         for (int i = 0; i < statements.Count; i += PushChunkSize)
         {
-            await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
+            applied += await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
         }
 
-        return statements.Count;
+        return applied;
     }
 
     private static async Task<List<ISyncEntity>> LoadChangedAsync(AppDbContext db, Type clrType, DateTime fromUtc, DateTime toUtc, CancellationToken ct)

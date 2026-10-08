@@ -62,6 +62,7 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (_disposed) throw new HttpRequestException("Servidor simulado cerrado");
             response = Process(text);
         }
         finally
@@ -183,9 +184,25 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         return new JsonObject { ["cols"] = new JsonArray(), ["rows"] = new JsonArray(), ["affected_row_count"] = affected };
     }
 
+    private bool _disposed;
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _connection.Dispose();
+        if (disposing)
+        {
+            // Una petición en segundo plano (p. ej. borrar la copia de una consulta) puede seguir en
+            // curso al terminar la prueba: se espera a que termine y las siguientes fallan como sin red
+            _gate.Wait();
+            try
+            {
+                _disposed = true;
+                _connection.Dispose();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
         base.Dispose(disposing);
     }
 }

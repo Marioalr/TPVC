@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-07 (TPVC v1.16.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-08 (TPVC v1.17.0). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -35,12 +35,22 @@ luego la preparación del código; al final lo que se construye en la propia app
 |---|---|---|
 | C1 | **Enlace por QR** | La PC ya genera el paquete de emparejamiento (`SyncProtocolVersion = 2`). Falta mostrarlo como QR y leerlo en Android. El paquete contiene el token: generar un token propio para la tablet en Turso (revocable). |
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). En Android: receta por PDF/HTML (el exportador HTML ya existe) y ticket en impresora térmica Bluetooth (ESC/POS). |
-| C3a | **Consulta entre equipos** | Decidido (2026-10-07): se podrá **mandar la consulta en curso de la PC a la tablet y viceversa**, con un solo dueño a la vez. El guardado automático (v1.11) es local de cada equipo; su copia de trabajo es lo que viaja, por una tabla `consultation_handoffs` en Turso. Diseño completo en `docs/PLAN_REDISENO_UI.md` (Fase E). |
+| C3a | **Consulta entre equipos** | La PC ya envía y recibe (v1.17, probado PC ↔ PC con un servidor Turso simulado). La tablet debe implementar el mismo contrato de `ConsultationHandoffs` (`docs/TURSO_SYNC_ARCHITECTURE.md` §4.5): revisar la tabla cada pocos segundos en Pacientes, tomarla con ficha (`AcceptToken`) y preguntar si la respuesta se pierde, borrar la copia de la nube solo tras guardarla, recuperar con la instrucción inserta-o-cancela, marca de solo lectura persistente, y traducir `PatientSyncId`/`CatalogSyncId` a sus Id locales (o cargo libre). Su `RegisteredDevices.AppVersion` debe ser ≥ 1.17.0 y `DeviceRole = AndroidTablet`. |
 | C3 | **Modo sin conexión** | La tablet trabaja sobre su SQLite local y sincroniza al recuperar red (mismo diseño que la PC). Indicador visible de "pendiente por subir". |
 | C4 | **Interfaz táctil** | Rehacer las pantallas para tablet (MAUI XAML): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*), Pacientes de v1.14 (inicio con citas de hoy, ficha única, alta por secciones, agenda en panel; las reglas están en `MedicalRecordsViewModel.Pacientes.cs` como funciones puras: `RankPatients`, `BuildTimeline`, `BuildAntecedentSections`, `BuildSlots`) y el cobro de v1.15 (`CheckoutViewModel`: cuenta, forma de pago, recibido y cambio; `PosViewModel.RankProducts` y `ParseQuantityPrefix` para la búsqueda); la búsqueda al escribir de las listas ya está en `TextSearch.FindBestMatchIndex` (reutilizable). |
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.17.0 (Consulta entre equipos, con dos PC y la nube activada)
+
+- [ ] "Enviar a…" lista la otra PC con "En línea · hace N s"; un equipo con versión anterior aparece desactivado.
+- [ ] Enviar: la PC queda en solo lectura con "Enviada a …" y Recuperar; en la otra aparece el aviso en Pacientes (y un aviso breve si está en otra pantalla).
+- [ ] Continuar aquí: misma nota, signos, receta, cuenta, folio y hora de inicio; la primera PC se cierra sola sin descartar nada.
+- [ ] Recuperar antes de que la acepten: vuelve a ser editable; el aviso desaparece en la otra.
+- [ ] Desconectar la red: "Enviar a…" se desactiva y dice por qué; Recuperar sin red ofrece "Liberar este equipo".
+- [ ] Cerrar el programa con la consulta enviada y volver a abrir: vuelve en solo lectura.
+- [ ] Terminar y cobrar en el segundo equipo: la nota y las existencias llegan al primero tras sincronizar; una sola nota con ese folio.
 
 ### v1.16.0 (Configuración)
 

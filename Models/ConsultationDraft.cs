@@ -73,6 +73,14 @@ public sealed class ConsultationDraft
     public Guid? FeeServiceSyncId { get; set; }
 
     /// <summary>
+    /// Solo en el archivo local del equipo que la recibió de otro: con ella guardada en disco se
+    /// borra la copia de la nube y no se vuelve a ofrecer (aunque se cierre el programa).
+    /// </summary>
+    public string? ReceivedHandoffId { get; set; }
+
+    public string? ReceivedHandoffToken { get; set; }
+
+    /// <summary>
     /// Solo en el archivo local del equipo que envía: la consulta se mandó a otro equipo y aquí queda
     /// en solo lectura hasta que se acepte (se cierra) o se recupere. Nunca viaja en la copia enviada.
     /// </summary>

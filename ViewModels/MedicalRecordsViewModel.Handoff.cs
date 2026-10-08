@@ -49,6 +49,11 @@ public partial class MedicalRecordsViewModel
     /// <summary>Honorario que usaba el equipo que envió la consulta (Id local).</summary>
     private int? _feeServiceOverrideId;
 
+    /// <summary>La consulta en pantalla se recibió de otro equipo (su envío y la ficha con que se tomó).</summary>
+    private string? _receivedHandoffId;
+    private string? _receivedHandoffToken;
+    private readonly HashSet<string> _finalizedReceived = new();
+
     /// <summary>Cada cuánto se revisa la nube estando en Pacientes.</summary>
     public TimeSpan HandoffPollInterval { get; set; } = TimeSpan.FromSeconds(4);
 
@@ -358,14 +363,26 @@ public partial class MedicalRecordsViewModel
                 {
                     if (result.OutgoingState == ConsultationHandoffService.StateAccepted)
                     {
-                        await OnUiAsync(() => ReleaseHandedOffConsultation(outgoing,
+                        bool released = false;
+                        await OnUiAsync(() => released = ReleaseHandedOffConsultation(outgoing,
                             $"La consulta de {outgoing.PatientName} continúa en {outgoing.ToDeviceName}"));
-                        _ = AcknowledgeHandoffAsync(outgoing.Id);
+                        if (released && MarkerGoneFromDisk(outgoing.Id)) _ = AcknowledgeHandoffAsync(outgoing.Id);
                     }
-                    else if (result.OutgoingState is ConsultationHandoffService.StateCancelled or "")
+                    else if (result.OutgoingState == ConsultationHandoffService.StateCancelled)
                     {
-                        // Solo este equipo cancela; si ya no existe (otra base) nadie pudo tomarla en esta
+                        // Solo este equipo cancela (p. ej. se cerró el programa justo después de recuperarla)
                         await ResolveOutgoingCoreAsync(outgoing, userInitiated: false);
+                    }
+                    else if (result.OutgoingState == string.Empty)
+                    {
+                        // Un envío confirmado no desaparece solo (la limpieza espera a que este equipo lo vea):
+                        // nunca se vuelve editable sin saber dónde siguió
+                        await OnUiAsync(() =>
+                        {
+                            if (_outgoingHandoff?.Id != outgoing.Id) return;
+                            CanReleaseHandoffLocally = true;
+                            HandoffBannerDetail = "No se encontró este envío en la nube (¿se cambió o restauró la base?). Si la consulta no siguió en el otro equipo, libere este.";
+                        });
                     }
                 }
                 else
@@ -397,27 +414,31 @@ public partial class MedicalRecordsViewModel
 
     private async Task HandleIncomingAsync(HandoffPollResult result, long epoch)
     {
-        HandoffRow? acceptedPending = null;
-        foreach (var row in result.Incoming.Where(r => r.State == ConsultationHandoffService.StateAccepted))
-        {
-            if (_appliedIncoming.Contains(row.Id) || _draftStore?.IsHandoffApplied(row.Id) == true)
-            {
-                // Ya está aquí: solo falta borrar su copia de la nube
-                if (_draftStore?.GetAcceptToken(row.Id) is { } token) _ = ClearIncomingPayloadAsync(row.Id, token);
-                continue;
-            }
-            // Solo las que tomó este equipo (con su ficha); falta abrirlas
-            if (_draftStore?.IsAcceptToken(row.Id, row.AcceptToken) == true) acceptedPending ??= row;
-        }
-
-        var offered = acceptedPending ?? result.Incoming
-            .Where(r => r.State == ConsultationHandoffService.StateSent && !_dismissedIncoming.Contains(r.Id))
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .FirstOrDefault();
-
+        // Todo en el hilo de la interfaz: los conjuntos de vistas/descartadas también cambian ahí
         await OnUiAsync(() =>
         {
             if (Interlocked.Read(ref _handoffEpoch) != epoch) return;
+
+            HandoffRow? acceptedPending = null;
+            foreach (var row in result.Incoming.Where(r => r.State == ConsultationHandoffService.StateAccepted))
+            {
+                if (_appliedIncoming.Contains(row.Id) || _draftStore?.IsHandoffApplied(row.Id) == true)
+                {
+                    // Ya está guardada aquí: solo falta borrar su copia de la nube
+                    if (_draftStore?.GetAcceptToken(row.Id) is { } token && _draftStore.IsHandoffApplied(row.Id))
+                    {
+                        _ = ClearIncomingPayloadAsync(row.Id, token);
+                    }
+                    continue;
+                }
+                // Solo las que tomó este equipo (con su ficha); falta abrirlas
+                if (_draftStore?.IsAcceptToken(row.Id, row.AcceptToken) == true) acceptedPending ??= row;
+            }
+
+            var offered = acceptedPending ?? result.Incoming
+                .Where(r => r.State == ConsultationHandoffService.StateSent && !_dismissedIncoming.Contains(r.Id))
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .FirstOrDefault();
             ShowIncomingNotice(offered, accepted: offered != null && ReferenceEquals(offered, acceptedPending));
 
             foreach (var row in result.Incoming.Where(r => r.State == ConsultationHandoffService.StateSent))
@@ -685,6 +706,8 @@ public partial class MedicalRecordsViewModel
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
         draft.Handoff = null;
+        draft.ReceivedHandoffId = null;
+        draft.ReceivedHandoffToken = null;
         draft.PatientId = 0;
         draft.AttendingAppointmentId = null;
         draft.SavedAt = DateTime.Now;
@@ -768,7 +791,13 @@ public partial class MedicalRecordsViewModel
             await OnUiAsync(() =>
             {
                 if (_outgoingHandoff?.Id != marker.Id) return;
-                CanReleaseHandoffLocally = true;
+                // Liberar solo cuando lo enviado sí llegó (sigue en la nube para el otro equipo); un
+                // envío dudoso se resuelve en cuanto haya conexión
+                CanReleaseHandoffLocally = marker.Phase == HandoffPhase.Sent;
+                if (marker.Phase != HandoffPhase.Sent)
+                {
+                    HandoffBannerDetail = "No se pudo confirmar el envío. Se resolverá solo en cuanto haya conexión.";
+                }
                 if (userInitiated)
                 {
                     HandoffBannerDetail = $"No se pudo recuperar: {ConsultationHandoffService.Describe(ex)}. Intente de nuevo o libere este equipo.";
@@ -778,8 +807,12 @@ public partial class MedicalRecordsViewModel
             return false;
         }
 
+        bool applied = false;
         await OnUiAsync(() =>
         {
+            // Si mientras tanto se liberó o resolvió de otra forma, no se cambia nada ni se avisa
+            if (_outgoingHandoff?.Id != marker.Id) return;
+            applied = true;
             if (resolution == HandoffResolution.Accepted)
             {
                 ReleaseHandedOffConsultation(marker, $"La consulta de {marker.PatientName} continúa en {marker.ToDeviceName}");
@@ -792,7 +825,8 @@ public partial class MedicalRecordsViewModel
                     : $"No se confirmó el envío a {marker.ToDeviceName}: la consulta sigue en este equipo");
             }
         });
-        _ = AcknowledgeHandoffAsync(marker.Id);
+        // La nube puede borrar el envío solo cuando este equipo ya no lo tiene pendiente en disco
+        if (applied && MarkerGoneFromDisk(marker.Id)) _ = AcknowledgeHandoffAsync(marker.Id);
         return true;
     }
 
@@ -800,9 +834,9 @@ public partial class MedicalRecordsViewModel
     /// El otro equipo la aceptó: se cierra aquí SIN descartar (la nota, la receta y la cuenta siguen
     /// allá) y sin tocar el expediente; después se descarga lo del otro equipo.
     /// </summary>
-    private void ReleaseHandedOffConsultation(ConsultationHandoffMarker marker, string message)
+    private bool ReleaseHandedOffConsultation(ConsultationHandoffMarker marker, string message)
     {
-        if (_outgoingHandoff?.Id != marker.Id) return;
+        if (_outgoingHandoff?.Id != marker.Id) return false;
         Interlocked.Increment(ref _handoffEpoch);
         var patientId = ActiveConsultation?.PatientId;
 
@@ -839,6 +873,14 @@ public partial class MedicalRecordsViewModel
         // El expediente se edita aquí otra vez cuando llegue lo del otro equipo (o si no hay conexión)
         _handoffLockedPatientId = patientId;
         _ = RefreshAfterHandoffAsync(patientId);
+        return true;
+    }
+
+    /// <summary>La marca de "enviada" ya no está en el borrador del disco (o no hay borrador).</summary>
+    private bool MarkerGoneFromDisk(string markerId)
+    {
+        if (_draftStore == null || !_draftStore.Exists) return true;
+        return _draftStore.Load()?.Handoff?.Id != markerId;
     }
 
     private async Task RefreshAfterHandoffAsync(int? patientId)
@@ -854,9 +896,19 @@ public partial class MedicalRecordsViewModel
 
         await OnUiAsync(async () =>
         {
-            if (patientId is int id) _forceFreshPatientIds.Add(id);
-            await LoadPatientsAsync();
-            if (_outgoingHandoff == null && _handoffLockedPatientId == patientId) _handoffLockedPatientId = null;
+            try
+            {
+                if (patientId is int id) _forceFreshPatientIds.Add(id);
+                await LoadPatientsAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo recargar el expediente tras pasar la consulta a otro equipo", ex);
+            }
+            finally
+            {
+                if (_outgoingHandoff == null && _handoffLockedPatientId == patientId) _handoffLockedPatientId = null;
+            }
         });
     }
 
@@ -877,22 +929,37 @@ public partial class MedicalRecordsViewModel
     /// esperarla. La copia se aparta en un archivo; si el otro equipo la acepta, sigue allá.
     /// </summary>
     [RelayCommand]
-    public void ReleaseHandoffLocally()
+    public async Task ReleaseHandoffLocallyAsync()
     {
         var marker = _outgoingHandoff;
-        if (marker == null) return;
-        if (!DialogService.Confirm(
-                $"La consulta de {marker.PatientName} se quitará de este equipo sin confirmar con la nube.\n\n" +
-                $"Si {marker.ToDeviceName} ya la aceptó, continúa allá. Si no, sigue en la nube para que {marker.ToDeviceName} la acepte.\n\n" +
-                "¿Liberar este equipo?",
-                "Liberar este equipo"))
+        if (marker == null || IsRecoveringHandoff) return;
+
+        var question = marker.Phase == HandoffPhase.Sent
+            ? $"La consulta de {marker.PatientName} se quitará de este equipo sin confirmar con la nube.\n\n" +
+              $"Si {marker.ToDeviceName} ya la aceptó, continúa allá. Si no, sigue en la nube para que {marker.ToDeviceName} la acepte.\n\n" +
+              "¿Liberar este equipo?"
+            : $"No se sabe si la consulta de {marker.PatientName} llegó a {marker.ToDeviceName}.\n\n" +
+              "Se quitará de este equipo y su copia se apartará en un archivo (no se pierde, pero no se podrá seguir aquí).\n\n" +
+              "¿Liberar este equipo?";
+        if (!DialogService.Confirm(question, "Liberar este equipo")) return;
+
+        // Con la misma compuerta que recuperar y revisar: nunca a la mitad de una resolución
+        if (!await _handoffGate.WaitAsync(0))
         {
+            ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
             return;
         }
-
-        var archived = _draftStore?.ArchiveDraft(marker.Id);
-        AppLogger.Warn($"Equipo liberado de la consulta enviada {marker.Id} ({marker.Folio}); copia apartada en {archived ?? "(sin copia)"}.");
-        ReleaseHandedOffConsultation(marker, "Este equipo quedó libre");
+        try
+        {
+            if (_outgoingHandoff?.Id != marker.Id) return; // se resolvió mientras se confirmaba
+            var archived = _draftStore?.ArchiveDraft(marker.Id);
+            AppLogger.Warn($"Equipo liberado de la consulta enviada {marker.Id} ({marker.Folio}); copia apartada en {archived ?? "(sin copia)"}.");
+            ReleaseHandedOffConsultation(marker, "Este equipo quedó libre");
+        }
+        finally
+        {
+            _handoffGate.Release();
+        }
     }
 
     // ================================================================== quien recibe
@@ -945,7 +1012,7 @@ public partial class MedicalRecordsViewModel
         }
     }
 
-    private sealed record MappedHandoff(PatientRecord Patient, ConsultationDraft Draft, int? AppointmentId, int? FeeServiceId, List<string> FreeLines);
+    private sealed record MappedHandoff(PatientRecord Patient, ConsultationDraft Draft, List<string> FreeLines);
 
     private async Task AcceptIncomingCoreAsync(HandoffRow row)
     {
@@ -973,9 +1040,40 @@ public partial class MedicalRecordsViewModel
             return;
         }
 
-        // 3. Tomarla (si ya era de este equipo de un intento anterior, no hace falta)
+        // 3. Tomarla. Si este equipo ya lo intentó (p. ej. se perdió la respuesta), se pregunta con la
+        //    ficha de entonces: nunca se reemplaza, o su propio intento parecería de otro equipo
         string? token = _draftStore?.GetAcceptToken(row.Id);
-        if (row.State != ConsultationHandoffService.StateAccepted || token == null || token != row.AcceptToken)
+        if (token != null)
+        {
+            (string? State, string? Owner) current;
+            try
+            {
+                current = await _handoff.GetAcceptStateAsync(row.Id);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn($"No se pudo consultar la consulta recibida {row.Id}: {ex.Message}");
+                ShowWarning("Sin conexión: si la consulta quedó tomada en este equipo, aparecerá para abrirla en cuanto vuelva la conexión.");
+                return;
+            }
+
+            if (current.State == ConsultationHandoffService.StateSent)
+            {
+                if (!await TryTakeIncomingAsync(row, token)) return;
+            }
+            else if (current.State != ConsultationHandoffService.StateAccepted || current.Owner != token)
+            {
+                ShowWarning(current.State == ConsultationHandoffService.StateCancelled
+                    ? $"{row.FromDeviceName} recuperó la consulta."
+                    : current.State == ConsultationHandoffService.StateAccepted
+                        ? "Otro equipo ya tomó esta consulta."
+                        : "La consulta ya no está disponible.");
+                _dismissedIncoming.Add(row.Id);
+                ShowIncomingNotice(null, accepted: false);
+                return;
+            }
+        }
+        else
         {
             token = Guid.NewGuid().ToString("N");
             if (_draftStore != null && !_draftStore.RememberAcceptToken(row.Id, token))
@@ -1046,6 +1144,7 @@ public partial class MedicalRecordsViewModel
         var selected = SelectedPatient;
         if (selected != null && selected.SyncId == patientSyncId) _forceFreshPatientIds.Add(selected.Id);
         await LoadPatientsAsync();
+        await LoadServicesAsync();
 
         var patient = Patients.FirstOrDefault(p => p.SyncId == patientSyncId);
         if (patient == null)
@@ -1086,14 +1185,10 @@ public partial class MedicalRecordsViewModel
         int? appointmentId = payload.AttendingAppointmentSyncId is Guid appointmentSyncId
             ? await _inventoryService.FindAppointmentIdAsync(appointmentSyncId)
             : null;
-        int? feeId = payload.FeeServiceSyncId is Guid feeSyncId
-            ? refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Service && r.IsActive && r.SyncId == feeSyncId)?.Id
-            : null;
-
         payload.PatientId = patient.Id;
         payload.AttendingAppointmentId = appointmentId;
         payload.Handoff = null;
-        return (new MappedHandoff(patient, payload, appointmentId, feeId, freeLines), null);
+        return (new MappedHandoff(patient, payload, freeLines), null);
     }
 
     /// <summary>Por identificador; si no llegó, el mismo código Y nombre (activo).</summary>
@@ -1115,30 +1210,50 @@ public partial class MedicalRecordsViewModel
         CloseConsultationSheets();
         IsSendConsultationSheetOpen = false;
 
-        ApplyConsultationDraft(mapped.Patient, mapped.Draft);
-        _attendingAppointmentId = mapped.AppointmentId;
-        _feeServiceOverrideId = mapped.FeeServiceId;
-        IsConsultationRecovered = false;
-
+        // Con su envío y su ficha: al quedar guardada en disco se borra la copia de la nube y no se
+        // vuelve a ofrecer, aunque el programa se cierre antes
+        mapped.Draft.ReceivedHandoffId = row.Id;
+        mapped.Draft.ReceivedHandoffToken = token;
         _appliedIncoming.Add(row.Id);
+
+        ApplyConsultationDraft(mapped.Patient, mapped.Draft);
+        IsConsultationRecovered = false;
         if (!SaveConsultationDraftChecked())
         {
-            ShowWarning("La consulta se abrió, pero no se pudo guardar su copia en este equipo. No cierre el programa hasta terminarla.");
+            ShowWarning("La consulta se abrió, pero todavía no se pudo guardar su copia en este equipo; la de la nube se conserva hasta lograrlo.");
         }
-        _draftStore?.MarkHandoffApplied(row.Id);
 
         _dismissedIncoming.Add(row.Id);
         ShowIncomingNotice(null, accepted: false);
         AutosaveStatus = $"Recibida de {row.FromDeviceName} · {DateTime.Now:HH:mm}";
         PatientsPage = PageConsultation;
+        NotifyAccountChanged();
         NotifyHandoffState();
         ShowSuccess($"Consulta de {row.PatientName} recibida de {row.FromDeviceName}");
         if (mapped.FreeLines.Count > 0)
         {
             ShowWarning($"No están en el catálogo de este equipo y se cobrarán sin descontar existencias: {string.Join(", ", mapped.FreeLines)}.");
         }
+    }
 
-        _ = ClearIncomingPayloadAsync(row.Id, token);
+    /// <summary>
+    /// La copia de una consulta recibida quedó en disco (al abrirla, en un guardado posterior o al
+    /// volver a abrir el programa): se anota como recibida y se borra su copia de la nube.
+    /// </summary>
+    private void OnReceivedHandoffPersisted(ConsultationDraft draft)
+    {
+        var id = draft.ReceivedHandoffId;
+        if (string.IsNullOrEmpty(id) || _draftStore == null) return;
+        lock (_finalizedReceived)
+        {
+            if (!_finalizedReceived.Add(id)) return;
+        }
+        if (!_draftStore.IsHandoffApplied(id) && !_draftStore.MarkHandoffApplied(id))
+        {
+            lock (_finalizedReceived) _finalizedReceived.Remove(id);
+            return;
+        }
+        if (!string.IsNullOrEmpty(draft.ReceivedHandoffToken)) _ = ClearIncomingPayloadAsync(id, draft.ReceivedHandoffToken);
     }
 
     private async Task ClearIncomingPayloadAsync(string handoffId, string token)

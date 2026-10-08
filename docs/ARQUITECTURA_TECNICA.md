@@ -183,6 +183,8 @@ TPVC/
 ├── Services/
 │   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
+│   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2)
+│   ├── ConsultationHandoffService.cs # Consulta entre equipos (tabla ConsultationHandoffs)
 │   └── AppUpdateService.cs      # Cliente de actualización vía GitHub Releases
 ├── ViewModels/
 │   ├── MainViewModel.cs         # Orquestación de navegación y status bar
@@ -198,6 +200,7 @@ TPVC/
 │   ├── DataManagementViewModel.cs # Respaldos, importar Excel y restaurar base
 │   ├── UpdatesViewModel.cs      # Versión, actualizaciones y token de GitHub
 │   ├── ServicesCatalogViewModel.cs # Servicios, precios e insumos
+│   ├── MedicalRecordsViewModel.Handoff.cs # Enviar/recibir la consulta en curso entre equipos
 │   └── ProductDialogViewModel.cs # Alta y edición de producto (panel lateral)
 ├── Views/
 │   ├── MainWindow.xaml          # Ventana principal y barra de estado inferior
@@ -213,7 +216,8 @@ TPVC/
 │   ├── AppearanceView.xaml      # Apariencia con vista previa
 │   ├── DataManagementView.xaml  # Respaldos y datos
 │   ├── UpdatesView.xaml         # Acerca de y actualizaciones
-│   └── TursoSyncView.xaml       # Nube y dispositivos
+│   ├── TursoSyncView.xaml       # Nube y dispositivos
+│   └── SendConsultationSheetView.xaml # "Enviar a…" (consulta entre equipos)
 ├── tests/
 │   └── TPVC.Tests/
 │       ├── InventoryTests.cs    # Suite de 8 pruebas unitarias

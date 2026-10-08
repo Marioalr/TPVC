@@ -43,7 +43,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 2 | Pacientes y consulta (expediente) | ✅ Hecho (v1.14) · pendientes al final de su sección |
 | 3 | Punto de venta (POS) | ✅ Hecho (v1.15) |
 | 4 | Configuración | ✅ Hecho (v1.16) |
-| E | Consulta entre equipos (PC ↔ tablet) | Pendiente (con la app de la tablet) |
+| E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | Pendiente (casi al final) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | Pendiente |
 
@@ -195,6 +195,25 @@ empezar el interrogatorio en el escritorio y terminar la exploración en el cons
   última conexión; en el otro equipo, el aviso y "Continuar aquí". Detalle visual en la propuesta.
 - Se construye junto con la app de la tablet; la parte de la PC (enviar, recibir, solo lectura) puede
   ir antes y probarse entre dos PC.
+
+**Hecho en v1.17 (parte de la PC, probada PC ↔ PC):** `ConsultationHandoffService` y la tabla
+`ConsultationHandoffs` (contrato en `docs/TURSO_SYNC_ARCHITECTURE.md` §4.5), `MedicalRecordsViewModel.Handoff.cs`
+y `SendConsultationSheetView`. Antes de programar, tres revisiones críticas del diseño encontraron casos
+que perdían la consulta o dejaban dos dueños; quedaron resueltos así: tomarla lleva una ficha propia
+(`AcceptToken`) y si la respuesta se pierde se pregunta a la nube; la copia se borra de la nube solo después
+de guardarla en el equipo que la recibe; recuperar o resolver un envío dudoso inserta-o-cancela en una sola
+instrucción (un INSERT atrasado ya no la revive); la marca de "enviada" va en todas las copias locales
+(también al cerrar el programa); una sola compuerta para enviar, recuperar, recibir y aplicar lo revisado;
+la limpieza solo borra filas que quien envió ya vio; marcas de sincronización siempre posteriores a la
+guardada (relojes desfasados) y subida sin tope superior; la ficha abierta se reemplaza por la versión de la
+base cuando llega un cambio de otro equipo; el expediente no se edita en el equipo que la envió mientras
+está en el otro; y "Liberar este equipo" cuando no hay forma de confirmar con la nube. Una revisión del código
+en cuatro frentes (dueño único, integridad, interfaz y regresiones) encontró además: reintentar "Continuar aquí"
+reemplazaba la ficha del primer intento (quedaba sin dueño), "Liberar" podía cruzarse con una resolución en curso,
+la copia de la nube se borraba aunque el guardado local hubiera fallado, la subida sin tope podía revivir en la nube
+registros borrados por otro equipo y en solo lectura no se podían abrir las demás secciones; todo corregido con pruebas.
+Pendiente: la app de la tablet implementa el mismo contrato; revisar en Windows con dos PC reales
+(lista en `PENDIENTES_ANDROID.md`, D v1.17).
 
 ### Fase 5 · Revisión de la visualización de los temas (casi al final)
 

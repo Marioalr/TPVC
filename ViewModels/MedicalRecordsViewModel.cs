@@ -1534,18 +1534,24 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 if (index >= 0)
                 {
                     // Si otro equipo cambió el expediente (llegó con la sincronización), se toma la
-                    // versión de la base: guardar después la instancia vieja borraría esos cambios
+                    // versión de la base: guardar después la instancia vieja borraría esos cambios.
+                    // Se decide después de leer: mientras tanto pudo cambiar la selección o iniciarse
+                    // una consulta con ese paciente.
                     var fresh = dbPatients[index];
-                    bool forced = _forceFreshPatientIds.Remove(prevSelectedId);
-                    if ((forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc) && CanReplaceSelectedPatientInstance(prevSelected))
+                    var consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
+                    bool forced = _forceFreshPatientIds.Contains(prevSelectedId);
+                    if (ReferenceEquals(SelectedPatient, prevSelected)
+                        && (forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc)
+                        && CanReplaceSelectedPatientInstance(prevSelected))
                     {
-                        fresh.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
+                        _forceFreshPatientIds.Remove(prevSelectedId);
+                        fresh.Consultations = consultations;
                         keptSelected = fresh;
                         replacedSelected = true;
                     }
                     else
                     {
-                        prevSelected.Consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
+                        prevSelected.Consultations = consultations;
                         dbPatients[index] = prevSelected;
                         keptSelected = prevSelected;
                     }
@@ -1560,13 +1566,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
             if (prevSelectedId > 0)
             {
-                if (keptSelected == null)
+                if (!ReferenceEquals(SelectedPatient, prevSelected))
+                {
+                    // Se eligió otro paciente mientras se leía la base: no se toca su ficha
+                }
+                else if (keptSelected == null)
                 {
                     SelectedPatient = null; // El expediente fue dado de baja
                 }
                 else if (replacedSelected)
                 {
-                    SelectedPatient = keptSelected;
+                    ReplaceSelectedPatientKeepingView(keptSelected);
                 }
                 else
                 {
@@ -1579,6 +1589,28 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 SelectedPatient = Patients.FirstOrDefault(p => p.FullName == activeName);
             }
         }
+    }
+
+    /// <summary>
+    /// Cambia la ficha abierta por la versión de la base sin perder lo que el médico tenía a la vista
+    /// (búsqueda del historial, gráfica de signos, secciones abiertas y la consulta elegida).
+    /// </summary>
+    private void ReplaceSelectedPatientKeepingView(PatientRecord fresh)
+    {
+        var timelineSearch = TimelineSearchText;
+        var vitalsVisible = IsVitalsChartVisible;
+        var historyId = SelectedHistoryConsultation?.Id ?? 0;
+        var historyFolio = SelectedHistoryConsultation?.Folio;
+        var openSections = AntecedentSections.Where(a => a.IsOpen).Select(a => a.Key).ToHashSet();
+
+        SelectedPatient = fresh;
+
+        TimelineSearchText = timelineSearch;
+        IsVitalsChartVisible = vitalsVisible;
+        foreach (var section in AntecedentSections) section.IsOpen = openSections.Contains(section.Key);
+        SelectedHistoryConsultation =
+            ConsultationsHistory.FirstOrDefault(c => (historyId > 0 && c.Id == historyId) || (historyFolio != null && c.Folio == historyFolio))
+            ?? SelectedHistoryConsultation;
     }
 
     /// <summary>
@@ -1694,6 +1726,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             StopConsultationTimer();
             _feeServiceOverrideId = null;
+            _receivedHandoffId = null;
+            _receivedHandoffToken = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (_consultationRecordPatient != null) _ = EndConsultationOnRecordAsync(discarded: false);
         }

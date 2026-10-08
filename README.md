@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.16.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.17.0-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -33,6 +33,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
   - **Card ⚙️ "Configuración"**: secciones con resumen (Panel, Productos, Lotes FEFO, Kardex, Servicios, Médico y consultorio, Apariencia, Respaldos y datos, Nube y dispositivos, Actualizaciones) y **"Buscar un ajuste"** para llegar a cualquiera escribiendo (v1.16).
 - **Navegación Intuitiva**: Todas las vistas incluyen botón de retorno rápido (*"← Volver a Inicio"*).
 - **Interconexión Clínica**: Desde el Punto de Venta, *"Abrir consulta"* lleva a la consulta en curso. La consulta nunca manda al POS: todo lo que se usa con el paciente se cobra al terminarla.
+- **Consulta entre equipos (v1.17)**: *Enviar a…* pasa la consulta en curso a otro equipo enlazado a la nube (mismo folio, nota, signos, receta y cuenta) con un solo dueño a la vez; el otro la abre con *Continuar aquí*.
 
 ### 2. Punto de Venta (POS / Farmacia)
 - **Buscador al centro (v1.15)**: busca al escribir por nombre, genérico, código o ubicación (sin acentos ni mayúsculas); el código exacto va primero para el lector de código de barras. **Enter** agrega el primero y **`3*para`** agrega 3.
@@ -117,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **248 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **265 pruebas** unitarias y de integración
 
 ---
 

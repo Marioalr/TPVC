@@ -154,6 +154,7 @@ public partial class MedicalRecordsViewModel
                 _draftSessionActive = true;
             }
         }
+        if (saved) OnReceivedHandoffPersisted(draft);
         return saved;
     }
 
@@ -202,6 +203,9 @@ public partial class MedicalRecordsViewModel
             PreviousPrescriptions = _previousPrescriptionKnown ? _previousPrescription.Select(ClonePrescription).ToList() : null,
             PatientBefore = _summaryBeforeConsultation,
             AttendingAppointmentId = _attendingAppointmentId,
+            FeeServiceSyncId = _feeServiceOverrideId is int feeId ? Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
+            ReceivedHandoffId = _receivedHandoffId,
+            ReceivedHandoffToken = _receivedHandoffToken,
             // La marca de "enviada a otro equipo" va en TODAS las copias (también al cerrar el
             // programa): sin ella, al volver a abrir la consulta sería editable aquí y allá
             Handoff = CloneMarker(_outgoingHandoff)
@@ -227,6 +231,7 @@ public partial class MedicalRecordsViewModel
                 _lastWrittenDraftSequence = draft.Sequence;
             }
         }
+        if (saved) OnReceivedHandoffPersisted(draft);
 
         var status = saved
             ? $"Guardado {draft.SavedAt:HH:mm:ss}"
@@ -292,6 +297,8 @@ public partial class MedicalRecordsViewModel
 
         ApplyConsultationDraft(patient, draft);
         if (draft.Handoff != null) RestoreOutgoingHandoff(draft.Handoff);
+        // Una consulta recibida que ya estaba guardada aquí: su copia de la nube ya no hace falta
+        OnReceivedHandoffPersisted(draft);
 
         IsConsultationRecovered = true;
         PatientsPage = PageConsultation;
@@ -310,6 +317,12 @@ public partial class MedicalRecordsViewModel
         _suspendAutosave = true;
         try
         {
+            // Antes de iniciarla: la cuenta se muestra ya con el honorario y la cita correctos
+            _feeServiceOverrideId = draft.FeeServiceSyncId is Guid feeSyncId
+                ? Services.FirstOrDefault(s => s.IsActive && s.SyncId == feeSyncId)?.Id
+                : null;
+            _receivedHandoffId = draft.ReceivedHandoffId;
+            _receivedHandoffToken = draft.ReceivedHandoffToken;
             SelectPatient(patient);
             var active = _consultationService!.StartConsultation(patient, draft.ChiefComplaintLabel);
             if (!string.IsNullOrWhiteSpace(draft.Folio)) active.Folio = draft.Folio;

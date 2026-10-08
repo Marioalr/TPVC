@@ -408,6 +408,55 @@ public class ConsultationHandoffTests
     }
 
     [TestMethod]
+    public async Task RetryingAfterALostAcceptResponse_KeepsTheFirstTokenAndOpensIt()
+    {
+        var (pc, tablet) = await TwoDevicesAsync();
+        await StartConsultationAsync(pc);
+        await SendToAsync(pc, tablet);
+        await tablet.Records.PollHandoffsOnceAsync();
+
+        // Se toma, se pierde la respuesta y tampoco se puede preguntar
+        _server.DropResponseAfterExecute = sql =>
+        {
+            if (!sql.Contains("AcceptToken = ?, UpdatedAtUtc")) return false;
+            _server.IsOffline = true;
+            return true;
+        };
+        await tablet.Records.AcceptIncomingHandoffAsync();
+        _server.DropResponseAfterExecute = null;
+        _server.IsOffline = false;
+        Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
+
+        // El médico vuelve a pulsar "Continuar aquí" con el aviso de antes (sin revisar otra vez):
+        // la ficha del primer intento no se reemplaza y la consulta se abre aquí
+        Assert.IsNotNull(tablet.Records.IncomingHandoff);
+        await tablet.Records.AcceptIncomingHandoffAsync();
+        Assert.IsTrue(tablet.Consultations.HasActiveConsultation, tablet.Records.InfoModalMessage);
+        await pc.Records.PollHandoffsOnceAsync();
+        Assert.IsFalse(pc.Consultations.HasActiveConsultation);
+        Assert.AreEqual(1, Owners(pc, tablet));
+    }
+
+    [TestMethod]
+    public async Task ConfirmedSendWhoseRowDisappears_IsNeverUnlockedAutomatically()
+    {
+        var (pc, tablet) = await TwoDevicesAsync();
+        await StartConsultationAsync(pc);
+        await SendToAsync(pc, tablet);
+
+        // P. ej. se restauró la base de la nube: no se sabe dónde siguió la consulta
+        using (var cmd = _server.Connection.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM ConsultationHandoffs";
+            cmd.ExecuteNonQuery();
+        }
+        await pc.Records.PollHandoffsOnceAsync();
+        Assert.IsTrue(pc.Records.IsConsultationHandedOff, "Sigue en solo lectura");
+        Assert.IsTrue(pc.Records.CanReleaseHandoffLocally);
+        StringAssert.Contains(pc.Records.HandoffBannerDetail, "No se encontró");
+    }
+
+    [TestMethod]
     public async Task SendResponseLost_IsResolvedAgainstTheCloud_AndNeverLeavesTwoOwners()
     {
         var (pc, tablet) = await TwoDevicesAsync();
@@ -462,7 +511,7 @@ public class ConsultationHandoffTests
         Assert.IsTrue(pc.Records.CanReleaseHandoffLocally);
         StringAssert.Contains(pc.Records.HandoffBannerDetail, "No se pudo recuperar");
 
-        pc.Records.ReleaseHandoffLocally();
+        await pc.Records.ReleaseHandoffLocallyAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation, "El equipo queda libre para otra consulta");
         Assert.IsTrue(Directory.GetFiles(Path.GetDirectoryName(pc.Device.DraftPath)!, "consulta-enviada-*.json").Any(), "La copia se aparta");
 
@@ -590,6 +639,41 @@ public class ConsultationHandoffTests
         cmd.CommandText = "SELECT Allergies FROM Patients WHERE SyncId = $id";
         cmd.Parameters.AddWithValue("$id", TursoSyncService.FormatGuid(edited.SyncId));
         Assert.AreEqual("Penicilina", cmd.ExecuteScalar()?.ToString(), "Sube aunque su marca sea posterior al corte");
+    }
+
+    [TestMethod]
+    public async Task RowFromAFastClock_DeletedElsewhere_IsNotRevivedByTheNextPush()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // La tablet (reloj 10 min adelantado) guarda un avance de nota y lo sube
+        var tabletPatient = (await tablet.Inventory.GetPatientSummariesAsync()).First();
+        await tablet.Inventory.AddConsultationNoteAsync(tabletPatient.Id,
+            new PatientConsultation { Folio = "CNS-RELOJ-1", Date = DateTime.Now, ChiefComplaint = "Tos", Diagnosis = "J00" });
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            db.ApplyingRemoteChanges = true;
+            db.PatientConsultations.Single(c => c.Folio == "CNS-RELOJ-1").UpdatedAtUtc = DateTime.UtcNow.AddMinutes(10);
+            db.SaveChanges();
+        }
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual("1", ServerScalar("SELECT COUNT(*) FROM PatientConsultations WHERE Folio = 'CNS-RELOJ-1'"));
+
+        // La tablet la descarta (borrado) y lo sube; la PC, que aún la tiene, sincroniza después
+        Assert.IsTrue(await tablet.Inventory.DeleteConsultationNoteAsync(tabletPatient.Id, "CNS-RELOJ-1"));
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        Assert.AreEqual("0", ServerScalar("SELECT COUNT(*) FROM PatientConsultations WHERE Folio = 'CNS-RELOJ-1'"));
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual("0", ServerScalar("SELECT COUNT(*) FROM PatientConsultations WHERE Folio = 'CNS-RELOJ-1'"), "La subida de la PC no la revive");
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        Assert.AreEqual("0", ServerScalar("SELECT COUNT(*) FROM PatientConsultations WHERE Folio = 'CNS-RELOJ-1'"));
+        using (var db = pc.Factory.CreateDbContext()) Assert.AreEqual(0, db.PatientConsultations.Count(c => c.Folio == "CNS-RELOJ-1"));
+        using (var db = tablet.Factory.CreateDbContext()) Assert.AreEqual(0, db.PatientConsultations.Count(c => c.Folio == "CNS-RELOJ-1"));
     }
 
     [TestMethod]
