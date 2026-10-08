@@ -176,9 +176,23 @@ internal sealed class UiPerfSession
         var big = records.Patients.First(p => p.Id == bigPatientId);
         open.Restart();
         records.OpenPatientChart(big);
+        var afterOpen = open.Elapsed.TotalMilliseconds;
         PumpUntil(() => records.ConsultationsHistory.Count >= ManyConsultations);
+        var afterLoad = open.Elapsed.TotalMilliseconds;
+        Pump();
+        var afterPump = open.Elapsed.TotalMilliseconds;
+        host.Measure(new System.Windows.Size(Width, Height));
+        host.Arrange(new System.Windows.Rect(0, 0, Width, Height));
+        host.UpdateLayout();
+        var afterLayout = open.Elapsed.TotalMilliseconds;
         Draw(host);
         Add("Expediente", $"Abrir uno con {ManyConsultations} consultas", open);
+        _rows.Add(("Desglose", "Abrir (código)", $"{afterOpen:0} ms"));
+        _rows.Add(("Desglose", "Leer consultas", $"{afterLoad - afterOpen:0} ms"));
+        _rows.Add(("Desglose", "Pendientes del despachador", $"{afterPump - afterLoad:0} ms"));
+        _rows.Add(("Desglose", "Medir y acomodar", $"{afterLayout - afterPump:0} ms"));
+        _rows.Add(("Desglose", "Dibujar", $"{open.Elapsed.TotalMilliseconds - afterLayout:0} ms"));
+        _rows.Add(("Desglose", "Elementos del historial", $"{records.Timeline.Count} renglones, {CountVisuals(host)} elementos visuales"));
 
         records.GoToPatientsHome();
         Settle(host);
@@ -270,6 +284,16 @@ internal sealed class UiPerfSession
         host.UpdateLayout();
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Width, (int)Height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
         bitmap.Render(host);
+    }
+
+    private static int CountVisuals(System.Windows.DependencyObject root)
+    {
+        int count = 1;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            count += CountVisuals(System.Windows.Media.VisualTreeHelper.GetChild(root, i));
+        }
+        return count;
     }
 
     private static void Pump()
