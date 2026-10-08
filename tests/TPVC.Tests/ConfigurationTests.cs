@@ -131,6 +131,17 @@ public class ConfigurationTests
         Assert.AreSame(shell.TursoSyncVM, shell.CurrentSubView, "Sin resultados no cambia de página");
     }
 
+    [TestMethod]
+    public void SectionSummaries_FollowChangesWithoutNavigating()
+    {
+        var shell = NewMain().ConfigurationShellVM;
+        var clinic = shell.Sections.Single(s => s.Key == ConfigurationShellViewModel.SectionClinic);
+
+        shell.ClinicProfileVM.DoctorName = "Dra. Ana López";
+        Assert.AreEqual("Dra. Ana López", clinic.Summary);
+        Assert.AreSame(shell.DashboardVM, shell.CurrentSubView, "Se actualiza sin abrir la sección");
+    }
+
     // ================================================================== apariencia
 
     [TestMethod]

@@ -99,6 +99,14 @@ public partial class ConfigurationShellViewModel : ObservableObject
             .Select(g => new ConfigSectionGroup(g.Key, g.ToList()))
             .ToList();
 
+        // Los resúmenes siguen a su sección sin esperar a cambiar de página (por ejemplo, el
+        // "Último respaldo" al pulsar "Respaldar ahora")
+        FollowSummary(ServicesVM, nameof(ServicesCatalogViewModel.Summary), SectionServices, () => ServicesVM.Summary);
+        FollowSummary(ClinicProfileVM, nameof(ClinicProfileViewModel.Summary), SectionClinic, () => ClinicProfileVM.Summary);
+        FollowSummary(AppearanceVM, nameof(AppearanceViewModel.Summary), SectionAppearance, () => AppearanceVM.Summary);
+        FollowSummary(DataVM, nameof(DataManagementViewModel.LastBackupText), SectionData, () => DataVM.LastBackupText);
+        FollowSummary(TursoSyncVM, nameof(TursoSyncViewModel.StatusMessage), SectionCloud, () => TursoSyncVM.StatusMessage);
+
         // Iniciar en el panel del consultorio
         NavigateSubView(SectionDashboard);
     }
@@ -240,6 +248,12 @@ public partial class ConfigurationShellViewModel : ObservableObject
         SetSummary(SectionUpdates, $"Versión {AppVersion.TrimStart('v', 'V')}");
         SetSummary(SectionDesignSystem, "Muestra de botones, campos y avisos");
     }
+
+    private void FollowSummary(System.ComponentModel.INotifyPropertyChanged source, string property, string key, Func<string> read) =>
+        source.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == property) SetSummary(key, read());
+        };
 
     private void SetSummary(string key, string summary)
     {
