@@ -14,9 +14,9 @@ on:
         required: true
         default: perf/antes-v1.18
       rounds:
-        description: Rondas por versión
+        description: Rondas por versión (par, para alternar el orden)
         required: true
-        default: '3'
+        default: '4'
 
 permissions:
   contents: read
@@ -43,21 +43,26 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Compilar las pruebas y publicar el programa como en el zip (cada versión con sus propios ajustes)
       - name: Build both
         shell: pwsh
         run: |
-          dotnet build antes/TPVC.sln --configuration Release
-          dotnet build despues/TPVC.sln --configuration Release
+          foreach ($side in 'antes', 'despues') {
+            dotnet build "$side/TPVC.sln" --configuration Release
+            dotnet publish "$side/TPVC.csproj" -c Release -r win-x64 --self-contained false -o "$side/pub"
+          }
 
       - name: Measure
         shell: pwsh
         run: |
           $root = Join-Path $pwd 'medidas'
-          for ($round = 1; $round -le [int]'${{ github.event.inputs.rounds || '3' }}'; $round++) {
-            foreach ($side in 'antes', 'despues') {
+          for ($round = 1; $round -le [int]'${{ github.event.inputs.rounds || '4' }}'; $round++) {
+            # Se alterna quién va primero: la segunda medición de cada ronda sale un poco más rápida
+            $order = if ($round % 2 -eq 1) { 'antes', 'despues' } else { 'despues', 'antes' }
+            foreach ($side in $order) {
               $env:TPVC_PERF_DIR = Join-Path $root "$side/$round"
               dotnet test "$side/TPVC.sln" --configuration Release --no-build --verbosity minimal --filter "TestCategory=Rendimiento"
-              ./despues/scripts/measure-startup.ps1 -Exe "$side/bin/Release/net10.0-windows/TPVC.exe" -OutDir $env:TPVC_PERF_DIR -Launches 3
+              ./despues/scripts/measure-startup.ps1 -Exe "$side/pub/TPVC.exe" -OutDir $env:TPVC_PERF_DIR -Launches 3
             }
           }
           ./despues/scripts/compare-performance.ps1 -Root $root -Out (Join-Path $root 'comparacion.md')

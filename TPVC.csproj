@@ -15,6 +15,9 @@
     <Description>Sistema de control de inventario clínico y farmacológico para consultorio de medicina general con base de datos local SQLite y personalización de temas.</Description>
     <Copyright>Copyright © 2026 Marioalr</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- Al publicar (instalador y zip) el código va ya compilado para Windows x64: el programa
+         abre más rápido porque no tiene que compilarlo cada vez que arranca -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

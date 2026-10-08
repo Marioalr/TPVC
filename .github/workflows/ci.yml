@@ -63,8 +63,11 @@ jobs:
           tzutil /s "Central Standard Time (Mexico)"
           dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory!=Rendimiento"
 
+      - name: Build Installer and Packages
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.version.outputs.value }}"
+
       # Tiempos y memoria para comparar versiones: en su propio proceso (arranque sin compilar) y con el
-      # programa real. No detiene la CI; el resultado queda en el resumen de la ejecución y como artefacto.
+      # programa publicado (el mismo del zip). No detiene la CI; el resultado queda en el resumen de la ejecución y como artefacto.
       - name: Medir rendimiento
         continue-on-error: true
         shell: pwsh
@@ -72,7 +75,7 @@ jobs:
           TPVC_PERF_DIR: ${{ github.workspace }}\rendimiento
         run: |
           dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory=Rendimiento"
-          ./scripts/measure-startup.ps1 -Exe "bin/Release/net10.0-windows/TPVC.exe" -OutDir "$env:TPVC_PERF_DIR"
+          ./scripts/measure-startup.ps1 -Exe "publish/TPVC-v${{ steps.version.outputs.value }}-win-x64/TPVC.exe" -OutDir "$env:TPVC_PERF_DIR"
           Get-ChildItem "$env:TPVC_PERF_DIR" -Filter *.md | Get-Content | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Upload Performance Report
@@ -82,9 +85,6 @@ jobs:
           name: rendimiento
           path: ./rendimiento
           if-no-files-found: ignore
-
-      - name: Build Installer and Packages
-        run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.version.outputs.value }}"
 
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4

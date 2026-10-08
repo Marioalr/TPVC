@@ -24,7 +24,7 @@ function Read-Round([string]$dir) {
         $section = ''
         foreach ($line in Get-Content $perf) {
             if ($line -match '^\| ([^|]+) \| \|$') { $section = $Matches[1].Trim(); continue }
-            if ($line -match '^\| ([^|]+) \| ([\d\.]+) (ms|MB)') {
+            if ($line -notmatch 'la primera vez' -and $line -match '^\| ([^|]+) \| ([\d\.]+) (ms|MB)') {
                 $values["$section · $($Matches[1].Trim())"] = @([double]$Matches[2], $Matches[3])
             }
             if ($line -match '^\| ([^|]+) \| ([\d\.]+) ms la primera vez · ([\d\.]+) ms después') {
