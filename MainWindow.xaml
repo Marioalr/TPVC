@@ -46,9 +46,6 @@
         <DataTemplate DataType="{x:Type vm:MovementsViewModel}">
             <views:MovementsView />
         </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-            <views:SettingsView />
-        </DataTemplate>
     </Window.Resources>
 
     <Grid>

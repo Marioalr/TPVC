@@ -73,6 +73,9 @@ public partial class ProductDialogViewModel : ObservableObject
 
     public event Action? RequestClose;
 
+    /// <summary>Se guardó un producto (la lista lo refresca; el alta queda abierta para el siguiente).</summary>
+    public event Action? Saved;
+
     public ObservableCollection<string> CommonUnits { get; } = new()
     {
         "Piezas",
@@ -203,12 +206,13 @@ public partial class ProductDialogViewModel : ObservableObject
 
             await _inventoryService.SaveProductAsync(product);
             DialogResult = true;
+            Saved?.Invoke();
 
             if (IsNew)
             {
                 // Limpiar lo agregado para permitir registrar el siguiente insumo sin duplicados
                 ResetFields();
-                SuccessMessage = $"✓ Insumo \"{savedName}\" guardado correctamente. Formulario limpio para registrar el siguiente.";
+                SuccessMessage = $"\"{savedName}\" guardado. Puede registrar el siguiente.";
             }
             else
             {

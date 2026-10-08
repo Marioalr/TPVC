@@ -24,35 +24,6 @@ public partial class TursoSyncViewModel : ObservableObject
     private readonly TursoSyncService _syncService;
     private readonly TursoSettingsService _settingsService;
     private readonly ClinicProfileService _clinicProfileService;
-    private readonly DataImportService _dataImportService;
-
-    [ObservableProperty]
-    private bool _isImportConfirmModalOpen;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanProceedWithImport))]
-    private string _importConfirmWord = string.Empty;
-
-    [ObservableProperty]
-    private string _selectedImportFilePath = string.Empty;
-
-    [ObservableProperty]
-    private string _selectedImportFileType = string.Empty; // "Excel" o "Database"
-
-    [ObservableProperty]
-    private string _importModalTitle = string.Empty;
-
-    [ObservableProperty]
-    private string _importModalWarning = string.Empty;
-
-    [ObservableProperty]
-    private string _importStatusMessage = string.Empty;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanProceedWithImport))]
-    private bool _isImporting;
-
-    public bool CanProceedWithImport => !IsImporting && DataImportService.ValidateConfirmationWord(ImportConfirmWord);
 
     [ObservableProperty]
     private bool _isSyncEnabled;
@@ -137,16 +108,11 @@ public partial class TursoSyncViewModel : ObservableObject
     public TursoSyncViewModel(
         TursoSyncService syncService,
         TursoSettingsService settingsService,
-        ClinicProfileService clinicProfileService,
-        DataImportService? dataImportService = null)
+        ClinicProfileService clinicProfileService)
     {
         _syncService = syncService;
         _settingsService = settingsService;
         _clinicProfileService = clinicProfileService;
-        _dataImportService = dataImportService ?? new DataImportService(
-            new AppDbContextFactory(),
-            new BackupService(),
-            clinicProfileService);
 
         _syncService.StatusChanged += (s, m) =>
         {
@@ -473,111 +439,5 @@ public partial class TursoSyncViewModel : ObservableObject
     public void ToggleHelpGuide()
     {
         IsHelpGuideOpen = !IsHelpGuideOpen;
-    }
-
-    [RelayCommand]
-    public void StartImportExcel()
-    {
-        if (IsBusy || IsImporting) return;
-
-        var path = DialogService.ShowOpenFileDialog(
-            "Archivos de catálogo (*.xlsx;*.csv;*.txt)|*.xlsx;*.csv;*.txt|Libros de Excel (*.xlsx)|*.xlsx|Archivos CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*",
-            "Seleccionar Catálogo de Medicamentos para Importar");
-
-        if (string.IsNullOrWhiteSpace(path)) return;
-
-        SelectedImportFilePath = path;
-        SelectedImportFileType = "Excel";
-        ImportModalTitle = "⚠️ Confirmar Importación de Catálogo (Excel / CSV)";
-        ImportModalWarning =
-            $"Está a punto de importar medicamentos, recetas y datos clínicos desde:\n" +
-            $"{Path.GetFileName(path)}\n({path})\n\n" +
-            "• Esta operación modificará los registros de medicamentos en la base de datos local y actualizará los expedientes.\n" +
-            "• Se creará automáticamente un respaldo preventivo íntegro antes de iniciar.\n\n" +
-            "Para proceder, escriba la palabra CONFIRMAR en el campo inferior:";
-        ImportConfirmWord = string.Empty;
-        IsImportConfirmModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void StartImportDatabase()
-    {
-        if (IsBusy || IsImporting) return;
-
-        var path = DialogService.ShowOpenFileDialog(
-            "Bases de datos SQLite (*.db;*.sqlite;*.sqlite3)|*.db;*.sqlite;*.sqlite3|Todos los archivos (*.*)|*.*",
-            "Seleccionar Base de Datos SQLite para Restaurar");
-
-        if (string.IsNullOrWhiteSpace(path)) return;
-
-        SelectedImportFilePath = path;
-        SelectedImportFileType = "Database";
-        ImportModalTitle = "🚨 ADVERTENCIA CRÍTICA: Reemplazo Total de Base de Datos";
-        ImportModalWarning =
-            $"Está a punto de sustituir TODA la base de datos local con el archivo:\n" +
-            $"{Path.GetFileName(path)}\n({path})\n\n" +
-            "⚠️ ATENCIÓN: Todos los registros actuales (pacientes, consultas, inventario, ventas) serán reemplazados por el archivo seleccionado.\n" +
-            "🛡️ Por su seguridad, el sistema creará un respaldo automático preventivo antes de sustituir la base de datos.\n\n" +
-            "Para proceder con el reemplazo, escriba la palabra CONFIRMAR en el campo inferior:";
-        ImportConfirmWord = string.Empty;
-        IsImportConfirmModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CancelImport()
-    {
-        IsImportConfirmModalOpen = false;
-        SelectedImportFilePath = string.Empty;
-        ImportConfirmWord = string.Empty;
-    }
-
-    [RelayCommand]
-    public async Task ExecuteConfirmedImportAsync()
-    {
-        if (!CanProceedWithImport || IsBusy || IsImporting) return;
-
-        IsBusy = true;
-        IsImporting = true;
-        var filePath = SelectedImportFilePath;
-        var fileType = SelectedImportFileType;
-
-        try
-        {
-            DataImportResult res;
-            if (fileType == "Excel")
-            {
-                res = await Task.Run(() => _dataImportService.ImportExcelOrCsvAsync(filePath));
-            }
-            else
-            {
-                res = await Task.Run(() => _dataImportService.ImportDatabaseFileAsync(filePath));
-            }
-
-            if (res.Success)
-            {
-                ImportStatusMessage = $"✓ {res.Message}";
-                SaveStatusMessage = $"✓ {res.Message}";
-                IsImportConfirmModalOpen = false;
-                ImportConfirmWord = string.Empty;
-            }
-            else
-            {
-                ImportStatusMessage = $"✕ {res.Message}";
-                SaveStatusMessage = $"✕ {res.Message}";
-                DialogService.ShowError(res.Message, "Error en la Importación");
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error en importación confirmada", ex);
-            ImportStatusMessage = $"✕ Error inesperado: {ex.Message}";
-            SaveStatusMessage = $"✕ Error: {ex.Message}";
-            DialogService.ShowError($"Error inesperado al importar:\n{ex.Message}", "Error");
-        }
-        finally
-        {
-            IsImporting = false;
-            IsBusy = false;
-        }
     }
 }

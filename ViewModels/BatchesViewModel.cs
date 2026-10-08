@@ -9,8 +9,77 @@ using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
+/// <summary>Chip de filtro con su conteo ("Por vencer · 3").</summary>
+public sealed record BatchFilterChip(string Key, string Text);
+
 public partial class BatchesViewModel : ObservableObject
 {
+    private static readonly System.Globalization.CultureInfo Mexican = System.Globalization.CultureInfo.GetCultureInfo("es-MX");
+    private static readonly string[] DateFormats = { "d/M/yyyy", "dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "yyyy-MM-dd", "d/M/yy", "dd/MM/yy", "MM/yyyy", "M/yyyy" };
+
+    [ObservableProperty]
+    private ObservableCollection<BatchFilterChip> _filterChips = new();
+
+    [ObservableProperty]
+    private BatchFilterChip? _selectedFilterChip;
+
+    partial void OnSelectedFilterChipChanged(BatchFilterChip? value)
+    {
+        if (value != null && value.Key != SelectedFilter) SelectedFilter = value.Key;
+    }
+
+    private void RebuildFilterChips()
+    {
+        FilterChips = new ObservableCollection<BatchFilterChip>(new[]
+        {
+            new BatchFilterChip("Todos", $"Todos · {CountTodos}"),
+            new BatchFilterChip("Proximos", $"Por vencer · {CountProximos}"),
+            new BatchFilterChip("Vencidos", $"Vencidos · {CountVencidos}"),
+            new BatchFilterChip("Vigentes", $"Vigentes · {CountVigentes}")
+        });
+        SelectedFilterChip = FilterChips.FirstOrDefault(c => c.Key == SelectedFilter);
+    }
+
+    public string ResultsSummary => Batches.Count == 1 ? "1 lote" : $"{Batches.Count} lotes";
+
+    /// <summary>Caducidad como se escribe (dd/mm/aaaa o mm/aaaa, que toma el último día del mes).</summary>
+    [ObservableProperty]
+    private string _newBatchExpirationText = string.Empty;
+
+    private bool _syncingExpirationText;
+
+    partial void OnNewBatchExpirationTextChanged(string value)
+    {
+        if (_syncingExpirationText) return;
+        var parsed = ParseExpiration(value);
+        if (parsed.HasValue)
+        {
+            _syncingExpirationText = true;
+            NewBatchExpirationDate = parsed.Value;
+            _syncingExpirationText = false;
+        }
+        else
+        {
+            IsExpirationWarningVisible = !string.IsNullOrWhiteSpace(value);
+            ExpirationWarningMessage = "Escriba la fecha como dd/mm/aaaa (o mm/aaaa).";
+        }
+    }
+
+    /// <summary>"31/12/2027" → esa fecha; "12/2027" → último día de diciembre de 2027 (como en la caja).</summary>
+    public static DateTime? ParseExpiration(string? text)
+    {
+        var clean = text?.Trim();
+        if (string.IsNullOrEmpty(clean)) return null;
+        if (!DateTime.TryParseExact(clean, DateFormats, Mexican, System.Globalization.DateTimeStyles.None, out var date)) return null;
+        bool monthOnly = clean.Count(c => c == '/' || c == '-') == 1;
+        return monthOnly ? new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)) : date.Date;
+    }
+
+    [RelayCommand]
+    public void AddMonthsToExpiration(string? months)
+    {
+        if (int.TryParse(months, out var m)) NewBatchExpirationDate = DateTime.Today.AddMonths(m);
+    }
     private readonly InventoryService _inventoryService;
 
     [ObservableProperty]
@@ -60,6 +129,9 @@ public partial class BatchesViewModel : ObservableObject
     private bool _isExpirationWarningVisible;
 
     [ObservableProperty]
+    private string? _newBatchError;
+
+    [ObservableProperty]
     private string _expirationWarningMessage = string.Empty;
 
     public BatchesViewModel(InventoryService inventoryService)
@@ -95,6 +167,12 @@ public partial class BatchesViewModel : ObservableObject
     partial void OnNewBatchExpirationDateChanged(DateTime value)
     {
         ValidateExpirationDate(value);
+        if (!_syncingExpirationText)
+        {
+            _syncingExpirationText = true;
+            NewBatchExpirationText = value.ToString("dd/MM/yyyy", Mexican);
+            _syncingExpirationText = false;
+        }
     }
 
     private void ValidateExpirationDate(DateTime value)
@@ -102,13 +180,13 @@ public partial class BatchesViewModel : ObservableObject
         if (value.Date < DateTime.Today)
         {
             IsExpirationWarningVisible = true;
-            ExpirationWarningMessage = "⚠️ Atención: La fecha de caducidad ingresada ya venció.";
+            ExpirationWarningMessage = "Esa fecha ya pasó: el lote entraría vencido.";
         }
         else if ((value.Date - DateTime.Today).TotalDays <= 30)
         {
             int days = (int)(value.Date - DateTime.Today).TotalDays;
             IsExpirationWarningVisible = true;
-            ExpirationWarningMessage = $"⚠️ Advertencia: Este lote vencerá en {days} días ({value:dd/MM/yyyy}). Confirme que la fecha sea correcta.";
+            ExpirationWarningMessage = $"Este lote vence en {days} días ({value:dd/MM/yyyy}). Revise que la fecha sea correcta.";
         }
         else
         {
@@ -145,7 +223,9 @@ public partial class BatchesViewModel : ObservableObject
                 list = active.Where(b => b.Status == ExpirationStatus.Vigente).ToList();
             }
 
-            Batches = new ObservableCollection<ProductBatch>(list);
+            Batches = new ObservableCollection<ProductBatch>(list.OrderBy(b => b.ExpirationDate));
+            OnPropertyChanged(nameof(ResultsSummary));
+            RebuildFilterChips();
 
             var products = await _inventoryService.GetProductsAsync();
             AvailableProducts = new ObservableCollection<Product>(products);
@@ -170,6 +250,7 @@ public partial class BatchesViewModel : ObservableObject
     {
         NewBatchNumber = $"LOT-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(10, 99)}";
         NewBatchExpirationDate = DateTime.Today.AddMonths(12);
+        NewBatchExpirationText = NewBatchExpirationDate.ToString("dd/MM/yyyy", Mexican);
         ValidateExpirationDate(NewBatchExpirationDate);
         NewBatchQuantity = 10;
         NewBatchNotes = string.Empty;
@@ -187,8 +268,15 @@ public partial class BatchesViewModel : ObservableObject
     {
         if (NewBatchSelectedProduct == null || string.IsNullOrWhiteSpace(NewBatchNumber) || NewBatchQuantity <= 0)
         {
+            NewBatchError = "Elija el producto y escriba el número de lote y la cantidad.";
             return;
         }
+        if (ParseExpiration(NewBatchExpirationText) == null)
+        {
+            NewBatchError = "Escriba la caducidad como dd/mm/aaaa (o mm/aaaa).";
+            return;
+        }
+        NewBatchError = null;
 
         var batch = new ProductBatch
         {

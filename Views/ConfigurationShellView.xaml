@@ -1,238 +1,165 @@
 <UserControl x:Class="TPVC.Views.ConfigurationShellView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:views="clr-namespace:TPVC.Views"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
-             mc:Ignorable="d" 
+             mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:ConfigurationShellViewModel}"
-             d:DesignHeight="750" d:DesignWidth="1100">
+             d:DesignHeight="800" d:DesignWidth="1300">
 
+    <!-- ======================================================================== -->
+    <!-- CONFIGURACIÓN: menú agrupado (Resumen, Inventario, Consultorio, Sistema) -->
+    <!-- con un resumen de una línea por sección y un buscador que lleva directo  -->
+    <!-- a cualquier ajuste. Cada página se crea al abrirla.                      -->
+    <!-- ======================================================================== -->
     <UserControl.Resources>
-        <!-- DataTemplates para resolución automática de Vistas Administrativas -->
-        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
-            <views:DashboardView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
-            <views:InventoryView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:BatchesViewModel}">
-            <views:BatchesView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:MovementsViewModel}">
-            <views:MovementsView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:ClinicProfileViewModel}">
-            <views:ClinicProfileView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-            <views:SettingsView />
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:TursoSyncViewModel}">
-            <views:TursoSyncView />
-        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:InventoryViewModel}"><views:InventoryView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BatchesViewModel}"><views:BatchesView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MovementsViewModel}"><views:MovementsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ServicesCatalogViewModel}"><views:ServicesCatalogView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ClinicProfileViewModel}"><views:ClinicProfileView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AppearanceViewModel}"><views:AppearanceView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DataManagementViewModel}"><views:DataManagementView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:UpdatesViewModel}"><views:UpdatesView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:TursoSyncViewModel}"><views:TursoSyncView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DesignSystemViewModel}"><views:DesignSystemView /></DataTemplate>
+
+        <!-- Elemento del menú: icono, título y resumen; el activo con barra de acento -->
+        <Style x:Key="NavItem" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DsFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="10,8" Margin="0,0,0,2">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240" />
+            <ColumnDefinition Width="290" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Panel Lateral de Navegación y Configuración -->
-        <Border Grid.Column="0" 
-                Background="{DynamicResource ThemeSurface}" 
-                BorderBrush="{DynamicResource ThemeBorder}" 
-                BorderThickness="0,0,1,0">
-            <Grid Margin="18,20,18,18">
+        <Border Background="{DynamicResource ThemeCard}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,1,0">
+            <Grid Margin="16,16,12,12">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Cabecera del Panel Lateral -->
-                <StackPanel Grid.Row="0" Margin="4,0,4,16">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
-                        <Border Background="{DynamicResource ThemeAccent}" 
-                                CornerRadius="8" 
-                                Width="34" Height="34" 
-                                Margin="0,0,10,0">
-                            <TextBlock Text="+" 
-                                       FontWeight="Bold" 
-                                       FontSize="22" 
-                                       Foreground="{DynamicResource ThemeAccentText}" 
-                                       HorizontalAlignment="Center" 
-                                       VerticalAlignment="Center" 
-                                       Margin="0,-2,0,0" />
-                        </Border>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="TPVC" 
-                                       FontWeight="Bold" 
-                                       FontSize="16" 
-                                       Foreground="{DynamicResource ThemeText}" />
-                            <TextBlock Text="Configuración y Ajustes" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Botón Destacado: Volver a Inicio (Hub de las 3 Cards) -->
-                    <Button Style="{DynamicResource OutlineButton}" 
-                            Command="{Binding BackToHubCommand}" 
-                            Padding="12,8" 
-                            Margin="0,0,0,10">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="←" FontWeight="Bold" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Volver a Inicio" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding BackToHubCommand}" Margin="0,0,12,0" ToolTip="Volver al inicio de la aplicación">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoChevronLeft}" Margin="0,0,6,0" />
+                            <TextBlock Text="Inicio" />
                         </StackPanel>
                     </Button>
+                    <TextBlock Grid.Column="1" Style="{StaticResource TextHeading}" Text="Configuración" VerticalAlignment="Center" />
+                </Grid>
 
-                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="0,4,0,0" />
-                </StackPanel>
+                <Grid Grid.Row="1" Margin="0,0,4,12">
+                    <TextBox x:Name="SettingsSearchBox" Style="{StaticResource FieldTextBox}" Padding="36,7,10,7"
+                             Text="{Binding SettingsSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             helpers:Field.Placeholder="Buscar un ajuste (ej. modo oscuro)"
+                             AutomationProperties.Name="Buscar un ajuste">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding OpenFirstSettingCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <helpers:Icon Data="{StaticResource IcoSearch}" HorizontalAlignment="Left" Margin="12,0,0,0"
+                                  Foreground="{DynamicResource ThemeTextSecondary}" IsHitTestVisible="False" />
+                </Grid>
 
-                <!-- Menú de Opciones de Administración y Configuración -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,-6,0" Padding="0,0,6,0">
-                    <StackPanel>
-                        <!-- 1. Resumen / Métricas (Dashboard) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Dashboard, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="Dashboard">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconDashboard}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Panel y Métricas" />
-                            </StackPanel>
-                        </RadioButton>
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                    <Grid>
+                        <!-- Menú agrupado -->
+                        <ItemsControl ItemsSource="{Binding SectionGroups}" Visibility="{Binding IsSearchingSettings, Converter={StaticResource InverseBoolToVis}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ConfigSectionGroup}">
+                                    <StackPanel Margin="0,0,0,10">
+                                        <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="{Binding Name}" Margin="10,0,0,4" />
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:ConfigSectionItem}">
+                                                    <Button Style="{StaticResource NavItem}"
+                                                            Command="{Binding DataContext.NavigateSubViewCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding Key}"
+                                                            AutomationProperties.Name="{Binding Title}">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <helpers:Icon Data="{Binding IconKey, Converter={StaticResource ResourceLookup}}" Width="18" Height="18"
+                                                                          Margin="0,1,10,0" VerticalAlignment="Top" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                            <StackPanel Grid.Column="1">
+                                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Title}" />
+                                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                                                                           Visibility="{Binding Summary, Converter={StaticResource BoolToVis}}" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                        <!-- 2. Inventario e Insumos -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Inventory, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="Inventory">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconPill}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Inventario e Insumos" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 3. Lotes y Caducidades -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Batches, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="Batches">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconCalendar}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Lotes y Caducidades" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 4. Kardex de Movimientos -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Movements, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="Movements">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconHistory}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Kardex de Movimientos" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 5. Datos de Consultorio y Médico -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=ClinicProfile, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="ClinicProfile">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🩺" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Datos del Médico y Clínica" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 6. Temas y Ajustes -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=Settings, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="Settings">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource IconSettings}" 
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" 
-                                      Width="15" Height="15" 
-                                      Stretch="Uniform" 
-                                      Margin="0,0,10,0" />
-                                <TextBlock Text="Temas y Ajustes" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 7. Nube y Sincronización Turso -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=TursoSync, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="TursoSync">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="☁️" FontSize="13" Margin="0,0,10,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Nube y Turso Cloud" />
-                            </StackPanel>
-                        </RadioButton>
-
-                        <!-- 8. Muestra del lenguaje visual (revisión de temas) -->
-                        <RadioButton Style="{DynamicResource NavRadioButton}" 
-                                     GroupName="ConfigNav"
-                                     IsChecked="{Binding ActiveSubViewName, Converter={StaticResource ComparisonToBool}, ConverterParameter=DesignSystem, Mode=OneWay}"
-                                     Command="{Binding NavigateSubViewCommand}" 
-                                     CommandParameter="DesignSystem">
-                            <StackPanel Orientation="Horizontal">
-                                <helpers:Icon Data="{StaticResource IcoSun}" Width="15" Height="15" Margin="0,0,10,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Componentes" />
-                            </StackPanel>
-                        </RadioButton>
-                    </StackPanel>
+                        <!-- Resultados del buscador -->
+                        <StackPanel Visibility="{Binding IsSearchingSettings, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl ItemsSource="{Binding SettingsSearchResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SettingEntry}">
+                                        <Button Style="{StaticResource ButtonGhost}" HorizontalContentAlignment="Left" Padding="10,8" Margin="0,0,0,2"
+                                                Foreground="{DynamicResource ThemeText}"
+                                                Command="{Binding DataContext.OpenSettingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Description}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource TextDetail}" Margin="10,8" TextWrapping="Wrap" Text="Ningún ajuste coincide. Pruebe con otra palabra."
+                                       Visibility="{Binding HasNoSettingsResults, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Grid>
                 </ScrollViewer>
 
-                <!-- Pie del Panel Lateral -->
-                <StackPanel Grid.Row="2" Margin="4,0,4,4">
-                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Sistema de Consultorio" 
-                                       FontSize="11" 
-                                       Foreground="{DynamicResource ThemeTextSecondary}" />
-                            <TextBlock Text="{Binding AppVersion}" 
-                                       FontSize="11" 
-                                       FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource ThemeAccent}" 
-                                       Margin="0,2,0,0" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <TextBlock Grid.Row="3" Style="{StaticResource TextCaption}" Margin="10,10,0,0" Text="{Binding AppVersion, StringFormat='TPVC {0}'}" />
             </Grid>
         </Border>
 
-        <!-- Área de Contenido de la Vista Administrativa Seleccionada -->
-        <ContentControl Grid.Column="1" Content="{Binding CurrentSubView, Converter={StaticResource CachedView}}" />
+        <ContentControl Grid.Column="1" Content="{Binding CurrentSubView}" Focusable="False" />
     </Grid>
 </UserControl>

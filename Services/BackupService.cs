@@ -57,7 +57,15 @@ public class BackupService
 
     /// <summary>Respaldo manual con fecha y hora en el nombre.</summary>
     public Task<string> CreateBackupNowAsync() =>
-        Task.Run(() => CreateBackup(Path.Combine(BackupDirectory, $"consultorio-{DateTime.Now:yyyyMMdd-HHmmss}.db")));
+        Task.Run(() => CreateBackup(UniquePath($"consultorio-{DateTime.Now:yyyyMMdd-HHmmss}")));
+
+    /// <summary>Dos respaldos en el mismo segundo no se pisan: el segundo lleva "-2", "-3"…</summary>
+    private string UniquePath(string baseName)
+    {
+        var path = Path.Combine(BackupDirectory, baseName + ".db");
+        for (int i = 2; File.Exists(path); i++) path = Path.Combine(BackupDirectory, $"{baseName}-{i}.db");
+        return path;
+    }
 
     private string CreateBackup(string targetPath)
     {

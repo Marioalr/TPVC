@@ -292,47 +292,116 @@ public class DataImportTests
         }
     }
 
-    [TestMethod]
-    public async Task TursoSyncViewModel_ImportConfirmationWorkflow()
+    private static string SampleCatalogPath()
     {
-        var syncSettings = new TursoSettingsService(_settingsPath);
-        var syncService = new TursoSyncService(_factory, syncSettings, _profileService, _inventoryService);
-        var vm = new TursoSyncViewModel(syncService, syncSettings, _profileService, _importService);
-
         string samplePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestAssets", "catalogo_muestra.xlsx");
-        if (!File.Exists(samplePath))
-        {
-            samplePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../TestAssets/catalogo_muestra.xlsx"));
-        }
+        return File.Exists(samplePath)
+            ? samplePath
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../TestAssets/catalogo_muestra.xlsx"));
+    }
 
-        // Simular selector de archivo
+    [TestMethod]
+    public async Task DataManagement_ExcelImport_ShowsStepsAndNeedsNoTypedWord()
+    {
+        var vm = new DataManagementViewModel(_backupService, _importService);
+        var samplePath = SampleCatalogPath();
         DialogService.OpenFilePickerHandler = (_, _) => samplePath;
 
-        // Iniciar importación
         vm.StartImportExcelCommand.Execute(null);
 
-        Assert.IsTrue(vm.IsImportConfirmModalOpen, "El modal de confirmación debe abrirse");
-        Assert.AreEqual("Excel", vm.SelectedImportFileType);
-        Assert.AreEqual(samplePath, vm.SelectedImportFilePath);
-        Assert.IsFalse(vm.CanProceedWithImport, "No debe permitir proceder sin escribir CONFIRMAR");
+        Assert.IsTrue(vm.IsImportSheetOpen, "La hoja de importar debe abrirse");
+        Assert.IsTrue(vm.IsConfirmStep);
+        Assert.AreEqual(DataManagementViewModel.ImportExcel, vm.ImportKind);
+        Assert.AreEqual(samplePath, vm.ImportFilePath);
+        Assert.AreEqual("catalogo_muestra.xlsx", vm.ImportFileName);
+        Assert.IsFalse(vm.RequiresTypedConfirmation, "El catálogo se respalda antes y no borra nada: basta un clic");
+        Assert.IsTrue(vm.CanProceedWithImport);
+        Assert.AreEqual(3, vm.ImportSteps.Count);
+        Assert.AreEqual(1, vm.ImportSteps[0].Number);
+        StringAssert.Contains(vm.ImportSteps[0].Text, "respaldo");
 
-        // Escribir texto erróneo
+        await vm.ExecuteImportCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(vm.HasImportResult);
+        Assert.IsFalse(vm.IsConfirmStep, "Tras importar se muestra el resultado, no la confirmación");
+        Assert.IsTrue(vm.ImportResult!.Success, vm.ImportResult.Message);
+        StringAssert.Contains(vm.ImportResult.Message, "Catálogo procesado");
+        Assert.IsTrue(vm.ImportResultLines.Any(l => l.StartsWith("Respaldo previo")), "Debe decir qué respaldo se creó");
+        Assert.IsTrue(vm.HasBackups, "El respaldo previo aparece en la lista");
+
+        vm.CloseImportSheetCommand.Execute(null);
+        Assert.IsFalse(vm.IsImportSheetOpen);
+        Assert.IsFalse(vm.HasImportResult);
+        Assert.AreEqual(string.Empty, vm.ImportFilePath);
+    }
+
+    [TestMethod]
+    public async Task DataManagement_RestoreBackup_RequiresConfirmarAndRestoresThatState()
+    {
+        var vm = new DataManagementViewModel(_backupService, _importService);
+        Assert.IsFalse(vm.HasBackups);
+        Assert.AreEqual("Sin respaldos todavía", vm.LastBackupText);
+
+        await vm.BackupNowCommand.ExecuteAsync(null);
+        Assert.IsTrue(vm.HasBackups);
+        StringAssert.StartsWith(vm.LastBackupText, "Último respaldo hoy");
+        var backup = vm.Backups[0];
+
+        // Algo que se registra después del respaldo y que se pierde al volver a él
+        using (var db = _factory.CreateDbContext())
+        {
+            var cat = new Category { Name = "Posterior" };
+            db.Categories.Add(cat);
+            db.Products.Add(new Product { Code = "POST-1", Name = "Registrado después del respaldo", Category = cat });
+            db.SaveChanges();
+        }
+
+        vm.RestoreBackupCommand.Execute(backup);
+        Assert.IsTrue(vm.IsDatabaseRestore);
+        Assert.IsTrue(vm.RequiresTypedConfirmation, "Reemplazar toda la base es irreversible: pide CONFIRMAR");
+        Assert.IsFalse(vm.CanProceedWithImport);
         vm.ImportConfirmWord = "SI";
         Assert.IsFalse(vm.CanProceedWithImport);
-
-        vm.ImportConfirmWord = "confirm";
+        vm.ImportConfirmWord = "CONFIRM";
         Assert.IsFalse(vm.CanProceedWithImport);
-
-        // Escribir CONFIRMAR
         vm.ImportConfirmWord = "CONFIRMAR";
-        Assert.IsTrue(vm.CanProceedWithImport, "Debe habilitar el botón al escribir CONFIRMAR");
+        Assert.IsTrue(vm.CanProceedWithImport);
 
-        // Ejecutar importación confirmada
-        await vm.ExecuteConfirmedImportCommand.ExecuteAsync(null);
+        SqliteConnection.ClearAllPools();
+        await vm.ExecuteImportCommand.ExecuteAsync(null);
 
-        Assert.IsFalse(vm.IsImportConfirmModalOpen, "El modal debe cerrarse tras completarse");
-        Assert.AreEqual(string.Empty, vm.ImportConfirmWord, "La palabra de confirmación debe limpiarse");
-        StringAssert.Contains(vm.ImportStatusMessage, "Catálogo procesado");
+        Assert.IsTrue(vm.ImportResult!.Success, vm.ImportResult.Message);
+        Assert.AreEqual(string.Empty, vm.ImportConfirmWord, "La palabra se limpia al terminar");
+        Assert.IsTrue(File.Exists(backup.Path), "El respaldo elegido sigue existiendo");
+        using (var db = _factory.CreateDbContext())
+        {
+            Assert.IsFalse(db.Products.Any(p => p.Code == "POST-1"), "Se volvió al estado del respaldo");
+        }
+        Assert.AreEqual(2, vm.Backups.Count, "El respaldo previo a restaurar no pisa al elegido aunque sea del mismo segundo");
+    }
+
+    [TestMethod]
+    public async Task RestoreOldestBackup_WhenRetentionIsFull_StillWorks()
+    {
+        // Con los 14 respaldos llenos, el respaldo previo a restaurar borra el más antiguo; si ese es el
+        // que se restaura, antes fallaba porque el archivo ya no existía.
+        Directory.CreateDirectory(_backupService.BackupDirectory);
+        for (int i = 0; i < BackupService.RetainedBackups; i++)
+        {
+            await _backupService.CreateBackupNowAsync();
+        }
+        var backups = _backupService.GetBackups();
+        for (int i = 0; i < backups.Count; i++)
+        {
+            File.SetLastWriteTime(backups[i].FullName, DateTime.Now.AddDays(-i - 1));
+        }
+        var oldest = _backupService.GetBackups().Last();
+
+        SqliteConnection.ClearAllPools();
+        var result = await _importService.ImportDatabaseFileAsync(oldest.FullName);
+
+        Assert.IsTrue(result.Success, result.Message);
+        Assert.AreEqual(BackupService.RetainedBackups, _backupService.GetBackups().Count);
     }
 
     private class TestDbContextFactory : IDbContextFactory<AppDbContext>

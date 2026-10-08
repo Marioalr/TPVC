@@ -1033,11 +1033,13 @@ public class InventoryService
     // ==========================================
     // SERVICIOS CLÍNICOS Y PAQUETES DE INSUMOS
     // ==========================================
-    public async Task<List<ClinicalService>> GetClinicalServicesAsync()
+    /// <summary>Servicios para cobrar (solo los activos) o, en Configuración, también los desactivados.</summary>
+    public async Task<List<ClinicalService>> GetClinicalServicesAsync(bool includeInactive = false)
     {
         await using var db = CreateContext();
         return await db.ClinicalServices
             .AsNoTracking()
+            .Where(s => includeInactive || s.IsActive)
             .Include(s => s.DefaultProducts)
                 .ThenInclude(dp => dp.Product)
             .OrderBy(s => s.Category)

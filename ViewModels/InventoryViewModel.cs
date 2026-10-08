@@ -41,6 +41,41 @@ public partial class InventoryViewModel : ObservableObject
     [ObservableProperty]
     private int _totalResultsCount;
 
+    // ================================================================== edición en panel lateral
+
+    /// <summary>Alta o edición de un producto en el panel lateral (antes una ventana aparte).</summary>
+    [ObservableProperty]
+    private ProductDialogViewModel? _editor;
+
+    [ObservableProperty]
+    private bool _isEditorOpen;
+
+    [RelayCommand]
+    public Task NewProductAsync() => OpenEditorAsync(null);
+
+    [RelayCommand]
+    public Task EditProductAsync(Product? product) => product == null ? Task.CompletedTask : OpenEditorAsync(product);
+
+    private async Task OpenEditorAsync(Product? product)
+    {
+        IsQuickActionOpen = false;
+        var editor = new ProductDialogViewModel(_inventoryService, CloseEditor);
+        editor.Saved += () => _ = FilterProductsAsync();
+        await editor.InitializeAsync(product);
+        Editor = editor;
+        IsEditorOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseEditor()
+    {
+        IsEditorOpen = false;
+    }
+
+    public string ResultsSummary => TotalResultsCount == 1 ? "1 producto" : $"{TotalResultsCount} productos";
+
+    partial void OnTotalResultsCountChanged(int value) => OnPropertyChanged(nameof(ResultsSummary));
+
     // Quick Action Form state
     [ObservableProperty]
     private bool _isQuickActionOpen;
@@ -88,14 +123,12 @@ public partial class InventoryViewModel : ObservableObject
         try
         {
             var categories = await _inventoryService.GetCategoriesAsync();
-            var allCat = new Category { Id = 0, Name = "Todas las Categorías" };
+            var allCat = new Category { Id = 0, Name = "Todas" };
             var catList = new ObservableCollection<Category> { allCat };
             foreach (var c in categories) catList.Add(c);
             Categories = catList;
-            if (SelectedCategory == null)
-            {
-                SelectedCategory = allCat;
-            }
+            // Conserva la categoría elegida (las instancias cambian al recargar)
+            SelectedCategory = Categories.FirstOrDefault(c => c.Id == (SelectedCategory?.Id ?? 0)) ?? allCat;
 
             await FilterProductsAsync();
         }
@@ -162,6 +195,7 @@ public partial class InventoryViewModel : ObservableObject
         if (target == null) return;
 
         SelectedProduct = target;
+        IsEditorOpen = false;
         IsQuickConsumptionMode = true;
         QuickActionTitle = $"Consumo en Consulta: {target.Name}";
         QuickActionQuantity = 1;
@@ -176,6 +210,7 @@ public partial class InventoryViewModel : ObservableObject
         if (target == null) return;
 
         SelectedProduct = target;
+        IsEditorOpen = false;
         IsQuickConsumptionMode = false;
         QuickActionTitle = $"Entrada de Stock: {target.Name}";
         QuickActionQuantity = 5;

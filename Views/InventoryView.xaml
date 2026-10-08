@@ -1,279 +1,324 @@
 <UserControl x:Class="TPVC.Views.InventoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             mc:Ignorable="d" 
-             d:DataContext="{d:DesignInstance vm:InventoryViewModel}">
-    <Grid Margin="28,24,28,28">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:InventoryViewModel}"
+             d:DesignHeight="800" d:DesignWidth="1000">
 
-        <!-- Encabezado y Botón de Creación -->
-        <Grid Grid.Row="0" Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+    <!-- Productos: busca al escribir, filtros como chips y lista que solo crea las filas visibles. -->
+    <!-- Alta, edición, entradas y consumos en un panel lateral (sin ventanas aparte).            -->
+    <Grid>
+        <Grid Margin="28,24,28,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Catálogo de Insumos y Medicamentos" 
-                           FontSize="24" 
-                           FontWeight="Bold" 
-                           Foreground="{DynamicResource ThemeText}" />
-                <TextBlock Text="Control interno de inventario, stock y consumo médico" 
-                           FontSize="13" 
-                           Foreground="{DynamicResource ThemeTextSecondary}" 
-                           Margin="0,4,0,0" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Style="{DynamicResource AccentButton}" 
-                        Click="NewProduct_Click"
-                        Padding="16,9">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource IconPlus}" 
-                              Fill="{DynamicResource ThemeAccentText}" 
-                              Width="14" Height="14" 
-                              Stretch="Uniform" 
-                              Margin="0,0,8,0" />
-                        <TextBlock Text="Nuevo Insumo / Fármaco" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Grid>
-
-        <!-- Barra de Filtros y Búsqueda -->
-        <Border Grid.Row="1" Style="{DynamicResource CardBorder}" Margin="0,0,0,16" Padding="14,12">
-            <Grid>
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280" />
-                    <ColumnDefinition Width="14" />
-                    <ColumnDefinition Width="220" />
-                    <ColumnDefinition Width="20" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TextTitle}" Text="Productos" />
+                    <TextBlock Style="{StaticResource TextDetail}" Text="{Binding ResultsSummary}" Margin="0,4,0,0" />
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource ButtonPrimary}" Command="{Binding NewProductCommand}" VerticalAlignment="Top">
+                    <StackPanel Orientation="Horizontal">
+                        <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
+                        <TextBlock Text="Nuevo producto" />
+                    </StackPanel>
+                </Button>
+            </Grid>
 
-                <!-- Campo de búsqueda con botón de limpiar -->
-                <Grid Grid.Column="0">
-                    <TextBox Style="{DynamicResource ModernTextBox}" 
+            <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                <Grid Margin="0,0,0,10">
+                    <TextBox Style="{StaticResource FieldTextBox}" Height="44" Padding="40,7,12,7"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Tag="Buscar por nombre, código o genérico..." 
-                             Padding="10,6,28,6" />
-                    <Button Command="{Binding ClearSearchCommand}" 
-                            Visibility="{Binding SearchText, Converter={StaticResource BoolToVis}}" 
-                            HorizontalAlignment="Right" 
-                            VerticalAlignment="Center" 
-                            Margin="0,0,8,0"
-                            Background="Transparent" 
-                            BorderThickness="0" 
-                            Cursor="Hand"
-                            Padding="4"
-                            ToolTip="Limpiar búsqueda">
-                        <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
+                             helpers:Field.Placeholder="Buscar por nombre, genérico, código o ubicación"
+                             AutomationProperties.Name="Buscar producto" />
+                    <helpers:Icon Data="{StaticResource IcoSearch}" Width="18" Height="18" HorizontalAlignment="Left" Margin="14,0,0,0"
+                                  Foreground="{DynamicResource ThemeTextSecondary}" IsHitTestVisible="False" />
+                </Grid>
+                <WrapPanel>
+                    <ToggleButton Style="{StaticResource ChipToggle}" Margin="0,0,6,6" IsChecked="{Binding FilterLowStock}" Content="Stock bajo" />
+                    <ToggleButton Style="{StaticResource ChipToggle}" Margin="0,0,12,6" IsChecked="{Binding FilterExpiring}" Content="Por caducar" />
+                    <ListBox Style="{StaticResource ChipList}" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                             DisplayMemberPath="Name" AutomationProperties.Name="Categorías" />
+                </WrapPanel>
+            </StackPanel>
+
+            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <ListBox x:Name="ProductsList" Style="{StaticResource PlainList}" Padding="8,6"
+                             ItemsSource="{Binding Products}"
+                             SelectedItem="{Binding SelectedProduct, Mode=TwoWay}"
+                             MouseDoubleClick="ProductsList_MouseDoubleClick"
+                             AutomationProperties.Name="Productos">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:Product}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="170" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="96" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            <Border Style="{StaticResource BadgeInfo}" Margin="8,0,0,0" Visibility="{Binding RequiresRefrigeration, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="Refrigerar" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                                                    <Binding Path="Code" />
+                                                    <Binding Path="GenericName" />
+                                                    <Binding Path="Presentation" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource TextDetail}" Text="{Binding Category.Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Location}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Style="{StaticResource StockBadge}" VerticalAlignment="Center">
+                                        <TextBlock>
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} {1}">
+                                                    <Binding Path="CurrentStock" />
+                                                    <Binding Path="Unit" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Border>
+                                    <TextBlock Grid.Column="3" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
+                                               Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Content="Entrada" ToolTip="Registrar una entrada (compra o reposición)"
+                                                Command="{Binding DataContext.OpenQuickEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Style="{StaticResource ButtonIcon}" Width="32" Height="32" Margin="4,0,0,0"
+                                                helpers:MenuOnClick.IsEnabled="True"
+                                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                ToolTip="Más acciones" AutomationProperties.Name="Más acciones">
+                                            <helpers:Icon Data="{StaticResource IcoMore}" StrokeThickness="3" />
+                                            <Button.ContextMenu>
+                                                <ContextMenu Style="{StaticResource DsContextMenu}">
+                                                    <MenuItem Header="Editar" Command="{Binding PlacementTarget.Tag.EditProductCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Registrar consumo (sin cobro)" Command="{Binding PlacementTarget.Tag.OpenQuickConsumptionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Dar de baja del catálogo" Command="{Binding PlacementTarget.Tag.DeleteProductCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding Products.Count, Converter={StaticResource InverseBoolToVis}}">
+                        <TextBlock Style="{StaticResource TextBody}" Text="Ningún producto con estos filtros." HorizontalAlignment="Center" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Quite un filtro o cambie la búsqueda." HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ======================= PANEL: ALTA / EDICIÓN ======================= -->
+        <Border Style="{StaticResource SidePanel}" Width="460" Panel.ZIndex="50"
+                Visibility="{Binding IsEditorOpen, Converter={StaticResource BoolToVis}}">
+            <Grid DataContext="{Binding Editor}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="24,20,16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextHeading}">
+                                <Setter Property="Text" Value="Editar producto" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsNew}" Value="True">
+                                        <Setter Property="Text" Value="Nuevo producto" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CancelCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,0,24,16">
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,12" Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                        </Border>
+                        <Border Style="{StaticResource NoticeSuccess}" Margin="0,0,0,12" Visibility="{Binding SuccessMessage, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding SuccessMessage}" TextWrapping="Wrap" />
+                        </Border>
 
-                <!-- Combo de Categorías -->
-                <ComboBox Grid.Column="2" 
-                          Style="{DynamicResource ModernComboBox}"
-                          ItemsSource="{Binding Categories}" 
-                          SelectedItem="{Binding SelectedCategory}" 
-                          DisplayMemberPath="Name" />
-
-                <!-- Filtros rápidos -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <CheckBox IsChecked="{Binding FilterLowStock}" 
-                              Content="Solo Stock Bajo ⚠️" 
-                              Margin="0,0,18,0"
-                              FontSize="12" 
-                              FontWeight="Medium"
-                              Foreground="{DynamicResource ThemeText}" />
-                    <CheckBox IsChecked="{Binding FilterExpiring}" 
-                              Content="Próximos a Caducar ⏳" 
-                              FontSize="12" 
-                              FontWeight="Medium"
-                              Foreground="{DynamicResource ThemeText}" />
-                </StackPanel>
-
-                <!-- Contador de resultados -->
-                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding TotalResultsCount, StringFormat='{}{0} artículos'}" 
-                               FontSize="12" 
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Código *" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre comercial *" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Genérico (principio activo)" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding GenericName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Presentación" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Presentation, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="Ej. Caja con 20 tabletas de 500 mg" Margin="0,0,0,12" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Categoría *" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" DisplayMemberPath="Name" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Unidad" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding CommonUnits}" SelectedItem="{Binding Unit}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Precio de venta ($)" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding Price, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Ubicación" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Ej. Estante A1" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Existencias" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding CurrentStock, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Mínimo" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding MinStock, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Ideal" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding OptimalStock, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource FieldHint}" Margin="0,0,0,12" TextWrapping="Wrap"
+                                   Text="Cambiar las existencias aquí queda en el kardex como ajuste. Para compras use Entrada." />
+                        <CheckBox Style="{StaticResource FieldCheckBox}" IsChecked="{Binding RequiresRefrigeration}" Content="Requiere refrigeración" Margin="0,0,0,12" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Notas" />
+                        <TextBox Style="{StaticResource FieldMultiline}" MinHeight="60" Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </ScrollViewer>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CancelCommand}" Content="Cerrar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
+                                <TextBlock Text="Guardar" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
-        <!-- Tabla DataGrid de Productos -->
-        <Border Grid.Row="2" Style="{DynamicResource CardBorder}" Padding="0">
-            <DataGrid ItemsSource="{Binding Products}" 
-                      SelectedItem="{Binding SelectedProduct}">
-                <DataGrid.Columns>
-                    <!-- Código -->
-                    <DataGridTextColumn Header="Código" Binding="{Binding Code}" Width="100" />
-                    
-                    <!-- Nombre y Principio Activo -->
-                    <DataGridTemplateColumn Header="Artículo e Insumo" Width="*">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel VerticalAlignment="Center" Margin="4,0">
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
-                                    <TextBlock Text="{Binding GenericName}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-
-                    <!-- Presentación -->
-                    <DataGridTextColumn Header="Presentación" Binding="{Binding Presentation}" Width="160" />
-
-                    <!-- Categoría -->
-                    <DataGridTextColumn Header="Categoría" Binding="{Binding Category.Name}" Width="160" />
-
-                    <!-- Ubicación -->
-                    <DataGridTextColumn Header="Ubicación" Binding="{Binding Location}" Width="130" />
-
-                    <!-- Stock Actual con Badge -->
-                    <DataGridTemplateColumn Header="Stock Actual" Width="120">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CurrentStock}" 
-                                               FontWeight="Bold" 
-                                               FontSize="13" 
-                                               Margin="0,0,4,0"
-                                               Foreground="{DynamicResource ThemeText}" />
-                                    <TextBlock Text="{Binding Unit}" 
-                                               FontSize="11" 
-                                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                                               Margin="0,0,8,0" 
-                                               VerticalAlignment="Center" />
-                                    <Border Background="{DynamicResource ThemeWarning}" 
-                                            CornerRadius="4" 
-                                            Padding="6,2" 
-                                            Visibility="{Binding IsLowStock, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="Bajo" Foreground="White" FontSize="10" FontWeight="Bold" />
-                                    </Border>
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-
-                    <!-- Precio de Venta -->
-                    <DataGridTemplateColumn Header="Precio" Width="95">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Price, StringFormat='${0:N2}'}" 
-                                           FontWeight="SemiBold" 
-                                           VerticalAlignment="Center" 
-                                           HorizontalAlignment="Right" 
-                                           Margin="0,0,8,0" 
-                                           Foreground="{DynamicResource ThemeAccent}" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-
-                    <!-- Acciones Rápidas -->
-                    <DataGridTemplateColumn Header="Acciones Rápidas" Width="260">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <!-- Consumo rápido en consulta -->
-                                    <Button Style="{DynamicResource SuccessButton}" 
-                                            Content="⚡ Consumo" 
-                                            Padding="8,4" 
-                                            FontSize="11" 
-                                            Margin="0,0,6,0"
-                                            ToolTip="Registrar consumo durante consulta médica"
-                                            Command="{Binding DataContext.OpenQuickConsumptionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                            CommandParameter="{Binding}" />
-
-                                    <!-- Entrada rápida -->
-                                    <Button Style="{DynamicResource OutlineButton}" 
-                                            Content="+ Entrada" 
-                                            Padding="8,4" 
-                                            FontSize="11" 
-                                            Margin="0,0,6,0"
-                                            ToolTip="Registrar entrada de insumos"
-                                            Command="{Binding DataContext.OpenQuickEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                            CommandParameter="{Binding}" />
-
-                                    <!-- Editar -->
-                                    <Button Style="{DynamicResource OutlineButton}" 
-                                            Content="✏️" 
-                                            Padding="8,4" 
-                                            FontSize="11" 
-                                            Margin="0,0,6,0"
-                                            ToolTip="Editar información de producto"
-                                            Click="EditProduct_Click" />
-
-                                    <!-- Eliminar -->
-                                    <Button Style="{DynamicResource OutlineButton}" 
-                                            Content="🗑️" 
-                                            Padding="8,4" 
-                                            FontSize="11" 
-                                            ToolTip="Desactivar producto"
-                                            Command="{Binding DataContext.DeleteProductCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                            CommandParameter="{Binding}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
-
-        <!-- Overlay de Acción Rápida (Consumo / Entrada) -->
-        <Border Grid.Row="0" Grid.RowSpan="3"
-                Background="#66000000"
+        <!-- ======================= PANEL: ENTRADA O CONSUMO ======================= -->
+        <Border Style="{StaticResource SidePanel}" Width="420" Panel.ZIndex="50"
                 Visibility="{Binding IsQuickActionOpen, Converter={StaticResource BoolToVis}}">
-            <Border Style="{DynamicResource CardBorder}" 
-                    Width="400" 
-                    VerticalAlignment="Center" 
-                    HorizontalAlignment="Center"
-                    Padding="24">
-                <StackPanel>
-                    <TextBlock Text="{Binding QuickActionTitle}" 
-                               FontSize="17" 
-                               FontWeight="Bold" 
-                               Foreground="{DynamicResource ThemeText}" 
-                               Margin="0,0,0,6" />
-                    <TextBlock Text="Indica la cantidad a descontar o añadir al inventario del consultorio:" 
-                               FontSize="12" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               Margin="0,0,0,16" />
-
-                    <TextBlock Text="Cantidad *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <TextBox Style="{DynamicResource ModernTextBox}" 
-                             Text="{Binding QuickActionQuantity, UpdateSourceTrigger=PropertyChanged}" 
-                             Margin="0,0,0,14" />
-
-                    <TextBlock Text="Motivo o Procedimiento" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <TextBox Style="{DynamicResource ModernTextBox}" 
-                             Text="{Binding QuickActionNotes, UpdateSourceTrigger=PropertyChanged}" 
-                             Margin="0,0,0,20" />
-
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Content="Cancelar" 
-                                Command="{Binding CloseQuickActionCommand}" 
-                                Margin="0,0,10,0" 
-                                Padding="16,8" />
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Content="Confirmar" 
-                                Command="{Binding ConfirmQuickActionCommand}" 
-                                Padding="20,8" />
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="24,20,16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextHeading}">
+                                    <Setter Property="Text" Value="Entrada" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsQuickConsumptionMode}" Value="True">
+                                            <Setter Property="Text" Value="Consumo sin cobro" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource TextDetail}" Text="{Binding SelectedProduct.Name}" TextWrapping="Wrap" />
                     </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseQuickActionCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </Grid>
+                <StackPanel Grid.Row="1" Margin="24,0,24,16">
+                    <Border Style="{StaticResource CardSubtle}" Margin="0,0,0,14">
+                        <TextBlock Style="{StaticResource TextDetail}" Text="{Binding SelectedProduct.CurrentStock, StringFormat='Existencias actuales: {0}'}" />
+                    </Border>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
+                    <TextBox Style="{StaticResource FieldTextBox}" FontSize="18" Height="44" HorizontalContentAlignment="Center"
+                             Text="{Binding QuickActionQuantity, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" AutomationProperties.Name="Cantidad" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Motivo" />
+                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding QuickActionNotes, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Motivo" />
+                    <TextBlock Style="{StaticResource FieldHint}" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Text="Queda registrado en el kardex. Lo que se usa con un paciente se carga mejor a la cuenta de su consulta."
+                               Visibility="{Binding IsQuickConsumptionMode, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
-            </Border>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseQuickActionCommand}" Content="Cancelar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ConfirmQuickActionCommand}" Content="Registrar" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

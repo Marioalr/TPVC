@@ -9,11 +9,19 @@ namespace TPVC.Services;
 
 public class ThemeService
 {
-    private static readonly string SettingsFile = Path.Combine(
+    private static readonly string DefaultSettingsFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TPVC",
         "theme.json"
     );
+
+    private readonly string SettingsFile;
+
+    /// <param name="settingsFile">Dónde guardar el tema (las pruebas usan una carpeta temporal).</param>
+    public ThemeService(string? settingsFile = null)
+    {
+        SettingsFile = settingsFile ?? DefaultSettingsFile;
+    }
 
     public ThemeSettings CurrentSettings { get; private set; } = new();
 

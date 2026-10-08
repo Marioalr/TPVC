@@ -170,7 +170,29 @@ public class DataImportService
             };
         }
 
-        // 2. Respaldo previo de la base actual
+        // 2. Copia del origen antes de respaldar: si el origen es uno de los respaldos (por ejemplo el
+        //    más antiguo), el respaldo previo podría borrarlo al limpiar los viejos o pisarlo si se
+        //    crea en el mismo segundo.
+        var stagedPath = Path.Combine(Path.GetTempPath(), $"tpvc-restore-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var source = new SqliteConnection($"Data Source={sqliteDbFilePath};Mode=ReadOnly;Pooling=False");
+            using var staged = new SqliteConnection($"Data Source={stagedPath};Pooling=False");
+            source.Open();
+            staged.Open();
+            source.BackupDatabase(staged);
+        }
+        catch (Exception ex)
+        {
+            TryDelete(stagedPath);
+            return new DataImportResult
+            {
+                Success = false,
+                Message = $"No se pudo leer el archivo de base de datos: {ex.Message}"
+            };
+        }
+
+        // 3. Respaldo previo de la base actual
         string backupPath;
         try
         {
@@ -178,6 +200,7 @@ public class DataImportService
         }
         catch (Exception ex)
         {
+            TryDelete(stagedPath);
             return new DataImportResult
             {
                 Success = false,
@@ -185,7 +208,7 @@ public class DataImportService
             };
         }
 
-        // 3. Liberar conexiones y reemplazar archivo
+        // 4. Liberar conexiones y reemplazar archivo
         try
         {
             SqliteConnection.ClearAllPools();
@@ -196,7 +219,7 @@ public class DataImportService
 
             // API de respaldo en línea de SQLite: copia consistente aunque el origen tenga cambios en
             // su archivo -wal y sin corromper la base destino (a diferencia de File.Copy con WAL activo)
-            using (var source = new SqliteConnection($"Data Source={sqliteDbFilePath};Mode=ReadOnly;Pooling=False"))
+            using (var source = new SqliteConnection($"Data Source={stagedPath};Mode=ReadOnly;Pooling=False"))
             using (var destination = new SqliteConnection($"Data Source={targetDbPath};Pooling=False"))
             {
                 source.Open();
@@ -205,7 +228,7 @@ public class DataImportService
             }
             SqliteConnection.ClearAllPools();
 
-            // 4. Migración aditiva automática para asegurar columnas e índices faltantes
+            // 5. Migración aditiva automática para asegurar columnas e índices faltantes
             using (var ctx = _contextFactory.CreateDbContext())
             {
                 ctx.Database.EnsureCreated();
@@ -240,6 +263,16 @@ public class DataImportService
                 Message = $"Error al sustituir la base de datos: {ex.Message}. Su respaldo previo está intacto en: {backupPath}"
             };
         }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            TryDelete(stagedPath);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 
     #region Excel del consultorio (.xlsx)

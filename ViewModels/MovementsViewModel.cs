@@ -26,6 +26,28 @@ public partial class MovementsViewModel : ObservableObject
     [ObservableProperty]
     private int _totalMovementsCount;
 
+    /// <summary>Filtros como chips: todo, entradas, ventas, consumo en consulta, bajas y ajustes.</summary>
+    public IReadOnlyList<string> TypeFilters { get; } = new[] { "Todos", "Entradas", "Ventas", "Consultas", "Bajas", "Ajustes" };
+
+    [ObservableProperty]
+    private string _typeFilter = "Todos";
+
+    public string ResultsSummary => TotalMovementsCount == 1 ? "1 movimiento" : $"{TotalMovementsCount} movimientos";
+
+    partial void OnTotalMovementsCountChanged(int value) => OnPropertyChanged(nameof(ResultsSummary));
+
+    partial void OnTypeFilterChanged(string value) => ApplySearchFilter();
+
+    public static bool MatchesTypeFilter(InventoryMovement movement, string? filter) => filter switch
+    {
+        "Entradas" => movement.MovementType is MovementType.EntradaCompra or MovementType.EntradaAjuste or MovementType.EntradaDevolucion,
+        "Ventas" => movement.MovementType == MovementType.SalidaVenta,
+        "Consultas" => movement.MovementType == MovementType.SalidaConsulta,
+        "Bajas" => movement.MovementType is MovementType.SalidaCaducidad or MovementType.SalidaMerma,
+        "Ajustes" => movement.MovementType == MovementType.AjusteInventario,
+        _ => true
+    };
+
     public MovementsViewModel(InventoryService inventoryService)
     {
         _inventoryService = inventoryService;
@@ -74,7 +96,7 @@ public partial class MovementsViewModel : ObservableObject
     /// </summary>
     private void ApplySearchFilter()
     {
-        IEnumerable<InventoryMovement> list = _loadedMovements;
+        IEnumerable<InventoryMovement> list = _loadedMovements.Where(m => MatchesTypeFilter(m, TypeFilter));
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
             var q = TextSearch.Normalize(SearchText);

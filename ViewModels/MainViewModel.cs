@@ -115,7 +115,10 @@ public partial class MainViewModel : ObservableObject
     public InventoryViewModel InventoryVM { get; }
     public BatchesViewModel BatchesVM { get; }
     public MovementsViewModel MovementsVM { get; }
-    public SettingsViewModel SettingsVM { get; }
+    public AppearanceViewModel AppearanceVM { get; }
+    public DataManagementViewModel DataVM { get; }
+    public UpdatesViewModel UpdatesVM { get; }
+    public ServicesCatalogViewModel ServicesCatalogVM { get; }
     public TursoSyncViewModel TursoSyncVM { get; }
 
     public MainViewModel(
@@ -175,8 +178,13 @@ public partial class MainViewModel : ObservableObject
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
         ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
-        SettingsVM = new SettingsViewModel(themeService, updateService, backupService);
-        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService, dataImportService);
+        // "Temas y ajustes" se dividió en Apariencia, Respaldos y datos (con la importación que
+        // estaba en la página de la nube) y Actualizaciones
+        AppearanceVM = new AppearanceViewModel(themeService);
+        DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications);
+        UpdatesVM = new UpdatesViewModel(updateService);
+        ServicesCatalogVM = new ServicesCatalogViewModel(inventoryService, Notifications);
+        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
             NavigateTo,
@@ -185,8 +193,11 @@ public partial class MainViewModel : ObservableObject
             BatchesVM,
             MovementsVM,
             ClinicProfileVM,
-            SettingsVM,
+            AppearanceVM,
+            DataVM,
+            UpdatesVM,
             TursoSyncVM,
+            ServicesCatalogVM,
             AppVersion,
             new DesignSystemViewModel(themeService, Notifications));
 
@@ -613,9 +624,15 @@ public partial class MainViewModel : ObservableObject
             case "Inventory":
             case "Batches":
             case "Movements":
+            case "Services":
+            case "ClinicProfile":
+            case "Appearance":
+            case "Data":
+            case "Updates":
             case "Settings":
             case "TursoSync":
             case "DesignSystem":
+                // Antes "ClinicProfile" no llegaba a su página (se quedaba en la anterior)
                 ConfigurationShellVM.NavigateSubView(viewName);
                 CurrentView = ConfigurationShellVM;
                 break;

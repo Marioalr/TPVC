@@ -705,6 +705,20 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeAccentText}" />
     </Style>
 
+    <!-- Estado de un lote (DataContext = ProductBatch): verde vigente, ámbar por vencer, rojo vencido -->
+    <Style x:Key="BatchStatusBadge" TargetType="Border" BasedOn="{StaticResource BadgeSuccess}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Status}" Value="ProximoAVencer">
+                <Setter Property="Background" Value="{DynamicResource ThemeWarningSubtle}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeWarningText}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="Vencido">
+                <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeDangerText}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Existencias de un producto (DataContext = Product): verde, ámbar si quedan pocas, rojo si no hay -->
     <Style x:Key="StockBadge" TargetType="Border" BasedOn="{StaticResource BadgeSuccess}">
         <Style.Triggers>

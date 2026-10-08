@@ -59,6 +59,14 @@ public partial class ClinicProfileViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSuccess = true;
 
+    /// <summary>Resumen para el menú de Configuración.</summary>
+    public string Summary => !string.IsNullOrWhiteSpace(DoctorName) ? DoctorName.Trim()
+        : !string.IsNullOrWhiteSpace(ClinicName) ? ClinicName.Trim()
+        : "Sin configurar (sale en recetas y tickets)";
+
+    partial void OnDoctorNameChanged(string value) => OnPropertyChanged(nameof(Summary));
+    partial void OnClinicNameChanged(string value) => OnPropertyChanged(nameof(Summary));
+
     public ClinicProfileViewModel(ClinicProfileService profileService)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));

@@ -380,10 +380,39 @@ internal sealed class UiSmokeSession
             Capture(host, $"17-alta-gineco-{suffix}");
             records.CancelPatientForm();
 
-            foreach (var sub in new[] { "Dashboard", "Inventory", "Batches", "Movements", "ClinicProfile", "Settings", "TursoSync", "DesignSystem" })
+            var shell = main.ConfigurationShellVM;
+            foreach (var sub in new[] { "Dashboard", "Inventory", "Batches", "Movements", "Services", "ClinicProfile", "Appearance", "Data", "TursoSync", "Updates", "DesignSystem" })
             {
                 Show(host, main, sub, $"20-config-{sub.ToLowerInvariant()}-{suffix}");
             }
+
+            shell.SettingsSearchText = "respaldo";
+            Capture(host, $"21-config-buscar-{suffix}");
+            shell.SettingsSearchText = string.Empty;
+
+            main.NavigateTo("Inventory");
+            WaitFor(shell.InventoryVM.LoadDataAsync());
+            WaitFor(shell.InventoryVM.NewProductAsync());
+            Capture(host, $"22-config-producto-nuevo-{suffix}");
+            shell.InventoryVM.CloseEditor();
+
+            main.NavigateTo("Batches");
+            shell.BatchesVM.OpenNewBatchModal();
+            shell.BatchesVM.NewBatchExpirationText = "12/2027";
+            Capture(host, $"23-config-lote-nuevo-{suffix}");
+            shell.BatchesVM.CloseNewBatchModal();
+
+            main.NavigateTo("Services");
+            WaitFor(shell.ServicesVM.LoadAsync());
+            WaitFor(shell.ServicesVM.EditServiceAsync(shell.ServicesVM.FilteredServices.First()));
+            Capture(host, $"24-config-servicio-{suffix}");
+            shell.ServicesVM.CloseEditor();
+
+            main.NavigateTo("Data");
+            WaitFor(shell.DataVM.BackupNowAsync());
+            shell.DataVM.RestoreBackup(shell.DataVM.Backups[0]);
+            Capture(host, $"25-config-restaurar-{suffix}");
+            shell.DataVM.CloseImportSheet();
         }
     }
 

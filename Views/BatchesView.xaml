@@ -1,252 +1,172 @@
 <UserControl x:Class="TPVC.Views.BatchesView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
-             mc:Ignorable="d" 
-             d:DataContext="{d:DesignInstance vm:BatchesViewModel}">
-    <Grid Margin="28,24,28,28">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:BatchesViewModel}"
+             d:DesignHeight="800" d:DesignWidth="1000">
 
-        <!-- Encabezado -->
-        <Grid Grid.Row="0" Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+    <!-- Lotes y caducidades: lo que vence primero arriba (FEFO), filtros como chips y el registro -->
+    <!-- de un lote nuevo en un panel lateral.                                                   -->
+    <Grid>
+        <Grid Margin="28,24,28,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Control de Lotes y Fechas de Caducidad" 
-                           FontSize="24" 
-                           FontWeight="Bold" 
-                           Foreground="{DynamicResource ThemeText}" />
-                <TextBlock Text="Monitoreo crítico para insumos médicos y farmacológicos" 
-                           FontSize="13" 
-                           Foreground="{DynamicResource ThemeTextSecondary}" 
-                           Margin="0,4,0,0" />
-            </StackPanel>
-
-            <Button Grid.Column="1" 
-                    Style="{DynamicResource AccentButton}" 
-                    Command="{Binding OpenNewBatchModalCommand}"
-                    Padding="16,9">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource IconPlus}" 
-                          Fill="{DynamicResource ThemeAccentText}" 
-                          Width="14" Height="14" 
-                          Stretch="Uniform" 
-                          Margin="0,0,8,0" />
-                    <TextBlock Text="Registrar Nuevo Lote" FontWeight="SemiBold" />
-                </StackPanel>
-            </Button>
-        </Grid>
-
-        <!-- Filtros de Estado de Caducidad -->
-        <Border Grid.Row="1" Style="{DynamicResource CardBorder}" Margin="0,0,0,16" Padding="14,10">
-            <Grid>
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-
-                <TextBlock Text="Filtrar por Vencimiento:" 
-                           FontWeight="SemiBold" 
-                           FontSize="13" 
-                           VerticalAlignment="Center" 
-                           Margin="0,0,16,0" />
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Tab: Todos -->
-                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Todos" 
-                            Padding="14,6" Margin="0,0,8,0">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Todos">
-                                        <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
-                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Todos los Lotes" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding CountTodos, StringFormat=' ({0})'}" FontSize="11" Opacity="0.8" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Tab: Próximos a Vencer -->
-                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Proximos" 
-                            Padding="14,6" Margin="0,0,8,0">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Proximos">
-                                        <Setter Property="Background" Value="{DynamicResource ThemeWarning}" />
-                                        <Setter Property="Foreground" Value="White" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="⏳ Próximos a Vencer (≤60d)" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding CountProximos, StringFormat=' ({0})'}" FontWeight="Bold" FontSize="11" Margin="4,0,0,0" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Tab: Vencidos -->
-                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Vencidos" 
-                            Padding="14,6" Margin="0,0,8,0">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Vencidos">
-                                        <Setter Property="Background" Value="{DynamicResource ThemeError}" />
-                                        <Setter Property="Foreground" Value="White" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="🛑 Vencidos" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding CountVencidos, StringFormat=' ({0})'}" FontWeight="Bold" FontSize="11" Margin="4,0,0,0" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Tab: Vigentes -->
-                    <Button Command="{Binding SetFilterCommand}" CommandParameter="Vigentes" 
-                            Padding="14,6">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedFilter}" Value="Vigentes">
-                                        <Setter Property="Background" Value="{DynamicResource ThemeSuccess}" />
-                                        <Setter Property="Foreground" Value="White" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="✅ Vigentes" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{Binding CountVigentes, StringFormat=' ({0})'}" FontSize="11" Opacity="0.8" Margin="4,0,0,0" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- DataGrid de Lotes -->
-        <Border Grid.Row="2" Style="{DynamicResource CardBorder}" Padding="0">
-            <DataGrid ItemsSource="{Binding Batches}">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="N° de Lote" Binding="{Binding BatchNumber}" Width="150" />
-                    <DataGridTextColumn Header="Insumo / Medicamento" Binding="{Binding Product.Name}" Width="*" />
-                    <DataGridTextColumn Header="Cantidad en Lote" Binding="{Binding Quantity}" Width="130" />
-                    <DataGridTextColumn Header="Fecha de Caducidad" Binding="{Binding ExpirationDate, StringFormat='{}{0:dd/MM/yyyy}'}" Width="150" />
-                    <DataGridTextColumn Header="Estado" Binding="{Binding StatusText}" Width="170" />
-                    <DataGridTextColumn Header="Notas" Binding="{Binding Notes}" Width="200" />
-                    
-                    <DataGridTemplateColumn Header="Acción" Width="100">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Button Style="{DynamicResource OutlineButton}" 
-                                        Content="Eliminar" 
-                                        Padding="8,4" 
-                                        FontSize="11"
-                                        Command="{Binding DataContext.DeleteBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                        CommandParameter="{Binding}" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
-
-        <!-- Modal Registrar Nuevo Lote -->
-        <Border Grid.Row="0" Grid.RowSpan="3"
-                Background="#66000000"
-                Visibility="{Binding IsNewBatchModalOpen, Converter={StaticResource BoolToVis}}">
-            <Border Style="{DynamicResource CardBorder}" 
-                    Width="460" 
-                    VerticalAlignment="Center" 
-                    HorizontalAlignment="Center"
-                    Padding="26">
                 <StackPanel>
-                    <TextBlock Text="Registrar Lote de Insumo / Medicamento" 
-                               FontSize="17" 
-                               FontWeight="Bold" 
-                               Foreground="{DynamicResource ThemeText}" 
-                               Margin="0,0,0,6" />
-                    <TextBlock Text="Asigna un lote y fecha de expiración para control riguroso:" 
-                               FontSize="12" 
-                               Foreground="{DynamicResource ThemeTextSecondary}" 
-                               Margin="0,0,0,16" />
-
-                    <TextBlock Text="Artículo / Medicamento *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <ComboBox Style="{DynamicResource ModernComboBox}" 
-                              ItemsSource="{Binding AvailableProducts}" 
-                              SelectedItem="{Binding NewBatchSelectedProduct}" 
-                              DisplayMemberPath="Name" 
-                              Margin="0,0,0,14" />
-
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="12" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Número de Lote *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding NewBatchNumber, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="Cantidad a Ingresar *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                            <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding NewBatchQuantity, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                    </Grid>
-
-                    <TextBlock Text="Fecha de Caducidad *" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <DatePicker SelectedDate="{Binding NewBatchExpirationDate}" Margin="0,0,0,10" />
-
-                    <!-- Alerta preventiva si vence en <= 30 días o ya venció -->
-                    <Border Background="{DynamicResource ThemeWarning}" 
-                            CornerRadius="6" 
-                            Padding="12,8" 
-                            Margin="0,0,0,14" 
-                            Visibility="{Binding IsExpirationWarningVisible, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="{Binding ExpirationWarningMessage}" 
-                                   Foreground="White" 
-                                   FontSize="11" 
-                                   FontWeight="SemiBold" 
-                                   TextWrapping="Wrap" />
-                    </Border>
-
-                    <TextBlock Text="Notas del Lote" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
-                    <TextBox Style="{DynamicResource ModernTextBox}" Text="{Binding NewBatchNotes, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,20" />
-
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{DynamicResource OutlineButton}" 
-                                Content="Cancelar" 
-                                Command="{Binding CloseNewBatchModalCommand}" 
-                                Margin="0,0,10,0" 
-                                Padding="16,8" />
-                        <Button Style="{DynamicResource AccentButton}" 
-                                Content="Guardar Lote" 
-                                Command="{Binding SaveNewBatchCommand}" 
-                                Padding="20,8" />
-                    </StackPanel>
+                    <TextBlock Style="{StaticResource TextTitle}" Text="Lotes y caducidades" />
+                    <TextBlock Style="{StaticResource TextDetail}" Text="Al vender o usar se descuenta primero el lote que vence antes" Margin="0,4,0,0" />
                 </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource ButtonPrimary}" Command="{Binding OpenNewBatchModalCommand}" VerticalAlignment="Top">
+                    <StackPanel Orientation="Horizontal">
+                        <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
+                        <TextBlock Text="Registrar lote" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <ListBox Grid.Row="1" Style="{StaticResource ChipList}" Margin="0,0,0,12"
+                     ItemsSource="{Binding FilterChips}" SelectedItem="{Binding SelectedFilterChip, Mode=TwoWay}"
+                     DisplayMemberPath="Text" AutomationProperties.Name="Filtrar lotes" />
+
+            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <ListBox Style="{StaticResource PlainList}" Padding="8,6" ItemsSource="{Binding Batches}" AutomationProperties.Name="Lotes">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:ProductBatch}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Product.Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Notes}" TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding Notes, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="Lote" />
+                                        <TextBlock Style="{StaticResource TextMono}" Text="{Binding BatchNumber}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="Quedan" />
+                                        <TextBlock Style="{StaticResource TextMono}" FontWeight="SemiBold" Text="{Binding Quantity}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="Caduca" />
+                                        <Border Style="{StaticResource BatchStatusBadge}" HorizontalAlignment="Left">
+                                            <TextBlock>
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0:dd/MM/yyyy} · {1}">
+                                                        <Binding Path="ExpirationDate" />
+                                                        <Binding Path="StatusText" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </Border>
+                                    </StackPanel>
+                                    <Button Grid.Column="4" Style="{StaticResource ButtonDangerGhost}" MinHeight="0" Padding="10,5" Margin="12,0,0,0" VerticalAlignment="Center"
+                                            Command="{Binding DataContext.DeleteBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                            ToolTip="Quita el lote y descuenta sus piezas de las existencias">
+                                        <StackPanel Orientation="Horizontal">
+                                            <helpers:Icon Data="{StaticResource IcoTrash}" Width="14" Height="14" Margin="0,0,6,0" />
+                                            <TextBlock Text="Quitar" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Style="{StaticResource TextDetail}" HorizontalAlignment="Center" VerticalAlignment="Center" Text="No hay lotes con este filtro."
+                               Visibility="{Binding Batches.Count, Converter={StaticResource InverseBoolToVis}}" />
+                </Grid>
             </Border>
+        </Grid>
+
+        <!-- ======================= PANEL: REGISTRAR LOTE ======================= -->
+        <Border Style="{StaticResource SidePanel}" Width="440" Panel.ZIndex="50"
+                Visibility="{Binding IsNewBatchModalOpen, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="24,20,16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Registrar lote" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Las piezas se suman a las existencias y quedan en el kardex" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseNewBatchModalCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="24,0,24,16">
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,12" Visibility="{Binding NewBatchError, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding NewBatchError}" TextWrapping="Wrap" />
+                        </Border>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Producto *" />
+                        <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding AvailableProducts}" SelectedItem="{Binding NewBatchSelectedProduct}"
+                                  DisplayMemberPath="Name" helpers:TypeAhead.IsEnabled="True" Margin="0,0,0,12" AutomationProperties.Name="Producto"
+                                  ToolTip="Despliegue y escriba el nombre para ir directo a él" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="110" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Número de lote *" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding NewBatchNumber, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Piezas *" />
+                                <TextBox Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center" Text="{Binding NewBatchQuantity, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Caducidad *" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding NewBatchExpirationText, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="dd/mm/aaaa o mm/aaaa" AutomationProperties.Name="Caducidad" />
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" Content="+6 meses" Command="{Binding AddMonthsToExpirationCommand}" CommandParameter="6" />
+                            <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" Content="+1 año" Command="{Binding AddMonthsToExpirationCommand}" CommandParameter="12" />
+                            <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" Content="+2 años" Command="{Binding AddMonthsToExpirationCommand}" CommandParameter="24" />
+                        </WrapPanel>
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,6,0,12" Visibility="{Binding IsExpirationWarningVisible, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding ExpirationWarningMessage}" TextWrapping="Wrap" />
+                        </Border>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Notas" Margin="0,6,0,6" />
+                        <TextBox Style="{StaticResource FieldMultiline}" MinHeight="60" Text="{Binding NewBatchNotes, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="Proveedor, factura…" />
+                    </StackPanel>
+                </ScrollViewer>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseNewBatchModalCommand}" Content="Cancelar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveNewBatchCommand}" Content="Registrar lote" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>
