@@ -195,4 +195,39 @@ public class ConsultationAutosaveTests
         Assert.IsTrue(loaded.Prescriptions.Single().DispenseInClinic);
         Assert.IsFalse(File.Exists(_draftPath + ".tmp"), "Sin archivos temporales sueltos");
     }
+
+    [TestMethod]
+    public async Task AttendedAppointment_IsInTheDraftBeforeAnyEdit_AndTheRecoveredConsultationMarksIt()
+    {
+        var (records, _, _) = await OpenAppAsync();
+        records.AutosaveDelay = TimeSpan.FromMilliseconds(50);
+        var patient = records.Patients.First();
+        var appointment = await _service.SaveAppointmentAsync(new PatientAppointment
+        {
+            PatientRecordId = patient.Id,
+            PatientName = patient.FullName,
+            Date = DateTime.Today,
+            Time = "23:30",
+            Reason = "Dolor de garganta"
+        });
+        Assert.IsTrue(appointment.Id > 0);
+
+        records.AttendAppointment(appointment);
+        Assert.IsTrue(records.HasActiveConsultation);
+
+        // Sin tocar nada más, la copia guardada sola ya lleva la cita
+        var store = new ConsultationDraftStore(_draftPath);
+        await WaitUntilAsync(() => store.Load()?.AttendingAppointmentId == appointment.Id);
+
+        // El programa se cae (sin guardar al cerrar) y se vuelve a abrir: al cobrar, la cita queda atendida
+        var (reopened, checkout, reopenedConsultations) = await OpenAppAsync();
+        Assert.IsTrue(reopened.HasActiveConsultation);
+        await reopened.FinalizeConsultationAsync();
+        checkout.SelectedPaymentMethod = "Efectivo";
+        checkout.CashReceived = 5000m;
+        await checkout.ChargeAsync();
+        await WaitUntilAsync(() => !reopenedConsultations.HasActiveConsultation && reopened.IsHomePage);
+        var stored =(await _service.GetAppointmentsByDayAsync(DateTime.Today)).Single(a => a.Id == appointment.Id);
+        Assert.AreEqual("Atendida", stored.Status);
+    }
 }

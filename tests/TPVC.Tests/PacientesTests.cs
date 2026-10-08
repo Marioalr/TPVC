@@ -297,6 +297,32 @@ public class PacientesTests
         StringAssert.Contains(records.FormProgressText, "obligatoria");
     }
 
+    [TestMethod]
+    public async Task FormProgressText_FollowsWhatIsCaptured()
+    {
+        var (records, _, _) = await CreateRecordsAsync();
+        await records.NewPatientAsync();
+
+        // Lo que ve la pantalla: el texto leído cada vez que se avisa que cambió
+        var shown = records.FormProgressText;
+        records.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MedicalRecordsViewModel.FormProgressText)) shown = records.FormProgressText;
+        };
+        StringAssert.Contains(shown, "Faltan 2");
+
+        records.FormFirstName = "Lucía";
+        records.FormLastName = "Pérez";
+        records.FormGender = "Femenino";
+        records.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
+        Assert.AreEqual(records.FormProgressText, shown);
+        StringAssert.Contains(shown, "Faltan 1", "Falta solo alergias");
+
+        records.FormAllergies = "Negadas";
+        Assert.AreEqual(records.FormProgressText, shown);
+        StringAssert.Contains(shown, "lo obligatorio está completo");
+    }
+
     // ------------------------------------------------------------------ ficha
 
     [TestMethod]
@@ -396,6 +422,34 @@ public class PacientesTests
         Assert.AreEqual(string.Empty, glucose.Trend);
 
         Assert.IsEmpty(MedicalRecordsViewModel.BuildLatestVitals(null));
+    }
+
+    [TestMethod]
+    public void DeselectingThePatient_ClearsTheEssentialVitals()
+    {
+        var records = new MedicalRecordsViewModel();
+        records.SelectedPatient = new PatientRecord
+        {
+            Id = 7,
+            FullName = "Ana Ruiz",
+            Consultations = new()
+            {
+                new PatientConsultation { Folio = "CNS-1", Date = DateTime.Today.AddDays(-7), BloodPressureSystolic = 130, BloodPressureDiastolic = 85, Weight = 70m }
+            }
+        };
+        Assert.IsTrue(records.HasLatestVitals);
+
+        bool? shown = null;
+        records.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MedicalRecordsViewModel.HasLatestVitals)) shown = records.HasLatestVitals;
+        };
+
+        records.SelectedPatient = null;
+
+        Assert.IsEmpty(records.LatestVitals, "No quedan los signos del paciente anterior");
+        Assert.IsFalse(records.HasLatestVitals);
+        Assert.AreEqual(false, shown, "La pantalla se entera");
     }
 
     // ------------------------------------------------------------------ receta de la consulta

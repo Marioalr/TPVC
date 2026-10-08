@@ -62,10 +62,20 @@ public partial class MedicalRecordsViewModel
     // ALERTAS DE SIGNOS VITALES (ayuda visual mientras se capturan)
     // =========================================================================
 
-    partial void OnConsultationTempChanged(string value) => OnPropertyChanged(nameof(VitalSignsWarning));
-    partial void OnConsultationFCChanged(string value) => OnPropertyChanged(nameof(VitalSignsWarning));
-    partial void OnConsultationSpO2Changed(string value) => OnPropertyChanged(nameof(VitalSignsWarning));
-    partial void OnConsultationGlucoseChanged(string value) => OnPropertyChanged(nameof(VitalSignsWarning));
+    partial void OnConsultationTempChanged(string value) => NotifyVitalSignsWarningChanged();
+    partial void OnConsultationFCChanged(string value) => NotifyVitalSignsWarningChanged();
+    partial void OnConsultationSpO2Changed(string value) => NotifyVitalSignsWarningChanged();
+    partial void OnConsultationGlucoseChanged(string value) => NotifyVitalSignsWarningChanged();
+
+    /// <summary>
+    /// Todo lo que lee VitalSignsWarning avisa aquí: Temp, FC, SpO₂ y glucosa (arriba), la T/A
+    /// (OnConsultationTAChanged, que además le da formato) y el paciente, por su edad (OnSelectedPatientChanged).
+    /// </summary>
+    private void NotifyVitalSignsWarningChanged()
+    {
+        OnPropertyChanged(nameof(VitalSignsWarning));
+        OnPropertyChanged(nameof(HasVitalSignsWarning));
+    }
 
     public bool HasVitalSignsWarning => !string.IsNullOrEmpty(VitalSignsWarning);
 
@@ -304,6 +314,34 @@ public partial class MedicalRecordsViewModel
         {
             InfoModalMessage = $"'{item.ServiceName}' no tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
             IsInfoModalVisible = true;
+        }
+    }
+
+    /// <summary>Quitar el insumo de la hoja lo quita de la cuenta tal como se cargó (producto o cargo libre).</summary>
+    private void UnchargeSupply(PatientSupplyItem item)
+    {
+        var product = FindCatalogProduct(item.SupplyName);
+        Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), Math.Max(1, item.Quantity));
+    }
+
+    /// <summary>
+    /// Quitar el servicio de la hoja lo quita de la cuenta tal como se cargó: por cada unidad, su
+    /// renglón y sus insumos por defecto (AddServiceToActiveConsultation), o su cargo libre.
+    /// </summary>
+    private void UnchargeService(PatientServiceItem item)
+    {
+        var units = Math.Max(1, item.Quantity);
+        var service = Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        if (service == null)
+        {
+            Uncharge(FreeChargeId(item.ServiceName), units);
+            return;
+        }
+
+        Uncharge(-service.Id, units);
+        foreach (var dp in service.DefaultProducts)
+        {
+            if (dp.Product != null) Uncharge(dp.Product.Id, Math.Max(1, dp.Quantity) * units);
         }
     }
 

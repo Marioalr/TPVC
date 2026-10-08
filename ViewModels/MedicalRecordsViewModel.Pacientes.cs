@@ -107,9 +107,10 @@ public partial class MedicalRecordsViewModel
         if (name == null) return;
 
         // La barra lateral del alta refleja lo que se va capturando
-        if (name.StartsWith("Form", StringComparison.Ordinal) && name != nameof(FormSections) && name != nameof(FormPageTitle))
+        if (name.StartsWith("Form", StringComparison.Ordinal) && name != nameof(FormSections) && name != nameof(FormPageTitle) && name != nameof(FormProgressText))
         {
             OnPropertyChanged(nameof(FormSections));
+            OnPropertyChanged(nameof(FormProgressText));
             if (name is nameof(FormFirstName) or nameof(FormLastName) or nameof(FormMaternalLastName) or nameof(FormPatientId))
             {
                 OnPropertyChanged(nameof(FormPageTitle));
@@ -434,6 +435,9 @@ public partial class MedicalRecordsViewModel
         StartActiveConsultation();
         if (!string.IsNullOrWhiteSpace(appointment.Reason)) ConsultationChiefComplaint = appointment.Reason.Trim();
         _attendingAppointmentId = appointment.Id;
+        // La copia pendiente se tomó antes de saber la cita: si el programa se cierra antes de la
+        // siguiente edición, la consulta recuperada debe seguir ligada a ella (y marcarla "Atendida")
+        ScheduleAutosave();
     }
 
     /// <summary>Al cobrar la consulta, la cita que se estaba atendiendo queda como atendida.</summary>

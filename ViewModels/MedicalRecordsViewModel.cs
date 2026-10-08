@@ -454,8 +454,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             ConsultationTA = formatted;
         }
-        OnPropertyChanged(nameof(VitalSignsWarning));
-        OnPropertyChanged(nameof(HasVitalSignsWarning));
+        NotifyVitalSignsWarningChanged();
     }
 
     [ObservableProperty]
@@ -1108,6 +1107,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _isCurrentConsultationSaved = false;
         }
         OnPropertyChanged(nameof(ShowsPediatricDose));
+        NotifyVitalSignsWarningChanged();
         RefreshChartData();
         NotifyPatientsPageState();
         if (newValue != null)
@@ -2434,7 +2434,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SelectAndAddSupplyProductAsync(Product? product)
     {
-        if (SelectedPatient == null) return;
+        if (SelectedPatient == null || BlockIfConsultationReadOnly()) return;
 
         string name;
         decimal unitPrice;
@@ -2500,7 +2500,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task RemoveSupplyItemFromPatientAsync(PatientSupplyItem? item)
     {
-        if (SelectedPatient == null || item == null) return;
+        if (SelectedPatient == null || item == null || BlockIfConsultationReadOnly()) return;
+
+        // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
+        if (IsConsultationForSelectedPatient)
+        {
+            UnchargeSupply(item);
+        }
 
         var list = new List<PatientSupplyItem>(SelectedPatient.ActiveSupplies);
         list.Remove(item);
@@ -2522,6 +2528,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SaveSuppliesModalAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient != null)
         {
             SelectedPatient.SyncSuppliesJson();
@@ -2673,7 +2680,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SelectAndAddServiceModalSuggestionAsync(ClinicalService? service)
     {
-        if (SelectedPatient == null) return;
+        if (SelectedPatient == null || BlockIfConsultationReadOnly()) return;
 
         string name;
         decimal price;
@@ -2751,7 +2758,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task RemoveServiceItemFromPatientAsync(PatientServiceItem? item)
     {
-        if (SelectedPatient == null || item == null) return;
+        if (SelectedPatient == null || item == null || BlockIfConsultationReadOnly()) return;
+
+        // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
+        if (IsConsultationForSelectedPatient)
+        {
+            UnchargeService(item);
+        }
 
         var list = new List<PatientServiceItem>(SelectedPatient.ActiveServices);
         list.Remove(item);
@@ -2773,6 +2786,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SaveServicesModalAsync()
     {
+        if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient != null)
         {
             SelectedPatient.SyncServicesJson();
@@ -2860,7 +2874,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         var pat = patient ?? SelectedPatient;
         if (pat == null)
         {
-            VitalSignsEvolutionPoints.Clear();
+            // Colección nueva (no Clear): así "Lo esencial" (LatestVitals) también queda vacío
+            VitalSignsEvolutionPoints = new ObservableCollection<VitalSignsEvolutionPoint>();
             ChartPoints.Clear();
             HasEnoughPointsForChart = false;
             LatestWeightFormatted = "--";

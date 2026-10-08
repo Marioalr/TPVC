@@ -247,4 +247,94 @@ public class ConsultationWorkspaceTests
         records.SetConsultationSection("x");
         Assert.AreEqual(MedicalRecordsViewModel.ConsultationSectionCount, records.ConsultationSection, "Texto inválido se ignora");
     }
+
+    [TestMethod]
+    public async Task RemovingSupplyOrServiceFromItsSheet_UnchargesWhatAddingItCharged()
+    {
+        var (records, _, consultations, patient) = await StartConsultationAsync();
+        var items = consultations.CurrentConsultation!.Items;
+        int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
+        int ChargedByName(string name) => items.FirstOrDefault(i => i.Name == name)?.Quantity ?? 0;
+
+        var curacion = records.Services.Single(s => s.Code == "SERV-002");
+        var gasa = curacion.DefaultProducts.Single(dp => dp.Product!.Name.Contains("Gasa")).Product!;
+        Assert.IsTrue(curacion.DefaultProducts.Count > 1, "La curación lleva varios insumos por defecto");
+
+        // Insumo del inventario (producto) y servicio del catálogo x2 con sus insumos por defecto
+        records.SupplyQuantity = 1;
+        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == gasa.Id));
+        var gasaSupply = patient.ActiveSupplies.Last();
+        records.ServiceModalQuantity = 2;
+        await records.SelectAndAddServiceModalSuggestionAsync(curacion);
+        var curacionItem = patient.ActiveServices.Last();
+        Assert.AreEqual(2, Charged(-curacion.Id));
+        Assert.AreEqual(1 + 2 * 2, Charged(gasa.Id), "La gasa del insumo más la de cada curación");
+
+        // Insumo y servicio fuera de catálogo: cargos libres
+        records.SupplySearchText = "Férula de aluminio a la medida";
+        records.SupplyQuantity = 3;
+        await records.SelectAndAddSupplyProductAsync(null);
+        var freeSupply = patient.ActiveSupplies.Last();
+        records.ServiceModalSearchText = "Retiro de puntos a domicilio";
+        await records.SelectAndAddServiceModalSuggestionAsync(null);
+        var freeService = patient.ActiveServices.Last();
+        Assert.AreEqual(3, ChargedByName("Férula de aluminio a la medida"));
+        Assert.AreEqual(1, ChargedByName("Retiro de puntos a domicilio"));
+
+        // Quitar el servicio deja de cobrar su renglón y sus insumos, pero no la gasa del insumo
+        await records.RemoveServiceItemFromPatientAsync(curacionItem);
+        Assert.AreEqual(0, Charged(-curacion.Id));
+        Assert.AreEqual(1, Charged(gasa.Id));
+        foreach (var dp in curacion.DefaultProducts.Where(dp => dp.Product!.Id != gasa.Id))
+        {
+            Assert.AreEqual(0, Charged(dp.Product!.Id), dp.Product.Name);
+        }
+
+        await records.RemoveSupplyItemFromPatientAsync(gasaSupply);
+        await records.RemoveSupplyItemFromPatientAsync(freeSupply);
+        await records.RemoveServiceItemFromPatientAsync(freeService);
+
+        Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
+        Assert.AreEqual(records.ConsultationFeeAmount, records.ConsultationAccountTotal);
+        CollectionAssert.DoesNotContain(patient.ActiveSupplies, gasaSupply);
+        CollectionAssert.DoesNotContain(patient.ActiveSupplies, freeSupply);
+        CollectionAssert.DoesNotContain(patient.ActiveServices, curacionItem);
+        CollectionAssert.DoesNotContain(patient.ActiveServices, freeService);
+    }
+
+    [TestMethod]
+    public void VitalSignsWarning_IsRefreshedWhenAnyOfItsInputsChanges()
+    {
+        var records = new MedicalRecordsViewModel(inventoryService: null, new ConsultationService(seedDemoPatients: false));
+        var adult = new PatientRecord { Id = 1, FullName = "Adulto", Age = 40 };
+        var child = new PatientRecord { Id = 2, FullName = "Niño", Age = 6 };
+        records.SelectedPatient = adult;
+
+        // Lo que ve la pantalla: el valor de HasVitalSignsWarning cada vez que se avisa
+        bool? shown = null;
+        records.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MedicalRecordsViewModel.HasVitalSignsWarning)) shown = records.HasVitalSignsWarning;
+        };
+
+        void Check(string input, Action change, bool expected)
+        {
+            shown = null;
+            change();
+            Assert.AreEqual(expected, records.HasVitalSignsWarning, input);
+            Assert.AreEqual(expected, shown, $"{input}: la alerta en pantalla se actualiza");
+        }
+
+        Check("Temp alta", () => records.ConsultationTemp = "38.5", true);
+        Check("Temp normal", () => records.ConsultationTemp = "36.5", false);
+        Check("FC alta en adulto", () => records.ConsultationFC = "120", true);
+        Check("Misma FC en un niño", () => records.SelectedPatient = child, false);
+        Check("De vuelta al adulto", () => records.SelectedPatient = adult, true);
+        Check("FC vacía", () => records.ConsultationFC = string.Empty, false);
+        Check("SpO2 baja", () => records.ConsultationSpO2 = "88", true);
+        Check("SpO2 vacía", () => records.ConsultationSpO2 = string.Empty, false);
+        Check("Glucosa alta", () => records.ConsultationGlucose = "250", true);
+        Check("Glucosa vacía", () => records.ConsultationGlucose = string.Empty, false);
+        Check("T/A alta", () => records.ConsultationTA = "150/95", true);
+    }
 }

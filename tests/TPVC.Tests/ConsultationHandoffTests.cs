@@ -609,6 +609,49 @@ public class ConsultationHandoffTests
         StringAssert.Contains(pc.Records.InfoModalMessage, patient.FullName);
     }
 
+    [TestMethod]
+    public async Task ReadOnlyConsultation_DoesNotAddOrRemoveSuppliesAndServices()
+    {
+        var (pc, tablet) = await TwoDevicesAsync();
+        var (_, product, service) = await StartConsultationAsync(pc);
+        var records = pc.Records;
+
+        // Agregados antes de enviarla (se cargan a la cuenta)
+        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == product.Id));
+        await records.SelectAndAddServiceModalSuggestionAsync(records.Services.Single(s => s.Id == service.Id));
+
+        await SendToAsync(pc, tablet);
+        Assert.IsTrue(records.IsConsultationHandedOff);
+
+        var patient = records.SelectedPatient!;
+        var supply = patient.ActiveSupplies.Last();
+        var serviceItem = patient.ActiveServices.Last();
+        var supplies = patient.ActiveSupplies.ToList();
+        var services = patient.ActiveServices.ToList();
+        var charges = pc.Consultations.CurrentConsultation!.Items.Select(i => $"{i.ProductId}x{i.Quantity}").ToList();
+
+        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == product.Id));
+        records.SupplySearchText = "Férula de aluminio";
+        await records.SelectAndAddSupplyProductAsync(null);
+        await records.SelectAndAddServiceModalSuggestionAsync(records.Services.Single(s => s.Id == service.Id));
+        await records.RemoveSupplyItemFromPatientAsync(supply);
+        await records.RemoveServiceItemFromPatientAsync(serviceItem);
+
+        Assert.AreSame(patient, records.SelectedPatient);
+        CollectionAssert.AreEqual(supplies, patient.ActiveSupplies, "La hoja de insumos no cambia en solo lectura");
+        CollectionAssert.AreEqual(services, patient.ActiveServices, "La hoja de servicios no cambia en solo lectura");
+        CollectionAssert.AreEqual(charges, pc.Consultations.CurrentConsultation.Items.Select(i => $"{i.ProductId}x{i.Quantity}").ToList(), "Ni la cuenta");
+        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
+
+        // Guardar las hojas tampoco escribe el expediente
+        records.InfoModalMessage = null;
+        await records.SaveSuppliesModalAsync();
+        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
+        records.InfoModalMessage = null;
+        await records.SaveServicesModalAsync();
+        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
+    }
+
     // ================================================================== sincronización con relojes distintos
 
     [TestMethod]
