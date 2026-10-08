@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
@@ -97,6 +98,7 @@ public partial class App : Application
         // Mostrar la ventana principal
         var mainWindow = Services.GetRequiredService<MainWindow>();
         TitleBar.Follow(mainWindow, themeService);
+        mainWindow.ContentRendered += LogStartupTime;
         mainWindow.Show();
 
         // Respaldo diario y limpieza de bitácoras en segundo plano (no retrasa el arranque)
@@ -113,6 +115,25 @@ public partial class App : Application
             }
             AppLogger.PurgeOldLogs();
         });
+    }
+
+    /// <summary>
+    /// Deja en la bitácora cuánto tardó en verse la ventana desde que Windows inició el proceso
+    /// (y la memoria en ese momento): sirve para comparar versiones y diagnosticar equipos lentos.
+    /// </summary>
+    private static void LogStartupTime(object? sender, EventArgs e)
+    {
+        if (sender is Window window) window.ContentRendered -= LogStartupTime;
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            var elapsed = DateTime.Now - process.StartTime;
+            AppLogger.Info($"Arranque: ventana lista en {elapsed.TotalMilliseconds:0} ms · memoria {process.WorkingSet64 / 1048576.0:0} MB");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"No se pudo medir el arranque: {ex.Message}");
+        }
     }
 
     private void RegisterGlobalErrorHandlers()

@@ -45,7 +45,7 @@ jobs:
         env:
           # La prueba de humo de la interfaz guarda aquí capturas de cada pantalla en claro y oscuro
           TPVC_SCREENSHOTS_DIR: ${{ github.workspace }}\screenshots
-        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal --filter "TestCategory!=Rendimiento"
 
       - name: Upload UI Screenshots
         if: always()
@@ -61,7 +61,27 @@ jobs:
         shell: pwsh
         run: |
           tzutil /s "Central Standard Time (Mexico)"
-          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal
+          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory!=Rendimiento"
+
+      # Tiempos y memoria para comparar versiones: en su propio proceso (arranque sin compilar) y con el
+      # programa real. No detiene la CI; el resultado queda en el resumen de la ejecución y como artefacto.
+      - name: Medir rendimiento
+        continue-on-error: true
+        shell: pwsh
+        env:
+          TPVC_PERF_DIR: ${{ github.workspace }}\rendimiento
+        run: |
+          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory=Rendimiento"
+          ./scripts/measure-startup.ps1 -Exe "bin/Release/net10.0-windows/TPVC.exe" -OutDir "$env:TPVC_PERF_DIR"
+          Get-ChildItem "$env:TPVC_PERF_DIR" -Filter *.md | Get-Content | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Performance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendimiento
+          path: ./rendimiento
+          if-no-files-found: ignore
 
       - name: Build Installer and Packages
         run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.version.outputs.value }}"

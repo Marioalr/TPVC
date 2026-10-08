@@ -54,7 +54,7 @@ jobs:
         run: dotnet build TPVC.sln --configuration Release --no-restore
 
       - name: Execute Unit Tests
-        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal --filter "TestCategory!=Rendimiento"
 
       # Las fechas se guardan en hora local del consultorio: repetir las pruebas en la zona de México
       # detecta desfases que no aparecen con el reloj del runner en UTC
@@ -62,7 +62,7 @@ jobs:
         shell: pwsh
         run: |
           tzutil /s "Central Standard Time (Mexico)"
-          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal
+          dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory!=Rendimiento"
 
       - name: Build Installer and Packages
         run: powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1 -Version "${{ steps.tag.outputs.version }}"
