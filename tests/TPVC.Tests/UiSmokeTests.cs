@@ -101,6 +101,7 @@ internal sealed class UiSmokeSession
             SetUpApplication();
             CheckComponentColors();
             RunScreens();
+            ReportContrastIssues();
         }
         finally
         {
@@ -113,7 +114,7 @@ internal sealed class UiSmokeSession
         var problems = _failures.Concat(_bindingErrors.Errors.Distinct()).ToList();
         if (problems.Count > 0)
         {
-            Assert.Fail($"La interfaz reportó {problems.Count} problema(s):\n" + string.Join("\n", problems.Take(80)));
+            Assert.Fail($"La interfaz reportó {problems.Count} problema(s):\n" + string.Join("\n", problems.Take(200)));
         }
     }
 
@@ -271,12 +272,17 @@ internal sealed class UiSmokeSession
         WaitFor(main.MedicalRecordsVM.InitialLoad);
         notifications.Success("Expediente guardado");
 
-        foreach (var dark in new[] { false, true })
+        // Fase 5: cada pantalla en claro, oscuro, un acento distinto al azul y colores personalizados
+        var themes = new (string Suffix, ThemeSettings Settings)[]
         {
-            _themes.ApplyTheme(dark
-                ? new ThemeSettings { ThemeMode = "Oscuro", BackgroundColor = "#0F172A", SurfaceColor = "#1E293B", TextColor = "#F8FAFC", SecondaryTextColor = "#94A3B8", BorderColor = "#334155" }
-                : new ThemeSettings());
-            var suffix = dark ? "oscuro" : "claro";
+            ("claro", new ThemeSettings()),
+            ("oscuro", new ThemeSettings { ThemeMode = "Oscuro", BackgroundColor = "#0F172A", SurfaceColor = "#1E293B", TextColor = "#F8FAFC", SecondaryTextColor = "#94A3B8", BorderColor = "#334155" }),
+            ("ambar", new ThemeSettings { AccentColor = "#D97706" }),
+            ("personalizado", new ThemeSettings { ThemeMode = "Personalizado", BackgroundColor = "#FFF7ED", SurfaceColor = "#FFFFFF", AccentColor = "#0D9488" })
+        };
+        foreach (var (suffix, settings) in themes)
+        {
+            _themes.ApplyTheme(settings);
 
             Show(host, main, "MainHub", $"01-inicio-{suffix}");
             var pos = main.PosVM;
@@ -498,6 +504,8 @@ internal sealed class UiSmokeSession
         Pump();
         Layout(host, Width, Height);
 
+        CheckContrast(host, name);
+
         if (string.IsNullOrEmpty(_screenshotDir)) return;
         Directory.CreateDirectory(_screenshotDir);
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Width, (int)Height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -512,6 +520,135 @@ internal sealed class UiSmokeSession
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
         using var stream = File.Create(Path.Combine(_screenshotDir, name + ".png"));
         encoder.Save(stream);
+    }
+
+    // ------------------------------------------------------------------ contraste real de cada texto
+
+    private readonly Dictionary<string, (string Description, List<string> Screens)> _contrastIssues = new();
+
+    /// <summary>
+    /// Cada texto visible contra el fondo que realmente tiene detrás (el primer fondo opaco de sus
+    /// contenedores, mezclando los semitransparentes): 4.5:1, o 3:1 en títulos grandes (WCAG 2.1).
+    /// Lo deshabilitado o atenuado a propósito no cuenta.
+    /// </summary>
+    private void CheckContrast(System.Windows.DependencyObject root, string screen)
+    {
+        if (root is System.Windows.UIElement element)
+        {
+            if (element.Visibility != System.Windows.Visibility.Visible || !element.IsEnabled || element.Opacity < 0.99) return;
+        }
+
+        switch (root)
+        {
+            case System.Windows.Controls.TextBlock text:
+                CheckTextBlock(text, screen);
+                break;
+            case System.Windows.Controls.TextBox box when !string.IsNullOrWhiteSpace(box.Text) && box.Foreground is System.Windows.Media.SolidColorBrush boxBrush:
+                Report(screen, box, box.Text, boxBrush.Color, box.FontSize, box.FontWeight);
+                break;
+        }
+
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            CheckContrast(System.Windows.Media.VisualTreeHelper.GetChild(root, i), screen);
+        }
+    }
+
+    private void CheckTextBlock(System.Windows.Controls.TextBlock text, string screen)
+    {
+        if (text.ActualWidth < 1 || text.ActualHeight < 1) return;
+        var runs = text.Inlines.OfType<System.Windows.Documents.Run>().Where(r => !string.IsNullOrWhiteSpace(r.Text)).ToList();
+        if (runs.Count == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(text.Text) && text.Foreground is System.Windows.Media.SolidColorBrush brush)
+            {
+                Report(screen, text, text.Text, brush.Color, text.FontSize, text.FontWeight);
+            }
+            return;
+        }
+        foreach (var run in runs)
+        {
+            if (run.Foreground is System.Windows.Media.SolidColorBrush runBrush)
+            {
+                Report(screen, text, run.Text, runBrush.Color, run.FontSize, run.FontWeight);
+            }
+        }
+    }
+
+    private void Report(string screen, System.Windows.DependencyObject element, string content, System.Windows.Media.Color foreground,
+        double fontSize, System.Windows.FontWeight weight)
+    {
+        var background = EffectiveBackground(element);
+        if (background == null) return;
+        var fg = Composite(foreground, background.Value);
+        double ratio = ThemeColor.Contrast(ToTheme(fg), ToTheme(background.Value));
+        bool large = fontSize >= 24 || (fontSize >= 18.66 && weight.ToOpenTypeWeight() >= 700);
+        double required = large ? 3.0 : 4.5;
+        if (ratio >= required - 0.005) return;
+
+        var snippet = content.Replace("\n", " ").Trim();
+        if (snippet.Length > 40) snippet = snippet[..40] + "…";
+        var key = $"{snippet}|{fg}|{background}";
+        if (!_contrastIssues.TryGetValue(key, out var issue))
+        {
+            issue = ($"\"{snippet}\" {ToHex(fg)} sobre {ToHex(background.Value)} = {ratio:0.00}:1 (mínimo {required:0.#}:1, {fontSize:0.#}px)", new List<string>());
+            _contrastIssues[key] = issue;
+        }
+        if (!issue.Screens.Contains(screen)) issue.Screens.Add(screen);
+    }
+
+    /// <summary>Fondo pintado detrás del elemento: mezcla los semitransparentes hasta uno opaco.</summary>
+    private System.Windows.Media.Color? EffectiveBackground(System.Windows.DependencyObject element)
+    {
+        var layers = new List<System.Windows.Media.Color>();
+        for (var current = System.Windows.Media.VisualTreeHelper.GetParent(element); current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        {
+            var brush = current switch
+            {
+                System.Windows.Controls.Border border => border.Background,
+                System.Windows.Controls.Panel panel => panel.Background,
+                _ => null
+            };
+            if (brush == null) continue;
+            if (brush is not System.Windows.Media.SolidColorBrush solid) return null; // degradado o imagen: no se mide
+            if (solid.Color.A == 0 || solid.Opacity <= 0) continue;
+            var color = solid.Color;
+            if (solid.Opacity < 1) color.A = (byte)(color.A * solid.Opacity);
+            layers.Add(color);
+            if (color.A == 255) break;
+        }
+
+        var result = ThemeColorOf("ThemeBackground");
+        for (int i = layers.Count - 1; i >= 0; i--) result = Composite(layers[i], result);
+        return result;
+    }
+
+    private static System.Windows.Media.Color Composite(System.Windows.Media.Color top, System.Windows.Media.Color bottom)
+    {
+        if (top.A == 255) return top;
+        double a = top.A / 255.0;
+        return System.Windows.Media.Color.FromRgb(
+            (byte)Math.Round(top.R * a + bottom.R * (1 - a)),
+            (byte)Math.Round(top.G * a + bottom.G * (1 - a)),
+            (byte)Math.Round(top.B * a + bottom.B * (1 - a)));
+    }
+
+    private static ThemeColor ToTheme(System.Windows.Media.Color c) => ThemeColor.Rgb(c.R, c.G, c.B);
+    private static string ToHex(System.Windows.Media.Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    private void ReportContrastIssues()
+    {
+        if (_contrastIssues.Count == 0) return;
+        var lines = _contrastIssues.Values
+            .OrderBy(i => i.Screens[0], StringComparer.Ordinal)
+            .Select(i => $"[contraste] {i.Description} en {string.Join(", ", i.Screens.Take(4))}{(i.Screens.Count > 4 ? $" y {i.Screens.Count - 4} más" : "")}")
+            .ToList();
+        if (!string.IsNullOrEmpty(_screenshotDir))
+        {
+            Directory.CreateDirectory(_screenshotDir);
+            File.WriteAllLines(Path.Combine(_screenshotDir, "contraste.txt"), lines);
+        }
+        _failures.AddRange(lines);
     }
 
     // ------------------------------------------------------------------ utilidades WPF
