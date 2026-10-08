@@ -28,7 +28,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Width="52" Height="52" CornerRadius="14" Background="{DynamicResource ThemeAccentStrong}" Margin="0,0,16,0">
-                            <TextBlock Text="TPVC" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentForeground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Text="TPVC" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Style="{StaticResource TextSection}" Text="{Binding AppVersion, StringFormat='Versión {0}'}" />
@@ -156,7 +156,7 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" helpers:PasswordBoxHelper.BindPassword="True"
+                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" Height="36" VerticalContentAlignment="Center" helpers:PasswordBoxHelper.BindPassword="True"
                                          helpers:PasswordBoxHelper.BoundPassword="{Binding GitHubToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          Visibility="{Binding IsGitHubTokenVisible, Converter={StaticResource InverseBoolToVis}}" AutomationProperties.Name="Token de GitHub" />
                             <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"

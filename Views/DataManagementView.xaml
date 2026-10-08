@@ -132,7 +132,7 @@
         <!-- ======================= HOJA: IMPORTAR / RESTAURAR ======================= -->
         <Grid Panel.ZIndex="60" Visibility="{Binding IsImportSheetOpen, Converter={StaticResource BoolToVis}}">
             <Border Style="{StaticResource SheetScrim}" />
-            <Border Style="{StaticResource SheetCard}" Width="560" VerticalAlignment="Center" HorizontalAlignment="Center" AutomationProperties.Name="{Binding ImportSheetTitle}">
+            <Border Style="{StaticResource SheetCard}" Width="560" Padding="24,20" AutomationProperties.Name="{Binding ImportSheetTitle}">
                 <StackPanel>
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>

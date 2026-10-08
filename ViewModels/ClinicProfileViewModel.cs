@@ -64,8 +64,25 @@ public partial class ClinicProfileViewModel : ObservableObject
         : !string.IsNullOrWhiteSpace(ClinicName) ? ClinicName.Trim()
         : "Sin configurar (sale en recetas y tickets)";
 
-    partial void OnDoctorNameChanged(string value) => OnPropertyChanged(nameof(Summary));
-    partial void OnClinicNameChanged(string value) => OnPropertyChanged(nameof(Summary));
+    /// <summary>Vista previa de la receta: lo que falta se ve como texto de ejemplo.</summary>
+    public string PreviewDoctorName => string.IsNullOrWhiteSpace(DoctorName) ? "Nombre del médico" : DoctorName.Trim();
+    public string PreviewClinicName => string.IsNullOrWhiteSpace(ClinicName) ? "Nombre del consultorio" : ClinicName.Trim();
+    public bool HasDoctorName => !string.IsNullOrWhiteSpace(DoctorName);
+    public bool HasClinicName => !string.IsNullOrWhiteSpace(ClinicName);
+
+    partial void OnDoctorNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(PreviewDoctorName));
+        OnPropertyChanged(nameof(HasDoctorName));
+    }
+
+    partial void OnClinicNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(PreviewClinicName));
+        OnPropertyChanged(nameof(HasClinicName));
+    }
 
     public ClinicProfileViewModel(ClinicProfileService profileService)
     {

@@ -89,7 +89,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
             new ConfigSectionItem(SectionClinic, "Consultorio", "Médico y consultorio", "IcoUser"),
             new ConfigSectionItem(SectionAppearance, "Sistema", "Apariencia", "IcoSun"),
             new ConfigSectionItem(SectionData, "Sistema", "Respaldos y datos", "IcoSave"),
-            new ConfigSectionItem(SectionCloud, "Sistema", "Nube y tablet", "IcoTablet"),
+            new ConfigSectionItem(SectionCloud, "Sistema", "Nube y dispositivos", "IcoTablet"),
             new ConfigSectionItem(SectionUpdates, "Sistema", "Actualizaciones", "IcoRefresh"),
             new ConfigSectionItem(SectionDesignSystem, "Sistema", "Componentes", "IcoInfo")
         });
@@ -216,6 +216,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         try
         {
             if (DashboardVM.Metrics.TotalProducts == 0) await DashboardVM.RefreshAsync();
+            if (!ServicesVM.IsLoaded) await ServicesVM.LoadAsync();
         }
         catch (Exception ex)
         {
@@ -268,9 +269,9 @@ public partial class ConfigurationShellViewModel : ObservableObject
         new SettingEntry("Restaurar un respaldo", "Respaldos y datos", SectionData, "recuperar copia anterior backup"),
         new SettingEntry("Importar catálogo de Excel", "Respaldos y datos", SectionData, "excel xlsx csv receta medicamentos importar"),
         new SettingEntry("Restaurar base de datos (.db)", "Respaldos y datos", SectionData, "sqlite db reemplazar base"),
-        new SettingEntry("Sincronización con la nube (Turso)", "Nube y tablet", SectionCloud, "turso nube sincronizar token url"),
-        new SettingEntry("Vincular tablet o celular", "Nube y tablet", SectionCloud, "android tablet celular emparejar"),
-        new SettingEntry("Nombre de este equipo", "Nube y tablet", SectionCloud, "dispositivo rol"),
+        new SettingEntry("Sincronización con la nube (Turso)", "Nube y dispositivos", SectionCloud, "turso nube sincronizar token url"),
+        new SettingEntry("Vincular tablet o celular", "Nube y dispositivos", SectionCloud, "android tablet celular emparejar"),
+        new SettingEntry("Nombre de este equipo", "Nube y dispositivos", SectionCloud, "dispositivo rol"),
         new SettingEntry("Buscar actualizaciones", "Actualizaciones", SectionUpdates, "version nueva descargar instalar"),
         new SettingEntry("Token de GitHub", "Actualizaciones", SectionUpdates, "repositorio privado token"),
         new SettingEntry("Carpeta de registros (logs)", "Actualizaciones", SectionUpdates, "errores diagnostico log"),

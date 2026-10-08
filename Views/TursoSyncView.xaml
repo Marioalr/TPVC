@@ -111,7 +111,7 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" helpers:PasswordBoxHelper.BindPassword="True"
+                            <PasswordBox Style="{DynamicResource ModernPasswordBox}" Height="36" VerticalContentAlignment="Center" helpers:PasswordBoxHelper.BindPassword="True"
                                          helpers:PasswordBoxHelper.BoundPassword="{Binding AuthToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          Visibility="{Binding IsAuthTokenVisible, Converter={StaticResource InverseBoolToVis}}" AutomationProperties.Name="Token de Turso" />
                             <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding AuthToken, UpdateSourceTrigger=PropertyChanged}"
@@ -277,7 +277,7 @@
         <!-- ======================= HOJA: CÓDIGO DE VINCULACIÓN ======================= -->
         <Grid Panel.ZIndex="60" Visibility="{Binding IsPairingModalOpen, Converter={StaticResource BoolToVis}}">
             <Border Style="{StaticResource SheetScrim}" />
-            <Border Style="{StaticResource SheetCard}" Width="600" MaxHeight="620" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Border Style="{StaticResource SheetCard}" Width="600" MaxHeight="620" Padding="24,20">
                 <StackPanel>
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>

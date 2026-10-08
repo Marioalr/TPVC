@@ -42,7 +42,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 1 | Fundamentos comunes de diseño | ✅ Hecho (v1.13) |
 | 2 | Pacientes y consulta (expediente) | ✅ Hecho (v1.14) · pendientes al final de su sección |
 | 3 | Punto de venta (POS) | ✅ Hecho (v1.15) |
-| 4 | Configuración | Pendiente |
+| 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | Pendiente (con la app de la tablet) |
 | 5 | Revisión de la visualización de los temas | Pendiente (casi al final) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | Pendiente |
@@ -160,6 +160,16 @@ consulta, la alerta de alergia y la gráfica de signos (colores de serie del tem
 - Inventario, lotes y kardex con listas virtualizadas, filtros como chips y edición en hoja lateral.
 - Importar Excel / restaurar base con pasos claros y confirmación solo en lo irreversible.
 - Apariencia con vista previa en vivo del tema.
+
+**Hecho en v1.16:** `ConfigurationShellViewModel` con secciones agrupadas y resumen, índice de ajustes
+(`SettingsIndex`/`SearchSettings`, sin acentos, título primero) y nombres viejos normalizados
+("Settings" → Apariencia). El antiguo `SettingsViewModel` se dividió en `AppearanceViewModel` (vista
+previa con `ThemePalette`), `DataManagementViewModel` (respaldos, importar y restaurar en una hoja con
+pasos; CONFIRMAR solo al reemplazar la base) y `UpdatesViewModel`; Servicios es una sección propia
+(`ServicesCatalogViewModel`, desactivar oculta del POS y la consulta con
+`GetClinicalServicesAsync(includeInactive)`). Productos, lotes y kardex con `PlainList` virtualizada,
+chips y `SidePanel` (el `ProductDialog` modal se retiró: el mismo `ProductDialogViewModel` vive en el
+panel). Pendiente: revisar en Windows con datos reales (lista en `PENDIENTES_ANDROID.md`, D v1.16).
 
 ### Fase E · Consulta entre equipos (PC ↔ tablet)
 

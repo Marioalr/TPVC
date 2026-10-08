@@ -10,11 +10,11 @@ Bienvenido al manual oficial de **TPVC**, una aplicación de escritorio diseñad
 3. [Módulo 1: Vista Principal](#3-módulo-1-vista-principal)
 4. [Módulo 2: Punto de Venta (POS / Farmacia)](#4-módulo-2-punto-de-venta-pos--farmacia)
 5. [Módulo 3: Pacientes (expedientes, consulta y agenda)](#5-módulo-3-pacientes-expedientes-consulta-y-agenda)
-6. [Módulo 4: Panel de Métricas (Dashboard)](#6-módulo-4-panel-de-métricas-dashboard)
-7. [Módulo 5: Catálogo de Inventario e Insumos](#7-módulo-5-catálogo-de-inventario-e-insumos)
-8. [Módulo 6: Control de Lotes y Semáforo de Caducidad](#8-módulo-6-control-de-lotes-y-semáforo-de-caducidad)
-9. [Módulo 7: Kardex y Movimientos](#9-módulo-7-kardex-y-movimientos)
-10. [Módulo 8: Configuración, Temas y Actualizaciones](#10-módulo-8-configuración-temas-y-actualizaciones)
+6. [Módulo 4: Panel del consultorio](#6-módulo-4-panel-del-consultorio)
+7. [Módulo 5: Productos](#7-módulo-5-productos)
+8. [Módulo 6: Lotes y caducidades](#8-módulo-6-lotes-y-caducidades)
+9. [Módulo 7: Kardex](#9-módulo-7-kardex)
+10. [Módulo 8: Configuración](#10-módulo-8-configuración)
 11. [Respaldo y Seguridad de Datos](#11-respaldo-y-seguridad-de-datos)
 12. [Preguntas Frecuentes (FAQ)](#12-preguntas-frecuentes-faq)
 
@@ -37,14 +37,14 @@ La pantalla principal se organiza con una arquitectura intuitiva y moderna:
    * **🛒 Nueva Venta**: Acceso directo al Punto de Venta (POS con Carrito) a pantalla completa.
    * **📋 Pacientes**: Citas de hoy, búsqueda de pacientes, fichas, consulta y agenda.
    * **⚙️ Configuración**: Acceso directo al centro de administración del consultorio donde reside el **Panel Lateral de Navegación**.
-2. **Centro de Configuración y Panel Lateral**:
-   * Dentro de *Configuración*, el panel lateral permite alternar entre:
-     * **Panel y Métricas**: Dashboard con KPIs en tiempo real y alertas de desabasto/caducidad.
-     * **Inventario e Insumos**: Catálogo general con precios, stock, ubicaciones y cadena de frío.
-     * **Lotes y Caducidades**: Control detallado de fechas de expiración con semáforo cromático (FEFO).
-     * **Kardex de Movimientos**: Bitácora inmutable de entradas, salidas y ventas.
-     * **Temas y Ajustes**: Personalización visual de colores y verificador de actualizaciones.
-     * Botón **"← Volver a Inicio"** para regresar en cualquier momento a las 3 tarjetas principales.
+2. **Configuración**:
+   * A la izquierda, las secciones agrupadas, cada una con una línea de resumen (por ejemplo "120 productos · 4 con stock bajo" o "Último respaldo hoy 09:15"):
+     * **Resumen**: Panel del consultorio (ventas, consumo y alertas del día).
+     * **Inventario**: Productos, Lotes y caducidades y Kardex.
+     * **Consultorio**: Servicios (precios e insumos) y Médico y consultorio (lo que sale en recetas y tickets).
+     * **Sistema**: Apariencia, Respaldos y datos, Nube y dispositivos, Actualizaciones y Componentes.
+   * Arriba, **"Buscar un ajuste"**: escriba lo que busca ("respaldo", "cédula", "tablet", "color"…) y Enter abre el primero.
+   * Botón **"← Volver a Inicio"** para regresar en cualquier momento a las 3 tarjetas principales.
 3. **Barra de Estado Inferior Constante**:
    * Muestra de un vistazo el título del sistema, la **versión exacta de la aplicación** y el indicador discreto de sincronización.
 
@@ -60,7 +60,7 @@ Al abrir TPVC, accederá a la **Vista Principal**, la cual presenta una interfaz
 2. **Card 📋 "Pacientes"**:
    * Abre el inicio de **Pacientes** (ver el Módulo 3): citas de hoy, pacientes recientes y el buscador.
 3. **Card ⚙️ "Configuración"**:
-   * Abre el centro de administración y gestión clínica, desplegando el **Panel Lateral** para consultar Métricas, Inventario, Lotes, Kardex y Temas/Ajustes.
+   * Abre Configuración: inventario, lotes, kardex, servicios, datos del médico, apariencia, respaldos, nube y actualizaciones, con un buscador para llegar a cualquier ajuste.
 
 > Todas las vistas incluyen en su cabecera o barra lateral el botón **"← Volver a Inicio"** para regresar a la pantalla de las tres tarjetas en cualquier momento.
 
@@ -129,55 +129,63 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 
 ---
 
-## 6. Módulo 4: Panel de Métricas (Dashboard)
+## 6. Módulo 4: Panel del consultorio
 
-El Dashboard permite la supervisión gerencial y clínica:
-
-### Tarjetas de Métricas (KPIs)
-* **Total Insumos**: Cantidad de productos y medicamentos en catálogo.
-* **Alertas Stock Bajo**: Insumos que requieren reorden urgente.
-* **Próximos a Vencer**: Lotes con caducidad en ≤ 60 días o vencidos.
-* **Consumo Hoy**: Unidades aplicadas o dispensadas durante el día.
-
-### Acción Rápida: "Registrar Consumo en Consulta"
-Permite registrar en 2 clics el uso de insumos durante curaciones o procedimientos en el consultorio.
+Primera sección de Configuración, con lo de hoy y lo que conviene atender:
+* **Ventas de hoy**, **usado en consulta hoy** (piezas), **productos** en el catálogo, **con stock bajo** y **lotes por vencer**.
+* Listas de **stock bajo** y **lotes por vencer (60 días)** con acceso directo a Productos y a Lotes, y los **movimientos recientes**.
 
 ---
 
-## 7. Módulo 5: Catálogo de Inventario e Insumos
+## 7. Módulo 5: Productos
 
-Permite gestionar fichas técnicas, precios y existencias:
-* **Campos Registrados**: Código SKU, Nombre comercial, Principio activo, Presentación, Categoría, Unidad, **Precio de venta ($ MXN)**, Stock actual, Stock mínimo, Ubicación y marca de Refrigeración (❄️).
-* **Filtros Rápidos**: *"Todos"*, *"Solo Stock Bajo ⚠️"*, *"Próximos a Caducar ⏳"*.
-* **Alta y Edición**: Diálogo modal para capturar o actualizar precios y datos del insumo.
-
----
-
-## 8. Módulo 6: Control de Lotes y Semáforo de Caducidad
-
-Trazabilidad por número de lote y fecha de expiración:
-* 🟢 **Vigente**: Con más de 60 días antes de vencer.
-* 🟡 **Próximo a Vencer**: Con 60 días o menos de vida útil.
-* 🔴 **Vencido**: Caducado (para retiro inmediato).
+Catálogo de medicamentos e insumos con precios y existencias:
+* **Buscar** por nombre, genérico o código y filtrar con los chips de **categoría** y **"Stock bajo"** / **"Por caducar"**. La lista solo dibuja las filas visibles, así que se mueve igual de rápido con miles de productos.
+* **Nuevo producto** o **doble clic** en una fila abre el **panel lateral** de edición (código, nombre, genérico, presentación, categoría, unidad, precio, existencias, mínimo, ubicación y refrigeración) sin salir de la lista. Al dar de alta, el panel se queda abierto y limpio para registrar el siguiente.
+* **Entrada** y **Consumo** rápidos en el mismo panel lateral.
 
 ---
 
-## 9. Módulo 7: Kardex y Movimientos
+## 8. Módulo 6: Lotes y caducidades
 
-Bitácora inmutable de auditoría:
-* Entradas por compra o reposición.
-* Salidas por consumo en consulta médica.
-* Salidas por venta en mostrador / POS.
-* Bajas por caducidad o merma.
-* Ajustes de inventario.
+Trazabilidad por número de lote y fecha de caducidad; lo que vence primero aparece arriba y es lo que se descuenta primero al vender o usar (FEFO):
+* Chips con el conteo: **Todos**, **Por vencer** (60 días o menos), **Vencidos** y **Vigentes**.
+* **Registrar lote** abre un panel lateral: producto, número de lote, piezas y **caducidad escrita como en la caja** (`12/2027` toma el último día del mes, o `dd/mm/aaaa`), con atajos **+6 meses**, **+1 año** y **+2 años**.
+* **Quitar** un lote descuenta sus piezas de las existencias y queda en el kardex.
 
 ---
 
-## 10. Módulo 8: Configuración, Temas y Actualizaciones
+## 9. Módulo 7: Kardex
 
-* **Modos de Fondo**: Claro Clínico, Oscuro y Personalizado (códigos Hexadecimales libres).
-* **Colores de Acento**: Cian Médico, Azul Clínico, Verde Quirúrgico, Esmeralda, Violeta, Rosa Clínico, Ámbar y Grafito.
-* **Actualizador de Software**: Exclusivo en Ajustes para verificar y descargar nuevas versiones desde GitHub.
+Bitácora de todo lo que mueve las existencias, con **existencias antes → después** en cada renglón:
+* Chips: **Entradas** (compras, ajustes y devoluciones), **Ventas**, **Consultas**, **Bajas** (caducidad y merma) y **Ajustes**.
+* Buscar por producto, código, motivo, folio o responsable.
+
+---
+
+## 10. Módulo 8: Configuración
+
+### Servicios
+Lo que se cobra además de los productos (consulta, curación, inyección, certificado…): precio, duración y los **insumos que usa** cada uno, que se agregan solos a la cuenta y se descuentan del inventario. Se editan en un panel lateral. **Desactivar** un servicio lo quita del Punto de Venta y de la consulta sin borrar los tickets donde aparece ("Mostrar desactivados" para volver a activarlo).
+
+### Médico y consultorio
+Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y notas al pie. A la derecha se ve **cómo sale en la receta**. Se edita con **Editar** y se guarda con **Guardar**.
+
+### Apariencia
+* **Modo** claro u oscuro, con una muestra de cada uno.
+* **Color de acento**: Azul consultorio, Azul clínico, Verde quirúrgico, Esmeralda, Violeta, Rosa, Ámbar y Grafito. Si un color tiene poco contraste, el programa lo oscurece o aclara solo para que el texto se lea.
+* **Colores propios** (`#RRGGBB`) para fondo, tarjetas y acento: la **vista previa** de la derecha cambia mientras escribe (con el contraste del texto) y se aplican con **Aplicar colores**.
+
+### Respaldos y datos
+* **Respaldar ahora** y la lista de **respaldos guardados** (se respalda solo al abrir el programa y antes de importar o restaurar; se guardan los últimos 14). **Volver a este** regresa la información al momento de ese respaldo.
+* **Importar catálogo de Excel** (.xlsx o .csv): medicamentos, plantillas de receta, dosis pediátricas y datos del médico. Se explican los pasos y basta con **Importar**: antes se crea un respaldo y no se borra nada.
+* **Restaurar base de datos** (.db): reemplaza toda la información por la del archivo. Por ser irreversible pide escribir **CONFIRMAR** (también al volver a un respaldo).
+
+### Nube y dispositivos
+Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre y uso de este equipo, **códigos para vincular la tablet y el celular**, la cuota gratuita y una guía plegable para crear la base gratis.
+
+### Actualizaciones
+Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.
 
 ---
 
@@ -187,7 +195,7 @@ La base de datos SQLite se almacena en:
 ```text
 %LocalAppData%\TPVC\consultorio.db
 ```
-Para respaldar, simplemente copie el archivo `consultorio.db` a una memoria USB o disco de respaldo.
+Los respaldos automáticos y manuales están en la carpeta `backups` junto a ella (**Configuración → Respaldos y datos → Abrir carpeta**). De vez en cuando copie uno a una memoria USB o disco externo.
 
 ---
 
@@ -197,4 +205,4 @@ Para respaldar, simplemente copie el archivo `consultorio.db` a una memoria USB 
 Dentro de la consulta, marque **Se surte aquí** en los medicamentos que entrega el consultorio (y agregue insumos o servicios a la cuenta). Al pulsar **Terminar consulta** se cobra todo junto en una sola ventana; no hace falta ir al Punto de Venta.
 
 ### ¿Puedo modificar el precio de un medicamento?
-Sí. Ingrese a **Inventario e Insumos**, seleccione el producto, presione **"Editar"** y modifique el campo **Precio ($ MXN)**.
+Sí. En **Configuración → Productos** haga doble clic en el producto (o "Editar"), cambie el **Precio** en el panel lateral y pulse **Guardar**.

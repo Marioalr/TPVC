@@ -193,8 +193,12 @@ TPVC/
 │   ├── InventoryViewModel.cs    # Catálogo, búsquedas y filtros
 │   ├── BatchesViewModel.cs      # Control de lotes y semáforos
 │   ├── MovementsViewModel.cs    # Auditoría de Kardex
-│   ├── SettingsViewModel.cs     # Configuración de temas y actualizador
-│   └── ProductDialogViewModel.cs # Formulario de alta y edición con precio
+│   ├── ConfigurationShellViewModel.cs # Secciones de Configuración, resúmenes y buscador de ajustes
+│   ├── AppearanceViewModel.cs   # Modo, acento y colores propios con vista previa
+│   ├── DataManagementViewModel.cs # Respaldos, importar Excel y restaurar base
+│   ├── UpdatesViewModel.cs      # Versión, actualizaciones y token de GitHub
+│   ├── ServicesCatalogViewModel.cs # Servicios, precios e insumos
+│   └── ProductDialogViewModel.cs # Alta y edición de producto (panel lateral)
 ├── Views/
 │   ├── MainWindow.xaml          # Ventana principal y barra de estado inferior
 │   ├── MainHubView.xaml         # Vista principal dividida
@@ -204,8 +208,12 @@ TPVC/
 │   ├── InventoryView.xaml       # Vista de catálogo
 │   ├── BatchesView.xaml         # Vista de lotes
 │   ├── MovementsView.xaml       # Vista de movimientos
-│   ├── SettingsView.xaml        # Vista de ajustes
-│   └── ProductDialog.xaml       # Diálogo modal de producto
+│   ├── ConfigurationShellView.xaml # Secciones y buscador de ajustes
+│   ├── ServicesCatalogView.xaml # Servicios
+│   ├── AppearanceView.xaml      # Apariencia con vista previa
+│   ├── DataManagementView.xaml  # Respaldos y datos
+│   ├── UpdatesView.xaml         # Acerca de y actualizaciones
+│   └── TursoSyncView.xaml       # Nube y dispositivos
 ├── tests/
 │   └── TPVC.Tests/
 │       ├── InventoryTests.cs    # Suite de 8 pruebas unitarias

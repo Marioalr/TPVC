@@ -147,14 +147,34 @@
                     <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Así sale en la receta" Margin="0,0,0,8" />
                     <Border Style="{StaticResource Card}" Padding="20">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource TextSection}" Text="{Binding DoctorName, TargetNullValue='Nombre del médico'}" TextWrapping="Wrap" />
-                            <TextBlock Style="{StaticResource TextDetail}" Text="{Binding Specialty}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding PreviewDoctorName}" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasDoctorName}" Value="False">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource TextDetail}" Text="{Binding Specialty}" TextWrapping="Wrap" Visibility="{Binding Specialty, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ProfessionalLicense, StringFormat='Céd. Prof. {0}'}"
                                        Visibility="{Binding ProfessionalLicense, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding University}" Visibility="{Binding University, Converter={StaticResource BoolToVis}}" />
                             <Border Style="{StaticResource Divider}" Margin="0,12" />
-                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding ClinicName}" TextWrapping="Wrap" />
-                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Address}" TextWrapping="Wrap" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding PreviewClinicName}" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasClinicName}" Value="False">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Address}" TextWrapping="Wrap" Visibility="{Binding Address, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Phone, StringFormat='Tel. {0}'}" Visibility="{Binding Phone, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Email}" Visibility="{Binding Email, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>

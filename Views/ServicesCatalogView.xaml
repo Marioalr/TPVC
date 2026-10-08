@@ -186,6 +186,10 @@
                                 <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,10" TextWrapping="Wrap"
                                            Text="Se agregan a la cuenta y se descuentan del inventario cada vez que se carga el servicio." />
                                 <Grid Margin="0,0,0,10">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="8" />
@@ -193,11 +197,13 @@
                                         <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding AvailableProducts}" SelectedItem="{Binding SelectedProductToAdd}"
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Insumo" />
+                                    <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Cantidad" />
+                                    <ComboBox Grid.Row="1" Style="{StaticResource FieldComboBox}" ItemsSource="{Binding AvailableProducts}" SelectedItem="{Binding SelectedProductToAdd}"
                                               DisplayMemberPath="Name" helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Insumo" />
-                                    <TextBox Grid.Column="2" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
+                                    <TextBox Grid.Row="1" Grid.Column="2" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
                                              Text="{Binding NewSupplyQuantity, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cantidad" />
-                                    <Button Grid.Column="4" Style="{StaticResource ButtonSecondary}" Command="{Binding AddSupplyCommand}" Content="Agregar" />
+                                    <Button Grid.Row="1" Grid.Column="4" Style="{StaticResource ButtonSecondary}" Command="{Binding AddSupplyCommand}" Content="Agregar" />
                                 </Grid>
                                 <ItemsControl ItemsSource="{Binding EditSupplies}">
                                     <ItemsControl.ItemTemplate>

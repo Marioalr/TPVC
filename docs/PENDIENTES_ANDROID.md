@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-07 (TPVC v1.15.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-07 (TPVC v1.16.0). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -17,7 +17,7 @@ luego la preparación del código; al final lo que se construye en la propia app
 | A3 | **Folios por dispositivo** | `EXP-`, `TKT-` y `CNS-` son consecutivos por equipo; dos equipos generan el mismo folio. v1.9 evita el bloqueo agregando `-R1`, pero los folios quedan distintos entre equipos. | Prefijo de dispositivo (`TKT-T-20261007-0001`) o rango de folios asignado por equipo. |
 | A4 | **Referencias dentro de JSON** | `PatientRecord.ActiveServicesJson` guarda el `Id` local del servicio clínico; en otro equipo apunta a otro servicio. | Guardar el `SyncId` del servicio dentro del JSON (migrar los existentes). |
 | A5 | **Sincronización periódica** | La PC solo sincroniza al iniciar o al guardar algo; no verá lo que capture la tablet hasta su siguiente cambio local. | Sincronización en segundo plano cada 1–2 min con la app abierta (las consultas vacías casi no consumen cuota). |
-| A6 | **Primera sincronización real con Turso** | Las versiones 1.8.x nunca subieron datos (HTTP 400). | En la PC: *Configuración → Nube y Turso Cloud → Sincronización Completa* (hace sincronización completa y renombra las tablas viejas a `legacy_v1_*`). Revisar en el panel de Turso que existan filas en todas las tablas. |
+| A6 | **Primera sincronización real con Turso** | Las versiones 1.8.x nunca subieron datos (HTTP 400). | En la PC: *Configuración → Nube y dispositivos → Sincronización completa* (hace sincronización completa y renombra las tablas viejas a `legacy_v1_*`). Revisar en el panel de Turso que existan filas en todas las tablas. |
 
 ## B. Preparación del código compartido
 
@@ -41,6 +41,16 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.16.0 (Configuración)
+
+- [ ] Buscar un ajuste: "respaldo", "cedula" y "tablet" llevan a su sección; Enter abre el primero.
+- [ ] Productos: doble clic abre el panel lateral; dar de alta deja el panel listo para el siguiente; la lista sigue fluida con todo el catálogo.
+- [ ] Lotes: caducidad "12/2027" queda al 31/12/2027; los chips muestran el conteo correcto.
+- [ ] Servicios: desactivar uno y comprobar que ya no aparece en el POS (F3) ni en la consulta; "Mostrar desactivados" lo vuelve a activar.
+- [ ] Apariencia: la vista previa cambia al escribir colores propios; Aplicar y volver a Claro/Oscuro.
+- [ ] Respaldos: "Respaldar ahora", "Volver a este" con CONFIRMAR; importar el Excel del médico sin escribir nada y revisar el resultado.
+- [ ] Médico y consultorio se abre desde el inicio y la paleta de comandos.
 
 ### v1.15.0 (Punto de venta)
 

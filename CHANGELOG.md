@@ -2,6 +2,24 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.16.0] - 2026-10-07
+
+### Cambiado — Fase 4 del rediseño: Configuración
+* **Configuración por secciones con resumen**: a la izquierda los grupos *Resumen*, *Inventario* (Productos, Lotes y caducidades, Kardex), *Consultorio* (Servicios, Médico y consultorio) y *Sistema* (Apariencia, Respaldos y datos, Nube y dispositivos, Actualizaciones, Componentes), cada uno con una línea de lo que importa ("120 productos · 4 con stock bajo", "Último respaldo hoy 09:15", "Claro · Azul consultorio"…).
+* **"Buscar un ajuste"**: escribir "respaldo", "cédula", "tablet" o "color" (sin acentos) muestra los ajustes que coinciden y **Enter abre el primero**.
+* **Productos, Lotes y Kardex** con los componentes comunes: listas que solo crean las filas visibles, filtros como chips (categorías y stock bajo/por caducar; lotes *Por vencer/Vencidos/Vigentes* con su conteo; kardex *Entradas/Ventas/Consultas/Bajas/Ajustes*) y **edición en panel lateral** sin salir de la lista (alta de producto con doble clic o "Nuevo producto", que se queda abierto para registrar el siguiente; entrada y consumo rápidos; registrar lote). El kardex muestra las existencias antes → después y la cantidad con signo.
+* **Caducidad escrita como en la caja**: `12/2027` toma el último día del mes (también `dd/mm/aaaa`), con atajos +6 meses, +1 año y +2 años; ya no hay calendario (se veía claro en modo oscuro).
+* **Servicios** tiene su propia sección: precio, duración y los insumos que se agregan solos, en un panel lateral. **Desactivar** un servicio lo quita del POS y de la consulta sin borrar los tickets donde aparece.
+* **Médico y consultorio** en tarjetas con la **vista previa del encabezado de la receta**.
+* **Apariencia** con **vista previa en vivo**: modo claro u oscuro con muestra, 8 colores de acento y colores propios que se ven mientras se escriben (con el contraste del texto) antes de aplicarlos.
+* **Respaldos y datos** en un solo lugar: *Respaldar ahora*, lista de respaldos con **"Volver a este"**, importar el catálogo de Excel y restaurar una base. Cada operación pasa por una hoja que explica qué va a pasar y muestra el resultado; **solo lo irreversible (reemplazar toda la base) pide escribir CONFIRMAR**. Importar el Excel ya no lo pide: antes se crea un respaldo y no se borra nada.
+* **Nube y dispositivos** y **Actualizaciones** con los componentes comunes (el token de GitHub y la guía de Turso quedan plegados).
+
+### Corregido
+* **"Médico y consultorio" no abría su página** desde los accesos del inicio y la paleta de comandos (se quedaba en la anterior).
+* **Volver al respaldo más antiguo fallaba** con los 14 respaldos guardados: el respaldo previo a restaurar borraba justo ese archivo al limpiar los viejos. Ahora se copia antes de respaldar.
+* Dos respaldos en el mismo segundo se pisaban (el segundo lleva "-2").
+
 ## [1.15.0] - 2026-10-07
 
 ### Cambiado — Fase 3 del rediseño: Punto de venta

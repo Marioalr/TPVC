@@ -57,6 +57,9 @@ public partial class ServicesCatalogViewModel : ObservableObject
 
     public string ListSummary => FilteredServices.Count == 1 ? "1 servicio" : $"{FilteredServices.Count} servicios";
 
+    /// <summary>Ya se leyó la lista al menos una vez (el resumen de Configuración la necesita).</summary>
+    public bool IsLoaded { get; private set; }
+
     public async Task LoadAsync()
     {
         try
@@ -76,6 +79,7 @@ public partial class ServicesCatalogViewModel : ObservableObject
         CategoryFilters = new ObservableCollection<string>(new[] { "Todos" }.Concat(categories));
         if (!CategoryFilters.Contains(CategoryFilter)) CategoryFilter = "Todos";
         ApplyFilter();
+        IsLoaded = true;
         OnPropertyChanged(nameof(Summary));
     }
 
