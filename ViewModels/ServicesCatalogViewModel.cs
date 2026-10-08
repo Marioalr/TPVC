@@ -55,8 +55,6 @@ public partial class ServicesCatalogViewModel : ObservableObject
         }
     }
 
-    public string ListSummary => FilteredServices.Count == 1 ? "1 servicio" : $"{FilteredServices.Count} servicios";
-
     /// <summary>Ya se leyó la lista al menos una vez (el resumen de Configuración la necesita).</summary>
     public bool IsLoaded { get; private set; }
 
@@ -100,7 +98,6 @@ public partial class ServicesCatalogViewModel : ObservableObject
             list = list.Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category, s.Description));
         }
         FilteredServices = new ObservableCollection<ClinicalService>(list.OrderBy(s => s.Category).ThenBy(s => s.Name));
-        OnPropertyChanged(nameof(ListSummary));
     }
 
     // ================================================================== editor (panel lateral)

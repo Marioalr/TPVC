@@ -7,10 +7,9 @@
              xmlns:models="clr-namespace:TPVC.Models"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+             d:DataContext="{d:DesignInstance Type=vm:PosViewModel}">
 
-    <!-- Nuevo servicio clínico con sus insumos por defecto. La misma hoja en Pacientes y en el -->
-    <!-- Punto de Venta (los dos ViewModels exponen los mismos nombres).                       -->
+    <!-- Nuevo servicio clínico con sus insumos por defecto (hoja del Punto de Venta). -->
     <Border Style="{StaticResource SheetScrim}">
         <Border Style="{StaticResource SheetCard}" Width="720" MaxHeight="720" Padding="0">
             <Grid>

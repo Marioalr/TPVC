@@ -196,35 +196,6 @@ public class PatientConsultation : ISyncEntity
             PrescriptionsJson = JsonSerializer.Serialize(_prescriptions);
         }
     }
-
-    [NotMapped]
-    public TimeSpan? Duration => (StartedAt.HasValue && EndedAt.HasValue && EndedAt.Value >= StartedAt.Value)
-        ? (EndedAt.Value - StartedAt.Value)
-        : null;
-
-    [NotMapped]
-    public string FormattedDuration => Duration.HasValue
-        ? (Duration.Value.TotalHours >= 1
-            ? $"{(int)Duration.Value.TotalHours}h {Duration.Value.Minutes}m {Duration.Value.Seconds}s"
-            : $"{(int)Duration.Value.TotalMinutes} min {Duration.Value.Seconds} s")
-        : string.Empty;
-
-    [NotMapped]
-    public string FormattedScheduleTime
-    {
-        get
-        {
-            if (StartedAt.HasValue && EndedAt.HasValue)
-            {
-                return $"{StartedAt.Value:HH:mm} - {EndedAt.Value:HH:mm} ({FormattedDuration})";
-            }
-            if (StartedAt.HasValue)
-            {
-                return $"Inicio: {StartedAt.Value:HH:mm}";
-            }
-            return Date.ToString("HH:mm");
-        }
-    }
 }
 
 public class PatientRecord : ISyncEntity
@@ -395,14 +366,6 @@ public class PatientRecord : ISyncEntity
     public string NextAppointmentTime { get; set; } = string.Empty;
     public string NextAppointmentReason { get; set; } = string.Empty;
     public string NextAppointmentNotes { get; set; } = string.Empty;
-
-    [NotMapped]
-    public bool HasScheduledAppointment => NextAppointmentDate.HasValue && NextAppointmentDate.Value.Date >= DateTime.Today;
-
-    [NotMapped]
-    public string FormattedNextAppointment => HasScheduledAppointment 
-        ? $"{NextAppointmentDate:dd/MM/yyyy} {NextAppointmentTime} • {NextAppointmentReason}" 
-        : string.Empty;
 
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -622,8 +585,7 @@ public class PatientRecord : ISyncEntity
                     Glucose = c.Glucose,
                     HeartRate = c.HeartRate,
                     Temperature = c.Temperature,
-                    BMI = c.BMI,
-                    OxygenSaturation = c.OxygenSaturation
+                    BMI = c.BMI
                 });
             }
         }
@@ -642,22 +604,18 @@ public class VitalSignsEvolutionPoint
     public decimal? HeartRate { get; set; }
     public decimal? Temperature { get; set; }
     public decimal? BMI { get; set; }
-    public decimal? OxygenSaturation { get; set; }
 
     public string WeightText => Weight.HasValue ? $"{Weight.Value:F1} kg" : "--";
     public string BloodPressureText => (Systolic.HasValue && Diastolic.HasValue) ? $"{Systolic.Value:F0}/{Diastolic.Value:F0}" : "--";
     public string GlucoseText => Glucose.HasValue ? $"{Glucose.Value:F0} mg/dL" : "--";
     public string TempText => Temperature.HasValue ? $"{Temperature.Value:F1} °C" : "--";
-    public string OxygenSaturationText => OxygenSaturation.HasValue ? $"{OxygenSaturation.Value:F0}%" : "--";
 }
 
 public class VitalSignsChartPoint
 {
     public double X { get; set; }
     public double Y { get; set; }
-    public string DateLabel { get; set; } = string.Empty;
     public string ValueLabel { get; set; } = string.Empty;
     public string SeriesName { get; set; } = string.Empty;
-    public string ColorHex { get; set; } = "#3B82F6";
 }
 

@@ -112,7 +112,6 @@ public class TursoTests
         var quota = service.GetQuotaSummary();
         Assert.AreEqual(500, quota.RowsReadThisMonth);
         Assert.AreEqual(120, quota.RowsWrittenThisMonth);
-        Assert.IsTrue(quota.IsSafeWithinFreeTier);
         Assert.IsTrue(quota.PercentageWritesUsed < 1.0); // Extremadamente bajo respecto a 25M
         Assert.IsTrue(quota.PercentageReadsUsed < 1.0);  // Extremadamente bajo respecto a 1B
     }

@@ -68,9 +68,6 @@ public partial class ProductDialogViewModel : ObservableObject
     [ObservableProperty]
     private string _successMessage = string.Empty;
 
-    [ObservableProperty]
-    private bool _isSaving;
-
     public event Action? RequestClose;
 
     /// <summary>Se guardó un producto (la lista lo refresca; el alta queda abierta para el siguiente).</summary>
@@ -88,8 +85,6 @@ public partial class ProductDialogViewModel : ObservableObject
         "Rollos",
         "Mililitros"
     };
-
-    public bool DialogResult { get; private set; }
 
     public ProductDialogViewModel(InventoryService inventoryService, Action? onClose = null)
     {
@@ -181,7 +176,6 @@ public partial class ProductDialogViewModel : ObservableObject
             return;
         }
 
-        IsSaving = true;
         try
         {
             string savedName = Name.Trim();
@@ -205,7 +199,6 @@ public partial class ProductDialogViewModel : ObservableObject
             };
 
             await _inventoryService.SaveProductAsync(product);
-            DialogResult = true;
             Saved?.Invoke();
 
             if (IsNew)
@@ -223,10 +216,6 @@ public partial class ProductDialogViewModel : ObservableObject
         catch (Exception ex)
         {
             ErrorMessage = $"Error al guardar el insumo: {ex.Message}";
-        }
-        finally
-        {
-            IsSaving = false;
         }
     }
 

@@ -279,24 +279,6 @@ public class TursoClient : IDisposable
         return totalAffected;
     }
 
-    public async Task ExecuteScriptAsync(string multiStatementSql, CancellationToken ct = default)
-    {
-        var rawStatements = multiStatementSql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var items = new List<(string Sql, object?[]? Args)>();
-        foreach (var stmt in rawStatements)
-        {
-            if (!string.IsNullOrWhiteSpace(stmt))
-            {
-                items.Add((stmt + ";", null));
-            }
-        }
-
-        if (items.Count > 0)
-        {
-            await ExecuteBatchAsync(items, ct);
-        }
-    }
-
     private static JsonObject CreatePipelineRequest(IEnumerable<(string Sql, object?[]? Args)> statements)
     {
         var requestsArray = new JsonArray();

@@ -323,7 +323,7 @@ public class DataLayerTests
         records.ConsultationDiagnosis = "Sano";
 
         await records.FinalizeConsultationAsync();
-        Assert.IsTrue(records.IsPosModalOpen);
+        Assert.IsTrue(records.IsFinishConsultationOpen);
 
         await records.Checkout.ChargeAsync();
 

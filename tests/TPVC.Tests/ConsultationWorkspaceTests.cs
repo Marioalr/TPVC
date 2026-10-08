@@ -104,7 +104,7 @@ public class ConsultationWorkspaceTests
         records.PrescriptionMedicineName = product.Name;
         records.PrescriptionDosage = "1 tableta cada 8 horas";
         records.PrescriptionQuantity = 1;
-        await records.AddPrescriptionItemToPatientAsync();
+        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
         Assert.IsFalse(records.IsAllergyAlertOpen);
         Assert.AreEqual(product.Name, patient.ActivePrescription.Last().MedicineName);
         Assert.IsTrue(patient.ActivePrescription.Last().DispenseInClinic);
@@ -115,7 +115,7 @@ public class ConsultationWorkspaceTests
 
         await records.FinalizeConsultationAsync();
 
-        Assert.IsTrue(records.IsPosModalOpen, "Se abre la ventana de terminar consulta");
+        Assert.IsTrue(records.IsFinishConsultationOpen, "Se abre la ventana de terminar consulta");
         Assert.IsTrue(records.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
         Assert.HasCount(2, checkout.Cart, "Honorario + medicamento surtido");
         Assert.IsTrue(checkout.Cart[0].IsService);
@@ -123,7 +123,7 @@ public class ConsultationWorkspaceTests
         Assert.AreEqual(product.Id, checkout.Cart[1].ProductId);
 
         // "Volver a la consulta" y terminar otra vez no duplica cargos ni notas
-        records.ClosePosModal();
+        records.CloseFinishConsultation();
         Assert.IsEmpty(checkout.Cart);
         Assert.IsTrue(records.HasActiveConsultation);
         await records.FinalizeConsultationAsync();
@@ -137,7 +137,7 @@ public class ConsultationWorkspaceTests
         await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation);
-        Assert.IsFalse(records.IsPosModalOpen);
+        Assert.IsFalse(records.IsFinishConsultationOpen);
         var after = (await _service.GetProductsAsync()).Single(p => p.Id == product.Id);
         Assert.AreEqual(stockBefore - 1, after.CurrentStock, "Se descuenta lo surtido en el consultorio");
         var sales = await _service.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1));
@@ -168,7 +168,9 @@ public class ConsultationWorkspaceTests
         int notesBefore = (await _service.GetPatientConsultationsAsync(patient.Id)).Count;
 
         records.ConsultationChiefComplaint = "Paciente equivocado";
-        await records.SaveActiveConsultationNoteAsync();
+        // "Terminar consulta" guarda el avance de la nota; "Volver a la consulta" la deja abierta
+        await records.FinalizeConsultationAsync();
+        records.CloseFinishConsultation();
         Assert.HasCount(notesBefore + 1, await _service.GetPatientConsultationsAsync(patient.Id));
 
         await records.DiscardActiveConsultationAsync();
@@ -198,7 +200,7 @@ public class ConsultationWorkspaceTests
         records.SelectedPrescriptionProduct = amoxicillin;
         records.PrescriptionMedicineName = "Alcohol etílico 70%";
         records.PrescriptionQuantity = 1;
-        await records.AddPrescriptionItemToPatientAsync();
+        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
 
         Assert.IsFalse(records.IsAllergyAlertOpen, "Sin falsa alerta por el producto preseleccionado");
         Assert.IsTrue(patient.ActivePrescription.Single().DispenseInClinic);
@@ -207,19 +209,19 @@ public class ConsultationWorkspaceTests
         // La alergia real se sigue detectando aunque la preselección sea otro producto
         records.SelectedPrescriptionProduct = alcohol;
         records.PrescriptionMedicineName = "Amoxicilina 500mg";
-        await records.AddPrescriptionItemToPatientAsync();
+        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
         Assert.IsTrue(records.IsAllergyAlertOpen);
     }
 
     [TestMethod]
-    public async Task LegacyConsultationForm_DoesNotPrefillExampleVitalSigns()
+    public async Task StartConsultation_DoesNotPrefillExampleVitalSigns()
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = new MedicalRecordsViewModel(_service, consultations);
         await records.InitialLoad;
         records.SelectPatient(records.Patients.First());
 
-        records.NewConsultation();
+        records.StartActiveConsultation();
 
         // Un 120/80 o 70 kg de ejemplo se guardaría como si se hubiera medido
         Assert.AreEqual(string.Empty, records.ConsultationTA);

@@ -167,20 +167,20 @@ public class InventoryTests
         posVm.AddToCart(product);
 
         Assert.HasCount(1, posVm.Cart);
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
         Assert.AreEqual(product.Price, posVm.TotalCartAmount);
 
         var item = posVm.Cart[0];
         posVm.IncreaseQuantity(item);
-        Assert.AreEqual(2, posVm.TotalCartItems);
+        Assert.AreEqual(2, posVm.Checkout.TotalItems);
         Assert.AreEqual(product.Price * 2, posVm.TotalCartAmount);
 
         posVm.DecreaseQuantity(item);
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
 
         posVm.ClearCart();
         Assert.IsEmpty(posVm.Cart);
-        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0, posVm.Checkout.TotalItems);
         Assert.AreEqual(0m, posVm.TotalCartAmount);
     }
 
@@ -190,11 +190,9 @@ public class InventoryTests
         var medVm = new MedicalRecordsViewModel();
         Assert.IsGreaterThanOrEqualTo(1, medVm.Patients.Count);
         Assert.IsNull(medVm.SelectedPatient);
-        Assert.AreEqual("Agregar Paciente", medVm.PatientActionButtonText);
 
         medVm.SelectedPatient = medVm.Patients.First();
         Assert.IsNotNull(medVm.SelectedPatient);
-        Assert.AreEqual("Cambiar Paciente", medVm.PatientActionButtonText);
     }
 
     [TestMethod]
@@ -205,7 +203,6 @@ public class InventoryTests
 
         // 1. Al escribir texto debe abrir el dropdown con sugerencias coincidentes
         posVm.SearchText = "Para";
-        Assert.IsTrue(posVm.IsSearchDropdownOpen);
         Assert.IsGreaterThanOrEqualTo(1, posVm.SearchSuggestions.Count);
         Assert.IsTrue(posVm.SearchSuggestions.Any(p => p.Name.Contains("Paracetamol", StringComparison.OrdinalIgnoreCase)));
 
@@ -213,10 +210,10 @@ public class InventoryTests
         var chosen = posVm.SearchSuggestions[0];
         posVm.SelectSuggestion(chosen);
 
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
         Assert.AreEqual(chosen.Price, posVm.TotalCartAmount);
         Assert.IsTrue(string.IsNullOrEmpty(posVm.SearchText));
-        Assert.IsFalse(posVm.IsSearchDropdownOpen);
+        Assert.IsEmpty(posVm.SearchSuggestions);
     }
 
     [TestMethod]
@@ -238,7 +235,7 @@ public class InventoryTests
         // 3. Agregar desde el modal
         var product = posVm.CatalogFilteredProducts.First(p => p.CurrentStock > 0);
         posVm.AddToCart(product);
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
 
         // 4. Cerrar modal
         posVm.CloseCatalogModal();
@@ -253,7 +250,6 @@ public class InventoryTests
 
         // 1. Buscar una letra común para obtener múltiples sugerencias (ej. 'o' o 'a')
         posVm.SearchText = "o";
-        Assert.IsTrue(posVm.IsSearchDropdownOpen);
         Assert.IsGreaterThanOrEqualTo(2, posVm.SearchSuggestions.Count, "Debe haber al menos 2 sugerencias para probar navegación por flechas");
 
         // Al iniciar la búsqueda, la primera sugerencia está seleccionada por defecto (índice 0)
@@ -277,11 +273,11 @@ public class InventoryTests
         posVm.ConfirmSelectedSuggestion();
 
         // Verificar que el producto seleccionado con las flechas fue el agregado al ticket de venta
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
         Assert.HasCount(1, posVm.Cart);
         Assert.AreEqual(selectedProduct.Id, posVm.Cart[0].ProductId);
         Assert.IsTrue(string.IsNullOrEmpty(posVm.SearchText));
-        Assert.IsFalse(posVm.IsSearchDropdownOpen);
+        Assert.IsEmpty(posVm.SearchSuggestions);
     }
 
     [TestMethod]
@@ -299,15 +295,16 @@ public class InventoryTests
         // 1. Booleanos directos
         Assert.AreEqual(Visibility.Visible, converter.Convert(true, typeof(Visibility), null, CultureInfo.InvariantCulture));
         Assert.AreEqual(Visibility.Collapsed, converter.Convert(false, typeof(Visibility), null, CultureInfo.InvariantCulture));
-        Assert.AreEqual(Visibility.Collapsed, converter.Convert(true, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture));
-        Assert.AreEqual(Visibility.Visible, converter.Convert(false, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture));
+        var inverse = new BoolToVisibilityConverter { Invert = true };
+        Assert.AreEqual(Visibility.Collapsed, inverse.Convert(true, typeof(Visibility), null, CultureInfo.InvariantCulture));
+        Assert.AreEqual(Visibility.Visible, inverse.Convert(false, typeof(Visibility), null, CultureInfo.InvariantCulture));
 
         // 2. Números enteros (ej. Cart.Count) - Aquí ocurría el bug crítico donde 1 is true evaluaba a false
         Assert.AreEqual(Visibility.Visible, converter.Convert(1, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 1 debe ser Visible");
         Assert.AreEqual(Visibility.Visible, converter.Convert(5, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 5 debe ser Visible");
         Assert.AreEqual(Visibility.Collapsed, converter.Convert(0, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 0 debe ser Collapsed");
-        Assert.AreEqual(Visibility.Visible, converter.Convert(0, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture), "Cart.Count = 0 con Inverse debe ser Visible (EmptyState)");
-        Assert.AreEqual(Visibility.Collapsed, converter.Convert(1, typeof(Visibility), "Inverse", CultureInfo.InvariantCulture), "Cart.Count = 1 con Inverse debe ser Collapsed (oculta EmptyState)");
+        Assert.AreEqual(Visibility.Visible, inverse.Convert(0, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 0 invertido debe ser Visible (EmptyState)");
+        Assert.AreEqual(Visibility.Collapsed, inverse.Convert(1, typeof(Visibility), null, CultureInfo.InvariantCulture), "Cart.Count = 1 invertido debe ser Collapsed (oculta EmptyState)");
 
         // 3. Cadenas de texto (ej. SearchText o GenericName)
         Assert.AreEqual(Visibility.Visible, converter.Convert("Paracetamol", typeof(Visibility), null, CultureInfo.InvariantCulture));
@@ -318,10 +315,6 @@ public class InventoryTests
         // 4. Colecciones directas
         Assert.AreEqual(Visibility.Visible, converter.Convert(new List<string> { "Item" }, typeof(Visibility), null, CultureInfo.InvariantCulture));
         Assert.AreEqual(Visibility.Collapsed, converter.Convert(new List<string>(), typeof(Visibility), null, CultureInfo.InvariantCulture));
-
-        // 5. TargetType bool
-        Assert.IsTrue((bool)converter.Convert(1, typeof(bool), null, CultureInfo.InvariantCulture)!);
-        Assert.IsFalse((bool)converter.Convert(0, typeof(bool), null, CultureInfo.InvariantCulture)!);
     }
 
 
@@ -333,24 +326,24 @@ public class InventoryTests
 
         // Inicialmente el carrito debe estar vacío y HasCartItems en false
         Assert.IsFalse(posVm.HasCartItems);
-        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0, posVm.Checkout.TotalItems);
 
         // Al agregar un producto, HasCartItems cambia reactivamente a true
         var product = posVm.Products.First(p => p.CurrentStock > 0);
         posVm.AddToCart(product);
         Assert.IsTrue(posVm.HasCartItems);
-        Assert.AreEqual(1, posVm.TotalCartItems);
+        Assert.AreEqual(1, posVm.Checkout.TotalItems);
 
         // Al incrementar cantidad sigue en true
         var cartItem = posVm.Cart[0];
         posVm.IncreaseQuantity(cartItem);
         Assert.IsTrue(posVm.HasCartItems);
-        Assert.AreEqual(2, posVm.TotalCartItems);
+        Assert.AreEqual(2, posVm.Checkout.TotalItems);
 
         // Al limpiar el carrito cambia reactivamente a false
         posVm.ClearCart();
         Assert.IsFalse(posVm.HasCartItems);
-        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0, posVm.Checkout.TotalItems);
 
         // Al volver a agregar y luego removerlo uno a uno
         posVm.AddToCart(product);
@@ -408,41 +401,6 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_ServicesSection_AddsNewServiceWithDefaultProducts()
-    {
-        var mrVm = new MedicalRecordsViewModel(_inventoryService);
-        await mrVm.LoadServicesAsync();
-
-        Assert.IsNotNull(mrVm.Services);
-        int initialCount = mrVm.Services.Count;
-
-        mrVm.OpenCreateServiceModal();
-        mrVm.NewServiceCode = "SERV-TEST";
-        mrVm.NewServiceName = "Prueba de Espirometría Clínica";
-        mrVm.NewServiceCategory = "Diagnóstico";
-        mrVm.NewServicePrice = 500.00m;
-        mrVm.NewServiceDuration = 25;
-
-        Assert.IsNotNull(mrVm.AvailableProducts);
-        Assert.IsTrue(mrVm.AvailableProducts.Count > 0);
-        mrVm.SelectedProductToAdd = mrVm.AvailableProducts[0];
-        mrVm.NewProductQuantity = 3;
-        mrVm.AddProductToNewService();
-
-        Assert.AreEqual(1, mrVm.NewServiceDefaultProducts.Count);
-        Assert.AreEqual(3, mrVm.NewServiceDefaultProducts[0].Quantity);
-
-        await mrVm.SaveNewServiceAsync();
-
-        Assert.IsFalse(mrVm.IsCreateServiceModalOpen);
-        Assert.AreEqual(initialCount + 1, mrVm.Services.Count);
-        var created = mrVm.Services.FirstOrDefault(s => s.Code == "SERV-TEST");
-        Assert.IsNotNull(created);
-        Assert.AreEqual("Prueba de Espirometría Clínica", created.Name);
-        Assert.AreEqual(1, created.DefaultProducts.Count);
-    }
-
-    [TestMethod]
     public void ComparisonToVisibilityConverter_ConvertsValuesCorrectly()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -475,11 +433,11 @@ public class InventoryTests
         posVm.AddToCart(productsWithStock[1]);
         posVm.IncreaseQuantity(posVm.Cart[0]); // cantidad = 2
 
-        posVm.PatientName = "Ana Laura Domínguez";
-        posVm.SelectedPaymentMethod = "Tarjeta Débito/Crédito";
+        posVm.Checkout.PatientName = "Ana Laura Domínguez";
+        posVm.Checkout.SelectedPaymentMethod = "Tarjeta Débito/Crédito";
 
         decimal expectedTotal = posVm.TotalCartAmount;
-        int expectedItems = posVm.TotalCartItems;
+        int expectedItems = posVm.Checkout.TotalItems;
 
         // Al despachar la venta
         await posVm.ProcessSaleAsync();
@@ -503,7 +461,6 @@ public class InventoryTests
 
         // 4. Probar comando de imprimir ticket
         posVm.PrintTicket();
-        Assert.IsTrue(posVm.IsTicketPrinted);
         Assert.IsNotNull(posVm.TicketStatusMessage);
 
         // 5. Probar cerrar ticket / nueva venta
@@ -644,7 +601,7 @@ public class InventoryTests
 
         Assert.IsFalse(string.IsNullOrWhiteSpace(dialogVm.ErrorMessage));
         Assert.IsTrue(dialogVm.ErrorMessage.Contains("ya está registrado"), "Debe notificar que el código está repetido");
-        Assert.IsFalse(dialogVm.DialogResult);
+        Assert.IsFalse((await _inventoryService.GetProductsAsync()).Any(p => p.Name == "Insumo Nuevo con Código Repetido"), "No se guarda");
     }
 
     [TestMethod]
@@ -666,7 +623,7 @@ public class InventoryTests
 
         await dialogVm.SaveAsync();
 
-        Assert.IsTrue(dialogVm.DialogResult, "Debe ser exitoso");
+        Assert.IsTrue((await _inventoryService.GetProductsAsync()).Any(p => p.Code == "NUEVO-INSUMO-OK"), "Debe guardarse");
         Assert.IsTrue(string.IsNullOrWhiteSpace(dialogVm.ErrorMessage));
         Assert.IsFalse(string.IsNullOrWhiteSpace(dialogVm.SuccessMessage));
         Assert.IsTrue(dialogVm.SuccessMessage.Contains("Gasas Estériles Premium"));
@@ -733,19 +690,19 @@ public class InventoryTests
         posVm.IncreaseQuantity(posVm.Cart.First()); // Qty = 2
 
         var initialCartTotal = posVm.TotalCartAmount;
-        Assert.AreEqual(2, posVm.TotalCartItems);
+        Assert.AreEqual(2, posVm.Checkout.TotalItems);
 
         // Agregar a la consulta activa
         posVm.AddToActiveConsultation();
 
         // No se cobra de inmediato: se vacía el carrito del mostrador para seguir atendiendo
         Assert.IsEmpty(posVm.Cart);
-        Assert.AreEqual(0, posVm.TotalCartItems);
+        Assert.AreEqual(0, posVm.Checkout.TotalItems);
         Assert.AreEqual(0m, posVm.TotalCartAmount);
 
         // Pero la consulta activa acumula los insumos guardados
-        Assert.AreEqual(2, posVm.ActiveConsultationItemsCount);
-        Assert.AreEqual(initialCartTotal, posVm.ActiveConsultationTotalAmount);
+        Assert.AreEqual(2, consultService.CurrentConsultation!.Items.Sum(i => i.Quantity));
+        Assert.AreEqual(initialCartTotal, consultService.CurrentConsultation.TotalAmount);
 
         // La consulta sigue en curso: se cobra al terminarla (en Pacientes), nunca desde el POS
         Assert.IsTrue(posVm.HasActiveConsultation);
@@ -753,7 +710,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MedicalRecordsViewModel_ActiveConsultationLifecycle_WorksSynchronouslyWithConsultationService()
+    public async Task MedicalRecordsViewModel_ActiveConsultationLifecycle_WorksSynchronouslyWithConsultationService()
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
@@ -766,8 +723,8 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.HasActiveConsultation);
         Assert.AreEqual(recordsVm.SelectedPatient.FullName, recordsVm.ActiveConsultationPatientName);
 
-        // Cancelar consulta
-        recordsVm.CancelActiveConsultation();
+        // Descartar consulta
+        await recordsVm.DiscardActiveConsultationAsync();
         Assert.IsFalse(recordsVm.HasActiveConsultation);
     }
 
@@ -954,41 +911,6 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_ConsultationModal_RegistersNoteAndPrescription()
-    {
-        var consultService = new ConsultationService();
-        var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
-        await recordsVm.LoadPatientsAsync();
-
-        recordsVm.SelectedPatient = recordsVm.Patients.First();
-        recordsVm.NewConsultation();
-
-        Assert.IsTrue(recordsVm.IsConsultationModalOpen);
-        Assert.IsTrue(recordsVm.ConsultationFolio.StartsWith("CNS-"));
-
-        recordsVm.ConsultationChiefComplaint = "Chequeo de rutina";
-        recordsVm.ConsultationDiagnosis = "Paciente clínicamente sano (Z00.0)";
-        recordsVm.ConsultationTreatmentPlan = "Continuar hábitos saludables y dieta balanceada.";
-
-        // Agregar medicamento a la receta en el modal
-        recordsVm.NewPrescriptionMedicine = "Complejo B Cápsulas";
-        recordsVm.NewPrescriptionDosage = "1 cápsula diaria con alimentos por 30 días";
-        recordsVm.NewPrescriptionQuantity = 1;
-        recordsVm.AddPrescriptionItem();
-
-        Assert.HasCount(1, recordsVm.ConsultationPrescriptions);
-
-        // Guardar consulta
-        await recordsVm.SaveConsultationModalAsync();
-
-        Assert.IsFalse(recordsVm.IsConsultationModalOpen);
-        Assert.IsNull(recordsVm.ConsultationErrorMessage);
-        Assert.AreEqual("Paciente clínicamente sano (Z00.0)", recordsVm.SelectedPatient.LastDiagnosis);
-        Assert.IsTrue(consultService.HasActiveConsultation, "Debió activar consulta en ConsultationService");
-        Assert.AreEqual(recordsVm.SelectedPatient.FullName, consultService.CurrentConsultation?.PatientName);
-    }
-
-    [TestMethod]
     public async Task PosViewModel_ServicesModal_OpensLoadsAndFiltersByCategoryAndText()
     {
         var consultService = new ConsultationService();
@@ -1003,7 +925,7 @@ public class InventoryTests
         Assert.IsNotNull(posVm.SelectedService);
 
         // 2. Filtrar por categoría 'Consulta'
-        posVm.FilterServiceCategory("Consulta");
+        posVm.ServiceCategoryFilter = "Consulta";
         Assert.AreEqual("Consulta", posVm.ServiceCategoryFilter);
         Assert.IsTrue(posVm.FilteredServices.All(s => s.Category == "Consulta"));
 
@@ -1013,7 +935,7 @@ public class InventoryTests
 
         // 4. Limpiar filtros volviendo a 'Todos'
         posVm.ServiceSearchText = string.Empty;
-        posVm.FilterServiceCategory("Todos");
+        posVm.ServiceCategoryFilter = "Todos";
         Assert.AreEqual("Todos", posVm.ServiceCategoryFilter);
         Assert.HasCount(posVm.Services.Count, posVm.FilteredServices);
 
@@ -1099,7 +1021,6 @@ public class InventoryTests
         var activeItems = consultService.CurrentConsultation?.Items;
         Assert.IsNotNull(activeItems);
         Assert.IsTrue(activeItems.Any(i => i.ProductId == -srvWithProducts.Id), "El servicio debe transferirse a la consulta activa");
-        Assert.HasCount(posVm.ActiveConsultationItemsCount, activeItems);
     }
 
     [TestMethod]
@@ -1162,61 +1083,11 @@ public class InventoryTests
 
         Assert.IsEmpty(posVm.Cart, "La venta se vacía al pasarla a la consulta");
         Assert.IsGreaterThanOrEqualTo(2, consultService.CurrentConsultation?.Items.Count ?? 0);
-        Assert.AreEqual(consultService.CurrentConsultation?.TotalItems, recordsVm.ActiveConsultationItemsCount);
         Assert.IsGreaterThan(0m, recordsVm.ActiveConsultationTotalAmount);
     }
 
     [TestMethod]
-    public void MedicalRecordsViewModel_SelectPatientModal_OpenFilterSelectAndDeselect()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        Assert.IsNull(recordsVm.SelectedPatient);
-        Assert.AreEqual("Agregar Paciente", recordsVm.PatientActionButtonText);
-        Assert.IsFalse(recordsVm.HasSelectedPatient);
-
-        // 1. Abrir modal
-        recordsVm.OpenSelectPatientModal();
-        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
-        Assert.HasCount(recordsVm.Patients.Count, recordsVm.SelectablePatients);
-
-        // 2. Filtrar por término de búsqueda
-        recordsVm.SelectPatientSearchText = "Hernández";
-        Assert.IsGreaterThanOrEqualTo(1, recordsVm.SelectablePatients.Count);
-        var targetPatient = recordsVm.SelectablePatients.First();
-        Assert.Contains("Hernández", targetPatient.FullName);
-
-        // 3. Seleccionar paciente
-        recordsVm.SelectPatient(targetPatient);
-        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen);
-        Assert.IsNotNull(recordsVm.SelectedPatient);
-        Assert.AreEqual("Hernández López, Sofía", recordsVm.SelectedPatient.FullName);
-        Assert.AreEqual("Cambiar Paciente", recordsVm.PatientActionButtonText);
-        Assert.IsTrue(recordsVm.HasSelectedPatient);
-
-        // 4. Quitar selección (Deseleccionar)
-        recordsVm.DeselectPatient();
-        Assert.IsNull(recordsVm.SelectedPatient);
-        Assert.AreEqual("Agregar Paciente", recordsVm.PatientActionButtonText);
-        Assert.IsFalse(recordsVm.HasSelectedPatient);
-    }
-
-    [TestMethod]
-    public async Task MedicalRecordsViewModel_NewPatientFromSelector_OpensPatientModal()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.OpenSelectPatientModal();
-        Assert.IsTrue(recordsVm.IsSelectPatientModalOpen);
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
-
-        await recordsVm.NewPatientFromSelectorAsync();
-
-        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen, "Debe cerrar el modal selector");
-        Assert.IsTrue(recordsVm.IsPatientModalOpen, "Debe abrir el modal de nuevo paciente");
-        Assert.AreEqual(0, recordsVm.FormPatientId);
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_WhenNoPatientSelected_NewAndActiveConsultationGoToPatientsHome()
+    public void MedicalRecordsViewModel_WhenNoPatientSelected_StartConsultationGoesToPatientsHome()
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
@@ -1227,16 +1098,10 @@ public class InventoryTests
 
         // Sin paciente no hay consulta que abrir: vuelve al inicio de Pacientes con el buscador listo
         recordsVm.PatientsPage = MedicalRecordsViewModel.PageChart;
-        recordsVm.NewConsultation();
-        Assert.IsTrue(recordsVm.IsHomePage);
-        Assert.IsFalse(consultService.HasActiveConsultation);
-
-        recordsVm.PatientsPage = MedicalRecordsViewModel.PageChart;
         recordsVm.StartActiveConsultation();
         Assert.IsTrue(recordsVm.IsHomePage);
         Assert.IsFalse(consultService.HasActiveConsultation);
-        Assert.AreEqual(2, focusRequests, "Cada vez debe pedir el foco en el buscador");
-        Assert.IsFalse(recordsVm.IsSelectPatientModalOpen, "Ya no se usa el modal selector");
+        Assert.AreEqual(1, focusRequests, "Debe pedir el foco en el buscador");
     }
 
     [TestMethod]
@@ -1263,7 +1128,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MedicalRecordsViewModel_ConsultationTimer_UpdatesElapsedTimeAndStopsOnCancel()
+    public async Task MedicalRecordsViewModel_ConsultationTimer_UpdatesElapsedTimeAndStopsOnCancel()
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
@@ -1285,112 +1150,10 @@ public class InventoryTests
         recordsVm.UpdateActiveConsultationTimer(asOf);
         Assert.AreEqual("12:45", recordsVm.ActiveConsultationElapsedTime);
 
-        // Cancelar o finalizar consulta
-        recordsVm.CancelActiveConsultation();
+        // Descartar la consulta
+        await recordsVm.DiscardActiveConsultationAsync();
         Assert.IsFalse(recordsVm.HasActiveConsultation);
         Assert.AreEqual("00:00", recordsVm.ActiveConsultationElapsedTime);
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_RecordsViewerModal_OpensAndFiltersPatients()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen);
-
-        // Abrir visor modal de expedientes
-        recordsVm.OpenRecordsViewerModal();
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen);
-        Assert.IsNull(recordsVm.ViewingRecordPatient);
-        Assert.AreEqual(string.Empty, recordsVm.RecordsViewerSearchText);
-        Assert.IsTrue(recordsVm.RecordsViewerPatients.Count > 0);
-
-        // Filtrar por nombre de paciente
-        var firstPatient = recordsVm.RecordsViewerPatients.First();
-        recordsVm.RecordsViewerSearchText = firstPatient.FullName.Substring(0, 3);
-        Assert.IsTrue(recordsVm.RecordsViewerPatients.Any(p => p.FullName == firstPatient.FullName));
-
-        // Cerrar visor modal
-        recordsVm.CloseRecordsViewerModal();
-        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen);
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_RecordsViewerModal_ViewPatientDetail_ShowsFullRecordWithoutClosingModal()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.OpenRecordsViewerModal();
-
-        var patientToInspect = recordsVm.RecordsViewerPatients.First();
-        // Agregar consulta previa al paciente para comprobar visualización de historial
-        patientToInspect.Consultations.Add(new PatientConsultation
-        {
-            Folio = "CNS-HIST-001",
-            Date = DateTime.Now.AddDays(-10),
-            ChiefComplaint = "Cefalea tensional",
-            Diagnosis = "Cefalea (G44.2)",
-            TreatmentPlan = "Reposo e hidratación"
-        });
-
-        // Al hacer click en "Ver", no pasa a pantalla completa; se queda dentro de la modal
-        recordsVm.ViewPatientRecordDetail(patientToInspect);
-
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe permanecer abierta");
-        Assert.IsNotNull(recordsVm.ViewingRecordPatient);
-        Assert.AreEqual(patientToInspect.FullName, recordsVm.ViewingRecordPatient.FullName);
-        Assert.AreEqual("Resumen", recordsVm.ViewingRecordTab);
-        Assert.IsTrue(recordsVm.ViewingPatientConsultations.Count >= 1);
-
-        // Cambiar de pestaña dentro del expediente en la modal
-        recordsVm.SwitchViewingRecordTab("Historial");
-        Assert.AreEqual("Historial", recordsVm.ViewingRecordTab);
-
-        // Volver a la lista dentro de la modal
-        recordsVm.BackToRecordsList();
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "La modal debe continuar abierta al volver a la lista");
-        Assert.IsNull(recordsVm.ViewingRecordPatient, "Debe limpiar el paciente en visualización");
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_RecordsViewerModal_SelectForConsultation_SetsSelectedPatientAndClosesModal()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.SelectedPatient = null;
-        recordsVm.OpenRecordsViewerModal();
-
-        var targetPatient = recordsVm.RecordsViewerPatients.First();
-        recordsVm.ViewPatientRecordDetail(targetPatient);
-
-        // Cargar en la pantalla principal
-        recordsVm.SelectViewingPatientForConsultation(targetPatient);
-
-        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Debe cerrar la modal al cargar en consulta");
-        Assert.IsNotNull(recordsVm.SelectedPatient);
-        Assert.AreEqual(targetPatient.FullName, recordsVm.SelectedPatient.FullName);
-        Assert.IsTrue(recordsVm.IsInfoModalVisible);
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_RecordsViewerModal_CloseInDetailView_ReturnsToRecordsList()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.OpenRecordsViewerModal();
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen);
-
-        var targetPatient = recordsVm.RecordsViewerPatients.First();
-        recordsVm.ViewPatientRecordDetail(targetPatient);
-        Assert.IsNotNull(recordsVm.ViewingRecordPatient);
-
-        // Al dar en cerrar mientras se visualiza el expediente, debe cerrar la modal por completo
-        recordsVm.CloseRecordsViewerModal();
-        Assert.IsFalse(recordsVm.IsRecordsViewerModalOpen, "Cerrar debe cerrar la modal por completo sin volver a la lista general");
-        Assert.IsNull(recordsVm.ViewingRecordPatient, "El paciente visualizado debe limpiarse");
-
-        // Al usar explícitamente BackToRecordsListCommand debe regresar a la lista de expedientes
-        recordsVm.OpenRecordsViewerModal();
-        recordsVm.ViewPatientRecordDetail(targetPatient);
-        recordsVm.BackToRecordsListCommand.Execute(null);
-        Assert.IsTrue(recordsVm.IsRecordsViewerModalOpen, "BackToRecordsList debe mantener abierta la modal en la lista general");
-        Assert.IsNull(recordsVm.ViewingRecordPatient, "El paciente visualizado debe ser nulo tras volver a la lista");
     }
 
     [TestMethod]
@@ -1540,68 +1303,12 @@ public class InventoryTests
 
         // Comprobación de reactividad en el ViewModel
         var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.FormVitalTA = "14090";
-        Assert.AreEqual("140/90", recordsVm.FormVitalTA);
-
         recordsVm.ConsultationTA = "11070";
         Assert.AreEqual("110/70", recordsVm.ConsultationTA);
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_IndividualVitalSigns_CalculatesIMCAndFormats()
-    {
-        var recordsVm = new MedicalRecordsViewModel();
-        await recordsVm.NewPatientAsync();
-
-        // Sin valores de ejemplo: un 120/80 prellenado se guardaba como si se hubiera medido
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalTA);
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalFC);
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalFR);
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalTemp);
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalWeight);
-        Assert.AreEqual(string.Empty, recordsVm.FormVitalHeight);
-        Assert.AreEqual("Valores no disponibles", recordsVm.FormVitalIMC);
-
-        // Modificar peso y talla para recalcular IMC
-        recordsVm.FormVitalWeight = "85.0";
-        recordsVm.FormVitalHeight = "1.75";
-        // IMC = 85 / (1.75 * 1.75) = 27.75 (Sobrepeso)
-        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("27.8"));
-        Assert.IsTrue(recordsVm.FormVitalIMC.Contains("Sobrepeso"));
-
-        // Guardar paciente con signos individuales
-        recordsVm.FormFirstName = "Carlos";
-        recordsVm.FormLastName = "Hernández";
-        FillRequiredIdentity(recordsVm);
-        recordsVm.FormVitalTA = "130/85";
-        recordsVm.FormVitalFC = "80";
-        recordsVm.FormVitalFR = "20";
-        recordsVm.FormVitalTemp = "37.0";
-        await recordsVm.SavePatientModalAsync();
-
-        Assert.IsNotNull(recordsVm.SelectedPatient);
-        var vitals = recordsVm.SelectedPatient.VitalSigns;
-        Assert.IsTrue(vitals.Contains("TA: 130/85 mmHg"));
-        Assert.IsTrue(vitals.Contains("FC: 80 lpm"));
-        Assert.IsTrue(vitals.Contains("FR: 20 rpm"));
-        Assert.IsTrue(vitals.Contains("Temp: 37.0 °C"));
-        Assert.IsTrue(vitals.Contains("Peso: 85.0 kg"));
-        Assert.IsTrue(vitals.Contains("Talla: 1.75 m"));
-
-        // Editar paciente y verificar que parsea los signos vitales y nombres
-        recordsVm.EditPatient();
-        Assert.AreEqual("Carlos", recordsVm.FormFirstName);
-        Assert.AreEqual("Hernández", recordsVm.FormLastName);
-        Assert.AreEqual("130/85", recordsVm.FormVitalTA);
-        Assert.AreEqual("80", recordsVm.FormVitalFC);
-        Assert.AreEqual("20", recordsVm.FormVitalFR);
-        Assert.AreEqual("37.0", recordsVm.FormVitalTemp);
-        Assert.AreEqual("85.0", recordsVm.FormVitalWeight);
-        Assert.AreEqual("1.75", recordsVm.FormVitalHeight);
-    }
-
-    [TestMethod]
-    public async Task MedicalRecordsViewModel_ConsultationActionButtonText_TogglesAndChargesInItsOwnCheckout()
+    public async Task MedicalRecordsViewModel_StartAndFinishConsultation_ChargesInItsOwnCheckout()
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
@@ -1617,26 +1324,24 @@ public class InventoryTests
 
         // Estado inicial sin consulta activa
         Assert.IsFalse(recordsVm.HasActiveConsultation);
-        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
 
-        // Click en Iniciar Consulta
-        await recordsVm.ToggleActiveConsultationAsync();
+        // Iniciar consulta
+        recordsVm.StartActiveConsultation();
         Assert.IsTrue(recordsVm.HasActiveConsultation);
-        Assert.AreEqual("Finalizar Consulta", recordsVm.ConsultationActionButtonText);
         Assert.AreEqual("María Elena Soto", consultService.CurrentConsultation?.PatientName);
 
-        // Click en Terminar Consulta -> abre el cobro de la consulta con el honorario incluido.
+        // Terminar consulta -> abre el cobro de la consulta con el honorario incluido.
         // La consulta sigue activa hasta cobrar ("Volver a la consulta" permite agregar lo que faltó).
-        await recordsVm.ToggleActiveConsultationAsync();
+        await recordsVm.FinalizeConsultationAsync();
 
         Assert.IsTrue(recordsVm.HasActiveConsultation, "La consulta se cierra hasta cobrar");
-        Assert.IsTrue(recordsVm.IsPosModalOpen, "Debe abrir la ventana de cobro de la consulta");
+        Assert.IsTrue(recordsVm.IsFinishConsultationOpen, "Debe abrir la ventana de cobro de la consulta");
         Assert.IsTrue(checkout.Cart.Count >= 1, "Debe tener items en la cuenta");
         Assert.IsTrue(checkout.Cart.Any(i => i.Code == "SERV-001" || i.Name.Contains("Consulta")),
             "Debe incluir la Consulta Médica General en el cobro");
 
         // Volver a la consulta y terminar de nuevo no duplica el honorario
-        recordsVm.ClosePosModal();
+        recordsVm.CloseFinishConsultation();
         Assert.IsTrue(recordsVm.HasActiveConsultation);
         Assert.IsEmpty(checkout.Cart, "La cuenta se rearma al terminar de nuevo");
         await recordsVm.FinalizeConsultationAsync();
@@ -1645,7 +1350,6 @@ public class InventoryTests
         // Al cobrar, la consulta termina
         await checkout.ChargeAsync();
         Assert.IsFalse(recordsVm.HasActiveConsultation, "La consulta termina al cobrar");
-        Assert.AreEqual("Iniciar Consulta", recordsVm.ConsultationActionButtonText);
     }
 
     [TestMethod]
@@ -1659,13 +1363,8 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Count > 0);
         Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Any(p => p.Name.Contains("Paracetamol")));
 
-        // Seleccionar una sugerencia
-        var suggestion = recordsVm.PrescriptionProductSuggestions.First();
-        recordsVm.SelectPrescriptionProduct(suggestion);
-
-        Assert.AreEqual(suggestion, recordsVm.SelectedPrescriptionProduct);
-        Assert.IsFalse(recordsVm.IsPrescriptionDropdownOpen, "El dropdown debe cerrarse al seleccionar");
-        Assert.IsTrue(recordsVm.PrescriptionMedicineName.Contains(suggestion.Name));
+        // La primera sugerencia queda preseleccionada para agregarla con Enter
+        Assert.AreEqual(recordsVm.PrescriptionProductSuggestions.First(), recordsVm.SelectedPrescriptionProduct);
     }
 
     [TestMethod]
@@ -1689,7 +1388,7 @@ public class InventoryTests
         recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días vía oral después de los alimentos";
         recordsVm.PrescriptionQuantity = 2;
 
-        await recordsVm.AddPrescriptionItemToPatientAsync();
+        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
 
         // Verificar que se añadió a la receta activa del paciente
         Assert.AreEqual(1, recordsVm.SelectedPatient.ActivePrescription.Count);
@@ -1740,68 +1439,6 @@ public class InventoryTests
         Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
         Assert.IsTrue(recordsVm.IsInfoModalVisible);
         Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("PDF") == true);
-    }
-
-    [TestMethod]
-    public async Task MedicalRecords_VitalSignsModal_AnyFieldCanBeEntered_NoneMandatory()
-    {
-        var consultationService = new ConsultationService();
-        var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
-
-        var patient = new PatientRecord
-        {
-            Id = 10,
-            FullName = "Carlos Santana",
-            RecordNumber = "EXP-TEST-010",
-            VitalSigns = "Sin signos vitales registrados"
-        };
-
-        recordsVm.SelectedPatient = patient;
-
-        // Iniciar consulta activa
-        recordsVm.StartActiveConsultation();
-        Assert.IsTrue(recordsVm.HasActiveConsultation);
-
-        // Abrir modal de signos vitales
-        recordsVm.OpenVitalSignsModal();
-        Assert.IsTrue(recordsVm.IsVitalSignsModalOpen);
-
-        // Caso 1: Llenar solo algunos campos (ninguno es obligatorio)
-        recordsVm.VitalSignTA = "13085"; // Autoformatea a 130/85
-        Assert.AreEqual("130/85", recordsVm.VitalSignTA);
-        recordsVm.VitalSignTemp = "37.1";
-        recordsVm.VitalSignSpO2 = "99";
-        // Dejar FC, FR, Peso, Talla, Glucosa, Cintura vacíos
-
-        await recordsVm.SaveVitalSignsAsync();
-
-        Assert.IsFalse(recordsVm.IsVitalSignsModalOpen);
-        Assert.IsTrue(patient.VitalSigns.Contains("TA: 130/85 mmHg"));
-        Assert.IsTrue(patient.VitalSigns.Contains("Temp: 37.1 °C"));
-        Assert.IsTrue(patient.VitalSigns.Contains("SpO2: 99%"));
-        Assert.IsFalse(patient.VitalSigns.Contains("FC:"));
-        Assert.IsFalse(patient.VitalSigns.Contains("Peso:"));
-        Assert.AreEqual(patient.VitalSigns, consultationService.CurrentConsultation?.VitalSigns);
-
-        // Caso 2: Abrir y llenar todos los campos
-        recordsVm.OpenVitalSignsModal();
-        recordsVm.VitalSignFC = "78";
-        recordsVm.VitalSignFR = "19";
-        recordsVm.VitalSignWeight = "75.0";
-        recordsVm.VitalSignHeight = "1.75";
-        recordsVm.VitalSignGlucose = "92";
-        recordsVm.VitalSignWaist = "88";
-
-        Assert.IsTrue(recordsVm.VitalSignIMC.Contains("24.5")); // Auto-recalculado
-
-        await recordsVm.SaveVitalSignsAsync();
-
-        Assert.IsTrue(patient.VitalSigns.Contains("FC: 78 lpm"));
-        Assert.IsTrue(patient.VitalSigns.Contains("FR: 19 rpm"));
-        Assert.IsTrue(patient.VitalSigns.Contains("Peso: 75.0 kg"));
-        Assert.IsTrue(patient.VitalSigns.Contains("Talla: 1.75 m"));
-        Assert.IsTrue(patient.VitalSigns.Contains("Glucosa: 92 mg/dL"));
-        Assert.IsTrue(patient.VitalSigns.Contains("Cintura: 88 cm"));
     }
 
     [TestMethod]
@@ -1860,7 +1497,7 @@ public class InventoryTests
         recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
         recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
         recordsVm.PrescriptionQuantity = 2;
-        await recordsVm.AddPrescriptionItemToPatientAsync();
+        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.IsTrue(patient.ActivePrescription[0].DispenseInClinic);
@@ -1878,7 +1515,7 @@ public class InventoryTests
         recordsVm.PrescriptionMedicineName = "Medicamento de farmacia externa";
         recordsVm.PrescriptionDosage = "1 tableta al día";
         recordsVm.PrescriptionQuantity = 1;
-        await recordsVm.AddPrescriptionItemToPatientAsync();
+        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
 
         Assert.IsFalse(patient.ActivePrescription[1].DispenseInClinic);
         Assert.IsEmpty(consultationService.CurrentConsultation.Items);
@@ -1926,10 +1563,6 @@ public class InventoryTests
 
         recordsVm.Services.Add(service);
 
-        // Cambiar a la pestaña Servicios
-        recordsVm.SwitchPatientDetailTab("Servicios");
-        Assert.AreEqual("Servicios", recordsVm.PatientDetailTab);
-
         // Agregar servicio a la consulta activa
         recordsVm.AddServiceToActiveConsultation(service);
 
@@ -1940,14 +1573,14 @@ public class InventoryTests
         Assert.IsTrue(items.Any(i => i.ProductName == "Gasa Estéril 10x10" && i.Quantity == 2));
 
         // Subtotal = 200 + (25 * 2) = 250.00
-        Assert.AreEqual(250.00m, consultationService.CurrentConsultation.Subtotal);
+        Assert.AreEqual(250.00m, consultationService.CurrentConsultation.TotalAmount);
 
         // Quitar el insumo de la cuenta
         var insumoItem = items.First(i => i.ProductName == "Gasa Estéril 10x10");
         recordsVm.RemoveItemFromActiveConsultation(insumoItem);
 
         Assert.AreEqual(1, items.Count);
-        Assert.AreEqual(200.00m, consultationService.CurrentConsultation.Subtotal);
+        Assert.AreEqual(200.00m, consultationService.CurrentConsultation.TotalAmount);
     }
 
     [TestMethod]
@@ -2002,7 +1635,7 @@ public class InventoryTests
         recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
         recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
         recordsVm.PrescriptionQuantity = 2;
-        await recordsVm.AddPrescriptionItemToPatientAsync();
+        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.AreEqual("Amoxicilina 500mg", patient.ActivePrescription[0].MedicineName);
@@ -2021,7 +1654,7 @@ public class InventoryTests
         recordsVm.PrescriptionMedicineName = "Ibuprofeno 400mg";
         recordsVm.PrescriptionDosage = "1 tableta cada 8 horas si hay dolor";
         recordsVm.PrescriptionQuantity = 1;
-        await recordsVm.AddPrescriptionItemToPatientAsync();
+        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
 
         Assert.AreEqual(2, patient.ActivePrescription.Count);
         Assert.AreEqual("Ibuprofeno 400mg", patient.ActivePrescription[1].MedicineName);
@@ -2077,7 +1710,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_SuppliesModal_AddSaveReeditAndPosWorksCorrectly()
+    public async Task MedicalRecordsViewModel_SuppliesModal_AddSaveReeditAndChargeWorksCorrectly()
     {
         var consultationService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultationService);
@@ -2090,25 +1723,24 @@ public class InventoryTests
             Age = 35
         };
         recordsVm.SelectedPatient = patient;
+        recordsVm.StartActiveConsultation();
 
         // 1. Abrir modal de insumos
         recordsVm.OpenSuppliesModal();
         Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
 
-        // 2. Agregar un insumo clínico
-        recordsVm.SupplyName = "Guantes de Látex Quirúrgicos";
+        // 2. Agregar un insumo escrito a mano (no está en el inventario)
+        recordsVm.SupplySearchText = "Guantes de Látex Quirúrgicos";
         recordsVm.SupplyInstructions = "Uso en curación de herida";
         recordsVm.SupplyQuantity = 2;
-        await recordsVm.AddSupplyItemToPatientAsync();
+        await recordsVm.SelectAndAddSupplyProductAsync(null);
 
         Assert.AreEqual(1, patient.ActiveSupplies.Count);
         Assert.AreEqual("Guantes de Látex Quirúrgicos", patient.ActiveSupplies[0].SupplyName);
         Assert.AreEqual(2, patient.ActiveSupplies[0].Quantity);
 
-        // 3. Probar agregar al POS
-        recordsVm.AddSupplyItemToPos(patient.ActiveSupplies[0]);
-        Assert.IsTrue(recordsVm.HasActiveConsultation);
-        Assert.IsTrue(recordsVm.ActiveConsultationItemsCount > 0);
+        // 3. Con la consulta en curso, el insumo se carga de inmediato a su cuenta
+        Assert.IsTrue(consultationService.CurrentConsultation!.Items.Any(i => i.Name == "Guantes de Látex Quirúrgicos" && i.Quantity == 2));
 
         // 4. Guardar insumos -> Cierra modal y persiste JSON
         await recordsVm.SaveSuppliesModalAsync();
@@ -2120,10 +1752,10 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
 
         // 6. Agregar un segundo insumo
-        recordsVm.SupplyName = "Venda Elástica 10cm";
+        recordsVm.SupplySearchText = "Venda Elástica 10cm";
         recordsVm.SupplyInstructions = "Vendaje compresivo en tobillo";
         recordsVm.SupplyQuantity = 1;
-        await recordsVm.AddSupplyItemToPatientAsync();
+        await recordsVm.SelectAndAddSupplyProductAsync(null);
 
         Assert.AreEqual(2, patient.ActiveSupplies.Count);
 
@@ -2140,7 +1772,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_ServicesModal_AddSaveReeditAndPosWorksCorrectly()
+    public async Task MedicalRecordsViewModel_ServicesModal_AddSaveReeditAndChargeWorksCorrectly()
     {
         var consultationService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultationService);
@@ -2153,24 +1785,23 @@ public class InventoryTests
             Age = 28
         };
         recordsVm.SelectedPatient = patient;
+        recordsVm.StartActiveConsultation();
 
         // 1. Abrir modal de servicios
         recordsVm.OpenServicesModal();
         Assert.IsTrue(recordsVm.IsServicesModalOpen);
 
-        // 2. Agregar un servicio clínico
-        recordsVm.ServiceModalName = "Sutura de Herida Menor";
+        // 2. Agregar un servicio clínico escrito a mano (no está en el catálogo)
+        recordsVm.ServiceModalSearchText = "Sutura de Herida Menor";
         recordsVm.ServiceModalNotes = "3 puntos de sutura sin complicaciones";
         recordsVm.ServiceModalQuantity = 1;
-        await recordsVm.AddServiceItemToPatientAsync();
+        await recordsVm.SelectAndAddServiceModalSuggestionAsync(null);
 
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual("Sutura de Herida Menor", patient.ActiveServices[0].ServiceName);
 
-        // 3. Probar agregar al POS
-        recordsVm.AddServiceItemToPos(patient.ActiveServices[0]);
-        Assert.IsTrue(recordsVm.HasActiveConsultation);
-        Assert.IsTrue(recordsVm.ActiveConsultationItemsCount > 0);
+        // 3. Con la consulta en curso, el servicio se carga de inmediato a su cuenta
+        Assert.IsTrue(consultationService.CurrentConsultation!.Items.Any(i => i.Name == "Sutura de Herida Menor"));
 
         // 4. Guardar servicios -> Cierra modal y persiste JSON
         await recordsVm.SaveServicesModalAsync();
@@ -2182,10 +1813,10 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.IsServicesModalOpen);
 
         // 6. Agregar un segundo servicio
-        recordsVm.ServiceModalName = "Toma de Glucosa Capilar";
+        recordsVm.ServiceModalSearchText = "Toma de Glucosa Capilar";
         recordsVm.ServiceModalNotes = "Glucemia postprandial";
         recordsVm.ServiceModalQuantity = 1;
-        await recordsVm.AddServiceItemToPatientAsync();
+        await recordsVm.SelectAndAddServiceModalSuggestionAsync(null);
 
         Assert.AreEqual(2, patient.ActiveServices.Count);
 
@@ -2199,55 +1830,6 @@ public class InventoryTests
         Assert.IsFalse(recordsVm.IsServicesModalOpen);
         Assert.IsTrue(patient.ActiveServicesJson.Contains("Toma de Glucosa Capilar"));
         Assert.IsFalse(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
-    }
-
-    [TestMethod]
-    public async Task MedicalRecordsViewModel_ScheduleAppointmentModal_SaveAndCancelWorksCorrectly()
-    {
-        var recordsVm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
-        await recordsVm.LoadInitialDataAsync();
-
-        var patient = new PatientRecord
-        {
-            FullName = "Roberto Gómez",
-            RecordNumber = "EXP-TEST-APT",
-            Age = 42
-        };
-        recordsVm.SelectedPatient = patient;
-
-        // 1. Abrir modal de agendar consulta
-        recordsVm.OpenScheduleAppointmentModal();
-        Assert.IsTrue(recordsVm.IsScheduleAppointmentModalOpen);
-
-        // 2. Configurar datos de la cita
-        var targetDate = DateTime.Today.AddDays(10);
-        recordsVm.AppointmentDate = targetDate;
-        recordsVm.AppointmentTime = "11:30 AM";
-        recordsVm.SetAppointmentReasonPreset("Revisión de Estudios de Laboratorio");
-        recordsVm.AppointmentNotes = "Presentarse con 8 horas de ayuno";
-
-        // 3. Guardar la cita
-        await recordsVm.SaveScheduledAppointmentAsync();
-        Assert.IsFalse(recordsVm.IsScheduleAppointmentModalOpen);
-        Assert.IsTrue(recordsVm.IsInfoModalVisible);
-
-        // 4. Validar persistencia en el paciente
-        Assert.IsTrue(patient.HasScheduledAppointment);
-        Assert.AreEqual(targetDate.Date, patient.NextAppointmentDate?.Date);
-        Assert.AreEqual("11:30 AM", patient.NextAppointmentTime);
-        Assert.AreEqual("Revisión de Estudios de Laboratorio", patient.NextAppointmentReason);
-        Assert.AreEqual("Presentarse con 8 horas de ayuno", patient.NextAppointmentNotes);
-        Assert.IsTrue(patient.FormattedNextAppointment.Contains("11:30 AM"));
-
-        // 5. Reabrir modal y cancelar la cita
-        recordsVm.OpenScheduleAppointmentModal();
-        Assert.IsTrue(recordsVm.IsScheduleAppointmentModalOpen);
-
-        await recordsVm.CancelScheduledAppointmentAsync();
-        Assert.IsFalse(recordsVm.IsScheduleAppointmentModalOpen);
-        Assert.IsFalse(patient.HasScheduledAppointment);
-        Assert.IsNull(patient.NextAppointmentDate);
-        Assert.AreEqual(string.Empty, patient.NextAppointmentTime);
     }
 
     [TestMethod]
@@ -2459,14 +2041,14 @@ public class InventoryTests
 
         // Finalizar consulta: abre el modal del POS
         await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsPosModalOpen, "Debe abrirse la ventana modal del POS");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsFinishConsultationOpen, "Debe abrirse la ventana modal del POS");
         Assert.IsTrue(mainVm.MedicalRecordsVM.Checkout.Cart.Count > 0, "Debe incluir al menos la Consulta Médica General");
 
         // Al cobrar en "Terminar consulta":
         await mainVm.MedicalRecordsVM.Checkout.ChargeAsync();
 
         // 1. Debe salir de todo:
-        Assert.IsFalse(mainVm.MedicalRecordsVM.IsPosModalOpen, "La ventana de terminar consulta debe cerrarse");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.IsFinishConsultationOpen, "La ventana de terminar consulta debe cerrarse");
         Assert.IsFalse(mainVm.PosVM.IsTicketModalOpen, "El Punto de Venta no se entera: la consulta tiene su propio cobro");
         Assert.IsFalse(consultService.HasActiveConsultation, "La consulta activa debe cerrarse");
         Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "No debe haber consulta activa en curso");
@@ -2511,31 +2093,7 @@ public class InventoryTests
         Assert.IsNotNull(savedConsultation.EndedAt, "EndedAt debe estar registrado en BD");
         Assert.AreEqual(startTime.Minute, savedConsultation.StartedAt.Value.Minute);
         Assert.IsTrue(savedConsultation.EndedAt.Value >= savedConsultation.StartedAt.Value);
-        Assert.IsTrue(savedConsultation.Duration.HasValue);
-        Assert.IsTrue(savedConsultation.Duration.Value.TotalMinutes >= 19.9);
-        Assert.IsFalse(string.IsNullOrWhiteSpace(savedConsultation.FormattedScheduleTime));
-    }
-
-    [TestMethod]
-    public void PatientConsultation_DurationAndFormattedScheduleTime_CalculatesCorrectly()
-    {
-        var start = new DateTime(2026, 10, 4, 10, 0, 0);
-        var end = new DateTime(2026, 10, 4, 10, 25, 30);
-
-        var consult = new PatientConsultation
-        {
-            Folio = "CNS-20261004-001",
-            Date = start.Date,
-            StartedAt = start,
-            EndedAt = end,
-            ChiefComplaint = "Control general"
-        };
-
-        Assert.IsNotNull(consult.Duration);
-        Assert.AreEqual(25, (int)consult.Duration.Value.TotalMinutes);
-        Assert.AreEqual(30, consult.Duration.Value.Seconds);
-        Assert.IsTrue(consult.FormattedDuration.Contains("25 min 30 s"));
-        Assert.IsTrue(consult.FormattedScheduleTime.Contains("10:00 - 10:25"));
+        Assert.IsGreaterThanOrEqualTo(19.9, (savedConsultation.EndedAt.Value - savedConsultation.StartedAt.Value).TotalMinutes);
     }
 
     [TestMethod]
@@ -2548,7 +2106,6 @@ public class InventoryTests
 
         Assert.AreEqual("Records", mainVm.ActiveViewName);
         Assert.IsTrue(mainVm.MedicalRecordsVM.IsHomePage, "Al entrar a Pacientes se ve el inicio (hoy, recientes y buscador)");
-        Assert.IsFalse(mainVm.MedicalRecordsVM.IsSelectPatientModalOpen, "Ya no se abre un modal al entrar");
     }
 
     [TestMethod]
@@ -2697,47 +2254,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MedicalRecordsViewModel_StepNavigationCommands_CycleTabsCorrectly()
-    {
-        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
-
-        Assert.AreEqual("Identificacion", vm.FormPatientActiveTab);
-
-        // Mujer adulta: el paso de gineco-obstétricos sí aplica
-        vm.FormGender = "Femenino";
-        vm.FormAgeText = "30";
-
-        // Next -> Patologicos
-        vm.NextFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab);
-
-        // Next -> GinecoHitos
-        vm.NextFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("GinecoHitos", vm.FormPatientActiveTab);
-
-        // Next -> NoPatologicos
-        vm.NextFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
-
-        // Next at end stays at NoPatologicos
-        vm.NextFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
-
-        // Previous -> GinecoHitos
-        vm.PreviousFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("GinecoHitos", vm.FormPatientActiveTab);
-
-        // Previous -> Patologicos
-        vm.PreviousFormPatientStepCommand.Execute(null);
-        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab);
-
-        // Direct tab set
-        vm.SetFormPatientStepTabCommand.Execute("NoPatologicos");
-        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
-    }
-
-    [TestMethod]
-    public async Task MedicalRecordsViewModel_SaveActiveConsultationNoteCommand_PersistsDirectlyWithoutOpeningPOS()
+    public async Task MedicalRecordsViewModel_FinalizeConsultation_PersistsAllClinicalFieldsBeforeCharging()
     {
         var consultService = new ConsultationService();
         var mainVm = new MainViewModel(_inventoryService, consultService, new ThemeService(), new AppUpdateService());
@@ -2755,12 +2272,12 @@ public class InventoryTests
         mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
         mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Ibuprofeno 400mg c/8h por 3 días + calor local y ejercicios de relajación";
 
-        // Guardar nota directa (sin cobrar en POS)
-        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+        // Terminar consulta: la nota se guarda antes de cobrar
+        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
 
-        // La consulta activa se mantiene abierta para seguir trabajando, persistiendo los datos sin abrir el POS
-        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta activa debe permanecer abierta tras guardar la nota");
-        Assert.IsFalse(mainVm.MedicalRecordsVM.IsPosModalOpen, "No debe abrirse el POS cuando solo se guarda la nota médica");
+        // La consulta sigue en curso hasta cobrar ("Volver a la consulta" permite seguir trabajando)
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.IsFinishConsultationOpen);
 
         // Verificar en base de datos
         var patients = await _inventoryService.GetPatientsAsync();
@@ -2775,7 +2292,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task MedicalRecordsViewModel_SaveActiveConsultationNote_DoesNotEndConsultation_AllowsIncrementalEditsWithoutDuplication()
+    public async Task MedicalRecordsViewModel_ReturnToConsultation_UpdatesTheSameNoteWithoutDuplication()
     {
         var consultationService = new ConsultationService();
         var mainVm = new MainViewModel(_inventoryService, consultationService, new ThemeService(), new AppUpdateService());
@@ -2790,8 +2307,9 @@ public class InventoryTests
         mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Lumbalgia mecánica (M54.5)";
         mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Reposo relativo por 48 horas";
 
-        // Primer guardado de nota
-        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+        // Terminar consulta guarda la nota; "Volver a la consulta" la deja abierta
+        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+        mainVm.MedicalRecordsVM.CloseFinishConsultation();
 
         // La consulta debe permanecer activa y con los campos intactos para continuar trabajando
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta debe mantenerse activa");
@@ -2801,10 +2319,10 @@ public class InventoryTests
         // Modificar plan y agregar indicaciones adicionales
         mainVm.MedicalRecordsVM.ConsultationTreatmentPlan += " + Paracetamol 500mg cada 8 horas";
 
-        // Segundo guardado de nota (mismo folio)
-        await mainVm.MedicalRecordsVM.SaveActiveConsultationNoteCommand.ExecuteAsync(null);
+        // Terminar de nuevo (mismo folio)
+        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
 
-        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta continúa activa tras el segundo guardado");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta continúa activa hasta cobrar");
 
         // Verificar en BD que se actualizó en lugar de duplicarse
         var patients = await _inventoryService.GetPatientsAsync();
@@ -2870,52 +2388,6 @@ public class InventoryTests
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
         Assert.AreEqual(string.Empty, vm.ServiceModalSearchText);
-    }
-
-    [TestMethod]
-    public void MedicalRecordsViewModel_ViewSelectedPatientRecordCommand_OpensModalForSelectedPatientWithoutAffectingActiveConsultation()
-    {
-        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
-
-        // Si no hay paciente seleccionado, no debe abrir el modal
-        vm.SelectedPatient = null;
-        vm.ViewSelectedPatientRecordCommand.Execute(null);
-        Assert.IsFalse(vm.IsRecordsViewerModalOpen, "No debe abrir el modal de expediente si no hay paciente seleccionado");
-
-        // Con paciente seleccionado y consulta activa en curso
-        var patient = new PatientRecord
-        {
-            Id = 999,
-            FullName = "Paciente Prueba Expediente",
-            Age = 35,
-            Gender = "Femenino"
-        };
-        vm.SelectedPatient = patient;
-
-        // Iniciar consulta activa y cargar datos en progreso
-        vm.StartActiveConsultationCommand.Execute(null);
-        Assert.IsTrue(vm.HasActiveConsultation);
-        vm.ConsultationDiagnosis = "Cefalea en estudio";
-        vm.ConsultationChiefComplaint = "Dolor pulsátil";
-
-        // Ejecutar comando Ver Expediente
-        vm.ViewSelectedPatientRecordCommand.Execute(null);
-
-        // Validaciones: Modal abierto y paciente asignado correctamente
-        Assert.IsTrue(vm.IsRecordsViewerModalOpen, "Debe abrir el modal de expediente");
-        Assert.AreSame(patient, vm.ViewingRecordPatient, "El paciente en el visor debe coincidir con SelectedPatient");
-        Assert.AreEqual("Resumen", vm.ViewingRecordTab, "La pestaña inicial debe ser Resumen");
-
-        // Comprobar que no se alteró la consulta activa en curso
-        Assert.IsTrue(vm.HasActiveConsultation, "La consulta activa debe permanecer activa");
-        Assert.AreEqual("Cefalea en estudio", vm.ConsultationDiagnosis, "El diagnóstico en curso no debe verse afectado");
-        Assert.AreEqual("Dolor pulsátil", vm.ConsultationChiefComplaint, "El motivo de consulta en curso no debe verse afectado");
-
-        // Cerrar visor: clic en cerrar o tecla Esc sale por completo
-        vm.CloseRecordsViewerModalCommand.Execute(null);
-        Assert.IsFalse(vm.IsRecordsViewerModalOpen, "El modal de expediente debe cerrarse completamente");
-        Assert.IsNull(vm.ViewingRecordPatient, "El paciente visualizado debe ser nulo");
-        Assert.IsTrue(vm.HasActiveConsultation, "La consulta activa sigue en pie después de cerrar el visor");
     }
 
     [TestMethod]
@@ -3001,14 +2473,14 @@ public class InventoryTests
         var cut = await _inventoryService.GetDailyCashCutAsync(DateTime.Today, profile);
 
         Assert.IsNotNull(cut);
-        Assert.AreEqual(100m, cut.CashRevenue);
-        Assert.AreEqual(300m, cut.DebitCardRevenue);
-        Assert.AreEqual(0m, cut.TransferRevenue); // Cancelada no suma a netos
-        Assert.AreEqual(400m, cut.TotalRevenue);
-        Assert.AreEqual(50m, cut.CancelledRevenue);
+        Assert.AreEqual(100m, cut.TotalCash);
+        Assert.AreEqual(300m, cut.TotalDebitCard);
+        Assert.AreEqual(0m, cut.TotalTransfer); // Cancelada no suma a netos
+        Assert.AreEqual(400m, cut.TotalSalesAmount);
+        Assert.AreEqual(50m, cut.TotalCancelledAmount);
         Assert.AreEqual(1, cut.CancelledTicketsCount);
-        Assert.AreEqual(100m, cut.ProductsRevenue);
-        Assert.AreEqual(300m, cut.ServicesRevenue);
+        Assert.AreEqual(100m, cut.TotalProductsAmount);
+        Assert.AreEqual(300m, cut.TotalServicesAmount);
 
         // Exportar a CSV
         string csv = _inventoryService.ExportDailyCashCutToCsv(cut, profile);
@@ -3219,7 +2691,7 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public async Task Appointments_Save_GetByDay_GetByWeek_UpdateStatus_Delete_WorksCorrectly()
+    public async Task Appointments_Save_GetByDay_GetByWeek_UpdateStatus_WorksCorrectly()
     {
         var patient = (await _inventoryService.GetPatientsAsync()).First();
         var today = DateTime.Today;
@@ -3266,11 +2738,6 @@ public class InventoryTests
         await _inventoryService.UpdateAppointmentStatusAsync(saved1.Id, "Confirmada");
         var refreshed = (await _inventoryService.GetAppointmentsAsync()).First(a => a.Id == saved1.Id);
         Assert.AreEqual("Confirmada", refreshed.Status);
-
-        // Delete
-        await _inventoryService.DeleteAppointmentAsync(saved2.Id);
-        var allAfterDelete = await _inventoryService.GetAppointmentsAsync();
-        Assert.IsFalse(allAfterDelete.Any(a => a.Id == saved2.Id));
     }
 
     [TestMethod]
@@ -3392,7 +2859,8 @@ public class InventoryTests
 
         var hubVm = new MainHubViewModel(s => { }, _inventoryService);
         await hubVm.RefreshAlertsAsync();
-        Assert.IsNotNull(hubVm.AlertsSummary);
+        Assert.AreEqual(summary.LowStockCount, hubVm.LowStockCount);
+        Assert.AreEqual(summary.HasAlerts, hubVm.HasAlerts);
 
         await hubVm.OpenSuggestedPurchasesAsync();
         Assert.IsTrue(hubVm.IsSuggestedPurchasesOpen);
@@ -3411,36 +2879,6 @@ public class InventoryTests
         Assert.IsFalse(hubVm.IsSuggestedPurchasesOpen);
     }
 
-    [TestMethod]
-    public void Agenda_GoogleCalendarAndWhatsApp_TodoPlan_WorksCorrectly()
-    {
-        var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
-        var appt = new PatientAppointment
-        {
-            Id = 42,
-            PatientName = "Pedro Sánchez",
-            PatientPhone = "5512345678",
-            Date = DateTime.Today.AddDays(1),
-            Time = "11:00",
-            Reason = "Control de presión arterial"
-        };
-
-        // Google Calendar TODO
-        vm.OpenGoogleCalendarTodo(appt);
-        Assert.IsTrue(vm.IsGoogleCalendarTodoModalOpen);
-        Assert.IsTrue(vm.GoogleCalendarUrl.Contains("calendar.google.com"));
-        Assert.IsTrue(vm.GoogleCalendarDetails.Contains("Google Calendar API"));
-        vm.CloseGoogleCalendarTodo();
-        Assert.IsFalse(vm.IsGoogleCalendarTodoModalOpen);
-
-        // WhatsApp Reminder TODO
-        vm.OpenWhatsAppTodo(appt);
-        Assert.IsTrue(vm.IsWhatsAppTodoModalOpen);
-        Assert.IsTrue(vm.WhatsAppUrl.Contains("wa.me"));
-        Assert.IsTrue(vm.WhatsAppMessagePreview.Contains("Pedro"));
-        vm.CloseWhatsAppTodo();
-        Assert.IsFalse(vm.IsWhatsAppTodoModalOpen);
-    }
 }
 
 

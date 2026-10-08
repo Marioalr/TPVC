@@ -15,7 +15,6 @@ public partial class MainHubViewModel : ObservableObject
 {
     private readonly Action<string> _navigate;
     private readonly InventoryService? _inventoryService;
-    private readonly PrintingService? _printingService;
 
     public Action? OnOpenAgendaRequested { get; set; }
 
@@ -36,9 +35,6 @@ public partial class MainHubViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _hasAlerts;
-
-    [ObservableProperty]
-    private SystemAlertsSummary? _alertsSummary;
 
     [ObservableProperty]
     private string _alertNotificationMessage = string.Empty;
@@ -63,12 +59,10 @@ public partial class MainHubViewModel : ObservableObject
 
     public MainHubViewModel(
         Action<string> navigate, 
-        InventoryService? inventoryService = null, 
-        PrintingService? printingService = null)
+        InventoryService? inventoryService = null)
     {
         _navigate = navigate;
         _inventoryService = inventoryService;
-        _printingService = printingService;
 
         if (_inventoryService != null)
         {
@@ -104,7 +98,6 @@ public partial class MainHubViewModel : ObservableObject
         try
         {
             var summary = await _inventoryService.GetSystemAlertsSummaryAsync();
-            AlertsSummary = summary;
             TodayAppointmentsCount = summary.TodayAppointmentsCount;
             LowStockCount = summary.LowStockCount;
             ExpiredBatchesCount = summary.ExpiredBatchesCount;

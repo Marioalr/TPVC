@@ -50,32 +50,6 @@ public class PrintingService
     }
 
     /// <summary>
-    /// Imprime un ticket a partir de la entidad Sale persistida (útil para reimpresión por folio).
-    /// </summary>
-    public bool PrintTicket(Sale sale, ClinicProfile profile)
-    {
-        if (sale == null) return false;
-
-        var receipt = new SaleReceipt
-        {
-            Folio = sale.Folio,
-            Date = sale.Date,
-            PatientName = sale.CustomerName,
-            PaymentMethod = sale.PaymentMethod,
-            Cashier = sale.Cashier,
-            Items = sale.Items.Select(i => new SaleReceiptItem
-            {
-                ProductId = i.ProductId ?? 0,
-                Name = i.Description,
-                Quantity = i.Quantity,
-                UnitPrice = i.UnitPrice
-            }).ToList()
-        };
-
-        return PrintTicket(receipt, profile);
-    }
-
-    /// <summary>
     /// Imprime la receta médica oficial (NOM-004-SSA3) en cualquier impresora o PDF virtual.
     /// </summary>
     public bool PrintPrescription(

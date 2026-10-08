@@ -88,8 +88,6 @@ public partial class DesignSystemViewModel : ObservableObject
     [ObservableProperty]
     private int _openSection = 1;
 
-    public bool IsDark => _themeService?.CurrentSettings.ThemeMode == "Oscuro";
-
     [RelayCommand]
     public void UseLightTheme() => SetMode("Claro");
 
@@ -100,7 +98,6 @@ public partial class DesignSystemViewModel : ObservableObject
     {
         _themeService?.SetMode(mode);
         ColorTokens = ColorTokenKeys.ToList();
-        OnPropertyChanged(nameof(IsDark));
     }
 
     [RelayCommand]

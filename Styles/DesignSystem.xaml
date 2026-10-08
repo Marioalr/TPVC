@@ -23,10 +23,8 @@
     <FontFamily x:Key="FontFamilyMono">Cascadia Mono, Consolas, monospace</FontFamily>
 
     <!-- Radios -->
-    <CornerRadius x:Key="RadiusControl">8</CornerRadius>
     <CornerRadius x:Key="RadiusCard">12</CornerRadius>
     <CornerRadius x:Key="RadiusSheet">16</CornerRadius>
-    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
 
     <!-- Iconos de trazo (24×24) -->
     <Geometry x:Key="IcoSearch">M11 18 A7 7 0 1 1 11 4 A7 7 0 1 1 11 18 Z M20 20 L16 16</Geometry>
@@ -1065,12 +1063,6 @@
             </Setter.Value>
         </Setter>
     </Style>
-
-    <!-- Compatibilidad: pantallas anteriores que usan ModernComboBox reciben la lista con tema -->
-    <Style x:Key="ModernComboBox" TargetType="ComboBox" BasedOn="{StaticResource FieldComboBox}" />
-    <!-- Se usaba en la agenda y las citas sin existir (salía el botón gris de Windows) -->
-    <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource ButtonGhost}" />
-
 
     <!-- Barras de desplazamiento delgadas con colores del tema (las de Windows salían claras en
          modo oscuro). Implícito: aplica a toda la aplicación. -->

@@ -27,7 +27,6 @@
         <DataTemplate x:Key="ServicesSheet"><views:ServicesSheetView /></DataTemplate>
         <DataTemplate x:Key="CatalogSheet"><views:CatalogBrowserSheetView /></DataTemplate>
         <DataTemplate x:Key="PreviewSheet"><views:PrescriptionPreviewSheetView /></DataTemplate>
-        <DataTemplate x:Key="CreateServiceSheet"><views:CreateServiceSheetView /></DataTemplate>
         <DataTemplate x:Key="CheckoutSheet"><views:ConsultationCheckoutView /></DataTemplate>
         <DataTemplate x:Key="AllergyDialog"><views:AllergyAlertView /></DataTemplate>
         <DataTemplate x:Key="InfoDialog"><views:InfoDialogView /></DataTemplate>
@@ -161,13 +160,11 @@
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ServicesSheet}"
                         Visibility="{Binding IsServicesModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="300" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CheckoutSheet}"
-                        Visibility="{Binding IsPosModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="310" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CatalogSheet}"
                         Visibility="{Binding IsCatalogBrowserModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PreviewSheet}"
                         Visibility="{Binding IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
-        <ContentControl Grid.RowSpan="3" Panel.ZIndex="360" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CreateServiceSheet}"
-                        Visibility="{Binding IsCreateServiceModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource SendConsultationSheet}"
                         Visibility="{Binding IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource AllergyDialog}"

@@ -42,8 +42,6 @@ public class BackupService
             .ToList();
     }
 
-    public FileInfo? GetLatestBackup() => GetBackups().FirstOrDefault();
-
     /// <summary>
     /// Crea el respaldo del día si todavía no existe. Devuelve la ruta creada o null.
     /// </summary>

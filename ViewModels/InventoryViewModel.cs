@@ -36,9 +36,6 @@ public partial class InventoryViewModel : ObservableObject
     private Product? _selectedProduct;
 
     [ObservableProperty]
-    private bool _isLoading;
-
-    [ObservableProperty]
     private int _totalResultsCount;
 
     // ================================================================== edición en panel lateral
@@ -66,7 +63,6 @@ public partial class InventoryViewModel : ObservableObject
         IsEditorOpen = true;
     }
 
-    [RelayCommand]
     public void CloseEditor()
     {
         IsEditorOpen = false;
@@ -79,9 +75,6 @@ public partial class InventoryViewModel : ObservableObject
     // Quick Action Form state
     [ObservableProperty]
     private bool _isQuickActionOpen;
-
-    [ObservableProperty]
-    private string _quickActionTitle = "Consumo Rápido en Consulta";
 
     [ObservableProperty]
     private bool _isQuickConsumptionMode = true; // True = Salida consulta, False = Entrada
@@ -116,61 +109,37 @@ public partial class InventoryViewModel : ObservableObject
         };
     }
 
-    [RelayCommand]
     public async Task LoadDataAsync()
     {
-        IsLoading = true;
-        try
-        {
-            var categories = await _inventoryService.GetCategoriesAsync();
-            var allCat = new Category { Id = 0, Name = "Todas" };
-            var catList = new ObservableCollection<Category> { allCat };
-            foreach (var c in categories) catList.Add(c);
-            Categories = catList;
-            // Conserva la categoría elegida (las instancias cambian al recargar)
-            SelectedCategory = Categories.FirstOrDefault(c => c.Id == (SelectedCategory?.Id ?? 0)) ?? allCat;
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var allCat = new Category { Id = 0, Name = "Todas" };
+        var catList = new ObservableCollection<Category> { allCat };
+        foreach (var c in categories) catList.Add(c);
+        Categories = catList;
+        // Conserva la categoría elegida (las instancias cambian al recargar)
+        SelectedCategory = Categories.FirstOrDefault(c => c.Id == (SelectedCategory?.Id ?? 0)) ?? allCat;
 
-            await FilterProductsAsync();
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+        await FilterProductsAsync();
     }
 
-    [RelayCommand]
     public async Task FilterProductsAsync()
     {
-        IsLoading = true;
-        try
-        {
-            int? catId = (SelectedCategory != null && SelectedCategory.Id > 0) ? SelectedCategory.Id : null;
-            var list = await _inventoryService.GetProductsAsync(
-                searchText: SearchText,
-                categoryId: catId,
-                onlyLowStock: FilterLowStock,
-                onlyExpiring: FilterExpiring
-            );
+        int? catId = (SelectedCategory != null && SelectedCategory.Id > 0) ? SelectedCategory.Id : null;
+        var list = await _inventoryService.GetProductsAsync(
+            searchText: SearchText,
+            categoryId: catId,
+            onlyLowStock: FilterLowStock,
+            onlyExpiring: FilterExpiring
+        );
 
-            Products = new ObservableCollection<Product>(list);
-            TotalResultsCount = Products.Count;
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+        Products = new ObservableCollection<Product>(list);
+        TotalResultsCount = Products.Count;
     }
 
     partial void OnSearchTextChanged(string value)
     {
         // Evita una consulta a la base por cada tecla
         _ = _searchDebouncer.RunAsync(FilterProductsAsync);
-    }
-
-    [RelayCommand]
-    public void ClearSearch()
-    {
-        SearchText = string.Empty;
     }
 
     partial void OnSelectedCategoryChanged(Category? value)
@@ -197,7 +166,6 @@ public partial class InventoryViewModel : ObservableObject
         SelectedProduct = target;
         IsEditorOpen = false;
         IsQuickConsumptionMode = true;
-        QuickActionTitle = $"Consumo en Consulta: {target.Name}";
         QuickActionQuantity = 1;
         QuickActionNotes = "Uso en consulta médica";
         IsQuickActionOpen = true;
@@ -212,7 +180,6 @@ public partial class InventoryViewModel : ObservableObject
         SelectedProduct = target;
         IsEditorOpen = false;
         IsQuickConsumptionMode = false;
-        QuickActionTitle = $"Entrada de Stock: {target.Name}";
         QuickActionQuantity = 5;
         QuickActionNotes = "Adquisición de insumos";
         IsQuickActionOpen = true;
@@ -229,7 +196,6 @@ public partial class InventoryViewModel : ObservableObject
     {
         if (SelectedProduct == null || QuickActionQuantity <= 0) return;
 
-        IsLoading = true;
         try
         {
             if (IsQuickConsumptionMode)
@@ -259,10 +225,6 @@ public partial class InventoryViewModel : ObservableObject
         {
             AppLogger.Error("Error en movimiento rápido de inventario", ex);
             DialogService.ShowError($"No se pudo registrar el movimiento:\n{ex.Message}");
-        }
-        finally
-        {
-            IsLoading = false;
         }
     }
 

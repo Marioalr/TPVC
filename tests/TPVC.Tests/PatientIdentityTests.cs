@@ -104,45 +104,30 @@ public class PatientIdentityTests
     }
 
     [TestMethod]
-    public void ConditionalStep_OnlyAppearsWhenItMatchesSexAndAge()
+    public void ConditionalSections_OnlyAppearWhenTheyMatchSexAndAge()
     {
         var vm = new MedicalRecordsViewModel();
 
         // Hombre adulto: no hay nada que llenar en gineco ni en desarrollo
         vm.FormGender = "Masculino";
         vm.FormAgeText = "40";
-        Assert.IsFalse(vm.FormHasConditionalStep);
-        Assert.AreEqual(3, vm.FormPatientStepCount);
-        Assert.AreEqual("3. ", vm.FormNoPathologicalStepNumber);
-        vm.SetFormPatientStepTab("Patologicos");
-        vm.NextFormPatientStep();
-        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab, "Salta el paso que no aplica");
-        vm.PreviousFormPatientStep();
-        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab);
-        vm.SetFormPatientStepTab("GinecoHitos");
-        Assert.AreEqual("Patologicos", vm.FormPatientActiveTab, "No se puede abrir un paso que no aplica");
+        Assert.IsFalse(vm.FormShowsGyneco);
+        Assert.IsFalse(vm.FormIsPediatric);
 
         // Mujer adulta: solo gineco-obstétricos
         vm.FormGender = "Femenino";
         Assert.IsTrue(vm.FormShowsGyneco);
         Assert.IsFalse(vm.FormIsPediatric);
-        Assert.AreEqual("Gineco-obstétricos", vm.FormConditionalStepTitle);
-        Assert.AreEqual(4, vm.FormPatientStepCount);
 
         // Niña de 6 años: desarrollo, sin antecedentes gineco-obstétricos
         vm.FormAgeText = "6";
         Assert.IsFalse(vm.FormShowsGyneco);
-        Assert.AreEqual("Desarrollo", vm.FormConditionalStepTitle);
+        Assert.IsTrue(vm.FormIsPediatric);
 
         // Adolescente: ambos
         vm.FormAgeText = "14";
-        Assert.AreEqual("Gineco / Desarrollo", vm.FormConditionalStepTitle);
-
-        // Si se corrige el sexo estando en ese paso, no se queda en un paso vacío
-        vm.FormAgeText = "30";
-        vm.SetFormPatientStepTab("GinecoHitos");
-        vm.FormGender = "Masculino";
-        Assert.AreEqual("NoPatologicos", vm.FormPatientActiveTab);
+        Assert.IsTrue(vm.FormShowsGyneco);
+        Assert.IsTrue(vm.FormIsPediatric);
     }
 
     [TestMethod]
@@ -184,7 +169,6 @@ public class PatientIdentityTests
         Assert.AreEqual(string.Empty, vm.FormGender);
         Assert.AreEqual(MedicalRecordsViewModel.BloodTypeUnknown, vm.FormBloodType);
         Assert.AreEqual(string.Empty, vm.FormAllergies);
-        Assert.AreEqual(string.Empty, vm.FormVitalTA);
 
         vm.FormFirstName = "Rodrigo";
         vm.FormLastName = "Medina";
@@ -204,7 +188,8 @@ public class PatientIdentityTests
         StringAssert.Contains(vm.FormErrorMessage, "sexo");
 
         vm.FormGender = "Masculino";
-        Assert.AreEqual("Desarrollo", vm.FormConditionalStepTitle);
+        Assert.IsTrue(vm.FormIsPediatric, "Se muestra el desarrollo");
+        Assert.IsFalse(vm.FormShowsGyneco);
         await vm.SavePatientModalAsync();
         StringAssert.Contains(vm.FormErrorMessage, "Negadas");
 
@@ -234,7 +219,7 @@ public class PatientIdentityTests
 
         vm.ConsultationChiefComplaint = "Revisión de resultados";
         vm.ConsultationDiagnosis = "Z01 Examen de control";
-        await vm.SaveActiveConsultationNoteAsync();
+        await vm.FinalizeConsultationAsync();
 
         var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
         Assert.AreEqual(string.Empty, note.VitalSigns, "No se tomaron signos en esta consulta");

@@ -71,7 +71,6 @@ public partial class TimelineEntry : ObservableObject
     public bool IsConsultation => Kind == TimelineKind.Consultation;
     public bool IsVitals => Kind == TimelineKind.Vitals;
     public bool IsPrescription => Kind == TimelineKind.Prescription;
-    public bool IsAppointment => Kind == TimelineKind.Appointment;
 
     /// <summary>Las notas largas se muestran recortadas hasta que se piden completas.</summary>
     [ObservableProperty]
@@ -79,7 +78,7 @@ public partial class TimelineEntry : ObservableObject
 }
 
 /// <summary>Último valor de un signo vital con su tendencia frente a la medición anterior.</summary>
-public sealed record VitalSummary(string Label, string Value, string Trend, bool IsUp, bool IsDown);
+public sealed record VitalSummary(string Label, string Value, string Trend, bool IsUp);
 
 /// <summary>Día de la franja semanal del panel de agenda.</summary>
 public sealed partial class AgendaDayItem : ObservableObject
@@ -130,7 +129,6 @@ public sealed partial class AgendaSlot : ObservableObject
         : $"{Appointment.Reason} · {Appointment.DurationMinutes} min";
     public string Status => Appointment?.Status ?? string.Empty;
     public bool IsAttended => Appointment?.IsAttended ?? false;
-    public bool IsCancelled => Appointment?.IsCancelled ?? false;
     public bool IsConfirmed => Appointment?.Status == "Confirmada";
 
     /// <summary>El formulario para agendar se abre dentro del propio hueco.</summary>

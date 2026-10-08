@@ -27,9 +27,6 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<ProductBatch> _expiringBatches = new();
 
-    [ObservableProperty]
-    private bool _isLoading;
-
     public bool HasNoLowStock => LowStockProducts.Count == 0;
     public bool HasNoExpiringBatches => ExpiringBatches.Count == 0;
     public bool HasNoRecentMovements => RecentMovements.Count == 0;
@@ -63,31 +60,23 @@ public partial class DashboardViewModel : ObservableObject
 
     public async Task RefreshAsync()
     {
-        IsLoading = true;
-        try
-        {
-            Metrics = await _inventoryService.GetDashboardMetricsAsync();
+        Metrics = await _inventoryService.GetDashboardMetricsAsync();
 
-            var movements = await _inventoryService.GetRecentMovementsAsync(15);
-            RecentMovements = new ObservableCollection<InventoryMovement>(movements);
+        var movements = await _inventoryService.GetRecentMovementsAsync(15);
+        RecentMovements = new ObservableCollection<InventoryMovement>(movements);
 
-            var lowStock = await _inventoryService.GetProductsAsync(onlyLowStock: true);
-            LowStockProducts = new ObservableCollection<Product>(lowStock.Take(8));
+        var lowStock = await _inventoryService.GetProductsAsync(onlyLowStock: true);
+        LowStockProducts = new ObservableCollection<Product>(lowStock.Take(8));
 
-            var batches = await _inventoryService.GetBatchesAsync();
-            var expiring = batches.Where(b => !b.IsDepleted && b.Quantity > 0 && b.DaysRemaining <= 60)
-                                  .OrderBy(b => b.ExpirationDate)
-                                  .Take(8);
-            ExpiringBatches = new ObservableCollection<ProductBatch>(expiring);
+        var batches = await _inventoryService.GetBatchesAsync();
+        var expiring = batches.Where(b => !b.IsDepleted && b.Quantity > 0 && b.DaysRemaining <= 60)
+                              .OrderBy(b => b.ExpirationDate)
+                              .Take(8);
+        ExpiringBatches = new ObservableCollection<ProductBatch>(expiring);
 
-            OnPropertyChanged(nameof(HasNoLowStock));
-            OnPropertyChanged(nameof(HasNoExpiringBatches));
-            OnPropertyChanged(nameof(HasNoRecentMovements));
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+        OnPropertyChanged(nameof(HasNoLowStock));
+        OnPropertyChanged(nameof(HasNoExpiringBatches));
+        OnPropertyChanged(nameof(HasNoRecentMovements));
     }
 
     [RelayCommand]

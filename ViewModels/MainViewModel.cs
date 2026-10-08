@@ -25,8 +25,6 @@ public class CommandPaletteItem
 public partial class MainViewModel : ObservableObject
 {
     private readonly InventoryService _inventoryService;
-    private readonly ConsultationService _consultationService;
-    private readonly ThemeService _themeService;
     private readonly AppUpdateService _updateService;
     private readonly ClinicProfileService _clinicProfileService;
     private readonly PrintingService? _printingService;
@@ -140,8 +138,6 @@ public partial class MainViewModel : ObservableObject
     {
         Notifications = notificationService ?? new NotificationService();
         _inventoryService = inventoryService;
-        _consultationService = consultationService;
-        _themeService = themeService;
         _updateService = updateService;
         _clinicProfileService = clinicProfileService ?? new ClinicProfileService();
         _printingService = printingService;
@@ -155,7 +151,7 @@ public partial class MainViewModel : ObservableObject
 
         AppVersion = $"v{_updateService.CurrentVersion.TrimStart('v', 'V')}";
 
-        MainHubVM = new MainHubViewModel(NavigateTo, inventoryService, _printingService);
+        MainHubVM = new MainHubViewModel(NavigateTo, inventoryService);
         MainHubVM.OnOpenAgendaRequested = () =>
         {
             // La agenda es un panel del apartado Pacientes
@@ -506,7 +502,6 @@ public partial class MainViewModel : ObservableObject
         SelectedPaletteItem = PaletteResults.FirstOrDefault();
     }
 
-    [RelayCommand]
     public void OpenCommandPalette()
     {
         PaletteSearchText = string.Empty;
@@ -585,7 +580,6 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
     private async Task OpenRecoveredConsultationAsync()
     {
         try
@@ -655,7 +649,6 @@ public partial class MainViewModel : ObservableObject
         ConfigurationShellVM.NavigateSubView("TursoSync");
     }
 
-    [RelayCommand]
     public async Task SyncTursoNowAsync()
     {
         await _tursoSyncService.SyncAsync();

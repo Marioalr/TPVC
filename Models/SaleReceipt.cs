@@ -6,9 +6,7 @@ namespace TPVC.Models;
 
 public class SaleReceiptItem
 {
-    public int ProductId { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string? GenericName { get; set; }
     public string? Presentation { get; set; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }

@@ -75,13 +75,7 @@ public sealed record LinkedDevice(
 /// <summary>Resultado de una revisión de la tabla de envíos.</summary>
 public sealed class HandoffPollResult
 {
-    public bool Success { get; init; }
-    public string? Error { get; init; }
-    public DateTime? ServerNowUtc { get; init; }
     public System.Collections.Generic.IReadOnlyList<HandoffRow> Incoming { get; init; } = Array.Empty<HandoffRow>();
-
-    /// <summary>Id del envío propio consultado (null si no se consultó).</summary>
-    public string? OutgoingId { get; init; }
 
     /// <summary>Estado del envío propio: "enviada", "aceptada", "cancelada" o "" si ya no existe.</summary>
     public string? OutgoingState { get; init; }

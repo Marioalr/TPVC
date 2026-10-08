@@ -106,7 +106,7 @@ public class PosTests
         var product = pos.Products.First(p => p.CurrentStock > 3);
 
         pos.SearchText = product.Code;
-        Assert.IsTrue(pos.IsSearchDropdownOpen);
+        Assert.IsNotEmpty(pos.SearchSuggestions);
         Assert.AreEqual(product.Id, pos.SelectedSuggestion?.Id);
 
         pos.ConfirmSelectedSuggestion();
@@ -181,11 +181,11 @@ public class PosTests
         Assert.IsTrue(checkout.HasChange);
         Assert.IsTrue(checkout.CanCharge);
 
-        checkout.SelectPaymentMethod("Transferencia");
+        checkout.SelectedPaymentMethod = "Transferencia";
         Assert.IsFalse(checkout.IsCash);
         Assert.IsFalse(checkout.HasChange);
 
-        checkout.SelectPaymentMethod(CheckoutViewModel.Cash);
+        checkout.SelectedPaymentMethod = CheckoutViewModel.Cash;
         checkout.SetExactCash();
         Assert.AreEqual(300m, checkout.CashReceived);
         Assert.AreEqual("300", checkout.CashReceivedText);
@@ -210,7 +210,7 @@ public class PosTests
         var product = pos.Products.First(p => p.CurrentStock > 2 && p.Price > 0);
         pos.AddToCartWithQuantity(product, 2);
         var total = pos.TotalCartAmount;
-        pos.CashReceived = Math.Ceiling(total / 100m) * 100m + 100m;
+        pos.Checkout.CashReceived = Math.Ceiling(total / 100m) * 100m + 100m;
 
         await pos.ProcessSaleAsync();
 
@@ -220,7 +220,7 @@ public class PosTests
         Assert.AreEqual(total, pos.CurrentReceipt.TotalAmount);
         Assert.AreEqual(pos.CurrentReceipt.CashReceived - total, pos.CurrentReceipt.Change);
         Assert.IsEmpty(pos.Cart, "La cuenta queda lista para la siguiente venta");
-        Assert.AreEqual(0m, pos.CashReceived);
+        Assert.AreEqual(0m, pos.Checkout.CashReceived);
 
         var stock = (await _service.GetProductsAsync()).Single(p => p.Id == product.Id).CurrentStock;
         Assert.AreEqual(product.CurrentStock - 2, stock);
@@ -238,7 +238,7 @@ public class PosTests
     {
         var pos = await CreatePosAsync();
         pos.AddToCart(pos.Products.First(p => p.CurrentStock > 0 && p.Price > 5));
-        pos.CashReceived = 1m;
+        pos.Checkout.CashReceived = 1m;
 
         await pos.ProcessSaleAsync();
 
@@ -270,7 +270,7 @@ public class PosTests
 
         var counterProduct = pos.Products.First(p => p.CurrentStock > 0);
         pos.AddToCart(counterProduct);
-        pos.PatientName = "Cliente de mostrador";
+        pos.Checkout.PatientName = "Cliente de mostrador";
 
         records.SelectPatient(records.Patients.First());
         records.StartActiveConsultation();
@@ -284,7 +284,7 @@ public class PosTests
         Assert.IsFalse(consultations.HasActiveConsultation);
         Assert.HasCount(1, pos.Cart);
         Assert.AreEqual(counterProduct.Id, pos.Cart[0].ProductId);
-        Assert.AreEqual("Cliente de mostrador", pos.PatientName);
+        Assert.AreEqual("Cliente de mostrador", pos.Checkout.PatientName);
         Assert.IsFalse(pos.IsTicketModalOpen, "El cobro de la consulta no abre el ticket del mostrador");
     }
 
@@ -299,7 +299,7 @@ public class PosTests
         int all = pos.CatalogFilteredProducts.Count;
 
         var category = pos.Categories.First(c => c.Id > 0 && pos.Products.Any(p => p.CategoryId == c.Id));
-        pos.SelectCatalogCategory(category);
+        pos.CatalogSelectedCategory = category;
         Assert.IsTrue(pos.CatalogFilteredProducts.All(p => p.CategoryId == category.Id));
         Assert.IsLessThan(all, pos.CatalogFilteredProducts.Count);
 

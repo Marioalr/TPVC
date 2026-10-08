@@ -39,7 +39,7 @@
                                 </TextBlock.Text>
                             </TextBlock>
                         </StackPanel>
-                        <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding ClosePosModalCommand}"
+                        <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding CloseFinishConsultationCommand}"
                                 ToolTip="Regresar a la nota para agregar o corregir algo antes de cobrar (Esc)">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoChevronLeft}" Margin="0,0,6,0" />

@@ -21,9 +21,6 @@ public partial class MovementsViewModel : ObservableObject
     private string _searchText = string.Empty;
 
     [ObservableProperty]
-    private bool _isLoading;
-
-    [ObservableProperty]
     private int _totalMovementsCount;
 
     /// <summary>Filtros como chips: todo, entradas, ventas, consumo en consulta, bajas y ajustes.</summary>
@@ -74,19 +71,10 @@ public partial class MovementsViewModel : ObservableObject
 
     private List<InventoryMovement> _loadedMovements = new();
 
-    [RelayCommand]
     public async Task LoadMovementsAsync()
     {
-        IsLoading = true;
-        try
-        {
-            _loadedMovements = await _inventoryService.GetRecentMovementsAsync(MovementsPageSize);
-            ApplySearchFilter();
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+        _loadedMovements = await _inventoryService.GetRecentMovementsAsync(MovementsPageSize);
+        ApplySearchFilter();
     }
 
     public const int MovementsPageSize = 200;

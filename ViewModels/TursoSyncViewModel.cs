@@ -16,7 +16,6 @@ public class DeviceRoleOption
 {
     public DeviceRole Role { get; set; }
     public string DisplayName { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
 }
 
 public partial class TursoSyncViewModel : ObservableObject
@@ -32,20 +31,13 @@ public partial class TursoSyncViewModel : ObservableObject
     private string _databaseUrl = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AuthTokenVisibilityIcon))]
     private string _authToken = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AuthTokenVisibilityIcon))]
     private bool _isAuthTokenVisible;
-
-    public string AuthTokenVisibilityIcon => IsAuthTokenVisible ? "🙈" : "👁";
 
     [ObservableProperty]
     private string _deviceName = string.Empty;
-
-    [ObservableProperty]
-    private string _deviceId = string.Empty;
 
     [ObservableProperty]
     private DeviceRole _selectedRole = DeviceRole.WindowsDesktop;
@@ -100,9 +92,9 @@ public partial class TursoSyncViewModel : ObservableObject
 
     public ObservableCollection<DeviceRoleOption> RoleOptions { get; } = new()
     {
-        new() { Role = DeviceRole.WindowsDesktop, DisplayName = "PC Windows 11 (Principal / Caja / Consultorio)", Description = "Control total: Consultas NOM-004, Recetas, Cobro POS, Inventario, Lotes y Nube." },
-        new() { Role = DeviceRole.AndroidTablet, DisplayName = "Tablet Android (Consultorio / Asistente)", Description = "Uso clínico y operativo: Expedientes, Notas médicas, Recetas, Citas y Cobro." },
-        new() { Role = DeviceRole.AndroidMobileAdmin, DisplayName = "Celular Android (Solo Administración)", Description = "Administración ejecutiva: Métricas del día, Cortes de caja, Consulta de existencias y Alertas." }
+        new() { Role = DeviceRole.WindowsDesktop, DisplayName = "PC Windows 11 (Principal / Caja / Consultorio)" },
+        new() { Role = DeviceRole.AndroidTablet, DisplayName = "Tablet Android (Consultorio / Asistente)" },
+        new() { Role = DeviceRole.AndroidMobileAdmin, DisplayName = "Celular Android (Solo Administración)" }
     };
 
     public TursoSyncViewModel(
@@ -157,7 +149,6 @@ public partial class TursoSyncViewModel : ObservableObject
         DatabaseUrl = settings.DatabaseUrl;
         AuthToken = settings.AuthToken;
         DeviceName = settings.DeviceName;
-        DeviceId = settings.DeviceId;
         SelectedRole = settings.DeviceRole;
         AutoSyncOnChanges = settings.AutoSyncOnChanges;
         AutoSyncOnStartup = settings.AutoSyncOnStartup;

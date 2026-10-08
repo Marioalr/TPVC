@@ -336,7 +336,6 @@ public partial class CheckoutViewModel : ObservableObject
         SelectedItem = Cart[Math.Clamp(index + step, 0, Cart.Count - 1)];
     }
 
-    [RelayCommand]
     public void ClearCart()
     {
         if (Cart.Count == 0) return;
@@ -346,7 +345,6 @@ public partial class CheckoutViewModel : ObservableObject
         Notify?.Invoke("Se vació la cuenta (puede deshacerlo)", true);
     }
 
-    [RelayCommand]
     public void UndoClear()
     {
         if (_lastClearedCart == null || _lastClearedCart.Count == 0) return;
@@ -375,12 +373,6 @@ public partial class CheckoutViewModel : ObservableObject
     }
 
     // ------------------------------------------------------------------ pago
-
-    [RelayCommand]
-    public void SelectPaymentMethod(string? method)
-    {
-        if (!string.IsNullOrWhiteSpace(method) && PaymentMethods.Contains(method)) SelectedPaymentMethod = method;
-    }
 
     [RelayCommand]
     public void SetCashReceived(decimal amount) => CashReceived = Math.Max(0m, amount);
@@ -444,9 +436,7 @@ public partial class CheckoutViewModel : ObservableObject
                 Change = received.HasValue ? Math.Max(0m, received.Value - total) : null,
                 Items = Cart.Select(c => new SaleReceiptItem
                 {
-                    ProductId = c.ProductId,
                     Name = c.Name,
-                    GenericName = c.GenericName,
                     Presentation = c.Presentation,
                     Quantity = c.Quantity,
                     UnitPrice = c.UnitPrice

@@ -70,17 +70,6 @@ public partial class MedicalRecordsViewModel
     /// <summary>Antecedentes gineco-obstétricos: mujeres de 10 años o más.</summary>
     public bool FormShowsGyneco => FormIsFemale && FormHasAge && FormAge >= PatientRecord.GynecoObstetricMinAge;
 
-    /// <summary>El paso 3 existe solo si hay algo que llenar (un hombre adulto no lo ve).</summary>
-    public bool FormHasConditionalStep => FormShowsGyneco || FormIsPediatric;
-
-    public string FormConditionalStepTitle => FormShowsGyneco && FormIsPediatric
-        ? "Gineco / Desarrollo"
-        : FormShowsGyneco ? "Gineco-obstétricos" : "Desarrollo";
-
-    public int FormPatientStepCount => FormHasConditionalStep ? 4 : 3;
-
-    public string FormNoPathologicalStepNumber => FormHasConditionalStep ? "4. " : "3. ";
-
     [RelayCommand]
     public void SetAllergiesDenied() => FormAllergies = "Negadas";
 
@@ -97,15 +86,5 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(FormHasAge));
         OnPropertyChanged(nameof(FormAgeDisplay));
         OnPropertyChanged(nameof(FormShowsGyneco));
-        OnPropertyChanged(nameof(FormHasConditionalStep));
-        OnPropertyChanged(nameof(FormConditionalStepTitle));
-        OnPropertyChanged(nameof(FormPatientStepCount));
-        OnPropertyChanged(nameof(FormNoPathologicalStepNumber));
-
-        // Si cambió el sexo o la edad y el paso ya no aplica, no se queda mostrando un paso vacío
-        if (FormPatientActiveTab == "GinecoHitos" && !FormHasConditionalStep)
-        {
-            FormPatientActiveTab = "NoPatologicos";
-        }
     }
 }

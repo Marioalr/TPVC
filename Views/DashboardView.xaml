@@ -5,7 +5,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:models="clr-namespace:TPVC.Models"
-             xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:DashboardViewModel}"
              d:DesignHeight="800" d:DesignWidth="1000">

@@ -42,7 +42,6 @@ public class SaleItem : ISyncEntity
     public Sale? Sale { get; set; }
 
     public int? ProductId { get; set; }
-    public int ProductIdSafe => ProductId ?? 0;
     public int? ClinicalServiceId { get; set; }
     public bool IsService { get; set; }
 

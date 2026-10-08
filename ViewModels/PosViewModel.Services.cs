@@ -89,12 +89,6 @@ public partial class PosViewModel
     partial void OnServiceCategoryFilterChanged(string value) => ApplyServicesFilter();
     partial void OnServiceSearchTextChanged(string value) => ApplyServicesFilter();
 
-    [RelayCommand]
-    public void FilterServiceCategory(string? category)
-    {
-        if (!string.IsNullOrWhiteSpace(category)) ServiceCategoryFilter = category;
-    }
-
     private void ApplyServicesFilter()
     {
         var query = Services.AsEnumerable();
@@ -114,9 +108,6 @@ public partial class PosViewModel
             SelectedService = FilteredServices.FirstOrDefault();
         }
     }
-
-    [RelayCommand]
-    public void SelectService(ClinicalService? service) => SelectedService = service;
 
     [RelayCommand]
     public void AddServiceToCart(ClinicalService? service) => AddServiceToCartInternal(service, includeDefaultSupplies: true);
@@ -274,7 +265,7 @@ public partial class PosViewModel
     [ObservableProperty]
     private ObservableCollection<ServiceDefaultProduct> _newServiceDefaultProducts = new();
 
-    // Mismos nombres que en Pacientes: las dos usan la misma hoja de "Nuevo servicio"
+    // Nombres que enlaza la hoja "Nuevo servicio" (CreateServiceSheetView)
     public ObservableCollection<Product> AvailableProducts => AvailableProductsForService;
 
     public Product? SelectedProductToAdd

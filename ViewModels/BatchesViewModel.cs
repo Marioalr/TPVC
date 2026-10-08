@@ -40,8 +40,6 @@ public partial class BatchesViewModel : ObservableObject
         SelectedFilterChip = FilterChips.FirstOrDefault(c => c.Key == SelectedFilter);
     }
 
-    public string ResultsSummary => Batches.Count == 1 ? "1 lote" : $"{Batches.Count} lotes";
-
     /// <summary>Caducidad como se escribe (dd/mm/aaaa o mm/aaaa, que toma el último día del mes).</summary>
     [ObservableProperty]
     private string _newBatchExpirationText = string.Empty;
@@ -103,9 +101,6 @@ public partial class BatchesViewModel : ObservableObject
     [ObservableProperty]
     private int _countVigentes;
 
-    [ObservableProperty]
-    private bool _isLoading;
-
     // Nuevo Lote Modal State
     [ObservableProperty]
     private bool _isNewBatchModalOpen;
@@ -158,12 +153,6 @@ public partial class BatchesViewModel : ObservableObject
         };
     }
 
-    [RelayCommand]
-    public void SetFilter(string filter)
-    {
-        SelectedFilter = filter;
-    }
-
     partial void OnNewBatchExpirationDateChanged(DateTime value)
     {
         ValidateExpirationDate(value);
@@ -195,48 +184,38 @@ public partial class BatchesViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
     public async Task LoadBatchesAsync()
     {
-        IsLoading = true;
-        try
+        var allBatches = await _inventoryService.GetBatchesAsync();
+        var active = allBatches.Where(b => !b.IsDepleted).ToList();
+
+        CountTodos = active.Count;
+        CountProximos = active.Count(b => b.Status == ExpirationStatus.ProximoAVencer);
+        CountVencidos = active.Count(b => b.Status == ExpirationStatus.Vencido);
+        CountVigentes = active.Count(b => b.Status == ExpirationStatus.Vigente);
+
+        var list = active;
+        if (SelectedFilter == "Proximos")
         {
-            var allBatches = await _inventoryService.GetBatchesAsync();
-            var active = allBatches.Where(b => !b.IsDepleted).ToList();
-
-            CountTodos = active.Count;
-            CountProximos = active.Count(b => b.Status == ExpirationStatus.ProximoAVencer);
-            CountVencidos = active.Count(b => b.Status == ExpirationStatus.Vencido);
-            CountVigentes = active.Count(b => b.Status == ExpirationStatus.Vigente);
-
-            var list = active;
-            if (SelectedFilter == "Proximos")
-            {
-                list = active.Where(b => b.Status == ExpirationStatus.ProximoAVencer).ToList();
-            }
-            else if (SelectedFilter == "Vencidos")
-            {
-                list = active.Where(b => b.Status == ExpirationStatus.Vencido).ToList();
-            }
-            else if (SelectedFilter == "Vigentes")
-            {
-                list = active.Where(b => b.Status == ExpirationStatus.Vigente).ToList();
-            }
-
-            Batches = new ObservableCollection<ProductBatch>(list.OrderBy(b => b.ExpirationDate));
-            OnPropertyChanged(nameof(ResultsSummary));
-            RebuildFilterChips();
-
-            var products = await _inventoryService.GetProductsAsync();
-            AvailableProducts = new ObservableCollection<Product>(products);
-            if (NewBatchSelectedProduct == null && AvailableProducts.Count > 0)
-            {
-                NewBatchSelectedProduct = AvailableProducts[0];
-            }
+            list = active.Where(b => b.Status == ExpirationStatus.ProximoAVencer).ToList();
         }
-        finally
+        else if (SelectedFilter == "Vencidos")
         {
-            IsLoading = false;
+            list = active.Where(b => b.Status == ExpirationStatus.Vencido).ToList();
+        }
+        else if (SelectedFilter == "Vigentes")
+        {
+            list = active.Where(b => b.Status == ExpirationStatus.Vigente).ToList();
+        }
+
+        Batches = new ObservableCollection<ProductBatch>(list.OrderBy(b => b.ExpirationDate));
+        RebuildFilterChips();
+
+        var products = await _inventoryService.GetProductsAsync();
+        AvailableProducts = new ObservableCollection<Product>(products);
+        if (NewBatchSelectedProduct == null && AvailableProducts.Count > 0)
+        {
+            NewBatchSelectedProduct = AvailableProducts[0];
         }
     }
 

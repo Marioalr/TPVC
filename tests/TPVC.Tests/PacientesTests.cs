@@ -385,7 +385,7 @@ public class PacientesTests
         var pressure = vitals.Single(v => v.Label.StartsWith("T/A"));
         Assert.AreEqual("120/80", pressure.Value);
         Assert.AreEqual("↓ antes 130/85", pressure.Trend, "La flecha marca la bajada sin depender del color");
-        Assert.IsTrue(pressure.IsDown);
+        Assert.IsFalse(pressure.IsUp);
 
         var weight = vitals.Single(v => v.Label.StartsWith("Peso"));
         Assert.AreEqual("80.0", weight.Value);
@@ -498,7 +498,7 @@ public class PacientesTests
         records.ChartPrimaryAction();
         records.PrescriptionMedicineName = "Loratadina 10 mg";
         records.PrescriptionDosage = "1 tableta cada 24 horas";
-        await records.AddPrescriptionItemToPatientAsync();
+        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
         CollectionAssert.AreEqual(new[] { "Loratadina 10 mg" }, await StoredPrescriptionAsync(patient.Id));
 
         await records.DiscardActiveConsultationAsync();
@@ -527,7 +527,7 @@ public class PacientesTests
         // "Terminar consulta" guarda la nota; luego "Volver a la consulta" y se descarta
         await records.FinalizeConsultationAsync();
         Assert.AreEqual("R51 Cefalea", patient.LastDiagnosis);
-        records.ClosePosModal();
+        records.CloseFinishConsultation();
         await records.DiscardActiveConsultationAsync();
 
         Assert.AreEqual(before.Diagnosis, patient.LastDiagnosis);
@@ -561,7 +561,7 @@ public class PacientesTests
             records.ChartPrimaryAction();
             records.PrescriptionMedicineName = "Loratadina 10 mg";
             records.PrescriptionDosage = "1 tableta cada 24 horas";
-            await records.AddPrescriptionItemToPatientAsync();
+            await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
             records.FlushConsultationDraft();
             records.Dispose();
 
@@ -745,7 +745,7 @@ public class PacientesTests
         Assert.IsNotNull(records.AgendaFormError);
 
         records.SetAgendaReason("Control");
-        records.SetAgendaDuration(60);
+        records.AgendaFormDuration = 60;
         await records.SaveAgendaFormAsync();
 
         var saved = (await _service.GetAppointmentsByDayAsync(DateTime.Today.AddDays(1))).Single(a => a.PatientRecordId == patient.Id);

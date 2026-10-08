@@ -105,7 +105,7 @@ public sealed class ConsultationHandoffService
     // ================================================================== revisión periódica
 
     /// <summary>
-    /// Una sola petición: hora del servidor, consultas dirigidas a este equipo (enviadas, o aceptadas
+    /// Una sola petición: consultas dirigidas a este equipo (enviadas, o aceptadas
     /// aquí pero aún no guardadas), el estado del envío propio y, cada 30 s, "sigo en línea".
     /// </summary>
     public async Task<HandoffPollResult> PollAsync(string? outgoingId, CancellationToken ct = default)
@@ -116,7 +116,6 @@ public sealed class ConsultationHandoffService
         var nowUtc = DateTime.UtcNow;
         var statements = new List<(string Sql, object?[]? Args)>
         {
-            ($"SELECT {ServerNow} AS ServerNow", null),
             ($"SELECT {Columns} FROM ConsultationHandoffs WHERE ToDeviceId = ? AND (State = '{StateSent}' OR (State = '{StateAccepted}' AND Payload <> '')) " +
              "ORDER BY CreatedAtUtc DESC LIMIT 10", new object?[] { DeviceId })
         };
@@ -144,15 +143,12 @@ public sealed class ConsultationHandoffService
         if (heartbeat) _lastHeartbeatUtc = nowUtc;
         if (cleanup) _lastCleanupUtc = nowUtc;
 
-        var incoming = results[1].Select(ToRow).ToList();
-        _sync.AddExternalUsage(rowsRead: 2 + incoming.Count + (outgoingIndex >= 0 ? 1 : 0), rowsWritten: heartbeat ? 1 : 0);
+        var incoming = results[0].Select(ToRow).ToList();
+        _sync.AddExternalUsage(rowsRead: 1 + incoming.Count + (outgoingIndex >= 0 ? 1 : 0), rowsWritten: heartbeat ? 1 : 0);
 
         return new HandoffPollResult
         {
-            Success = true,
-            ServerNowUtc = ParseUtc(results[0].FirstOrDefault()?["ServerNow"]),
             Incoming = incoming,
-            OutgoingId = outgoingIndex >= 0 ? outgoingId : null,
             OutgoingState = outgoingIndex >= 0 ? results[outgoingIndex].FirstOrDefault()?["State"]?.ToString() ?? string.Empty : null
         };
     }

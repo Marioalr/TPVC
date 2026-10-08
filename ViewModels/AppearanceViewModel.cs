@@ -39,8 +39,6 @@ public partial class AppearanceViewModel : ObservableObject
         };
     }
 
-    public IReadOnlyList<string> ModeOptions { get; } = new[] { "Claro", "Oscuro" };
-
     public ObservableCollection<AccentPaletteOption> PaletteOptions { get; } = new()
     {
         new() { Name = "Azul consultorio", Hex = "#0369A1" },

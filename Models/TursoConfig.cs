@@ -49,14 +49,6 @@ public static class DevicePermissions
     public static bool CanConfigureSystem(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop;
 
-    public static string GetRoleDisplayName(DeviceRole role) => role switch
-    {
-        DeviceRole.WindowsDesktop => "PC Windows 11 (Principal / Consultorio)",
-        DeviceRole.AndroidTablet => "Tablet Android (Consultorio / Asistente)",
-        DeviceRole.AndroidMobileAdmin => "Celular Android (Solo Administración)",
-        _ => "Dispositivo Desconocido"
-    };
-
     public static string GetRoleDescription(DeviceRole role) => role switch
     {
         DeviceRole.WindowsDesktop => "Control total: Consultas NOM-004, Recetas, Cobro POS, Inventario, Lotes, Kardex y Nube.",
@@ -145,7 +137,6 @@ public class TursoQuotaSummary
     // Límites oficiales del plan gratuito de Turso
     public const long FreeTierMonthlyRowsReadLimit = 1_000_000_000L; // 1,000 Millones
     public const long FreeTierMonthlyRowsWriteLimit = 25_000_000L;    // 25 Millones
-    public const long FreeTierStorageLimitBytes = 9L * 1024 * 1024 * 1024; // 9 GB
 
     public long RowsWrittenThisMonth { get; set; }
     public long RowsReadThisMonth { get; set; }
@@ -153,8 +144,6 @@ public class TursoQuotaSummary
 
     public double PercentageWritesUsed => (double)RowsWrittenThisMonth / FreeTierMonthlyRowsWriteLimit * 100.0;
     public double PercentageReadsUsed => (double)RowsReadThisMonth / FreeTierMonthlyRowsReadLimit * 100.0;
-
-    public bool IsSafeWithinFreeTier => PercentageWritesUsed < 80.0 && PercentageReadsUsed < 80.0;
 
     public string FreeTierStatusDescription =>
         $"100% Gratuito: {PercentageWritesUsed:F4}% de escrituras y {PercentageReadsUsed:F4}% de lecturas usadas de la cuota mensual.";
@@ -170,9 +159,4 @@ public class TursoSyncResult
     public int RowsPulled { get; set; }
     public long ElapsedMilliseconds { get; set; }
     public string? ErrorMessage { get; set; }
-    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
-
-    public string Summary => Success
-        ? $"✓ Sincronizado ({RowsPushed} subidos, {RowsPulled} recibidos en {ElapsedMilliseconds} ms)"
-        : $"✕ Error al sincronizar: {ErrorMessage}";
 }

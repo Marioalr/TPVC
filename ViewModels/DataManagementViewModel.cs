@@ -42,7 +42,6 @@ public partial class DataManagementViewModel : ObservableObject
         RefreshBackups();
     }
 
-    public string DatabasePath => _backupService.DatabasePath;
     public string BackupDirectory => _backupService.BackupDirectory;
     public bool CanImport => _importService != null;
 

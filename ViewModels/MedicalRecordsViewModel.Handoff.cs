@@ -682,7 +682,6 @@ public partial class MedicalRecordsViewModel
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
         IsCatalogBrowserModalOpen = false;
-        IsCreateServiceModalOpen = false;
         IsPrescriptionPdfModalOpen = false;
         IsAllergyAlertOpen = false;
         IsAgendaPanelOpen = false;
@@ -850,7 +849,7 @@ public partial class MedicalRecordsViewModel
         _feeServiceOverrideId = null;
         IsSendConsultationSheetOpen = false;
         CloseConsultationSheets();
-        IsPosModalOpen = false;
+        IsFinishConsultationOpen = false;
 
         // El cierre borra el borrador local (la consulta ya no es de este equipo)
         _consultationService?.CloseActiveConsultation();

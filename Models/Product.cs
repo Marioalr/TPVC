@@ -46,11 +46,4 @@ public class Product : ISyncEntity
     public bool HasStock => CurrentStock > 0;
     // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo)
     public string StockBadgeText => IsOutOfStock ? "Sin existencias" : IsLowStock ? $"Stock bajo: {CurrentStock}" : $"Existencias: {CurrentStock}";
-
-    public ProductBatch? NextExpiringBatch => Batches
-        .Where(b => !b.IsDepleted && b.Quantity > 0)
-        .OrderBy(b => b.ExpirationDate)
-        .FirstOrDefault();
-
-    public ExpirationStatus ExpiryStatus => NextExpiringBatch?.Status ?? ExpirationStatus.Vigente;
 }

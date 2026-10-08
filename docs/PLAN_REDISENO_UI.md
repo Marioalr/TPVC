@@ -44,7 +44,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 3 | Punto de venta (POS) | ✅ Hecho (v1.15) |
 | 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
-| 5 | Revisión de la visualización de los temas | Pendiente (casi al final) |
+| 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | Pendiente |
 
 ### Fase 1 · Fundamentos comunes

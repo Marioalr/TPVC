@@ -157,7 +157,6 @@ public class ConsultationService
         {
             PatientId = patient.Id,
             PatientName = patient.FullName,
-            PatientRecordNumber = patient.RecordNumber,
             ChiefComplaint = string.IsNullOrWhiteSpace(chiefComplaint) ? "Consulta Médica General" : chiefComplaint.Trim(),
             StartedAt = DateTime.Now
         };

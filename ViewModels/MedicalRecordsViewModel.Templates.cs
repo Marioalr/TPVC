@@ -105,15 +105,12 @@ public partial class MedicalRecordsViewModel
         reset();
     }
 
-    [RelayCommand]
     public void ApplyPosologyTemplate(PrescriptionTemplate? template)
     {
         if (template == null) return;
         PrescriptionDosage = template.Text;
-        NewPrescriptionDosage = template.Text;
     }
 
-    [RelayCommand]
     public void ApplyGeneralMeasureTemplate(PrescriptionTemplate? template)
     {
         if (template == null) return;
@@ -195,7 +192,6 @@ public partial class MedicalRecordsViewModel
         var text = $"Dar {amount} vía oral cada ___ hrs por ___ días";
 
         PrescriptionDosage = text;
-        NewPrescriptionDosage = text;
         if (string.IsNullOrWhiteSpace(PrescriptionSearchText) && string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
             PrescriptionMedicineName = rule.Medication;

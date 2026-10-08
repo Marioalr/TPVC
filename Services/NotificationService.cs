@@ -23,7 +23,6 @@ public sealed class Notification
 
     public string Message { get; }
     public NotificationKind Kind { get; }
-    public bool IsSuccess => Kind == NotificationKind.Success;
     public bool IsInfo => Kind == NotificationKind.Info;
     public bool IsWarning => Kind == NotificationKind.Warning;
     public bool IsError => Kind == NotificationKind.Error;
@@ -53,7 +52,6 @@ public sealed class NotificationService
     public void Success(string message) => Show(message, NotificationKind.Success);
     public void Info(string message) => Show(message, NotificationKind.Info);
     public void Warning(string message) => Show(message, NotificationKind.Warning);
-    public void Error(string message) => Show(message, NotificationKind.Error);
 
     public Notification Show(string message, NotificationKind kind = NotificationKind.Success)
     {

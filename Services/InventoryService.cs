@@ -284,25 +284,6 @@ public class InventoryService
             .ToListAsync();
     }
 
-    public async Task SaveCategoryAsync(Category category)
-    {
-        await using var db = CreateContext();
-        if (category.Id == 0)
-        {
-            db.Entry(category).State = EntityState.Added;
-        }
-        else
-        {
-            var existing = await db.Categories.FindAsync(category.Id)
-                ?? throw new InvalidOperationException("La categoría ya no existe.");
-            existing.Name = category.Name;
-            existing.Description = category.Description;
-            existing.Icon = category.Icon;
-        }
-        await db.SaveChangesAsync();
-        NotifyInventoryChanged();
-    }
-
     // =========================================================================
     // LOTES (FEFO)
     // =========================================================================
@@ -1112,20 +1093,6 @@ public class InventoryService
         return service;
     }
 
-    public async Task DeleteClinicalServiceAsync(int id)
-    {
-        await using var db = CreateContext();
-        var service = await db.ClinicalServices
-            .Include(s => s.DefaultProducts)
-            .FirstOrDefaultAsync(s => s.Id == id);
-        if (service != null)
-        {
-            db.ClinicalServices.Remove(service);
-            await db.SaveChangesAsync();
-            NotifyInventoryChanged();
-        }
-    }
-
     // =========================================================================
     // EXPEDIENTES CLÍNICOS Y NOTAS DE EVOLUCIÓN (NOM-004-SSA3)
     // =========================================================================
@@ -1572,18 +1539,6 @@ public class InventoryService
         return appointment;
     }
 
-    public async Task DeleteAppointmentAsync(int appointmentId)
-    {
-        await using var db = CreateContext();
-        var appt = await db.Appointments.FindAsync(appointmentId);
-        if (appt != null)
-        {
-            db.Appointments.Remove(appt);
-            await db.SaveChangesAsync();
-            NotifyAppointmentsChanged();
-        }
-    }
-
     public async Task UpdateAppointmentStatusAsync(int appointmentId, string status)
     {
         await using var db = CreateContext();
@@ -1673,7 +1628,6 @@ public class InventoryService
 
                 suggestedList.Add(new SuggestedPurchaseItem
                 {
-                    ProductId = p.Id,
                     ProductCode = p.Code,
                     ProductName = p.Name,
                     GenericName = p.GenericName ?? string.Empty,
@@ -1715,17 +1669,6 @@ public class InventoryService
             .OrderBy(r => r.SortOrder)
             .ThenBy(r => r.Medication)
             .ToListAsync();
-    }
-
-    /// <summary>Baja lógica de una plantilla (se sincroniza como actualización).</summary>
-    public async Task DeactivatePrescriptionTemplateAsync(int id)
-    {
-        await using var db = CreateContext();
-        var template = await db.PrescriptionTemplates.FindAsync(id);
-        if (template == null) return;
-        template.IsActive = false;
-        await db.SaveChangesAsync();
-        NotifyInventoryChanged();
     }
 
     // =========================================================================

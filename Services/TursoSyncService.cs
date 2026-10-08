@@ -75,7 +75,6 @@ public class TursoSyncService
 
     public TursoSyncStatus Status { get; private set; } = TursoSyncStatus.NotConfigured;
     public string StatusMessage { get; private set; } = "Sin configurar";
-    public TursoSyncResult? LastSyncResult { get; private set; }
 
     public event Action<TursoSyncStatus, string>? StatusChanged;
     public event Action<TursoSyncResult>? SyncCompleted;
@@ -219,12 +218,10 @@ public class TursoSyncService
                 Success = true,
                 RowsPushed = pushed,
                 RowsPulled = pulled,
-                ElapsedMilliseconds = sw.ElapsedMilliseconds,
-                TimestampUtc = DateTime.UtcNow
+                ElapsedMilliseconds = sw.ElapsedMilliseconds
             };
 
             SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)");
-            LastSyncResult = result;
             SyncCompleted?.Invoke(result);
 
             if (pulled > 0)
@@ -246,10 +243,8 @@ public class TursoSyncService
             {
                 Success = false,
                 ElapsedMilliseconds = sw.ElapsedMilliseconds,
-                ErrorMessage = ex.Message,
-                TimestampUtc = DateTime.UtcNow
+                ErrorMessage = ex.Message
             };
-            LastSyncResult = result;
             SyncCompleted?.Invoke(result);
             return result;
         }

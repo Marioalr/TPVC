@@ -36,8 +36,6 @@ public sealed class XlsxSheet
 
     /// <summary>Valores de la fila desde la columna A hasta la última usada en la hoja.</summary>
     public List<string> GetRow(int row) => Enumerable.Range(1, MaxColumn).Select(c => Get(row, c)).ToList();
-
-    public bool IsRowEmpty(int row) => Enumerable.Range(1, MaxColumn).All(c => string.IsNullOrWhiteSpace(Get(row, c)));
 }
 
 /// <summary>

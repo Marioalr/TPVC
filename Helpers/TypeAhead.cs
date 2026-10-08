@@ -37,14 +37,6 @@ public static class TypeAhead
 
     public static void SetIsEnabled(DependencyObject obj, bool value) => obj.SetValue(IsEnabledProperty, value);
 
-    /// <summary>Texto que se lleva tecleado (útil para mostrarlo como ayuda junto a la lista).</summary>
-    public static readonly DependencyProperty SearchTextProperty = DependencyProperty.RegisterAttached(
-        "SearchText", typeof(string), typeof(TypeAhead), new PropertyMetadata(string.Empty));
-
-    public static string GetSearchText(DependencyObject obj) => (string)obj.GetValue(SearchTextProperty);
-
-    private static void SetSearchText(DependencyObject obj, string value) => obj.SetValue(SearchTextProperty, value);
-
     private static void OnIsEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not ComboBox combo) return;
@@ -122,12 +114,10 @@ public static class TypeAhead
     private static void Reset(ComboBox combo, State state)
     {
         state.Buffer = string.Empty;
-        SetSearchText(combo, string.Empty);
     }
 
     private static void Search(ComboBox combo, State state)
     {
-        SetSearchText(combo, state.Buffer);
         if (!combo.IsDropDownOpen) combo.IsDropDownOpen = true;
 
         int index = FindBestMatch(combo, state.Buffer);

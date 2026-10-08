@@ -711,16 +711,16 @@ public partial class MedicalRecordsViewModel
             if (withValue.Count == 0) return null;
             var latest = value(withValue[^1])!.Value;
             string trend = string.Empty;
-            bool up = false, down = false;
+            bool up = false;
             if (withValue.Count > 1)
             {
                 var previous = value(withValue[^2])!.Value;
                 var diff = latest - previous;
                 if (diff > 0) { up = true; trend = $"↑ {format(diff)}"; }
-                else if (diff < 0) { down = true; trend = $"↓ {format(-diff)}"; }
+                else if (diff < 0) trend = $"↓ {format(-diff)}";
                 else trend = "sin cambio";
             }
-            return new VitalSummary($"{label}{unit}", format(latest), trend, up, down);
+            return new VitalSummary($"{label}{unit}", format(latest), trend, up);
         }
 
         var result = new List<VitalSummary>();
@@ -731,7 +731,7 @@ public partial class MedicalRecordsViewModel
             bool up = prev != null && last.Systolic > prev.Systolic, down = prev != null && last.Systolic < prev.Systolic;
             // La flecha dice si subió o bajó sin depender del color (en oscuro el ámbar se confunde con el texto)
             var trend = prev == null ? string.Empty : $"{(up ? "↑ " : down ? "↓ " : string.Empty)}antes {prev.BloodPressureText}";
-            result.Add(new VitalSummary("T/A (mmHg)", last.BloodPressureText, trend, up, down));
+            result.Add(new VitalSummary("T/A (mmHg)", last.BloodPressureText, trend, up));
         }
         if (Summary("Peso", p => p.Weight, v => v.ToString("0.0", CultureInfo.InvariantCulture), " (kg)") is { } weight) result.Add(weight);
         if (Summary("IMC", p => p.BMI, v => v.ToString("0.0", CultureInfo.InvariantCulture), string.Empty) is { } bmi) result.Add(bmi);
@@ -1067,12 +1067,6 @@ public partial class MedicalRecordsViewModel
     public void SetAgendaReason(string? reason)
     {
         if (!string.IsNullOrWhiteSpace(reason)) AgendaFormReason = reason;
-    }
-
-    [RelayCommand]
-    public void SetAgendaDuration(int minutes)
-    {
-        if (minutes > 0) AgendaFormDuration = minutes;
     }
 
     [RelayCommand]

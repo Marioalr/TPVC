@@ -27,15 +27,6 @@ public class PatientAppointment : ISyncEntity
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     [NotMapped]
-    public string FormattedDate => Date.ToString("dd/MM/yyyy");
-
-    [NotMapped]
-    public string FormattedDateTime => $"{Date:dd/MM/yyyy} {Time}";
-
-    [NotMapped]
-    public bool IsToday => Date.Date == DateTime.Today;
-
-    [NotMapped]
     public bool IsUpcoming => Date.Date >= DateTime.Today && Status != "Cancelada" && Status != "Atendida";
 
     [NotMapped]
@@ -46,14 +37,4 @@ public class PatientAppointment : ISyncEntity
 
     public override bool Equals(object? obj) => obj is PatientAppointment other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
     public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
-}
-
-public class AgendaWeekDayGroup
-{
-    public DateTime Date { get; set; }
-    public string DayName { get; set; } = string.Empty;
-    public string DayOfWeekName { get; set; } = string.Empty;
-    public bool IsToday { get; set; }
-    public System.Collections.ObjectModel.ObservableCollection<PatientAppointment> Appointments { get; set; } = new();
-    public int AppointmentsCount => Appointments.Count;
 }

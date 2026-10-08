@@ -44,7 +44,6 @@ public partial class PosViewModel
         FocusSearchRequested?.Invoke();
     }
 
-    [RelayCommand]
     public async Task LoadCashCutForDateAsync()
     {
         CurrentCashCut = await _inventoryService.GetDailyCashCutAsync(CashCutDate, _clinicProfileService?.CurrentProfile);
@@ -155,7 +154,6 @@ public partial class PosViewModel
         FocusSearchRequested?.Invoke();
     }
 
-    [RelayCommand]
     public async Task LoadSalesHistoryAsync()
     {
         RecentSales = new ObservableCollection<Sale>(await _inventoryService.GetSalesHistoryAsync(limit: 50));
@@ -186,12 +184,6 @@ public partial class PosViewModel
     }
 
     [RelayCommand]
-    public void SelectSaleForDetail(Sale? sale)
-    {
-        if (sale != null) SelectedSaleForDetail = sale;
-    }
-
-    [RelayCommand]
     public void ReprintSelectedTicket()
     {
         if (SelectedSaleForDetail == null) return;
@@ -205,7 +197,6 @@ public partial class PosViewModel
             Cashier = SelectedSaleForDetail.Cashier,
             Items = SelectedSaleForDetail.Items.Select(i => new SaleReceiptItem
             {
-                ProductId = i.ProductId ?? 0,
                 Name = i.ProductName,
                 Quantity = i.Quantity,
                 UnitPrice = i.UnitPrice
@@ -213,7 +204,6 @@ public partial class PosViewModel
         };
         IsFreshSaleTicket = false;
         IsTicketModalOpen = true;
-        IsTicketPrinted = false;
         TicketStatusMessage = null;
     }
 

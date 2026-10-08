@@ -32,18 +32,4 @@ public class DailyCashCut
     public int TotalServicesCount { get; set; }
 
     public List<Sale> Sales { get; set; } = new();
-
-    // Propiedades de acceso rápido para bindings y reportes
-    public decimal TotalRevenue => TotalSalesAmount;
-    public int TotalTickets => ActiveTicketsCount;
-    public decimal ProductsRevenue => TotalProductsAmount;
-    public int ProductsCount => TotalProductsUnitsSold;
-    public decimal ServicesRevenue => TotalServicesAmount;
-    public int ServicesCount => TotalServicesCount;
-    public decimal CashRevenue => TotalCash;
-    public decimal DebitCardRevenue => TotalDebitCard;
-    public decimal CreditCardRevenue => TotalCreditCard;
-    public decimal TransferRevenue => TotalTransfer;
-    public decimal OtherRevenue => TotalOtherPaymentMethods;
-    public decimal CancelledRevenue => TotalCancelledAmount;
 }

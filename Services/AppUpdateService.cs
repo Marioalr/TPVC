@@ -68,7 +68,6 @@ public class UpdateCheckResult
     public string CurrentVersion { get; set; } = "1.5.0";
     public string LatestVersion { get; set; } = "1.5.0";
     public string ReleaseNotes { get; set; } = string.Empty;
-    public string ReleaseUrl { get; set; } = string.Empty;
     public string DirectDownloadUrl { get; set; } = string.Empty;
     public string AssetApiUrl { get; set; } = string.Empty;
     public string DownloadFileName { get; set; } = string.Empty;
@@ -262,7 +261,6 @@ public class AppUpdateService
                 {
                     result.LatestVersion = release.TagName.TrimStart('v', 'V');
                     result.ReleaseNotes = release.Body;
-                    result.ReleaseUrl = release.HtmlUrl;
 
                     // Preferir el instalador .exe; el .zip portátil es respaldo
                     var asset = release.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))

@@ -155,7 +155,6 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(ConsultationFeeName));
         OnPropertyChanged(nameof(ConsultationFeeAmount));
         OnPropertyChanged(nameof(ConsultationAccountTotal));
-        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
     }
 
@@ -419,8 +418,6 @@ public partial class MedicalRecordsViewModel
         ConsultationHeight = string.Empty;
         ConsultationSpO2 = string.Empty;
         ConsultationIMC = "Valores no disponibles";
-        ConsultationPrescriptions.Clear();
-        ConsultationErrorMessage = null;
         ConsultationSection = 1;
     }
 }

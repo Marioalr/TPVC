@@ -50,14 +50,9 @@ public class BoolToVisibilityConverter : IValueConverter
             b = true;
         }
 
-        if (Invert || (parameter is string s && s.Equals("Inverse", StringComparison.OrdinalIgnoreCase)))
+        if (Invert)
         {
             b = !b;
-        }
-
-        if (targetType == typeof(bool) || targetType == typeof(bool?))
-        {
-            return b;
         }
 
         return b ? Visibility.Visible : Visibility.Collapsed;

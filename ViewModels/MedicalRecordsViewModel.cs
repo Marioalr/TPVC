@@ -28,106 +28,16 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void BackToHub() => OnBackToHubRequested?.Invoke();
 
     // ==========================================
-    // SECCIÓN ACTIVA: EXPEDIENTES O SERVICIOS
-    // ==========================================
-    [ObservableProperty]
-    private string _activeSection = "Expedientes"; // "Expedientes" o "Servicios"
-
-    [RelayCommand]
-    public void SwitchSection(string section)
-    {
-        ActiveSection = section;
-        if (section == "Servicios" && Services.Count == 0)
-        {
-            _ = LoadServicesAsync();
-        }
-    }
-
-    // ==========================================
     // PACIENTES Y EXPEDIENTES
     // ==========================================
     [ObservableProperty]
-    private string _searchPatientText = string.Empty;
-
-    [ObservableProperty]
     private ObservableCollection<PatientRecord> _patients = new();
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _filteredPatients = new();
 
     [ObservableProperty]
     private PatientRecord? _selectedPatient;
 
     [ObservableProperty]
     private ObservableCollection<PatientConsultation> _consultationsHistory = new();
-
-    [ObservableProperty]
-    private PatientConsultation? _selectedHistoryConsultation;
-
-    [ObservableProperty]
-    private string _patientDetailTab = "Resumen"; // "Resumen" o "Historial"
-
-    public string PatientActionButtonText => SelectedPatient == null ? "Agregar Paciente" : "Cambiar Paciente";
-    public bool HasSelectedPatient => SelectedPatient != null;
-
-    // ==========================================
-    // MODAL DE SELECCIÓN / CAMBIO DE PACIENTE
-    // ==========================================
-    [ObservableProperty]
-    private bool _isSelectPatientModalOpen;
-
-    [ObservableProperty]
-    private string _selectPatientSearchText = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _selectablePatients = new();
-
-    // ==========================================
-    // MODAL DE VISOR DE EXPEDIENTES (VER EXPEDIENTES)
-    // ==========================================
-    [ObservableProperty]
-    private bool _isRecordsViewerModalOpen;
-
-    [ObservableProperty]
-    private string _recordsViewerSearchText = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _recordsViewerPatients = new();
-
-    [ObservableProperty]
-    private PatientRecord? _viewingRecordPatient;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientConsultation> _viewingPatientConsultations = new();
-
-    [ObservableProperty]
-    private PatientConsultation? _selectedViewingConsultation;
-
-    [ObservableProperty]
-    private string _viewingRecordTab = "Resumen"; // "Resumen" o "Historial"
-
-    partial void OnRecordsViewerSearchTextChanged(string value)
-    {
-        ApplyRecordsViewerFilter();
-    }
-
-    [RelayCommand]
-    public void SwitchPatientDetailTab(string tab)
-    {
-        PatientDetailTab = tab;
-        if (tab == "Servicios" && Services.Count == 0)
-        {
-            _ = LoadServicesAsync();
-        }
-        else if (tab == "Evolucion")
-        {
-            RefreshVitalSignsEvolution(SelectedPatient);
-        }
-        else if (tab == "Citas")
-        {
-            _ = LoadPatientAppointmentsAsync(SelectedPatient?.Id);
-        }
-    }
 
     // ==========================================
     // ESTADO DE CONSULTA MÉDICA ACTIVA
@@ -136,7 +46,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public ActiveConsultation? ActiveConsultation => _consultationService?.CurrentConsultation;
     public string ActiveConsultationFolio => _consultationService?.CurrentConsultation?.Folio ?? string.Empty;
     public string ActiveConsultationPatientName => _consultationService?.CurrentConsultation?.PatientName ?? string.Empty;
-    public int ActiveConsultationItemsCount => _consultationService?.CurrentConsultation?.TotalItems ?? 0;
     public decimal ActiveConsultationTotalAmount => _consultationService?.CurrentConsultation?.TotalAmount ?? 0m;
 
     [ObservableProperty]
@@ -193,9 +102,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // ==========================================
     [ObservableProperty]
     private bool _isPatientModalOpen;
-
-    [ObservableProperty]
-    private string _patientModalTitle = "Nuevo Expediente Clínico";
 
     [ObservableProperty]
     private int _formPatientId;
@@ -342,45 +248,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private string _formZoonosis = string.Empty;
 
     [ObservableProperty]
-    private string _formPatientActiveTab = "Identificacion"; // "Identificacion", "Patologicos", "GinecoHitos", "NoPatologicos"
-
-    [ObservableProperty]
     private bool _formIsFemale;
 
     [ObservableProperty]
     private bool _formIsPediatric;
-
-    [RelayCommand]
-    public void SetFormPatientStepTab(string tab)
-    {
-        if (string.IsNullOrWhiteSpace(tab)) return;
-        if (tab == "GinecoHitos" && !FormHasConditionalStep) return;
-        FormPatientActiveTab = tab;
-    }
-
-    [RelayCommand]
-    public void NextFormPatientStep()
-    {
-        FormPatientActiveTab = FormPatientActiveTab switch
-        {
-            "Identificacion" => "Patologicos",
-            "Patologicos" => FormHasConditionalStep ? "GinecoHitos" : "NoPatologicos",
-            "GinecoHitos" => "NoPatologicos",
-            _ => "NoPatologicos"
-        };
-    }
-
-    [RelayCommand]
-    public void PreviousFormPatientStep()
-    {
-        FormPatientActiveTab = FormPatientActiveTab switch
-        {
-            "NoPatologicos" => FormHasConditionalStep ? "GinecoHitos" : "Patologicos",
-            "GinecoHitos" => "Patologicos",
-            "Patologicos" => "Identificacion",
-            _ => "Identificacion"
-        };
-    }
 
     [ObservableProperty]
     private string _formPhone = string.Empty;
@@ -421,64 +292,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (formatted != value)
         {
             FormEmergencyContactPhone = formatted;
-        }
-    }
-
-    // ==========================================
-    // SIGNOS VITALES INDIVIDUALES (FORMULARIO DE EXPEDIENTE)
-    // ==========================================
-    [ObservableProperty]
-    private string _formVitalTA = string.Empty;
-
-    partial void OnFormVitalTAChanged(string value)
-    {
-        var formatted = FormatTA(value);
-        if (formatted != value)
-        {
-            FormVitalTA = formatted;
-        }
-    }
-
-    [ObservableProperty]
-    private string _formVitalFC = string.Empty;
-
-    [ObservableProperty]
-    private string _formVitalFR = string.Empty;
-
-    [ObservableProperty]
-    private string _formVitalTemp = string.Empty;
-
-    [ObservableProperty]
-    private string _formVitalWeight = string.Empty;
-
-    [ObservableProperty]
-    private string _formVitalHeight = string.Empty;
-
-    [ObservableProperty]
-    private string _formVitalIMC = "Valores no disponibles";
-
-    partial void OnFormVitalWeightChanged(string value) => RecalculateFormIMC();
-    partial void OnFormVitalHeightChanged(string value) => RecalculateFormIMC();
-
-    public void RecalculateFormIMC()
-    {
-        if (decimal.TryParse(FormVitalWeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
-            decimal.TryParse(FormVitalHeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
-            height > 0)
-        {
-            var imc = weight / (height * height);
-            string category;
-            if (imc < 18.5m) category = "Bajo peso";
-            else if (imc < 25.0m) category = "Peso normal";
-            else if (imc < 30.0m) category = "Sobrepeso";
-            else if (imc < 35.0m) category = "Obesidad Grado I";
-            else category = "Obesidad Grado II+";
-
-            FormVitalIMC = $"{imc:F1} kg/m² ({category})";
-        }
-        else
-        {
-            FormVitalIMC = "Valores no disponibles";
         }
     }
 
@@ -610,69 +423,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ParseVitalSigns(string? vitalsString)
-    {
-        FormVitalTA = string.Empty;
-        FormVitalFC = string.Empty;
-        FormVitalFR = string.Empty;
-        FormVitalTemp = string.Empty;
-        FormVitalWeight = string.Empty;
-        FormVitalHeight = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(vitalsString))
-        {
-            RecalculateFormIMC();
-            return;
-        }
-
-        var segments = vitalsString.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var seg in segments)
-        {
-            var part = seg.Trim();
-            if (part.StartsWith("TA:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(3).Trim();
-                val = val.Replace("mmHg", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalTA = val;
-            }
-            else if (part.StartsWith("FC:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(3).Trim();
-                val = val.Replace("lpm", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalFC = val;
-            }
-            else if (part.StartsWith("FR:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(3).Trim();
-                val = val.Replace("rpm", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalFR = val;
-            }
-            else if (part.StartsWith("Temp:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(5).Trim();
-                val = val.Replace("°C", "", StringComparison.OrdinalIgnoreCase).Replace("C", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalTemp = val;
-            }
-            else if (part.StartsWith("Peso:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(5).Trim();
-                val = val.Replace("kg", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalWeight = val;
-            }
-            else if (part.StartsWith("Talla:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part.Substring(6).Trim();
-                val = val.Replace("m", "", StringComparison.OrdinalIgnoreCase).Trim();
-                if (!string.IsNullOrEmpty(val)) FormVitalHeight = val;
-            }
-        }
-
-        RecalculateFormIMC();
-    }
-
-    [ObservableProperty]
-    private string _formInitialVitalSigns = "TA: 120/80 mmHg | FC: 75 lpm | Temp: 36.5 °C";
-
     [ObservableProperty]
     private string _formClinicalNotes = string.Empty;
 
@@ -686,11 +436,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
 
     // ==========================================
-    // MODAL DE NUEVA CONSULTA / NOTA MÉDICA (NOM-004-SSA3)
+    // NOTA MÉDICA DE LA CONSULTA EN CURSO (NOM-004-SSA3)
     // ==========================================
-    [ObservableProperty]
-    private bool _isConsultationModalOpen;
-
     [ObservableProperty]
     private string _consultationFolio = string.Empty;
 
@@ -755,15 +502,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         var matches = Cie10Diagnosis.Search(value.Trim(), 20);
         Cie10Suggestions = new ObservableCollection<Cie10Diagnosis>(matches);
-        SelectedCie10Suggestion = Cie10Suggestions.FirstOrDefault();
         IsCie10DropdownOpen = Cie10Suggestions.Count > 0;
     }
 
     [ObservableProperty]
     private ObservableCollection<Cie10Diagnosis> _cie10Suggestions = new();
-
-    [ObservableProperty]
-    private Cie10Diagnosis? _selectedCie10Suggestion;
 
     [ObservableProperty]
     private bool _isCie10DropdownOpen;
@@ -785,35 +528,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
-    public void CloseCie10Dropdown()
-    {
-        IsCie10DropdownOpen = false;
-    }
-
     [ObservableProperty]
     private string _consultationTreatmentPlan = string.Empty;
 
     [ObservableProperty]
     private string _consultationNotes = string.Empty;
-
-    [ObservableProperty]
-    private bool _consultationStartActivePos = true;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientPrescriptionItem> _consultationPrescriptions = new();
-
-    [ObservableProperty]
-    private string _newPrescriptionMedicine = string.Empty;
-
-    [ObservableProperty]
-    private string _newPrescriptionDosage = string.Empty;
-
-    [ObservableProperty]
-    private int _newPrescriptionQuantity = 1;
-
-    [ObservableProperty]
-    private string? _consultationErrorMessage;
 
     // ==========================================
     // CATÁLOGO DE SERVICIOS CLÍNICOS
@@ -822,60 +541,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private ObservableCollection<ClinicalService> _services = new();
 
     [ObservableProperty]
-    private ClinicalService? _selectedService;
-
-    [ObservableProperty]
-    private bool _isCreateServiceModalOpen;
-
-    [ObservableProperty]
-    private string _newServiceCode = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceName = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceDescription = string.Empty;
-
-    [ObservableProperty]
-    private string _newServiceCategory = "Consulta";
-
-    [ObservableProperty]
-    private decimal _newServicePrice = 300.00m;
-
-    [ObservableProperty]
-    private int _newServiceDuration = 20;
-
-    [ObservableProperty]
     private ObservableCollection<Product> _availableProducts = new();
-
-    [ObservableProperty]
-    private Product? _selectedProductToAdd;
-
-    [ObservableProperty]
-    private int _newProductQuantity = 1;
-
-    [ObservableProperty]
-    private ObservableCollection<ServiceDefaultProduct> _newServiceDefaultProducts = new();
-
-    public List<string> ServiceCategories { get; } = new()
-    {
-        "Consulta",
-        "Curaciones",
-        "Procedimientos",
-        "Diagnóstico",
-        "Certificados"
-    };
 
     /// <summary>Cuenta de "Terminar consulta": el mismo cobro que el Punto de Venta, con su propia cuenta.</summary>
     public CheckoutViewModel Checkout { get; }
 
+    /// <summary>Hoja "Terminar consulta" (cuenta y cobro de la consulta) abierta.</summary>
     [ObservableProperty]
-    private bool _isPosModalOpen;
-
-    // ==========================================
-    // ESTADO Y ACCIONES DE CONSULTA ACTIVA
-    // ==========================================
-    public string ConsultationActionButtonText => HasActiveConsultation ? "Finalizar Consulta" : "Iniciar Consulta";
+    private bool _isFinishConsultationOpen;
 
     // ==========================================
     // CAPTURA INTERACTIVA DE RECETA MÉDICA (MEDICAMENTOS E INSUMOS)
@@ -947,9 +620,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private Product? _selectedSupplyProduct;
 
     [ObservableProperty]
-    private string _supplyName = string.Empty;
-
-    [ObservableProperty]
     private string _supplyInstructions = string.Empty;
 
     [ObservableProperty]
@@ -972,9 +642,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private ClinicalService? _selectedServiceModalItem;
-
-    [ObservableProperty]
-    private string _serviceModalName = string.Empty;
 
     [ObservableProperty]
     private string _serviceModalNotes = string.Empty;
@@ -1033,93 +700,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     // ==========================================
-    // AGENDA Y CALENDARIO DE CITAS (VISTA DÍA Y SEMANA)
+    // CITAS DEL PACIENTE
     // ==========================================
     [ObservableProperty]
-    private bool _isAgendaModalOpen;
-
-    [ObservableProperty]
-    private string _agendaViewMode = "Day"; // "Day" o "Week"
-
-    [ObservableProperty]
-    private DateTime _agendaDate = DateTime.Today;
-
-    [ObservableProperty]
-    private string _agendaHeaderTitle = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<PatientAppointment> _dayAppointments = new();
-
-    [ObservableProperty]
-    private ObservableCollection<AgendaWeekDayGroup> _weekDays = new();
-
-    [ObservableProperty]
-    private PatientAppointment? _selectedAgendaAppointment;
-
-    [ObservableProperty]
     private ObservableCollection<PatientAppointment> _patientAppointmentsHistory = new();
-
-    // Submodal de Crear / Editar Cita
-    [ObservableProperty]
-    private bool _isEditAppointmentModalOpen;
-
-    [ObservableProperty]
-    private string _editAppointmentModalTitle = "Nueva Cita Médica";
-
-    [ObservableProperty]
-    private int _editAppointmentId;
-
-    [ObservableProperty]
-    private int? _editAppointmentPatientRecordId;
-
-    [ObservableProperty]
-    private string _editAppointmentPatientName = string.Empty;
-
-    [ObservableProperty]
-    private string _editAppointmentPatientRecordNumber = string.Empty;
-
-    [ObservableProperty]
-    private string _editAppointmentPatientPhone = string.Empty;
-
-    [ObservableProperty]
-    private DateTime _editAppointmentDate = DateTime.Today;
-
-    [ObservableProperty]
-    private string _editAppointmentTime = "10:00 AM";
-
-    [ObservableProperty]
-    private int _editAppointmentDurationMinutes = 30;
-
-    [ObservableProperty]
-    private string _editAppointmentReason = "Consulta General";
-
-    [ObservableProperty]
-    private string _editAppointmentNotes = string.Empty;
-
-    [ObservableProperty]
-    private string _editAppointmentStatus = "Programada"; // "Programada", "Confirmada", "Atendida", "Cancelada"
-
-    // Modales de TODO: Google Calendar y WhatsApp
-    [ObservableProperty]
-    private bool _isGoogleCalendarTodoModalOpen;
-
-    [ObservableProperty]
-    private string _googleCalendarUrl = string.Empty;
-
-    [ObservableProperty]
-    private string _googleCalendarTitle = string.Empty;
-
-    [ObservableProperty]
-    private string _googleCalendarDetails = string.Empty;
-
-    [ObservableProperty]
-    private bool _isWhatsAppTodoModalOpen;
-
-    [ObservableProperty]
-    private string _whatsAppUrl = string.Empty;
-
-    [ObservableProperty]
-    private string _whatsAppMessagePreview = string.Empty;
 
     // ==========================================
     // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS)
@@ -1159,99 +743,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _latestIMCFormatted = "--";
-
-    // Retro-compatibilidad para Modal de Agendar Consulta Rápida
-    [ObservableProperty]
-    private bool _isScheduleAppointmentModalOpen;
-
-    [ObservableProperty]
-    private DateTime _appointmentDate = DateTime.Today.AddDays(7);
-
-    [ObservableProperty]
-    private string _appointmentTime = "10:00 AM";
-
-    [ObservableProperty]
-    private string _appointmentReason = "Consulta de Seguimiento y Control";
-
-    [ObservableProperty]
-    private string _appointmentNotes = string.Empty;
-
-    // ==========================================
-    // MODAL DE REGISTRO RÁPIDO DE SIGNOS VITALES
-    // ==========================================
-    [ObservableProperty]
-    private bool _isVitalSignsModalOpen;
-
-    [ObservableProperty]
-    private string _vitalSignTA = string.Empty;
-
-    partial void OnVitalSignTAChanged(string value)
-    {
-        var formatted = FormatTA(value);
-        if (formatted != value)
-        {
-            VitalSignTA = formatted;
-        }
-    }
-
-    [ObservableProperty]
-    private string _vitalSignFC = string.Empty;
-
-    [ObservableProperty]
-    private string _vitalSignFR = string.Empty;
-
-    [ObservableProperty]
-    private string _vitalSignTemp = string.Empty;
-
-    [ObservableProperty]
-    private string _vitalSignWeight = string.Empty;
-
-    partial void OnVitalSignWeightChanged(string value)
-    {
-        RecalculateVitalSignsIMC();
-    }
-
-    [ObservableProperty]
-    private string _vitalSignHeight = string.Empty;
-
-    partial void OnVitalSignHeightChanged(string value)
-    {
-        RecalculateVitalSignsIMC();
-    }
-
-    [ObservableProperty]
-    private string _vitalSignIMC = "No calculado";
-
-    [ObservableProperty]
-    private string _vitalSignSpO2 = string.Empty;
-
-    [ObservableProperty]
-    private string _vitalSignGlucose = string.Empty;
-
-    [ObservableProperty]
-    private string _vitalSignWaist = string.Empty;
-
-    private void RecalculateVitalSignsIMC()
-    {
-        if (decimal.TryParse((VitalSignWeight ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
-            decimal.TryParse((VitalSignHeight ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
-            height > 0)
-        {
-            var imc = weight / (height * height);
-            string category;
-            if (imc < 18.5m) category = "Bajo peso";
-            else if (imc < 25.0m) category = "Peso normal";
-            else if (imc < 30.0m) category = "Sobrepeso";
-            else if (imc < 35.0m) category = "Obesidad Grado I";
-            else category = "Obesidad Grado II+";
-
-            VitalSignIMC = $"{imc:F1} ({category})";
-        }
-        else
-        {
-            VitalSignIMC = "Valores no disponibles";
-        }
-    }
 
     // ==========================================
     // INDICACIONES GENERALES EN CONSULTA ACTIVA
@@ -1485,7 +976,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             if (_consultationService != null && _consultationService.Patients.Count > 0)
             {
                 Patients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
-                FilteredPatients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
                 if (_consultationService.HasActiveConsultation)
                 {
                     var activeName = _consultationService.CurrentConsultation?.PatientName;
@@ -1559,8 +1049,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             }
 
             Patients = new ObservableCollection<PatientRecord>(dbPatients);
-            ApplyPatientFilter();
-            ApplyRecordsViewerFilter();
 
             _consultationService?.LoadPatientsFromDatabase(dbPatients);
 
@@ -1593,14 +1081,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Cambia la ficha abierta por la versión de la base sin perder lo que el médico tenía a la vista
-    /// (búsqueda del historial, gráfica de signos, secciones abiertas y la consulta elegida).
+    /// (búsqueda del historial, gráfica de signos y secciones abiertas).
     /// </summary>
     private void ReplaceSelectedPatientKeepingView(PatientRecord fresh)
     {
         var timelineSearch = TimelineSearchText;
         var vitalsVisible = IsVitalsChartVisible;
-        var historyId = SelectedHistoryConsultation?.Id ?? 0;
-        var historyFolio = SelectedHistoryConsultation?.Folio;
         var openSections = AntecedentSections.Where(a => a.IsOpen).Select(a => a.Key).ToHashSet();
 
         SelectedPatient = fresh;
@@ -1608,9 +1094,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         TimelineSearchText = timelineSearch;
         IsVitalsChartVisible = vitalsVisible;
         foreach (var section in AntecedentSections) section.IsOpen = openSections.Contains(section.Key);
-        SelectedHistoryConsultation =
-            ConsultationsHistory.FirstOrDefault(c => (historyId > 0 && c.Id == historyId) || (historyFolio != null && c.Folio == historyFolio))
-            ?? SelectedHistoryConsultation;
     }
 
     /// <summary>
@@ -1629,8 +1112,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             _isCurrentConsultationSaved = false;
         }
-        OnPropertyChanged(nameof(PatientActionButtonText));
-        OnPropertyChanged(nameof(HasSelectedPatient));
         OnPropertyChanged(nameof(ShowsPediatricDose));
         RefreshChartData();
         NotifyPatientsPageState();
@@ -1638,7 +1119,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
             ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
-            SelectedHistoryConsultation = ConsultationsHistory.FirstOrDefault();
             RefreshVitalSignsEvolution(newValue);
             _ = LoadPatientAppointmentsAsync(newValue.Id);
 
@@ -1650,7 +1130,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else
         {
             ConsultationsHistory.Clear();
-            SelectedHistoryConsultation = null;
             RefreshVitalSignsEvolution(null);
             PatientAppointmentsHistory.Clear();
         }
@@ -1698,13 +1177,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     private void RefreshConsultationsHistory(PatientRecord patient)
     {
-        var selectedId = SelectedHistoryConsultation?.Id ?? 0;
-        var selectedFolio = SelectedHistoryConsultation?.Folio;
         var list = patient.Consultations.OrderByDescending(c => c.Date).ToList();
         ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
-        SelectedHistoryConsultation =
-            ConsultationsHistory.FirstOrDefault(c => (selectedId > 0 && c.Id == selectedId) || (selectedFolio != null && c.Folio == selectedFolio))
-            ?? ConsultationsHistory.FirstOrDefault();
     }
 
     public void SyncActiveConsultation()
@@ -1713,9 +1187,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ActiveConsultation));
         OnPropertyChanged(nameof(ActiveConsultationFolio));
         OnPropertyChanged(nameof(ActiveConsultationPatientName));
-        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
-        OnPropertyChanged(nameof(ConsultationActionButtonText));
         NotifyAccountChanged();
 
         if (HasActiveConsultation)
@@ -1825,11 +1297,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             var dbServices = await _inventoryService.GetClinicalServicesAsync();
             Services = new ObservableCollection<ClinicalService>(dbServices);
-            SelectedService = Services.FirstOrDefault();
 
             var prods = await _inventoryService.GetProductsAsync();
             AvailableProducts = new ObservableCollection<Product>(prods);
-            SelectedProductToAdd = AvailableProducts.FirstOrDefault();
         }
         else
         {
@@ -1895,7 +1365,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         };
 
         Services = new ObservableCollection<ClinicalService>(services);
-        SelectedService = Services.FirstOrDefault();
 
         if (AvailableProducts.Count == 0)
         {
@@ -1910,7 +1379,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 new() { Id = 7, Code = "INS-003", Name = "Solución Fisiológica 0.9% 250 ml", GenericName = "Solución Salina", Presentation = "Frasco flexible", CurrentStock = 24, Price = 42.00m },
                 new() { Id = 8, Code = "INS-004", Name = "Venda Elástica 10 cm", GenericName = "Material de Curación", Presentation = "Rollo 5 m", CurrentStock = 40, Price = 25.00m }
             };
-            SelectedProductToAdd = AvailableProducts.FirstOrDefault();
         }
     }
 
@@ -2021,60 +1489,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         };
 
         Patients = new ObservableCollection<PatientRecord>(list);
-        FilteredPatients = new ObservableCollection<PatientRecord>(list);
         SelectedPatient = null;
-    }
-
-    partial void OnSearchPatientTextChanged(string value)
-    {
-        ApplyPatientFilter();
-    }
-
-    private void ApplyPatientFilter()
-    {
-        if (string.IsNullOrWhiteSpace(SearchPatientText))
-        {
-            FilteredPatients = new ObservableCollection<PatientRecord>(Patients);
-        }
-        else
-        {
-            var q = TextSearch.Normalize(SearchPatientText);
-            FilteredPatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email)));
-        }
-    }
-
-    partial void OnSelectPatientSearchTextChanged(string value)
-    {
-        ApplySelectablePatientsFilter();
-    }
-
-    public void ApplySelectablePatientsFilter()
-    {
-        if (string.IsNullOrWhiteSpace(SelectPatientSearchText))
-        {
-            SelectablePatients = new ObservableCollection<PatientRecord>(Patients);
-        }
-        else
-        {
-            var q = TextSearch.Normalize(SelectPatientSearchText);
-            SelectablePatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email, p.Allergies)));
-        }
-    }
-
-    [RelayCommand]
-    public void OpenSelectPatientModal()
-    {
-        SelectPatientSearchText = string.Empty;
-        ApplySelectablePatientsFilter();
-        IsSelectPatientModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseSelectPatientModal()
-    {
-        IsSelectPatientModalOpen = false;
     }
 
     [RelayCommand]
@@ -2083,115 +1498,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (patient != null)
         {
             SelectedPatient = patient;
-            IsSelectPatientModalOpen = false;
-        }
-    }
-
-    [RelayCommand]
-    public void DeselectPatient()
-    {
-        SelectedPatient = null;
-        IsSelectPatientModalOpen = false;
-    }
-
-    [RelayCommand]
-    public async Task NewPatientFromSelectorAsync()
-    {
-        IsSelectPatientModalOpen = false;
-        await NewPatientAsync();
-    }
-
-    // ==========================================
-    // OPERACIONES DE VISOR DE EXPEDIENTES (VER EXPEDIENTES)
-    // ==========================================
-
-    public void ApplyRecordsViewerFilter()
-    {
-        if (string.IsNullOrWhiteSpace(RecordsViewerSearchText))
-        {
-            RecordsViewerPatients = new ObservableCollection<PatientRecord>(Patients);
-        }
-        else
-        {
-            var q = TextSearch.Normalize(RecordsViewerSearchText);
-            RecordsViewerPatients = new ObservableCollection<PatientRecord>(
-                Patients.Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.FormattedPhone, p.LastDiagnosis, p.Email, p.Allergies)));
-        }
-    }
-
-    [RelayCommand]
-    public void OpenRecordsViewerModal()
-    {
-        RecordsViewerSearchText = string.Empty;
-        ViewingRecordPatient = null;
-        ViewingPatientConsultations.Clear();
-        SelectedViewingConsultation = null;
-        ViewingRecordTab = "Resumen";
-        ApplyRecordsViewerFilter();
-        IsRecordsViewerModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseRecordsViewerModal()
-    {
-        IsRecordsViewerModalOpen = false;
-        ViewingRecordPatient = null;
-        ViewingPatientConsultations.Clear();
-        SelectedViewingConsultation = null;
-    }
-
-    [RelayCommand]
-    public async Task ViewSelectedPatientRecord()
-    {
-        if (SelectedPatient == null) return;
-        await ViewPatientRecordDetail(SelectedPatient);
-        IsRecordsViewerModalOpen = true;
-    }
-
-    [RelayCommand]
-    public async Task ViewPatientRecordDetail(PatientRecord? patient)
-    {
-        if (patient == null) return;
-
-        ViewingRecordPatient = patient;
-        if (NeedsConsultationsLoad(patient))
-        {
-            await LoadConsultationsForAsync(patient, refreshSelectedHistory: false);
-        }
-        var consultations = patient.Consultations.OrderByDescending(c => c.Date).ToList();
-        ViewingPatientConsultations = new ObservableCollection<PatientConsultation>(consultations);
-        SelectedViewingConsultation = ViewingPatientConsultations.FirstOrDefault();
-        ViewingRecordTab = "Resumen";
-    }
-
-    [RelayCommand]
-    public void BackToRecordsList()
-    {
-        ViewingRecordPatient = null;
-        ViewingPatientConsultations.Clear();
-        SelectedViewingConsultation = null;
-        ApplyRecordsViewerFilter();
-    }
-
-    [RelayCommand]
-    public void SwitchViewingRecordTab(string tab)
-    {
-        ViewingRecordTab = tab;
-    }
-
-    [RelayCommand]
-    public void SelectViewingPatientForConsultation(PatientRecord? patient)
-    {
-        var target = patient ?? ViewingRecordPatient;
-        if (target != null)
-        {
-            SelectedPatient = target;
-            IsRecordsViewerModalOpen = false;
-            ViewingRecordPatient = null;
-            ViewingPatientConsultations.Clear();
-            SelectedViewingConsultation = null;
-            InfoModalMessage = $"Expediente de '{target.FullName}' ({target.RecordNumber}) cargado en la pantalla principal.";
-            IsInfoModalVisible = true;
         }
     }
 
@@ -2204,7 +1510,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         FormPatientId = 0;
         FormErrorMessage = null;
-        PatientModalTitle = "Nuevo Expediente Clínico (NOM-004-SSA3)";
 
         if (_inventoryService != null)
         {
@@ -2256,12 +1561,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormDiet = string.Empty;
         FormHousingConditions = string.Empty;
         FormZoonosis = string.Empty;
-        FormPatientActiveTab = "Identificacion";
         FormIsFemale = false;
         FormIsPediatric = false;
 
-        ParseVitalSigns(null);
-        FormInitialVitalSigns = string.Empty;
         FormClinicalNotes = string.Empty;
 
         IsPatientModalOpen = true;
@@ -2280,7 +1582,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         FormPatientId = SelectedPatient.Id;
         FormErrorMessage = null;
-        PatientModalTitle = $"Editar Expediente Clínico • {SelectedPatient.RecordNumber}";
 
         FormRecordNumber = SelectedPatient.RecordNumber;
         FormFullName = SelectedPatient.FullName;
@@ -2329,10 +1630,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         FormIsFemale = SelectedPatient.IsFemale;
         FormIsPediatric = SelectedPatient.IsPediatric;
         NotifyFormProfileChanged();
-        FormPatientActiveTab = "Identificacion";
 
-        ParseVitalSigns(SelectedPatient.VitalSigns);
-        FormInitialVitalSigns = SelectedPatient.VitalSigns;
         FormClinicalNotes = SelectedPatient.ClinicalNotes;
 
         IsPatientModalOpen = true;
@@ -2475,22 +1773,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
         patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
 
-        var cleanTA = (FormVitalTA ?? string.Empty).Trim().TrimEnd('/');
-        var vitalsParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(cleanTA)) vitalsParts.Add($"TA: {cleanTA} mmHg");
-        if (!string.IsNullOrWhiteSpace(FormVitalFC)) vitalsParts.Add($"FC: {FormVitalFC.Trim()} lpm");
-        if (!string.IsNullOrWhiteSpace(FormVitalFR)) vitalsParts.Add($"FR: {FormVitalFR.Trim()} rpm");
-        if (!string.IsNullOrWhiteSpace(FormVitalTemp)) vitalsParts.Add($"Temp: {FormVitalTemp.Trim()} °C");
-        if (!string.IsNullOrWhiteSpace(FormVitalWeight)) vitalsParts.Add($"Peso: {FormVitalWeight.Trim()} kg");
-        if (!string.IsNullOrWhiteSpace(FormVitalHeight)) vitalsParts.Add($"Talla: {FormVitalHeight.Trim()} m");
-        if (!string.IsNullOrWhiteSpace(FormVitalIMC) && !FormVitalIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {FormVitalIMC.Trim()}");
-
-        // Solo signos realmente capturados; sin ellos se conservan los últimos registrados
-        patient.VitalSigns = vitalsParts.Count > 0
-            ? string.Join(" | ", vitalsParts)
-            : (FormInitialVitalSigns ?? string.Empty).Trim();
-
-        FormInitialVitalSigns = patient.VitalSigns;
+        // Los signos vitales no se capturan aquí: se conservan los registrados en las consultas
         patient.ClinicalNotes = FormClinicalNotes.Trim();
 
         if (_inventoryService != null)
@@ -2515,7 +1798,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 Patients.Insert(0, patient);
             }
             _consultationService?.UpsertPatient(patient);
-            ApplyPatientFilter();
             SelectedPatient = patient;
         }
 
@@ -2527,44 +1809,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     // ==========================================
     // OPERACIONES DE CONSULTA MÉDICA (NOM-004-SSA3)
     // ==========================================
-
-    [RelayCommand]
-    public void NewConsultation()
-    {
-        if (SelectedPatient == null)
-        {
-            GoToPatientsHome();
-            return;
-        }
-
-        ConsultationErrorMessage = null;
-        ConsultationFolio = $"CNS-{DateTime.Today:yyyyMMdd}-{(SelectedPatient.Consultations.Count + 1):D3}";
-        ConsultationChiefComplaint = string.Empty;
-
-        // Sin valores de ejemplo: un signo vital prellenado se guardaría como si se hubiera medido
-        ConsultationTA = string.Empty;
-        ConsultationFC = string.Empty;
-        ConsultationFR = string.Empty;
-        ConsultationTemp = string.Empty;
-        ConsultationWeight = string.Empty;
-        ConsultationHeight = string.Empty;
-        ConsultationSpO2 = string.Empty;
-        ConsultationGlucose = string.Empty;
-        RecalculateIMC();
-
-        ConsultationPhysicalExam = string.Empty;
-        ConsultationDiagnosis = string.Empty;
-        ConsultationTreatmentPlan = string.Empty;
-        ConsultationNotes = string.Empty;
-        ConsultationStartActivePos = true;
-
-        ConsultationPrescriptions.Clear();
-        NewPrescriptionMedicine = string.Empty;
-        NewPrescriptionDosage = string.Empty;
-        NewPrescriptionQuantity = 1;
-
-        IsConsultationModalOpen = true;
-    }
 
     partial void OnConsultationWeightChanged(string value) => RecalculateIMC();
     partial void OnConsultationHeightChanged(string value) => RecalculateIMC();
@@ -2588,155 +1832,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else
         {
             ConsultationIMC = "Valores no disponibles";
-        }
-    }
-
-    [RelayCommand]
-    public void AddPrescriptionItem()
-    {
-        if (string.IsNullOrWhiteSpace(NewPrescriptionMedicine))
-        {
-            ConsultationErrorMessage = "Especifique el nombre del medicamento o insumo a recetar.";
-            return;
-        }
-
-        var medName = NewPrescriptionMedicine.Trim();
-        var dosage = string.IsNullOrWhiteSpace(NewPrescriptionDosage) ? "Según indicación médica" : NewPrescriptionDosage.Trim();
-        var qty = Math.Max(1, NewPrescriptionQuantity);
-
-        if (SelectedPatient != null)
-        {
-            var allergyCheck = InventoryService.CheckMedicationAllergy(SelectedPatient, null, medName);
-            if (allergyCheck.HasConflict)
-            {
-                _pendingAllergyProduct = null;
-                _pendingAllergyMedName = medName;
-                _pendingAllergyDosage = dosage;
-                _pendingAllergyQty = qty;
-                AllergyAlertTitle = "Alerta de alergia a medicamento";
-                AllergyAlertMessage = allergyCheck.WarningDetails;
-                AllergyPatientAllergies = SelectedPatient.Allergies ?? "Sin alergias declaradas";
-                IsAllergyAlertOpen = true;
-                return;
-            }
-        }
-
-        ConsultationPrescriptions.Add(new PatientPrescriptionItem
-        {
-            MedicineName = medName,
-            Dosage = dosage,
-            RecommendedQuantity = qty
-        });
-
-        NewPrescriptionMedicine = string.Empty;
-        NewPrescriptionDosage = string.Empty;
-        NewPrescriptionQuantity = 1;
-        ConsultationErrorMessage = null;
-    }
-
-    [RelayCommand]
-    public void RemovePrescriptionItem(PatientPrescriptionItem item)
-    {
-        ConsultationPrescriptions.Remove(item);
-    }
-
-    [RelayCommand]
-    public void CloseConsultationModal()
-    {
-        IsConsultationModalOpen = false;
-        ConsultationErrorMessage = null;
-    }
-
-    [RelayCommand]
-    public async Task SaveConsultationModalAsync()
-    {
-        if (SelectedPatient == null) return;
-
-        if (string.IsNullOrWhiteSpace(ConsultationChiefComplaint))
-        {
-            ConsultationErrorMessage = "El motivo de consulta es obligatorio (NOM-004-SSA3).";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(ConsultationDiagnosis))
-        {
-            ConsultationErrorMessage = "El diagnóstico clínico es obligatorio (NOM-004-SSA3).";
-            return;
-        }
-
-        var cleanConsultationTA = ConsultationTA.Trim().TrimEnd('/');
-        var vitalSignsFormatted = $"TA: {cleanConsultationTA} mmHg | FC: {ConsultationFC.Trim()} lpm | FR: {ConsultationFR.Trim()} rpm | Temp: {ConsultationTemp.Trim()} °C | Peso: {ConsultationWeight.Trim()} kg | Talla: {ConsultationHeight.Trim()} m | IMC: {ConsultationIMC.Trim()}";
-
-        var startAt = _consultationService?.CurrentConsultation?.StartedAt ?? DateTime.Now;
-        var endAt = DateTime.Now;
-
-        var consultation = new PatientConsultation
-        {
-            PatientRecordId = SelectedPatient.Id,
-            Folio = string.IsNullOrWhiteSpace(ConsultationFolio) ? $"CNS-{DateTime.Today:yyyyMMdd}-001" : ConsultationFolio.Trim(),
-            Date = DateTime.Now,
-            StartedAt = startAt,
-            EndedAt = endAt,
-            ChiefComplaint = ConsultationChiefComplaint.Trim(),
-            VitalSigns = vitalSignsFormatted,
-            PhysicalExamination = ConsultationPhysicalExam.Trim(),
-            SystemsReview = ConsultationSystemsReview.Trim(),
-            Diagnosis = ConsultationDiagnosis.Trim(),
-            TreatmentPlan = ConsultationTreatmentPlan.Trim(),
-            Notes = ConsultationNotes.Trim(),
-            Prescriptions = new List<PatientPrescriptionItem>(ConsultationPrescriptions)
-        };
-
-        _isCurrentConsultationSaved = true;
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                await _inventoryService.AddConsultationNoteAsync(SelectedPatient.Id, consultation);
-                ApplyConsultationSummary(SelectedPatient, consultation);
-                await LoadPatientsAsync();
-            }
-            catch (Exception ex)
-            {
-                ConsultationErrorMessage = $"Error al registrar la consulta: {ex.Message}";
-                return;
-            }
-        }
-        else
-        {
-            SelectedPatient.LastVisit = consultation.Date;
-            SelectedPatient.LastDiagnosis = consultation.Diagnosis;
-            SelectedPatient.VitalSigns = consultation.VitalSigns;
-            SelectedPatient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
-            SelectedPatient.ActivePrescription = new List<PatientPrescriptionItem>(ConsultationPrescriptions);
-            SelectedPatient.Consultations.Insert(0, consultation);
-            ConsultationsHistory.Insert(0, consultation);
-            SelectedHistoryConsultation = consultation;
-        }
-
-        if (ConsultationStartActivePos && _consultationService != null)
-        {
-            _consultationService.StartConsultation(SelectedPatient, consultation.ChiefComplaint);
-            SyncActiveConsultation();
-        }
-
-        IsConsultationModalOpen = false;
-        ConsultationErrorMessage = null;
-        InfoModalMessage = $"¡Consulta médica registrada exitosamente para {SelectedPatient.FullName}!\nFolio: {consultation.Folio}\nDiagnóstico: {consultation.Diagnosis}\n\nLos signos vitales y la receta activa han sido actualizados en su expediente.";
-        IsInfoModalVisible = true;
-    }
-
-    [RelayCommand]
-    public async Task ToggleActiveConsultationAsync()
-    {
-        if (!HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-        else
-        {
-            await FinalizeConsultationAsync();
         }
     }
 
@@ -2854,12 +1949,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             var idx = ConsultationsHistory.IndexOf(existingInHistory);
             ConsultationsHistory[idx] = consultation;
-            SelectedHistoryConsultation = consultation;
         }
         else
         {
             ConsultationsHistory.Insert(0, consultation);
-            SelectedHistoryConsultation = consultation;
         }
 
         RefreshVitalSignsEvolution(SelectedPatient);
@@ -2887,43 +1980,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
             ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
             ClearConsultationFields();
-            PatientDetailTab = "Resumen";
             NotifyAccountChanged();
             // La pantalla de consulta ya indica que está en curso: sin ventana emergente que interrumpa
             PatientsPage = PageConsultation;
-        }
-    }
-
-    [RelayCommand]
-    public async Task SaveActiveConsultationNoteAsync()
-    {
-        if (BlockIfConsultationReadOnly()) return;
-        if (SelectedPatient == null || !HasActiveConsultation)
-        {
-            InfoModalMessage = "No hay ninguna consulta activa en curso.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(ConsultationChiefComplaint))
-        {
-            ConsultationChiefComplaint = "Consulta Médica General";
-        }
-        if (string.IsNullOrWhiteSpace(ConsultationDiagnosis))
-        {
-            ConsultationDiagnosis = "Revisión clínica general";
-        }
-
-        var consultation = await SaveActiveConsultationToDbAsync(DateTime.Now);
-        if (consultation != null)
-        {
-            // OJO: La consulta continúa activa para seguir trabajando en ella.
-            // Guardar nota es para persistir los datos en el expediente sin finalizar la consulta.
-            _isCurrentConsultationSaved = true;
-            ConsultationErrorMessage = null;
-
-            InfoModalMessage = $"✓ Avance de nota médica guardado exitosamente en el expediente de {SelectedPatient.FullName}.\nFolio: {consultation.Folio}\n\nLos datos han sido respaldados en la base de datos. La consulta continúa activa.";
-            IsInfoModalVisible = true;
         }
     }
 
@@ -2948,10 +2007,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Guardar (o actualizar) la nota con la hora de término; si ya había un avance guardado,
         // se actualiza el mismo registro (mismo folio)
         var endedAt = DateTime.Now;
-        if (_consultationService.CurrentConsultation != null)
-        {
-            _consultationService.CurrentConsultation.EndedAt = endedAt;
-        }
         _isCurrentConsultationSaved = false;
         await SaveActiveConsultationToDbAsync(endedAt);
 
@@ -2962,14 +2017,14 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Honorario + todo lo cargado durante la consulta. La consulta sigue activa hasta cobrar:
         // "Volver a la consulta" permite agregar algo que faltó.
         BuildCheckoutCart();
-        IsPosModalOpen = true;
+        IsFinishConsultationOpen = true;
     }
 
     /// <summary>"Volver a la consulta" (o Esc) desde Terminar consulta: no cobra ni la cierra.</summary>
     [RelayCommand]
-    public void ClosePosModal()
+    public void CloseFinishConsultation()
     {
-        IsPosModalOpen = false;
+        IsFinishConsultationOpen = false;
 
         // El cobro se rearma al terminar de nuevo y la nota se actualizará entonces
         if (HasActiveConsultation)
@@ -3006,14 +2061,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             _isCurrentConsultationSaved = false;
             await EndConsultationOnRecordAsync(discarded: false);
 
-            // 1. Cerrar la ventana modal del POS y cualquier otra modal secundaria
-            ClosePosModal();
+            // 1. Cerrar "Terminar consulta" y cualquier otra hoja secundaria
+            CloseFinishConsultation();
         IsPrescriptionModalOpen = false;
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
-        IsScheduleAppointmentModalOpen = false;
-        IsVitalSignsModalOpen = false;
-        IsRecordsViewerModalOpen = false;
         IsPatientModalOpen = false;
         IsCatalogBrowserModalOpen = false;
         DismissInfoModal();
@@ -3029,7 +2081,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // 4. Salir de todo y volver a la vista inicial (sin paciente seleccionado)
         SelectedPatient = null;
         ConsultationsHistory.Clear();
-        SelectedHistoryConsultation = null;
 
         // 6. La cita que se atendía queda como atendida y se vuelve al inicio, listo para el siguiente
         await CompleteAttendedAppointmentAsync();
@@ -3041,42 +2092,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
-    public async Task FinalizeConsultationAndOpenPosAsync()
-    {
-        await FinalizeConsultationAsync();
-    }
-
-    [RelayCommand]
-    public async Task CancelActiveConsultationAsync()
-    {
-        await DiscardActiveConsultationAsync();
-    }
-
-    public void CancelActiveConsultation()
-    {
-        _ = CancelActiveConsultationAsync();
-    }
-
     // ==========================================
     // OPERACIONES DE RECETA MÉDICA (NOM-004-SSA3)
     // ==========================================
-
-    [RelayCommand]
-    public void SelectPrescriptionProduct(Product? product)
-    {
-        if (product == null) return;
-        SelectedPrescriptionProduct = product;
-        PrescriptionMedicineName = $"{product.Name} ({product.Presentation})";
-        PrescriptionSearchText = product.Name;
-        IsPrescriptionDropdownOpen = false;
-    }
-
-    [RelayCommand]
-    public void ClosePrescriptionDropdown()
-    {
-        IsPrescriptionDropdownOpen = false;
-    }
 
     [RelayCommand]
     public async Task SelectAndAddPrescriptionProductAsync(Product? product)
@@ -3160,11 +2178,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         SelectedPatient.ActivePrescription = currentList;
         SelectedPatient.SyncPrescriptionJson();
 
-        if (ConsultationPrescriptions != null && !ConsultationPrescriptions.Any(p => p.MedicineName == newItem.MedicineName && p.Dosage == newItem.Dosage))
-        {
-            ConsultationPrescriptions.Add(newItem);
-        }
-
         if (_inventoryService != null)
         {
             try
@@ -3183,37 +2196,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         OnPropertyChanged(nameof(SelectedPatient));
         NotifyPrescriptionStateChanged();
-    }
-
-    [RelayCommand]
-    public async Task AddPrescriptionItemToPatientAsync()
-    {
-        await SelectAndAddPrescriptionProductAsync(SelectedPrescriptionProduct);
-    }
-
-    [RelayCommand]
-    public void AddPrescriptionItemToPos(PatientPrescriptionItem? item)
-    {
-        if (BlockIfConsultationReadOnly() || BlockIfReceivingHandoff()) return;
-        // Compatibilidad: equivale a marcar "Se surte aquí" (cargo a la cuenta de la consulta)
-        if (item == null || item.DispenseInClinic) return;
-
-        if (!HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-
-        if (ChargePrescription(item))
-        {
-            item.DispenseInClinic = true;
-            SelectedPatient?.SyncPrescriptionJson();
-            OnPropertyChanged(nameof(SelectedPatient));
-        }
-        else
-        {
-            InfoModalMessage = $"'{item.MedicineName}' no está en el inventario o no tiene existencias suficientes: queda solo en la receta.";
-            IsInfoModalVisible = true;
-        }
     }
 
     [RelayCommand]
@@ -3270,107 +2252,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         _consultationService.CurrentConsultation.Items.Remove(item);
         _consultationService.CurrentConsultation.NotifyItemsChanged();
         SyncActiveConsultation();
-    }
-
-    [RelayCommand]
-    public void OpenVitalSignsModal()
-    {
-        if (SelectedPatient == null)
-        {
-            InfoModalMessage = "Seleccione un paciente antes de registrar signos vitales.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        ParseQuickVitalSigns(SelectedPatient.VitalSigns);
-        IsVitalSignsModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseVitalSignsModal()
-    {
-        IsVitalSignsModalOpen = false;
-    }
-
-    [RelayCommand]
-    public async Task SaveVitalSignsAsync()
-    {
-        if (SelectedPatient == null || BlockIfPatientHandedOff(SelectedPatient)) return;
-
-        var parts = new List<string>();
-        var cleanTA = (VitalSignTA ?? string.Empty).Trim().TrimEnd('/');
-        if (!string.IsNullOrWhiteSpace(cleanTA)) parts.Add($"TA: {cleanTA} mmHg");
-        if (!string.IsNullOrWhiteSpace(VitalSignFC)) parts.Add($"FC: {VitalSignFC.Trim()} lpm");
-        if (!string.IsNullOrWhiteSpace(VitalSignFR)) parts.Add($"FR: {VitalSignFR.Trim()} rpm");
-        if (!string.IsNullOrWhiteSpace(VitalSignTemp)) parts.Add($"Temp: {VitalSignTemp.Trim()} °C");
-        if (!string.IsNullOrWhiteSpace(VitalSignWeight)) parts.Add($"Peso: {VitalSignWeight.Trim()} kg");
-        if (!string.IsNullOrWhiteSpace(VitalSignHeight)) parts.Add($"Talla: {VitalSignHeight.Trim()} m");
-        if (!string.IsNullOrWhiteSpace(VitalSignIMC) && !VitalSignIMC.Contains("no disponibles")) parts.Add($"IMC: {VitalSignIMC.Trim()}");
-        if (!string.IsNullOrWhiteSpace(VitalSignSpO2)) parts.Add($"SpO2: {VitalSignSpO2.Trim()}%");
-        if (!string.IsNullOrWhiteSpace(VitalSignGlucose)) parts.Add($"Glucosa: {VitalSignGlucose.Trim()} mg/dL");
-        if (!string.IsNullOrWhiteSpace(VitalSignWaist)) parts.Add($"Cintura: {VitalSignWaist.Trim()} cm");
-
-        SelectedPatient.VitalSigns = parts.Count > 0 
-            ? string.Join(" | ", parts) 
-            : "Sin signos vitales registrados";
-
-        if (_consultationService?.CurrentConsultation != null)
-        {
-            _consultationService.CurrentConsultation.VitalSigns = SelectedPatient.VitalSigns;
-        }
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                await _inventoryService.SavePatientAsync(SelectedPatient);
-            }
-            catch { }
-        }
-
-        IsVitalSignsModalOpen = false;
-        OnPropertyChanged(nameof(SelectedPatient));
-        ShowSuccess("¡Signos vitales guardados exitosamente en el expediente!");
-    }
-
-    private void ParseQuickVitalSigns(string? vitalsString)
-    {
-        VitalSignTA = string.Empty;
-        VitalSignFC = string.Empty;
-        VitalSignFR = string.Empty;
-        VitalSignTemp = string.Empty;
-        VitalSignWeight = string.Empty;
-        VitalSignHeight = string.Empty;
-        VitalSignSpO2 = string.Empty;
-        VitalSignGlucose = string.Empty;
-        VitalSignWaist = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(vitalsString)) return;
-
-        var segments = vitalsString.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var seg in segments)
-        {
-            var part = seg.Trim();
-            if (part.StartsWith("TA:", StringComparison.OrdinalIgnoreCase))
-                VitalSignTA = part.Substring(3).Replace("mmHg", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("FC:", StringComparison.OrdinalIgnoreCase))
-                VitalSignFC = part.Substring(3).Replace("lpm", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("FR:", StringComparison.OrdinalIgnoreCase))
-                VitalSignFR = part.Substring(3).Replace("rpm", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("Temp:", StringComparison.OrdinalIgnoreCase))
-                VitalSignTemp = part.Substring(5).Replace("°C", "", StringComparison.OrdinalIgnoreCase).Replace("C", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("Peso:", StringComparison.OrdinalIgnoreCase))
-                VitalSignWeight = part.Substring(5).Replace("kg", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("Talla:", StringComparison.OrdinalIgnoreCase))
-                VitalSignHeight = part.Substring(6).Replace("m", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("SpO2:", StringComparison.OrdinalIgnoreCase))
-                VitalSignSpO2 = part.Substring(5).Replace("%", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("Glucosa:", StringComparison.OrdinalIgnoreCase))
-                VitalSignGlucose = part.Substring(8).Replace("mg/dL", "", StringComparison.OrdinalIgnoreCase).Trim();
-            else if (part.StartsWith("Cintura:", StringComparison.OrdinalIgnoreCase))
-                VitalSignWaist = part.Substring(8).Replace("cm", "", StringComparison.OrdinalIgnoreCase).Trim();
-        }
-        RecalculateVitalSignsIMC();
     }
 
     [RelayCommand]
@@ -3550,7 +2431,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         SupplySearchText = string.Empty;
-        SupplyName = string.Empty;
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
         ApplySupplySuggestions(string.Empty);
@@ -3581,29 +2461,13 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void SelectSupplyProduct(Product? product)
-    {
-        if (product == null) return;
-        SelectedSupplyProduct = product;
-        SupplyName = $"{product.Name} ({product.Presentation})";
-        SupplySearchText = product.Name;
-        IsSupplyDropdownOpen = false;
-    }
-
-    [RelayCommand]
     public async Task SelectAndAddSupplyProductAsync(Product? product)
     {
         if (SelectedPatient == null) return;
 
         string name;
         decimal unitPrice;
-        if (!string.IsNullOrWhiteSpace(SupplyName))
-        {
-            name = SupplyName.Trim();
-            // Antes se cobraba $35 aunque se hubiera elegido un producto del inventario
-            unitPrice = product?.Price ?? FindCatalogProduct(name)?.Price ?? 35.00m;
-        }
-        else if (product != null)
+        if (product != null)
         {
             name = string.IsNullOrWhiteSpace(product.Presentation)
                 ? product.Name
@@ -3654,19 +2518,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         SupplySearchText = string.Empty;
-        SupplyName = string.Empty;
         SupplyInstructions = string.Empty;
         SupplyQuantity = 1;
         SelectedSupplyProduct = null;
         ApplySupplySuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
-    }
-
-    [RelayCommand]
-    public async Task AddSupplyItemToPatientAsync()
-    {
-        await SelectAndAddSupplyProductAsync(SelectedSupplyProduct);
     }
 
     [RelayCommand]
@@ -3689,18 +2546,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(SelectedPatient));
-    }
-
-    [RelayCommand]
-    public void AddSupplyItemToPos(PatientSupplyItem? item)
-    {
-        // Compatibilidad: cargo explícito de un insumo a la cuenta de la consulta
-        if (item == null) return;
-        if (!HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-        ChargeSupply(item, null);
     }
 
     [RelayCommand]
@@ -3751,7 +2596,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         ServiceModalSearchText = string.Empty;
-        ServiceModalName = string.Empty;
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
         ApplyServiceModalSuggestions(string.Empty);
@@ -3856,16 +2700,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void SelectServiceModalSuggestion(ClinicalService? service)
-    {
-        if (service == null) return;
-        SelectedServiceModalItem = service;
-        ServiceModalName = service.Name;
-        ServiceModalSearchText = service.Name;
-        IsServiceModalDropdownOpen = false;
-    }
-
-    [RelayCommand]
     public async Task SelectAndAddServiceModalSuggestionAsync(ClinicalService? service)
     {
         if (SelectedPatient == null) return;
@@ -3876,16 +2710,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         string code;
         int serviceId;
 
-        if (!string.IsNullOrWhiteSpace(ServiceModalName))
-        {
-            name = ServiceModalName.Trim();
-            var serviceObj = Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            price = serviceObj?.Price ?? 200.00m;
-            category = serviceObj?.Category ?? "Consulta";
-            code = serviceObj?.Code ?? "SERV-001";
-            serviceId = serviceObj?.Id ?? 0;
-        }
-        else if (service != null)
+        if (service != null)
         {
             name = service.Name;
             price = service.Price;
@@ -3944,19 +2769,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         ServiceModalSearchText = string.Empty;
-        ServiceModalName = string.Empty;
         ServiceModalNotes = string.Empty;
         ServiceModalQuantity = 1;
         SelectedServiceModalItem = null;
         ApplyServiceModalSuggestions(string.Empty);
 
         OnPropertyChanged(nameof(SelectedPatient));
-    }
-
-    [RelayCommand]
-    public async Task AddServiceItemToPatientAsync()
-    {
-        await SelectAndAddServiceModalSuggestionAsync(SelectedServiceModalItem);
     }
 
     [RelayCommand]
@@ -3982,18 +2800,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void AddServiceItemToPos(PatientServiceItem? item)
-    {
-        // Compatibilidad: cargo explícito de un servicio a la cuenta de la consulta
-        if (item == null) return;
-        if (!HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-        ChargeService(item);
-    }
-
-    [RelayCommand]
     public async Task SaveServicesModalAsync()
     {
         if (SelectedPatient != null)
@@ -4015,331 +2821,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     // ==========================================
-    // OPERACIONES DE AGENDAR NUEVA CONSULTA
+    // CITAS: ESTADO E HISTORIAL DEL PACIENTE (el panel de agenda vive en Pacientes)
     // ==========================================
-
-    [RelayCommand]
-    public void OpenScheduleAppointmentModal()
-    {
-        if (SelectedPatient == null)
-        {
-            InfoModalMessage = "Seleccione o agregue un paciente primero para agendar una nueva consulta médica.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        AppointmentDate = SelectedPatient.NextAppointmentDate ?? DateTime.Today.AddDays(7);
-        AppointmentTime = !string.IsNullOrWhiteSpace(SelectedPatient.NextAppointmentTime)
-            ? SelectedPatient.NextAppointmentTime
-            : "10:00 AM";
-        AppointmentReason = !string.IsNullOrWhiteSpace(SelectedPatient.NextAppointmentReason)
-            ? SelectedPatient.NextAppointmentReason
-            : "Consulta de Seguimiento y Control";
-        AppointmentNotes = SelectedPatient.NextAppointmentNotes ?? string.Empty;
-
-        IsScheduleAppointmentModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseScheduleAppointmentModal()
-    {
-        IsScheduleAppointmentModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void SetAppointmentReasonPreset(string preset)
-    {
-        if (!string.IsNullOrWhiteSpace(preset))
-        {
-            AppointmentReason = preset;
-        }
-    }
-
-    [RelayCommand]
-    public async Task SaveScheduledAppointmentAsync()
-    {
-        if (SelectedPatient == null) return;
-
-        SelectedPatient.NextAppointmentDate = AppointmentDate;
-        SelectedPatient.NextAppointmentTime = string.IsNullOrWhiteSpace(AppointmentTime) ? "10:00 AM" : AppointmentTime.Trim();
-        SelectedPatient.NextAppointmentReason = string.IsNullOrWhiteSpace(AppointmentReason) ? "Consulta de Seguimiento" : AppointmentReason.Trim();
-        SelectedPatient.NextAppointmentNotes = AppointmentNotes?.Trim() ?? string.Empty;
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                await _inventoryService.SavePatientAsync(SelectedPatient);
-            }
-            catch { }
-        }
-
-        IsScheduleAppointmentModalOpen = false;
-        InfoModalMessage = $"¡Cita agendada con éxito para el {AppointmentDate:dd/MM/yyyy} a las {SelectedPatient.NextAppointmentTime} para {SelectedPatient.FullName}!";
-        IsInfoModalVisible = true;
-
-        OnPropertyChanged(nameof(SelectedPatient));
-    }
-
-    [RelayCommand]
-    public async Task CancelScheduledAppointmentAsync()
-    {
-        if (SelectedPatient == null) return;
-
-        SelectedPatient.NextAppointmentDate = null;
-        SelectedPatient.NextAppointmentTime = string.Empty;
-        SelectedPatient.NextAppointmentReason = string.Empty;
-        SelectedPatient.NextAppointmentNotes = string.Empty;
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                await _inventoryService.SavePatientAsync(SelectedPatient);
-            }
-            catch { }
-        }
-
-        IsScheduleAppointmentModalOpen = false;
-        InfoModalMessage = $"Se ha cancelado la cita programada para {SelectedPatient.FullName}.";
-        IsInfoModalVisible = true;
-
-        OnPropertyChanged(nameof(SelectedPatient));
-    }
-
-    // ==========================================
-    // OPERACIONES DE AGENDA Y CALENDARIO DE CITAS
-    // ==========================================
-
-    [RelayCommand]
-    public void OpenAgendaModal()
-    {
-        IsAgendaModalOpen = true;
-        _ = LoadAgendaDataAsync();
-    }
-
-    [RelayCommand]
-    public void CloseAgendaModal()
-    {
-        IsAgendaModalOpen = false;
-        IsEditAppointmentModalOpen = false;
-        IsGoogleCalendarTodoModalOpen = false;
-        IsWhatsAppTodoModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void SwitchAgendaView(string mode)
-    {
-        AgendaViewMode = mode == "Week" ? "Week" : "Day";
-        _ = LoadAgendaDataAsync();
-    }
-
-    [RelayCommand]
-    public void AgendaPreviousPeriod()
-    {
-        AgendaDate = AgendaViewMode == "Week" ? AgendaDate.AddDays(-7) : AgendaDate.AddDays(-1);
-        _ = LoadAgendaDataAsync();
-    }
-
-    [RelayCommand]
-    public void AgendaNextPeriod()
-    {
-        AgendaDate = AgendaViewMode == "Week" ? AgendaDate.AddDays(7) : AgendaDate.AddDays(1);
-        _ = LoadAgendaDataAsync();
-    }
-
-    [RelayCommand]
-    public void AgendaToday()
-    {
-        AgendaDate = DateTime.Today;
-        _ = LoadAgendaDataAsync();
-    }
-
-    public async Task LoadAgendaDataAsync()
-    {
-        if (_inventoryService == null) return;
-
-        try
-        {
-            if (AgendaViewMode == "Day")
-            {
-                AgendaHeaderTitle = AgendaDate.ToString("dddd, dd 'de' MMMM 'de' yyyy", new CultureInfo("es-MX"));
-                AgendaHeaderTitle = char.ToUpper(AgendaHeaderTitle[0]) + AgendaHeaderTitle.Substring(1);
-
-                var list = await _inventoryService.GetAppointmentsByDayAsync(AgendaDate);
-                DayAppointments = new ObservableCollection<PatientAppointment>(list);
-            }
-            else
-            {
-                int diff = (7 + (AgendaDate.DayOfWeek - DayOfWeek.Monday)) % 7;
-                var monday = AgendaDate.AddDays(-1 * diff).Date;
-                var sunday = monday.AddDays(6);
-
-                AgendaHeaderTitle = $"Semana del {monday:dd MMM} al {sunday:dd MMM yyyy}";
-
-                var weekList = await _inventoryService.GetAppointmentsByWeekAsync(monday);
-                var groups = new ObservableCollection<AgendaWeekDayGroup>();
-
-                for (int i = 0; i < 7; i++)
-                {
-                    var d = monday.AddDays(i);
-                    var dayName = d.ToString("ddd dd/MM", new CultureInfo("es-MX"));
-                    var fullDayName = d.ToString("dddd", new CultureInfo("es-MX"));
-                    dayName = char.ToUpper(dayName[0]) + dayName.Substring(1);
-                    fullDayName = char.ToUpper(fullDayName[0]) + fullDayName.Substring(1);
-
-                    var dayAppts = weekList.Where(a => a.Date.Date == d.Date).OrderBy(a => a.Time).ToList();
-                    groups.Add(new AgendaWeekDayGroup
-                    {
-                        Date = d,
-                        DayName = dayName,
-                        DayOfWeekName = fullDayName,
-                        IsToday = d.Date == DateTime.Today,
-                        Appointments = new ObservableCollection<PatientAppointment>(dayAppts)
-                    });
-                }
-
-                WeekDays = groups;
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error al cargar citas de la agenda", ex);
-        }
-    }
-
-    [RelayCommand]
-    public void OpenNewAppointmentModal(DateTime? initialDate = null)
-    {
-        EditAppointmentId = 0;
-        EditAppointmentModalTitle = "Nueva Cita Médica";
-        EditAppointmentPatientRecordId = SelectedPatient?.Id;
-        EditAppointmentPatientName = SelectedPatient?.FullName ?? string.Empty;
-        EditAppointmentPatientRecordNumber = SelectedPatient?.RecordNumber ?? string.Empty;
-        EditAppointmentPatientPhone = SelectedPatient?.Phone ?? string.Empty;
-        EditAppointmentDate = initialDate ?? (AgendaDate > DateTime.Today ? AgendaDate : DateTime.Today.AddDays(1));
-        EditAppointmentTime = "10:00 AM";
-        EditAppointmentDurationMinutes = 30;
-        EditAppointmentReason = "Consulta General";
-        EditAppointmentNotes = string.Empty;
-        EditAppointmentStatus = "Programada";
-        IsEditAppointmentModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void OpenEditAppointmentModal(PatientAppointment? appt)
-    {
-        if (appt == null) return;
-        EditAppointmentId = appt.Id;
-        EditAppointmentModalTitle = "Editar Cita Médica";
-        EditAppointmentPatientRecordId = appt.PatientRecordId > 0 ? appt.PatientRecordId : null;
-        EditAppointmentPatientName = appt.PatientName;
-        EditAppointmentPatientRecordNumber = appt.PatientRecordNumber;
-        EditAppointmentPatientPhone = appt.PatientPhone;
-        EditAppointmentDate = appt.Date;
-        EditAppointmentTime = appt.Time;
-        EditAppointmentDurationMinutes = appt.DurationMinutes > 0 ? appt.DurationMinutes : 30;
-        EditAppointmentReason = appt.Reason;
-        EditAppointmentNotes = appt.Notes;
-        EditAppointmentStatus = appt.Status;
-        IsEditAppointmentModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseEditAppointmentModal()
-    {
-        IsEditAppointmentModalOpen = false;
-    }
-
-    [RelayCommand]
-    public async Task SaveAppointmentModalAsync()
-    {
-        if (string.IsNullOrWhiteSpace(EditAppointmentPatientName))
-        {
-            InfoModalMessage = "El nombre del paciente es obligatorio para agendar la cita.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        var appt = new PatientAppointment
-        {
-            Id = EditAppointmentId,
-            PatientRecordId = EditAppointmentPatientRecordId ?? (SelectedPatient?.Id ?? 0),
-            PatientName = EditAppointmentPatientName.Trim(),
-            PatientRecordNumber = EditAppointmentPatientRecordNumber?.Trim() ?? string.Empty,
-            PatientPhone = EditAppointmentPatientPhone?.Trim() ?? string.Empty,
-            Date = EditAppointmentDate.Date,
-            Time = string.IsNullOrWhiteSpace(EditAppointmentTime) ? "10:00 AM" : EditAppointmentTime.Trim(),
-            DurationMinutes = EditAppointmentDurationMinutes > 0 ? EditAppointmentDurationMinutes : 30,
-            Reason = string.IsNullOrWhiteSpace(EditAppointmentReason) ? "Consulta General" : EditAppointmentReason.Trim(),
-            Notes = EditAppointmentNotes?.Trim() ?? string.Empty,
-            Status = string.IsNullOrWhiteSpace(EditAppointmentStatus) ? "Programada" : EditAppointmentStatus.Trim()
-        };
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                await _inventoryService.SaveAppointmentAsync(appt);
-            }
-            catch (Exception ex)
-            {
-                InfoModalMessage = $"Error al guardar la cita: {ex.Message}";
-                IsInfoModalVisible = true;
-                return;
-            }
-        }
-
-        IsEditAppointmentModalOpen = false;
-        await LoadAgendaDataAsync();
-
-        if (SelectedPatient != null && SelectedPatient.Id == appt.PatientRecordId)
-        {
-            await LoadPatientAppointmentsAsync(SelectedPatient.Id);
-        }
-
-        ShowSuccess($"¡Cita guardada correctamente para {appt.PatientName} el {appt.Date:dd/MM/yyyy} a las {appt.Time}!");
-    }
-
-    [RelayCommand]
-    public async Task DeleteAppointmentAsync(PatientAppointment? appt)
-    {
-        if (appt == null || _inventoryService == null) return;
-
-        try
-        {
-            await _inventoryService.DeleteAppointmentAsync(appt.Id);
-            await LoadAgendaDataAsync();
-            if (SelectedPatient != null && SelectedPatient.Id == appt.PatientRecordId)
-            {
-                await LoadPatientAppointmentsAsync(SelectedPatient.Id);
-            }
-            ShowSuccess("Cita eliminada correctamente.");
-        }
-        catch (Exception ex)
-        {
-            InfoModalMessage = $"Error al eliminar la cita: {ex.Message}";
-            IsInfoModalVisible = true;
-        }
-    }
-
-    [RelayCommand]
-    public async Task MarkAppointmentAttendedAsync(PatientAppointment? appt)
-    {
-        await UpdateAppointmentStatusAsync(appt, "Atendida");
-    }
-
-    [RelayCommand]
-    public async Task MarkAppointmentCancelledAsync(PatientAppointment? appt)
-    {
-        await UpdateAppointmentStatusAsync(appt, "Cancelada");
-    }
-
-    [RelayCommand]
-    public async Task MarkAppointmentConfirmedAsync(PatientAppointment? appt)
-    {
-        await UpdateAppointmentStatusAsync(appt, "Confirmada");
-    }
 
     public async Task UpdateAppointmentStatusAsync(PatientAppointment? appt, string status)
     {
@@ -4349,7 +2832,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await _inventoryService.UpdateAppointmentStatusAsync(appt.Id, status);
             appt.Status = status;
-            await LoadAgendaDataAsync();
         }
         catch (Exception ex)
         {
@@ -4374,100 +2856,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             AppLogger.Error("Error al cargar historial de citas del paciente", ex);
-        }
-    }
-
-    // ==========================================
-    // GOOGLE CALENDAR TODO & INTEGRACIÓN
-    // ==========================================
-    [RelayCommand]
-    public void OpenGoogleCalendarTodo(PatientAppointment? appt)
-    {
-        if (appt == null) return;
-
-        var start = appt.Date.Date;
-        if (DateTime.TryParse(appt.Time, out var parsedTime))
-        {
-            start = start.Add(parsedTime.TimeOfDay);
-        }
-        else
-        {
-            start = start.AddHours(10);
-        }
-
-        var end = start.AddMinutes(appt.DurationMinutes > 0 ? appt.DurationMinutes : 30);
-        var startUtc = start.ToString("yyyyMMdd\\THHmmss");
-        var endUtc = end.ToString("yyyyMMdd\\THHmmss");
-
-        var title = Uri.EscapeDataString($"Cita Médica - {appt.PatientName}");
-        var details = Uri.EscapeDataString($"Paciente: {appt.PatientName}\nTeléfono: {appt.PatientPhone}\nMotivo: {appt.Reason}\nNotas: {appt.Notes}\nClínica: {ClinicName}");
-        var location = Uri.EscapeDataString(string.IsNullOrWhiteSpace(ClinicAddress) ? ClinicName : ClinicAddress);
-
-        GoogleCalendarUrl = $"https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}&dates={startUtc}/{endUtc}&details={details}&location={location}";
-        GoogleCalendarTitle = $"Cita Médica: {appt.PatientName} ({appt.Date:dd/MM/yyyy} {appt.Time})";
-        GoogleCalendarDetails = $"Plan de Sincronización Google Calendar:\n• Fase 1 (Actual): Generación de plantilla web directa para agendar con 1 clic en su cuenta de Google Calendar.\n• Fase 2 (En desarrollo): Sincronización bidireccional automática mediante Google Calendar API v3 y OAuth2.\n\nEnlace generado listo para abrir.";
-
-        IsGoogleCalendarTodoModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseGoogleCalendarTodo()
-    {
-        IsGoogleCalendarTodoModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void LaunchGoogleCalendarUrl()
-    {
-        if (string.IsNullOrWhiteSpace(GoogleCalendarUrl)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(GoogleCalendarUrl) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error al abrir navegador para Google Calendar", ex);
-        }
-    }
-
-    // ==========================================
-    // WHATSAPP REMINDER TODO & INTEGRACIÓN
-    // ==========================================
-    [RelayCommand]
-    public void OpenWhatsAppTodo(PatientAppointment? appt)
-    {
-        if (appt == null) return;
-
-        var phone = new string((appt.PatientPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-        if (phone.Length == 10)
-        {
-            phone = "52" + phone;
-        }
-
-        var msg = $"Hola {appt.PatientName}, le recordamos su cita médica en {ClinicName} programada para el {appt.Date:dd/MM/yyyy} a las {appt.Time}. Motivo: {appt.Reason}. Por favor confirme su asistencia respondiendo a este mensaje. ¡Le esperamos!";
-        WhatsAppMessagePreview = msg;
-        WhatsAppUrl = $"https://wa.me/{phone}?text={Uri.EscapeDataString(msg)}";
-
-        IsWhatsAppTodoModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseWhatsAppTodo()
-    {
-        IsWhatsAppTodoModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void LaunchWhatsAppUrl()
-    {
-        if (string.IsNullOrWhiteSpace(WhatsAppUrl)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(WhatsAppUrl) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error al abrir WhatsApp", ex);
         }
     }
 
@@ -4590,10 +2978,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     {
                         X = x,
                         Y = yW,
-                        DateLabel = p.FormattedDate,
                         ValueLabel = $"{p.Weight.Value:F1} kg",
-                        SeriesName = "Peso",
-                        ColorHex = "#3B82F6"
+                        SeriesName = "Peso"
                     });
                 }
             }
@@ -4610,10 +2996,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     {
                         X = x,
                         Y = ySys,
-                        DateLabel = p.FormattedDate,
                         ValueLabel = $"{p.Systolic.Value} Sis",
-                        SeriesName = "Presión Sistólica",
-                        ColorHex = "#EF4444"
+                        SeriesName = "Presión Sistólica"
                     });
                 }
             }
@@ -4630,10 +3014,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     {
                         X = x,
                         Y = yDia,
-                        DateLabel = p.FormattedDate,
                         ValueLabel = $"{p.Diastolic.Value} Dia",
-                        SeriesName = "Presión Diastólica",
-                        ColorHex = "#F59E0B"
+                        SeriesName = "Presión Diastólica"
                     });
                 }
             }
@@ -4650,10 +3032,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     {
                         X = x,
                         Y = yGlu,
-                        DateLabel = p.FormattedDate,
                         ValueLabel = $"{p.Glucose.Value:F0} mg/dL",
-                        SeriesName = "Glucosa",
-                        ColorHex = "#10B981"
+                        SeriesName = "Glucosa"
                     });
                 }
             }
@@ -4790,104 +3170,5 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         _infoModalCts?.Cancel();
         IsInfoModalVisible = false;
         InfoModalMessage = null;
-    }
-
-    // ==========================================
-    // MÉTODOS DE CATÁLOGO DE SERVICIOS
-    // ==========================================
-
-    [RelayCommand]
-    public void OpenCreateServiceModal()
-    {
-        NewServiceCode = $"SERV-{(Services.Count + 1):D3}";
-        NewServiceName = string.Empty;
-        NewServiceDescription = string.Empty;
-        NewServiceCategory = "Consulta";
-        NewServicePrice = 300.00m;
-        NewServiceDuration = 20;
-        NewProductQuantity = 1;
-        NewServiceDefaultProducts.Clear();
-        SelectedProductToAdd = AvailableProducts.FirstOrDefault();
-        IsCreateServiceModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseCreateServiceModal()
-    {
-        IsCreateServiceModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void AddProductToNewService()
-    {
-        if (SelectedProductToAdd == null) return;
-
-        var existing = NewServiceDefaultProducts.FirstOrDefault(dp => dp.ProductId == SelectedProductToAdd.Id);
-        if (existing != null)
-        {
-            existing.Quantity += Math.Max(1, NewProductQuantity);
-        }
-        else
-        {
-            NewServiceDefaultProducts.Add(new ServiceDefaultProduct
-            {
-                ProductId = SelectedProductToAdd.Id,
-                Product = SelectedProductToAdd,
-                Quantity = Math.Max(1, NewProductQuantity),
-                Instructions = "Insumo por defecto del procedimiento"
-            });
-        }
-
-        NewProductQuantity = 1;
-    }
-
-    [RelayCommand]
-    public void RemoveProductFromNewService(ServiceDefaultProduct item)
-    {
-        NewServiceDefaultProducts.Remove(item);
-    }
-
-    [RelayCommand]
-    public async Task SaveNewServiceAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewServiceName))
-        {
-            InfoModalMessage = "El nombre del servicio clínico es obligatorio.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        var newService = new ClinicalService
-        {
-            Code = string.IsNullOrWhiteSpace(NewServiceCode) ? $"SERV-{(Services.Count + 1):D3}" : NewServiceCode.Trim(),
-            Name = NewServiceName.Trim(),
-            Description = NewServiceDescription.Trim(),
-            Category = NewServiceCategory,
-            Price = NewServicePrice,
-            EstimatedDurationMinutes = NewServiceDuration,
-            IsActive = true
-        };
-
-        if (_inventoryService != null)
-        {
-            var defaultItems = NewServiceDefaultProducts
-                .Select(p => (p.ProductId, p.Quantity, p.Instructions))
-                .ToList();
-
-            var saved = await _inventoryService.SaveClinicalServiceAsync(newService, defaultItems);
-            await LoadServicesAsync();
-        }
-        else
-        {
-            foreach (var dp in NewServiceDefaultProducts)
-            {
-                newService.DefaultProducts.Add(dp);
-            }
-            Services.Add(newService);
-        }
-
-        SelectedService = newService;
-        IsCreateServiceModalOpen = false;
-        ShowSuccess($"¡Servicio '{newService.Name}' creado exitosamente con {newService.DefaultProducts.Count} producto(s) por defecto!");
     }
 }

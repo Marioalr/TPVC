@@ -21,7 +21,6 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class PosViewModel : ObservableObject, IDisposable
 {
-    private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
     private static readonly Regex QuantityPrefix = new(@"^\s*(\d{1,3})\s*\*\s*(.*)$", RegexOptions.Compiled);
 
     private readonly InventoryService _inventoryService;
@@ -72,11 +71,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
             // Los nombres de siempre del POS siguen avisando sus cambios
             switch (e.PropertyName)
             {
-                case nameof(CheckoutViewModel.TotalItems): OnPropertyChanged(nameof(TotalCartItems)); break;
                 case nameof(CheckoutViewModel.TotalAmount): OnPropertyChanged(nameof(TotalCartAmount)); break;
                 case nameof(CheckoutViewModel.HasItems): OnPropertyChanged(nameof(HasCartItems)); OnPropertyChanged(nameof(CanAddToActiveConsultation)); break;
-                case nameof(CheckoutViewModel.ChangeDue): OnPropertyChanged(nameof(ChangeDue)); break;
-                case nameof(CheckoutViewModel.HasChange): OnPropertyChanged(nameof(HasChange)); break;
             }
         };
 
@@ -189,9 +185,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
     private ObservableCollection<Product> _searchSuggestions = new();
 
     [ObservableProperty]
-    private bool _isSearchDropdownOpen;
-
-    [ObservableProperty]
     private int _selectedSuggestionIndex = -1;
 
     [ObservableProperty]
@@ -299,20 +292,17 @@ public partial class PosViewModel : ObservableObject, IDisposable
         PendingQuantity = quantity;
 
         SearchSuggestions = new ObservableCollection<Product>(RankProducts(Products, query));
-        IsSearchDropdownOpen = SearchSuggestions.Count > 0;
         SelectedSuggestionIndex = SearchSuggestions.Count > 0 ? 0 : -1;
         SelectedSuggestion = SearchSuggestions.FirstOrDefault();
         OnPropertyChanged(nameof(HasNoSearchResults));
     }
 
-    [RelayCommand]
     public void MoveSuggestionDown()
     {
         if (SearchSuggestions.Count == 0) return;
         SelectedSuggestionIndex = SelectedSuggestionIndex < 0 || SelectedSuggestionIndex >= SearchSuggestions.Count - 1 ? 0 : SelectedSuggestionIndex + 1;
     }
 
-    [RelayCommand]
     public void MoveSuggestionUp()
     {
         if (SearchSuggestions.Count == 0) return;
@@ -320,7 +310,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Enter en el buscador: agrega la sugerencia marcada con la cantidad escrita.</summary>
-    [RelayCommand]
     public void ConfirmSelectedSuggestion()
     {
         if (SearchSuggestions.Count == 0) return;
@@ -330,7 +319,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
         SelectSuggestion(target);
     }
 
-    [RelayCommand]
     public void SelectSuggestion(Product? product)
     {
         if (product == null) return;
@@ -339,14 +327,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
         FocusSearchRequested?.Invoke();
     }
 
-    [RelayCommand]
-    public void AddFirstSuggestion() => ConfirmSelectedSuggestion();
-
-    [RelayCommand]
-    public void CloseSearchDropdown() => IsSearchDropdownOpen = false;
-
     /// <summary>Esc en el buscador: primero cierra la lista, luego borra lo escrito.</summary>
-    [RelayCommand]
     public void ClearSearch()
     {
         SearchText = string.Empty;
@@ -385,12 +366,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
         FocusSearchRequested?.Invoke();
     }
 
-    [RelayCommand]
-    public void SelectCatalogCategory(Category? category)
-    {
-        if (category != null) CatalogSelectedCategory = category;
-    }
-
     /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
     [RelayCommand]
     public void AddFirstCatalogProduct()
@@ -422,30 +397,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
     public CheckoutViewModel Checkout { get; }
 
     public ObservableCollection<CartItem> Cart => Checkout.Cart;
-    public int TotalCartItems => Checkout.TotalItems;
     public decimal TotalCartAmount => Checkout.TotalAmount;
     public bool HasCartItems => Checkout.HasItems;
-    public IReadOnlyList<string> PaymentMethods => Checkout.PaymentMethods;
-    public decimal ChangeDue => Checkout.ChangeDue;
-    public bool HasChange => Checkout.HasChange;
-
-    public string PatientName
-    {
-        get => Checkout.PatientName;
-        set => Checkout.PatientName = value;
-    }
-
-    public string SelectedPaymentMethod
-    {
-        get => Checkout.SelectedPaymentMethod;
-        set => Checkout.SelectedPaymentMethod = value;
-    }
-
-    public decimal CashReceived
-    {
-        get => Checkout.CashReceived;
-        set => Checkout.CashReceived = value;
-    }
 
     [RelayCommand]
     public void AddToCart(Product? product)
@@ -470,10 +423,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void UndoClearCart() => Checkout.UndoClear();
 
-    public void RecalculateTotals() => Checkout.Recalculate();
-
     /// <summary>Cobra la venta (F5 / Ctrl+Enter / botón): mismo cobro que "Terminar consulta".</summary>
-    [RelayCommand]
     public Task ProcessSaleAsync() => Checkout.ChargeAsync();
 
     private Task OnSaleCompletedAsync(SaleReceipt? receipt)
@@ -482,7 +432,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
         CurrentReceipt = receipt;
         IsFreshSaleTicket = true;
         IsTicketModalOpen = true;
-        IsTicketPrinted = false;
         TicketStatusMessage = null;
         ShowAlert($"Venta cobrada · {receipt.Folio}", true, toast: true);
         return Task.CompletedTask;
@@ -499,9 +448,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string? _ticketStatusMessage;
 
-    [ObservableProperty]
-    private bool _isTicketPrinted;
-
     /// <summary>Ticket de la venta recién cobrada (no una reimpresión desde el historial).</summary>
     [ObservableProperty]
     private bool _isFreshSaleTicket;
@@ -512,7 +458,6 @@ public partial class PosViewModel : ObservableObject, IDisposable
         IsTicketModalOpen = false;
         CurrentReceipt = null;
         TicketStatusMessage = null;
-        IsTicketPrinted = false;
         FocusSearchRequested?.Invoke();
     }
 
@@ -529,12 +474,10 @@ public partial class PosViewModel : ObservableObject, IDisposable
         if (_printingService != null)
         {
             bool printed = _printingService.PrintTicket(CurrentReceipt, profile);
-            IsTicketPrinted = printed;
             TicketStatusMessage = printed ? "Ticket enviado a la impresora." : "Impresión cancelada o sin impresora seleccionada.";
         }
         else
         {
-            IsTicketPrinted = true;
             TicketStatusMessage = "Ticket emitido.";
         }
     }
@@ -542,11 +485,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
     // ================================================================== consulta en curso
 
     public bool HasActiveConsultation => _consultationService.HasActiveConsultation;
-    public ActiveConsultation? ActiveConsultation => _consultationService.CurrentConsultation;
-    public string ActiveConsultationFolio => _consultationService.CurrentConsultation?.Folio ?? string.Empty;
     public string ActiveConsultationPatientName => _consultationService.CurrentConsultation?.PatientName ?? string.Empty;
-    public int ActiveConsultationItemsCount => _consultationService.CurrentConsultation?.TotalItems ?? 0;
-    public decimal ActiveConsultationTotalAmount => _consultationService.CurrentConsultation?.TotalAmount ?? 0m;
     /// <summary>Hay consulta en curso que se cobra en este equipo (no la que se envió a otro).</summary>
     public bool CanChargeToActiveConsultation => HasActiveConsultation && _consultationService.CurrentConsultation?.IsHandedOff != true;
 
@@ -568,11 +507,7 @@ public partial class PosViewModel : ObservableObject, IDisposable
     public void SyncActiveConsultation()
     {
         OnPropertyChanged(nameof(HasActiveConsultation));
-        OnPropertyChanged(nameof(ActiveConsultation));
-        OnPropertyChanged(nameof(ActiveConsultationFolio));
         OnPropertyChanged(nameof(ActiveConsultationPatientName));
-        OnPropertyChanged(nameof(ActiveConsultationItemsCount));
-        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
         OnPropertyChanged(nameof(CanAddToActiveConsultation));
         OnPropertyChanged(nameof(CanChargeToActiveConsultation));
         OnPropertyChanged(nameof(ActiveConsultationBannerText));
@@ -670,12 +605,5 @@ public partial class PosViewModel : ObservableObject, IDisposable
         if (_notifications == null) return;
         if (!isSuccess) _notifications.Warning(message);
         else if (toast) _notifications.Success(message);
-    }
-
-    [RelayCommand]
-    public void DismissAlert()
-    {
-        IsAlertVisible = false;
-        AlertMessage = null;
     }
 }

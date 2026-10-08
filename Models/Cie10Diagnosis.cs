@@ -162,8 +162,6 @@ public class Cie10Diagnosis
         new() { Code = "Z34.9", Name = "Supervisión de embarazo normal, no especificado (Control prenatal)", Category = "Control Preventivo" }
     };
 
-    public static IReadOnlyList<Cie10Diagnosis> All => _allDiagnoses;
-
     public static IEnumerable<Cie10Diagnosis> Search(string query, int maxResults = 15)
     {
         if (string.IsNullOrWhiteSpace(query))

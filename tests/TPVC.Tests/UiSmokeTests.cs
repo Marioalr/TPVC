@@ -305,7 +305,7 @@ internal sealed class UiSmokeSession
             pos.AddToCartWithQuantity(stocked[0], 2);
             pos.AddToCart(stocked[1]);
             pos.AddServiceOnlyToCart(pos.Services.First());
-            pos.CashReceived = 1000m;
+            pos.Checkout.CashReceived = 1000m;
             Capture(host, $"02b-pos-cuenta-{suffix}");
             pos.SearchText = "3*para";
             Capture(host, $"02c-pos-busqueda-{suffix}");
@@ -388,7 +388,7 @@ internal sealed class UiSmokeSession
             // El paciente de prueba es alérgico a la penicilina: la amoxicilina debe avisar
             records.PrescriptionMedicineName = "Amoxicilina / Ácido Clavulánico 500/125 mg";
             records.PrescriptionDosage = "1 tableta cada 12 horas por 7 días";
-            WaitFor(records.AddPrescriptionItemToPatientAsync());
+            WaitFor(records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct));
             if (records.IsAllergyAlertOpen)
             {
                 Capture(host, $"11b-alerta-alergia-{suffix}");
@@ -419,7 +419,7 @@ internal sealed class UiSmokeSession
 
             WaitFor(records.FinalizeConsultationAsync());
             Capture(host, $"15-terminar-consulta-{suffix}");
-            records.ClosePosModal();
+            records.CloseFinishConsultation();
             WaitFor(records.DiscardActiveConsultationAsync());
 
             // Una consulta que la tablet mandó a esta PC: el aviso en Pacientes

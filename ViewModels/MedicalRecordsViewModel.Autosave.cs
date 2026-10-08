@@ -72,8 +72,6 @@ public partial class MedicalRecordsViewModel
     [ObservableProperty]
     private bool _isConsultationRecovered;
 
-    public bool IsAutosaveEnabled => _draftStore != null;
-
     private void InitializeAutosave(ConsultationDraftStore? store)
     {
         _draftStore = store;
