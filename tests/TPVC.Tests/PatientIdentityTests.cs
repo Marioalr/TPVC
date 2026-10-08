@@ -225,4 +225,37 @@ public class PatientIdentityTests
         Assert.AreEqual(string.Empty, note.VitalSigns, "No se tomaron signos en esta consulta");
         Assert.AreEqual("TA: 110/70 mmHg", vm.SelectedPatient.VitalSigns, "Se conservan los últimos registrados");
     }
+
+    [TestMethod]
+    public async Task EditPatient_LoadsTheNameParts_AndSavingKeepsTheLastVitalSigns()
+    {
+        // Antes, editar el expediente y guardar reescribía los signos sin la glucosa ni la saturación
+        var vitals = "TA: 130/85 mmHg | FC: 78 lpm | Glucosa: 142 mg/dL | SpO2: 97%";
+        var stored = await _service.SavePatientAsync(new PatientRecord
+        {
+            FullName = "Laura Gómez Rivas",
+            RecordNumber = "EXP-EDIT-001",
+            Gender = "Femenino",
+            BirthDate = new DateTime(1980, 5, 12),
+            Allergies = "Negadas",
+            VitalSigns = vitals
+        });
+
+        var vm = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
+        await vm.InitialLoad;
+        vm.SelectPatient(vm.Patients.Single(p => p.Id == stored.Id));
+        vm.EditPatient();
+
+        Assert.AreEqual("Laura", vm.FormFirstName);
+        Assert.AreEqual("Gómez", vm.FormLastName);
+        Assert.AreEqual("Rivas", vm.FormMaternalLastName);
+
+        vm.FormPhone = "5551234567";
+        await vm.SavePatientModalAsync();
+
+        Assert.IsNull(vm.FormErrorMessage);
+        var saved = (await _service.GetPatientsAsync()).Single(p => p.Id == stored.Id);
+        Assert.AreEqual("5551234567", saved.Phone);
+        Assert.AreEqual(vitals, saved.VitalSigns);
+    }
 }
