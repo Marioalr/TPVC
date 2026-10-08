@@ -163,8 +163,8 @@
                             <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="12,8" Margin="0,0,0,20">
                                 <StackPanel>
                                     <TextBlock Text="MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                    <TextBlock Text="{Binding PrescriptionGeneralInstructions}" Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource BoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                    <TextBlock Text="Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas." Visibility="{Binding HasCustomGeneralIndications, Converter={StaticResource InverseBoolToVis}}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                    <!-- Lo mismo que se imprime: el plan e indicaciones que escribió el médico, o el texto general -->
+                                    <TextBlock Text="{Binding PrescriptionIndications}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
 

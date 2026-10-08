@@ -126,6 +126,10 @@ public class PrintingService
     /// <summary>La receta siempre dice algo de alergias: cuáles, "Negadas" o "No interrogadas".</summary>
     public static string PrescriptionAllergyText(PatientRecord patient) => patient.AllergySummary;
 
+    /// <summary>Indicaciones de la receta cuando el médico no escribió otras (vista previa, impresión y PDF).</summary>
+    public const string DefaultPrescriptionIndications =
+        "Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas.";
+
     public string? ExportPrescriptionDocument(
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
@@ -221,7 +225,7 @@ public class PrintingService
             // General Instructions
             string indications = !string.IsNullOrWhiteSpace(generalNotes)
                 ? generalNotes
-                : "Completar el esquema terapéutico prescrito, mantener hidratación adecuada y reposo relativo. Acudir a revaloración médica o servicio de urgencias en caso de persistencia de fiebre, dificultad respiratoria o reacciones adversas.";
+                : DefaultPrescriptionIndications;
             sb.AppendLine("<div class=\"instructions\">");
             sb.AppendLine($"  <strong>&bull; Indicaciones Generales y Datos de Alarma:</strong><br>{H(indications).Replace("\n", "<br>")}");
             sb.AppendLine("</div>");
@@ -445,7 +449,7 @@ public class PrintingService
         // Indicaciones generales
         string indications = !string.IsNullOrWhiteSpace(generalNotes)
             ? generalNotes
-            : "Completar el tratamiento prescrito, mantener hidratación adecuada y reposo relativo. Acudir a valoración si presenta fiebre persistente o complicaciones.";
+            : DefaultPrescriptionIndications;
         var indicationsPara = new Paragraph { Margin = new Thickness(0, 16, 0, 30) };
         indicationsPara.Inlines.Add(new Bold(new Run("Indicaciones Generales y Datos de Alarma:\n")));
         indicationsPara.Inlines.Add(new Run(indications) { Foreground = Brushes.DarkSlateGray });

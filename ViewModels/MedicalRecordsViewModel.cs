@@ -750,11 +750,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _consultationGeneralIndications = "Tomar abundantes líquidos, mantener reposo relativo y acudir a urgencias en caso de presentar datos de alarma.";
 
-    [ObservableProperty]
-    private string _prescriptionGeneralInstructions = string.Empty;
-
-    [ObservableProperty]
-    private bool _hasCustomGeneralIndications;
 
     public static bool IsProductMedication(Product p)
     {
@@ -1871,7 +1866,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         var treatmentPlan = !string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
             ? ConsultationTreatmentPlan.Trim()
-            : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : "Tratamiento e indicaciones médicas según receta.");
+            : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : SavedTreatmentPlanPlaceholder);
 
         var systemsReview = !string.IsNullOrWhiteSpace(ConsultationSystemsReview)
             ? ConsultationSystemsReview.Trim()
@@ -2252,30 +2247,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         _consultationService.CurrentConsultation.Items.Remove(item);
         _consultationService.CurrentConsultation.NotifyItemsChanged();
         SyncActiveConsultation();
-    }
-
-    [RelayCommand]
-    public void AddGeneralIndicationsToPrescription()
-    {
-        if (string.IsNullOrWhiteSpace(ConsultationGeneralIndications))
-        {
-            InfoModalMessage = "Escriba las indicaciones generales del paciente antes de vincularlas a la receta.";
-            IsInfoModalVisible = true;
-            return;
-        }
-
-        PrescriptionGeneralInstructions = ConsultationGeneralIndications.Trim();
-        HasCustomGeneralIndications = true;
-        if (SelectedPatient != null)
-        {
-            SelectedPatient.GeneralIndications = PrescriptionGeneralInstructions;
-        }
-        if (_consultationService?.CurrentConsultation != null)
-        {
-            _consultationService.CurrentConsultation.GeneralIndications = PrescriptionGeneralInstructions;
-        }
-
-        ShowSuccess("¡Indicaciones generales vinculadas exitosamente a la receta médica!\n\nSe incluirán de forma destacada en la receta oficial NOM-004-SSA3 para impresión y PDF.");
     }
 
     [RelayCommand]
@@ -3098,7 +3069,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 SelectedPatient, 
                 SelectedPatient.ActivePrescription, 
                 profile, 
-                PrescriptionGeneralInstructions);
+                PrescriptionIndications);
 
             if (printed)
             {
@@ -3144,7 +3115,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 SelectedPatient, 
                 SelectedPatient.ActivePrescription, 
                 profile, 
-                PrescriptionGeneralInstructions);
+                PrescriptionIndications);
 
             if (!string.IsNullOrEmpty(filePath))
             {

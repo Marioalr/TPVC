@@ -1442,34 +1442,38 @@ public class InventoryTests
     }
 
     [TestMethod]
-    public void MedicalRecords_GeneralIndications_CanBeLinkedToPrescriptionAndConsultation()
+    public async Task MedicalRecords_PrescriptionIndications_AreWhatTheDoctorWrote()
     {
         var consultationService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
-
-        var patient = new PatientRecord
-        {
-            Id = 11,
-            FullName = "Elena Ramos",
-            RecordNumber = "EXP-TEST-011"
-        };
+        var patient = new PatientRecord { Id = 11, FullName = "Elena Ramos", RecordNumber = "EXP-TEST-011" };
         recordsVm.SelectedPatient = patient;
+
+        // Sin consulta ni historial: el texto general
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications);
+
+        // En consulta: el plan que escribe el médico (también lo que agregan los botones rápidos)
         recordsVm.StartActiveConsultation();
-
-        // Modificar indicaciones y añadir presets
-        recordsVm.ConsultationGeneralIndications = "Guardar reposo absoluto por 3 días.";
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications, "Plan vacío: texto general");
+        var changes = new List<string>();
+        recordsVm.PropertyChanged += (_, e) => changes.Add(e.PropertyName ?? string.Empty);
+        recordsVm.ConsultationTreatmentPlan = "Guardar reposo absoluto por 3 días.";
         recordsVm.AppendGeneralIndicationPreset("Hidratación con electrolitos orales.");
+        Assert.AreEqual("Guardar reposo absoluto por 3 días. Hidratación con electrolitos orales.", recordsVm.PrescriptionIndications);
+        Assert.Contains(nameof(MedicalRecordsViewModel.PrescriptionIndications), changes, "La vista previa se actualiza al escribir");
 
-        Assert.IsTrue(recordsVm.ConsultationGeneralIndications.Contains("Guardar reposo absoluto"));
-        Assert.IsTrue(recordsVm.ConsultationGeneralIndications.Contains("electrolitos orales"));
-
-        // Vincular a receta
-        recordsVm.AddGeneralIndicationsToPrescription();
-
-        Assert.IsTrue(recordsVm.HasCustomGeneralIndications);
-        Assert.AreEqual(recordsVm.ConsultationGeneralIndications, recordsVm.PrescriptionGeneralInstructions);
-        Assert.AreEqual(recordsVm.PrescriptionGeneralInstructions, patient.GeneralIndications);
-        Assert.AreEqual(recordsVm.PrescriptionGeneralInstructions, consultationService.CurrentConsultation?.GeneralIndications);
+        // Fuera de consulta: las de la última consulta guardada (no el texto de relleno)
+        await recordsVm.DiscardActiveConsultationAsync();
+        Assert.IsFalse(recordsVm.HasActiveConsultation);
+        recordsVm.ConsultationsHistory = new System.Collections.ObjectModel.ObservableCollection<PatientConsultation>
+        {
+            new() { Folio = "CNS-2", Date = DateTime.Today, TreatmentPlan = "Paracetamol si hay fiebre; control en una semana." },
+            new() { Folio = "CNS-1", Date = DateTime.Today.AddDays(-30), TreatmentPlan = "Dieta blanda." }
+        };
+        Assert.AreEqual("Paracetamol si hay fiebre; control en una semana.", recordsVm.PrescriptionIndications);
+        recordsVm.ConsultationsHistory[0].TreatmentPlan = "Tratamiento e indicaciones médicas según receta.";
+        recordsVm.ConsultationsHistory = new System.Collections.ObjectModel.ObservableCollection<PatientConsultation>(recordsVm.ConsultationsHistory);
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications);
     }
 
     [TestMethod]

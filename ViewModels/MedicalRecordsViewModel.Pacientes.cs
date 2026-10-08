@@ -565,6 +565,7 @@ public partial class MedicalRecordsViewModel
             .Where(e => kind == null || e.Kind == kind)
             .Where(e => TextSearch.Matches(query, e.Title, e.Detail)));
         OnPropertyChanged(nameof(HasTimeline));
+        OnPropertyChanged(nameof(PrescriptionIndications));
         OnPropertyChanged(nameof(NextAppointmentText));
         OnPropertyChanged(nameof(HasNextAppointment));
     }

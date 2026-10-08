@@ -49,8 +49,36 @@ public partial class MedicalRecordsViewModel
     private static bool SameMedicine(PatientPrescriptionItem a, PatientPrescriptionItem b) =>
         string.Equals(a.MedicineName?.Trim(), b.MedicineName?.Trim(), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Lo que se guarda como plan cuando la consulta termina sin plan escrito.</summary>
+    private const string SavedTreatmentPlanPlaceholder = "Tratamiento e indicaciones médicas según receta.";
+
+    /// <summary>
+    /// Indicaciones de la receta (vista previa, impresión y PDF): en consulta, el plan e indicaciones
+    /// que escribe el médico; fuera de ella, las de la última consulta guardada; si no hay, el texto general.
+    /// Antes la receta siempre llevaba el texto general aunque el médico hubiera escrito otras.
+    /// </summary>
+    public string PrescriptionIndications
+    {
+        get
+        {
+            if (IsConsultationForSelectedPatient)
+            {
+                return string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
+                    ? PrintingService.DefaultPrescriptionIndications
+                    : ConsultationTreatmentPlan.Trim();
+            }
+            var saved = ConsultationsHistory.FirstOrDefault()?.TreatmentPlan?.Trim();
+            return string.IsNullOrWhiteSpace(saved) || saved == SavedTreatmentPlanPlaceholder
+                ? PrintingService.DefaultPrescriptionIndications
+                : saved;
+        }
+    }
+
+    partial void OnConsultationTreatmentPlanChanged(string value) => OnPropertyChanged(nameof(PrescriptionIndications));
+
     private void NotifyPrescriptionStateChanged()
     {
+        OnPropertyChanged(nameof(PrescriptionIndications));
         OnPropertyChanged(nameof(CanRepeatPreviousPrescription));
         OnPropertyChanged(nameof(PreviousPrescriptionSummary));
         OnPropertyChanged(nameof(ChartPrescription));
