@@ -220,12 +220,12 @@ Pendiente: la app de la tablet implementa el mismo contrato; revisar en Windows 
 Cuando las pantallas nuevas ya existan, revisar **cada pantalla y cada ventana** en **modo claro,
 modo oscuro, un acento distinto al azul y el modo personalizado**:
 
-- [ ] Ningún color fijo que rompa el modo oscuro (cajas pastel con texto oscuro, `#AA000000`, etc.).
-- [ ] Contraste de texto 4.5:1 (3:1 en títulos grandes) sobre fondo, superficie, tarjeta y selección.
-- [ ] Estados: hover, foco de teclado visible, presionado, deshabilitado, seleccionado.
-- [ ] Distintivos de alergia, sin existencias, vencidos y avisos de signos vitales legibles en ambos modos.
-- [ ] Gráfica de signos vitales, ticket, receta impresa y PDF (la impresión siempre en claro).
-- [ ] Cambiar de tema con la app abierta actualiza todo sin reiniciar.
+- [x] Ningún color fijo que rompa el modo oscuro (cajas pastel con texto oscuro, `#AA000000`, etc.).
+- [x] Contraste de texto 4.5:1 (3:1 en títulos grandes) sobre fondo, superficie, tarjeta y selección.
+- [x] Estados: hover, foco de teclado visible, presionado, deshabilitado, seleccionado.
+- [x] Distintivos de alergia, sin existencias, vencidos y avisos de signos vitales legibles en ambos modos.
+- [x] Gráfica de signos vitales, ticket, receta impresa y PDF (la impresión siempre en claro).
+- [x] Cambiar de tema con la app abierta actualiza todo sin reiniciar.
 - Hallazgos ya identificados (2026-10-07):
   - El acento por defecto `#0284C7` con texto blanco tiene contraste **4.1:1** (menos de 4.5:1) en
     botones principales. Propuesta: `#0369A1` (5.9:1).
@@ -236,6 +236,22 @@ modo oscuro, un acento distinto al azul y el modo personalizado**:
 - Automático desde v1.11: la prueba `ThemeResourceTests` falla si una pantalla usa un color de tema que
   no existe o si un color de la paleta no cambia con el tema (así se encontraron `ThemeCard`,
   `ThemeError` y `ThemeSurfaceHighlight`, que nunca estuvieron definidos).
+
+**Hecho en v1.18:** la prueba de capturas (`UiSmokeTests`, CI de Windows) recorre todas las pantallas en
+claro, oscuro, ámbar y personalizado y mide el contraste real de cada texto e icono contra el fondo que tiene
+detrás (mezclando los semitransparentes); deja `contraste.txt` en el artefacto y falla si algo queda por
+debajo (empezó con 59 textos, terminó en 0). `ThemePalette.Build` separa los usos del acento
+(`ThemeAccentForeground` texto/iconos, `ThemeAccentStrong` fondo con texto blanco, `ThemeFocus` foco y bordes
+de estado a 3:1 también sobre gris suave, selección y avisos) y agrega `ThemeControlBorder`,
+`ThemeStatus*` y `ThemeToastHover/Pressed`; las pruebas de la paleta cubren los 8 acentos de Apariencia, los
+extremos y colores propios desde claro y desde oscuro. Dos pruebas de texto (`TextOnlyUsesTextColors`,
+`RawAccentIsOnlyUsedForTextSelection`) impiden volver a usar un color de relleno como texto. Tres auditorías
+(código, paleta y pantallas, más una de estados) dieron unos 60 hallazgos: estados con marca que no depende
+solo del tinte, controles de Windows reemplazados, estilos heredados retirados, emojis por iconos, barra de
+título oscura (`Helpers/TitleBar.cs`), colores propios coherentes y la receta impresa/PDF con tinta legible.
+Una revisión adversarial del resultado encontró además iconos vacíos en la paleta, botones que cambiaban de
+ancho al deshabilitarse y chips que se movían al elegirlos; corregidos. Pendiente: revisar en Windows lo que
+necesita interacción real (lista en `PENDIENTES_ANDROID.md`, D v1.18).
 
 ### Fase 6 · Cierre
 

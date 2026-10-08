@@ -2,6 +2,25 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.0] - 2026-10-08
+
+### Cambiado — Fase 5 del rediseño: revisión de los temas
+* **Cada pantalla medida en cuatro temas** (claro, oscuro, acento ámbar y personalizado): la prueba de capturas de la CI mide el contraste de cada texto (4.5:1, o 3:1 en títulos grandes) y de cada icono (3:1) contra el fondo que tiene detrás. Al empezar había 59 textos por debajo; ahora ninguno.
+* **El color de acento se ajusta según el uso**: uno para texto, iconos y enlaces (legible también sobre lo seleccionado), otro para el fondo de los botones con texto blanco y otro para el anillo de foco y los bordes de estado (3:1 también sobre el gris suave, lo seleccionado y las cajas de aviso). Un acento muy claro u oscuro ya no deja nada ilegible.
+* **Estados que se ven en cualquier tema**: los chips y las casillas marcadas llevan borde además del relleno; la fila elegida de las listas (y la sección activa de Configuración y la sugerencia CIE-10 que toma Enter) lleva una barra a la izquierda; en las listas desplegables el elemento al que se llega con el teclado se distingue del elegido; los menús marcan el elemento con borde; los encabezados plegables usan el foco del tema y se oscurecen al pulsarlos; los botones principales deshabilitados pasan a gris legible en vez de desvanecerse; la X de los avisos breves ya no desaparece al pasar el cursor.
+* **Contornos de casillas, opciones, campos y barras de desplazamiento** con contraste 3:1 (antes 1.6:1 en claro).
+* **No todo depende del color**: las existencias dicen "Stock bajo: 3" o "Sin existencias"; la T/A de "Lo esencial" lleva flecha ↑ ↓; en la vista previa de la receta las alergias van en rojo solo si las hay; el paciente que abre Enter lleva una barra.
+* **Ya no quedan controles con el aspecto de Windows** (claros en modo oscuro): lista de medidas generales, casilla "Se surte aquí", opciones del asistente inicial, barras de progreso, campo de los tokens y el botón Esc de la paleta. Los emojis del inicio, la paleta de comandos, el aviso clínico y el asistente pasaron a iconos que toman el color del tema.
+* **Barra de título oscura** en modo oscuro (Windows 10 y 11); cambia junto con el tema.
+* **Puntos de estado de la sincronización** con colores del tema (antes fijos, por debajo de 3:1 en claro).
+* **Colores propios**: el texto y los bordes salen del lado del fondo elegido (antes se quedaban los del modo anterior y el texto principal y el secundario salían del mismo gris); fondo y tarjetas deben ser los dos claros o los dos oscuros, y la vista previa muestra exactamente lo que se aplica.
+* **Receta impresa y PDF legibles en papel**: títulos en azul `#0369A1` (antes 4.1:1), gris de notas más oscuro y alergias en rojo solo si las hay; el papel siempre es blanco con tinta negra, sin importar el tema. La vista previa de la receta se ve como papel también en modo oscuro.
+
+### Corregido
+* Modo oscuro: la lista de medidas generales de la consulta era ilegible (fondo claro de Windows con texto blanco); los iconos de sol y luna de Apariencia salían en negro; el cursor de la paleta de comandos no se veía; el foco de teclado era un rectángulo negro punteado invisible en las tarjetas del inicio, los encabezados de sección y los botones de la barra de estado.
+* El resumen "Apariencia" de Configuración no cambiaba al cambiar el tema desde Componentes.
+* Con tarjetas gris medio en colores propios, lo seleccionado quedaba igual a la tarjeta.
+
 ## [1.17.0] - 2026-10-08
 
 ### Añadido — Fase E del rediseño: consulta entre equipos (parte de la PC)
