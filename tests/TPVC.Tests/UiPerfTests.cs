@@ -193,6 +193,14 @@ internal sealed class UiPerfSession
         _rows.Add(("Desglose", "Medir y acomodar", $"{afterLayout - afterPump:0} ms"));
         _rows.Add(("Desglose", "Dibujar", $"{open.Elapsed.TotalMilliseconds - afterLayout:0} ms"));
         _rows.Add(("Desglose", "Elementos del historial", $"{records.Timeline.Count} renglones, {CountVisuals(host)} elementos visuales"));
+        foreach (var list in FindItemsControls(host).Where(c => c.Items.Count > 20))
+        {
+            int realized = 0;
+            for (int i = 0; i < list.Items.Count; i++) if (list.ItemContainerGenerator.ContainerFromIndex(i) != null) realized++;
+            var panel = FindPanel(list);
+            _rows.Add(("Listas", $"{list.GetType().Name} {list.Name} ({list.ItemsSource?.GetType().GenericTypeArguments.FirstOrDefault()?.Name})",
+                $"{list.Items.Count} elementos, {realized} creados, panel {panel?.GetType().Name}, virtualiza {System.Windows.Controls.VirtualizingPanel.GetIsVirtualizing(list)}, alto {list.ActualHeight:0}, visible {list.IsVisible}"));
+        }
 
         records.GoToPatientsHome();
         Settle(host);
@@ -284,6 +292,25 @@ internal sealed class UiPerfSession
         host.UpdateLayout();
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Width, (int)Height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
         bitmap.Render(host);
+    }
+
+    private static IEnumerable<System.Windows.Controls.ItemsControl> FindItemsControls(System.Windows.DependencyObject root)
+    {
+        if (root is System.Windows.Controls.ItemsControl ic) yield return ic;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (var child in FindItemsControls(System.Windows.Media.VisualTreeHelper.GetChild(root, i))) yield return child;
+    }
+
+    private static System.Windows.Controls.Panel? FindPanel(System.Windows.DependencyObject root)
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is System.Windows.Controls.Panel { IsItemsHost: true } p) return p;
+            var found = FindPanel(child);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private static int CountVisuals(System.Windows.DependencyObject root)
