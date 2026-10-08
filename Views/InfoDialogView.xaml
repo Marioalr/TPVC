@@ -16,7 +16,7 @@
             HorizontalAlignment="Stretch" 
             VerticalAlignment="Stretch">
         <Border Background="{DynamicResource ThemeSurface}" 
-                BorderBrush="{DynamicResource ThemeAccent}" 
+                BorderBrush="{DynamicResource ThemeFocus}" 
                 BorderThickness="2" 
                 CornerRadius="16" 
                 Padding="30,26" 
@@ -24,7 +24,7 @@
                 HorizontalAlignment="Center" 
                 VerticalAlignment="Center">
             <StackPanel>
-                <Border Background="{DynamicResource ThemeAccent}" 
+                <Border Background="{DynamicResource ThemeAccentStrong}" 
                         CornerRadius="6" 
                         Padding="12,5" 
                         HorizontalAlignment="Left" 

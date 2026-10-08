@@ -104,6 +104,62 @@ public class ThemeResourceTests
 
         Assert.IsEmpty(missing.Distinct().ToList(), "Recursos sin definir: " + string.Join("; ", missing.Distinct()));
     }
+    /// <summary>
+    /// Fase 5: el texto solo usa colores hechos para texto. Los de relleno (acento sin ajustar,
+    /// sólidos de éxito/aviso/peligro, bordes, fondos) no garantizan contraste: con un acento ámbar
+    /// o en modo oscuro quedaban en 2–3:1.
+    /// </summary>
+    [TestMethod]
+    public void TextOnlyUsesTextColors()
+    {
+        var root = RepoRoot();
+        var fillOnly = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ThemeAccent", "ThemeAccentStrong", "ThemeAccentHover", "ThemeAccentPressed", "ThemePrimary", "ThemePrimaryTransparent",
+            "ThemeSuccess", "ThemeWarning", "ThemeDanger", "ThemeError", "ThemeFocus", "ThemeBorder", "ThemeBorderStrong",
+            "ThemeOverlay", "ThemeSelectionBackground", "ThemeSurface", "ThemeSurfaceSubtle", "ThemeCard", "ThemeBackground",
+            "ThemeSuccessSubtle", "ThemeWarningSubtle", "ThemeDangerSubtle", "ThemeInfoSubtle", "ThemeToastBackground"
+        };
+        var pattern = new Regex(
+            "(?:(?:\\b|\\.)Foreground=\"\\{(?:DynamicResource|StaticResource)\\s+(Theme\\w+)\\}\")" +
+            "|(?:Property=\"(?:TextElement\\.)?Foreground\"\\s+Value=\"\\{(?:DynamicResource|StaticResource)\\s+(Theme\\w+)\\}\")");
+        var problems = new List<string>();
+        foreach (var file in AppXamlFiles(root))
+        {
+            var lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                foreach (Match m in pattern.Matches(lines[i]))
+                {
+                    var key = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+                    if (fillOnly.Contains(key)) problems.Add($"{Path.GetRelativePath(root, file)}:{i + 1} {key}");
+                }
+            }
+        }
+        Assert.IsEmpty(problems, "Texto con colores de relleno (use ThemeText, ThemeTextSecondary, ThemeAccentForeground, ThemeAccentText o *Text): " +
+            string.Join("; ", problems));
+    }
+
+    /// <summary>El acento tal cual lo eligió el usuario solo sirve para la selección de texto.</summary>
+    [TestMethod]
+    public void RawAccentIsOnlyUsedForTextSelection()
+    {
+        var root = RepoRoot();
+        var problems = new List<string>();
+        foreach (var file in AppXamlFiles(root))
+        {
+            var lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!Regex.IsMatch(lines[i], "(?:DynamicResource|StaticResource)\\s+ThemeAccent\\}")) continue;
+                if (lines[i].Contains("SelectionBrush", StringComparison.Ordinal)) continue;
+                problems.Add($"{Path.GetRelativePath(root, file)}:{i + 1}");
+            }
+        }
+        Assert.IsEmpty(problems, "ThemeAccent sin ajustar (use ThemeAccentStrong de fondo, ThemeAccentForeground de texto o ThemeFocus de borde): " +
+            string.Join("; ", problems));
+    }
+
     [TestMethod]
     public void NoBindingUsesAsyncCommandNames()
     {

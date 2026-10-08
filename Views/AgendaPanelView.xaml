@@ -161,7 +161,7 @@
                                     </Button>
 
                                     <!-- Formulario para agendar en este hueco -->
-                                    <Border x:Name="SlotForm" BorderBrush="{DynamicResource ThemeAccent}" BorderThickness="2" CornerRadius="10" Padding="14,12" Margin="0,6,0,0"
+                                    <Border x:Name="SlotForm" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="2" CornerRadius="10" Padding="14,12" Margin="0,6,0,0"
                                             Background="{DynamicResource ThemeSurfaceSubtle}" Visibility="Collapsed">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold">
@@ -214,7 +214,7 @@
                                     <Setter TargetName="AppointmentCard" Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsConfirmed}" Value="True">
-                                    <Setter TargetName="AppointmentCard" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter TargetName="AppointmentCard" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                     <Setter TargetName="AppointmentCard" Property="BorderThickness" Value="1" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>

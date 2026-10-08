@@ -48,7 +48,7 @@
                     <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
                 </Border>
                     <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Duración de la consulta">
-                        <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccent}" />
+                        <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" />
                     </Border>
                 </WrapPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
@@ -73,7 +73,7 @@
                     </Button>
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DiscardActiveConsultationCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Paciente equivocado o se retiró: no guarda la nota ni cobra"
                             Visibility="{Binding IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}">
-                        <TextBlock Text="Descartar" Foreground="{DynamicResource ThemeError}" />
+                        <TextBlock Text="Descartar" Foreground="{DynamicResource ThemeDangerText}" />
                     </Button>
                     <Button Style="{StaticResource ButtonPrimary}" Command="{Binding FinalizeConsultationCommand}" Padding="18,8" Content="Terminar consulta" ToolTip="Revisar la cuenta y cobrar (Ctrl + Enter)"
                             Visibility="{Binding IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}" />
@@ -162,7 +162,7 @@
                             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=1}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -181,7 +181,7 @@
                                             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=1}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -234,7 +234,7 @@
                             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=2}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -253,7 +253,7 @@
                                             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=2}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -349,7 +349,7 @@
                             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=3}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -368,7 +368,7 @@
                                             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=3}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -427,7 +427,7 @@
                             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=4}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -446,7 +446,7 @@
                                             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=4}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -483,7 +483,7 @@
                                      ToolTip="Escriba la clave o el nombre (ej. J00, rinofaringitis) y elija con ↑ ↓ y Enter" />
                             <TextBlock Text="Escriba la clave o el nombre: aparecen sugerencias del catálogo CIE-10 (↑ ↓ y Enter para elegir)." FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,4,0,6" />
                             <Border Background="{DynamicResource ThemeSurface}"
-                                    BorderBrush="{DynamicResource ThemeAccent}"
+                                    BorderBrush="{DynamicResource ThemeFocus}"
                                     BorderThickness="1.5"
                                     CornerRadius="8"
                                     Margin="0,0,0,8"
@@ -529,7 +529,7 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0" Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                                <Border Grid.Column="0" Background="{DynamicResource ThemeAccentStrong}" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
                                                     <TextBlock Text="{Binding Code}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeAccentText}" />
                                                 </Border>
                                                 <TextBlock Grid.Column="1" Text="{Binding Description}" FontSize="12.5" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -550,7 +550,7 @@
                             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=5}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -569,7 +569,7 @@
                                             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=5}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccent}" />
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

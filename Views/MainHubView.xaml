@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=vm:MainHubViewModel}"
              d:DesignHeight="750" d:DesignWidth="1200">
@@ -32,7 +33,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="cardBorder" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                                <Setter TargetName="cardBorder" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                <Setter TargetName="cardBorder" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 <Setter TargetName="cardBorder" Property="BorderThickness" Value="2" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
@@ -74,7 +75,7 @@
                 <Border Grid.Row="0" 
                         Visibility="{Binding HasAlerts, Converter={StaticResource BoolToVis}}" 
                         Background="{DynamicResource ThemeSurfaceSubtle}" 
-                        BorderBrush="{DynamicResource ThemeAccent}" 
+                        BorderBrush="{DynamicResource ThemeFocus}" 
                         BorderThickness="1.5" 
                         CornerRadius="14" 
                         Padding="18,14" 
@@ -88,8 +89,8 @@
 
                         <!-- Mensaje Resumen de Alertas -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ThemeAccent}" CornerRadius="20" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <TextBlock Text="🔔" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border Background="{DynamicResource ThemeAccentStrong}" CornerRadius="20" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <helpers:Icon Data="{StaticResource IcoAlert}" Width="18" Height="18" Foreground="{DynamicResource ThemeAccentText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Avisos del Sistema al Iniciar la Jornada" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeText}" />
@@ -117,9 +118,9 @@
                                     Visibility="{Binding LowStockCount, Converter={StaticResource BoolToVis}}" 
                                     Padding="10,6" Margin="0,2,8,2">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⚠️ Stock Bajo (" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
-                                    <TextBlock Text="{Binding LowStockCount}" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
-                                    <TextBlock Text=")" FontSize="11.5" Foreground="{DynamicResource ThemeWarning}" />
+                                    <TextBlock Text="⚠️ Stock Bajo (" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
+                                    <TextBlock Text="{Binding LowStockCount}" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
+                                    <TextBlock Text=")" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" />
                                 </StackPanel>
                             </Button>
 
@@ -217,7 +218,7 @@
 
                     <!-- Ícono de Carrito en Círculo con Acento -->
                     <Border Grid.Row="0" 
-                            Background="{DynamicResource ThemeAccent}" 
+                            Background="{DynamicResource ThemeAccentStrong}" 
                             CornerRadius="36" 
                             Width="68" Height="68" 
                             HorizontalAlignment="Center" 
@@ -243,7 +244,7 @@
                                Text="Punto de Venta / Farmacia" 
                                FontWeight="SemiBold" 
                                FontSize="13" 
-                               Foreground="{DynamicResource ThemeAccent}" 
+                               Foreground="{DynamicResource ThemeAccentForeground}" 
                                HorizontalAlignment="Center" 
                                Margin="0,4,0,12" />
 
@@ -260,7 +261,7 @@
 
                     <!-- Botón / Indicador CTA -->
                     <Border Grid.Row="4" 
-                            Background="{DynamicResource ThemeAccent}" 
+                            Background="{DynamicResource ThemeAccentStrong}" 
                             CornerRadius="8" 
                             Padding="18,10" 
                             HorizontalAlignment="Center">
@@ -297,14 +298,14 @@
                     <!-- Ícono de Expediente Médico en Círculo -->
                     <Border Grid.Row="0" 
                             Background="{DynamicResource ThemeSurfaceSubtle}" 
-                            BorderBrush="{DynamicResource ThemeAccent}" 
+                            BorderBrush="{DynamicResource ThemeFocus}" 
                             BorderThickness="1.5" 
                             CornerRadius="36" 
                             Width="68" Height="68" 
                             HorizontalAlignment="Center" 
                             Margin="0,0,0,18">
                         <Path Data="{StaticResource IconFileMedical}" 
-                              Fill="{DynamicResource ThemeAccent}" 
+                              Fill="{DynamicResource ThemeAccentStrong}" 
                               Width="30" Height="30" 
                               Stretch="Uniform" 
                               HorizontalAlignment="Center" 
@@ -324,9 +325,9 @@
                         <TextBlock Text="Consulta, expedientes y agenda" 
                                    FontWeight="SemiBold" 
                                    FontSize="13" 
-                                   Foreground="{DynamicResource ThemeAccent}" 
+                                   Foreground="{DynamicResource ThemeAccentForeground}" 
                                    VerticalAlignment="Center" />
-                        <Border Background="{DynamicResource ThemeAccent}" 
+                        <Border Background="{DynamicResource ThemeAccentStrong}" 
                                 CornerRadius="4" 
                                 Padding="6,2" 
                                 Margin="8,0,0,0" 
@@ -351,7 +352,7 @@
 
                     <!-- Botón / Indicador CTA -->
                     <Border Grid.Row="4" 
-                            Background="{DynamicResource ThemeAccent}" 
+                            Background="{DynamicResource ThemeAccentStrong}" 
                             CornerRadius="8" 
                             Padding="18,10" 
                             HorizontalAlignment="Center">
@@ -388,14 +389,14 @@
                     <!-- Ícono de Configuración / Ajustes en Círculo -->
                     <Border Grid.Row="0" 
                             Background="{DynamicResource ThemeSurfaceSubtle}" 
-                            BorderBrush="{DynamicResource ThemeAccent}" 
+                            BorderBrush="{DynamicResource ThemeFocus}" 
                             BorderThickness="1.5" 
                             CornerRadius="36" 
                             Width="68" Height="68" 
                             HorizontalAlignment="Center" 
                             Margin="0,0,0,18">
                         <Path Data="{StaticResource IconSettings}" 
-                              Fill="{DynamicResource ThemeAccent}" 
+                              Fill="{DynamicResource ThemeAccentStrong}" 
                               Width="30" Height="30" 
                               Stretch="Uniform" 
                               HorizontalAlignment="Center" 
@@ -415,7 +416,7 @@
                                Text="Gestión y Administración" 
                                FontWeight="SemiBold" 
                                FontSize="13" 
-                               Foreground="{DynamicResource ThemeAccent}" 
+                               Foreground="{DynamicResource ThemeAccentForeground}" 
                                HorizontalAlignment="Center" 
                                Margin="0,4,0,12" />
 
@@ -447,7 +448,7 @@
                             <TextBlock Text="→" 
                                        FontWeight="Bold" 
                                        FontSize="14" 
-                                       Foreground="{DynamicResource ThemeAccent}" />
+                                       Foreground="{DynamicResource ThemeAccentForeground}" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -462,7 +463,7 @@
         <Grid Visibility="{Binding IsSuggestedPurchasesOpen, Converter={StaticResource BoolToVis}}" 
               SnapsToDevicePixels="True">
             <!-- Fondo Oscuro Translúcido -->
-            <Border Background="#99000000" />
+            <Border Background="{DynamicResource ThemeOverlay}" />
 
             <!-- Contenedor del Modal Centrado -->
             <Border Background="{DynamicResource ThemeCard}" 
@@ -497,7 +498,7 @@
                                            FontWeight="Bold" 
                                            FontSize="18" 
                                            Foreground="{DynamicResource ThemeText}" />
-                                <Border Background="{DynamicResource ThemeAccent}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource ThemeAccentStrong}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="Inventario Inteligente" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentText}" />
                                 </Border>
                             </StackPanel>
@@ -545,14 +546,14 @@
 
                             <StackPanel Grid.Column="2" HorizontalAlignment="Center">
                                 <TextBlock Text="Unidades Totales Sugeridas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
-                                <TextBlock Text="{Binding TotalSuggestedQuantity}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                <TextBlock Text="{Binding TotalSuggestedQuantity}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentForeground}" HorizontalAlignment="Center" Margin="0,2,0,0" />
                             </StackPanel>
 
                             <Border Grid.Column="3" Width="1" Background="{DynamicResource ThemeBorder}" Margin="12,0" />
 
                             <StackPanel Grid.Column="4" HorizontalAlignment="Center">
                                 <TextBlock Text="Inversión Estimada (Costo)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
-                                <TextBlock Text="{Binding TotalSuggestedCost, StringFormat='${0:N2} MXN'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeSuccess}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                <TextBlock Text="{Binding TotalSuggestedCost, StringFormat='${0:N2} MXN'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeSuccessText}" HorizontalAlignment="Center" Margin="0,2,0,0" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -561,13 +562,13 @@
                     <Border Grid.Row="2" 
                             Visibility="{Binding SuggestedPurchasesStatusMessage, Converter={StaticResource BoolToVis}}" 
                             Background="{DynamicResource ThemeSelectionBackground}" 
-                            BorderBrush="{DynamicResource ThemeAccent}" 
+                            BorderBrush="{DynamicResource ThemeFocus}" 
                             BorderThickness="1" 
                             CornerRadius="8" 
                             Padding="12,8" 
                             Margin="0,0,0,12">
                         <TextBlock Text="{Binding SuggestedPurchasesStatusMessage}" 
-                                   Foreground="{DynamicResource ThemeAccent}" 
+                                   Foreground="{DynamicResource ThemeAccentForeground}" 
                                    FontWeight="SemiBold" 
                                    FontSize="12" 
                                    TextWrapping="Wrap" />
@@ -603,7 +604,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Border Background="{DynamicResource ThemeSelectionBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right" Margin="4,2">
-                                            <TextBlock Text="{Binding SuggestedQuantity}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding SuggestedQuantity}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccentForeground}" HorizontalAlignment="Right" />
                                         </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>

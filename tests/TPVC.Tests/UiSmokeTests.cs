@@ -285,6 +285,20 @@ internal sealed class UiSmokeSession
             _themes.ApplyTheme(settings);
 
             Show(host, main, "MainHub", $"01-inicio-{suffix}");
+
+            // Ventanas sobre el inicio: lista de compras sugeridas, paleta de comandos y asistente inicial
+            WaitFor(main.MainHubVM.OpenSuggestedPurchasesAsync());
+            Capture(host, $"01b-compras-sugeridas-{suffix}");
+            main.MainHubVM.IsSuggestedPurchasesOpen = false;
+            main.OpenCommandPalette();
+            main.PaletteSearchText = "con";
+            Capture(host, $"01c-paleta-comandos-{suffix}");
+            main.CloseCommandPalette();
+            main.IsFirstRunWizardOpen = true;
+            main.WizardErrorMessage = "Capture al menos el nombre del médico o del consultorio.";
+            Capture(host, $"01d-asistente-inicial-{suffix}");
+            main.WizardErrorMessage = null;
+            main.IsFirstRunWizardOpen = false;
             var pos = main.PosVM;
             Show(host, main, "Pos", $"02-pos-vacio-{suffix}");
             var stocked = pos.Products.Where(p => p.CurrentStock > 3 && p.Price > 0).ToList();

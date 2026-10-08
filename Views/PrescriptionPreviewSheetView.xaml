@@ -52,13 +52,13 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccent}" />
+                                        <TextBlock Text="{Binding ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccentForeground}" />
                                         <TextBlock Text="{Binding DoctorName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
                                         <TextBlock Text="{Binding DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeAccent}" BorderThickness="1" CornerRadius="4" Padding="8,4">
-                                            <TextBlock Text="RECETA MÉDICA INDIVIDUAL" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccent}" />
+                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                                            <TextBlock Text="RECETA MÉDICA INDIVIDUAL" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccentForeground}" />
                                         </Border>
                                         <TextBlock Text="{Binding SelectedPatient.RecordNumber, StringFormat='Exp: {0}'}" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
                                     </StackPanel>
@@ -100,7 +100,7 @@
 
                                     <StackPanel Grid.Row="1" Grid.Column="2">
                                         <TextBlock Text="Alergias:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeError}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeDangerText}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -108,7 +108,7 @@
                             <!-- Símbolo Rp y Lista de Fármacos Prescritos -->
                             <Border Margin="0,0,0,16">
                                 <StackPanel>
-                                    <TextBlock Text="℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                                    <TextBlock Text="℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,0,0,8" />
                                     <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -120,7 +120,7 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Grid.Column="0">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="● " FontSize="11" Foreground="{DynamicResource ThemeAccent}" VerticalAlignment="Center" />
+                                                                <TextBlock Text="● " FontSize="11" Foreground="{DynamicResource ThemeAccentForeground}" VerticalAlignment="Center" />
                                                                 <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding Dosage, StringFormat='   Indicaciones: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />

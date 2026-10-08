@@ -81,7 +81,7 @@
                     <TextBlock Text="{Binding AppVersion}" 
                                FontSize="11" 
                                FontWeight="SemiBold" 
-                               Foreground="{DynamicResource ThemeAccent}" />
+                               Foreground="{DynamicResource ThemeAccentForeground}" />
                 </StackPanel>
 
                 <!-- Acceso rápido a Paleta de Comandos (Ctrl + K) -->
@@ -102,7 +102,7 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="b" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                                    <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                    <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -155,7 +155,7 @@
               Panel.ZIndex="999"
               Visibility="{Binding IsCommandPaletteOpen, Converter={StaticResource BoolToVis}}">
             <!-- Fondo oscuro translúcido con desenfoque / click para cerrar -->
-            <Border Background="#66000000">
+            <Border Background="{DynamicResource ThemeOverlay}">
                 <Border.InputBindings>
                     <MouseBinding Gesture="LeftClick" Command="{Binding CloseCommandPaletteCommand}" />
                 </Border.InputBindings>
@@ -292,7 +292,7 @@
                                                     </Trigger>
                                                     <Trigger Property="IsSelected" Value="True">
                                                         <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                                                        <Setter TargetName="itemBorder" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                                                        <Setter TargetName="itemBorder" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -359,7 +359,7 @@
                                         <Border Grid.Column="2" 
                                                 Visibility="{Binding Badge, Converter={StaticResource BoolToVis}}"
                                                 Background="{DynamicResource ThemeSurfaceSubtle}" 
-                                                BorderBrush="{DynamicResource ThemeAccent}" 
+                                                BorderBrush="{DynamicResource ThemeFocus}" 
                                                 BorderThickness="1" 
                                                 CornerRadius="6" 
                                                 Padding="7,2" 
@@ -367,7 +367,7 @@
                                             <TextBlock Text="{Binding Badge}" 
                                                        FontSize="11" 
                                                        FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource ThemeAccent}" />
+                                                       Foreground="{DynamicResource ThemeAccentForeground}" />
                                         </Border>
                                     </Grid>
                                 </DataTemplate>
@@ -423,7 +423,7 @@
               Panel.ZIndex="1000"
               Visibility="{Binding IsFirstRunWizardOpen, Converter={StaticResource BoolToVis}}">
             <!-- Fondo oscuro -->
-            <Border Background="#CC0F172A" />
+            <Border Background="{DynamicResource ThemeOverlay}" />
 
             <!-- Contenedor del Asistente -->
             <Border Width="650" 
@@ -431,7 +431,7 @@
                     VerticalAlignment="Center" 
                     HorizontalAlignment="Center"
                     Background="{DynamicResource ThemeCard}"
-                    BorderBrush="{DynamicResource ThemeAccent}"
+                    BorderBrush="{DynamicResource ThemeFocus}"
                     BorderThickness="1.5"
                     CornerRadius="16"
                     Padding="28,24">
@@ -449,11 +449,11 @@
                     <!-- Cabecera de Bienvenida -->
                     <StackPanel Grid.Row="0" Margin="0,0,0,16">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ThemeAccent}" 
+                            <Border Background="{DynamicResource ThemeAccentStrong}" 
                                     CornerRadius="10" 
                                     Width="38" Height="38" 
                                     Margin="0,0,12,0">
-                                <TextBlock Text="🩺" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <helpers:Icon Data="{StaticResource IcoPulse}" Width="20" Height="20" Foreground="{DynamicResource ThemeAccentText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <StackPanel>
                                 <TextBlock Text="¡Bienvenido a TPVC Consultorio!" 
@@ -471,15 +471,15 @@
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="0,0,8,0">
                             <!-- Alerta de Error si faltan datos obligatorios -->
-                            <Border Background="#FEF2F2" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14" Visibility="{Binding WizardErrorMessage, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,14" Visibility="{Binding WizardErrorMessage, Converter={StaticResource BoolToVis}}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⚠️ " Foreground="#DC2626" FontWeight="Bold" />
-                                    <TextBlock Text="{Binding WizardErrorMessage}" Foreground="#DC2626" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <helpers:Icon Data="{StaticResource IcoAlert}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Top" />
+                                    <TextBlock Text="{Binding WizardErrorMessage}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
 
                             <!-- Sección 1: Datos del Médico -->
-                            <TextBlock Text="1. DATOS DEL MÉDICO TITULAR (NOM-004-SSA3)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,0,0,8" />
+                            <TextBlock Text="1. DATOS DEL MÉDICO TITULAR (NOM-004-SSA3)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,0,0,8" />
                             <Grid Margin="0,0,0,12">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -513,7 +513,7 @@
                             </Grid>
 
                             <!-- Sección 2: Datos del Consultorio -->
-                            <TextBlock Text="2. DATOS DEL CONSULTORIO O CLÍNICA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,6,0,8" />
+                            <TextBlock Text="2. DATOS DEL CONSULTORIO O CLÍNICA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,6,0,8" />
                             <StackPanel Margin="0,0,0,14">
                                 <TextBlock Text="Nombre del Consultorio / Clínica:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4" />
                                 <TextBox Text="{Binding WizardClinicName, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" FontSize="12" Margin="0,0,0,8" />
@@ -523,7 +523,7 @@
                             </StackPanel>
 
                             <!-- Sección 3: Modo de Inicio (Base Vacía vs Demostración) -->
-                            <TextBlock Text="3. MODO DE INICIO DEL SISTEMA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccent}" Margin="0,6,0,8" />
+                            <TextBlock Text="3. MODO DE INICIO DEL SISTEMA" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,6,0,8" />
                             <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12">
                                 <StackPanel>
                                     <RadioButton GroupName="StartupModeGroup" 

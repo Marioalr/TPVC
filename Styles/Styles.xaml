@@ -11,7 +11,6 @@
     <conv:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
     <conv:InverseBooleanConverter x:Key="InverseBool" />
     <conv:InverseBooleanConverter x:Key="InverseBoolConverter" />
-    <conv:StatusToBrushConverter x:Key="StatusToBrush" />
     <conv:ComparisonToBoolConverter x:Key="ComparisonToBool" />
     <conv:ComparisonToVisibilityConverter x:Key="ComparisonToVis" />
     <conv:ComparisonToVisibilityConverter x:Key="InverseComparisonToVis" Invert="True" />
@@ -126,7 +125,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="Opacity" Value="0.8" />
@@ -309,7 +308,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="CaretBrush" Value="{DynamicResource ThemeAccent}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource ThemeText}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -323,10 +322,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                             <Setter TargetName="border" Property="BorderThickness" Value="1.5" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -343,7 +342,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="CaretBrush" Value="{DynamicResource ThemeAccent}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource ThemeText}" />
         <Setter Property="PasswordChar" Value="●" />
         <Setter Property="Template">
             <Setter.Value>
@@ -358,10 +357,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                             <Setter TargetName="border" Property="BorderThickness" Value="1.5" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -425,7 +424,7 @@
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
                 <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                <Setter Property="Foreground" Value="{DynamicResource ThemeAccent}" />
+                <Setter Property="Foreground" Value="{DynamicResource ThemeAccentForeground}" />
             </Trigger>
         </Style.Triggers>
     </Style>

@@ -23,7 +23,7 @@
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
