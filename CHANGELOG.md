@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.4] - 2026-10-09
+
+### Corregido
+* **Lecturas simultáneas de la base**: el pool de conexiones de SQLite (Microsoft.Data.Sqlite 10.0.12) podía prestar la misma conexión a dos operaciones a la vez; aparecía como "SQLite Error 5" al abrir o cerrar y, con escrituras, podía mezclar transacciones. Ahora la apertura de conexiones se hace de una en una (las consultas siguen en paralelo). Se quitará cuando haya una versión de la biblioteca con la corrección (dotnet/efcore#39012).
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G4)
+* Sin cambios visibles. La lista de pacientes, el paciente abierto y su historial (`PatientSession`), la consulta activa con su cronómetro (`ActiveConsultationSession`) y la receta durante la consulta (`ConsultationRecordState`) salen de `MedicalRecordsViewModel`. Una revisión adversarial no encontró cambios de comportamiento.
+* Comparado con la v1.18.0 en el mismo equipo: abrir un expediente con 400 consultas 374 → 36 ms, memoria privada −54 %, arranque real −34 %.
+* El plan suma la **Fase 7** con los pedidos del consultorio (fecha de nacimiento con diagonales, ocultar el cronómetro, + / − en insumos, receta igual al modelo del Excel, X para borrar la búsqueda, confirmaciones con el tema) y las notas de la tablet (compartir receta y ticket, vincular por QR).
+
 ## [1.18.3] - 2026-10-08
 
 ### Interno — Fase 6: división del ViewModel de Pacientes (grupo G3)
