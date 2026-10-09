@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-08 (TPVC v1.18.0). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-08 (TPVC v1.18.1). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -41,6 +41,13 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.18.1 (Rendimiento y limpieza)
+
+- [ ] El programa abre en unos 2 s en el equipo del consultorio (la bitácora dice "Arranque: ventana lista en … ms").
+- [ ] Un expediente con muchas consultas abre sin pausa; "Gráfica de signos" la muestra y la tabla de mediciones se desplaza.
+- [ ] La receta impresa y el PDF llevan el plan e indicaciones escritos en la consulta.
+- [ ] Quitar un insumo o un servicio de su hoja durante la consulta lo quita de la cuenta.
 
 ### v1.18.0 (Revisión de los temas)
 

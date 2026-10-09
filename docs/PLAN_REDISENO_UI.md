@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-07 (TPVC v1.15.0).
+Estado al 2026-10-08 (TPVC v1.18.1).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -45,7 +45,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
-| 6 | Cierre: rendimiento, limpieza y base para Android | Pendiente |
+| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); falta dividir el ViewModel de Pacientes |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -269,3 +269,15 @@ necesita interacción real (lista en `PENDIENTES_ANDROID.md`, D v1.18).
   `VitalSignsChartPoint.ColorHex` y los colores fijos del indicador de Turso en la barra inferior.
 - Actualizar README, manual y `docs/PENDIENTES_ANDROID.md` (los ViewModels separados son la base de la
   app de la tablet).
+
+**Hecho en v1.18.1 (primera parte):** medición en la CI (`UiPerfTests` en su propio proceso, el programa
+publicado abierto varias veces con `scripts/measure-startup.ps1`, y `perf-compare.yml` para comparar dos
+versiones en el mismo equipo con rondas alternadas); la app anota su tiempo de arranque en la bitácora.
+Publicación precompilada (ReadyToRun): arranque normal 3.5 s → 2.0 s. La gráfica de signos se crea al
+mostrarla y su tabla se virtualiza (un expediente con 400 consultas: ~1.1 s → 63 ms). Se quitó todo el
+código sin pantalla de la lista anterior y más (~1,800 líneas del ViewModel de Pacientes, estilos y recursos
+sin uso) y `IsPosModalOpen` pasó a `IsFinishConsultationOpen`. Las auditorías encontraron y se corrigieron 9
+errores (indicaciones de la receta, descuento de insumos y servicios, ficha con copia vieja, entre otros).
+Antes de dividir el ViewModel quedaron las redes de seguridad del plan técnico (contrato de enlaces de las
+pantallas, formato del borrador y del envío entre equipos, flujos, avisos y un recorrido de teclado en la
+prueba de pantallas). Pendiente: dividir `MedicalRecordsViewModel` por función (grupos G2–G9 del plan).

@@ -2,6 +2,26 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.1] - 2026-10-08
+
+### Cambiado — Fase 6 del rediseño (primera parte): rendimiento y limpieza
+* **El programa abre más rápido**: se publica ya compilado para Windows x64 (ReadyToRun). Medido en el mismo equipo contra la v1.18.0: el arranque normal pasó de 3.5 s a 2.0 s (−43 %) y el primero tras instalar, de 3.4 s a 2.7 s.
+* **Expedientes con años de consultas abren rápido**: la gráfica de signos se crea solo al mostrarla, su tabla de mediciones crea solo los renglones visibles y se marcan a lo más 60 puntos por serie (las líneas usan todas las mediciones). Con 400 consultas, abrir el expediente pasó de ~1.1 s a 63 ms.
+* La bitácora anota cuánto tardó en verse la ventana y la memoria al arrancar (para comparar versiones y diagnosticar equipos lentos).
+* Se quitó el código que no tenía pantalla desde v1.14–v1.15 (selector de paciente, visor de expedientes, formulario por pasos, consulta modal antigua, agenda y citas antiguas, signos rápidos y otros): el ViewModel de Pacientes pasó de 8,965 a ~7,200 líneas, sin cambios visibles.
+* La CI mide el rendimiento en cada cambio y puede comparar dos versiones en el mismo equipo; nuevas pruebas protegen el comportamiento antes de dividir el ViewModel de Pacientes (enlaces de cada pantalla, formato del borrador y del envío entre equipos, avisos y flujos), y la prueba de pantallas recorre menús y atajos de teclado.
+
+### Corregido
+* **La receta no llevaba las indicaciones del médico**: la vista previa, la impresión y el PDF mostraban siempre un texto fijo (y distinto en cada uno). Ahora llevan el plan e indicaciones escritos en la consulta (fuera de consulta, los de la última consulta).
+* **Quitar un insumo o un servicio de la consulta no lo descontaba de la cuenta** (con sus insumos por defecto); ahora sí, como ya pasaba con la receta.
+* **La ficha abierta seguía con datos viejos** cuando llegaba una versión más reciente del expediente (de otro equipo o tras liberar una consulta enviada), y al guardarla se podían pisar esos cambios.
+* Editar el expediente y guardar borraba la glucosa y la saturación de los últimos signos.
+* Con la consulta enviada a otro equipo se podían agregar o quitar insumos y servicios.
+* El aviso de signos fuera de rango solo se actualizaba con la T/A.
+* El avance del alta de paciente no se actualizaba mientras se capturaba.
+* "Lo esencial" conservaba los signos del paciente anterior al cerrar la ficha.
+* Si el programa se cerraba de golpe justo después de atender una cita, la consulta recuperada ya no marcaba la cita como atendida.
+
 ## [1.18.0] - 2026-10-08
 
 ### Cambiado — Fase 5 del rediseño: revisión de los temas
