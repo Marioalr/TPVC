@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-09 (TPVC v1.18.10).
+Estado al 2026-10-09 (TPVC v1.19.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -45,7 +45,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
-| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G8 hechos (v1.18.2–v1.18.10), falta G9 |
+| 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
 
 ### Fase 1 · Fundamentos comunes
@@ -199,7 +199,7 @@ empezar el interrogatorio en el escritorio y terminar la exploración en el cons
 
 **Hecho en v1.17 (parte de la PC, probada PC ↔ PC):** `ConsultationHandoffService` y la tabla
 `ConsultationHandoffs` (contrato en `docs/TURSO_SYNC_ARCHITECTURE.md` §4.5), `MedicalRecordsViewModel.Handoff.cs`
-y `SendConsultationSheetView`. Antes de programar, tres revisiones críticas del diseño encontraron casos
+(desde v1.18.10, `ConsultationHandoffViewModel`) y `SendConsultationSheetView`. Antes de programar, tres revisiones críticas del diseño encontraron casos
 que perdían la consulta o dejaban dos dueños; quedaron resueltos así: tomarla lleva una ficha propia
 (`AcceptToken`) y si la respuesta se pierde se pregunta a la nube; la copia se borra de la nube solo después
 de guardarla en el equipo que la recibe; recuperar o resolver un envío dudoso inserta-o-cancela en una sola
@@ -281,7 +281,15 @@ sin uso) y `IsPosModalOpen` pasó a `IsFinishConsultationOpen`. Las auditorías 
 errores (indicaciones de la receta, descuento de insumos y servicios, ficha con copia vieja, entre otros).
 Antes de dividir el ViewModel quedaron las redes de seguridad del plan técnico (contrato de enlaces de las
 pantallas, formato del borrador y del envío entre equipos, flujos, avisos y un recorrido de teclado en la
-prueba de pantallas). Pendiente: dividir `MedicalRecordsViewModel` por función (grupos G2–G9 del plan).
+prueba de pantallas).
+
+**Hecho en v1.18.2–v1.19.0 (división del ViewModel de Pacientes):** los grupos G2–G9 del plan técnico
+(`docs/fase6/PLAN_DIVISION_VIEWMODEL.md`). `MedicalRecordsViewModel` (~5,000 líneas en parciales) quedó como
+23 objetos en `ViewModels/Patients` (inicio, ficha, alta, agenda, consulta, hojas, receta, cuenta, autoguardado,
+envío entre equipos…) coordinados por `PatientsWorkspace`, que no depende de WPF; `MedicalRecordsViewModel` solo
+le pasa la plataforma de Windows. Cada grupo solo movió código: pantallas, avisos, borradores y envíos
+quedaron idénticos (las redes de seguridad lo comprobaron en cada paso) y cada uno tuvo una revisión
+adversarial. Mapa de módulos, capas y flujos en `docs/ARQUITECTURA_TECNICA.md` §9.
 
 ### Fase 7 · Pedidos del consultorio (2026-10-09)
 

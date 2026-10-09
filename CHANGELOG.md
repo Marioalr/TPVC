@@ -2,6 +2,14 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.19.0] - 2026-10-09
+
+### Cambiado — Fin de la Fase 6: el módulo de Pacientes, listo para la tablet
+* Sin cambios visibles para el consultorio. El ViewModel de Pacientes (~5,000 líneas) quedó dividido en 23 objetos por función en `ViewModels/Patients` (inicio, ficha, alta, agenda, consulta, hojas de insumos, servicios y receta, cuenta, autoguardado y envío entre equipos), coordinados por `PatientsWorkspace`, que ya no depende de WPF: `MedicalRecordsViewModel` solo le pasa lo propio de Windows (hilo de la pantalla, avisos, impresión y enlaces). Es la base para reutilizar el módulo en la app de la tablet.
+* Una prueba nueva arma el módulo sin WPF y recorre una consulta completa: alta, receta que se surte aquí, cobro, recordatorio de cita y una consulta recibida de la tablet por la nube simulada.
+* Rendimiento frente a v1.18.0, medido en el mismo equipo: un expediente con 400 consultas abre en 44 ms (antes 483 ms), iniciar la consulta tarda 94 ms (antes 164 ms), la memoria privada bajó de 148 MB a 72 MB y el programa abre en 1.3 s (antes 2.2 s).
+* Documentación: sección "Módulo Pacientes" en `docs/ARQUITECTURA_TECNICA.md` (capas, piezas, puertos y flujos) y mapa de ViewModels a pantallas de la tablet en `docs/PENDIENTES_ANDROID.md`.
+
 ## [1.18.10] - 2026-10-09
 
 ### Interno — Fase 6: división del ViewModel de Pacientes (grupo G8)

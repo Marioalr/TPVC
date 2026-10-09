@@ -1,7 +1,8 @@
 <!-- Plan técnico para dividir MedicalRecordsViewModel (Fase 6). Lo produjo un panel de diseño
      (tres propuestas, dos jueces y una síntesis) y se ejecuta por grupos G1–G9. Está en inglés porque
      lo leen los agentes que hacen cada paso; el resumen en español va en docs/ARQUITECTURA_TECNICA.md
-     al terminar la fase. Los números de línea son aproximados: manda el código. -->
+     al terminar la fase. Los números de línea son aproximados: manda el código.
+     Ejecutado por completo en v1.18.2–v1.19.0 (2026-10-09). -->
 
 # Fase 6: final plan for splitting `MedicalRecordsViewModel`
 
