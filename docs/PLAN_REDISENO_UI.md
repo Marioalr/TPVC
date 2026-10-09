@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-09 (TPVC v1.18.6).
+Estado al 2026-10-09 (TPVC v1.18.7).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -45,8 +45,8 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
-| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G5 y G6a hechos (v1.18.2–v1.18.6), faltan G6b–G9 |
-| 7 | Pedidos del consultorio (2026-10-09) | En curso · 7.1, 7.4, 7.5 y 7.6 hechos (v1.18.5); faltan 7.2 y 7.3 |
+| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G7 hechos (v1.18.2–v1.18.7), faltan G8 y G9 |
+| 7 | Pedidos del consultorio (2026-10-09) | En curso · 7.1 y 7.3–7.6 hechos (v1.18.5–v1.18.7); falta 7.2 |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -293,7 +293,7 @@ la división todavía va a mover se hacen justo después del grupo que la mueve,
 |---|---|---|---|
 | 7.1 | **Fecha de nacimiento con diagonales solas** | En el alta (y la edición) de paciente, al escribir `08082008` se ve `08/08/2008`: las diagonales se agregan al teclear el día y el mes, y se quitan solas al borrar (borrar después de una diagonal también borra el dígito anterior). Pegar `08/08/2008` o `8/8/2008` sigue funcionando. Solo afecta lo que se ve; se guarda igual que hoy. | ✅ v1.18.5 |
 | 7.2 | **Ocultar el cronómetro de la consulta** | Clic sobre el cronómetro de la consulta lo oculta o lo muestra; se recuerda la última elección (también al cerrar el programa) en la configuración local del equipo. Oculto queda un indicador discreto para volver a mostrarlo. | Después de G7 (la consulta pasa a `ConsultationViewModel`) |
-| 7.3 | **Insumos y material con + / −** | En la hoja de insumos y material, cada renglón con botones + y − y la cantidad editable, igual que la cuenta del Punto de venta; quitar hasta 0 lo quita (y lo descuenta de la cuenta de la consulta, como ya pasa al quitarlo). | Después de G6b (la hoja pasa a `SuppliesSheetViewModel`) |
+| 7.3 | **Insumos y material con + / −** | En la hoja de insumos y material, cada renglón con botones + y − y la cantidad editable, igual que la cuenta del Punto de venta; quitar hasta 0 lo quita (y lo descuenta de la cuenta de la consulta, como ya pasa al quitarlo). Lo de una consulta anterior solo se ve o se quita, sin tocar la cuenta de hoy. | ✅ v1.18.7 |
 | 7.4 | **Receta igual al modelo del Excel del médico** | La impresión y el PDF copian la hoja RECETA de su libro (`tests/TPVC.Tests/TestAssets/catalogo_muestra.xlsx`): media carta horizontal; arriba a la izquierda el escudo de la universidad y arriba a la derecha el trazo de signos vitales; al centro el nombre del médico (grande), la universidad y la "Cédula Profesional"; renglón Paciente · Edad · Fecha; renglón Alergias · T/A · Temp · Peso · Talla · SpO2 (en %); a la izquierda cada medicamento con su posología debajo; a la derecha "Medidas generales" (el plan e indicaciones); al pie el teléfono con el icono de WhatsApp y el domicilio con el icono de ubicación. En "Médico y consultorio" se agregan la universidad y los dos logotipos (se toman del Excel al importarlo, o se eligen a mano) y la vista previa muestra lo mismo que se imprime. | ✅ v1.18.5 |
 | 7.5 | **Borrar la búsqueda de pacientes con una X** | En la barra de búsqueda de Pacientes, una X dentro del cuadro (solo cuando hay texto) borra toda la búsqueda con un clic y deja el cursor en el cuadro. | ✅ v1.18.5 |
 | 7.6 | **Confirmaciones con el tema** | "Descartar consulta" (y las demás confirmaciones: cancelar cita, dar de baja el expediente, salir del alta sin guardar, liberar el equipo) usan el cuadro de mensaje de Windows, que no sigue el tema (blanco en modo oscuro). Se cambia por un diálogo propio con los colores del tema, el botón peligroso en rojo y Esc/Enter con la opción segura. Entra por `IUserDialogs` (G2), así que las pantallas no cambian. | ✅ v1.18.5 |

@@ -2,6 +2,19 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.7] - 2026-10-09
+
+### Añadido — Fase 7: pedidos del consultorio
+* **Insumos y material con + / −** (como la cuenta del Punto de venta): cada insumo usado en la consulta tiene − [piezas] +, y las piezas también se escriben a mano (se aplican con Enter o al salir del cuadro). Lo que se suma se carga a la cuenta de la consulta y lo que se resta se descuenta; en 0 se quita. Un insumo del inventario no pasa de sus existencias (cuenta todo lo de ese producto que ya está en la cuenta: otros renglones, servicios y receta) y se avisa como en el Punto de venta.
+
+### Corregido
+* La hoja de insumos conserva lo usado en consultas anteriores. Esos renglones ahora dicen "De una consulta anterior", no se pueden cambiar y quitarlos ya no descuenta nada de la cuenta de la consulta en curso (antes la X podía descontar un insumo igual que se cargó hoy).
+* Quitar un insumo descuenta el mismo producto con que se cargó, aunque otro del inventario se llame igual.
+* Nota: si al instalar esta versión había una consulta abierta con insumos ya cargados, esos renglones se ven como de una consulta anterior; si se quita alguno, revise la cuenta de la consulta antes de cobrar.
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupos G6b y G7)
+* Sin cambios visibles: las hojas de insumos, servicios y receta (`SuppliesSheetViewModel`, `ClinicalServicesSheetViewModel`, `PrescriptionSheetViewModel`), la ficha del paciente (`PatientChartViewModel`), la consulta (`ConsultationViewModel`) y su autoguardado (`ConsultationAutosave`) salen de `MedicalRecordsViewModel`. Las revisiones adversariales no encontraron cambios de comportamiento.
+
 ## [1.18.6] - 2026-10-09
 
 ### Interno — Fase 6: división del ViewModel de Pacientes (grupo G6a)

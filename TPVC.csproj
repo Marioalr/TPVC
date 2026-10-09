@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>1.18.6</Version>
-    <AssemblyVersion>1.18.6.0</AssemblyVersion>
-    <FileVersion>1.18.6.0</FileVersion>
+    <Version>1.18.7</Version>
+    <AssemblyVersion>1.18.7.0</AssemblyVersion>
+    <FileVersion>1.18.7.0</FileVersion>
     <Authors>Marioalr</Authors>
     <Company>TPVC</Company>
     <Product>TPVC - Sistema de Inventario para Consultorio Médico</Product>

@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-09 (TPVC v1.18.6). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-09 (TPVC v1.18.7). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -15,7 +15,7 @@ luego la preparación del código; al final lo que se construye en la propia app
 | A1 | **Existencias derivadas de movimientos** | `Product.CurrentStock` y `ProductBatch.Quantity` se sincronizan como valores. Si la PC y la tablet venden el mismo producto sin conexión, gana la última escritura y **se pierde un descuento** (las dos ventas sí llegan como movimientos, pero el stock solo baja una vez). | Tras cada descarga, recalcular stock y lotes a partir de `InventoryMovements` (ya se sincronizan completos). Requiere un movimiento de "saldo inicial" para productos sembrados o creados antes de v1.9. |
 | A2 | **Equipo secundario sin sembrado** | Al instalar, cada equipo siembra sus propias categorías y servicios clínicos con `SyncId` distintos → al sincronizar aparecen **duplicados** ("Medicamentos y Fármacos" ×2). | Modo "equipo secundario": base vacía + sincronización completa desde Turso. Alternativa: `SyncId` determinísticos para el catálogo sembrado. |
 | A3 | **Folios por dispositivo** | `EXP-`, `TKT-` y `CNS-` son consecutivos por equipo; dos equipos generan el mismo folio. v1.9 evita el bloqueo agregando `-R1`, pero los folios quedan distintos entre equipos. | Prefijo de dispositivo (`TKT-T-20261007-0001`) o rango de folios asignado por equipo. |
-| A4 | **Referencias dentro de JSON** | `PatientRecord.ActiveServicesJson` guarda el `Id` local del servicio clínico; en otro equipo apunta a otro servicio. | Guardar el `SyncId` del servicio dentro del JSON (migrar los existentes). |
+| A4 | **Referencias dentro de JSON** | `PatientRecord.ActiveServicesJson` guarda el `Id` local del servicio clínico; en otro equipo apunta a otro servicio. Desde v1.18.7, `ActiveSuppliesJson` guarda en cada insumo el folio de la consulta que lo cargó y el `Id` local del producto (o del cargo libre) con que se cargó (`ChargedConsultationFolio`, `ChargedUnits`, `ChargedLineId`). | Guardar el `SyncId` del servicio y del producto dentro del JSON (migrar los existentes). La tablet debe conservar esos campos al editar la hoja. |
 | A5 | **Sincronización periódica** | La PC solo sincroniza al iniciar o al guardar algo; no verá lo que capture la tablet hasta su siguiente cambio local. | Sincronización en segundo plano cada 1–2 min con la app abierta (las consultas vacías casi no consumen cuota). |
 | A6 | **Primera sincronización real con Turso** | Las versiones 1.8.x nunca subieron datos (HTTP 400). | En la PC: *Configuración → Nube y dispositivos → Sincronización completa* (hace sincronización completa y renombra las tablas viejas a `legacy_v1_*`). Revisar en el panel de Turso que existan filas en todas las tablas. |
 
@@ -42,6 +42,17 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C6 | **Compartir receta y ticket** | Pedido del médico (2026-10-09): al ver una receta (vista previa, expediente, al terminar la consulta) o un ticket, botón **Compartir** con la hoja de compartir de Android (WhatsApp, correo, guardar): la receta como PDF con el modelo de la Fase 7.4 y el ticket como imagen o PDF. Reutilizar el generador de la receta sin WPF (separarlo de `PrintingService`, ver B2). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.18.7 (Insumos con + / − y división G6b–G7)
+
+- [ ] Consulta → Insumos y material: agregar un insumo, usar + y −, escribir las piezas y dar Enter; la cuenta de la consulta sigue cada cambio y en 0 el renglón se quita.
+- [ ] Subir un insumo por arriba de sus existencias: avisa "No hay más existencias" y se queda en lo que hay.
+- [ ] En la siguiente consulta del mismo paciente, lo de la anterior dice "De una consulta anterior", no tiene + / − y quitarlo no cambia la cuenta.
+- [ ] Al cerrar el catálogo, el cursor vuelve a la búsqueda de la hoja (insumos, servicios y receta).
+- [ ] El aviso informativo se cierra solo a los 4 segundos; las plantillas (posología, medidas generales) vuelven a quedar vacías al elegir una.
+- [ ] El cronómetro y el aviso de la consulta en curso avanzan; Ctrl+↓/↑ cambian de sección y Ctrl+S guarda el borrador.
+- [ ] Cerrar el programa a la fuerza con un alta a medias y con una consulta abierta: al volver a abrir se recuperan.
+- [ ] Atender una cita y cobrarla: la cita queda "Atendida".
 
 ### v1.18.5 (Pedidos del consultorio)
 
