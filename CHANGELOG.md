@@ -2,6 +2,12 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.8] - 2026-10-09
+
+### Corregido
+* **Servicios de una consulta anterior**: la hoja de servicios y procedimientos conserva lo hecho en consultas anteriores. Quitar uno de esos renglones durante la consulta descontaba ese servicio y sus insumos de la cuenta de hoy si ese día también se había hecho, y el paciente pagaba de menos. Ahora esos renglones dicen "De una consulta anterior: no se cobra en esta" y quitarlos no cambia la cuenta. Lo agregado en la consulta en curso se quita de la cuenta como siempre.
+* Nota: si al instalar esta versión había una consulta abierta con servicios ya cargados, esos renglones se ven como de una consulta anterior; si se quita alguno, revise la cuenta de la consulta antes de cobrar.
+
 ## [1.18.7] - 2026-10-09
 
 ### Añadido — Fase 7: pedidos del consultorio
