@@ -88,7 +88,7 @@ public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
-public class PatientServiceItem
+public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged
 {
     public int ServiceId { get; set; }
     public string ServiceCode { get; set; } = string.Empty;
@@ -97,6 +97,34 @@ public class PatientServiceItem
     public string Notes { get; set; } = string.Empty;
     public decimal Price { get; set; } = 0m;
     public int Quantity { get; set; } = 1;
+
+    /// <summary>
+    /// Consulta (folio) que cargó este servicio a su cuenta, y cuántas unidades (cada una con sus
+    /// insumos por defecto). La hoja guarda también los servicios de consultas anteriores: la X solo
+    /// descuenta lo que cargó la consulta en curso. Sin cargos no se escriben (el JSON de siempre).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? ChargedConsultationFolio { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int ChargedUnits { get; set; }
+
+    private bool _isFromEarlierConsultation;
+
+    /// <summary>La hoja lo marca al abrirse: servicio de otra consulta, que solo se ve o se quita.</summary>
+    [JsonIgnore]
+    public bool IsFromEarlierConsultation
+    {
+        get => _isFromEarlierConsultation;
+        set
+        {
+            if (_isFromEarlierConsultation == value) return;
+            _isFromEarlierConsultation = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsFromEarlierConsultation)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class PatientConsultation : ISyncEntity

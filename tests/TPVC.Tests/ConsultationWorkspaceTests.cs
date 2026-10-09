@@ -462,6 +462,61 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
+    public async Task ServiceRowsFromAnEarlierConsultation_AreOnlyShown_AndTheirXKeepsTodaysAccount()
+    {
+        var (records, _, consultations, patient) = await StartConsultationAsync();
+        var items = consultations.CurrentConsultation!.Items;
+        int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
+        int ChargedByName(string name) => items.FirstOrDefault(i => i.Name == name)?.Quantity ?? 0;
+        List<string> Account() => items.Select(i => $"{i.ProductId}×{i.Quantity}").OrderBy(s => s).ToList();
+        var curacion = records.Catalog.Services.Single(s => s.Code == "SERV-002");
+        Assert.IsGreaterThan(1, curacion.DefaultProducts.Count, "La curación lleva varios insumos por defecto");
+        const string freeName = "Retiro de puntos a domicilio";
+
+        // La hoja conserva lo hecho en una consulta anterior (ya cobrado con ella) y lo de una sin folio (versiones previas)
+        var earlier = new PatientServiceItem { ServiceId = curacion.Id, ServiceCode = curacion.Code, ServiceName = curacion.Name, Price = curacion.Price, Quantity = 2, ChargedConsultationFolio = "CNS-20260101-090000", ChargedUnits = 2 };
+        var legacy = new PatientServiceItem { ServiceId = curacion.Id, ServiceCode = curacion.Code, ServiceName = curacion.Name, Price = curacion.Price, Quantity = 1 };
+        var earlierFree = new PatientServiceItem { ServiceName = freeName, Price = 200m, Quantity = 1, ChargedConsultationFolio = "CNS-20260101-090000", ChargedUnits = 1 };
+        patient.ActiveServices = new List<PatientServiceItem> { earlier, legacy, earlierFree };
+        records.ClinicalServices.OpenServicesModal();
+        Assert.IsTrue(earlier.IsFromEarlierConsultation && legacy.IsFromEarlierConsultation && earlierFree.IsFromEarlierConsultation, "Se marcan al abrir la hoja");
+
+        // Lo de hoy del mismo servicio y del mismo cargo libre sí se cobra, y el renglón recuerda su consulta
+        records.ClinicalServices.ServiceModalQuantity = 1;
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(curacion);
+        var today = patient.ActiveServices.Last();
+        records.ClinicalServices.ServiceModalSearchText = freeName;
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(null);
+        var todayFree = patient.ActiveServices.Last();
+        Assert.IsFalse(today.IsFromEarlierConsultation || todayFree.IsFromEarlierConsultation);
+        Assert.AreEqual(consultations.CurrentConsultation.Folio, today.ChargedConsultationFolio);
+        Assert.AreEqual(1, today.ChargedUnits);
+        Assert.AreEqual(1, Charged(-curacion.Id));
+        Assert.AreEqual(1, ChargedByName(freeName));
+        var todaysAccount = Account();
+
+        // La X de lo de otra consulta (o sin folio) lo quita de la hoja, pero no descuenta el servicio ni sus insumos de hoy
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(earlier);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(legacy);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(earlierFree);
+        CollectionAssert.AreEqual(todaysAccount, Account(), "Quitar lo de otra consulta no descuenta lo de hoy");
+        CollectionAssert.AreEqual(new[] { today, todayFree }, patient.ActiveServices);
+
+        // Lo que se cobra hoy queda guardado con el renglón (sobrevive a reabrir el programa); sin cargos, el JSON de siempre
+        var saved = new PatientRecord { ActiveServicesJson = patient.ActiveServicesJson }.ActiveServices;
+        Assert.IsTrue(saved.All(s => s.ChargedConsultationFolio == consultations.CurrentConsultation.Folio && s.ChargedUnits == 1));
+        StringAssert.DoesNotMatch(patient.ActiveServicesJson, new System.Text.RegularExpressions.Regex("IsFromEarlierConsultation"));
+        StringAssert.DoesNotMatch(new PatientRecord { ActiveServices = new List<PatientServiceItem> { legacy } }.ActiveServicesJson,
+            new System.Text.RegularExpressions.Regex("Charged"));
+
+        // La X de lo de hoy sí lo descuenta: el servicio con sus insumos y el cargo libre
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(today);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(todayFree);
+        Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
+        Assert.IsEmpty(patient.ActiveServices);
+    }
+
+    [TestMethod]
     public void VitalSignsWarning_IsRefreshedWhenAnyOfItsInputsChanges()
     {
         var records = new MedicalRecordsViewModel(inventoryService: null, new ConsultationService(seedDemoPatients: false));
