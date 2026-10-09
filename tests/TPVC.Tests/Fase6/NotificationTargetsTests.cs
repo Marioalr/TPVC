@@ -82,7 +82,9 @@ public class NotificationTargetsTests
 
         // La revisión no está vacía (hoy hay unos 160 avisos; casi 100 en el coordinador)
         Assert.IsGreaterThan(120, raised.Count, "Avisos encontrados en ViewModels/**");
-        Assert.IsTrue(raised.Any(r => r.TypeName == nameof(MedicalRecordsViewModel)), "Se revisa el coordinador");
+        // El coordinador vive en su base sin WPF (PatientsWorkspace, paso 21): se busca por herencia
+        Assert.IsTrue(raised.Any(r => r.Type != null && r.Type != typeof(object) && r.Type.IsAssignableFrom(typeof(MedicalRecordsViewModel))),
+            "Se revisa el coordinador");
         Assert.IsTrue(raised.Any(r => r.TypeName == nameof(CheckoutViewModel)), "También se revisan los demás ViewModels");
     }
 

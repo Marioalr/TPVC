@@ -1,10 +1,10 @@
-namespace TPVC.ViewModels;
+namespace TPVC.ViewModels.Patients;
 
 /// <summary>
 /// Esc por capas y "escribir para buscar" de Pacientes (fase 6, paso 2d). Antes vivían en
 /// MedicalRecordsView.xaml.cs; la vista solo atiende las teclas y el foco, y pregunta aquí qué hacer.
 /// </summary>
-public partial class MedicalRecordsViewModel
+public partial class PatientsWorkspace
 {
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>

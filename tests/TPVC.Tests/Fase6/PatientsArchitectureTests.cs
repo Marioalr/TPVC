@@ -33,7 +33,10 @@ public class PatientsArchitectureTests
         ["AgendaPanelViewModel"] = 5, ["PatientFormViewModel"] = 5, ["PatientsHomeViewModel"] = 5, ["PatientChartViewModel"] = 5,
         ["SuppliesSheetViewModel"] = 5, ["ClinicalServicesSheetViewModel"] = 5, ["PrescriptionSheetViewModel"] = 5, ["ConsultationViewModel"] = 5,
         ["ConsultationAutosave"] = 6,
-        ["ConsultationHandoffViewModel"] = 7
+        ["ConsultationHandoffViewModel"] = 7,
+        // El coordinador (ViewModels/Patients/Workspace, paso 21) crea a todos los hijos: recibe solo la
+        // plataforma y los servicios
+        ["PatientsWorkspace"] = 8
     };
 
     /// <summary>
@@ -164,5 +167,29 @@ public class PatientsArchitectureTests
         Assert.IsEmpty(problems, string.Join("\n", problems));
         // Sin la carpeta todavía no hay nada que revisar: la prueba queda lista para el paso 3 en adelante
         if (!Directory.Exists(PatientsFolder)) Assert.IsEmpty(patientsTypes);
+        // Desde el paso 21 el coordinador vive en ViewModels/Patients/Workspace y también se revisa
+        if (Directory.Exists(Path.Combine(PatientsFolder, "Workspace")))
+        {
+            CollectionAssert.Contains(patientsTypes.Select(t => t.Name).ToList(), "PatientsWorkspace");
+        }
+    }
+
+    /// <summary>
+    /// MedicalRecordsViewModel (paso 21) solo arma la plataforma de WPF para PatientsWorkspace: no declara
+    /// miembros propios, así que todo lo del apartado se puede usar sin WPF.
+    /// </summary>
+    [TestMethod]
+    public void WpfCoordinator_OnlyBuildsThePlatform()
+    {
+        var wpf = typeof(MedicalRecordsViewModel);
+        Assert.AreEqual("PatientsWorkspace", wpf.BaseType?.Name);
+        Assert.AreEqual("TPVC.ViewModels.Patients", wpf.BaseType?.Namespace);
+        Assert.IsTrue(wpf.IsSealed);
+
+        var own = wpf.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(m => m.MemberType != MemberTypes.Constructor)
+            .Select(m => $"{m.MemberType} {m.Name}")
+            .ToList();
+        Assert.IsEmpty(own, "MedicalRecordsViewModel declara miembros propios (deben vivir en PatientsWorkspace):\n" + string.Join("\n", own));
     }
 }

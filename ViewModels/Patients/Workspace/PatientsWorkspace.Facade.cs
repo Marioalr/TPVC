@@ -1,16 +1,16 @@
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using TPVC.Models;
-using TPVC.ViewModels.Patients;
 
-namespace TPVC.ViewModels;
+namespace TPVC.ViewModels.Patients;
 
 /// <summary>
 /// Fachada del coordinador (fase 6, plan §1.3): atajos en C# a miembros que se movieron a su dueño,
-/// para MainViewModel, App y las pruebas. No avisan ni se enlazan ([NotForBinding]): las vistas usan la
-/// ruta del dueño (Session.SelectedPatient...) y el coordinador escribe en el dueño.
+/// para MainViewModel, App y las pruebas (con la carga inicial y lo demás del apartado, son
+/// IPatientsSection). No avisan ni se enlazan ([NotForBinding]): las vistas usan la ruta del dueño
+/// (Session.SelectedPatient...) y el coordinador escribe en el dueño.
 /// </summary>
-public partial class MedicalRecordsViewModel
+public partial class PatientsWorkspace
 {
     /// <summary>Session.Patients.</summary>
     [NotForBinding]

@@ -296,9 +296,16 @@ public class XamlBindingContractTests
     {
     }
 
-    /// <summary>Coordinador con un miembro de fachada: XAML no debe enlazarlo.</summary>
-    private sealed class FacadeProbeViewModel : MedicalRecordsViewModel
+    /// <summary>
+    /// Coordinador con un miembro de fachada: XAML no debe enlazarlo. Hereda de PatientsWorkspace porque
+    /// MedicalRecordsViewModel es sealed (paso 21); no se crea, solo se lee su tipo.
+    /// </summary>
+    private sealed class FacadeProbeViewModel : TPVC.ViewModels.Patients.PatientsWorkspace
     {
+        private FacadeProbeViewModel() : base(null!, null)
+        {
+        }
+
         [NotForBinding]
         public int FacadeOnly => 0;
     }
@@ -375,8 +382,8 @@ public class XamlBindingContractTests
         var owners = analysis.Bindings.Select(b => $"{b.Path}|{b.Owner}").ToList();
         CollectionAssert.Contains(owners, "Session.SelectedPatient.FullName|PatientRecord.FullName");
         CollectionAssert.Contains(owners, "FullName|PatientRecord.FullName");
-        CollectionAssert.Contains(owners, "DataContext.OpenPatientChartCommand|MedicalRecordsViewModel.OpenPatientChartCommand");
-        CollectionAssert.Contains(owners, "PlacementTarget.Tag.BackToHubCommand|MedicalRecordsViewModel.BackToHubCommand");
+        CollectionAssert.Contains(owners, "DataContext.OpenPatientChartCommand|PatientsWorkspace.OpenPatientChartCommand");
+        CollectionAssert.Contains(owners, "PlacementTarget.Tag.BackToHubCommand|PatientsWorkspace.BackToHubCommand");
         CollectionAssert.Contains(owners, ".|PatientRecord.");
         Assert.IsEmpty(analysis.Unresolved, string.Join("\n", analysis.Unresolved));
     }
