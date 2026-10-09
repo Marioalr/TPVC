@@ -470,6 +470,14 @@ internal sealed class UiSmokeSession
             shell.DataVM.RestoreBackup(shell.DataVM.Backups[0]);
             Capture(host, $"25-config-restaurar-{suffix}");
             shell.DataVM.CloseImportSheet();
+
+            // Fase 7 (7.6): confirmaciones y errores con la ventana de la app (antes, MessageBox blanco en oscuro)
+            CaptureDialog(TPVC.Views.ConfirmDialogKind.Confirm, "Descartar consulta",
+                "¿Descartar la consulta en curso?\n\nNo se guardará la nota médica ni se cobrará nada de la cuenta.",
+                $"26-confirmacion-{suffix}");
+            CaptureDialog(TPVC.Views.ConfirmDialogKind.Error, "TPVC",
+                "No se pudo imprimir la receta médica: la impresora no respondió.",
+                $"26b-error-{suffix}");
         }
 
         // Después de todas las capturas (cambia datos y muestra la ventana): menús y teclado reales
@@ -513,6 +521,24 @@ internal sealed class UiSmokeSession
     {
         main.NavigateTo(screen);
         Capture(host, name);
+    }
+
+    /// <summary>
+    /// La ventana de confirmación o de error de DialogService, sin mostrarla: su contenido (la tarjeta) se
+    /// mide y se dibuja como el de la ventana principal, sigue siendo hijo lógico de su ventana y se revisa
+    /// el contraste de cada texto e icono con los colores del tema actual.
+    /// </summary>
+    private void CaptureDialog(TPVC.Views.ConfirmDialogKind kind, string title, string message, string name)
+    {
+        var dialog = new TPVC.Views.ConfirmDialog(message, title, kind);
+        try
+        {
+            Capture((System.Windows.FrameworkElement)dialog.Content, name);
+        }
+        finally
+        {
+            dialog.Close();
+        }
     }
 
     private void Capture(System.Windows.FrameworkElement host, string name)
@@ -806,6 +832,7 @@ internal sealed class UiKeyboardPass
             ChartMenu(patient);
             AgendaSlotMenu(patient);
             ConsultationKeys(patient);
+            ThemedConfirmations(patient);
         }
         catch (Exception ex)
         {
@@ -1043,6 +1070,128 @@ internal sealed class UiKeyboardPass
         }
         Settle();
         Check(PressEscape() && !_records.IsServicesModalOpen, "Esc cierra los servicios");
+    }
+
+    // ------------------------------------------------------------------ confirmaciones con la ventana de la app (Fase 7, 7.6)
+
+    /// <summary>
+    /// DialogService con la ventana de la app sobre la principal (cargada y visible), contestada sin
+    /// mostrarla: con el botón que tocan Esc y Enter (lo seguro, con el foco al abrir) y con "Sí". Lo
+    /// seguro sigue siendo "No": DialogService regresa false y "Descartar consulta" conserva la consulta.
+    /// </summary>
+    private void ThemedConfirmations(PatientRecord patient)
+    {
+        if (_records.HasActiveConsultation) WaitFor(_records.DiscardActiveConsultationAsync());
+        _records.OpenPatientChart(patient);
+        _records.ChartPrimaryAction();
+        if (!Check(_records.HasActiveConsultation, "Confirmaciones: no se abrió la consulta")) return;
+        Settle();
+
+        var previousConfirm = DialogService.ConfirmHandler;
+        var previousError = DialogService.ErrorHandler;
+        var previousShowModal = TPVC.Helpers.ThemedDialogs.ShowModal;
+        var asked = new List<(TPVC.Views.ConfirmDialogKind Kind, string Title)>();
+        bool answerYes = false;
+
+        TPVC.Helpers.ThemedDialogs.Install(() => _window);
+        TPVC.Helpers.ThemedDialogs.ShowModal = dialog =>
+        {
+            asked.Add((dialog.Kind, dialog.Title));
+            var what = $"Ventana \"{dialog.Title}\"";
+            Check(ReferenceEquals(dialog.Owner, _window), $"{what}: no queda sobre la ventana principal");
+            Check(!dialog.ShowInTaskbar, $"{what}: aparece en la barra de tareas");
+
+            var buttons = LogicalDescendants<System.Windows.Controls.Button>(dialog)
+                .Where(b => b.Visibility == System.Windows.Visibility.Visible)
+                .ToList();
+            var escape = buttons.Where(b => b.IsCancel).ToList();
+            var enter = buttons.Where(b => b.IsDefault).ToList();
+            if (!Check(escape.Count == 1 && enter.Count == 1 && ReferenceEquals(escape[0], enter[0]),
+                    $"{what}: Esc y Enter deben tocar el mismo botón, el seguro ({escape.Count} con Esc, {enter.Count} con Enter)"))
+            {
+                return;
+            }
+            var safe = escape[0];
+            Check(ReferenceEquals(System.Windows.Input.FocusManager.GetFocusedElement(dialog), safe),
+                $"{what}: el foco al abrir no está en \"{safe.Content}\"");
+
+            System.Windows.Controls.Button? yes = null;
+            if (dialog.Kind == TPVC.Views.ConfirmDialogKind.Confirm)
+            {
+                yes = buttons.SingleOrDefault(b => !ReferenceEquals(b, safe));
+                Check(buttons.Count == 2 && Equals(safe.Content, "No") && Equals(yes?.Content, "Sí"),
+                    $"{what}: se esperaban \"No\" (lo seguro) y \"Sí\" ({string.Join(", ", buttons.Select(b => b.Content))})");
+            }
+            else
+            {
+                Check(buttons.Count == 1 && Equals(safe.Content, "Aceptar"),
+                    $"{what}: un error lleva solo \"Aceptar\" ({string.Join(", ", buttons.Select(b => b.Content))})");
+            }
+
+            var target = answerYes ? yes : safe;
+            if (Check(target != null, $"{what}: no hay botón para contestar \"Sí\"")) Invoke(target!);
+        };
+
+        try
+        {
+            Check(TPVC.Helpers.ThemedDialogs.CanShowOver(_window), "La ventana principal cargada y visible no puede llevar la confirmación de la app");
+
+            // Lo seguro (Esc o Enter al abrir): la consulta sigue
+            WaitFor(_records.DiscardActiveConsultationAsync());
+            Check(asked.Count == 1 && asked[0] == (TPVC.Views.ConfirmDialogKind.Confirm, "Descartar consulta"),
+                $"\"Descartar consulta\" no preguntó con la ventana de la app ({string.Join(", ", asked)})");
+            Check(_records.HasActiveConsultation, "Contestar lo seguro (Esc o Enter) en \"Descartar consulta\" descartó la consulta");
+            Check(!DialogService.Confirm("¿Continuar?", "Prueba"), "DialogService.Confirm contestado con lo seguro regresó true");
+
+            answerYes = true;
+            Check(DialogService.Confirm("¿Continuar?", "Prueba"), "DialogService.Confirm contestado con \"Sí\" regresó false");
+            WaitFor(_records.DiscardActiveConsultationAsync());
+            Check(!_records.HasActiveConsultation, "\"Sí\" en \"Descartar consulta\" no descartó la consulta");
+            answerYes = false;
+
+            int before = asked.Count;
+            DialogService.ShowError("No se pudo imprimir la receta médica: prueba.", "TPVC");
+            Check(asked.Count == before + 1 && asked[^1].Kind == TPVC.Views.ConfirmDialogKind.Error, "DialogService.ShowError no usó la ventana de la app");
+
+            // Sin ventana principal o con una que nunca se mostró: el MessageBox de Windows (aquí solo se revisa la condición)
+            var neverShown = new System.Windows.Window();
+            try
+            {
+                Check(!TPVC.Helpers.ThemedDialogs.CanShowOver(neverShown) && !TPVC.Helpers.ThemedDialogs.CanShowOver(null),
+                    "Sin ventana principal cargada no debe usarse la ventana de la app (sin dueño no se puede mostrar)");
+            }
+            finally
+            {
+                neverShown.Close();
+            }
+        }
+        finally
+        {
+            DialogService.ConfirmHandler = previousConfirm;
+            DialogService.ErrorHandler = previousError;
+            TPVC.Helpers.ThemedDialogs.ShowModal = previousShowModal;
+        }
+    }
+
+    /// <summary>
+    /// Lo que hacen Enter, Esc o un clic en un botón: su OnClick (con IsCancel, además, la orden de cancelar
+    /// el diálogo, que cierra la ventana cuando es modal). Por automatización, como un lector de pantalla.
+    /// </summary>
+    private static void Invoke(System.Windows.Controls.Button button)
+    {
+        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(button);
+        var invoke = (System.Windows.Automation.Provider.IInvokeProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke);
+        invoke.Invoke();
+        Pump();
+    }
+
+    private static IEnumerable<T> LogicalDescendants<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject
+    {
+        foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root).OfType<System.Windows.DependencyObject>())
+        {
+            if (child is T match) yield return match;
+            foreach (var nested in LogicalDescendants<T>(child)) yield return nested;
+        }
     }
 
     // ------------------------------------------------------------------ eventos de teclado reales

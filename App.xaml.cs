@@ -64,10 +64,10 @@ public partial class App : Application
         base.OnStartup(e);
 
         RegisterGlobalErrorHandlers();
-        DialogService.ConfirmHandler = (message, title) =>
-            MessageBox.Show(MainWindow ?? Current.MainWindow!, message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-        DialogService.ErrorHandler = (message, title) =>
-            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        // Confirmaciones y errores con la ventana de la app, que sigue el tema ("No" por defecto, como
+        // antes). Sin la ventana principal cargada o desde otro hilo, con el MessageBox de Windows
+        // (MainWindow solo se puede leer desde el hilo de la interfaz)
+        ThemedDialogs.Install(() => Dispatcher.CheckAccess() ? MainWindow : null);
 
         AppLogger.Info($"Inicio de TPVC v{Services.GetRequiredService<AppUpdateService>().CurrentVersion}");
 

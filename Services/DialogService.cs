@@ -3,8 +3,9 @@ using System;
 namespace TPVC.Services;
 
 /// <summary>
-/// Punto único para confirmaciones y avisos desde los ViewModels. La app conecta
-/// MessageBox al iniciar; en pruebas (sin WPF) las confirmaciones se aceptan solas.
+/// Punto único para confirmaciones y avisos desde los ViewModels. La app conecta al iniciar su
+/// ventana de diálogo, que sigue el tema (Helpers/ThemedDialogs, con el MessageBox de Windows de
+/// respaldo); en pruebas (sin WPF) las confirmaciones se aceptan solas.
 /// </summary>
 public static class DialogService
 {
