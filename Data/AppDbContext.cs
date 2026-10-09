@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using TPVC.Models;
@@ -27,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<PrescriptionTemplate> PrescriptionTemplates => Set<PrescriptionTemplate>();
     public DbSet<PediatricDoseRule> PediatricDoseRules => Set<PediatricDoseRule>();
 
+    private static readonly SqlitePoolOpenGuard PoolOpenGuard = new();
     private static readonly SqlitePragmaInterceptor PragmaInterceptor = new();
 
     public AppDbContext()
@@ -59,8 +61,14 @@ public class AppDbContext : DbContext
     {
         optionsBuilder
             .UseSqlite(connectionString ?? ConnectionString)
-            .AddInterceptors(PragmaInterceptor);
+            .AddInterceptors(PoolOpenGuard, PragmaInterceptor);
     }
+
+    /// <summary>
+    /// Libera las conexiones del pool (p.ej. antes de reemplazar el archivo de la base). Usar en lugar de
+    /// SqliteConnection.ClearAllPools: se serializa con las aperturas (ver <see cref="SqlitePoolOpenGuard"/>).
+    /// </summary>
+    public static void ClearConnectionPools() => SqlitePoolOpenGuard.ClearAllPools();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -261,6 +269,58 @@ public class AppDbContext : DbContext
         // Plantillas de receta importadas del Excel del consultorio
         modelBuilder.Entity<PrescriptionTemplate>()
             .HasIndex(t => new { t.Kind, t.SortOrder });
+    }
+}
+
+/// <summary>
+/// Evita que el pool de Microsoft.Data.Sqlite (10.0.12 y anteriores) preste la misma conexión nativa a
+/// dos DbContext a la vez. Al sacar una conexión del pool, SqliteConnectionInternal.Activate la marca
+/// como activa antes de registrar a su dueño, fuera del candado del pool; si en ese instante otro hilo
+/// abre, encuentra el pool vacío y ejecuta ReclaimLeakedConnections, la toma por "fugada", la devuelve
+/// al pool y otra apertura la recibe mientras la primera la sigue usando. Síntoma típico al cargar
+/// varias consultas en paralelo: SQLite Error 5 al abrir o cerrar ("unable to delete/modify collation
+/// sequence|user-function due to active statements" o "database is locked"), y con escrituras,
+/// transacciones mezcladas entre contextos.
+/// Corregido en dotnet/efcore#39012, aún sin versión 10.0.x publicada. Serializar la apertura física
+/// (sacar del pool y registrar las funciones de EF: microsegundos) cierra la ventana sin renunciar al
+/// pool; las consultas siguen en paralelo. Se puede quitar al actualizar a una versión con la corrección.
+/// </summary>
+internal sealed class SqlitePoolOpenGuard : DbConnectionInterceptor
+{
+    private static readonly object OpenGate = new();
+
+    public override InterceptionResult ConnectionOpening(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+    {
+        if (result.IsSuppressed)
+        {
+            return result;
+        }
+
+        lock (OpenGate)
+        {
+            connection.Open();
+        }
+
+        // EF ya no la vuelve a abrir, pero sí llama a ConnectionOpened (pragmas)
+        return InterceptionResult.Suppress();
+    }
+
+    public override ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection, ConnectionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+    {
+        // SqliteConnection no tiene apertura asíncrona: su OpenAsync ya ejecuta Open() en el mismo hilo
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(ConnectionOpening(connection, eventData, result));
+    }
+
+    /// <summary>
+    /// ClearAllPools también ejecuta ReclaimLeakedConnections (y desecha lo que reclama), así que comparte el candado.
+    /// </summary>
+    public static void ClearAllPools()
+    {
+        lock (OpenGate)
+        {
+            SqliteConnection.ClearAllPools();
+        }
     }
 }
 

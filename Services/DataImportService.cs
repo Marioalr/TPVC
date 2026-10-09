@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TPVC.Data;
 using TPVC.Models;
@@ -207,7 +206,7 @@ public class DataImportService
         // 4. Liberar conexiones y reemplazar archivo
         try
         {
-            SqliteConnection.ClearAllPools();
+            AppDbContext.ClearConnectionPools();
 
             var targetDbPath = _backupService.DatabasePath;
             var targetDir = Path.GetDirectoryName(targetDbPath) ?? ".";
@@ -216,7 +215,7 @@ public class DataImportService
             // API de respaldo en línea de SQLite: copia consistente aunque el origen tenga cambios en
             // su archivo -wal y sin corromper la base destino (a diferencia de File.Copy con WAL activo)
             BackupService.CopyDatabase(stagedPath, targetDbPath, sourceReadOnly: true);
-            SqliteConnection.ClearAllPools();
+            AppDbContext.ClearConnectionPools();
 
             // 5. Migración aditiva automática para asegurar columnas e índices faltantes
             using (var ctx = _contextFactory.CreateDbContext())
@@ -255,7 +254,7 @@ public class DataImportService
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            AppDbContext.ClearConnectionPools();
             TryDelete(stagedPath);
         }
     }

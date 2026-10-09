@@ -1,6 +1,8 @@
 using System;
+using System.Data;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -59,7 +61,8 @@ public class DataLayerTests
     [TestMethod]
     public async Task ConcurrentReads_DoNotThrowSecondOperationError()
     {
-        // Antes compartían un único DbContext y varias recargas simultáneas fallaban
+        // Antes compartían un único DbContext y varias recargas simultáneas fallaban; después, el pool de
+        // SQLite a veces prestaba la misma conexión a dos contextos (ver SqlitePoolOpenGuard)
         var tasks = Enumerable.Range(0, 10).Select(async i =>
         {
             await Task.Yield();
@@ -71,6 +74,42 @@ public class DataLayerTests
         });
 
         await Task.WhenAll(tasks);
+    }
+
+    [TestMethod]
+    public async Task ConnectionOpens_AreSerialized_SoThePoolCannotLendOneConnectionTwice()
+    {
+        // Microsoft.Data.Sqlite 10.0.12: si otra apertura (o ClearAllPools) corre mientras una conexión
+        // se está activando, puede tomarla por fugada y prestarla a un segundo contexto
+        using var first = NewContext();
+        using var second = NewContext();
+        using var insideFirstOpen = new ManualResetEventSlim();
+        using var releaseFirstOpen = new ManualResetEventSlim();
+        // StateChange se dispara al final de SqliteConnection.Open(), aún dentro de la apertura física
+        first.Database.GetDbConnection().StateChange += (_, e) =>
+        {
+            if (e.CurrentState == ConnectionState.Open)
+            {
+                insideFirstOpen.Set();
+                releaseFirstOpen.Wait(TimeSpan.FromSeconds(10));
+            }
+        };
+
+        var firstOpen = Task.Run(() => first.Database.OpenConnection());
+        Assert.IsTrue(insideFirstOpen.Wait(TimeSpan.FromSeconds(10)), "La primera conexión no llegó a abrirse");
+
+        var secondOpen = Task.Run(() => second.Database.OpenConnectionAsync());
+        var clearPools = Task.Run(AppDbContext.ClearConnectionPools);
+        var contenders = Task.WhenAny(secondOpen, clearPools);
+        var firstToFinish = await Task.WhenAny(contenders, Task.Delay(300));
+        releaseFirstOpen.Set();
+        await Task.WhenAll(firstOpen, secondOpen, clearPools);
+
+        Assert.AreNotSame(contenders, firstToFinish,
+            "Otra apertura o limpieza del pool terminó mientras la primera conexión se activaba");
+        Assert.AreNotSame(
+            ((SqliteConnection)first.Database.GetDbConnection()).Handle,
+            ((SqliteConnection)second.Database.GetDbConnection()).Handle);
     }
 
     [TestMethod]
