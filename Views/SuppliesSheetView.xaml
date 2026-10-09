@@ -132,9 +132,25 @@
                                                     <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Instructions}" TextWrapping="Wrap"
                                                                Visibility="{Binding Instructions, Converter={StaticResource BoolToVis}}" />
                                                 </StackPanel>
-                                                <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
-                                                </Border>
+                                                <!-- Piezas con + / − como en la cuenta del Punto de venta; a mano se aplica con Enter o al salir -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center">
+                                                    <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una menos (en 0 se quita)" AutomationProperties.Name="Una pieza menos"
+                                                            Command="{Binding DataContext.Supplies.DecreaseSupplyQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <TextBlock Text="−" FontSize="16" />
+                                                    </Button>
+                                                    <TextBox Style="{StaticResource FieldTextBox}" Width="48" MinHeight="30" Height="30" Padding="2,0" Margin="6,0"
+                                                             HorizontalContentAlignment="Center" FontWeight="SemiBold"
+                                                             Text="{Binding Quantity, Mode=OneWay}"
+                                                             PreviewKeyDown="SupplyLineQuantity_PreviewKeyDown"
+                                                             LostKeyboardFocus="SupplyLineQuantity_LostKeyboardFocus"
+                                                             AutomationProperties.Name="Piezas usadas" />
+                                                    <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una más" AutomationProperties.Name="Una pieza más"
+                                                            Command="{Binding DataContext.Supplies.IncreaseSupplyQuantityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <TextBlock Text="+" FontSize="16" />
+                                                    </Button>
+                                                </StackPanel>
                                                 <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta)" AutomationProperties.Name="Quitar insumo"
                                                         Command="{Binding DataContext.Supplies.RemoveSupplyItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}">

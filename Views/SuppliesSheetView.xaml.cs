@@ -140,6 +140,28 @@ public partial class SuppliesSheetView : UserControl
         }
     }
 
+    // Piezas escritas a mano en un insumo ya usado: se aplican con Enter o al salir del cuadro
+    private async void SupplyLineQuantity_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        await CommitLineQuantityAsync((TextBox)sender);
+    }
+
+    private async void SupplyLineQuantity_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
+        await CommitLineQuantityAsync((TextBox)sender);
+
+    private async Task CommitLineQuantityAsync(TextBox box)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm || box.DataContext is not PatientSupplyItem item) return;
+        if (int.TryParse(box.Text.Trim(), out var quantity) && quantity != item.Quantity)
+        {
+            await vm.Supplies.SetSupplyQuantityAsync(item, quantity);
+        }
+        // Lo que no se aplicó (texto inválido, sin existencias) vuelve a mostrar las piezas reales
+        box.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
+    }
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(CatalogBrowserViewModel.IsCatalogBrowserModalOpen)

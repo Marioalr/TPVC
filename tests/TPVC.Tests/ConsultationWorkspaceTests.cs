@@ -8,6 +8,7 @@ using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests;
 
@@ -300,6 +301,73 @@ public class ConsultationWorkspaceTests
         CollectionAssert.DoesNotContain(patient.ActiveSupplies, freeSupply);
         CollectionAssert.DoesNotContain(patient.ActiveServices, curacionItem);
         CollectionAssert.DoesNotContain(patient.ActiveServices, freeService);
+    }
+
+    [TestMethod]
+    public async Task SupplyPlusMinus_ChargesOnlyTheDifference_StopsAtStock_AndZeroRemovesIt()
+    {
+        var (records, _, consultations, patient) = await StartConsultationAsync();
+        var items = consultations.CurrentConsultation!.Items;
+        int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
+        int ChargedByName(string name) => items.FirstOrDefault(i => i.Name == name)?.Quantity ?? 0;
+        int Saved(PatientSupplyItem supply) =>
+            new PatientRecord { ActiveSuppliesJson = patient.ActiveSuppliesJson }.ActiveSupplies.Single(s => s.SupplyName == supply.SupplyName).Quantity;
+
+        // Insumo del inventario: + y − cargan y descuentan una pieza; lo guardado sigue a la hoja
+        var product = records.Catalog.AvailableProducts.First(p => CatalogStore.IsProductSupply(p) && p.CurrentStock >= 3 && p.Price > 0);
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(product);
+        var supply = patient.ActiveSupplies.Last();
+        string? changed = null;
+        supply.PropertyChanged += (_, e) => changed = e.PropertyName;
+
+        await records.Supplies.IncreaseSupplyQuantityAsync(supply);
+        Assert.AreEqual(2, supply.Quantity);
+        Assert.AreEqual(nameof(PatientSupplyItem.Quantity), changed, "La pantalla ve la nueva cantidad");
+        Assert.AreEqual(2, Charged(product.Id));
+        Assert.AreEqual(2, Saved(supply));
+
+        await records.Supplies.DecreaseSupplyQuantityAsync(supply);
+        Assert.AreEqual(1, supply.Quantity);
+        Assert.AreEqual(1, Charged(product.Id));
+
+        // A mano: no pasa de las existencias (como el Punto de venta) y se avisa
+        records.Info.IsInfoModalVisible = false;
+        await records.Supplies.SetSupplyQuantityAsync(supply, product.CurrentStock + 5);
+        Assert.AreEqual(product.CurrentStock, supply.Quantity);
+        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        StringAssert.Contains(records.Info.InfoModalMessage, "No hay más existencias");
+
+        records.Info.IsInfoModalVisible = false;
+        await records.Supplies.IncreaseSupplyQuantityAsync(supply);
+        Assert.AreEqual(product.CurrentStock, supply.Quantity, "Sin existencias, + no suma");
+        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+
+        // Hasta 0 se quita, también de la cuenta
+        await records.Supplies.SetSupplyQuantityAsync(supply, 1);
+        Assert.AreEqual(1, Charged(product.Id));
+        await records.Supplies.DecreaseSupplyQuantityAsync(supply);
+        CollectionAssert.DoesNotContain(patient.ActiveSupplies, supply);
+        Assert.AreEqual(0, Charged(product.Id));
+
+        // Un renglón ya quitado no vuelve a cargar nada
+        await records.Supplies.IncreaseSupplyQuantityAsync(supply);
+        Assert.AreEqual(0, Charged(product.Id));
+        CollectionAssert.DoesNotContain(patient.ActiveSupplies, supply);
+
+        // Insumo fuera del inventario: cargo libre por la diferencia, sin tope de existencias
+        records.Supplies.SupplySearchText = "Férula de aluminio a la medida";
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(null);
+        var free = patient.ActiveSupplies.Last();
+        await records.Supplies.SetSupplyQuantityAsync(free, 4);
+        Assert.AreEqual(4, ChargedByName(free.SupplyName));
+        await records.Supplies.SetSupplyQuantityAsync(free, 0);
+        Assert.AreEqual(0, ChargedByName(free.SupplyName));
+        Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
+        Assert.AreEqual(records.Account.ConsultationFeeAmount, records.Account.ConsultationAccountTotal);
     }
 
     [TestMethod]

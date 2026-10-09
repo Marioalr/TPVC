@@ -129,11 +129,7 @@ public partial class ConsultationAccount : ObservableObject
 
     public void ChargeSupply(PatientSupplyItem item, Product? knownProduct)
     {
-        var product = knownProduct ?? _catalog.FindCatalogProduct(item.SupplyName);
-        var qty = Math.Max(1, item.Quantity);
-        bool charged = product != null
-            ? ChargeProduct(product, qty, item.SupplyName)
-            : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, qty);
+        bool charged = ChargeSupplyUnits(item, knownProduct, Math.Max(1, item.Quantity));
         if (!charged)
         {
             _info.InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
@@ -157,11 +153,26 @@ public partial class ConsultationAccount : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Carga piezas de un insumo: como producto del inventario o, fuera de él, como cargo libre a su
+    /// precio. Devuelve false si no hay consulta o el cargo libre no tiene precio.
+    /// </summary>
+    public bool ChargeSupplyUnits(PatientSupplyItem item, Product? knownProduct, int units)
+    {
+        var product = knownProduct ?? _catalog.FindCatalogProduct(item.SupplyName);
+        return product != null
+            ? ChargeProduct(product, units, item.SupplyName)
+            : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, units);
+    }
+
     /// <summary>Quitar el insumo de la hoja lo quita de la cuenta tal como se cargó (producto o cargo libre).</summary>
-    public void UnchargeSupply(PatientSupplyItem item)
+    public void UnchargeSupply(PatientSupplyItem item) => UnchargeSupplyUnits(item, Math.Max(1, item.Quantity));
+
+    /// <summary>Descuenta piezas de un insumo de la cuenta, del mismo renglón con que se cargaron.</summary>
+    public void UnchargeSupplyUnits(PatientSupplyItem item, int units)
     {
         var product = _catalog.FindCatalogProduct(item.SupplyName);
-        Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), Math.Max(1, item.Quantity));
+        Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), units);
     }
 
     /// <summary>

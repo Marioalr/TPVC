@@ -33,12 +33,28 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
-public class PatientSupplyItem
+public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
 {
     public string SupplyName { get; set; } = string.Empty;
     public string Instructions { get; set; } = string.Empty;
-    public int Quantity { get; set; } = 1;
+
+    private int _quantity = 1;
+
+    /// <summary>Piezas usadas; la hoja la cambia con + / − (y la cuenta de la consulta con ella).</summary>
+    public int Quantity
+    {
+        get => _quantity;
+        set
+        {
+            if (_quantity == value) return;
+            _quantity = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Quantity)));
+        }
+    }
+
     public decimal UnitPrice { get; set; } = 0m;
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class PatientServiceItem

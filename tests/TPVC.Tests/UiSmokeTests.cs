@@ -1265,6 +1265,28 @@ internal sealed class UiKeyboardPass
                 "Catálogo: Enter en la búsqueda agrega el primero y cierra el catálogo");
         }
         Settle();
+
+        // Lo ya usado: piezas a mano con Enter, + y − en su renglón (como la cuenta del Punto de venta)
+        var used = _records.SelectedPatient!.ActiveSupplies.LastOrDefault();
+        System.Windows.Controls.Control? RowControl(string name) => used == null ? null : FindDescendant<System.Windows.Controls.Control>(sheet!,
+            c => System.Windows.Automation.AutomationProperties.GetName(c) == name && ReferenceEquals(c.DataContext, used));
+        if (Check(RowControl("Piezas usadas") is System.Windows.Controls.TextBox, "Insumos: no se encontró la cantidad del renglón"))
+        {
+            var quantityBox = (System.Windows.Controls.TextBox)RowControl("Piezas usadas")!;
+            quantityBox.Text = "2";
+            Check(PressKey(quantityBox, System.Windows.Input.Key.Enter), "Insumos: Enter en la cantidad se atiende");
+            Check(PumpUntil(() => used!.Quantity == 2), "Insumos: Enter aplica las piezas escritas");
+            var plus = RowControl("Una pieza más") as System.Windows.Controls.Button;
+            var minus = RowControl("Una pieza menos") as System.Windows.Controls.Button;
+            if (Check(plus?.Command != null && minus?.Command != null, "Insumos: + y − del renglón sin comando"))
+            {
+                plus!.Command.Execute(plus.CommandParameter);
+                Check(PumpUntil(() => used!.Quantity == 3), "Insumos: + suma una pieza");
+                minus!.Command.Execute(minus.CommandParameter);
+                Check(PumpUntil(() => used!.Quantity == 2) && quantityBox.Text == "2", "Insumos: − resta una pieza y la cantidad se ve");
+            }
+        }
+
         Check(PressEscape() && !_records.Supplies.IsSuppliesModalOpen, "Esc cierra los insumos");
     }
 

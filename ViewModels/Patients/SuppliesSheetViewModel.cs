@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -235,6 +236,66 @@ public partial class SuppliesSheetViewModel : ObservableObject
         var list = new List<PatientSupplyItem>(_session.SelectedPatient.ActiveSupplies);
         list.Remove(item);
         _session.SelectedPatient.ActiveSupplies = list;
+        _session.SelectedPatient.SyncSuppliesJson();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(_session.SelectedPatient);
+            }
+            catch { }
+        }
+
+        _session.NotifySelectedPatientMutated();
+    }
+
+    // ==========================================
+    // CANTIDAD CON + / − (COMO LA CUENTA DEL PUNTO DE VENTA)
+    // ==========================================
+
+    [RelayCommand]
+    public Task IncreaseSupplyQuantityAsync(PatientSupplyItem? item) =>
+        item == null ? Task.CompletedTask : SetSupplyQuantityAsync(item, item.Quantity + 1);
+
+    [RelayCommand]
+    public Task DecreaseSupplyQuantityAsync(PatientSupplyItem? item) =>
+        item == null ? Task.CompletedTask : SetSupplyQuantityAsync(item, item.Quantity - 1);
+
+    /// <summary>
+    /// Cambia las piezas de un insumo ya usado (+, − o escritas a mano). En la consulta del paciente
+    /// se carga o se descuenta de la cuenta solo la diferencia; llegar a 0 lo quita como la X. Un
+    /// insumo del inventario no pasa de sus existencias.
+    /// </summary>
+    public async Task SetSupplyQuantityAsync(PatientSupplyItem item, int quantity)
+    {
+        if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly()) return;
+        // Un renglón que ya se quitó (p. ej. el cuadro de cantidad pierde el foco al quitarlo)
+        if (!_session.SelectedPatient.ActiveSupplies.Contains(item)) return;
+
+        if (quantity <= 0)
+        {
+            await RemoveSupplyItemFromPatientAsync(item);
+            return;
+        }
+
+        var product = _catalog.FindCatalogProduct(item.SupplyName);
+        if (product != null && quantity > item.Quantity && quantity > product.CurrentStock)
+        {
+            _feedback.ShowWarning($"No hay más existencias de '{item.SupplyName}' ({product.CurrentStock}).");
+            quantity = Math.Max(item.Quantity, product.CurrentStock);
+        }
+
+        int difference = quantity - item.Quantity;
+        if (difference == 0) return;
+
+        if (IsConsultationForSelectedPatient)
+        {
+            if (difference > 0) _account.ChargeSupplyUnits(item, product, difference);
+            else _account.UnchargeSupplyUnits(item, -difference);
+        }
+
+        item.Quantity = quantity;
         _session.SelectedPatient.SyncSuppliesJson();
 
         if (_inventoryService != null)
