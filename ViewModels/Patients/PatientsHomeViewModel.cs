@@ -102,6 +102,14 @@ public partial class PatientsHomeViewModel : ObservableObject
     [RelayCommand]
     public void OpenFirstHomeResult() => _workflow.OpenPatientChart(HomeResults.FirstOrDefault());
 
+    /// <summary>La X del buscador (fase 7, 7.5): borra toda la búsqueda y deja el cursor en el cuadro, sin cambiar de página.</summary>
+    [RelayCommand]
+    public void ClearHomeSearch()
+    {
+        HomeSearchText = string.Empty;
+        _nav.RequestSearchFocus();
+    }
+
     [ObservableProperty]
     private ObservableCollection<PatientAppointment> _todayAppointments = new();
 

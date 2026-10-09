@@ -983,6 +983,8 @@ internal sealed class UiKeyboardPass
 
             var patient = _records.Patients.First(p => p.RecordNumber == "EXP-2026-002");
             TypeToSearch(patient);
+            ClearSearchButton();
+            BirthDateMask();
             ChartMenu(patient);
             AgendaSlotMenu(patient);
             ConsultationKeys(patient);
@@ -1018,6 +1020,67 @@ internal sealed class UiKeyboardPass
         _records.OpenPatientChart(patient);
         Settle();
         Check(PressEscape() && _records.Navigation.IsHomePage, "Esc en la ficha vuelve al inicio");
+    }
+
+    // ------------------------------------------------------------------ fase 7: la X del buscador (7.5) y la fecha con diagonales (7.1)
+
+    private void ClearSearchButton()
+    {
+        _records.Navigation.GoToPatientsHome();
+        _records.Home.HomeSearchText = string.Empty;
+        Settle();
+        var shell = PumpUntilFound<TPVC.Views.MedicalRecordsView>(v => v.IsVisible);
+        var searchBox = shell?.FindName("PatientSearchBox") as System.Windows.Controls.TextBox;
+        var clear = shell == null ? null : FindDescendant<System.Windows.Controls.Button>(shell,
+            b => System.Windows.Automation.AutomationProperties.GetName(b) == "Borrar la búsqueda");
+        if (!Check(searchBox != null && clear != null, "Buscador: no se encontró el cuadro o su X (\"Borrar la búsqueda\")")) return;
+        Check(!clear!.IsVisible, "Buscador: sin texto la X no debe verse");
+
+        _records.Home.HomeSearchText = "gar";
+        Settle();
+        if (!Check(clear.IsVisible, "Buscador: con texto la X debe verse")) return;
+
+        // Sin foco en ningún lado (ni lógico): la X debe dejar el cursor en el buscador
+        var scope = System.Windows.Input.FocusManager.GetFocusScope(searchBox!);
+        System.Windows.Input.Keyboard.ClearFocus();
+        System.Windows.Input.FocusManager.SetFocusedElement(scope, null);
+        Invoke(clear);
+        Check(_records.Home.HomeSearchText.Length == 0 && _records.Navigation.IsHomePage, $"Un clic en la X borra la búsqueda (quedó \"{_records.Home.HomeSearchText}\")");
+        Check(PumpUntil(() => searchBox!.IsKeyboardFocused || ReferenceEquals(System.Windows.Input.FocusManager.GetFocusedElement(scope), searchBox), 2000),
+            "La X deja el cursor en el buscador");
+        Settle();
+        Check(!clear.IsVisible, "Buscador: tras borrar la X se oculta");
+    }
+
+    private void BirthDateMask()
+    {
+        WaitFor(_records.PatientForm.NewPatientAsync());
+        _records.PatientForm.OpenFormSection("Identificacion");
+        Settle();
+        try
+        {
+            var form = PumpUntilFound<TPVC.Views.PatientFormView>(v => v.IsVisible);
+            var box = form == null ? null : PumpUntilFound<System.Windows.Controls.TextBox>(form, b => TPVC.Helpers.DateMask.GetIsEnabled(b) && b.IsVisible);
+            if (!Check(box != null, "Alta: no se encontró la fecha de nacimiento con las diagonales solas (DateMask)")) return;
+            box!.Focus();
+
+            foreach (var digit in "08082008") TypeInto(box, digit.ToString());
+            var patientForm = _records.PatientForm;
+            Check(box.Text == "08/08/2008" && patientForm.FormBirthDateText == "08/08/2008",
+                $"Alta: teclear 08082008 debe verse 08/08/2008 (se ve \"{box.Text}\", el ViewModel tiene \"{patientForm.FormBirthDateText}\")");
+            Check(patientForm.FormBirthDate == new DateTime(2008, 8, 8), $"Alta: la fecha tecleada no quedó leída ({patientForm.FormBirthDate:dd/MM/yyyy})");
+            Check(TypeInto(box, "a") && box.Text == "08/08/2008", $"Alta: una letra no entra en la fecha (se ve \"{box.Text}\")");
+
+            // Retroceso desde el final: las diagonales se van solas con el dígito anterior
+            for (int i = 0; i < 5; i++) PressKey(box, System.Windows.Input.Key.Back);
+            Check(box.Text == "08/0" && patientForm.FormBirthDateText == "08/0" && patientForm.FormBirthDate == null,
+                $"Alta: cinco retrocesos desde 08/08/2008 dejan \"08/0\" (se ve \"{box.Text}\")");
+        }
+        finally
+        {
+            _records.PatientForm.CancelPatientForm();
+            Settle();
+        }
     }
 
     // ------------------------------------------------------------------ menús contextuales
@@ -1380,6 +1443,19 @@ internal sealed class UiKeyboardPass
             RoutedEvent = System.Windows.Input.TextCompositionManager.PreviewTextInputEvent
         };
         _window.RaiseEvent(args);
+        Pump();
+        return args.Handled;
+    }
+
+    /// <summary>Texto tecleado con el foco en un campo (PreviewTextInput sobre el campo).</summary>
+    private bool TypeInto(System.Windows.Controls.TextBox box, string text)
+    {
+        var composition = new System.Windows.Input.TextComposition(System.Windows.Input.InputManager.Current, box, text);
+        var args = new System.Windows.Input.TextCompositionEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, composition)
+        {
+            RoutedEvent = System.Windows.Input.TextCompositionManager.PreviewTextInputEvent
+        };
+        box.RaiseEvent(args);
         Pump();
         return args.Handled;
     }

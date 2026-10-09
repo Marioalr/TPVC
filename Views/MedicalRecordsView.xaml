@@ -65,7 +65,7 @@
                              Style="{StaticResource FieldTextBox}"
                              Height="44"
                              FontSize="15"
-                             Padding="40,7,12,7"
+                             Padding="40,7,40,7"
                              Text="{Binding Home.HomeSearchText, UpdateSourceTrigger=PropertyChanged}"
                              helpers:Field.Placeholder="Buscar paciente por nombre, folio o teléfono"
                              AutomationProperties.Name="Buscar paciente">
@@ -75,6 +75,15 @@
                     </TextBox>
                     <helpers:Icon Data="{StaticResource IcoSearch}" Width="18" Height="18" HorizontalAlignment="Left" Margin="14,0,0,0"
                                   Foreground="{DynamicResource ThemeTextSecondary}" IsHitTestVisible="False" />
+                    <!-- X dentro del cuadro (solo con texto): borra la búsqueda y deja el cursor en el cuadro.
+                         Sin foco propio: el clic no se lleva el cursor del buscador -->
+                    <Button Style="{StaticResource ButtonIcon}" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,7,0"
+                            Focusable="False" Foreground="{DynamicResource ThemeTextSecondary}"
+                            Command="{Binding Home.ClearHomeSearchCommand}"
+                            Visibility="{Binding Home.HasHomeQuery, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Borrar la búsqueda (Esc)" AutomationProperties.Name="Borrar la búsqueda">
+                        <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                    </Button>
                 </Grid>
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Agenda.ToggleAgendaPanelCommand}" Margin="0,0,8,0" ToolTip="Agenda de la semana (panel)">

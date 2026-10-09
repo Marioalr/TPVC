@@ -167,7 +167,7 @@
 
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,16,0,0">
                                     <TextBlock Style="{StaticResource FieldLabel}" Text="Fecha de nacimiento *" />
-                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding FormBirthDateText, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="dd/mm/aaaa" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding FormBirthDateText, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="dd/mm/aaaa" helpers:DateMask.IsEnabled="True" />
                                     <TextBlock Style="{StaticResource FieldHint}" Text="{Binding FormAgeDisplay}" Foreground="{DynamicResource ThemeAccentForeground}" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,16,0,0">

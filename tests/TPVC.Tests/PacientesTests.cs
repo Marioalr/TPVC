@@ -138,6 +138,36 @@ public class PacientesTests
     }
 
     [TestMethod]
+    public async Task HomeSearch_ClearButton_EmptiesTheSearch_AndAsksForTheSearchBoxFocus()
+    {
+        var (records, _, _) = await CreateRecordsAsync();
+        records.EnterPatientsSection();
+        var focusRequests = 0;
+        records.Navigation.FocusSearchRequested += () => focusRequests++;
+
+        records.Home.HomeSearchText = records.Patients.First().FullName.Split(' ')[0];
+        Assert.IsTrue(records.Home.HasHomeQuery, "Con texto la X se ve (HasHomeQuery)");
+        Assert.IsNotEmpty(records.Home.HomeResults);
+
+        // Fase 7 (7.5): la X del buscador borra toda la búsqueda y deja el cursor en el cuadro
+        Assert.IsTrue(records.Home.ClearHomeSearchCommand.CanExecute(null));
+        records.Home.ClearHomeSearchCommand.Execute(null);
+        Assert.AreEqual(string.Empty, records.Home.HomeSearchText);
+        Assert.IsFalse(records.Home.HasHomeQuery, "Sin texto la X se oculta");
+        Assert.IsEmpty(records.Home.HomeResults);
+        Assert.IsTrue(records.Navigation.IsHomePage, "Se queda en el inicio");
+        Assert.AreEqual(1, focusRequests, "Pide el foco en el buscador");
+
+        // Solo borra: no cambia de página (aquí, la ficha con algo escrito en el buscador)
+        records.Home.HomeSearchText = "gar";
+        records.Navigation.PatientsPage = PatientsNavigation.PageChart;
+        records.Home.ClearHomeSearch();
+        Assert.AreEqual(string.Empty, records.Home.HomeSearchText);
+        Assert.IsTrue(records.Navigation.IsChartPage, "La X no cambia de página");
+        Assert.AreEqual(2, focusRequests);
+    }
+
+    [TestMethod]
     public async Task CreatePatientFromSearch_PrefillsNameFromWhatWasTyped()
     {
         var (records, _, _) = await CreateRecordsAsync();

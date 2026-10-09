@@ -57,4 +57,7 @@ public partial class PatientsNavigation : ObservableObject
         PatientsPage = PageHome;
         FocusSearchRequested?.Invoke();
     }
+
+    /// <summary>Pide el foco en el buscador sin cambiar de página (la X que borra la búsqueda).</summary>
+    public void RequestSearchFocus() => FocusSearchRequested?.Invoke();
 }
