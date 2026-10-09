@@ -2,6 +2,12 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.3] - 2026-10-08
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G3)
+* Sin cambios visibles. Primeras piezas fuera de `MedicalRecordsViewModel`, sin WPF y reutilizables en la app de la tablet (`ViewModels/Patients`): la gráfica de signos (`VitalSignsChartViewModel`), el aviso informativo, la navegación entre inicio, ficha, alta y consulta, los datos del consultorio, el catálogo de productos y servicios, y las plantillas de receta.
+* Se movieron sin renombrar ni cambiar su lógica; las pantallas enlazan directamente al dueño de cada dato. Las referencias de comportamiento (avisos, borradores, envío entre equipos) siguen idénticas y una revisión adversarial no encontró cambios.
+
 ## [1.18.2] - 2026-10-08
 
 ### Interno — Fase 6: división del ViewModel de Pacientes (grupo G2)
