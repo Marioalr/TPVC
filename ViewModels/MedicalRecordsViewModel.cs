@@ -33,8 +33,26 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ObservableCollection<PatientRecord> _patients = new();
 
-    [ObservableProperty]
     private PatientRecord? _selectedPatient;
+
+    /// <summary>
+    /// Paciente abierto. Cambia por referencia, no por Id (PatientRecord.Equals compara Id): la copia
+    /// más reciente del mismo expediente (cambios de otro equipo, recarga tras guardar) también se
+    /// toma. Antes se ignoraba y la ficha seguía con la copia vieja, que al guardarse pisaba lo nuevo.
+    /// </summary>
+    public PatientRecord? SelectedPatient
+    {
+        get => _selectedPatient;
+        set
+        {
+            if (ReferenceEquals(_selectedPatient, value)) return;
+            var oldValue = _selectedPatient;
+            OnPropertyChanging();
+            _selectedPatient = value;
+            OnSelectedPatientChanged(oldValue, value);
+            OnPropertyChanged();
+        }
+    }
 
     [ObservableProperty]
     private ObservableCollection<PatientConsultation> _consultationsHistory = new();
@@ -1099,7 +1117,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         && (_consultationRecordPatient == null || _consultationRecordPatient.Id != patient.Id)
         && !(HasActiveConsultation && ActiveConsultation?.PatientId == patient.Id);
 
-    partial void OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
+    private void OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
         // Solo un cambio real de paciente reinicia el estado de guardado de la consulta
         if (oldValue?.Id != newValue?.Id || newValue == null)

@@ -170,11 +170,10 @@ public class FlowCharacterizationTests
             Assert.AreEqual(0, db.SyncTombstones.Count(t => t.EntityType == nameof(PatientConsultation)), "Liberar no borra notas");
         }
 
-        // Recarga forzada del expediente (aunque la base no traiga una versión más nueva): la lista toma la
-        // instancia de la base. La ficha conserva la suya: PatientRecord.Equals compara por Id y asignar a
-        // SelectedPatient otra instancia del mismo paciente no hace nada (rareza actual, se caracteriza)
+        // Recarga forzada del expediente (aunque la base no traiga una versión más nueva): la lista y la
+        // ficha toman la instancia de la base (SelectedPatient cambia por referencia, no por Id)
         await WaitUntilAsync(() => !ReferenceEquals(records.Patients.Single(p => p.Id == patient.Id), before), "La lista vuelve a leer el expediente");
-        Assert.AreSame(before, records.SelectedPatient);
+        Assert.AreSame(records.Patients.Single(p => p.Id == patient.Id), records.SelectedPatient, "La ficha también toma la de la base");
         Assert.AreEqual("Paracetamol 500 mg (Caja con 20 tabletas)", records.Patients.Single(p => p.Id == patient.Id).ActivePrescription.Single().MedicineName);
         records.Dispose();
     }
@@ -242,7 +241,7 @@ public class FlowCharacterizationTests
     // ================================================================== recarga de expedientes
 
     [TestMethod]
-    public async Task LoadPatients_FresherRow_GoesToTheList_TheChartKeepsItsInstanceAndWhatTheDoctorWasLookingAt()
+    public async Task LoadPatients_FresherRow_ReplacesTheChartInstance_KeepingWhatTheDoctorWasLookingAt()
     {
         using var clinic = new Fase6Clinic();
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false), drafts: false);
@@ -257,13 +256,13 @@ public class FlowCharacterizationTests
         BumpPatientInDatabase(clinic, patient.Id, "Látex");
         await records.LoadPatientsAsync();
 
-        // La lista toma la versión de la base; la ficha conserva su instancia (PatientRecord.Equals compara
-        // por Id: asignar la nueva a SelectedPatient no hace nada; rareza actual, se caracteriza tal cual)
+        // La lista y la ficha toman la versión de la base (antes la ficha seguía con la copia vieja y al
+        // guardarla pisaba lo que llegó de otro equipo); lo que el médico estaba viendo se conserva
         var listed = records.Patients.Single(p => p.Id == patient.Id);
         Assert.AreNotSame(patient, listed, "Se toma la versión de la base");
         Assert.AreEqual("Látex", listed.Allergies);
-        Assert.AreSame(patient, records.SelectedPatient);
-        Assert.AreNotEqual("Látex", patient.Allergies);
+        Assert.AreSame(listed, records.SelectedPatient);
+        Assert.AreEqual("Látex", records.SelectedPatient!.Allergies);
         Assert.AreEqual("glucosa", records.TimelineSearchText);
         Assert.IsTrue(records.IsVitalsChartVisible);
         Assert.IsTrue(records.AntecedentSections.Single(s => s.Key == openSection).IsOpen);
@@ -362,10 +361,10 @@ public class FlowCharacterizationTests
 
         Assert.IsTrue(SavedToRecord(), "El avance quedó guardado");
 
-        // La misma ficha leída otra vez (otra instancia, mismo Id): sigue guardada. Hoy la asignación ni
-        // siquiera cambia la instancia (PatientRecord.Equals compara por Id)
-        records.SelectedPatient = new PatientRecord { Id = patient.Id, FullName = patient.FullName, RecordNumber = patient.RecordNumber };
-        Assert.AreSame(patient, records.SelectedPatient);
+        // La misma ficha leída otra vez (otra instancia, mismo Id): se toma la instancia y sigue guardada
+        var reread = new PatientRecord { Id = patient.Id, FullName = patient.FullName, RecordNumber = patient.RecordNumber };
+        records.SelectedPatient = reread;
+        Assert.AreSame(reread, records.SelectedPatient);
         Assert.IsTrue(SavedToRecord(), "Mismo paciente: no se reinicia");
 
         records.SelectedPatient = null;
