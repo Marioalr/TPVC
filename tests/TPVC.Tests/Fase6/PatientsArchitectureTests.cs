@@ -36,7 +36,40 @@ public class PatientsArchitectureTests
         ["ConsultationHandoffViewModel"] = 7
     };
 
+    /// <summary>
+    /// Dependencias dentro del mismo nivel que la tabla del plan (§1.2) declara: los avisos breves
+    /// (PatientsFeedback) usan la ventana de aviso (InfoDialogState) cuando no hay servicio de avisos.
+    /// </summary>
+    private static readonly HashSet<(string Type, string Dependency)> SameTierDependencies = new()
+    {
+        ("PatientsFeedback", "InfoDialogState")
+    };
+
     private static string PatientsFolder => Path.Combine(Fase6Assets.RepoRoot(), "ViewModels", "Patients");
+
+    /// <summary>
+    /// Plataforma (nivel 1) y puertos del coordinador: viven en ViewModels/Patients/Platform y
+    /// ViewModels/Patients/Ports con el espacio de nombres TPVC.ViewModels.Patients (el mismo que los
+    /// hijos), así que se reconocen por la carpeta de su archivo y no por el espacio de nombres.
+    /// </summary>
+    private static HashSet<string> PlatformAndPortTypeNames()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var folder in new[] { "Platform", "Ports" })
+        {
+            var path = Path.Combine(PatientsFolder, folder);
+            if (!Directory.Exists(path)) continue;
+            foreach (var file in Directory.GetFiles(path, "*.cs", SearchOption.AllDirectories))
+            {
+                var code = CSharpSource.Sanitize(File.ReadAllText(file));
+                foreach (Match m in Regex.Matches(code, @"\b(?:class|interface|struct|enum|record(?:\s+(?:class|struct))?)\s+(\w+)"))
+                {
+                    names.Add(m.Groups[1].Value);
+                }
+            }
+        }
+        return names;
+    }
 
     [TestMethod]
     public void PatientsFolder_HasNoWpfOrCoordinatorReferences()
@@ -83,7 +116,9 @@ public class PatientsArchitectureTests
         Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories).Where(f =>
         {
             var relative = Path.GetRelativePath(root, f).Replace('\\', '/');
+            // .claude/ guarda copias de trabajo de otras ramas (worktrees): no son esta versión
             return !relative.StartsWith("tests/", StringComparison.Ordinal)
+                   && !relative.StartsWith(".claude/", StringComparison.Ordinal)
                    && !relative.StartsWith("installer/", StringComparison.Ordinal)
                    && !relative.StartsWith("publish/", StringComparison.Ordinal)
                    && !relative.Contains("/obj/", StringComparison.Ordinal) && !relative.StartsWith("obj/", StringComparison.Ordinal)
@@ -98,6 +133,7 @@ public class PatientsArchitectureTests
             .Where(t => t.Namespace?.StartsWith("TPVC.ViewModels.Patients", StringComparison.Ordinal) == true && Tiers.ContainsKey(t.Name))
             .ToList();
 
+        var platformAndPorts = PlatformAndPortTypeNames();
         var problems = new List<string>();
         foreach (var type in patientsTypes)
         {
@@ -109,12 +145,13 @@ public class PatientsArchitectureTests
                     var dependency = parameter.ParameterType;
                     if (Tiers.TryGetValue(dependency.Name, out var dependencyTier))
                     {
-                        if (dependencyTier >= tier)
+                        if (dependencyTier >= tier && !SameTierDependencies.Contains((type.Name, dependency.Name)))
                         {
                             problems.Add($"{type.Name} (nivel {tier}) recibe {dependency.Name} (nivel {dependencyTier}): debe pasar por los puertos del coordinador");
                         }
                     }
                     else if (dependency.Namespace?.StartsWith("TPVC.ViewModels", StringComparison.Ordinal) == true
+                             && !(dependency.Namespace == "TPVC.ViewModels.Patients" && platformAndPorts.Contains(dependency.Name))
                              && dependency.Namespace?.StartsWith("TPVC.ViewModels.Patients.Platform", StringComparison.Ordinal) != true
                              && dependency.Namespace?.StartsWith("TPVC.ViewModels.Patients.Ports", StringComparison.Ordinal) != true)
                     {

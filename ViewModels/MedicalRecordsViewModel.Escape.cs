@@ -8,12 +8,12 @@ public partial class MedicalRecordsViewModel
 {
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>
-        IsInfoModalVisible || IsAllergyAlertOpen || IsCatalogBrowserModalOpen
+        Info.IsInfoModalVisible || IsAllergyAlertOpen || IsCatalogBrowserModalOpen
         || IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || IsPrescriptionModalOpen || IsSuppliesModalOpen
         || IsServicesModalOpen || IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
-    public bool CanTypeToSearch => (IsHomePage || IsChartPage) && !IsAgendaPanelOpen && !IsAnySheetOpen;
+    public bool CanTypeToSearch => (Navigation.IsHomePage || Navigation.IsChartPage) && !IsAgendaPanelOpen && !IsAnySheetOpen;
 
     /// <summary>Lo tecleado con el foco fuera de un campo se agrega al buscador.</summary>
     public void AppendTypedSearchText(string text) => HomeSearchText += text;
@@ -24,7 +24,7 @@ public partial class MedicalRecordsViewModel
     /// </summary>
     public bool TryCloseTopmost()
     {
-        if (IsInfoModalVisible) DismissInfoModal();
+        if (Info.IsInfoModalVisible) Info.DismissInfoModal();
         else if (IsAllergyAlertOpen) CancelAllergyPrescription();
         else if (IsCatalogBrowserModalOpen) CloseCatalogBrowser();
         else if (IsPrescriptionPdfModalOpen) ClosePrescriptionPdfPreview();
@@ -38,8 +38,8 @@ public partial class MedicalRecordsViewModel
         else if (IsServicesModalOpen) CloseServicesModal();
         else if (IsMovingAppointment) CancelMovingAppointment();
         else if (IsAgendaPanelOpen) CloseAgendaPanel();
-        else if (IsHomePage && HasHomeQuery) HomeSearchText = string.Empty;
-        else if (IsChartPage) GoToPatientsHome();
+        else if (Navigation.IsHomePage && HasHomeQuery) HomeSearchText = string.Empty;
+        else if (Navigation.IsChartPage) Navigation.GoToPatientsHome();
         else return false;
         return true;
     }

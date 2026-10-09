@@ -179,7 +179,7 @@ public partial class MedicalRecordsViewModel
         var skipped = new List<string>();
         foreach (var item in PendingPreviousPrescription)
         {
-            var product = FindCatalogProduct(item.MedicineName);
+            var product = Catalog.FindCatalogProduct(item.MedicineName);
             if (InventoryService.CheckMedicationAllergy(SelectedPatient, product, item.MedicineName).HasConflict)
             {
                 skipped.Add(item.MedicineName);
@@ -191,8 +191,8 @@ public partial class MedicalRecordsViewModel
         NotifyPrescriptionStateChanged();
         if (skipped.Count > 0)
         {
-            InfoModalMessage = $"No se repitió {string.Join(", ", skipped)}: coincide con las alergias registradas del paciente. Si de todos modos debe recetarse, agréguelo a mano para confirmar la alerta.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"No se repitió {string.Join(", ", skipped)}: coincide con las alergias registradas del paciente. Si de todos modos debe recetarse, agréguelo a mano para confirmar la alerta.";
+            Info.IsInfoModalVisible = true;
         }
     }
 }

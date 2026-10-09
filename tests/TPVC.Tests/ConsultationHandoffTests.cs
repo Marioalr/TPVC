@@ -237,7 +237,7 @@ public class ConsultationHandoffTests
 
         await tablet.Records.AcceptIncomingHandoffAsync();
         var received = tablet.Consultations.CurrentConsultation;
-        Assert.IsNotNull(received, tablet.Records.InfoModalMessage);
+        Assert.IsNotNull(received, tablet.Records.Info.InfoModalMessage);
         Assert.IsTrue(tablet.Records.IsConsultationEditable);
         Assert.AreEqual(folio, received.Folio, "Mismo folio");
         Assert.AreEqual(startedAt, received.StartedAt, "Misma hora de inicio");
@@ -257,7 +257,7 @@ public class ConsultationHandoffTests
 
         // La PC se entera en su revisión y se cierra SIN descartar
         await pc.Records.PollHandoffsOnceAsync();
-        Assert.IsFalse(pc.Consultations.HasActiveConsultation, pc.Records.InfoModalMessage);
+        Assert.IsFalse(pc.Consultations.HasActiveConsultation, pc.Records.Info.InfoModalMessage);
         Assert.IsFalse(pc.Records.IsConsultationHandedOff);
         Assert.IsFalse(File.Exists(pc.Device.DraftPath), "La PC ya no la recupera al abrir");
         using (var db = pc.Device.Factory.CreateDbContext())
@@ -302,7 +302,7 @@ public class ConsultationHandoffTests
         // La tablet todavía muestra el aviso (no ha revisado): tomarla ya no funciona
         await tablet.Records.AcceptIncomingHandoffAsync();
         Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
-        StringAssert.Contains(tablet.Records.InfoModalMessage, "recuperó");
+        StringAssert.Contains(tablet.Records.Info.InfoModalMessage, "recuperó");
         Assert.AreEqual(1, Owners(pc, tablet));
 
         await tablet.Records.PollHandoffsOnceAsync();
@@ -393,7 +393,7 @@ public class ConsultationHandoffTests
         await tablet.Records.AcceptIncomingHandoffAsync();
         _server.DropResponseAfterExecute = null;
         Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
-        StringAssert.Contains(tablet.Records.InfoModalMessage, "Sin conexión");
+        StringAssert.Contains(tablet.Records.Info.InfoModalMessage, "Sin conexión");
 
         // La PC ve "aceptada" y se libera; la consulta no se pierde: la copia sigue en la nube
         _server.IsOffline = false;
@@ -433,7 +433,7 @@ public class ConsultationHandoffTests
         // la ficha del primer intento no se reemplaza y la consulta se abre aquí
         Assert.IsNotNull(tablet.Records.IncomingHandoff);
         await tablet.Records.AcceptIncomingHandoffAsync();
-        Assert.IsTrue(tablet.Consultations.HasActiveConsultation, tablet.Records.InfoModalMessage);
+        Assert.IsTrue(tablet.Consultations.HasActiveConsultation, tablet.Records.Info.InfoModalMessage);
         await pc.Records.PollHandoffsOnceAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation);
         Assert.AreEqual(1, Owners(pc, tablet));
@@ -471,7 +471,7 @@ public class ConsultationHandoffTests
         _server.DropResponseAfterExecute = null;
 
         // El renglón llegó, pero la PC no lo supo: lo cancela antes de volver a editarla
-        Assert.IsTrue(pc.Records.IsConsultationEditable, pc.Records.InfoModalMessage);
+        Assert.IsTrue(pc.Records.IsConsultationEditable, pc.Records.Info.InfoModalMessage);
         Assert.AreEqual("cancelada", ServerState());
         await tablet.Records.PollHandoffsOnceAsync();
         Assert.IsNull(tablet.Records.IncomingHandoff);
@@ -589,7 +589,7 @@ public class ConsultationHandoffTests
 
         var line = tablet.Consultations.CurrentConsultation!.Items.Single(i => i.Name == product.Name);
         Assert.IsTrue(line.ProductId <= -1_000_000, "Se cobra como cargo libre (sin descontar existencias)");
-        StringAssert.Contains(tablet.Records.InfoModalMessage, product.Name);
+        StringAssert.Contains(tablet.Records.Info.InfoModalMessage, product.Name);
     }
 
     [TestMethod]
@@ -609,7 +609,7 @@ public class ConsultationHandoffTests
 
         pc.Records.EditPatient();
         Assert.IsFalse(pc.Records.IsPatientModalOpen, "El expediente se edita en el otro equipo");
-        StringAssert.Contains(pc.Records.InfoModalMessage, patient.FullName);
+        StringAssert.Contains(pc.Records.Info.InfoModalMessage, patient.FullName);
     }
 
     [TestMethod]
@@ -620,8 +620,8 @@ public class ConsultationHandoffTests
         var records = pc.Records;
 
         // Agregados antes de enviarla (se cargan a la cuenta)
-        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == product.Id));
-        await records.SelectAndAddServiceModalSuggestionAsync(records.Services.Single(s => s.Id == service.Id));
+        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
+        await records.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
 
         await SendToAsync(pc, tablet);
         Assert.IsTrue(records.IsConsultationHandedOff);
@@ -633,10 +633,10 @@ public class ConsultationHandoffTests
         var services = patient.ActiveServices.ToList();
         var charges = pc.Consultations.CurrentConsultation!.Items.Select(i => $"{i.ProductId}x{i.Quantity}").ToList();
 
-        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == product.Id));
+        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
         records.SupplySearchText = "Férula de aluminio";
         await records.SelectAndAddSupplyProductAsync(null);
-        await records.SelectAndAddServiceModalSuggestionAsync(records.Services.Single(s => s.Id == service.Id));
+        await records.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
         await records.RemoveSupplyItemFromPatientAsync(supply);
         await records.RemoveServiceItemFromPatientAsync(serviceItem);
 
@@ -644,15 +644,15 @@ public class ConsultationHandoffTests
         CollectionAssert.AreEqual(supplies, patient.ActiveSupplies, "La hoja de insumos no cambia en solo lectura");
         CollectionAssert.AreEqual(services, patient.ActiveServices, "La hoja de servicios no cambia en solo lectura");
         CollectionAssert.AreEqual(charges, pc.Consultations.CurrentConsultation.Items.Select(i => $"{i.ProductId}x{i.Quantity}").ToList(), "Ni la cuenta");
-        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
+        StringAssert.Contains(records.Info.InfoModalMessage, "solo lectura");
 
         // Guardar las hojas tampoco escribe el expediente
-        records.InfoModalMessage = null;
+        records.Info.InfoModalMessage = null;
         await records.SaveSuppliesModalAsync();
-        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
-        records.InfoModalMessage = null;
+        StringAssert.Contains(records.Info.InfoModalMessage, "solo lectura");
+        records.Info.InfoModalMessage = null;
         await records.SaveServicesModalAsync();
-        StringAssert.Contains(records.InfoModalMessage, "solo lectura");
+        StringAssert.Contains(records.Info.InfoModalMessage, "solo lectura");
     }
 
     // ================================================================== sincronización con relojes distintos

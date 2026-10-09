@@ -86,9 +86,9 @@
                             <ColumnDefinition Width="12" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Visibility="{Binding HasPosologyTemplates, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Visibility="{Binding Templates.HasPosologyTemplates, Converter={StaticResource BoolToVis}}">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Posología frecuente" />
-                            <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding PosologyTemplates}"
+                            <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding Templates.PosologyTemplates}"
                                       SelectedItem="{Binding SelectedPosologyTemplate, Mode=TwoWay}" DisplayMemberPath="Text"
                                       helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Posología frecuente"
                                       ToolTip="Despliegue y escriba (ej. &quot;cada 8&quot;): el cursor salta a la opción; Enter la copia a las indicaciones" />
@@ -101,7 +101,7 @@
                                     <ColumnDefinition Width="72" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding PediatricDoseRules}"
+                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding Templates.PediatricDoseRules}"
                                           SelectedItem="{Binding SelectedPediatricRule, Mode=TwoWay}" DisplayMemberPath="DisplayName"
                                           helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Medicamento pediátrico"
                                           ToolTip="Despliegue y escriba el medicamento para ir directo a él" />

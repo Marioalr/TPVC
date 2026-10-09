@@ -63,9 +63,9 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccentForeground}" />
-                                        <TextBlock Text="{Binding DoctorName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
-                                        <TextBlock Text="{Binding DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Text="{Binding Clinic.ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccentForeground}" />
+                                        <TextBlock Text="{Binding Clinic.DoctorName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding Clinic.DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
                                         <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="1" CornerRadius="4" Padding="8,4">
@@ -176,8 +176,8 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                     <Border BorderBrush="{DynamicResource ThemeTextSecondary}" BorderThickness="0,1,0,0" Width="220" Margin="0,0,0,6" />
-                                    <TextBlock Text="{Binding DoctorName}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
-                                    <TextBlock Text="{Binding DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="10" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                    <TextBlock Text="{Binding Clinic.DoctorName}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
+                                    <TextBlock Text="{Binding Clinic.DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="10" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     <TextBlock Text="Firma y Sello del Médico Tratante" FontSize="10" FontStyle="Italic" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
                                 </StackPanel>
                             </Grid>

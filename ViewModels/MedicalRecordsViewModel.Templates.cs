@@ -17,15 +17,6 @@ namespace TPVC.ViewModels;
 public partial class MedicalRecordsViewModel
 {
     [ObservableProperty]
-    private ObservableCollection<PrescriptionTemplate> _posologyTemplates = new();
-
-    [ObservableProperty]
-    private ObservableCollection<PrescriptionTemplate> _generalMeasureTemplates = new();
-
-    [ObservableProperty]
-    private ObservableCollection<PediatricDoseRule> _pediatricDoseRules = new();
-
-    [ObservableProperty]
     private PrescriptionTemplate? _selectedPosologyTemplate;
 
     [ObservableProperty]
@@ -40,35 +31,8 @@ public partial class MedicalRecordsViewModel
     [ObservableProperty]
     private string _pediatricDoseResult = string.Empty;
 
-    public bool HasPosologyTemplates => PosologyTemplates.Count > 0;
-    public bool HasGeneralMeasureTemplates => GeneralMeasureTemplates.Count > 0;
-    public bool HasPediatricDoseRules => PediatricDoseRules.Count > 0;
-
     /// <summary>La dosis pediátrica por peso solo se ofrece con pacientes menores de edad.</summary>
-    public bool ShowsPediatricDose => HasPediatricDoseRules && SelectedPatient?.IsPediatric == true;
-
-    public async Task LoadPrescriptionTemplatesAsync()
-    {
-        if (_inventoryService == null) return;
-        try
-        {
-            PosologyTemplates = new ObservableCollection<PrescriptionTemplate>(
-                await _inventoryService.GetPrescriptionTemplatesAsync(PrescriptionTemplateKinds.Posology));
-            GeneralMeasureTemplates = new ObservableCollection<PrescriptionTemplate>(
-                await _inventoryService.GetPrescriptionTemplatesAsync(PrescriptionTemplateKinds.GeneralMeasures));
-            PediatricDoseRules = new ObservableCollection<PediatricDoseRule>(
-                await _inventoryService.GetPediatricDoseRulesAsync());
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("No se pudieron cargar las plantillas de receta", ex);
-        }
-
-        OnPropertyChanged(nameof(HasPosologyTemplates));
-        OnPropertyChanged(nameof(HasGeneralMeasureTemplates));
-        OnPropertyChanged(nameof(HasPediatricDoseRules));
-        OnPropertyChanged(nameof(ShowsPediatricDose));
-    }
+    public bool ShowsPediatricDose => Templates.HasPediatricDoseRules && SelectedPatient?.IsPediatric == true;
 
     /// <summary>Elegir una posología la copia al campo de indicaciones del medicamento que se captura.</summary>
     partial void OnSelectedPosologyTemplateChanged(PrescriptionTemplate? value)

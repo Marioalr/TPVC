@@ -69,13 +69,13 @@ public class FlowCharacterizationTests
         records.IsServicesModalOpen = true;
         records.IsCatalogBrowserModalOpen = true;
         records.IsPatientModalOpen = true;
-        records.InfoModalMessage = "Aviso anterior";
-        records.IsInfoModalVisible = true;
+        records.Info.InfoModalMessage = "Aviso anterior";
+        records.Info.IsInfoModalVisible = true;
 
         records.Checkout.SelectedPaymentMethod = "Efectivo";
         records.Checkout.CashReceived = 5000m;
         await records.Checkout.ChargeAsync();
-        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage, "La consulta se cierra y vuelve al inicio");
+        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage, "La consulta se cierra y vuelve al inicio");
         await WaitUntilAsync(() => records.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended), "La cita de hoy se ve atendida");
 
         Assert.IsFalse(records.IsFinishConsultationOpen);
@@ -84,14 +84,14 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.IsServicesModalOpen);
         Assert.IsFalse(records.IsCatalogBrowserModalOpen);
         Assert.IsFalse(records.IsPatientModalOpen);
-        Assert.IsFalse(records.IsFormPage);
+        Assert.IsFalse(records.Navigation.IsFormPage);
         Assert.IsNull(records.SelectedPatient, "Sin paciente seleccionado");
         Assert.IsEmpty(records.ConsultationsHistory);
         Assert.AreEqual(string.Empty, records.ConsultationChiefComplaint, "Campos de la consulta limpios");
         Assert.AreEqual(string.Empty, records.ConsultationDiagnosis);
         Assert.AreEqual("00:00", records.ActiveConsultationElapsedTime);
         // El aviso anterior se cerró; el que queda es el del cobro (sin servicio de avisos usa la ventana)
-        StringAssert.StartsWith(records.InfoModalMessage, "Consulta cobrada");
+        StringAssert.StartsWith(records.Info.InfoModalMessage, "Consulta cobrada");
 
         Assert.AreEqual("Atendida", (await clinic.Inventory.GetAppointmentsByDayAsync(DateTime.Today)).Single(a => a.Id == appointment.Id).Status);
         Assert.IsTrue((await clinic.Inventory.GetPatientConsultationsAsync(patient.Id)).Any(c => c.Folio == folio), "La nota quedó en el expediente");
@@ -120,7 +120,7 @@ public class FlowCharacterizationTests
         await records.OpenSendConsultationSheetAsync();
         records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
         await records.SendConsultationToSelectedDeviceAsync();
-        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.InfoModalMessage);
+        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.Info.InfoModalMessage);
 
         // Lo que estuviera abierto al llegar la aceptación
         records.IsPrescriptionModalOpen = true;
@@ -144,7 +144,7 @@ public class FlowCharacterizationTests
         clinic.CloudScalar("UPDATE ConsultationHandoffs SET State = 'aceptada', AcceptToken = 'ficha-tablet'");
         await records.PollHandoffsOnceAsync();
 
-        Assert.IsFalse(consultations.HasActiveConsultation, records.InfoModalMessage);
+        Assert.IsFalse(consultations.HasActiveConsultation, records.Info.InfoModalMessage);
         Assert.IsFalse(records.IsConsultationHandedOff);
         Assert.IsFalse(records.IsPrescriptionModalOpen);
         Assert.IsFalse(records.IsSuppliesModalOpen);
@@ -155,8 +155,8 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.IsAgendaPanelOpen);
         Assert.IsFalse(records.IsSendConsultationSheetOpen);
         Assert.IsFalse(records.IsFinishConsultationOpen);
-        Assert.IsTrue(records.IsChartPage, "Queda la ficha del paciente");
-        StringAssert.Contains(records.InfoModalMessage, "continúa en Tablet del consultorio");
+        Assert.IsTrue(records.Navigation.IsChartPage, "Queda la ficha del paciente");
+        StringAssert.Contains(records.Info.InfoModalMessage, "continúa en Tablet del consultorio");
         Assert.IsFalse(File.Exists(clinic.DraftPath), "Ya no se recupera aquí");
 
         // Sin descartar: la nota sigue y el expediente no vuelve a como estaba antes de la consulta
@@ -266,7 +266,7 @@ public class FlowCharacterizationTests
         Assert.AreEqual("glucosa", records.TimelineSearchText);
         Assert.IsTrue(records.IsVitalsChartVisible);
         Assert.IsTrue(records.AntecedentSections.Single(s => s.Key == openSection).IsOpen);
-        Assert.IsTrue(records.IsChartPage);
+        Assert.IsTrue(records.Navigation.IsChartPage);
         records.Dispose();
     }
 
@@ -409,7 +409,7 @@ public class FlowCharacterizationTests
 
         records.AttendAppointment(appointment);
 
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.AreEqual("Dolor de garganta", records.ConsultationChiefComplaint, "El motivo se escribe después de iniciar");
         CollectionAssert.Contains(seen, "ConsultationChiefComplaint:sin cita");
         Assert.IsTrue(seen.All(s => s.EndsWith(":sin cita", StringComparison.Ordinal)), "La cita se asigna al final: " + string.Join(", ", seen));

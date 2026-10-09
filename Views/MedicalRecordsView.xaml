@@ -42,7 +42,7 @@
 
         <!-- ======================= BARRA DE PACIENTES ======================= -->
         <Border Background="{DynamicResource ThemeCard}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="24,12"
-                Visibility="{Binding ShowsPatientsTopBar, Converter={StaticResource BoolToVis}}">
+                Visibility="{Binding Navigation.ShowsPatientsTopBar, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -57,7 +57,7 @@
                     </StackPanel>
                 </Button>
                 <Button Grid.Column="1" Style="{StaticResource ButtonGhost}" Foreground="{DynamicResource ThemeText}" Padding="4,2"
-                        Command="{Binding GoToPatientsHomeCommand}" ToolTip="Citas de hoy y pacientes recientes">
+                        Command="{Binding Navigation.GoToPatientsHomeCommand}" ToolTip="Citas de hoy y pacientes recientes">
                     <TextBlock Style="{StaticResource TextHeading}" Text="Pacientes" />
                 </Button>
                 <Grid Grid.Column="2" MaxWidth="620" Margin="24,0" HorizontalAlignment="Stretch">
@@ -138,13 +138,13 @@
         <!-- ======================= PÁGINAS ======================= -->
         <Grid Grid.Row="2">
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource HomePage}"
-                            Visibility="{Binding IsHomePage, Converter={StaticResource BoolToVis}}" />
+                            Visibility="{Binding Navigation.IsHomePage, Converter={StaticResource BoolToVis}}" />
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ChartPage}"
-                            Visibility="{Binding IsChartPage, Converter={StaticResource BoolToVis}}" />
+                            Visibility="{Binding Navigation.IsChartPage, Converter={StaticResource BoolToVis}}" />
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource FormPage}"
-                            Visibility="{Binding IsFormPage, Converter={StaticResource BoolToVis}}" />
+                            Visibility="{Binding Navigation.IsFormPage, Converter={StaticResource BoolToVis}}" />
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ConsultationPage}"
-                            Visibility="{Binding IsConsultationPage, Converter={StaticResource BoolToVis}}" />
+                            Visibility="{Binding Navigation.IsConsultationPage, Converter={StaticResource BoolToVis}}" />
         </Grid>
 
         <!-- ======================= PANEL DE AGENDA (no oscurece lo de atrás) ======================= -->
@@ -169,7 +169,7 @@
                         Visibility="{Binding IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource AllergyDialog}"
                         Visibility="{Binding IsAllergyAlertOpen, Converter={StaticResource BoolToVis}}" />
-        <ContentControl Grid.RowSpan="3" Panel.ZIndex="500" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource InfoDialog}"
-                        Visibility="{Binding IsInfoModalVisible, Converter={StaticResource BoolToVis}}" />
+        <ContentControl Grid.RowSpan="3" Panel.ZIndex="500" Focusable="False" Content="{Binding Info}" ContentTemplate="{StaticResource InfoDialog}"
+                        Visibility="{Binding Info.IsInfoModalVisible, Converter={StaticResource BoolToVis}}" />
     </Grid>
 </UserControl>

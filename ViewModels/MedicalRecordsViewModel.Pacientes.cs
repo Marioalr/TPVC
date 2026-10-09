@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -19,30 +20,25 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class MedicalRecordsViewModel
 {
-    public const string PageHome = "Home";
-    public const string PageChart = "Chart";
-    public const string PageForm = "Form";
-    public const string PageConsultation = "Consultation";
+    // Las páginas son de Navigation; los nombres siguen aquí para quien ya los usa
+    public const string PageHome = PatientsNavigation.PageHome;
+    public const string PageChart = PatientsNavigation.PageChart;
+    public const string PageForm = PatientsNavigation.PageForm;
+    public const string PageConsultation = PatientsNavigation.PageConsultation;
 
     private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
 
-    private NotificationService? _notifications;
     private Action? _onAppointmentsChangedHandler;
-    private string _pageBeforeForm = PageHome;
     private int? _attendingAppointmentId;
     private List<PatientAppointment> _agendaWeekAppointments = new();
     private ObservableCollection<PatientConsultation>? _observedHistory;
     private ObservableCollection<PatientAppointment>? _observedAppointments;
 
-    /// <summary>La vista enfoca el buscador (al volver al inicio o al terminar una consulta).</summary>
-    public event Action? FocusSearchRequested;
-
     /// <summary>Abre enlaces (WhatsApp, Google Calendar); las pruebas lo reemplazan.</summary>
     public Func<string, bool>? OpenUrl { get; set; }
 
-    private void InitializePacientes(NotificationService? notifications)
+    private void InitializePacientes()
     {
-        _notifications = notifications;
         PropertyChanged += OnPropertyChangedForPacientes;
 
         if (_inventoryService != null)
@@ -75,31 +71,6 @@ public partial class MedicalRecordsViewModel
         }
     }
 
-    /// <summary>Problema que no impide seguir (p. ej. falta de existencias al cobrar).</summary>
-    private void ShowWarning(string message)
-    {
-        if (_notifications != null)
-        {
-            _notifications.Warning(message);
-            return;
-        }
-        InfoModalMessage = message;
-        IsInfoModalVisible = true;
-    }
-
-    /// <summary>Confirmación breve que se va sola; sin servicio de avisos (pruebas) usa la ventana.</summary>
-    private void ShowSuccess(string message)
-    {
-        if (_notifications != null)
-        {
-            var firstLine = message.Split('\n')[0].Trim().TrimStart('¡').TrimEnd('!');
-            _notifications.Success(firstLine);
-            return;
-        }
-        InfoModalMessage = message;
-        IsInfoModalVisible = true;
-    }
-
     private void OnPropertyChangedForPacientes(object? sender, PropertyChangedEventArgs e)
     {
         var name = e.PropertyName;
@@ -119,21 +90,8 @@ public partial class MedicalRecordsViewModel
 
     // ================================================================== páginas
 
-    [ObservableProperty]
-    private string _patientsPage = PageHome;
-
-    partial void OnPatientsPageChanged(string value) => NotifyPatientsPageState();
-
-    public bool IsHomePage => PatientsPage == PageHome;
-    public bool IsChartPage => PatientsPage == PageChart;
-    public bool IsFormPage => PatientsPage == PageForm;
-    public bool IsConsultationPage => PatientsPage == PageConsultation;
-
-    /// <summary>Barra con buscador, agenda y nuevo paciente (inicio y ficha).</summary>
-    public bool ShowsPatientsTopBar => IsHomePage || IsChartPage;
-
     /// <summary>Aviso "Consulta en curso · Volver" cuando se está fuera de la consulta.</summary>
-    public bool ShowsConsultationBanner => HasActiveConsultation && !IsConsultationPage && !IsFormPage;
+    public bool ShowsConsultationBanner => HasActiveConsultation && !Navigation.IsConsultationPage && !Navigation.IsFormPage;
 
     public string ConsultationBannerText => !HasActiveConsultation
         ? string.Empty
@@ -150,11 +108,7 @@ public partial class MedicalRecordsViewModel
 
     private void NotifyPatientsPageState()
     {
-        OnPropertyChanged(nameof(IsHomePage));
-        OnPropertyChanged(nameof(IsChartPage));
-        OnPropertyChanged(nameof(IsFormPage));
-        OnPropertyChanged(nameof(IsConsultationPage));
-        OnPropertyChanged(nameof(ShowsPatientsTopBar));
+        Navigation.RaisePageFlags();
         OnPropertyChanged(nameof(ShowsConsultationBanner));
         OnPropertyChanged(nameof(ConsultationBannerText));
         OnPropertyChanged(nameof(IsConsultationForSelectedPatient));
@@ -172,17 +126,10 @@ public partial class MedicalRecordsViewModel
         {
             ShowConsultation();
         }
-        else if (!IsFormPage)
+        else if (!Navigation.IsFormPage)
         {
-            GoToPatientsHome();
+            Navigation.GoToPatientsHome();
         }
-    }
-
-    [RelayCommand]
-    public void GoToPatientsHome()
-    {
-        PatientsPage = PageHome;
-        FocusSearchRequested?.Invoke();
     }
 
     [RelayCommand]
@@ -191,7 +138,7 @@ public partial class MedicalRecordsViewModel
         if (patient == null) return;
         HomeSearchText = string.Empty;
         SelectPatient(patient);
-        PatientsPage = PageChart;
+        Navigation.PatientsPage = PageChart;
     }
 
     [RelayCommand]
@@ -204,14 +151,14 @@ public partial class MedicalRecordsViewModel
             var patient = Patients.FirstOrDefault(p => p.Id == id);
             if (patient != null) SelectedPatient = patient;
         }
-        PatientsPage = PageConsultation;
+        Navigation.PatientsPage = PageConsultation;
     }
 
     /// <summary>Botón "Expediente" de la consulta: la ficha completa sin cerrar la consulta.</summary>
     [RelayCommand]
     public void ShowChartFromConsultation()
     {
-        if (SelectedPatient != null) PatientsPage = PageChart;
+        if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
     }
 
     [RelayCommand]
@@ -223,10 +170,10 @@ public partial class MedicalRecordsViewModel
         }
         else if (HasActiveConsultation)
         {
-            InfoModalMessage = IsConsultationHandedOff
+            Info.InfoModalMessage = IsConsultationHandedOff
                 ? $"La consulta de {ActiveConsultationPatientName} está enviada a {HandoffTargetName}. Recupérela o espere a que la acepte antes de iniciar otra."
                 : $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de iniciar otra.";
-            IsInfoModalVisible = true;
+            Info.IsInfoModalVisible = true;
         }
         else
         {
@@ -238,19 +185,19 @@ public partial class MedicalRecordsViewModel
     {
         if (value)
         {
-            if (!IsFormPage) _pageBeforeForm = PatientsPage;
+            if (!Navigation.IsFormPage) Navigation.PageBeforeForm = Navigation.PatientsPage;
             if (string.IsNullOrEmpty(FormOpenSection)) FormOpenSection = "Identificacion";
-            PatientsPage = PageForm;
+            Navigation.PatientsPage = PageForm;
             OnPatientFormOpenedForDraft();
             return;
         }
 
         OnPatientFormClosedForDraft();
-        if (!IsFormPage) return;
+        if (!Navigation.IsFormPage) return;
         // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
-        if (_pageBeforeForm == PageConsultation && HasActiveConsultation) ShowConsultation();
-        else if (SelectedPatient != null) PatientsPage = PageChart;
-        else GoToPatientsHome();
+        if (Navigation.PageBeforeForm == PageConsultation && HasActiveConsultation) ShowConsultation();
+        else if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
+        else Navigation.GoToPatientsHome();
     }
 
     // ================================================================== inicio
@@ -260,7 +207,7 @@ public partial class MedicalRecordsViewModel
 
     partial void OnHomeSearchTextChanged(string value)
     {
-        if (!string.IsNullOrWhiteSpace(value) && IsChartPage) PatientsPage = PageHome;
+        if (!string.IsNullOrWhiteSpace(value) && Navigation.IsChartPage) Navigation.PatientsPage = PageHome;
         RefreshHomeResults();
     }
 
@@ -410,7 +357,7 @@ public partial class MedicalRecordsViewModel
         {
             // Cita sin expediente: se busca por nombre para abrirlo o crearlo
             IsAgendaPanelOpen = false;
-            GoToPatientsHome();
+            Navigation.GoToPatientsHome();
             HomeSearchText = appointment.PatientName;
             return;
         }
@@ -423,8 +370,8 @@ public partial class MedicalRecordsViewModel
             }
             else
             {
-                InfoModalMessage = $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de atender otra cita.";
-                IsInfoModalVisible = true;
+                Info.InfoModalMessage = $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de atender otra cita.";
+                Info.IsInfoModalVisible = true;
             }
             return;
         }
@@ -519,12 +466,6 @@ public partial class MedicalRecordsViewModel
         _observedAppointments = value;
         if (_observedAppointments != null) _observedAppointments.CollectionChanged += OnChartSourceCollectionChanged;
         RefreshTimeline();
-    }
-
-    partial void OnVitalSignsEvolutionPointsChanged(ObservableCollection<VitalSignsEvolutionPoint> value)
-    {
-        LatestVitals = BuildLatestVitals(value);
-        OnPropertyChanged(nameof(HasLatestVitals));
     }
 
     private void ObserveConsultationsHistory(ObservableCollection<PatientConsultation> history)
@@ -1122,7 +1063,7 @@ public partial class MedicalRecordsViewModel
             return;
         }
 
-        ShowSuccess($"Cita agendada: {patient.FullName}, {appointment.Date.ToString("ddd d MMM", Mexican)} a las {appointment.Time}");
+        Feedback.ShowSuccess($"Cita agendada: {patient.FullName}, {appointment.Date.ToString("ddd d MMM", Mexican)} a las {appointment.Time}");
         await RefreshAgendaAfterChangeAsync(patient.Id);
     }
 
@@ -1151,13 +1092,13 @@ public partial class MedicalRecordsViewModel
         }
         catch (Exception ex)
         {
-            InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         MovingAppointment = null;
-        ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
+        Feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
         await RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
     }
 
@@ -1193,7 +1134,7 @@ public partial class MedicalRecordsViewModel
         if (appointment == null) return;
         if (!await _dialogs.ConfirmAsync($"¿Cancelar la cita de {appointment.PatientName} ({appointment.Date:dd/MM} {appointment.Time})?", "Cancelar cita")) return;
         await UpdateAppointmentStatusAsync(appointment, "Cancelada");
-        ShowSuccess($"Cita de {appointment.PatientName} cancelada");
+        Feedback.ShowSuccess($"Cita de {appointment.PatientName} cancelada");
         await RefreshAgendaAfterChangeAsync(appointment.PatientRecordId);
     }
 
@@ -1204,13 +1145,13 @@ public partial class MedicalRecordsViewModel
         var phone = new string((appointment.PatientPhone ?? string.Empty).Where(char.IsDigit).ToArray());
         if (phone.Length < 10)
         {
-            InfoModalMessage = $"La cita de {appointment.PatientName} no tiene un teléfono de 10 dígitos. Agréguelo en su expediente.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"La cita de {appointment.PatientName} no tiene un teléfono de 10 dígitos. Agréguelo en su expediente.";
+            Info.IsInfoModalVisible = true;
             return;
         }
         if (phone.Length == 10) phone = "52" + phone;
 
-        var message = $"Hola {appointment.PatientName}, le recordamos su cita en {ClinicName} el {appointment.Date.ToString("dddd d 'de' MMMM", Mexican)} a las {appointment.Time}. Por favor confirme su asistencia respondiendo a este mensaje.";
+        var message = $"Hola {appointment.PatientName}, le recordamos su cita en {Clinic.ClinicName} el {appointment.Date.ToString("dddd d 'de' MMMM", Mexican)} a las {appointment.Time}. Por favor confirme su asistencia respondiendo a este mensaje.";
         LaunchUrl($"https://wa.me/{phone}?text={Uri.EscapeDataString(message)}");
     }
 
@@ -1222,7 +1163,7 @@ public partial class MedicalRecordsViewModel
         var end = start.AddMinutes(appointment.DurationMinutes > 0 ? appointment.DurationMinutes : 30);
         var title = Uri.EscapeDataString($"Cita: {appointment.PatientName}");
         var details = Uri.EscapeDataString($"Motivo: {appointment.Reason}\nTeléfono: {appointment.PatientPhone}");
-        var location = Uri.EscapeDataString(string.IsNullOrWhiteSpace(ClinicAddress) ? ClinicName : ClinicAddress);
+        var location = Uri.EscapeDataString(string.IsNullOrWhiteSpace(Clinic.ClinicAddress) ? Clinic.ClinicName : Clinic.ClinicAddress);
         LaunchUrl($"https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}&dates={start:yyyyMMdd'T'HHmmss}/{end:yyyyMMdd'T'HHmmss}&details={details}&location={location}");
     }
 
@@ -1240,8 +1181,8 @@ public partial class MedicalRecordsViewModel
         catch (Exception ex)
         {
             AppLogger.Error("No se pudo abrir el enlace", ex);
-            InfoModalMessage = "No se pudo abrir el navegador.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "No se pudo abrir el navegador.";
+            Info.IsInfoModalVisible = true;
         }
     }
 
@@ -1253,8 +1194,8 @@ public partial class MedicalRecordsViewModel
         if (patient == null || BlockIfPatientHandedOff(patient)) return;
         if (HasActiveConsultation && ActiveConsultation?.PatientId == patient.Id)
         {
-            InfoModalMessage = "Termine o descarte la consulta en curso antes de dar de baja el expediente.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Termine o descarte la consulta en curso antes de dar de baja el expediente.";
+            Info.IsInfoModalVisible = true;
             return;
         }
         if (!await _dialogs.ConfirmAsync($"¿Dar de baja el expediente de {patient.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Dar de baja expediente")) return;
@@ -1265,15 +1206,15 @@ public partial class MedicalRecordsViewModel
         }
         catch (Exception ex)
         {
-            InfoModalMessage = $"No se pudo dar de baja el expediente: {ex.Message}";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"No se pudo dar de baja el expediente: {ex.Message}";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         SelectedPatient = null;
         await LoadPatientsAsync();
-        ShowSuccess($"Expediente de {patient.FullName} dado de baja");
-        GoToPatientsHome();
+        Feedback.ShowSuccess($"Expediente de {patient.FullName} dado de baja");
+        Navigation.GoToPatientsHome();
     }
 
     /// <summary>"Agendar cita" desde la ficha: el panel abre en mañana y al elegir un hueco el paciente ya viene puesto.</summary>

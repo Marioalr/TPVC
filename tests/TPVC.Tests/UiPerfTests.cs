@@ -171,7 +171,7 @@ internal sealed class UiPerfSession
         Draw(host);
         Add("Expediente", "Abrir la primera ficha (crea la pantalla)", open);
 
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         Settle(host);
         var big = records.Patients.First(p => p.Id == bigPatientId);
         open.Restart();
@@ -194,7 +194,7 @@ internal sealed class UiPerfSession
         _rows.Add(("Desglose", "Dibujar", $"{open.Elapsed.TotalMilliseconds - afterLayout:0} ms"));
         _rows.Add(("Desglose", "Elementos del historial", $"{records.Timeline.Count} renglones, {CountVisuals(host)} elementos visuales"));
 
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         Settle(host);
         open.Restart();
         records.OpenPatientChart(big);

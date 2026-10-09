@@ -218,7 +218,7 @@
                                         <Setter Property="Content" Value="{x:Null}" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsVitalsChartVisible}" Value="True">
-                                                <Setter Property="Content" Value="{Binding}" />
+                                                <Setter Property="Content" Value="{Binding VitalsChart}" />
                                                 <Setter Property="ContentTemplate">
                                                     <Setter.Value>
                                                         <DataTemplate>

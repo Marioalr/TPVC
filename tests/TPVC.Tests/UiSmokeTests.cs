@@ -395,12 +395,12 @@ internal sealed class UiSmokeSession
                 records.CancelAllergyPrescription();
             }
             WaitFor(records.RepeatPreviousPrescriptionAsync());
-            records.DismissInfoModal();
+            records.Info.DismissInfoModal();
             Capture(host, $"11c-receta-con-medicamentos-{suffix}");
             records.OpenPrescriptionPdfPreview();
             Capture(host, $"11d-vista-previa-receta-{suffix}");
             records.ClosePrescriptionPdfPreview();
-            records.DismissInfoModal();
+            records.Info.DismissInfoModal();
             records.ClosePrescriptionModal();
 
             WaitFor(records.OpenSuppliesModalAsync());
@@ -781,9 +781,9 @@ internal sealed class UiKeyboardPass
         _records = _main.MedicalRecordsVM;
         _records.AutosaveDelay = TimeSpan.FromHours(1); // el borrador solo se escribe con Ctrl+S
         _main.NavigateTo("Records");
-        _records.DismissInfoModal();
+        _records.Info.DismissInfoModal();
         _records.CloseAgendaPanel();
-        _records.GoToPatientsHome();
+        _records.Navigation.GoToPatientsHome();
 
         _window.WindowStartupLocation = System.Windows.WindowStartupLocation.Manual;
         _window.Left = -32000;
@@ -823,20 +823,20 @@ internal sealed class UiKeyboardPass
 
     private void TypeToSearch(PatientRecord patient)
     {
-        _records.GoToPatientsHome();
+        _records.Navigation.GoToPatientsHome();
         _records.HomeSearchText = string.Empty;
         Settle();
         Check(TypeText("r") && _records.HomeSearchText == "r", $"Inicio: escribir con el foco fuera de un campo va al buscador (quedó \"{_records.HomeSearchText}\")");
-        Check(PressEscape() && _records.HomeSearchText.Length == 0 && _records.IsHomePage, "Esc en el inicio borra la búsqueda");
+        Check(PressEscape() && _records.HomeSearchText.Length == 0 && _records.Navigation.IsHomePage, "Esc en el inicio borra la búsqueda");
 
         _records.OpenPatientChart(patient);
         Settle();
-        Check(TypeText("m") && _records.HomeSearchText == "m" && _records.IsHomePage, "Ficha: escribir abre la búsqueda en el inicio");
+        Check(TypeText("m") && _records.HomeSearchText == "m" && _records.Navigation.IsHomePage, "Ficha: escribir abre la búsqueda en el inicio");
         Check(PressEscape() && _records.HomeSearchText.Length == 0, "Esc borra la búsqueda abierta desde la ficha");
 
         _records.OpenPatientChart(patient);
         Settle();
-        Check(PressEscape() && _records.IsHomePage, "Esc en la ficha vuelve al inicio");
+        Check(PressEscape() && _records.Navigation.IsHomePage, "Esc en la ficha vuelve al inicio");
     }
 
     // ------------------------------------------------------------------ menús contextuales
@@ -907,7 +907,7 @@ internal sealed class UiKeyboardPass
         if (_records.HasActiveConsultation) WaitFor(_records.DiscardActiveConsultationAsync());
         _records.OpenPatientChart(patient);
         _records.ChartPrimaryAction();
-        if (!Check(_records.IsConsultationPage, "No se abrió la consulta")) return;
+        if (!Check(_records.Navigation.IsConsultationPage, "No se abrió la consulta")) return;
         Settle();
 
         // Ctrl+↓ / Ctrl+↑ / Ctrl+S en la consulta
@@ -973,10 +973,10 @@ internal sealed class UiKeyboardPass
         }
 
         // Capas sobre la receta: el aviso, la alerta de alergia, el catálogo y la vista previa
-        _records.InfoModalMessage = "Aviso de prueba";
-        _records.IsInfoModalVisible = true;
+        _records.Info.InfoModalMessage = "Aviso de prueba";
+        _records.Info.IsInfoModalVisible = true;
         Settle();
-        Check(PressEscape() && !_records.IsInfoModalVisible && _records.IsPrescriptionModalOpen, "Esc cierra primero el aviso (la receta sigue)");
+        Check(PressEscape() && !_records.Info.IsInfoModalVisible && _records.IsPrescriptionModalOpen, "Esc cierra primero el aviso (la receta sigue)");
         _records.IsAllergyAlertOpen = true;
         Settle();
         Check(PressEscape() && !_records.IsAllergyAlertOpen && _records.IsPrescriptionModalOpen, "Esc cierra la alerta de alergia");

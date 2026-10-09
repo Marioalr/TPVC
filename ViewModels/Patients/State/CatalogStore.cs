@@ -1,0 +1,173 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using TPVC.Models;
+using TPVC.Services;
+
+namespace TPVC.ViewModels.Patients;
+
+/// <summary>
+/// Catálogo de Pacientes (fase 6, paso 6b): servicios clínicos y productos del inventario, o los de
+/// demostración si no hay base de datos. Al cambiar los servicios avisa al coordinador (el honorario
+/// de la consulta sale de ellos).
+/// </summary>
+public partial class CatalogStore : ObservableObject
+{
+    private readonly InventoryService? _inventoryService;
+    private readonly IPatientsHubs _hubs;
+
+    public CatalogStore(InventoryService? inventoryService, IPatientsHubs hubs)
+    {
+        _inventoryService = inventoryService;
+        _hubs = hubs;
+    }
+
+    // ==========================================
+    // CATÁLOGO DE SERVICIOS CLÍNICOS
+    // ==========================================
+    [ObservableProperty]
+    private ObservableCollection<ClinicalService> _services = new();
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _availableProducts = new();
+
+    partial void OnServicesChanged(ObservableCollection<ClinicalService> value) => _hubs.OnServicesChanged();
+
+    /// <summary>Servicios y productos de la base (o los de demostración sin base de datos).</summary>
+    public async Task LoadAsync()
+    {
+        if (_inventoryService != null)
+        {
+            var dbServices = await _inventoryService.GetClinicalServicesAsync();
+            Services = new ObservableCollection<ClinicalService>(dbServices);
+
+            var prods = await _inventoryService.GetProductsAsync();
+            AvailableProducts = new ObservableCollection<Product>(prods);
+        }
+        else
+        {
+            LoadFallbackServices();
+        }
+    }
+
+    public void LoadFallbackServices()
+    {
+        var services = new List<ClinicalService>
+        {
+            new()
+            {
+                Id = 1,
+                Code = "SERV-001",
+                Name = "Consulta Médica General",
+                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
+                Category = "Consulta",
+                Price = 300.00m,
+                EstimatedDurationMinutes = 25,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Abatelenguas de madera" }, Quantity = 1, Instructions = "Exploración orofaríngea" },
+                    new() { Product = new Product { Name = "Alcohol Etílico 70%" }, Quantity = 1, Instructions = "Asepsia" }
+                }
+            },
+            new()
+            {
+                Id = 2,
+                Code = "SERV-002",
+                Name = "Curación Menor y Asepsia",
+                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
+                Category = "Curaciones",
+                Price = 250.00m,
+                EstimatedDurationMinutes = 20,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Limpieza y cobertura" },
+                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Lavado de arrastre" },
+                    new() { Product = new Product { Name = "Venda Elástica 10 cm" }, Quantity = 1, Instructions = "Vendaje protector" }
+                }
+            },
+            new()
+            {
+                Id = 3,
+                Code = "SERV-003",
+                Name = "Sutura de Herida Simple",
+                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
+                Category = "Procedimientos",
+                Price = 450.00m,
+                EstimatedDurationMinutes = 35,
+                DefaultProducts = new List<ServiceDefaultProduct>
+                {
+                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Secado y hemostasia" },
+                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Asepsia previa" }
+                }
+            }
+        };
+
+        Services = new ObservableCollection<ClinicalService>(services);
+
+        if (AvailableProducts.Count == 0)
+        {
+            AvailableProducts = new ObservableCollection<Product>
+            {
+                new() { Id = 1, Code = "MED-001", Name = "Paracetamol 500 mg", GenericName = "Paracetamol", Presentation = "Caja con 20 tabletas", CurrentStock = 45, Price = 45.00m },
+                new() { Id = 2, Code = "MED-002", Name = "Amoxicilina 500 mg", GenericName = "Amoxicilina", Presentation = "Caja con 12 cápsulas", CurrentStock = 28, Price = 85.00m },
+                new() { Id = 3, Code = "MED-003", Name = "Ibuprofeno 400 mg", GenericName = "Ibuprofeno", Presentation = "Caja con 10 tabletas", CurrentStock = 35, Price = 55.00m },
+                new() { Id = 4, Code = "MED-004", Name = "Omeprazol 20 mg", GenericName = "Omeprazol", Presentation = "Caja con 14 cápsulas", CurrentStock = 50, Price = 60.00m },
+                new() { Id = 5, Code = "INS-001", Name = "Gasa Estéril 10x10 cm", GenericName = "Material de Curación", Presentation = "Sobre con 5 piezas", CurrentStock = 120, Price = 18.00m },
+                new() { Id = 6, Code = "INS-002", Name = "Jeringa Desechable 5 ml con Aguja", GenericName = "Insumo Descartable", Presentation = "Pieza estéril", CurrentStock = 85, Price = 12.00m },
+                new() { Id = 7, Code = "INS-003", Name = "Solución Fisiológica 0.9% 250 ml", GenericName = "Solución Salina", Presentation = "Frasco flexible", CurrentStock = 24, Price = 42.00m },
+                new() { Id = 8, Code = "INS-004", Name = "Venda Elástica 10 cm", GenericName = "Material de Curación", Presentation = "Rollo 5 m", CurrentStock = 40, Price = 25.00m }
+            };
+        }
+    }
+
+    /// <summary>Producto del inventario por nombre exacto, "Nombre (Presentación)" o genérico.</summary>
+    public Product? FindCatalogProduct(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var clean = name.Trim();
+        return AvailableProducts.FirstOrDefault(p =>
+            p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
+            $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool ProductMatchesName(Product product, string name)
+    {
+        var n = TextSearch.Normalize(name);
+        var productName = TextSearch.Normalize(product.Name);
+        return n == productName
+               || n == TextSearch.Normalize($"{product.Name} ({product.Presentation})")
+               || n.StartsWith(productName + " ", StringComparison.Ordinal)
+               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName));
+    }
+
+    public static bool IsProductMedication(Product p)
+    {
+        if (p.Category != null && (p.Category.Name.Contains("Medicamento", StringComparison.OrdinalIgnoreCase) || p.Category.Name.Contains("Fármaco", StringComparison.OrdinalIgnoreCase)))
+            return true;
+        if (!string.IsNullOrEmpty(p.Code) && p.Code.StartsWith("MED", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (p.Category != null && (
+            p.Category.Name.Contains("Curación", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Insumo", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Antiséptico", StringComparison.OrdinalIgnoreCase) ||
+            p.Category.Name.Contains("Diagnóstico", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        if (!string.IsNullOrEmpty(p.Code) && (
+            p.Code.StartsWith("CUR", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("INS", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("ANT", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("DIA", StringComparison.OrdinalIgnoreCase) ||
+            p.Code.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        return true;
+    }
+
+    public static bool IsProductSupply(Product p)
+    {
+        return !IsProductMedication(p);
+    }
+}

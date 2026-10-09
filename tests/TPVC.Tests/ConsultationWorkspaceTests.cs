@@ -190,7 +190,7 @@ public class ConsultationWorkspaceTests
         var records = new MedicalRecordsViewModel(inventoryService: null, consultations);
         var amoxicillin = new Product { Id = 1, Code = "AMX", Name = "Amoxicilina 500mg", GenericName = "Amoxicilina", Price = 90m, CurrentStock = 10 };
         var alcohol = new Product { Id = 2, Code = "ALC", Name = "Alcohol etílico 70%", Price = 30m, CurrentStock = 10 };
-        records.AvailableProducts = new System.Collections.ObjectModel.ObservableCollection<Product> { amoxicillin, alcohol };
+        records.Catalog.AvailableProducts = new System.Collections.ObjectModel.ObservableCollection<Product> { amoxicillin, alcohol };
 
         var patient = new PatientRecord { Id = 5, FullName = "Ana Ruiz", RecordNumber = "EXP-5", Allergies = "Penicilina", ActivePrescription = new() };
         records.SelectedPatient = patient;
@@ -256,13 +256,13 @@ public class ConsultationWorkspaceTests
         int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
         int ChargedByName(string name) => items.FirstOrDefault(i => i.Name == name)?.Quantity ?? 0;
 
-        var curacion = records.Services.Single(s => s.Code == "SERV-002");
+        var curacion = records.Catalog.Services.Single(s => s.Code == "SERV-002");
         var gasa = curacion.DefaultProducts.Single(dp => dp.Product!.Name.Contains("Gasa")).Product!;
         Assert.IsTrue(curacion.DefaultProducts.Count > 1, "La curación lleva varios insumos por defecto");
 
         // Insumo del inventario (producto) y servicio del catálogo x2 con sus insumos por defecto
         records.SupplyQuantity = 1;
-        await records.SelectAndAddSupplyProductAsync(records.AvailableProducts.Single(p => p.Id == gasa.Id));
+        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == gasa.Id));
         var gasaSupply = patient.ActiveSupplies.Last();
         records.ServiceModalQuantity = 2;
         await records.SelectAndAddServiceModalSuggestionAsync(curacion);

@@ -466,16 +466,16 @@ public class DataLayerTests
         var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
         await records.LoadInitialDataAsync();
 
-        records.SelectedPosologyTemplate = records.PosologyTemplates.Single();
+        records.SelectedPosologyTemplate = records.Templates.PosologyTemplates.Single();
         Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.PrescriptionDosage);
         Assert.IsNull(records.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
 
         records.ConsultationTreatmentPlan = string.Empty;
-        records.SelectedGeneralMeasureTemplate = records.GeneralMeasureTemplates.Single();
+        records.SelectedGeneralMeasureTemplate = records.Templates.GeneralMeasureTemplates.Single();
         Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationTreatmentPlan);
         Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationGeneralIndications);
 
-        records.SelectedPediatricRule = records.PediatricDoseRules.Single();
+        records.SelectedPediatricRule = records.Templates.PediatricDoseRules.Single();
         records.PediatricWeightText = "15";
         StringAssert.Contains(records.PediatricDoseResult, "7 ml (140 gotas)");
         records.ApplyPediatricDose();

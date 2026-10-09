@@ -12,6 +12,7 @@ using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests;
 
@@ -1092,14 +1093,14 @@ public class InventoryTests
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
         var focusRequests = 0;
-        recordsVm.FocusSearchRequested += () => focusRequests++;
+        recordsVm.Navigation.FocusSearchRequested += () => focusRequests++;
 
         Assert.IsNull(recordsVm.SelectedPatient);
 
         // Sin paciente no hay consulta que abrir: vuelve al inicio de Pacientes con el buscador listo
-        recordsVm.PatientsPage = MedicalRecordsViewModel.PageChart;
+        recordsVm.Navigation.PatientsPage = MedicalRecordsViewModel.PageChart;
         recordsVm.StartActiveConsultation();
-        Assert.IsTrue(recordsVm.IsHomePage);
+        Assert.IsTrue(recordsVm.Navigation.IsHomePage);
         Assert.IsFalse(consultService.HasActiveConsultation);
         Assert.AreEqual(1, focusRequests, "Debe pedir el foco en el buscador");
     }
@@ -1437,8 +1438,8 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.IsPrescriptionPdfModalOpen);
         recordsVm.PrintOrExportPrescriptionPdf();
         Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
-        Assert.IsTrue(recordsVm.IsInfoModalVisible);
-        Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("PDF") == true);
+        Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
+        Assert.IsTrue(recordsVm.Info.InfoModalMessage?.Contains("PDF") == true);
     }
 
     [TestMethod]
@@ -1481,7 +1482,7 @@ public class InventoryTests
     {
         var consultationService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, consultationService);
-        recordsVm.AvailableProducts = new System.Collections.ObjectModel.ObservableCollection<Product>
+        recordsVm.Catalog.AvailableProducts = new System.Collections.ObjectModel.ObservableCollection<Product>
         {
             new() { Id = 501, Code = "AMX-500", Name = "Amoxicilina 500mg", Price = 120m, CurrentStock = 10, Unit = "Cajas" }
         };
@@ -1565,7 +1566,7 @@ public class InventoryTests
             }
         };
 
-        recordsVm.Services.Add(service);
+        recordsVm.Catalog.Services.Add(service);
 
         // Agregar servicio a la consulta activa
         recordsVm.AddServiceToActiveConsultation(service);
@@ -1596,8 +1597,8 @@ public class InventoryTests
         recordsVm.OpenPrescriptionModal();
 
         Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
-        Assert.IsTrue(recordsVm.IsInfoModalVisible);
-        Assert.IsTrue(recordsVm.InfoModalMessage?.Contains("Seleccione o agregue un paciente") ?? false);
+        Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
+        Assert.IsTrue(recordsVm.Info.InfoModalMessage?.Contains("Seleccione o agregue un paciente") ?? false);
     }
 
     [TestMethod]
@@ -1647,7 +1648,7 @@ public class InventoryTests
         // 3. Guardar receta -> Cierra modal y regresa a la ventana principal
         await recordsVm.SavePrescriptionModalAsync();
         Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
-        Assert.IsTrue(recordsVm.IsInfoModalVisible);
+        Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
         Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
 
         // 4. Volver a abrir la receta para continuar editando
@@ -1698,11 +1699,11 @@ public class InventoryTests
         };
 
         // Verificación de métodos de clasificación
-        Assert.IsTrue(MedicalRecordsViewModel.IsProductMedication(medProduct));
-        Assert.IsFalse(MedicalRecordsViewModel.IsProductSupply(medProduct));
+        Assert.IsTrue(CatalogStore.IsProductMedication(medProduct));
+        Assert.IsFalse(CatalogStore.IsProductSupply(medProduct));
 
-        Assert.IsTrue(MedicalRecordsViewModel.IsProductSupply(supplyProduct));
-        Assert.IsFalse(MedicalRecordsViewModel.IsProductMedication(supplyProduct));
+        Assert.IsTrue(CatalogStore.IsProductSupply(supplyProduct));
+        Assert.IsFalse(CatalogStore.IsProductMedication(supplyProduct));
 
         // Verificación de sugerencias en receta (solo medicamentos)
         recordsVm.ApplyPrescriptionSuggestions("Gasa");
@@ -2059,7 +2060,7 @@ public class InventoryTests
         Assert.IsNull(mainVm.MedicalRecordsVM.SelectedPatient, "El paciente debe deseleccionarse para volver a la vista inicial");
 
         // 2. Debe volver al inicio de Pacientes (citas de hoy y buscador) para el siguiente paciente:
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsHomePage, "Debe volver al inicio de Pacientes");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.Navigation.IsHomePage, "Debe volver al inicio de Pacientes");
         Assert.IsFalse(mainVm.MedicalRecordsVM.ShowsConsultationBanner);
     }
 
@@ -2109,7 +2110,7 @@ public class InventoryTests
         mainVm.NavigateTo("Records");
 
         Assert.AreEqual("Records", mainVm.ActiveViewName);
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsHomePage, "Al entrar a Pacientes se ve el inicio (hoy, recientes y buscador)");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.Navigation.IsHomePage, "Al entrar a Pacientes se ve el inicio (hoy, recientes y buscador)");
     }
 
     [TestMethod]
@@ -2613,7 +2614,7 @@ public class InventoryTests
         vm.PrescriptionSearchText = "Para";
         Assert.IsTrue(vm.IsPrescriptionDropdownOpen, "El menú debe desplegarse únicamente al escribir");
         Assert.IsTrue(vm.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de medicamentos");
-        Assert.IsTrue(vm.PrescriptionProductSuggestions.All(MedicalRecordsViewModel.IsProductMedication), "Solo debe tener medicamentos");
+        Assert.IsTrue(vm.PrescriptionProductSuggestions.All(CatalogStore.IsProductMedication), "Solo debe tener medicamentos");
         vm.ClosePrescriptionModal();
 
         // 2. Insumos: el menú desplegable NO debe estar abierto al inicio
@@ -2623,7 +2624,7 @@ public class InventoryTests
         vm.SupplySearchText = "Gas";
         Assert.IsTrue(vm.IsSupplyDropdownOpen, "El menú debe desplegarse únicamente al escribir");
         Assert.IsTrue(vm.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de insumos");
-        Assert.IsTrue(vm.SupplyProductSuggestions.All(MedicalRecordsViewModel.IsProductSupply), "Solo debe tener insumos");
+        Assert.IsTrue(vm.SupplyProductSuggestions.All(CatalogStore.IsProductSupply), "Solo debe tener insumos");
         vm.CloseSuppliesModal();
 
         // 3. Servicios: el menú desplegable NO debe estar abierto al inicio
@@ -2655,7 +2656,7 @@ public class InventoryTests
         Assert.AreEqual("Medications", vm.CatalogBrowserMode);
         Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Medicamentos"));
         Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(MedicalRecordsViewModel.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
 
         // Agregar medicamento desde catálogo
         var chosenMed = vm.CatalogBrowserFilteredProducts.First();
@@ -2670,7 +2671,7 @@ public class InventoryTests
         Assert.AreEqual("Supplies", vm.CatalogBrowserMode);
         Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Insumos"));
         Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(MedicalRecordsViewModel.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");
+        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");
 
         // Agregar insumo desde catálogo
         var chosenSupply = vm.CatalogBrowserFilteredProducts.First();

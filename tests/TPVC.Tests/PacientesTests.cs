@@ -114,7 +114,7 @@ public class PacientesTests
     {
         var (records, _, _) = await CreateRecordsAsync();
         records.EnterPatientsSection();
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
         Assert.IsFalse(records.HasHomeQuery);
         Assert.IsNotEmpty(records.RecentPatients, "El inicio muestra pacientes recientes");
 
@@ -128,7 +128,7 @@ public class PacientesTests
 
         var expected = records.HomeResults[0];
         records.OpenFirstHomeResult();
-        Assert.IsTrue(records.IsChartPage);
+        Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.AreEqual(expected.Id, records.SelectedPatient?.Id);
 
         records.HomeSearchText = "zzzz-nadie";
@@ -145,7 +145,7 @@ public class PacientesTests
 
         await records.CreatePatientFromSearchAsync();
 
-        Assert.IsTrue(records.IsFormPage, "Abre el alta como página");
+        Assert.IsTrue(records.Navigation.IsFormPage, "Abre el alta como página");
         Assert.IsTrue(records.IsFormNew);
         Assert.AreEqual("María", records.FormFirstName);
         Assert.AreEqual("López", records.FormLastName);
@@ -169,33 +169,33 @@ public class PacientesTests
         var patient = records.Patients.First();
 
         records.OpenPatientChart(patient);
-        Assert.IsTrue(records.IsChartPage);
-        Assert.IsTrue(records.ShowsPatientsTopBar);
+        Assert.IsTrue(records.Navigation.IsChartPage);
+        Assert.IsTrue(records.Navigation.ShowsPatientsTopBar);
         Assert.AreEqual("Iniciar consulta", records.ChartPrimaryActionText);
 
         records.ChartPrimaryAction();
         Assert.IsTrue(consultations.HasActiveConsultation);
-        Assert.IsTrue(records.IsConsultationPage);
-        Assert.IsFalse(records.ShowsPatientsTopBar, "La consulta ocupa toda la pantalla");
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
+        Assert.IsFalse(records.Navigation.ShowsPatientsTopBar, "La consulta ocupa toda la pantalla");
         Assert.IsFalse(records.ShowsConsultationBanner);
 
         // Consultar el expediente durante la consulta no la cierra
         records.ShowChartFromConsultation();
-        Assert.IsTrue(records.IsChartPage);
+        Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.IsTrue(records.ShowsConsultationBanner);
         StringAssert.Contains(records.ConsultationBannerText, patient.FullName);
         Assert.AreEqual("Volver a la consulta", records.ChartPrimaryActionText);
 
         // Ir al inicio y volver a entrar regresa a la consulta en curso
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         Assert.IsTrue(records.ShowsConsultationBanner);
         records.EnterPatientsSection();
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
 
         // Descartar la consulta deja la ficha del paciente
         await records.DiscardActiveConsultationAsync();
         Assert.IsFalse(consultations.HasActiveConsultation);
-        Assert.IsTrue(records.IsChartPage);
+        Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.IsFalse(records.ShowsConsultationBanner);
     }
 
@@ -210,9 +210,9 @@ public class PacientesTests
         records.ChartPrimaryAction();
         Assert.IsTrue(consultations.HasActiveConsultation);
 
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         records.OpenPatientChart(second);
-        Assert.IsTrue(records.IsChartPage);
+        Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.IsFalse(records.IsConsultationForSelectedPatient);
         Assert.IsTrue(records.ShowsConsultationBanner, "El aviso recuerda la consulta en curso");
 
@@ -227,13 +227,13 @@ public class PacientesTests
         records.EnterPatientsSection();
 
         await records.NewPatientAsync();
-        Assert.IsTrue(records.IsFormPage);
+        Assert.IsTrue(records.Navigation.IsFormPage);
         Assert.AreEqual("Nuevo paciente", records.FormPageTitle);
         Assert.AreEqual("Identificacion", records.FormOpenSection);
 
         records.CancelPatientForm();
-        Assert.IsFalse(records.IsFormPage);
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsFalse(records.Navigation.IsFormPage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
     }
 
     [TestMethod]
@@ -251,7 +251,7 @@ public class PacientesTests
 
         Assert.IsNull(records.FormErrorMessage);
         Assert.IsTrue(consultations.HasActiveConsultation);
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.AreEqual("Sofía Hernández", records.SelectedPatient?.FullName);
     }
 
@@ -266,7 +266,7 @@ public class PacientesTests
 
         Assert.IsNotNull(records.FormErrorMessage);
         Assert.AreEqual("Identificacion", records.FormOpenSection, "Lleva al dato que falta");
-        Assert.IsTrue(records.IsFormPage, "No sale del alta");
+        Assert.IsTrue(records.Navigation.IsFormPage, "No sale del alta");
     }
 
     [TestMethod]
@@ -463,7 +463,7 @@ public class PacientesTests
         checkout.SelectedPaymentMethod = "Efectivo";
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();
-        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage);
+        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage);
     }
 
     [TestMethod]
@@ -537,8 +537,8 @@ public class PacientesTests
         await records.RepeatPreviousPrescriptionAsync();
 
         Assert.IsFalse(patient.ActivePrescription.Any(p => p.MedicineName.StartsWith(allergic)), "No se repite lo que causa alergia");
-        Assert.IsTrue(records.IsInfoModalVisible);
-        StringAssert.Contains(records.InfoModalMessage, allergic);
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        StringAssert.Contains(records.Info.InfoModalMessage, allergic);
     }
 
     [TestMethod]
@@ -669,7 +669,7 @@ public class PacientesTests
 
         var reopened = await OpenAppAsync(folder);
 
-        Assert.IsTrue(reopened.IsFormPage, "Se reabre el alta");
+        Assert.IsTrue(reopened.Navigation.IsFormPage, "Se reabre el alta");
         Assert.IsTrue(reopened.IsFormNew);
         Assert.AreEqual(folio, reopened.FormRecordNumber);
         Assert.AreEqual("Lucía", reopened.FormFirstName);
@@ -701,13 +701,13 @@ public class PacientesTests
 
         var reopened = await OpenAppAsync(folder);
 
-        Assert.IsTrue(reopened.IsFormPage);
+        Assert.IsTrue(reopened.Navigation.IsFormPage);
         Assert.AreEqual(patient.Id, reopened.FormPatientId);
         Assert.AreEqual(patient.Id, reopened.SelectedPatient?.Id);
         Assert.AreEqual(typedPhone, reopened.FormPhone);
 
         reopened.CancelPatientForm();
-        Assert.IsFalse(reopened.IsFormPage);
+        Assert.IsFalse(reopened.Navigation.IsFormPage);
         Assert.IsFalse(File.Exists(folder.Store().PatientFormPath));
         reopened.Dispose();
     }
@@ -859,7 +859,7 @@ public class PacientesTests
         opened = null;
         records.RemindByWhatsApp(new PatientAppointment { PatientName = "Luis", PatientPhone = "123" });
         Assert.IsNull(opened);
-        Assert.IsTrue(records.IsInfoModalVisible);
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
     }
 
     [TestMethod]
@@ -881,7 +881,7 @@ public class PacientesTests
         records.AttendAppointment(appointment);
 
         Assert.IsTrue(consultations.HasActiveConsultation);
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.AreEqual(patient.Id, records.SelectedPatient?.Id);
         Assert.AreEqual("Dolor de garganta", records.ConsultationChiefComplaint);
 
@@ -891,7 +891,7 @@ public class PacientesTests
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();
 
-        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.IsHomePage);
+        await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage);
         await WaitUntilAsync(() => records.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended));
         Assert.AreEqual("Atendida", (await _service.GetAppointmentsByDayAsync(DateTime.Today)).Single(a => a.Id == appointment.Id).Status);
     }
@@ -904,7 +904,7 @@ public class PacientesTests
         records.AttendAppointment(new PatientAppointment { PatientRecordId = 0, PatientName = "Paciente Sin Expediente", Date = DateTime.Today });
 
         Assert.IsFalse(consultations.HasActiveConsultation);
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
         Assert.AreEqual("Paciente Sin Expediente", records.HomeSearchText);
     }
 
@@ -917,7 +917,7 @@ public class PacientesTests
 
         await records.DeactivateSelectedPatientAsync();
 
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
         Assert.IsNull(records.SelectedPatient);
         Assert.IsFalse(records.Patients.Any(p => p.Id == patient.Id), "Deja de aparecer");
         Assert.IsFalse(MedicalRecordsViewModel.RankPatients(records.Patients, patient.FullName).Any(p => p.Id == patient.Id));

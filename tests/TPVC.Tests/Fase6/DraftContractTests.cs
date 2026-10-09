@@ -95,7 +95,7 @@ public class DraftContractTests
         await records.OpenSendConsultationSheetAsync();
         records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
         await records.SendConsultationToSelectedDeviceAsync();
-        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.InfoModalMessage);
+        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.Info.InfoModalMessage);
 
         var payload = clinic.CloudScalar("SELECT Payload FROM ConsultationHandoffs");
         Assert.AreNotEqual(string.Empty, payload);
@@ -133,7 +133,7 @@ public class DraftContractTests
         File.WriteAllText(path, fixture);
 
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
-        Assert.IsTrue(records.IsFormPage, "Se reabre el alta");
+        Assert.IsTrue(records.Navigation.IsFormPage, "Se reabre el alta");
         Assert.IsTrue(records.IsFormNew);
         Assert.AreEqual("EXP-2026-777", records.FormRecordNumber);
         Assert.AreEqual("Gineco", records.FormOpenSection);
@@ -205,7 +205,7 @@ public class DraftContractTests
         }
 
         var reopened = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
-        Assert.IsTrue(reopened.IsFormPage, "Se reabre el alta");
+        Assert.IsTrue(reopened.Navigation.IsFormPage, "Se reabre el alta");
         foreach (var key in keys)
         {
             Assert.AreEqual(expected[key], properties[key].GetValue(reopened), $"{key} se restaura en su propio campo");

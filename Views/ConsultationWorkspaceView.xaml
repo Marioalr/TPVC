@@ -610,7 +610,7 @@
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Dieta blanda baja en grasas, irritantes y condimentos." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Dieta blanda" />
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Acudir a urgencias en caso de fiebre persistente &gt; 38.5°C o dificultad respiratoria." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Datos de alarma" />
                                 <ComboBox Style="{StaticResource FieldComboBox}"
-                                          ItemsSource="{Binding GeneralMeasureTemplates}"
+                                          ItemsSource="{Binding Templates.GeneralMeasureTemplates}"
                                           SelectedItem="{Binding SelectedGeneralMeasureTemplate, Mode=TwoWay}"
                                           DisplayMemberPath="Title"
                                           helpers:TypeAhead.IsEnabled="True"
@@ -620,7 +620,7 @@
                                           Padding="10,3,32,3"
                                           FontSize="12.5"
                                           Margin="0,0,6,6"
-                                          Visibility="{Binding HasGeneralMeasureTemplates, Converter={StaticResource BoolToVis}}" />
+                                          Visibility="{Binding Templates.HasGeneralMeasureTemplates, Converter={StaticResource BoolToVis}}" />
                             </WrapPanel>
                             <TextBox Text="{Binding ConsultationTreatmentPlan, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Plan terapéutico e indicaciones" />
                             <Grid Margin="0,4,0,6">

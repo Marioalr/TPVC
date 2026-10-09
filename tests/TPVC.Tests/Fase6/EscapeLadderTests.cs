@@ -22,7 +22,7 @@ public class EscapeLadderTests
     /// <summary>Las capas en el orden en que Esc las cierra (la primera es la de más arriba).</summary>
     private static readonly Layer[] Ladder =
     {
-        new("info", (vm, _) => { vm.InfoModalMessage = "Aviso"; vm.IsInfoModalVisible = true; }, vm => vm.IsInfoModalVisible),
+        new("info", (vm, _) => { vm.Info.InfoModalMessage = "Aviso"; vm.Info.IsInfoModalVisible = true; }, vm => vm.Info.IsInfoModalVisible),
         new("alergia", (vm, _) => vm.IsAllergyAlertOpen = true, vm => vm.IsAllergyAlertOpen),
         new("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.OpenPrescriptionCatalogAsync(), "Catálogo"); }, vm => vm.IsCatalogBrowserModalOpen),
         new("vista previa", (vm, _) => vm.IsPrescriptionPdfModalOpen = true, vm => vm.IsPrescriptionPdfModalOpen),
@@ -34,14 +34,14 @@ public class EscapeLadderTests
         new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenServicesModal(); }, vm => vm.IsServicesModalOpen),
         new("cambiar cita", (vm, _) => { Completes(vm.OpenAgendaPanelAsync(), "Agenda"); vm.StartMovingAppointment(Appointment()); }, vm => vm.IsMovingAppointment),
         new("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda"), vm => vm.IsAgendaPanelOpen),
-        new("búsqueda", (vm, _) => vm.HomeSearchText = "gar", vm => vm.IsHomePage && vm.HasHomeQuery),
-        new("ficha", (vm, _) => vm.OpenPatientChart(Mock(vm, 2)), vm => vm.IsChartPage)
+        new("búsqueda", (vm, _) => vm.HomeSearchText = "gar", vm => vm.Navigation.IsHomePage && vm.HasHomeQuery),
+        new("ficha", (vm, _) => vm.OpenPatientChart(Mock(vm, 2)), vm => vm.Navigation.IsChartPage)
     };
 
     /// <summary>Las hojas y avisos que impiden escribir para buscar (la agenda y CIE-10 no son hojas).</summary>
     private static readonly (string Name, Action<MedicalRecordsViewModel> Open)[] Sheets =
     {
-        ("info", vm => vm.IsInfoModalVisible = true),
+        ("info", vm => vm.Info.IsInfoModalVisible = true),
         ("alergia", vm => vm.IsAllergyAlertOpen = true),
         ("catálogo", vm => vm.IsCatalogBrowserModalOpen = true),
         ("vista previa", vm => vm.IsPrescriptionPdfModalOpen = true),
@@ -114,8 +114,8 @@ public class EscapeLadderTests
         records.IsPrescriptionPdfModalOpen = true;
         records.IsCatalogBrowserModalOpen = true;
         records.IsAllergyAlertOpen = true;
-        records.InfoModalMessage = "Aviso";
-        records.IsInfoModalVisible = true;
+        records.Info.InfoModalMessage = "Aviso";
+        records.Info.IsInfoModalVisible = true;
 
         var expectedOrder = Ladder.Where(l => l.Name != "búsqueda").Select(l => l.Name).ToList();
         Assert.AreEqual(string.Join(", ", expectedOrder), OpenLayers(records), "Todas las capas (salvo la búsqueda) abiertas");
@@ -133,7 +133,7 @@ public class EscapeLadderTests
         }
 
         CollectionAssert.AreEqual(expectedOrder, closed, "Orden en que Esc cierra las capas");
-        Assert.IsTrue(records.IsHomePage, "La última Esc vuelve de la ficha al inicio");
+        Assert.IsTrue(records.Navigation.IsHomePage, "La última Esc vuelve de la ficha al inicio");
         Assert.IsFalse(records.TryCloseTopmost(), "En el inicio sin búsqueda Esc no tiene nada que cerrar");
         records.Dispose();
     }
@@ -142,7 +142,7 @@ public class EscapeLadderTests
     public void OnHome_EscClosesTheAgendaBeforeClearingTheSearch()
     {
         var (records, _) = Open();
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         records.HomeSearchText = "gar";
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
 
@@ -152,7 +152,7 @@ public class EscapeLadderTests
 
         Assert.IsTrue(records.TryCloseTopmost());
         Assert.AreEqual(string.Empty, records.HomeSearchText, "Luego la búsqueda");
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
 
         Assert.IsFalse(records.TryCloseTopmost());
         records.Dispose();
@@ -162,8 +162,8 @@ public class EscapeLadderTests
     public void NothingOpen_EscIsNotHandled_AndNothingIsNotified()
     {
         var (records, _) = Open();
-        records.GoToPatientsHome();
-        Assert.IsTrue(records.IsHomePage);
+        records.Navigation.GoToPatientsHome();
+        Assert.IsTrue(records.Navigation.IsHomePage);
 
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         Assert.IsFalse(records.TryCloseTopmost(), "Sin nada abierto la tecla sigue su camino");
@@ -176,18 +176,18 @@ public class EscapeLadderTests
     {
         var (form, _) = Open();
         Completes(form.NewPatientAsync(), "Alta");
-        Assert.IsTrue(form.IsFormPage);
+        Assert.IsTrue(form.Navigation.IsFormPage);
         Assert.IsFalse(form.TryCloseTopmost(), "El alta se cierra con sus botones, no con Esc");
-        Assert.IsTrue(form.IsFormPage);
+        Assert.IsTrue(form.Navigation.IsFormPage);
         form.Dispose();
 
         var (consultation, consultations) = Open();
         consultation.SelectPatient(Mock(consultation, 2));
         consultation.StartActiveConsultation();
         FreezeClock(consultations);
-        Assert.IsTrue(consultation.IsConsultationPage);
+        Assert.IsTrue(consultation.Navigation.IsConsultationPage);
         Assert.IsFalse(consultation.TryCloseTopmost(), "La consulta no se deja con Esc");
-        Assert.IsTrue(consultation.IsConsultationPage);
+        Assert.IsTrue(consultation.Navigation.IsConsultationPage);
         consultation.Dispose();
     }
 
@@ -197,7 +197,7 @@ public class EscapeLadderTests
     public void CanTypeToSearch_OnHomeOrChart_WithNothingOnTop()
     {
         var (records, consultations) = Open();
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         Assert.IsTrue(records.CanTypeToSearch, "Inicio");
         Assert.IsFalse(records.IsAnySheetOpen);
 
@@ -217,7 +217,7 @@ public class EscapeLadderTests
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();
         FreezeClock(consultations);
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.IsFalse(records.CanTypeToSearch, "En la consulta");
         records.Dispose();
 
@@ -236,7 +236,7 @@ public class EscapeLadderTests
             {
                 var (records, _) = Open();
                 if (onChart) records.OpenPatientChart(Mock(records, 2));
-                else records.GoToPatientsHome();
+                else records.Navigation.GoToPatientsHome();
                 Assert.IsTrue(records.CanTypeToSearch);
 
                 open(records);
@@ -251,7 +251,7 @@ public class EscapeLadderTests
     public void AppendTypedSearchText_AddsToTheSearch()
     {
         var (records, _) = Open();
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         records.AppendTypedSearchText("g");
         records.AppendTypedSearchText("ar");
         Assert.AreEqual("gar", records.HomeSearchText);
@@ -261,7 +261,7 @@ public class EscapeLadderTests
         records.OpenPatientChart(Mock(records, 2));
         records.AppendTypedSearchText("l");
         Assert.AreEqual("l", records.HomeSearchText);
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
         records.Dispose();
     }
 }

@@ -346,7 +346,7 @@ public class XamlBindingContractTests
                             </MultiBinding>
                         </TextBlock.Text>
                     </TextBlock>
-                    <views:VitalSignsChartView />
+                    <views:VitalSignsChartView DataContext="{Binding VitalsChart}" />
                     <views:VitalSignsChartView DataContext="{Binding Checkout}" />
                 </StackPanel>
             </UserControl>
@@ -368,7 +368,7 @@ public class XamlBindingContractTests
         Expect("PlacementTarget.Tag.NoSuchCommand", "no tiene la propiedad pública 'NoSuchCommand'");
         Expect("DataContext.BackToHubCommand, RelativeSource={RelativeSource AncestorType=UserControl}", "no hay un ancestro UserControl alcanzable");
         Expect("NoSuchInMultiBinding", "no tiene la propiedad pública 'NoSuchInMultiBinding'");
-        Expect("(DataContext)", "VitalSignsChartView espera MedicalRecordsViewModel pero recibe CheckoutViewModel");
+        Expect("(DataContext)", "VitalSignsChartView espera VitalSignsChartViewModel pero recibe CheckoutViewModel");
         Assert.HasCount(9, problems, "Solo lo roto se reporta:\n" + Report());
 
         // Lo correcto del mismo XAML sí se resuelve (con su dueño)

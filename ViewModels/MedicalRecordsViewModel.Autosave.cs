@@ -200,7 +200,7 @@ public partial class MedicalRecordsViewModel
             PreviousPrescriptions = _previousPrescriptionKnown ? _previousPrescription.Select(ClonePrescription).ToList() : null,
             PatientBefore = _summaryBeforeConsultation,
             AttendingAppointmentId = _attendingAppointmentId,
-            FeeServiceSyncId = _feeServiceOverrideId is int feeId ? Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
+            FeeServiceSyncId = _feeServiceOverrideId is int feeId ? Catalog.Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
             ReceivedHandoffId = _receivedHandoffId,
             ReceivedHandoffToken = _receivedHandoffToken,
             // La marca de "enviada a otro equipo" va en TODAS las copias (también al cerrar el
@@ -298,7 +298,7 @@ public partial class MedicalRecordsViewModel
         OnReceivedHandoffPersisted(draft);
 
         IsConsultationRecovered = true;
-        PatientsPage = PageConsultation;
+        Navigation.PatientsPage = PageConsultation;
         AutosaveStatus = draft.Handoff != null
             ? $"Enviada a {draft.Handoff.ToDeviceName}"
             : $"Consulta recuperada · iniciada {draft.StartedAt:dd/MM HH:mm}";
@@ -316,7 +316,7 @@ public partial class MedicalRecordsViewModel
         {
             // Antes de iniciarla: la cuenta se muestra ya con el honorario y la cita correctos
             _feeServiceOverrideId = draft.FeeServiceSyncId is Guid feeSyncId
-                ? Services.FirstOrDefault(s => s.IsActive && s.SyncId == feeSyncId)?.Id
+                ? Catalog.Services.FirstOrDefault(s => s.IsActive && s.SyncId == feeSyncId)?.Id
                 : null;
             _receivedHandoffId = draft.ReceivedHandoffId;
             _receivedHandoffToken = draft.ReceivedHandoffToken;

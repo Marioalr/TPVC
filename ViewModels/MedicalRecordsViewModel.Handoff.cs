@@ -171,7 +171,7 @@ public partial class MedicalRecordsViewModel
     public bool ShowsIncomingHandoff => IncomingHandoff != null;
 
     /// <summary>El aviso se ve en el inicio y la ficha (en la consulta o el alta, un aviso breve).</summary>
-    public bool ShowsIncomingHandoffNotice => ShowsIncomingHandoff && ShowsPatientsTopBar;
+    public bool ShowsIncomingHandoffNotice => ShowsIncomingHandoff && Navigation.ShowsPatientsTopBar;
 
     public string IncomingHandoffTitle => IncomingHandoff == null
         ? string.Empty
@@ -189,7 +189,7 @@ public partial class MedicalRecordsViewModel
             if (IsReceivingHandoff) return "Recibiendo la consulta…";
             if (IsConsultationHandedOff) return "Primero recupere la consulta que envió a otro equipo";
             if (HasActiveConsultation) return "Termine o descarte la consulta en curso para continuar esta aquí";
-            if (IsFormPage) return "Termine el alta o edición del expediente para continuarla aquí";
+            if (Navigation.IsFormPage) return "Termine el alta o edición del expediente para continuarla aquí";
             if (IncomingHandoff.PayloadVersion > ConsultationHandoffService.ProtocolVersion) return "Actualice TPVC en este equipo para recibirla";
             return string.Empty;
         }
@@ -221,7 +221,7 @@ public partial class MedicalRecordsViewModel
     private bool BlockIfConsultationReadOnly()
     {
         if (!HasActiveConsultation || (!IsConsultationHandedOff && !IsSendingHandoff)) return false;
-        ShowWarning(IsSendingHandoff
+        Feedback.ShowWarning(IsSendingHandoff
             ? "Se está enviando la consulta a otro equipo."
             : $"La consulta se envió a {HandoffTargetName}: aquí está en solo lectura. Use \"Recuperar\" para seguirla en este equipo.");
         return true;
@@ -231,7 +231,7 @@ public partial class MedicalRecordsViewModel
     private bool BlockIfPatientHandedOff(PatientRecord? patient)
     {
         if (patient == null || _handoffLockedPatientId != patient.Id) return false;
-        ShowWarning(IsConsultationHandedOff
+        Feedback.ShowWarning(IsConsultationHandedOff
             ? $"La consulta de {patient.FullName} está en {HandoffTargetName}: el expediente se edita allá (o aquí al recuperarla)."
             : "Se está actualizando el expediente con lo del otro equipo. Intente en unos segundos.");
         return true;
@@ -240,7 +240,7 @@ public partial class MedicalRecordsViewModel
     private bool BlockIfReceivingHandoff()
     {
         if (!IsReceivingHandoff) return false;
-        ShowWarning("Se está recibiendo una consulta de otro equipo. Espere un momento.");
+        Feedback.ShowWarning("Se está recibiendo una consulta de otro equipo. Espere un momento.");
         return true;
     }
 
@@ -447,7 +447,7 @@ public partial class MedicalRecordsViewModel
                 // En Pacientes ya se ve el aviso; fuera de ahí (o con otra consulta abierta), un aviso breve
                 if (!_inPatientsSection || HasActiveConsultation)
                 {
-                    _notifications?.Info($"{row.FromDeviceName} te envió la consulta de {row.PatientName}. Ábrela en Pacientes.");
+                    Feedback.Info($"{row.FromDeviceName} te envió la consulta de {row.PatientName}. Ábrela en Pacientes.");
                 }
             }
         });
@@ -606,7 +606,7 @@ public partial class MedicalRecordsViewModel
                 marker.Phase = HandoffPhase.Sent;
                 SaveConsultationDraftChecked();
                 IsSendConsultationSheetOpen = false;
-                ShowSuccess($"Consulta enviada a {device.DeviceName}");
+                Feedback.ShowSuccess($"Consulta enviada a {device.DeviceName}");
             }
             catch (Exception ex) when (ConsultationHandoffService.IsDefinitiveRejection(ex))
             {
@@ -756,7 +756,7 @@ public partial class MedicalRecordsViewModel
 
         if (!await _handoffGate.WaitAsync(TimeSpan.FromSeconds(15)))
         {
-            ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
+            Feedback.ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
             return;
         }
         IsRecoveringHandoff = true;
@@ -819,7 +819,7 @@ public partial class MedicalRecordsViewModel
             else
             {
                 LeaveHandedOffState(marker);
-                ShowSuccess(userInitiated
+                Feedback.ShowSuccess(userInitiated
                     ? "La consulta volvió a este equipo"
                     : $"No se confirmó el envío a {marker.ToDeviceName}: la consulta sigue en este equipo");
             }
@@ -860,14 +860,14 @@ public partial class MedicalRecordsViewModel
         StopConsultationTimer();
         ClearConsultationFields();
 
-        if (IsConsultationPage)
+        if (Navigation.IsConsultationPage)
         {
-            if (SelectedPatient != null) PatientsPage = PageChart;
-            else GoToPatientsHome();
+            if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
+            else Navigation.GoToPatientsHome();
         }
         NotifyHandoffState();
         NotifyPatientsPageState();
-        ShowSuccess(message);
+        Feedback.ShowSuccess(message);
 
         // El expediente se edita aquí otra vez cuando llegue lo del otro equipo (o si no hay conexión)
         _handoffLockedPatientId = patientId;
@@ -945,7 +945,7 @@ public partial class MedicalRecordsViewModel
         // Con la misma compuerta que recuperar y revisar: nunca a la mitad de una resolución
         if (!await _handoffGate.WaitAsync(0))
         {
-            ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
+            Feedback.ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
             return;
         }
         try
@@ -971,7 +971,7 @@ public partial class MedicalRecordsViewModel
         if (_handoff == null || row == null || IsReceivingHandoff) return;
         if (!CanAcceptIncomingHandoff)
         {
-            ShowWarning(IncomingHandoffBlockedReason);
+            Feedback.ShowWarning(IncomingHandoffBlockedReason);
             return;
         }
 
@@ -980,15 +980,15 @@ public partial class MedicalRecordsViewModel
         {
             // La consulta propia sin terminar (si la hay) se recupera primero
             await InitialLoad;
-            if (HasActiveConsultation || IsFormPage)
+            if (HasActiveConsultation || Navigation.IsFormPage)
             {
-                ShowWarning(IncomingHandoffBlockedReason.Length > 0 ? IncomingHandoffBlockedReason : "Termine lo que está abierto para continuarla aquí.");
+                Feedback.ShowWarning(IncomingHandoffBlockedReason.Length > 0 ? IncomingHandoffBlockedReason : "Termine lo que está abierto para continuarla aquí.");
                 return;
             }
 
             if (!await _handoffGate.WaitAsync(TimeSpan.FromSeconds(15)))
             {
-                ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
+                Feedback.ShowWarning("Se está revisando la nube. Intente de nuevo en un momento.");
                 return;
             }
             try
@@ -1003,7 +1003,7 @@ public partial class MedicalRecordsViewModel
         catch (Exception ex)
         {
             AppLogger.Error("No se pudo recibir la consulta de otro equipo", ex);
-            ShowWarning($"No se pudo recibir la consulta: {ex.Message}");
+            Feedback.ShowWarning($"No se pudo recibir la consulta: {ex.Message}");
         }
         finally
         {
@@ -1019,7 +1019,7 @@ public partial class MedicalRecordsViewModel
         var payload = ConsultationDraftStore.Deserialize(row.Payload);
         if (payload == null || row.PayloadVersion > ConsultationHandoffService.ProtocolVersion || payload.Version > ConsultationDraft.CurrentVersion)
         {
-            ShowWarning("Esta consulta viene de una versión más nueva de TPVC. Actualice este equipo para recibirla.");
+            Feedback.ShowWarning("Esta consulta viene de una versión más nueva de TPVC. Actualice este equipo para recibirla.");
             return;
         }
 
@@ -1027,7 +1027,7 @@ public partial class MedicalRecordsViewModel
         var pull = await _handoff!.Sync.SyncAsync(isBackgroundAutoSync: false, lockWait: HandoffSyncLockWait);
         if (!pull.Success)
         {
-            ShowWarning($"No se pudo actualizar desde la nube: {pull.ErrorMessage}");
+            Feedback.ShowWarning($"No se pudo actualizar desde la nube: {pull.ErrorMessage}");
             return;
         }
 
@@ -1035,7 +1035,7 @@ public partial class MedicalRecordsViewModel
         var (mapped, error) = await MapIncomingDraftAsync(payload, row);
         if (mapped == null)
         {
-            ShowWarning(error ?? "No se pudo preparar la consulta recibida.");
+            Feedback.ShowWarning(error ?? "No se pudo preparar la consulta recibida.");
             return;
         }
 
@@ -1052,7 +1052,7 @@ public partial class MedicalRecordsViewModel
             catch (Exception ex)
             {
                 AppLogger.Warn($"No se pudo consultar la consulta recibida {row.Id}: {ex.Message}");
-                ShowWarning("Sin conexión: si la consulta quedó tomada en este equipo, aparecerá para abrirla en cuanto vuelva la conexión.");
+                Feedback.ShowWarning("Sin conexión: si la consulta quedó tomada en este equipo, aparecerá para abrirla en cuanto vuelva la conexión.");
                 return;
             }
 
@@ -1062,7 +1062,7 @@ public partial class MedicalRecordsViewModel
             }
             else if (current.State != ConsultationHandoffService.StateAccepted || current.Owner != token)
             {
-                ShowWarning(current.State == ConsultationHandoffService.StateCancelled
+                Feedback.ShowWarning(current.State == ConsultationHandoffService.StateCancelled
                     ? $"{row.FromDeviceName} recuperó la consulta."
                     : current.State == ConsultationHandoffService.StateAccepted
                         ? "Otro equipo ya tomó esta consulta."
@@ -1077,7 +1077,7 @@ public partial class MedicalRecordsViewModel
             token = Guid.NewGuid().ToString("N");
             if (_draftStore != null && !_draftStore.RememberAcceptToken(row.Id, token))
             {
-                ShowWarning("No se pudo preparar este equipo para recibir la consulta (no se pudo escribir en el disco).");
+                Feedback.ShowWarning("No se pudo preparar este equipo para recibir la consulta (no se pudo escribir en el disco).");
                 return;
             }
             if (!await TryTakeIncomingAsync(row, token)) return;
@@ -1096,7 +1096,7 @@ public partial class MedicalRecordsViewModel
         }
         catch (Exception ex) when (ConsultationHandoffService.IsDefinitiveRejection(ex))
         {
-            ShowWarning($"No se pudo tomar la consulta: {ConsultationHandoffService.Describe(ex)}.");
+            Feedback.ShowWarning($"No se pudo tomar la consulta: {ConsultationHandoffService.Describe(ex)}.");
             return false;
         }
         catch (Exception ex)
@@ -1111,11 +1111,11 @@ public partial class MedicalRecordsViewModel
 
             if (state == ConsultationHandoffService.StateSent)
             {
-                ShowWarning("No se pudo tomar la consulta. Intente de nuevo.");
+                Feedback.ShowWarning("No se pudo tomar la consulta. Intente de nuevo.");
             }
             else
             {
-                ShowWarning(state == ConsultationHandoffService.StateCancelled
+                Feedback.ShowWarning(state == ConsultationHandoffService.StateCancelled
                     ? $"{row.FromDeviceName} recuperó la consulta."
                     : state == ConsultationHandoffService.StateAccepted
                         ? "Otro equipo ya tomó esta consulta."
@@ -1127,7 +1127,7 @@ public partial class MedicalRecordsViewModel
         catch (Exception ex)
         {
             AppLogger.Warn($"No se pudo confirmar si se tomó la consulta {row.Id}: {ex.Message}");
-            ShowWarning("Sin conexión: si la consulta quedó tomada en este equipo, aparecerá para abrirla en cuanto vuelva la conexión.");
+            Feedback.ShowWarning("Sin conexión: si la consulta quedó tomada en este equipo, aparecerá para abrirla en cuanto vuelva la conexión.");
         }
         return false;
     }
@@ -1219,19 +1219,19 @@ public partial class MedicalRecordsViewModel
         IsConsultationRecovered = false;
         if (!SaveConsultationDraftChecked())
         {
-            ShowWarning("La consulta se abrió, pero todavía no se pudo guardar su copia en este equipo; la de la nube se conserva hasta lograrlo.");
+            Feedback.ShowWarning("La consulta se abrió, pero todavía no se pudo guardar su copia en este equipo; la de la nube se conserva hasta lograrlo.");
         }
 
         _dismissedIncoming.Add(row.Id);
         ShowIncomingNotice(null, accepted: false);
         AutosaveStatus = $"Recibida de {row.FromDeviceName} · {DateTime.Now:HH:mm}";
-        PatientsPage = PageConsultation;
+        Navigation.PatientsPage = PageConsultation;
         NotifyAccountChanged();
         NotifyHandoffState();
-        ShowSuccess($"Consulta de {row.PatientName} recibida de {row.FromDeviceName}");
+        Feedback.ShowSuccess($"Consulta de {row.PatientName} recibida de {row.FromDeviceName}");
         if (mapped.FreeLines.Count > 0)
         {
-            ShowWarning($"No están en el catálogo de este equipo y se cobrarán sin descontar existencias: {string.Join(", ", mapped.FreeLines)}.");
+            Feedback.ShowWarning($"No están en el catálogo de este equipo y se cobrarán sin descontar existencias: {string.Join(", ", mapped.FreeLines)}.");
         }
     }
 

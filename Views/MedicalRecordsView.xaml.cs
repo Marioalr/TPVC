@@ -28,7 +28,7 @@ public partial class MedicalRecordsView : UserControl
         {
             AttachToWindow(Window.GetWindow(this));
             AttachToViewModel(DataContext as MedicalRecordsViewModel);
-            if (DataContext is MedicalRecordsViewModel { IsHomePage: true }) FocusSearchBox();
+            if (DataContext is MedicalRecordsViewModel { Navigation.IsHomePage: true }) FocusSearchBox();
         };
         Unloaded += (_, _) =>
         {
@@ -58,9 +58,9 @@ public partial class MedicalRecordsView : UserControl
 
     private void AttachToViewModel(MedicalRecordsViewModel? viewModel)
     {
-        if (_subscribedViewModel != null) _subscribedViewModel.FocusSearchRequested -= FocusSearchBox;
+        if (_subscribedViewModel != null) _subscribedViewModel.Navigation.FocusSearchRequested -= FocusSearchBox;
         _subscribedViewModel = viewModel;
-        if (_subscribedViewModel != null) _subscribedViewModel.FocusSearchRequested += FocusSearchBox;
+        if (_subscribedViewModel != null) _subscribedViewModel.Navigation.FocusSearchRequested += FocusSearchBox;
     }
 
     private void FocusSearchBox()

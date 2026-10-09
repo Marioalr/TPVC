@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -132,10 +133,10 @@ public partial class MedicalRecordsViewModel
     /// <summary>Servicio de "consulta" del catálogo que se cobra como honorario al terminar.</summary>
     public ClinicalService? ConsultationFeeService =>
         // Consulta recibida de otro equipo: el honorario que ya usaba aquel
-        (_feeServiceOverrideId is int feeId ? Services.FirstOrDefault(s => s.IsActive && s.Id == feeId) : null)
-        ?? Services.FirstOrDefault(s => s.IsActive && s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase))
-        ?? Services.FirstOrDefault(s => s.IsActive && s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase))
-        ?? Services.FirstOrDefault(s => s.IsActive && s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
+        (_feeServiceOverrideId is int feeId ? Catalog.Services.FirstOrDefault(s => s.IsActive && s.Id == feeId) : null)
+        ?? Catalog.Services.FirstOrDefault(s => s.IsActive && s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase))
+        ?? Catalog.Services.FirstOrDefault(s => s.IsActive && s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase))
+        ?? Catalog.Services.FirstOrDefault(s => s.IsActive && s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
 
     public string ConsultationFeeName => ConsultationFeeService?.Name ?? "Consulta Médica General";
 
@@ -145,8 +146,6 @@ public partial class MedicalRecordsViewModel
 
     /// <summary>Honorario + todo lo cargado durante la consulta (lo que se cobrará al terminar).</summary>
     public decimal ConsultationAccountTotal => ConsultationFeeAmount + ActiveConsultationTotalAmount;
-
-    partial void OnServicesChanged(System.Collections.ObjectModel.ObservableCollection<ClinicalService> value) => NotifyAccountChanged();
 
     /// <summary>Última consulta anterior (sin contar el avance guardado de la consulta en curso).</summary>
     public PatientConsultation? PreviousConsultation =>
@@ -166,27 +165,6 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(ConsultationFeeAmount));
         OnPropertyChanged(nameof(ConsultationAccountTotal));
         OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
-    }
-
-    /// <summary>Producto del inventario por nombre exacto, "Nombre (Presentación)" o genérico.</summary>
-    private Product? FindCatalogProduct(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return null;
-        var clean = name.Trim();
-        return AvailableProducts.FirstOrDefault(p =>
-            p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
-            $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)));
-    }
-
-    private static bool ProductMatchesName(Product product, string name)
-    {
-        var n = TextSearch.Normalize(name);
-        var productName = TextSearch.Normalize(product.Name);
-        return n == productName
-               || n == TextSearch.Normalize($"{product.Name} ({product.Presentation})")
-               || n.StartsWith(productName + " ", StringComparison.Ordinal)
-               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName));
     }
 
     /// <summary>Id negativo estable para un cargo libre (servicio o insumo fuera de catálogo): se acumula si se repite.</summary>
@@ -236,9 +214,9 @@ public partial class MedicalRecordsViewModel
     /// </summary>
     private bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct = null)
     {
-        var product = knownProduct != null && ProductMatchesName(knownProduct, item.MedicineName)
+        var product = knownProduct != null && CatalogStore.ProductMatchesName(knownProduct, item.MedicineName)
             ? knownProduct
-            : FindCatalogProduct(item.MedicineName);
+            : Catalog.FindCatalogProduct(item.MedicineName);
         var qty = Math.Max(1, item.RecommendedQuantity);
         if (product == null || product.CurrentStock < qty) return false;
         return ChargeProduct(product, qty, item.MedicineName);
@@ -246,7 +224,7 @@ public partial class MedicalRecordsViewModel
 
     private void UnchargePrescription(PatientPrescriptionItem item)
     {
-        var product = FindCatalogProduct(item.MedicineName);
+        var product = Catalog.FindCatalogProduct(item.MedicineName);
         if (product != null) Uncharge(product.Id, Math.Max(1, item.RecommendedQuantity));
     }
 
@@ -267,10 +245,10 @@ public partial class MedicalRecordsViewModel
             if (!HasActiveConsultation || !ChargePrescription(item))
             {
                 item.DispenseInClinic = false;
-                InfoModalMessage = HasActiveConsultation
+                Info.InfoModalMessage = HasActiveConsultation
                     ? $"'{item.MedicineName}' no tiene existencias suficientes en el consultorio; queda solo en la receta."
                     : "Inicie la consulta para cargar medicamentos a la cuenta.";
-                IsInfoModalVisible = true;
+                Info.IsInfoModalVisible = true;
             }
         }
         else if (HasActiveConsultation)
@@ -289,21 +267,21 @@ public partial class MedicalRecordsViewModel
 
     private void ChargeSupply(PatientSupplyItem item, Product? knownProduct)
     {
-        var product = knownProduct ?? FindCatalogProduct(item.SupplyName);
+        var product = knownProduct ?? Catalog.FindCatalogProduct(item.SupplyName);
         var qty = Math.Max(1, item.Quantity);
         bool charged = product != null
             ? ChargeProduct(product, qty, item.SupplyName)
             : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, qty);
         if (!charged)
         {
-            InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
+            Info.IsInfoModalVisible = true;
         }
     }
 
     private void ChargeService(PatientServiceItem item)
     {
-        var service = Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        var service = Catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
         if (service != null)
         {
             for (int i = 0; i < Math.Max(1, item.Quantity); i++) AddServiceToActiveConsultation(service);
@@ -312,15 +290,15 @@ public partial class MedicalRecordsViewModel
 
         if (!ChargeFreeLine(item.ServiceCode, item.ServiceName, $"Servicio Clínico • {item.Category}", "Servicio", item.Price, Math.Max(1, item.Quantity)))
         {
-            InfoModalMessage = $"'{item.ServiceName}' no tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = $"'{item.ServiceName}' no tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
+            Info.IsInfoModalVisible = true;
         }
     }
 
     /// <summary>Quitar el insumo de la hoja lo quita de la cuenta tal como se cargó (producto o cargo libre).</summary>
     private void UnchargeSupply(PatientSupplyItem item)
     {
-        var product = FindCatalogProduct(item.SupplyName);
+        var product = Catalog.FindCatalogProduct(item.SupplyName);
         Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), Math.Max(1, item.Quantity));
     }
 
@@ -331,7 +309,7 @@ public partial class MedicalRecordsViewModel
     private void UnchargeService(PatientServiceItem item)
     {
         var units = Math.Max(1, item.Quantity);
-        var service = Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        var service = Catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
         if (service == null)
         {
             Uncharge(FreeChargeId(item.ServiceName), units);
@@ -370,7 +348,7 @@ public partial class MedicalRecordsViewModel
 
         foreach (var item in _consultationService?.CurrentConsultation?.Items ?? Enumerable.Empty<ConsultationProductItem>())
         {
-            var product = item.ProductId > 0 ? AvailableProducts.FirstOrDefault(p => p.Id == item.ProductId) : null;
+            var product = item.ProductId > 0 ? Catalog.AvailableProducts.FirstOrDefault(p => p.Id == item.ProductId) : null;
             Checkout.Cart.Add(new CartItem
             {
                 ProductId = item.ProductId,
@@ -435,7 +413,7 @@ public partial class MedicalRecordsViewModel
         SyncActiveConsultation();
         StopConsultationTimer();
         ClearConsultationFields();
-        PatientsPage = SelectedPatient != null ? PageChart : PageHome;
+        Navigation.PatientsPage = SelectedPatient != null ? PageChart : PageHome;
     }
 
     private void ClearConsultationFields()

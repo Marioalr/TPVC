@@ -158,15 +158,15 @@ internal static class Fase6Scenarios
         records.ConsultationGeneralIndications = "Dieta baja en azúcares y caminata diaria";
         records.ConsultationSection = 4;
 
-        var paracetamol = records.AvailableProducts.Single(p => p.Code == "MED-001");
+        var paracetamol = records.Catalog.AvailableProducts.Single(p => p.Code == "MED-001");
         records.PrescriptionDosage = "1 tableta cada 8 horas por 3 días";
         await records.SelectAndAddPrescriptionProductAsync(paracetamol);
 
-        var gauze = records.AvailableProducts.First(p => p.Name == "Gasa Estéril 10x10 cm");
+        var gauze = records.Catalog.AvailableProducts.First(p => p.Name == "Gasa Estéril 10x10 cm");
         records.SupplyInstructions = "Curación de herida";
         await records.SelectAndAddSupplyProductAsync(gauze);
 
-        var glucose = records.Services.Single(s => s.Code == "SERV-004");
+        var glucose = records.Catalog.Services.Single(s => s.Code == "SERV-004");
         await records.SelectAndAddServiceModalSuggestionAsync(glucose);
 
         Assert.IsTrue(consultations.AddCartItemToActiveConsultation(-1_000_777, "LIBRE", "Curación especial", null, null, "Servicio", 150m, 1));

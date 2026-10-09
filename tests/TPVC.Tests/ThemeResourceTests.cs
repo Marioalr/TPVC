@@ -26,7 +26,9 @@ public class ThemeResourceTests
             .Where(f =>
             {
                 var relative = Path.GetRelativePath(root, f).Replace('\\', '/');
+                // .claude/ guarda copias de trabajo de otras ramas (worktrees): no son esta versión
                 return !relative.StartsWith("tests/", StringComparison.Ordinal)
+                       && !relative.StartsWith(".claude/", StringComparison.Ordinal)
                        && !relative.Contains("/obj/", StringComparison.Ordinal)
                        && !relative.Contains("/bin/", StringComparison.Ordinal)
                        && !relative.StartsWith("obj/", StringComparison.Ordinal)

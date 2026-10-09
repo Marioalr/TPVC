@@ -226,7 +226,7 @@ public class ConsultationAutosaveTests
         checkout.SelectedPaymentMethod = "Efectivo";
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();
-        await WaitUntilAsync(() => !reopenedConsultations.HasActiveConsultation && reopened.IsHomePage);
+        await WaitUntilAsync(() => !reopenedConsultations.HasActiveConsultation && reopened.Navigation.IsHomePage);
         var stored =(await _service.GetAppointmentsByDayAsync(DateTime.Today)).Single(a => a.Id == appointment.Id);
         Assert.AreEqual("Atendida", stored.Status);
     }

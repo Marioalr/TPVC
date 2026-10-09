@@ -81,49 +81,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     private System.Threading.Timer? _consultationTimer;
 
-    [ObservableProperty]
-    private string? _infoModalMessage;
-
-    [ObservableProperty]
-    private bool _isInfoModalVisible;
-
-    private System.Threading.CancellationTokenSource? _infoModalCts;
-
-    partial void OnIsInfoModalVisibleChanged(bool value)
-    {
-        if (value)
-        {
-            _infoModalCts?.Cancel();
-            _infoModalCts?.Dispose();
-            _infoModalCts = new System.Threading.CancellationTokenSource();
-            var token = _infoModalCts.Token;
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(4000, token);
-                    if (!token.IsCancellationRequested)
-                    {
-                        if (_ui.IsOffUiThread)
-                        {
-                            await _ui.InvokeAsync(() => DismissInfoModal());
-                        }
-                        else
-                        {
-                            DismissInfoModal();
-                        }
-                    }
-                }
-                catch (System.OperationCanceledException) { }
-            }, token);
-        }
-        else
-        {
-            _infoModalCts?.Cancel();
-        }
-    }
-
     // ==========================================
     // MODAL DE ALTA / EDICIÓN DE EXPEDIENTE (NOM-004-SSA3)
     // ==========================================
@@ -560,15 +517,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _consultationNotes = string.Empty;
 
-    // ==========================================
-    // CATÁLOGO DE SERVICIOS CLÍNICOS
-    // ==========================================
-    [ObservableProperty]
-    private ObservableCollection<ClinicalService> _services = new();
-
-    [ObservableProperty]
-    private ObservableCollection<Product> _availableProducts = new();
-
     /// <summary>Cuenta de "Terminar consulta": el mismo cobro que el Punto de Venta, con su propia cuenta.</summary>
     public CheckoutViewModel Checkout { get; }
 
@@ -605,27 +553,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isPrescriptionModalOpen;
-
-    // ==========================================
-    // DATOS DE IDENTIFICACIÓN MÉDICA (NOM-004-SSA3)
-    // ==========================================
-    [ObservableProperty]
-    private string _doctorName = "Dr. Titular";
-
-    [ObservableProperty]
-    private string _doctorLicense = "";
-
-    [ObservableProperty]
-    private string _doctorSpecialty = "Médico General";
-
-    [ObservableProperty]
-    private string _clinicName = "Consultorio Médico";
-
-    [ObservableProperty]
-    private string _clinicAddress = "";
-
-    [ObservableProperty]
-    private string _clinicPhone = "";
 
     // ==========================================
     // MODAL DE INSUMOS Y MATERIAL CLÍNICO
@@ -732,77 +659,11 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private ObservableCollection<PatientAppointment> _patientAppointmentsHistory = new();
 
     // ==========================================
-    // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS)
-    // ==========================================
-    [ObservableProperty]
-    private ObservableCollection<VitalSignsEvolutionPoint> _vitalSignsEvolutionPoints = new();
-
-    [ObservableProperty]
-    private string _vitalSignsFilter = "Todos"; // "Todos", "Peso", "Presion", "Glucosa"
-
-    [ObservableProperty]
-    private string _weightPolylinePoints = string.Empty;
-
-    [ObservableProperty]
-    private string _systolicPolylinePoints = string.Empty;
-
-    [ObservableProperty]
-    private string _diastolicPolylinePoints = string.Empty;
-
-    [ObservableProperty]
-    private string _glucosePolylinePoints = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<VitalSignsChartPoint> _chartPoints = new();
-
-    [ObservableProperty]
-    private bool _hasEnoughPointsForChart;
-
-    [ObservableProperty]
-    private string _latestWeightFormatted = "--";
-
-    [ObservableProperty]
-    private string _latestBPFormatted = "--";
-
-    [ObservableProperty]
-    private string _latestGlucoseFormatted = "--";
-
-    [ObservableProperty]
-    private string _latestIMCFormatted = "--";
-
-    // ==========================================
     // INDICACIONES GENERALES EN CONSULTA ACTIVA
     // ==========================================
     [ObservableProperty]
     private string _consultationGeneralIndications = "Tomar abundantes líquidos, mantener reposo relativo y acudir a urgencias en caso de presentar datos de alarma.";
 
-
-    public static bool IsProductMedication(Product p)
-    {
-        if (p.Category != null && (p.Category.Name.Contains("Medicamento", StringComparison.OrdinalIgnoreCase) || p.Category.Name.Contains("Fármaco", StringComparison.OrdinalIgnoreCase)))
-            return true;
-        if (!string.IsNullOrEmpty(p.Code) && p.Code.StartsWith("MED", StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (p.Category != null && (
-            p.Category.Name.Contains("Curación", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Insumo", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Antiséptico", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Diagnóstico", StringComparison.OrdinalIgnoreCase)))
-            return false;
-        if (!string.IsNullOrEmpty(p.Code) && (
-            p.Code.StartsWith("CUR", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("INS", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("ANT", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("DIA", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)))
-            return false;
-        return true;
-    }
-
-    public static bool IsProductSupply(Product p)
-    {
-        return !IsProductMedication(p);
-    }
 
     partial void OnPrescriptionSearchTextChanged(string value)
     {
@@ -812,9 +673,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void ApplyPrescriptionSuggestions(string query)
     {
         var matches = string.IsNullOrWhiteSpace(query)
-            ? AvailableProducts.Where(IsProductMedication).Take(20).ToList()
-            : AvailableProducts
-                .Where(IsProductMedication)
+            ? Catalog.AvailableProducts.Where(CatalogStore.IsProductMedication).Take(20).ToList()
+            : Catalog.AvailableProducts
+                .Where(CatalogStore.IsProductMedication)
                 .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
                 .Take(20)
                 .ToList();
@@ -832,9 +693,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void ApplySupplySuggestions(string query)
     {
         var matches = string.IsNullOrWhiteSpace(query)
-            ? AvailableProducts.Where(IsProductSupply).Take(20).ToList()
-            : AvailableProducts
-                .Where(IsProductSupply)
+            ? Catalog.AvailableProducts.Where(CatalogStore.IsProductSupply).Take(20).ToList()
+            : Catalog.AvailableProducts
+                .Where(CatalogStore.IsProductSupply)
                 .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
                 .Take(20)
                 .ToList();
@@ -852,8 +713,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public void ApplyServiceModalSuggestions(string query)
     {
         var matches = string.IsNullOrWhiteSpace(query)
-            ? Services.Take(20).ToList()
-            : Services
+            ? Catalog.Services.Take(20).ToList()
+            : Catalog.Services
                 .Where(s => TextSearch.Matches(TextSearch.Normalize(query), s.Name, s.Code, s.Category))
                 .Take(20)
                 .ToList();
@@ -898,7 +759,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         if (CatalogBrowserMode == "Medications")
         {
-            var list = AvailableProducts.Where(IsProductMedication);
+            var list = Catalog.AvailableProducts.Where(CatalogStore.IsProductMedication);
             if (!string.IsNullOrWhiteSpace(q))
             {
                 list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
@@ -907,7 +768,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else if (CatalogBrowserMode == "Supplies")
         {
-            var list = AvailableProducts.Where(IsProductSupply);
+            var list = Catalog.AvailableProducts.Where(CatalogStore.IsProductSupply);
             if (!string.IsNullOrWhiteSpace(q))
             {
                 list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
@@ -916,7 +777,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else if (CatalogBrowserMode == "Services")
         {
-            var list = Services.AsEnumerable();
+            var list = Catalog.Services.AsEnumerable();
             if (!string.IsNullOrWhiteSpace(q))
             {
                 list = list.Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category, s.Description));
@@ -940,27 +801,28 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
+        CreateChildren(notificationService, clinicProfileService);
         Checkout = new CheckoutViewModel(inventoryService, () =>
             _clinicProfileService?.CurrentProfile?.DoctorNameWithTitle is { Length: > 0 } doctor ? doctor : "Dr. Titular")
         {
             // Quitar todos los cargos termina una consulta de cortesía sin registrar una venta en ceros
             EmptyChargeText = "Terminar consulta (sin cargos)",
             ChargeSuffix = " y terminar",
-            Notify = (message, ok) => { if (!ok) ShowWarning(message); },
+            Notify = (message, ok) => { if (!ok) Feedback.ShowWarning(message); },
             Completed = OnConsultationChargedAsync,
             Failed = () => _ = LoadServicesAsync()
         };
         InitializeAutosave(consultationDraftStore);
-        InitializePacientes(notificationService);
+        InitializePacientes();
         InitializeHandoff(consultationHandoffService);
         _clinicProfileService = clinicProfileService;
         _printingService = printingService;
 
         if (_clinicProfileService != null)
         {
-            _onProfileChangedHandler = () => RefreshProfileData();
+            _onProfileChangedHandler = () => Clinic.RefreshProfileData();
             _clinicProfileService.ProfileChanged += _onProfileChangedHandler;
-            RefreshProfileData();
+            Clinic.RefreshProfileData();
         }
 
         if (_consultationService != null)
@@ -992,7 +854,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         else
         {
-            LoadFallbackServices();
+            Catalog.LoadFallbackServices();
             if (_consultationService != null && _consultationService.Patients.Count > 0)
             {
                 Patients = new ObservableCollection<PatientRecord>(_consultationService.Patients);
@@ -1019,7 +881,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         await LoadPatientsAsync();
         await LoadServicesAsync();
-        await LoadPrescriptionTemplatesAsync();
+        await Templates.LoadPrescriptionTemplatesAsync();
         await LoadTodayAppointmentsAsync();
         TryRestoreConsultationDraft();
         await TryRestorePatientFormDraftAsync();
@@ -1274,20 +1136,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void RefreshProfileData(ClinicProfile? profile = null)
-    {
-        var p = profile ?? _clinicProfileService?.CurrentProfile;
-        if (p != null)
-        {
-            DoctorName = string.IsNullOrWhiteSpace(p.DoctorName) ? "Dr. Titular" : p.DoctorName;
-            DoctorLicense = p.DoctorLicense ?? string.Empty;
-            DoctorSpecialty = string.IsNullOrWhiteSpace(p.DoctorSpecialty) ? "Médico General" : p.DoctorSpecialty;
-            ClinicName = string.IsNullOrWhiteSpace(p.ClinicName) ? "Consultorio Médico" : p.ClinicName;
-            ClinicAddress = p.ClinicAddress ?? string.Empty;
-            ClinicPhone = p.ClinicPhone ?? string.Empty;
-        }
-    }
-
     public void Dispose()
     {
         if (_consultationService != null)
@@ -1313,93 +1161,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     public async Task LoadServicesAsync()
     {
-        if (_inventoryService != null)
-        {
-            var dbServices = await _inventoryService.GetClinicalServicesAsync();
-            Services = new ObservableCollection<ClinicalService>(dbServices);
-
-            var prods = await _inventoryService.GetProductsAsync();
-            AvailableProducts = new ObservableCollection<Product>(prods);
-        }
-        else
-        {
-            LoadFallbackServices();
-        }
+        await Catalog.LoadAsync();
 
         ApplyPrescriptionSuggestions(PrescriptionSearchText ?? string.Empty);
         ApplySupplySuggestions(SupplySearchText ?? string.Empty);
         ApplyServiceModalSuggestions(ServiceModalSearchText ?? string.Empty);
         ApplyCatalogBrowserFilter();
-    }
-
-    private void LoadFallbackServices()
-    {
-        var services = new List<ClinicalService>
-        {
-            new()
-            {
-                Id = 1,
-                Code = "SERV-001",
-                Name = "Consulta Médica General",
-                Description = "Evaluación clínica general, exploración física, diagnóstico y prescripción médica.",
-                Category = "Consulta",
-                Price = 300.00m,
-                EstimatedDurationMinutes = 25,
-                DefaultProducts = new List<ServiceDefaultProduct>
-                {
-                    new() { Product = new Product { Name = "Abatelenguas de madera" }, Quantity = 1, Instructions = "Exploración orofaríngea" },
-                    new() { Product = new Product { Name = "Alcohol Etílico 70%" }, Quantity = 1, Instructions = "Asepsia" }
-                }
-            },
-            new()
-            {
-                Id = 2,
-                Code = "SERV-002",
-                Name = "Curación Menor y Asepsia",
-                Description = "Aseo quirúrgico superficial, desinfección, curación de herida o quemadura y vendaje de protección.",
-                Category = "Curaciones",
-                Price = 250.00m,
-                EstimatedDurationMinutes = 20,
-                DefaultProducts = new List<ServiceDefaultProduct>
-                {
-                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Limpieza y cobertura" },
-                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Lavado de arrastre" },
-                    new() { Product = new Product { Name = "Venda Elástica 10 cm" }, Quantity = 1, Instructions = "Vendaje protector" }
-                }
-            },
-            new()
-            {
-                Id = 3,
-                Code = "SERV-003",
-                Name = "Sutura de Herida Simple",
-                Description = "Afrontamiento por planos de bordes de herida dérmica limpia con material estéril.",
-                Category = "Procedimientos",
-                Price = 450.00m,
-                EstimatedDurationMinutes = 35,
-                DefaultProducts = new List<ServiceDefaultProduct>
-                {
-                    new() { Product = new Product { Name = "Gasa Estéril 10x10 cm" }, Quantity = 2, Instructions = "Secado y hemostasia" },
-                    new() { Product = new Product { Name = "Solución Fisiológica 0.9%" }, Quantity = 1, Instructions = "Asepsia previa" }
-                }
-            }
-        };
-
-        Services = new ObservableCollection<ClinicalService>(services);
-
-        if (AvailableProducts.Count == 0)
-        {
-            AvailableProducts = new ObservableCollection<Product>
-            {
-                new() { Id = 1, Code = "MED-001", Name = "Paracetamol 500 mg", GenericName = "Paracetamol", Presentation = "Caja con 20 tabletas", CurrentStock = 45, Price = 45.00m },
-                new() { Id = 2, Code = "MED-002", Name = "Amoxicilina 500 mg", GenericName = "Amoxicilina", Presentation = "Caja con 12 cápsulas", CurrentStock = 28, Price = 85.00m },
-                new() { Id = 3, Code = "MED-003", Name = "Ibuprofeno 400 mg", GenericName = "Ibuprofeno", Presentation = "Caja con 10 tabletas", CurrentStock = 35, Price = 55.00m },
-                new() { Id = 4, Code = "MED-004", Name = "Omeprazol 20 mg", GenericName = "Omeprazol", Presentation = "Caja con 14 cápsulas", CurrentStock = 50, Price = 60.00m },
-                new() { Id = 5, Code = "INS-001", Name = "Gasa Estéril 10x10 cm", GenericName = "Material de Curación", Presentation = "Sobre con 5 piezas", CurrentStock = 120, Price = 18.00m },
-                new() { Id = 6, Code = "INS-002", Name = "Jeringa Desechable 5 ml con Aguja", GenericName = "Insumo Descartable", Presentation = "Pieza estéril", CurrentStock = 85, Price = 12.00m },
-                new() { Id = 7, Code = "INS-003", Name = "Solución Fisiológica 0.9% 250 ml", GenericName = "Solución Salina", Presentation = "Frasco flexible", CurrentStock = 24, Price = 42.00m },
-                new() { Id = 8, Code = "INS-004", Name = "Venda Elástica 10 cm", GenericName = "Material de Curación", Presentation = "Rollo 5 m", CurrentStock = 40, Price = 25.00m }
-            };
-        }
     }
 
     private void LoadMockPatients()
@@ -1595,8 +1362,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfPatientHandedOff(SelectedPatient)) return;
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -1823,7 +1590,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         IsPatientModalOpen = false;
         FormErrorMessage = null;
-        ShowSuccess($"Expediente de {patient.FullName} guardado");
+        Feedback.ShowSuccess($"Expediente de {patient.FullName} guardado");
     }
 
     // ==========================================
@@ -1986,7 +1753,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfReceivingHandoff()) return;
         if (SelectedPatient == null)
         {
-            GoToPatientsHome();
+            Navigation.GoToPatientsHome();
             return;
         }
 
@@ -2002,7 +1769,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             ClearConsultationFields();
             NotifyAccountChanged();
             // La pantalla de consulta ya indica que está en curso: sin ventana emergente que interrumpa
-            PatientsPage = PageConsultation;
+            Navigation.PatientsPage = PageConsultation;
         }
     }
 
@@ -2012,15 +1779,15 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfConsultationReadOnly()) return;
         if (_consultationService == null || !_consultationService.HasActiveConsultation)
         {
-            InfoModalMessage = "No hay ninguna consulta médica activa para terminar.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "No hay ninguna consulta médica activa para terminar.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         if (_inventoryService == null)
         {
-            InfoModalMessage = "El servicio de inventario no está disponible.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "El servicio de inventario no está disponible.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -2059,7 +1826,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private async Task OnConsultationChargedAsync(SaleReceipt? receipt)
     {
         await HandleSaleCompletedFromConsultationAsync();
-        if (receipt != null) ShowSuccess($"Consulta cobrada · {receipt.Folio}");
+        if (receipt != null) Feedback.ShowSuccess($"Consulta cobrada · {receipt.Folio}");
     }
 
     public async Task HandleSaleCompletedFromConsultationAsync()
@@ -2088,7 +1855,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsServicesModalOpen = false;
         IsPatientModalOpen = false;
         IsCatalogBrowserModalOpen = false;
-        DismissInfoModal();
+        Info.DismissInfoModal();
 
         // 2. Finalizar y cerrar la consulta médica en el servicio y detener cronómetro
         _consultationService?.CloseActiveConsultation();
@@ -2104,7 +1871,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         // 6. La cita que se atendía queda como atendida y se vuelve al inicio, listo para el siguiente
         await CompleteAttendedAppointmentAsync();
-        GoToPatientsHome();
+        Navigation.GoToPatientsHome();
         }
         catch (Exception ex)
         {
@@ -2143,9 +1910,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         // La lista de sugerencias puede dejar preseleccionado otro medicamento cuando el nombre se
         // escribe a mano: solo cuenta el producto que corresponde a lo recetado (alergias y surtido)
-        if (product != null && !ProductMatchesName(product, name))
+        if (product != null && !CatalogStore.ProductMatchesName(product, name))
         {
-            product = FindCatalogProduct(name);
+            product = Catalog.FindCatalogProduct(name);
         }
 
         var dosage = string.IsNullOrWhiteSpace(PrescriptionDosage)
@@ -2190,7 +1957,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // traer preseleccionado otro medicamento cuando el nombre se escribió a mano).
         if (HasActiveConsultation)
         {
-            var dispensed = product != null && ProductMatchesName(product, name) ? product : null;
+            var dispensed = product != null && CatalogStore.ProductMatchesName(product, name) ? product : null;
             newItem.DispenseInClinic = ChargePrescription(newItem, dispensed);
         }
 
@@ -2323,7 +2090,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenPrescriptionModalAsync()
     {
         OpenPrescriptionModal();
-        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        if (Catalog.AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
             ApplyPrescriptionSuggestions(string.Empty);
@@ -2336,8 +2103,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar su receta médica.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar su receta médica.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -2350,7 +2117,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsPrescriptionModalOpen = true;
 
         // Plantillas recién importadas del Excel (o llegadas por sincronización)
-        _ = LoadPrescriptionTemplatesAsync();
+        _ = Templates.LoadPrescriptionTemplatesAsync();
         SelectedPediatricRule = null;
         PediatricWeightText = string.Empty;
     }
@@ -2359,7 +2126,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenPrescriptionCatalogAsync()
     {
         if (BlockIfConsultationReadOnly()) return;
-        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        if (Catalog.AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
         }
@@ -2397,7 +2164,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsPrescriptionModalOpen = false;
-        ShowSuccess($"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!");
+        Feedback.ShowSuccess($"¡Receta médica guardada correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -2408,7 +2175,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenSuppliesModalAsync()
     {
         OpenSuppliesModal();
-        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        if (Catalog.AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
             ApplySupplySuggestions(string.Empty);
@@ -2421,8 +2188,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar sus insumos y material clínico.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar sus insumos y material clínico.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -2438,7 +2205,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenSupplyCatalogAsync()
     {
         if (BlockIfConsultationReadOnly()) return;
-        if (AvailableProducts.Count == 0 && _inventoryService != null)
+        if (Catalog.AvailableProducts.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
         }
@@ -2501,7 +2268,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo)
         if (HasActiveConsultation)
         {
-            ChargeSupply(newItem, product ?? FindCatalogProduct(name));
+            ChargeSupply(newItem, product ?? Catalog.FindCatalogProduct(name));
         }
 
         if (_inventoryService != null)
@@ -2569,7 +2336,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsSuppliesModalOpen = false;
-        ShowSuccess($"¡Insumos y materiales clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
+        Feedback.ShowSuccess($"¡Insumos y materiales clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -2580,7 +2347,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenServicesModalAsync()
     {
         OpenServicesModal();
-        if (Services.Count == 0 && _inventoryService != null)
+        if (Catalog.Services.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
             ApplyServiceModalSuggestions(string.Empty);
@@ -2593,8 +2360,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (BlockIfConsultationReadOnly()) return;
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar los servicios y procedimientos clínicos.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar los servicios y procedimientos clínicos.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -2610,7 +2377,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     public async Task OpenServiceCatalogAsync()
     {
         if (BlockIfConsultationReadOnly()) return;
-        if (Services.Count == 0 && _inventoryService != null)
+        if (Catalog.Services.Count == 0 && _inventoryService != null)
         {
             await LoadServicesAsync();
         }
@@ -2724,7 +2491,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else if (!string.IsNullOrWhiteSpace(ServiceModalSearchText))
         {
             name = ServiceModalSearchText.Trim();
-            var serviceObj = Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var serviceObj = Catalog.Services.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             price = serviceObj?.Price ?? 200.00m;
             category = serviceObj?.Category ?? "Consulta";
             code = serviceObj?.Code ?? "SERV-001";
@@ -2827,7 +2594,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
 
         IsServicesModalOpen = false;
-        ShowSuccess($"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
+        Feedback.ShowSuccess($"¡Servicios clínicos guardados correctamente en el expediente de {SelectedPatient?.FullName}!");
     }
 
     // ==========================================
@@ -2870,213 +2637,26 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     // ==========================================
-    // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS)
+    // EVOLUCIÓN DE SIGNOS VITALES (HISTORIAL Y GRÁFICAS): VitalsChart
     // ==========================================
-    [RelayCommand]
-    public void SetVitalSignsFilter(string filter)
-    {
-        VitalSignsFilter = filter;
-        RecalculateChartPoints();
-    }
 
-    /// <summary>Filtros de la gráfica como chips (con acentos para leerse bien).</summary>
-    public IReadOnlyList<string> VitalSignsFilterOptions { get; } = new[] { "Todos", "Peso", "Presión", "Glucosa" };
-
-    public string VitalSignsFilterLabel
-    {
-        get => VitalSignsFilter == "Presion" ? "Presión" : VitalSignsFilter;
-        set
-        {
-            if (string.IsNullOrWhiteSpace(value)) return;
-            SetVitalSignsFilter(value == "Presión" ? "Presion" : value);
-        }
-    }
-
-    partial void OnVitalSignsFilterChanged(string value) => OnPropertyChanged(nameof(VitalSignsFilterLabel));
-
-    public void RefreshVitalSignsEvolution(PatientRecord? patient = null)
-    {
-        var pat = patient ?? SelectedPatient;
-        if (pat == null)
-        {
-            // Colección nueva (no Clear): así "Lo esencial" (LatestVitals) también queda vacío
-            VitalSignsEvolutionPoints = new ObservableCollection<VitalSignsEvolutionPoint>();
-            ChartPoints.Clear();
-            HasEnoughPointsForChart = false;
-            LatestWeightFormatted = "--";
-            LatestBPFormatted = "--";
-            LatestGlucoseFormatted = "--";
-            LatestIMCFormatted = "--";
-            WeightPolylinePoints = string.Empty;
-            SystolicPolylinePoints = string.Empty;
-            DiastolicPolylinePoints = string.Empty;
-            GlucosePolylinePoints = string.Empty;
-            return;
-        }
-
-        var points = pat.GetVitalSignsEvolution();
-        VitalSignsEvolutionPoints = new ObservableCollection<VitalSignsEvolutionPoint>(points);
-
-        var latest = points.LastOrDefault();
-        if (latest != null)
-        {
-            LatestWeightFormatted = latest.Weight.HasValue ? $"{latest.Weight.Value:F1} kg" : "--";
-            LatestBPFormatted = (latest.Systolic.HasValue && latest.Diastolic.HasValue) ? $"{latest.Systolic.Value}/{latest.Diastolic.Value} mmHg" : "--";
-            LatestGlucoseFormatted = latest.Glucose.HasValue ? $"{latest.Glucose.Value:F0} mg/dL" : "--";
-            LatestIMCFormatted = latest.BMI.HasValue ? $"{latest.BMI.Value:F1}" : "--";
-        }
-        else
-        {
-            LatestWeightFormatted = "--";
-            LatestBPFormatted = "--";
-            LatestGlucoseFormatted = "--";
-            LatestIMCFormatted = "--";
-        }
-
-        RecalculateChartPoints();
-    }
-
-    private const int MaxChartMarkersPerSeries = 60;
-
-    private void RecalculateChartPoints()
-    {
-        var points = VitalSignsEvolutionPoints.ToList();
-        if (points.Count == 0)
-        {
-            HasEnoughPointsForChart = false;
-            WeightPolylinePoints = string.Empty;
-            SystolicPolylinePoints = string.Empty;
-            DiastolicPolylinePoints = string.Empty;
-            GlucosePolylinePoints = string.Empty;
-            ChartPoints.Clear();
-            return;
-        }
-
-        HasEnoughPointsForChart = true;
-
-        double width = 640;
-        double height = 200;
-        double padLeft = 40;
-        double padRight = 30;
-        double padTop = 20;
-        double padBottom = 30;
-
-        double plotW = width - padLeft - padRight;
-        double plotH = height - padTop - padBottom;
-
-        int n = points.Count;
-        double stepX = n > 1 ? plotW / (n - 1) : plotW / 2;
-
-        var chartPts = new ObservableCollection<VitalSignsChartPoint>();
-        // Con años de consultas los puntos quedan encimados (y cada uno es un elemento en pantalla):
-        // las líneas usan todas las mediciones, pero se marcan a lo más ~60 por serie, repartidas
-        int markerStep = Math.Max(1, (int)Math.Ceiling(n / (double)MaxChartMarkersPerSeries));
-
-        var weightPoly = new StringBuilder();
-        var sysPoly = new StringBuilder();
-        var diaPoly = new StringBuilder();
-        var gluPoly = new StringBuilder();
-
-        for (int i = 0; i < n; i++)
-        {
-            var p = points[i];
-            double x = n > 1 ? padLeft + (i * stepX) : padLeft + stepX;
-            bool marker = i % markerStep == 0 || i == n - 1;
-
-            // Peso: escala 30..150 kg
-            if (p.Weight.HasValue)
-            {
-                double normW = (double)Math.Clamp(p.Weight.Value, 30m, 150m);
-                double yW = padTop + plotH - ((normW - 30.0) / 120.0 * plotH);
-                weightPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yW));
-                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Peso"))
-                {
-                    chartPts.Add(new VitalSignsChartPoint
-                    {
-                        X = x,
-                        Y = yW,
-                        ValueLabel = $"{p.Weight.Value:F1} kg",
-                        SeriesName = "Peso"
-                    });
-                }
-            }
-
-            // Presión sistólica: escala 60..220 mmHg
-            if (p.Systolic.HasValue)
-            {
-                double normSys = (double)Math.Clamp(p.Systolic.Value, 60m, 220m);
-                double ySys = padTop + plotH - ((normSys - 60.0) / 160.0 * plotH);
-                sysPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, ySys));
-                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion"))
-                {
-                    chartPts.Add(new VitalSignsChartPoint
-                    {
-                        X = x,
-                        Y = ySys,
-                        ValueLabel = $"{p.Systolic.Value} Sis",
-                        SeriesName = "Presión Sistólica"
-                    });
-                }
-            }
-
-            // Presión diastólica: escala 40..130 mmHg
-            if (p.Diastolic.HasValue)
-            {
-                double normDia = (double)Math.Clamp(p.Diastolic.Value, 40m, 130m);
-                double yDia = padTop + plotH - ((normDia - 40.0) / 90.0 * plotH);
-                diaPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yDia));
-                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion"))
-                {
-                    chartPts.Add(new VitalSignsChartPoint
-                    {
-                        X = x,
-                        Y = yDia,
-                        ValueLabel = $"{p.Diastolic.Value} Dia",
-                        SeriesName = "Presión Diastólica"
-                    });
-                }
-            }
-
-            // Glucosa: escala 50..300 mg/dL
-            if (p.Glucose.HasValue)
-            {
-                double normGlu = (double)Math.Clamp(p.Glucose.Value, 50m, 300m);
-                double yGlu = padTop + plotH - ((normGlu - 50.0) / 250.0 * plotH);
-                gluPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yGlu));
-                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Glucosa"))
-                {
-                    chartPts.Add(new VitalSignsChartPoint
-                    {
-                        X = x,
-                        Y = yGlu,
-                        ValueLabel = $"{p.Glucose.Value:F0} mg/dL",
-                        SeriesName = "Glucosa"
-                    });
-                }
-            }
-        }
-
-        WeightPolylinePoints = weightPoly.ToString().Trim();
-        SystolicPolylinePoints = sysPoly.ToString().Trim();
-        DiastolicPolylinePoints = diaPoly.ToString().Trim();
-        GlucosePolylinePoints = gluPoly.ToString().Trim();
-        ChartPoints = chartPts;
-    }
+    /// <summary>Recalcula la gráfica de signos del paciente dado o, si no se da, del paciente abierto.</summary>
+    public void RefreshVitalSignsEvolution(PatientRecord? patient = null) => VitalsChart.RefreshVitalSignsEvolution(patient ?? SelectedPatient);
 
     [RelayCommand]
     public void OpenPrescriptionPdfPreview()
     {
         if (SelectedPatient == null)
         {
-            InfoModalMessage = "Seleccione un paciente para visualizar la receta médica.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "Seleccione un paciente para visualizar la receta médica.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         if (SelectedPatient.ActivePrescription.Count == 0)
         {
-            InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para generar el documento.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para generar el documento.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
@@ -3094,19 +2674,19 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
         {
-            InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para imprimir.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para imprimir.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
         {
-            DoctorName = DoctorName,
-            DoctorLicense = DoctorLicense,
-            DoctorSpecialty = DoctorSpecialty,
-            ClinicName = ClinicName,
-            ClinicAddress = ClinicAddress,
-            ClinicPhone = ClinicPhone
+            DoctorName = Clinic.DoctorName,
+            DoctorLicense = Clinic.DoctorLicense,
+            DoctorSpecialty = Clinic.DoctorSpecialty,
+            ClinicName = Clinic.ClinicName,
+            ClinicAddress = Clinic.ClinicAddress,
+            ClinicPhone = Clinic.ClinicPhone
         };
 
         if (_printingService != null)
@@ -3119,19 +2699,19 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
             if (printed)
             {
-                InfoModalMessage = "¡Receta médica enviada a la impresora física con éxito!";
+                Info.InfoModalMessage = "¡Receta médica enviada a la impresora física con éxito!";
             }
             else
             {
-                InfoModalMessage = "Impresión de receta cancelada o no se seleccionó impresora.";
+                Info.InfoModalMessage = "Impresión de receta cancelada o no se seleccionó impresora.";
             }
         }
         else
         {
-            InfoModalMessage = "La receta oficial NOM-004-SSA3 ha sido formateada con éxito para emisión física o guardado en PDF.";
+            Info.InfoModalMessage = "La receta oficial NOM-004-SSA3 ha sido formateada con éxito para emisión física o guardado en PDF.";
         }
 
-        IsInfoModalVisible = true;
+        Info.IsInfoModalVisible = true;
         IsPrescriptionPdfModalOpen = false;
     }
 
@@ -3140,19 +2720,19 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         if (SelectedPatient == null || SelectedPatient.ActivePrescription.Count == 0)
         {
-            InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para exportar.";
-            IsInfoModalVisible = true;
+            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para exportar.";
+            Info.IsInfoModalVisible = true;
             return;
         }
 
         var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
         {
-            DoctorName = DoctorName,
-            DoctorLicense = DoctorLicense,
-            DoctorSpecialty = DoctorSpecialty,
-            ClinicName = ClinicName,
-            ClinicAddress = ClinicAddress,
-            ClinicPhone = ClinicPhone
+            DoctorName = Clinic.DoctorName,
+            DoctorLicense = Clinic.DoctorLicense,
+            DoctorSpecialty = Clinic.DoctorSpecialty,
+            ClinicName = Clinic.ClinicName,
+            ClinicAddress = Clinic.ClinicAddress,
+            ClinicPhone = Clinic.ClinicPhone
         };
 
         if (_printingService != null)
@@ -3165,27 +2745,19 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrEmpty(filePath))
             {
-                InfoModalMessage = $"¡Receta médica oficial exportada con éxito!\nGuardada en: {filePath}";
+                Info.InfoModalMessage = $"¡Receta médica oficial exportada con éxito!\nGuardada en: {filePath}";
             }
             else
             {
-                InfoModalMessage = "Exportación de receta cancelada.";
+                Info.InfoModalMessage = "Exportación de receta cancelada.";
             }
         }
         else
         {
-            InfoModalMessage = "Servicio de exportación no disponible en este entorno.";
+            Info.InfoModalMessage = "Servicio de exportación no disponible en este entorno.";
         }
 
-        IsInfoModalVisible = true;
+        Info.IsInfoModalVisible = true;
         IsPrescriptionPdfModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void DismissInfoModal()
-    {
-        _infoModalCts?.Cancel();
-        IsInfoModalVisible = false;
-        InfoModalMessage = null;
     }
 }

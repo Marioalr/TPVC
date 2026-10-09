@@ -200,7 +200,7 @@ public partial class MedicalRecordsViewModel
             _suspendFormDraft = false;
         }
 
-        _notifications?.Info(draft.PatientId > 0
+        Feedback.Info(draft.PatientId > 0
             ? "Se recuperó la edición del expediente que no se había guardado"
             : "Se recuperó el alta de paciente que no se había guardado");
         AppLogger.Info($"Formulario de paciente recuperado (expediente {draft.PatientId}, guardado {draft.SavedAt:dd/MM HH:mm}).");

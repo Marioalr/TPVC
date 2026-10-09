@@ -351,6 +351,9 @@ internal sealed class XamlBindingResolver
             case "ContentTemplate":
                 scope = ContentScope(session, owner);
                 break;
+            case "Value" when owner.Tag == "Setter" && owner.Element.Attribute("Property")?.Value == "ContentTemplate":
+                scope = SetterContentScope(session, owner);
+                break;
             case "ContextMenu":
                 placementOwner = owner;
                 popup = true;
@@ -450,6 +453,21 @@ internal sealed class XamlBindingResolver
         var ext = MarkupExtension.TryParse(content.Value);
         if (ext is not { Name: "Binding" }) return null;
         return ResolveQuiet(session, owner, ext);
+    }
+
+    /// <summary>
+    /// Plantilla que pone un Setter de ContentTemplate (contenido que se crea solo mientras se muestra,
+    /// como la gráfica de signos de la ficha): su DataContext es el Content que pone el Setter hermano
+    /// del mismo disparador o estilo. Sin ese Setter, el DataContext heredado.
+    /// </summary>
+    private Type? SetterContentScope(Session session, Frame setter)
+    {
+        var content = setter.Element.Parent?.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "Setter" && e.Attribute("Property")?.Value == "Content");
+        if (content?.Attribute("Value")?.Value is not { } value) return setter.Scope;
+        var ext = MarkupExtension.TryParse(value);
+        if (ext is not { Name: "Binding" }) return null;
+        return ResolveQuiet(session, setter, ext);
     }
 
     // ================================================================== resolución

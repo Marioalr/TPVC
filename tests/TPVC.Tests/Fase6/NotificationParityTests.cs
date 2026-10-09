@@ -129,7 +129,7 @@ public class NotificationParityTests
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();
         FreezeClock(consultations);
-        var paracetamol = records.AvailableProducts.Single(p => p.Code == "MED-001");
+        var paracetamol = records.Catalog.AvailableProducts.Single(p => p.Code == "MED-001");
         records.PrescriptionDosage = "1 tableta cada 8 horas";
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
@@ -150,7 +150,7 @@ public class NotificationParityTests
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
 
-        golden.Section("cargar un servicio con sus insumos", RecordSync(recorder, () => records.AddServiceToActiveConsultation(records.Services.First(s => s.DefaultProducts.Count > 0))));
+        golden.Section("cargar un servicio con sus insumos", RecordSync(recorder, () => records.AddServiceToActiveConsultation(records.Catalog.Services.First(s => s.DefaultProducts.Count > 0))));
         golden.AssertMatches("add-service.txt", "Avisos al cargar un servicio");
     }
 
@@ -189,7 +189,7 @@ public class NotificationParityTests
     {
         var layers = new (string Layer, Action<MedicalRecordsViewModel, ConsultationService> Open)[]
         {
-            ("info", (vm, _) => { vm.InfoModalMessage = "Aviso"; vm.IsInfoModalVisible = true; }),
+            ("info", (vm, _) => { vm.Info.InfoModalMessage = "Aviso"; vm.Info.IsInfoModalVisible = true; }),
             ("alergia", (vm, _) => vm.IsAllergyAlertOpen = true),
             ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
             ("vista previa", (vm, _) => vm.IsPrescriptionPdfModalOpen = true),
@@ -229,22 +229,22 @@ public class NotificationParityTests
     public void PatientForm_OpenAndClose()
     {
         var (records, consultations) = OpenWithoutDatabase();
-        records.GoToPatientsHome();
+        records.Navigation.GoToPatientsHome();
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
 
         golden.Section("nuevo paciente desde el inicio", RecordSync(recorder, () => Completes(records.NewPatientAsync(), "Alta")));
-        Assert.IsTrue(records.IsFormPage);
+        Assert.IsTrue(records.Navigation.IsFormPage);
         golden.Section("cancelar el alta sin datos", RecordSync(recorder, records.CancelPatientForm));
-        Assert.IsTrue(records.IsHomePage);
+        Assert.IsTrue(records.Navigation.IsHomePage);
 
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();
         FreezeClock(consultations);
         golden.Section("editar el expediente durante la consulta", RecordSync(recorder, records.EditPatient));
-        Assert.IsTrue(records.IsFormPage);
+        Assert.IsTrue(records.Navigation.IsFormPage);
         golden.Section("cerrar y volver a la consulta", RecordSync(recorder, records.ClosePatientModal));
-        Assert.IsTrue(records.IsConsultationPage);
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
         golden.AssertMatches("patient-form.txt", "Avisos al abrir y cerrar el alta");
     }
 
@@ -253,7 +253,7 @@ public class NotificationParityTests
     private static async Task<List<string>> RecordSetAsync(PatientsNotificationRecorder recorder, MedicalRecordsViewModel records, Func<Task> action)
     {
         // Nada de lo anterior se mezcla: el aviso abierto se cierra (su cierre a los 4 s no cae en este paso)
-        records.DismissInfoModal();
+        records.Info.DismissInfoModal();
         await recorder.WaitForQuietAsync();
         recorder.Clear();
         await action();
@@ -322,7 +322,7 @@ public class NotificationParityTests
             FillNewPatient(records);
             golden.Section("guardar el alta con base de datos", await RecordSetAsync(recorder, records, records.SavePatientModalAsync));
             Assert.IsNull(records.FormErrorMessage);
-            Assert.IsTrue(records.IsChartPage);
+            Assert.IsTrue(records.Navigation.IsChartPage);
             records.Dispose();
         }
 
@@ -380,7 +380,7 @@ public class NotificationParityTests
             {
                 golden.Section("recuperar el alta al abrir", await RecordSetAsync(recorder, form, form.LoadInitialDataAsync));
             }
-            Assert.IsTrue(form.IsFormPage);
+            Assert.IsTrue(form.Navigation.IsFormPage);
             Assert.AreEqual("EXP-2026-777", form.FormRecordNumber);
 
             golden.AssertMatches("draft-restore.txt", "Avisos al recuperar borradores");
@@ -423,7 +423,7 @@ public class NotificationParityTests
             await pcRecords.OpenSendConsultationSheetAsync();
             pcRecords.SelectedHandoffDevice = pcRecords.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
             await pcRecords.SendConsultationToSelectedDeviceAsync();
-            Assert.IsTrue(pcRecords.IsConsultationHandedOff, pcRecords.HandoffSheetError ?? pcRecords.InfoModalMessage);
+            Assert.IsTrue(pcRecords.IsConsultationHandedOff, pcRecords.HandoffSheetError ?? pcRecords.Info.InfoModalMessage);
         }
 
         golden.Section("enviar a la tablet (PC)", await RecordSetAsync(pcRecorder, pcRecords, SendAsync));
@@ -436,10 +436,10 @@ public class NotificationParityTests
             await tabletRecords.PollHandoffsOnceAsync();
             await tabletRecords.AcceptIncomingHandoffAsync();
         }));
-        Assert.IsTrue(tabletConsultations.HasActiveConsultation, tabletRecords.InfoModalMessage);
+        Assert.IsTrue(tabletConsultations.HasActiveConsultation, tabletRecords.Info.InfoModalMessage);
 
         golden.Section("la PC se entera y la suelta (PC)", await RecordSetAsync(pcRecorder, pcRecords, () => pcRecords.PollHandoffsOnceAsync()));
-        Assert.IsFalse(pcConsultations.HasActiveConsultation, pcRecords.InfoModalMessage);
+        Assert.IsFalse(pcConsultations.HasActiveConsultation, pcRecords.Info.InfoModalMessage);
 
         golden.AssertMatches("handoff.txt", "Avisos al pasar la consulta a otro equipo");
         tabletRecords.Dispose();
