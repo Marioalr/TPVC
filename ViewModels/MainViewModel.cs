@@ -134,7 +134,8 @@ public partial class MainViewModel : ObservableObject
         DataImportService? dataImportService = null,
         ConsultationDraftStore? consultationDraftStore = null,
         NotificationService? notificationService = null,
-        ConsultationHandoffService? consultationHandoffService = null)
+        ConsultationHandoffService? consultationHandoffService = null,
+        LocalPreferencesStore? localPreferences = null)
     {
         Notifications = notificationService ?? new NotificationService();
         _inventoryService = inventoryService;
@@ -162,7 +163,7 @@ public partial class MainViewModel : ObservableObject
         // a medias del mostrador. El POS solo manda a la consulta ("Abrir consulta"), nunca al revés.
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, Notifications);
         MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, consultationDraftStore, Notifications,
-            consultationHandoffService);
+            consultationHandoffService, localPreferences);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 

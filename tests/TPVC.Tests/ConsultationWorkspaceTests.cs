@@ -462,6 +462,37 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
+    public void ConsultationTimer_ClickHidesOrShowsIt_AndTheChoiceIsRememberedOnThisDevice()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"tpvc_preferencias_{Guid.NewGuid():N}.json");
+        MedicalRecordsViewModel Open() =>
+            new(inventoryService: null, new ConsultationService(seedDemoPatients: false), localPreferences: new LocalPreferencesStore(file));
+        try
+        {
+            var records = Open();
+            Assert.IsTrue(records.Consultation.IsConsultationTimerVisible, "La primera vez se ve");
+            records.Consultation.ToggleConsultationTimerCommand.Execute(null);
+            Assert.IsFalse(records.Consultation.IsConsultationTimerVisible);
+
+            // Al volver a abrir el programa sigue oculto, y otro clic lo vuelve a mostrar
+            var reopened = Open();
+            Assert.IsFalse(reopened.Consultation.IsConsultationTimerVisible);
+            reopened.Consultation.ToggleConsultationTimerCommand.Execute(null);
+            Assert.IsTrue(reopened.Consultation.IsConsultationTimerVisible);
+            Assert.IsTrue(Open().Consultation.IsConsultationTimerVisible);
+
+            // Sin preferencias guardadas (pruebas) o con el archivo dañado, se ve
+            Assert.IsTrue(new MedicalRecordsViewModel(inventoryService: null, new ConsultationService(seedDemoPatients: false)).Consultation.IsConsultationTimerVisible);
+            File.WriteAllText(file, "{ esto no es json");
+            Assert.IsTrue(Open().Consultation.IsConsultationTimerVisible);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
     public void VitalSignsWarning_IsRefreshedWhenAnyOfItsInputsChanges()
     {
         var records = new MedicalRecordsViewModel(inventoryService: null, new ConsultationService(seedDemoPatients: false));

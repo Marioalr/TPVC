@@ -103,7 +103,7 @@ public partial class MedicalRecordsViewModel
 
     [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
-        IPrescriptionOutput? printingService)
+        IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences)
     {
         _info = new InfoDialogState(_ui);
         _feedback = new PatientsFeedback(notificationService, _info);
@@ -140,7 +140,7 @@ public partial class MedicalRecordsViewModel
         // Al final: el cobro (Checkout) se arma con la consulta, como antes justo después de los hijos y
         // antes de cualquier suscripción
         _consultation = new ConsultationViewModel(_inventoryService, _consultationService, clinicProfileService, _session, _active, _record, _account,
-            _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this);
+            _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this, localPreferences);
         _autosave = new ConsultationAutosave(_consultationService, consultationDraftStore, _consultation, _session, _active, _record, _account, _catalog,
             _navigation, _ui, _autosaveOptions, this, this);
     }

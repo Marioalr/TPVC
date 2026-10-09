@@ -19,6 +19,7 @@ public static class ServiceRegistration
         services.AddSingleton(sp => new InventoryService(sp.GetRequiredService<IDbContextFactory<AppDbContext>>()));
         services.AddSingleton(_ => new ConsultationService(seedDemoPatients: false));
         services.AddSingleton(_ => new ConsultationDraftStore());
+        services.AddSingleton(_ => new LocalPreferencesStore());
         services.AddSingleton(_ => new NotificationService());
         services.AddSingleton<ThemeService>();
         services.AddSingleton<AppUpdateService>();

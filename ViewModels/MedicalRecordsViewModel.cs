@@ -52,11 +52,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         PrintingService? printingService = null,
         ConsultationDraftStore? consultationDraftStore = null,
         NotificationService? notificationService = null,
-        ConsultationHandoffService? consultationHandoffService = null)
+        ConsultationHandoffService? consultationHandoffService = null,
+        LocalPreferencesStore? localPreferences = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
-        CreateChildren(notificationService, clinicProfileService, consultationDraftStore, printingService);
+        CreateChildren(notificationService, clinicProfileService, consultationDraftStore, printingService, localPreferences);
         InitializeAutosave(consultationDraftStore);
         PatientForm.AttachPropertyRules();
         InitializePacientes();

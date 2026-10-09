@@ -46,9 +46,30 @@
                 <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding Session.SelectedPatient}" VerticalAlignment="Center" Margin="12,0,0,0">
                     <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
                 </Border>
-                    <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Duración de la consulta">
-                        <TextBlock Text="{Binding Active.ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" />
-                    </Border>
+                    <!-- Cronómetro: un clic lo oculta (queda solo el reloj) o lo vuelve a mostrar; se recuerda en este equipo -->
+                    <Button Style="{StaticResource ButtonGhost}" Command="{Binding Consultation.ToggleConsultationTimerCommand}"
+                            Background="{DynamicResource ThemeSurfaceSubtle}" MinHeight="28" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center"
+                            AutomationProperties.Name="Duración de la consulta (mostrar u ocultar)">
+                        <Button.ToolTip>
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Duración de la consulta · clic para ocultarla" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Consultation.IsConsultationTimerVisible}" Value="False">
+                                                <Setter Property="Text" Value="Mostrar la duración de la consulta" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button.ToolTip>
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoClock}" Width="14" Height="14" />
+                            <TextBlock Text="{Binding Active.ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Margin="6,0,0,0"
+                                       Visibility="{Binding Consultation.IsConsultationTimerVisible, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Button>
                 </WrapPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ShowChartFromConsultationCommand}" Padding="10,6" Margin="0,0,6,0" Content="Expediente" ToolTip="Ver el expediente completo: antecedentes, historial y gráfica de signos" />

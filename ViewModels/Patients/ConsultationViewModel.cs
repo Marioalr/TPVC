@@ -34,6 +34,7 @@ public partial class ConsultationViewModel : ObservableObject
     private readonly IUserDialogs _dialogs;
     private readonly IUiThread _ui;
     private readonly IPatientsWorkflow _workflow;
+    private readonly LocalPreferencesStore? _preferences;
 
     public ConsultationViewModel(
         InventoryService? inventoryService,
@@ -50,7 +51,8 @@ public partial class ConsultationViewModel : ObservableObject
         IConsultationGate gate,
         IUserDialogs dialogs,
         IUiThread ui,
-        IPatientsWorkflow workflow)
+        IPatientsWorkflow workflow,
+        LocalPreferencesStore? preferences = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -67,6 +69,8 @@ public partial class ConsultationViewModel : ObservableObject
         _dialogs = dialogs;
         _ui = ui;
         _workflow = workflow;
+        _preferences = preferences;
+        _isConsultationTimerVisible = preferences?.Current.HideConsultationTimer != true;
 
         Checkout = new CheckoutViewModel(inventoryService, () =>
             _clinicProfileService?.CurrentProfile?.DoctorNameWithTitle is { Length: > 0 } doctor ? doctor : "Dr. Titular")
@@ -78,6 +82,22 @@ public partial class ConsultationViewModel : ObservableObject
             Completed = _workflow.OnConsultationChargedAsync,
             Failed = () => _ = _workflow.LoadServicesAsync()
         };
+    }
+
+    /// <summary>
+    /// Cronómetro de la consulta (Fase 7.2): un clic lo oculta o lo vuelve a mostrar y la elección se
+    /// recuerda en este equipo, también al cerrar el programa.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isConsultationTimerVisible;
+
+    [RelayCommand]
+    private void ToggleConsultationTimer()
+    {
+        IsConsultationTimerVisible = !IsConsultationTimerVisible;
+        if (_preferences == null) return;
+        _preferences.Current.HideConsultationTimer = !IsConsultationTimerVisible;
+        _preferences.Save();
     }
 
     public static string FormatTA(string? input)

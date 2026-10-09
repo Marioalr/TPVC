@@ -1173,6 +1173,21 @@ internal sealed class UiKeyboardPass
             Check(_records.Autosave.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal), $"Ctrl+S muestra la hora del guardado (\"{_records.Autosave.AutosaveStatus}\")");
         }
 
+        // Clic en el cronómetro lo oculta (queda el reloj) y otro clic lo vuelve a mostrar
+        var timer = workspace == null ? null : FindDescendant<System.Windows.Controls.Button>(workspace,
+            b => System.Windows.Automation.AutomationProperties.GetName(b) == "Duración de la consulta (mostrar u ocultar)");
+        if (Check(timer?.Command != null, "Consulta: no se encontró el cronómetro"))
+        {
+            var time = FindDescendant<System.Windows.Controls.TextBlock>(timer!, t => t.FontFamily.Source == "Consolas");
+            var shown = _records.Consultation.IsConsultationTimerVisible;
+            timer!.Command.Execute(null);
+            Settle();
+            Check(_records.Consultation.IsConsultationTimerVisible != shown && time?.IsVisible == !shown, "Clic en el cronómetro lo oculta o lo muestra");
+            timer.Command.Execute(null);
+            Settle();
+            Check(_records.Consultation.IsConsultationTimerVisible == shown && time?.IsVisible == shown, "Otro clic lo deja como estaba");
+        }
+
         // CIE-10 abierto, "Enviar a…" y "Terminar consulta": Esc los cierra uno por uno
         _records.Consultation.ConsultationDiagnosis = "farin";
         Settle();
