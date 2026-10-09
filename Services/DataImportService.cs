@@ -26,6 +26,9 @@ public class DataImportResult
     public string? DoctorName { get; set; }
     public int TemplatesImported { get; set; }
     public int PediatricRulesImported { get; set; }
+
+    /// <summary>Imágenes del membrete (escudo, encabezado) tomadas de la hoja RECETA.</summary>
+    public int LetterheadImagesImported { get; set; }
 }
 
 /// <summary>
@@ -325,6 +328,8 @@ public class DataImportService
             result.DoctorName = docName;
             if (patOk) result.PatientsImported++;
             await db.SaveChangesAsync();
+
+            result.LetterheadImagesImported = ImportLetterheadImages(recetaSheet);
         }
 
         _inventoryService?.NotifyAllChanged();
@@ -334,6 +339,7 @@ public class DataImportService
         if (result.TemplatesImported > 0) sb.Append($"\n✓ {result.TemplatesImported} plantillas de posología / medidas generales.");
         if (result.PediatricRulesImported > 0) sb.Append($"\n✓ {result.PediatricRulesImported} reglas de dosis pediátrica por peso.");
         if (result.DoctorProfileUpdated) sb.Append($"\n✓ Perfil médico actualizado ({result.DoctorName}).");
+        if (result.LetterheadImagesImported > 0) sb.Append("\n✓ Imágenes del membrete de la receta tomadas del Excel.");
         if (result.PatientsImported > 0) sb.Append($"\n✓ {result.PatientsImported} expediente clínico y consulta importados.");
         result.Message = sb.ToString();
         return result;
@@ -590,6 +596,51 @@ public class DataImportService
             return ml / weight;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Escudo (imagen anclada en A1) e imagen del encabezado (la de la derecha, en J2 en el formato del
+    /// médico) de la hoja RECETA. Solo si el perfil no tiene ya una: no se reemplaza la que eligió el médico.
+    /// </summary>
+    private int ImportLetterheadImages(XlsxSheet recetaSheet)
+    {
+        var (crest, header) = FindLetterheadImages(recetaSheet);
+        var profile = _clinicProfileService.CurrentProfile;
+        int saved = 0;
+
+        foreach (var (kind, image, current) in new[]
+                 {
+                     (LetterheadImageKind.Crest, crest, profile.CrestImagePath),
+                     (LetterheadImageKind.Header, header, profile.HeaderImagePath)
+                 })
+        {
+            if (image == null || current != null) continue;
+            try
+            {
+                _clinicProfileService.SaveLetterheadImage(kind, image.GetDisplayedContent());
+                saved++;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+            {
+                // Una imagen en otro formato (EMF, GIF...) no detiene la importación
+                AppLogger.Warn($"No se tomó la imagen {image.MediaPath} de la hoja RECETA: {ex.Message}");
+            }
+        }
+        return saved;
+    }
+
+    /// <summary>
+    /// Imágenes del membrete en la hoja RECETA: entre las ancladas en las primeras filas, la de la columna A
+    /// (o B) es el escudo y la que empieza más a la derecha (de la columna G en adelante) es la del encabezado.
+    /// Los iconos del pie (WhatsApp, ubicación) quedan fuera.
+    /// </summary>
+    public static (XlsxImage? Crest, XlsxImage? Header) FindLetterheadImages(XlsxSheet sheet)
+    {
+        var top = sheet.Images.Where(i => i.FromRow <= 4 && i.Content.Length > 0).ToList();
+        var crest = top.Where(i => i.FromColumn <= 2).OrderBy(i => i.FromColumn).ThenBy(i => i.FromRow).FirstOrDefault();
+        var header = top.Where(i => i.FromColumn >= 7 && !ReferenceEquals(i, crest))
+            .OrderByDescending(i => i.FromColumn).ThenBy(i => i.FromRow).FirstOrDefault();
+        return (crest, header);
     }
 
     private async Task<(bool DoctorUpdated, string? DoctorName, bool PatientImported)> ImportRecetaSheetAsync(

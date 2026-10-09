@@ -44,7 +44,37 @@ public partial class ClinicProfileViewModel : ObservableObject
     /// Controla si los campos están desbloqueados para edición o bloqueados en solo lectura.
     /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ChooseCrestImageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearCrestImageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ChooseHeaderImageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearHeaderImageCommand))]
     private bool _isEditing;
+
+    // ==========================================
+    // MEMBRETE DE LA RECETA (escudo e imagen del encabezado)
+    // ==========================================
+
+    /// <summary>Escudo o logotipo que se ve (el guardado o el recién elegido); null sin imagen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCrestImage))]
+    private string? _crestImagePath;
+
+    /// <summary>Imagen del encabezado que se ve (el trazo de signos vitales del Excel); null sin imagen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHeaderImage))]
+    private string? _headerImagePath;
+
+    public bool HasCrestImage => !string.IsNullOrEmpty(CrestImagePath);
+    public bool HasHeaderImage => !string.IsNullOrEmpty(HeaderImagePath);
+
+    private const string ImageFileFilter = "Imágenes (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg";
+
+    /// <summary>Cambio de imagen pendiente hasta "Guardar": la ruta elegida, o null para quitarla.</summary>
+    private sealed record PendingImage(string? SourcePath);
+
+    private PendingImage? _pendingCrest;
+    private PendingImage? _pendingHeader;
+    private readonly Func<string, string, string?> _pickImageFile;
 
     /// <summary>
     /// Leyenda del botón principal: "Editar" cuando los datos están guardados y bloqueados,
@@ -84,9 +114,11 @@ public partial class ClinicProfileViewModel : ObservableObject
         OnPropertyChanged(nameof(HasClinicName));
     }
 
-    public ClinicProfileViewModel(ClinicProfileService profileService)
+    /// <param name="pickImageFile">Selector de archivo (filtro, título); por defecto el diálogo de Windows.</param>
+    public ClinicProfileViewModel(ClinicProfileService profileService, Func<string, string, string?>? pickImageFile = null)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _pickImageFile = pickImageFile ?? ((filter, title) => DialogService.ShowOpenFileDialog(filter, title));
         LoadFromProfile();
     }
 
@@ -103,6 +135,10 @@ public partial class ClinicProfileViewModel : ObservableObject
         Email = p.Email ?? string.Empty;
         TaxId = p.TaxId ?? string.Empty;
         AdditionalNotes = p.AdditionalNotes ?? string.Empty;
+        _pendingCrest = null;
+        _pendingHeader = null;
+        CrestImagePath = p.CrestImagePath;
+        HeaderImagePath = p.HeaderImagePath;
 
         // Si ya están cargados los datos, mostrarlos bloqueados y que el botón diga "Editar".
         // Si no están cargados (vacíos), mostrarlos desbloqueados y con el botón diciendo "Guardar".
@@ -160,12 +196,85 @@ public partial class ClinicProfileViewModel : ObservableObject
             };
 
             _profileService.SaveProfile(profile);
+            var imageError = ApplyPendingImages();
 
             // Una vez guardado, se vuelven a bloquear los campos y el botón cambia a Editar
             IsEditing = false;
             ActionButtonText = "Editar";
-            StatusMessage = "✓ Datos del consultorio y médico guardados exitosamente.";
-            IsSuccess = true;
+            StatusMessage = imageError == null
+                ? "✓ Datos del consultorio y médico guardados exitosamente."
+                : $"Datos guardados, pero la imagen del membrete no: {imageError}";
+            IsSuccess = imageError == null;
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsEditing))]
+    public void ChooseCrestImage() => ChooseImage(LetterheadImageKind.Crest, "Elegir escudo o logotipo");
+
+    [RelayCommand(CanExecute = nameof(IsEditing))]
+    public void ClearCrestImage()
+    {
+        _pendingCrest = new PendingImage(null);
+        CrestImagePath = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(IsEditing))]
+    public void ChooseHeaderImage() => ChooseImage(LetterheadImageKind.Header, "Elegir imagen del encabezado");
+
+    [RelayCommand(CanExecute = nameof(IsEditing))]
+    public void ClearHeaderImage()
+    {
+        _pendingHeader = new PendingImage(null);
+        HeaderImagePath = null;
+    }
+
+    private void ChooseImage(LetterheadImageKind kind, string title)
+    {
+        var path = _pickImageFile(ImageFileFilter, title);
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (!ClinicProfileService.IsSupportedImageFile(path))
+        {
+            StatusMessage = "Elija una imagen PNG o JPG de hasta 10 MB.";
+            IsSuccess = false;
+            return;
+        }
+
+        if (kind == LetterheadImageKind.Crest)
+        {
+            _pendingCrest = new PendingImage(path);
+            CrestImagePath = path;
+        }
+        else
+        {
+            _pendingHeader = new PendingImage(path);
+            HeaderImagePath = path;
+        }
+        StatusMessage = "Imagen elegida: queda en la receta al presionar Guardar.";
+        IsSuccess = true;
+    }
+
+    /// <summary>Guarda o quita las imágenes elegidas; devuelve el error, o null si todo se guardó.</summary>
+    private string? ApplyPendingImages()
+    {
+        string? error = null;
+        foreach (var (kind, pending) in new[] { (LetterheadImageKind.Crest, _pendingCrest), (LetterheadImageKind.Header, _pendingHeader) })
+        {
+            if (pending == null) continue;
+            try
+            {
+                if (pending.SourcePath != null) _profileService.SaveLetterheadImage(kind, pending.SourcePath);
+                else _profileService.ClearLetterheadImage(kind);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+            {
+                error = ex.Message;
+            }
+        }
+
+        _pendingCrest = null;
+        _pendingHeader = null;
+        CrestImagePath = _profileService.CurrentProfile.CrestImagePath;
+        HeaderImagePath = _profileService.CurrentProfile.HeaderImagePath;
+        return error;
     }
 }

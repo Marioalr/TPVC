@@ -9,10 +9,10 @@
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
     <!-- ========================================================================= -->
-    <!-- MODAL: VISTA PREVIA Y GENERACIÓN DE RECETA MÉDICA OFICIAL (NOM-004-SSA3)  -->
+    <!-- MODAL: VISTA PREVIA DE LA RECETA (igual a la impresión y al PDF)           -->
     <!-- ========================================================================= -->
     <Border Style="{StaticResource SheetScrim}">
-        <Border Style="{StaticResource SheetCard}" Width="760" MaxHeight="720" Padding="24,18">
+        <Border Style="{StaticResource SheetCard}" Width="900" MaxHeight="720" Padding="24,18">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -27,95 +27,156 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la receta" />
-                        <TextBlock Style="{StaticResource TextCaption}" Text="Así se imprime o se guarda (formato NOM-004-SSA3)" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Así se imprime o se guarda: media carta horizontal, con el formato de su receta de Excel" />
                     </StackPanel>
                     <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePrescriptionPdfPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
 
-                <!-- Documento Simulado (Hoja de Receta): es papel, así que se ve como sale impresa (siempre
-                     en claro) con cualquier tema; estos colores tapan los del tema solo dentro de la hoja -->
-                <Border Grid.Row="1" 
-                        Background="{DynamicResource ThemeSurface}" 
-                        BorderBrush="{DynamicResource ThemeBorder}" 
-                        BorderThickness="1" 
-                        CornerRadius="8" 
-                        Padding="20">
-                    <Border.Resources>
-                        <SolidColorBrush x:Key="ThemeSurface" Color="#FFFFFF" />
-                        <SolidColorBrush x:Key="ThemeBackground" Color="#F8FAFC" />
-                        <SolidColorBrush x:Key="ThemeSurfaceSubtle" Color="#F1F5F9" />
-                        <SolidColorBrush x:Key="ThemeText" Color="#0F172A" />
-                        <SolidColorBrush x:Key="ThemeTextSecondary" Color="#5A687D" />
-                        <SolidColorBrush x:Key="ThemeBorder" Color="#E2E8F0" />
-                        <SolidColorBrush x:Key="ThemeAccentForeground" Color="#0369A1" />
-                        <SolidColorBrush x:Key="ThemeFocus" Color="#0369A1" />
-                        <SolidColorBrush x:Key="ThemeDangerText" Color="#991B1B" />
-                    </Border.Resources>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <!-- Membrete Institucional y Médico -->
-                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1.5" Padding="0,0,0,12" Margin="0,0,0,14">
+                <!-- La hoja (media carta horizontal: 816 x 528 a 96 ppp) a escala. Es papel: se ve como sale
+                     impresa (siempre en claro) con cualquier tema. Mismo acomodo que PrintingService.Prescription:
+                     encabezado, Paciente · Edad · Fecha, Alergias y signos, medicamentos | medidas generales y pie.
+                     Con muchos medicamentos la hoja crece (al imprimir pasan a otra hoja) -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Viewbox Stretch="Uniform" VerticalAlignment="Top">
+                        <Border Width="816" MinHeight="528" Padding="22.66,18.91" BorderThickness="1"
+                                Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}"
+                                TextElement.Foreground="{DynamicResource ThemeText}"
+                                TextElement.FontFamily="Neue Haas Grotesk Text Pro, Segoe UI, Arial"
+                                TextElement.FontSize="13.333">
+                            <Border.Resources>
+                                <!-- Tinta sobre papel blanco (≥ 4.5:1, también sobre el sombreado de los campos) -->
+                                <SolidColorBrush x:Key="ThemeSurface" Color="#FFFFFF" />
+                                <SolidColorBrush x:Key="ThemeText" Color="#000000" />
+                                <SolidColorBrush x:Key="ThemeTextSecondary" Color="#5A687D" />
+                                <SolidColorBrush x:Key="ThemeBorder" Color="#CBD5E1" />
+                                <SolidColorBrush x:Key="ThemeAccentForeground" Color="#0369A1" />
+                                <SolidColorBrush x:Key="ThemeDangerText" Color="#991B1B" />
+                                <!-- Sombreado gris muy claro de los campos, como en la hoja del Excel -->
+                                <SolidColorBrush x:Key="PaperFill" Color="#F0F0F0" />
+
+                                <Style x:Key="PaperLabel" TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                    <Setter Property="HorizontalAlignment" Value="Right" />
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                    <Setter Property="Margin" Value="10,0,6,0" />
+                                </Style>
+                                <Style x:Key="PaperField" TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource PaperFill}" />
+                                    <Setter Property="Padding" Value="6,1" />
+                                    <Setter Property="MinHeight" Value="20" />
+                                </Style>
+                                <Style x:Key="PaperValue" TargetType="TextBlock">
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                </Style>
+                                <Style x:Key="PaperCentered" TargetType="Viewbox">
+                                    <Setter Property="Stretch" Value="Uniform" />
+                                    <Setter Property="StretchDirection" Value="DownOnly" />
+                                    <Setter Property="HorizontalAlignment" Value="Center" />
+                                    <Setter Property="Height" Value="20" />
+                                    <Setter Property="Margin" Value="139,0" />
+                                </Style>
+                            </Border.Resources>
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="92" />
+                                    <RowDefinition Height="13" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="13" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="14" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="6" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Encabezado: escudo, nombre (grande), universidad y cédula, trazo de signos vitales -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="92" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Width="76" Height="76" Margin="0,4,0,0" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Source="{Binding Clinic.CrestImagePath, Converter={StaticResource ImageFile}}" />
+                                    <StackPanel Grid.Column="1">
+                                        <Viewbox Height="48" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Clinic.DoctorName}" FontFamily="Frosted Breath, Segoe Script, Segoe UI" FontSize="32"
+                                                       Foreground="{DynamicResource ThemeAccentForeground}" VerticalAlignment="Center" />
+                                        </Viewbox>
+                                        <Viewbox Style="{StaticResource PaperCentered}">
+                                            <TextBlock Text="{Binding Clinic.University}" VerticalAlignment="Center" />
+                                        </Viewbox>
+                                        <Viewbox Style="{StaticResource PaperCentered}" Visibility="{Binding Clinic.DoctorLicense, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding Clinic.DoctorLicense, StringFormat='Cédula Profesional {0}'}" VerticalAlignment="Center" />
+                                        </Viewbox>
+                                    </StackPanel>
+                                    <Image Grid.Column="1" Width="131" Height="44" Stretch="Uniform" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                           Source="{Binding Clinic.HeaderImagePath, Converter={StaticResource ImageFile}}" />
+                                </Grid>
+
+                                <!-- Paciente · Edad · Fecha -->
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions>
+                                        <!-- Nombre y alergias toman lo que sobra; los demás campos miden lo que su
+                                             valor, con el mínimo de la celda del Excel (igual que al imprimir) -->
+                                        <ColumnDefinition Width="70" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="90" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="90" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding Clinic.ClinicName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource ThemeAccentForeground}" />
-                                        <TextBlock Text="{Binding Clinic.DoctorName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" Margin="0,2,0,0" />
-                                        <TextBlock Text="{Binding Clinic.DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                        <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="1" CornerRadius="4" Padding="8,4">
-                                            <TextBlock Text="RECETA MÉDICA INDIVIDUAL" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccentForeground}" />
-                                        </Border>
-                                        <TextBlock Text="{Binding Session.SelectedPatient.RecordNumber, StringFormat='Exp: {0}'}" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
-                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource PaperLabel}" Margin="0,0,6,0" Text="Paciente:" />
+                                    <Border Grid.Column="1" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.FullName}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="2" Style="{StaticResource PaperLabel}" Text="Edad:" />
+                                    <Border Grid.Column="3" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.AgeDisplay}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="4" Style="{StaticResource PaperLabel}" Text="Fecha:" />
+                                    <Border Grid.Column="5" Style="{StaticResource PaperField}">
+                                        <!-- La fecha del día (la pone el código al abrir la vista previa) -->
+                                        <TextBlock x:Name="PrescriptionDate" Style="{StaticResource PaperValue}" />
+                                    </Border>
                                 </Grid>
-                            </Border>
 
-                            <!-- Ficha de Identificación del Paciente -->
-                            <Border Background="{DynamicResource ThemeBackground}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
+                                <!-- Alergias · T/A · Temp · Peso · Talla · SpO2 (lo que no se registró queda en blanco) -->
+                                <Grid Grid.Row="4">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="1*" />
-                                        <ColumnDefinition Width="1*" />
+                                        <ColumnDefinition Width="70" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="76" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="60" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="52" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="56" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" MinWidth="48" />
                                     </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,6">
-                                        <TextBlock Text="Nombre del Paciente:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding Session.SelectedPatient.FullName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,8,6">
-                                        <TextBlock Text="Edad:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding Session.SelectedPatient.AgeDisplay}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,6">
-                                        <TextBlock Text="Sexo:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding Session.SelectedPatient.Gender}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,8,0">
-                                        <TextBlock Text="Signos Vitales Registrados:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding Session.SelectedPatient.VitalSigns}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource ThemeText}" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Row="1" Grid.Column="2">
-                                        <TextBlock Text="Alergias:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <!-- En rojo solo si tiene alergias: "Negadas" o "No interrogadas" no son una alarma -->
-                                        <TextBlock Text="{Binding Session.SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap">
+                                    <!-- En rojo solo si tiene alergias: "Negadas" o "No interrogadas" no son una alarma -->
+                                    <TextBlock Text="Alergias:" Margin="0,0,6,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource PaperLabel}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Session.SelectedPatient.HasAllergies}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeDangerText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <Border Grid.Column="1" Style="{StaticResource PaperField}">
+                                        <TextBlock Text="{Binding Session.SelectedPatient.AllergySummary}">
                                             <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource PaperValue}">
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Session.SelectedPatient.HasAllergies}" Value="True">
                                                             <Setter Property="Foreground" Value="{DynamicResource ThemeDangerText}" />
@@ -124,66 +185,83 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                    </StackPanel>
+                                    </Border>
+                                    <TextBlock Grid.Column="2" Style="{StaticResource PaperLabel}" Text="T/A:" />
+                                    <Border Grid.Column="3" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.VitalSigns, Converter={StaticResource PrescriptionVital}, ConverterParameter=TA}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="4" Style="{StaticResource PaperLabel}" Text="Temp:" />
+                                    <Border Grid.Column="5" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.VitalSigns, Converter={StaticResource PrescriptionVital}, ConverterParameter=Temp}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="6" Style="{StaticResource PaperLabel}" Text="Peso:" />
+                                    <Border Grid.Column="7" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.VitalSigns, Converter={StaticResource PrescriptionVital}, ConverterParameter=Peso}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="8" Style="{StaticResource PaperLabel}" Text="Talla:" />
+                                    <Border Grid.Column="9" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.VitalSigns, Converter={StaticResource PrescriptionVital}, ConverterParameter=Talla}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="10" Style="{StaticResource PaperLabel}" Text="SpO2%:" />
+                                    <Border Grid.Column="11" Style="{StaticResource PaperField}">
+                                        <TextBlock Style="{StaticResource PaperValue}" Text="{Binding Session.SelectedPatient.VitalSigns, Converter={StaticResource PrescriptionVital}, ConverterParameter=SpO2}" />
+                                    </Border>
                                 </Grid>
-                            </Border>
 
-                            <!-- Símbolo Rp y Lista de Fármacos Prescritos -->
-                            <Border Margin="0,0,0,16">
-                                <StackPanel>
-                                    <TextBlock Text="℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,0,0,8" />
-                                    <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActivePrescription}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="0,6,0,8" Margin="0,0,0,4">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="● " FontSize="11" Foreground="{DynamicResource ThemeAccentForeground}" VerticalAlignment="Center" />
-                                                                <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding Dosage, StringFormat='   Indicaciones: {0}'}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                                        </StackPanel>
-                                                        <Border Grid.Column="1" Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Top">
-                                                            <TextBlock Text="{Binding RecommendedQuantity, StringFormat='Cant: {0}'}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource ThemeText}" />
-                                                        </Border>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
+                                <!-- Medicamentos con su posología debajo (izquierda) y medidas generales (derecha) -->
+                                <Grid Grid.Row="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="7*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="3*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource PaperFill}" Padding="8,6">
+                                        <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActivePrescription}" Focusable="False">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,0,0,16">
+                                                        <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Dosage}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="{DynamicResource PaperFill}" Padding="8,6">
+                                        <StackPanel>
+                                            <TextBlock Text="Medidas generales:" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                                            <!-- Lo mismo que se imprime: el plan e indicaciones que escribió el médico, o el texto general -->
+                                            <TextBlock Text="{Binding PrescriptionIndications}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
 
-                            <!-- Indicaciones de Cuidados Generales y Alarma -->
-                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="12,8" Margin="0,0,0,20">
-                                <StackPanel>
-                                    <TextBlock Text="MEDIDAS GENERALES Y DATOS DE ALARMA:" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                    <!-- Lo mismo que se imprime: el plan e indicaciones que escribió el médico, o el texto general -->
-                                    <TextBlock Text="{Binding PrescriptionIndications}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Firma y Cédula del Médico Tratante -->
-                            <Grid Margin="0,10,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="260" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                                    <Border BorderBrush="{DynamicResource ThemeTextSecondary}" BorderThickness="0,1,0,0" Width="220" Margin="0,0,0,6" />
-                                    <TextBlock Text="{Binding Clinic.DoctorName}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeText}" />
-                                    <TextBlock Text="{Binding Clinic.DoctorLicense, StringFormat='Cédula Profesional: {0}'}" FontSize="10" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                    <TextBlock Text="Firma y Sello del Médico Tratante" FontSize="10" FontStyle="Italic" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,0" />
-                                </StackPanel>
+                                <!-- Pie: WhatsApp + teléfono y ubicación + domicilio -->
+                                <Grid Grid.Row="8" TextElement.FontSize="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="6*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource PaperFill}" MinHeight="27" Padding="8,2">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                    Visibility="{Binding Clinic.ClinicPhone, Converter={StaticResource BoolToVis}}">
+                                            <Image Source="{x:Static helpers:PrescriptionImages.WhatsApp}" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Clinic.ClinicPhone}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="{DynamicResource PaperFill}" MinHeight="27" Padding="8,2">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                    Visibility="{Binding Clinic.ClinicAddress, Converter={StaticResource BoolToVis}}">
+                                            <Image Source="{x:Static helpers:PrescriptionImages.Location}" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Clinic.ClinicAddress}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
                             </Grid>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
+                        </Border>
+                    </Viewbox>
+                </ScrollViewer>
 
                 <Grid Grid.Row="2" Margin="0,16,0,0">
                     <Grid.ColumnDefinitions>

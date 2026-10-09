@@ -100,7 +100,7 @@
                             </Border>
                             <TextBlock Style="{StaticResource TextSection}" Text="Importar catálogo de Excel" />
                             <TextBlock Style="{StaticResource TextDetail}" TextWrapping="Wrap" Margin="0,4,0,14"
-                                       Text="Medicamentos, plantillas de receta, dosis pediátricas y datos del médico desde la hoja de Excel (.xlsx) o un CSV. Lo que ya existe se actualiza; no se borra nada." />
+                                       Text="Medicamentos, plantillas de receta, dosis pediátricas, datos del médico y las imágenes del membrete de la receta (si aún no tiene) desde la hoja de Excel (.xlsx) o un CSV. Lo que ya existe se actualiza; no se borra nada." />
                             <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding StartImportExcelCommand}" IsEnabled="{Binding CanImport}">
                                 <StackPanel Orientation="Horizontal">
                                     <helpers:Icon Data="{StaticResource IcoFile}" Margin="0,0,8,0" />

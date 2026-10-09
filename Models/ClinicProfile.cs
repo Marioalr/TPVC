@@ -25,6 +25,31 @@ public class ClinicProfile
     /// <summary>Última modificación (UTC) para resolver conflictos al sincronizar entre dispositivos.</summary>
     public DateTime? UpdatedAtUtc { get; set; }
 
+    // Membrete de la receta (como la hoja RECETA del Excel del médico): solo el nombre del archivo; la
+    // imagen vive en la carpeta "membrete" junto a este perfil. Son de este equipo: no viajan a la nube.
+    /// <summary>Escudo o logotipo, arriba a la izquierda de la receta.</summary>
+    public string CrestImageFile { get; set; } = string.Empty;
+
+    /// <summary>Imagen del encabezado (el trazo de signos vitales), arriba a la derecha de la receta.</summary>
+    public string HeaderImageFile { get; set; } = string.Empty;
+
+    /// <summary>Carpeta de las imágenes del membrete; la pone ClinicProfileService al cargar o guardar.</summary>
+    [JsonIgnore] public string? LetterheadFolder { get; set; }
+
+    /// <summary>Ruta completa del escudo, o null si no hay (o el archivo ya no existe).</summary>
+    [JsonIgnore] public string? CrestImagePath => ResolveLetterheadImage(CrestImageFile);
+
+    /// <summary>Ruta completa de la imagen del encabezado, o null si no hay.</summary>
+    [JsonIgnore] public string? HeaderImagePath => ResolveLetterheadImage(HeaderImageFile);
+
+    private string? ResolveLetterheadImage(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(LetterheadFolder)) return null;
+        // Solo el nombre: un perfil editado a mano no puede apuntar fuera de la carpeta del membrete
+        var path = System.IO.Path.Combine(LetterheadFolder, System.IO.Path.GetFileName(fileName.Trim()));
+        return System.IO.File.Exists(path) ? path : null;
+    }
+
     // Aliases para máxima compatibilidad con vistas y componentes (no se guardan duplicados en disco)
     [JsonIgnore] public string DoctorLicense { get => ProfessionalLicense; set => ProfessionalLicense = value; }
     [JsonIgnore] public string DoctorSpecialty { get => Specialty; set => Specialty = value; }

@@ -205,6 +205,7 @@ internal sealed class UiSmokeSession
         var inventory = new InventoryService(factory);
         var consultations = new ConsultationService(seedDemoPatients: false);
         var profile = new ClinicProfileService(Path.Combine(_workDir, "clinic_profile.json"));
+        SeedDoctorLetterhead(profile);
         var tursoSettings = new TursoSettingsService(Path.Combine(_workDir, "turso.json"));
         var tursoSync = new TursoSyncService(factory, tursoSettings, profile, inventory);
 
@@ -400,6 +401,8 @@ internal sealed class UiSmokeSession
             records.OpenPrescriptionPdfPreview();
             Capture(host, $"11d-vista-previa-receta-{suffix}");
             records.ClosePrescriptionPdfPreview();
+            // La hoja impresa es papel: no depende del tema (se revisa una vez)
+            if (suffix == "claro") CheckPrintedPrescription(records.Session.SelectedPatient!, profile.CurrentProfile, records.PrescriptionIndications);
             records.Info.DismissInfoModal();
             records.ClosePrescriptionModal();
 
@@ -482,6 +485,157 @@ internal sealed class UiSmokeSession
 
         // Después de todas las capturas (cambia datos y muestra la ventana): menús y teclado reales
         new UiKeyboardPass(window, main, _failures, _bindingErrors, Path.Combine(_workDir, "consulta.json")).Run();
+    }
+
+    // ------------------------------------------------------------------ receta impresa (fase 7.4)
+
+    /// <summary>El médico y su membrete como quedan al importar su Excel (escudo y trazo de la hoja RECETA).</summary>
+    private static void SeedDoctorLetterhead(ClinicProfileService profile)
+    {
+        profile.SaveProfile(new ClinicProfile
+        {
+            DoctorName = "Dra. María del Cielo Alberto Galicia",
+            University = "Benemérita Universidad Autónoma de Puebla",
+            ProfessionalLicense = "15632243",
+            Phone = "2481592448",
+            Address = "Calle Niños Héroes #503, Sección Segunda, Yehualtepec",
+            ClinicName = "Consultorio Médico"
+        });
+        var receta = XlsxReader.Read(Path.Combine(AppContext.BaseDirectory, "TestAssets", "catalogo_muestra.xlsx")).Single(s => s.Name == "RECETA");
+        var (crest, header) = DataImportService.FindLetterheadImages(receta);
+        profile.SaveLetterheadImage(LetterheadImageKind.Crest, crest!.GetDisplayedContent());
+        profile.SaveLetterheadImage(LetterheadImageKind.Header, header!.GetDisplayedContent());
+    }
+
+    /// <summary>
+    /// La receta impresa (el FlowDocument que va a la impresora): media carta horizontal; con los
+    /// medicamentos de la hoja del Excel cabe en una hoja con el pie abajo; con muchos pasa a otras hojas
+    /// sin cortar nada. Guarda la imagen de las hojas junto a las demás capturas.
+    /// </summary>
+    private void CheckPrintedPrescription(PatientRecord patient, ClinicProfile clinic, string indications)
+    {
+        _bindingErrors.Screen = "receta-impresa";
+
+        var consultation = Paginate(PrescriptionSheet.Create(patient, patient.ActivePrescription, clinic, indications, DateTime.Now));
+        SavePage(consultation.Pages[0], "11e-receta-impresa");
+        if (consultation.Pages[0].Size != new System.Windows.Size(816, 528))
+        {
+            _failures.Add($"[receta impresa] la hoja mide {consultation.Pages[0].Size} (media carta horizontal: 816x528)");
+        }
+
+        var excelItems = new[]
+        {
+            new PatientPrescriptionItem { MedicineName = "Espabion suspensión", Dosage = "Dar 5 ml vía oral cada 8 hrs por 5 días" },
+            new PatientPrescriptionItem { MedicineName = "Adinol (Paracetamol) Jarabe 3.2 g/100 ml", Dosage = "Dar 8 ml vía oral cada 8 hrs por 5 días" }
+        };
+        var excel = Paginate(PrescriptionSheet.Create(patient, excelItems, clinic, indications, DateTime.Now));
+        if (excel.Pages.Count != 1)
+        {
+            _failures.Add($"[receta impresa] dos medicamentos ocupan {excel.Pages.Count} hojas (el pie no debe pasar a otra hoja)");
+        }
+        if (!excel.Pages[0].ContainsImage(TPVC.Helpers.PrescriptionImages.WhatsApp))
+        {
+            _failures.Add("[receta impresa] el pie con el teléfono no está en la hoja");
+        }
+
+        var many = Enumerable.Range(1, 24)
+            .Select(i => new PatientPrescriptionItem { MedicineName = $"Medicamento de prueba {i}", Dosage = "Tomar 1 tableta vía oral cada 8 hrs por 5 días" })
+            .ToList();
+        var flowing = Paginate(PrescriptionSheet.Create(patient, many, clinic, indications, DateTime.Now));
+        SavePage(flowing.Pages[^1], "11f-receta-impresa-ultima-hoja");
+        if (flowing.Pages.Count < 2)
+        {
+            _failures.Add($"[receta impresa] 24 medicamentos caben en {flowing.Pages.Count} hoja: deberían pasar a otra");
+        }
+        if (!flowing.Pages[^1].ContainsImage(TPVC.Helpers.PrescriptionImages.WhatsApp))
+        {
+            _failures.Add("[receta impresa] con varias hojas, el pie no quedó en la última");
+        }
+        // Nada se corta: el texto de las hojas (si WPF lo expone) trae el último medicamento
+        var text = string.Concat(flowing.Pages.Select(p => p.Text));
+        if (text.Length > 0 && !text.Contains("Medicamentodeprueba24", StringComparison.Ordinal))
+        {
+            _failures.Add("[receta impresa] el último de 24 medicamentos no aparece en ninguna hoja (se cortó)");
+        }
+    }
+
+    private sealed record PrintedPage(System.Windows.Documents.DocumentPage Page)
+    {
+        public System.Windows.Size Size => Page.Size;
+
+        /// <summary>Texto de la hoja sin espacios (de los GlyphRun que dibuja WPF).</summary>
+        public string Text
+        {
+            get
+            {
+                var sb = new System.Text.StringBuilder();
+                Walk(Page.Visual, v =>
+                {
+                    if (System.Windows.Media.VisualTreeHelper.GetDrawing(v) is { } drawing) Collect(drawing, sb);
+                });
+                return new string(sb.ToString().Where(c => !char.IsWhiteSpace(c)).ToArray());
+            }
+        }
+
+        public bool ContainsImage(System.Windows.Media.ImageSource? source)
+        {
+            bool found = false;
+            Walk(Page.Visual, v => found |= v is System.Windows.Controls.Image image && ReferenceEquals(image.Source, source));
+            return found;
+        }
+
+        private static void Walk(System.Windows.Media.Visual visual, Action<System.Windows.Media.Visual> action)
+        {
+            action(visual);
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(visual); i++)
+            {
+                if (System.Windows.Media.VisualTreeHelper.GetChild(visual, i) is System.Windows.Media.Visual child) Walk(child, action);
+            }
+        }
+
+        private static void Collect(System.Windows.Media.Drawing drawing, System.Text.StringBuilder sb)
+        {
+            switch (drawing)
+            {
+                case System.Windows.Media.DrawingGroup group:
+                    foreach (var child in group.Children) Collect(child, sb);
+                    break;
+                case System.Windows.Media.GlyphRunDrawing glyphs when glyphs.GlyphRun?.Characters != null:
+                    sb.Append(glyphs.GlyphRun.Characters.ToArray());
+                    break;
+            }
+        }
+    }
+
+    private sealed record PrintedDocument(List<PrintedPage> Pages);
+
+    private static PrintedDocument Paginate(PrescriptionSheet sheet)
+    {
+        var doc = PrintingService.BuildPrescriptionDocument(sheet, PrescriptionSheet.PageWidth, PrescriptionSheet.PageHeight);
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)doc).DocumentPaginator;
+        paginator.PageSize = new System.Windows.Size(PrescriptionSheet.PageWidth, PrescriptionSheet.PageHeight);
+        paginator.ComputePageCount();
+        return new PrintedDocument(Enumerable.Range(0, paginator.PageCount).Select(i => new PrintedPage(paginator.GetPage(i))).ToList());
+    }
+
+    /// <summary>La hoja impresa a 192 ppp sobre papel blanco, como las demás capturas.</summary>
+    private void SavePage(PrintedPage page, string name)
+    {
+        if (string.IsNullOrEmpty(_screenshotDir)) return;
+        Directory.CreateDirectory(_screenshotDir);
+        var size = page.Size;
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)(size.Width * 2), (int)(size.Height * 2), 192, 192, System.Windows.Media.PixelFormats.Pbgra32);
+        var paper = new System.Windows.Media.DrawingVisual();
+        using (var dc = paper.RenderOpen())
+        {
+            dc.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(size));
+        }
+        bitmap.Render(paper);
+        bitmap.Render(page.Page.Visual);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(_screenshotDir, name + ".png"));
+        encoder.Save(stream);
     }
 
     private void ExecuteCloud(string sql)

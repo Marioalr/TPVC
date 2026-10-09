@@ -36,6 +36,41 @@ public sealed class XlsxSheet
 
     /// <summary>Valores de la fila desde la columna A hasta la última usada en la hoja.</summary>
     public List<string> GetRow(int row) => Enumerable.Range(1, MaxColumn).Select(c => Get(row, c)).ToList();
+
+    /// <summary>Imágenes colocadas sobre la hoja (dibujo de la hoja), en el orden del archivo.</summary>
+    public List<XlsxImage> Images { get; } = new();
+}
+
+/// <summary>
+/// Imagen colocada sobre una hoja: la celda donde empieza y donde termina (fila 1..n, columna A=1),
+/// el archivo de xl/media y el recorte que Excel le aplica al mostrarla.
+/// </summary>
+public sealed class XlsxImage
+{
+    public int FromRow { get; init; }
+    public int FromColumn { get; init; }
+    public int ToRow { get; init; }
+    public int ToColumn { get; init; }
+
+    /// <summary>Parte del libro con la imagen (ej. xl/media/image1.png).</summary>
+    public string MediaPath { get; init; } = string.Empty;
+
+    public byte[] Content { get; init; } = Array.Empty<byte>();
+
+    /// <summary>Recorte de Excel (a:srcRect) en fracción de la imagen: 0.50441 = se ocultó el 50.441 %.</summary>
+    public double CropLeft { get; init; }
+    public double CropTop { get; init; }
+    public double CropRight { get; init; }
+    public double CropBottom { get; init; }
+
+    public bool IsCropped => CropLeft > 0 || CropTop > 0 || CropRight > 0 || CropBottom > 0;
+
+    /// <summary>
+    /// La imagen como se ve en Excel: con el recorte aplicado si es un PNG que se puede recortar;
+    /// si no, el archivo original.
+    /// </summary>
+    public byte[] GetDisplayedContent() =>
+        IsCropped ? PngImage.Crop(Content, CropLeft, CropTop, CropRight, CropBottom) ?? Content : Content;
 }
 
 /// <summary>
@@ -92,10 +127,117 @@ public static class XlsxReader
                 }
             }
 
+            ReadSheetImages(zip, path, doc, sheet.Images);
             sheets.Add(sheet);
         }
 
         return sheets;
+    }
+
+    private static readonly XNamespace SheetDrawing = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+    private static readonly XNamespace DrawingMain = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+    /// <summary>
+    /// Imágenes del dibujo de la hoja (&lt;drawing r:id&gt; → xl/drawings/drawingN.xml → xl/media/...):
+    /// su celda de anclaje, sus bytes y el recorte. Un dibujo que no se puede leer no impide leer las celdas.
+    /// </summary>
+    private static void ReadSheetImages(ZipArchive zip, string sheetPath, XDocument sheetDoc, List<XlsxImage> images)
+    {
+        try
+        {
+            var drawingId = sheetDoc.Root?.Element(Main + "drawing")?.Attribute(RelAttr + "id")?.Value;
+            if (drawingId == null) return;
+            if (!ReadPartRelationships(zip, sheetPath).TryGetValue(drawingId, out var drawingPath)) return;
+
+            var drawingEntry = zip.GetEntry(drawingPath);
+            if (drawingEntry == null) return;
+            XDocument drawing;
+            using (var stream = drawingEntry.Open()) drawing = XDocument.Load(stream);
+            var media = ReadPartRelationships(zip, drawingPath);
+
+            foreach (var anchor in drawing.Root?.Elements() ?? Enumerable.Empty<XElement>())
+            {
+                if (anchor.Name != SheetDrawing + "twoCellAnchor" && anchor.Name != SheetDrawing + "oneCellAnchor") continue;
+                var pic = anchor.Element(SheetDrawing + "pic");
+                var blipFill = pic?.Element(SheetDrawing + "blipFill");
+                var embed = blipFill?.Element(DrawingMain + "blip")?.Attribute(RelAttr + "embed")?.Value;
+                if (embed == null || !media.TryGetValue(embed, out var mediaPath)) continue;
+
+                var mediaEntry = zip.GetEntry(mediaPath);
+                if (mediaEntry == null) continue;
+                byte[] content;
+                using (var stream = mediaEntry.Open())
+                using (var buffer = new System.IO.MemoryStream())
+                {
+                    stream.CopyTo(buffer);
+                    content = buffer.ToArray();
+                }
+
+                var from = anchor.Element(SheetDrawing + "from");
+                var to = anchor.Element(SheetDrawing + "to") ?? from;
+                var crop = blipFill!.Element(DrawingMain + "srcRect");
+                images.Add(new XlsxImage
+                {
+                    // En el dibujo las filas y columnas empiezan en 0
+                    FromRow = AnchorIndex(from, "row") + 1,
+                    FromColumn = AnchorIndex(from, "col") + 1,
+                    ToRow = AnchorIndex(to, "row") + 1,
+                    ToColumn = AnchorIndex(to, "col") + 1,
+                    MediaPath = mediaPath,
+                    Content = content,
+                    CropLeft = CropFraction(crop, "l"),
+                    CropTop = CropFraction(crop, "t"),
+                    CropRight = CropFraction(crop, "r"),
+                    CropBottom = CropFraction(crop, "b")
+                });
+            }
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or System.IO.InvalidDataException or System.IO.IOException)
+        {
+            AppLogger.Warn($"No se pudieron leer las imágenes de la hoja ({sheetPath}): {ex.Message}");
+        }
+    }
+
+    private static int AnchorIndex(XElement? marker, string name) =>
+        int.TryParse(marker?.Element(SheetDrawing + name)?.Value, out var value) ? value : 0;
+
+    /// <summary>Recorte en milésimas de por ciento ("50441" = 50.441 %) como fracción entre 0 y 1.</summary>
+    private static double CropFraction(XElement? srcRect, string side) =>
+        int.TryParse(srcRect?.Attribute(side)?.Value, out var value) ? Math.Clamp(value / 100000.0, 0, 1) : 0;
+
+    /// <summary>Relaciones de una parte del libro (su archivo _rels/X.rels), con destinos como rutas del zip.</summary>
+    private static Dictionary<string, string> ReadPartRelationships(ZipArchive zip, string partPath)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var slash = partPath.LastIndexOf('/');
+        var folder = slash >= 0 ? partPath[..slash] : string.Empty;
+        var relsPath = (folder.Length > 0 ? folder + "/" : string.Empty) + "_rels/" + partPath[(slash + 1)..] + ".rels";
+
+        var entry = zip.GetEntry(relsPath);
+        if (entry == null) return map;
+        XDocument doc;
+        using (var stream = entry.Open()) doc = XDocument.Load(stream);
+        foreach (var rel in doc.Descendants(PackageRel + "Relationship"))
+        {
+            var id = rel.Attribute("Id")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target) || rel.Attribute("TargetMode")?.Value == "External") continue;
+            map[id] = ResolvePartPath(folder, target);
+        }
+        return map;
+    }
+
+    /// <summary>"xl/worksheets" + "../drawings/drawing1.xml" → "xl/drawings/drawing1.xml".</summary>
+    private static string ResolvePartPath(string folder, string target)
+    {
+        if (target.StartsWith('/')) return target.TrimStart('/');
+        var parts = new List<string>(folder.Split('/', StringSplitOptions.RemoveEmptyEntries));
+        foreach (var segment in target.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == "..") { if (parts.Count > 0) parts.RemoveAt(parts.Count - 1); }
+            else if (segment != ".") parts.Add(segment);
+        }
+        return string.Join('/', parts);
     }
 
     /// <summary>"A" → 1, "Z" → 26, "AA" → 27.</summary>

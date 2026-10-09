@@ -27,6 +27,13 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
   </ItemGroup>
 
+  <!-- Iconos fijos del pie de la receta (WhatsApp y ubicación), los mismos de la hoja RECETA del médico.
+       Recurso incrustado: los leen la impresión, la vista previa y el HTML/PDF (también en las pruebas) -->
+  <ItemGroup>
+    <None Remove="Resources\Receta\*.png" />
+    <EmbeddedResource Include="Resources\Receta\*.png" LogicalName="TPVC.Receta.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />

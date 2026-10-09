@@ -97,7 +97,65 @@
                                 </StackPanel>
                             </Grid>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Universidad" />
-                            <TextBox Style="{StaticResource ProfileField}" Margin="0" Text="{Binding University, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Style="{StaticResource ProfileField}" Margin="0" Text="{Binding University, UpdateSourceTrigger=PropertyChanged}"
+                                     helpers:Field.Placeholder="Ej. Benemérita Universidad Autónoma de Puebla" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Membrete de la receta: las dos imágenes de arriba (se toman del Excel al importarlo) -->
+                    <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextSection}" Text="Membrete de la receta" />
+                            <TextBlock Style="{StaticResource TextDetail}" TextWrapping="Wrap" Margin="0,4,0,12"
+                                       Text="Se toman de su Excel al importarlo, o elíjalas aquí (PNG o JPG). Se guardan al presionar Guardar." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Escudo / logotipo" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="Arriba a la izquierda" Margin="0,0,0,6" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <!-- Muestra en papel blanco, como sale impresa -->
+                                        <Border Width="72" Height="72" Background="#FFFFFF" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="4">
+                                            <Image Stretch="Uniform" Source="{Binding CrestImagePath, Converter={StaticResource ImageFile}}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                            <Button Style="{StaticResource ButtonSecondary}" Content="Elegir…" HorizontalAlignment="Left"
+                                                    Command="{Binding ChooseCrestImageCommand}" ToolTip="Elegir el escudo o logotipo (PNG o JPG)" />
+                                            <Button Style="{StaticResource ButtonGhost}" Content="Quitar" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                    Command="{Binding ClearCrestImageCommand}" ToolTip="La receta sale sin escudo"
+                                                    Visibility="{Binding HasCrestImage, Converter={StaticResource BoolToVis}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Imagen del encabezado" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="Arriba a la derecha (trazo de signos vitales)" Margin="0,0,0,6" TextWrapping="Wrap" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="120" Height="72" Background="#FFFFFF" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="6" Padding="4">
+                                            <Image Stretch="Uniform" Source="{Binding HeaderImagePath, Converter={StaticResource ImageFile}}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                            <Button Style="{StaticResource ButtonSecondary}" Content="Elegir…" HorizontalAlignment="Left"
+                                                    Command="{Binding ChooseHeaderImageCommand}" ToolTip="Elegir la imagen del encabezado (PNG o JPG)" />
+                                            <Button Style="{StaticResource ButtonGhost}" Content="Quitar" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                    Command="{Binding ClearHeaderImageCommand}" ToolTip="La receta sale sin imagen en el encabezado"
+                                                    Visibility="{Binding HasHeaderImage, Converter={StaticResource BoolToVis}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
@@ -142,27 +200,67 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Vista previa del encabezado de la receta -->
+                <!-- Vista previa del encabezado y el pie de la receta (en papel blanco, como sale impresa) -->
                 <StackPanel Grid.Column="2">
                     <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Así sale en la receta" Margin="0,0,0,8" />
+                    <Border Background="#FFFFFF" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="16,14" Margin="0,0,0,16"
+                            TextElement.Foreground="#000000" TextElement.FontSize="12">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Image Width="52" Height="52" Margin="0,0,10,0" Stretch="Uniform" VerticalAlignment="Top"
+                                       Source="{Binding CrestImagePath, Converter={StaticResource ImageFile}}"
+                                       Visibility="{Binding HasCrestImage, Converter={StaticResource BoolToVis}}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding PreviewDoctorName}" TextWrapping="Wrap" TextAlignment="Center"
+                                               FontFamily="Frosted Breath, Segoe Script, Segoe UI" FontSize="18">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#0369A1" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasDoctorName}" Value="False">
+                                                        <Setter Property="Foreground" Value="#5A687D" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding University}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,2,0,0"
+                                               Visibility="{Binding University, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding ProfessionalLicense, StringFormat='Cédula Profesional {0}'}" TextAlignment="Center"
+                                               Visibility="{Binding ProfessionalLicense, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                            </Grid>
+                            <Image Width="131" Height="44" Margin="0,6,0,0" Stretch="Uniform" HorizontalAlignment="Right"
+                                   Source="{Binding HeaderImagePath, Converter={StaticResource ImageFile}}"
+                                   Visibility="{Binding HasHeaderImage, Converter={StaticResource BoolToVis}}" />
+                            <!-- Pie de la receta: teléfono (WhatsApp) y domicilio (ubicación) -->
+                            <Border Background="#F0F0F0" Padding="8,4" Margin="0,10,0,0" Visibility="{Binding Phone, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Image Source="{x:Static helpers:PrescriptionImages.WhatsApp}" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Phone}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#F0F0F0" Padding="8,4" Margin="0,6,0,0" Visibility="{Binding Address, Converter={StaticResource BoolToVis}}">
+                                <Grid HorizontalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Source="{x:Static helpers:PrescriptionImages.Location}" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Address}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Lo demás sale en tickets y cortes de caja -->
+                    <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="En tickets y cortes de caja" Margin="0,0,0,8" />
                     <Border Style="{StaticResource Card}" Padding="20">
                         <StackPanel>
-                            <TextBlock Text="{Binding PreviewDoctorName}" TextWrapping="Wrap">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasDoctorName}" Value="False">
-                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource TextDetail}" Text="{Binding Specialty}" TextWrapping="Wrap" Visibility="{Binding Specialty, Converter={StaticResource BoolToVis}}" />
-                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ProfessionalLicense, StringFormat='Céd. Prof. {0}'}"
-                                       Visibility="{Binding ProfessionalLicense, Converter={StaticResource BoolToVis}}" />
-                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding University}" Visibility="{Binding University, Converter={StaticResource BoolToVis}}" />
-                            <Border Style="{StaticResource Divider}" Margin="0,12" />
                             <TextBlock FontWeight="SemiBold" Text="{Binding PreviewClinicName}" TextWrapping="Wrap">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
@@ -174,6 +272,7 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+                            <TextBlock Style="{StaticResource TextDetail}" Text="{Binding Specialty}" TextWrapping="Wrap" Visibility="{Binding Specialty, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Address}" TextWrapping="Wrap" Visibility="{Binding Address, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Phone, StringFormat='Tel. {0}'}" Visibility="{Binding Phone, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Email}" Visibility="{Binding Email, Converter={StaticResource BoolToVis}}" />

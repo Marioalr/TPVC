@@ -175,6 +175,45 @@ public class DataImportTests
     }
 
     [TestMethod]
+    public async Task ImportExcel_TakesTheLetterheadImagesOfTheRecetaSheet_WithoutReplacingTheDoctorsOwn()
+    {
+        string samplePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../TestAssets/catalogo_muestra.xlsx"));
+        if (!File.Exists(samplePath)) samplePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestAssets", "catalogo_muestra.xlsx");
+        var receta = XlsxReader.Read(samplePath).Single(s => s.Name == "RECETA");
+        var excelCrest = receta.Images.Single(i => i.FromRow == 1 && i.FromColumn == 1);
+
+        var first = await _importService.ImportExcelOrCsvAsync(samplePath);
+
+        Assert.IsTrue(first.Success, first.Message);
+        Assert.AreEqual(2, first.LetterheadImagesImported, "Escudo (A1) y trazo de signos vitales (J2)");
+        StringAssert.Contains(first.Message, "membrete");
+        var profile = _profileService.CurrentProfile;
+        Assert.IsNotNull(profile.CrestImagePath);
+        Assert.IsNotNull(profile.HeaderImagePath);
+        Assert.AreEqual(Path.Combine(_tempDir, "membrete"), Path.GetDirectoryName(profile.CrestImagePath), "Junto al perfil del consultorio");
+        CollectionAssert.AreEqual(excelCrest.Content, File.ReadAllBytes(profile.CrestImagePath));
+        Assert.AreEqual((740, 245), PngImage.Size(File.ReadAllBytes(profile.HeaderImagePath)), "El trazo como se ve en el Excel (recortado)");
+        Assert.IsTrue(profile.IsConfigured);
+
+        // El médico eligió otro escudo y quitó el encabezado: reimportar no reemplaza su escudo
+        // (el encabezado vacío sí se vuelve a tomar del Excel)
+        var ownCrest = PrescriptionSheet.LocationIconPng;
+        _profileService.SaveLetterheadImage(LetterheadImageKind.Crest, ownCrest);
+        _profileService.ClearLetterheadImage(LetterheadImageKind.Header);
+
+        var second = await _importService.ImportExcelOrCsvAsync(samplePath);
+
+        Assert.IsTrue(second.Success, second.Message);
+        Assert.AreEqual(1, second.LetterheadImagesImported);
+        CollectionAssert.AreEqual(ownCrest, File.ReadAllBytes(_profileService.CurrentProfile.CrestImagePath!), "Se conserva el escudo del médico");
+        Assert.IsNotNull(_profileService.CurrentProfile.HeaderImagePath);
+
+        var third = await _importService.ImportExcelOrCsvAsync(samplePath);
+        Assert.AreEqual(0, third.LetterheadImagesImported, "Ya tiene las dos: no se toca nada");
+        Assert.IsFalse(third.Message.Contains("membrete", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task ImportExcel_Twice_IsIdempotent()
     {
         string samplePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../TestAssets/catalogo_muestra.xlsx"));
