@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -368,6 +369,63 @@ public class ConsultationWorkspaceTests
         Assert.AreEqual(0, ChargedByName(free.SupplyName));
         Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
         Assert.AreEqual(records.Account.ConsultationFeeAmount, records.Account.ConsultationAccountTotal);
+    }
+
+    [TestMethod]
+    public async Task SupplyRowsFromAnEarlierConsultation_AreOnlyShown_AndTheStockCapCountsTheWholeAccount()
+    {
+        var (records, _, consultations, patient) = await StartConsultationAsync();
+        var items = consultations.CurrentConsultation!.Items;
+        int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
+        var product = records.Catalog.AvailableProducts.First(p => CatalogStore.IsProductSupply(p) && p.CurrentStock >= 4 && p.CurrentStock < 500 && p.Price > 0);
+
+        // La hoja conserva lo usado en una consulta anterior (ya cobrado con ella) y lo de una sin folio (versiones previas)
+        var earlier = new PatientSupplyItem { SupplyName = product.Name, Quantity = 2, UnitPrice = product.Price, ChargedConsultationFolio = "CNS-20260101-090000", ChargedUnits = 2 };
+        var legacy = new PatientSupplyItem { SupplyName = product.Name, Quantity = 1, UnitPrice = product.Price };
+        patient.ActiveSupplies = new List<PatientSupplyItem> { earlier, legacy };
+        records.Supplies.OpenSuppliesModal();
+        Assert.IsTrue(earlier.IsFromEarlierConsultation && legacy.IsFromEarlierConsultation, "Se marcan al abrir la hoja");
+
+        // + / − y a mano no los cambian ni tocan la cuenta de hoy (un toque de − y luego + no cobraría de más)
+        await records.Supplies.DecreaseSupplyQuantityAsync(earlier);
+        await records.Supplies.IncreaseSupplyQuantityAsync(earlier);
+        await records.Supplies.SetSupplyQuantityAsync(legacy, 3);
+        Assert.AreEqual(2, earlier.Quantity);
+        Assert.AreEqual(1, legacy.Quantity);
+        Assert.AreEqual(0, Charged(product.Id));
+
+        // Lo de hoy del mismo producto sí se cobra, y la X de un renglón anterior no lo descuenta
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(product);
+        var today = patient.ActiveSupplies.Last();
+        Assert.IsFalse(today.IsFromEarlierConsultation);
+        Assert.AreEqual(consultations.CurrentConsultation.Folio, today.ChargedConsultationFolio);
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(earlier);
+        Assert.AreEqual(1, Charged(product.Id), "Quitar lo de otra consulta no descuenta lo de hoy");
+
+        // El tope cuenta todo lo del producto que ya está en la cuenta (otro renglón, servicios, receta)
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(product);
+        var second = patient.ActiveSupplies.Last();
+        Assert.AreEqual(2, Charged(product.Id));
+        records.Info.IsInfoModalVisible = false;
+        await records.Supplies.SetSupplyQuantityAsync(today, product.CurrentStock);
+        Assert.AreEqual(product.CurrentStock - 1, today.Quantity, "Queda lugar solo para lo que no carga el otro renglón");
+        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        await records.Supplies.IncreaseSupplyQuantityAsync(second);
+        Assert.AreEqual(1, second.Quantity);
+        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+
+        // Lo que se cobra hoy queda guardado con el renglón (sobrevive a reabrir el programa)
+        var saved = new PatientRecord { ActiveSuppliesJson = patient.ActiveSuppliesJson }.ActiveSupplies;
+        Assert.AreEqual(product.CurrentStock - 1, saved.Single(s => s.ChargedUnits == product.CurrentStock - 1).Quantity);
+        StringAssert.DoesNotMatch(patient.ActiveSuppliesJson, new System.Text.RegularExpressions.Regex("IsFromEarlierConsultation"));
+
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(today);
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(second);
+        Assert.AreEqual(0, Charged(product.Id));
+        CollectionAssert.AreEqual(new[] { legacy }, patient.ActiveSupplies);
     }
 
     [TestMethod]

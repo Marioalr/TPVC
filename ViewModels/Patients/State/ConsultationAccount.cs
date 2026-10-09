@@ -127,7 +127,8 @@ public partial class ConsultationAccount : ObservableObject
         if (product != null) Uncharge(product.Id, Math.Max(1, item.RecommendedQuantity));
     }
 
-    public void ChargeSupply(PatientSupplyItem item, Product? knownProduct)
+    /// <summary>Carga el insumo recién agregado (todas sus piezas); false si no se pudo (sin consulta o sin precio).</summary>
+    public bool ChargeSupply(PatientSupplyItem item, Product? knownProduct)
     {
         bool charged = ChargeSupplyUnits(item, knownProduct, Math.Max(1, item.Quantity));
         if (!charged)
@@ -135,6 +136,7 @@ public partial class ConsultationAccount : ObservableObject
             _info.InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
             _info.IsInfoModalVisible = true;
         }
+        return charged;
     }
 
     public void ChargeService(PatientServiceItem item)
@@ -165,15 +167,16 @@ public partial class ConsultationAccount : ObservableObject
             : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, units);
     }
 
-    /// <summary>Quitar el insumo de la hoja lo quita de la cuenta tal como se cargó (producto o cargo libre).</summary>
-    public void UnchargeSupply(PatientSupplyItem item) => UnchargeSupplyUnits(item, Math.Max(1, item.Quantity));
-
-    /// <summary>Descuenta piezas de un insumo de la cuenta, del mismo renglón con que se cargaron.</summary>
+    /// <summary>Descuenta piezas de un insumo de la cuenta, del mismo renglón con que se cargaron (producto o cargo libre).</summary>
     public void UnchargeSupplyUnits(PatientSupplyItem item, int units)
     {
         var product = _catalog.FindCatalogProduct(item.SupplyName);
         Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), units);
     }
+
+    /// <summary>Piezas de un producto que ya están en la cuenta de la consulta (de cualquier hoja o servicio).</summary>
+    public int ChargedProductUnits(int productId) =>
+        _consultationService?.CurrentConsultation?.Items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
 
     /// <summary>
     /// Quitar el servicio de la hoja lo quita de la cuenta tal como se cargó: por cada unidad, su

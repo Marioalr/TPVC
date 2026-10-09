@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TPVC.Models;
 
@@ -53,6 +54,32 @@ public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
     }
 
     public decimal UnitPrice { get; set; } = 0m;
+
+    /// <summary>
+    /// Consulta (folio) que cargó piezas de este renglón a su cuenta, y cuántas. La hoja guarda también
+    /// los renglones de consultas anteriores: + / − y la X solo mueven lo que cargó la consulta en curso.
+    /// Sin cargos no se escriben (el JSON de siempre).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string? ChargedConsultationFolio { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int ChargedUnits { get; set; }
+
+    private bool _isFromEarlierConsultation;
+
+    /// <summary>La hoja lo marca al abrirse: renglón de otra consulta, que solo se ve o se quita.</summary>
+    [JsonIgnore]
+    public bool IsFromEarlierConsultation
+    {
+        get => _isFromEarlierConsultation;
+        set
+        {
+            if (_isFromEarlierConsultation == value) return;
+            _isFromEarlierConsultation = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsFromEarlierConsultation)));
+        }
+    }
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }

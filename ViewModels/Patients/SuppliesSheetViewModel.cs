@@ -131,6 +131,7 @@ public partial class SuppliesSheetViewModel : ObservableObject
         SupplyQuantity = 1;
         ApplySupplySuggestions(string.Empty);
         IsSupplyDropdownOpen = false;
+        MarkRowsFromEarlierConsultations();
         IsSuppliesModalOpen = true;
     }
 
@@ -198,11 +199,15 @@ public partial class SuppliesSheetViewModel : ObservableObject
         _session.SelectedPatient.ActiveSupplies = list;
         _session.SelectedPatient.SyncSuppliesJson();
 
-        // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo)
-        if (_active.HasActiveConsultation)
+        // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo);
+        // el renglón recuerda qué consulta lo cargó para que + / − y la X muevan solo eso
+        if (_active.HasActiveConsultation && _account.ChargeSupply(newItem, product ?? _catalog.FindCatalogProduct(name)))
         {
-            _account.ChargeSupply(newItem, product ?? _catalog.FindCatalogProduct(name));
+            newItem.ChargedConsultationFolio = _active.ActiveConsultation?.Folio;
+            newItem.ChargedUnits = qty;
+            _session.SelectedPatient.SyncSuppliesJson();
         }
+        newItem.IsFromEarlierConsultation = !IsFromThisConsultation(newItem);
 
         if (_inventoryService != null)
         {
@@ -227,10 +232,12 @@ public partial class SuppliesSheetViewModel : ObservableObject
     {
         if (_session.SelectedPatient == null || item == null || _gate.BlockIfConsultationReadOnly()) return;
 
-        // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
-        if (IsConsultationForSelectedPatient)
+        // Lo que esta consulta cargó a la cuenta por el renglón deja de cobrarse (lo de una consulta
+        // anterior ya se cobró con ella)
+        var charged = ChargedInThisConsultation(item);
+        if (charged > 0)
         {
-            _account.UnchargeSupply(item);
+            _account.UnchargeSupplyUnits(item, charged);
         }
 
         var list = new List<PatientSupplyItem>(_session.SelectedPatient.ActiveSupplies);
@@ -262,16 +269,37 @@ public partial class SuppliesSheetViewModel : ObservableObject
     public Task DecreaseSupplyQuantityAsync(PatientSupplyItem? item) =>
         item == null ? Task.CompletedTask : SetSupplyQuantityAsync(item, item.Quantity - 1);
 
+    /// <summary>El renglón lo cargó la consulta en curso del paciente (los demás ya se cobraron o se descartaron).</summary>
+    private bool IsFromThisConsultation(PatientSupplyItem item) =>
+        IsConsultationForSelectedPatient && item.ChargedConsultationFolio == _active.ActiveConsultation?.Folio;
+
+    /// <summary>Piezas del renglón que están en la cuenta de la consulta en curso (0 si las cargó otra).</summary>
+    private int ChargedInThisConsultation(PatientSupplyItem item) => IsFromThisConsultation(item) ? item.ChargedUnits : 0;
+
     /// <summary>
-    /// Cambia las piezas de un insumo ya usado (+, − o escritas a mano). En la consulta del paciente
-    /// se carga o se descuenta de la cuenta solo la diferencia; llegar a 0 lo quita como la X. Un
-    /// insumo del inventario no pasa de sus existencias.
+    /// La hoja conserva lo usado en consultas anteriores: esos renglones se ven y se pueden quitar, pero
+    /// + / − solo cambian lo de la consulta en curso (así la cuenta de hoy no cobra ni descuenta lo de otra).
+    /// </summary>
+    private void MarkRowsFromEarlierConsultations()
+    {
+        if (_session.SelectedPatient == null) return;
+        foreach (var row in _session.SelectedPatient.ActiveSupplies)
+        {
+            row.IsFromEarlierConsultation = !IsFromThisConsultation(row);
+        }
+    }
+
+    /// <summary>
+    /// Cambia las piezas de un insumo usado en la consulta en curso (+, − o escritas a mano): lo que se
+    /// suma se carga a la cuenta y lo que se resta se descuenta; llegar a 0 lo quita como la X. Como en
+    /// el Punto de venta, un insumo del inventario no pasa de sus existencias (cuenta todo lo del
+    /// producto que ya está en la cuenta: otros renglones, servicios, receta).
     /// </summary>
     public async Task SetSupplyQuantityAsync(PatientSupplyItem item, int quantity)
     {
         if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly()) return;
-        // Un renglón que ya se quitó (p. ej. el cuadro de cantidad pierde el foco al quitarlo)
-        if (!_session.SelectedPatient.ActiveSupplies.Contains(item)) return;
+        // Un renglón que ya se quitó (p. ej. el cuadro de cantidad pierde el foco al quitarlo) o de otra consulta
+        if (!_session.SelectedPatient.ActiveSupplies.Contains(item) || !IsFromThisConsultation(item)) return;
 
         if (quantity <= 0)
         {
@@ -280,22 +308,31 @@ public partial class SuppliesSheetViewModel : ObservableObject
         }
 
         var product = _catalog.FindCatalogProduct(item.SupplyName);
-        if (product != null && quantity > item.Quantity && quantity > product.CurrentStock)
-        {
-            _feedback.ShowWarning($"No hay más existencias de '{item.SupplyName}' ({product.CurrentStock}).");
-            quantity = Math.Max(item.Quantity, product.CurrentStock);
-        }
-
         int difference = quantity - item.Quantity;
+        if (difference > 0 && product != null)
+        {
+            int room = product.CurrentStock - _account.ChargedProductUnits(product.Id);
+            if (difference > room)
+            {
+                _feedback.ShowWarning($"No hay más existencias de '{item.SupplyName}' ({product.CurrentStock}).");
+                difference = Math.Max(0, room);
+            }
+        }
         if (difference == 0) return;
 
-        if (IsConsultationForSelectedPatient)
+        if (difference > 0)
         {
-            if (difference > 0) _account.ChargeSupplyUnits(item, product, difference);
-            else _account.UnchargeSupplyUnits(item, -difference);
+            if (!_account.ChargeSupplyUnits(item, product, difference)) return;
+            item.ChargedUnits += difference;
+        }
+        else
+        {
+            int units = Math.Min(-difference, item.ChargedUnits);
+            if (units > 0) _account.UnchargeSupplyUnits(item, units);
+            item.ChargedUnits -= units;
         }
 
-        item.Quantity = quantity;
+        item.Quantity += difference;
         _session.SelectedPatient.SyncSuppliesJson();
 
         if (_inventoryService != null)
