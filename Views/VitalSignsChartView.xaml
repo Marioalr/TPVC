@@ -191,7 +191,24 @@
                         <TextBlock Grid.Column="6" Style="{StaticResource TextLabel}" Text="IMC" />
                     </Grid>
                 </Border>
-                <ItemsControl ItemsSource="{Binding VitalSignsEvolutionPoints}">
+                <!-- Lista con su propio desplazamiento: solo se crean los renglones visibles -->
+                <ItemsControl ItemsSource="{Binding VitalSignsEvolutionPoints}" MaxHeight="240"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              ScrollViewer.CanContentScroll="True">
+                    <ItemsControl.Template>
+                        <ControlTemplate TargetType="ItemsControl">
+                            <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type models:VitalSignsEvolutionPoint}">
                             <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="16,8">

@@ -2929,6 +2929,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         RecalculateChartPoints();
     }
 
+    private const int MaxChartMarkersPerSeries = 60;
+
     private void RecalculateChartPoints()
     {
         var points = VitalSignsEvolutionPoints.ToList();
@@ -2959,6 +2961,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         double stepX = n > 1 ? plotW / (n - 1) : plotW / 2;
 
         var chartPts = new ObservableCollection<VitalSignsChartPoint>();
+        // Con años de consultas los puntos quedan encimados (y cada uno es un elemento en pantalla):
+        // las líneas usan todas las mediciones, pero se marcan a lo más ~60 por serie, repartidas
+        int markerStep = Math.Max(1, (int)Math.Ceiling(n / (double)MaxChartMarkersPerSeries));
 
         var weightPoly = new StringBuilder();
         var sysPoly = new StringBuilder();
@@ -2969,6 +2974,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             var p = points[i];
             double x = n > 1 ? padLeft + (i * stepX) : padLeft + stepX;
+            bool marker = i % markerStep == 0 || i == n - 1;
 
             // Peso: escala 30..150 kg
             if (p.Weight.HasValue)
@@ -2976,7 +2982,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 double normW = (double)Math.Clamp(p.Weight.Value, 30m, 150m);
                 double yW = padTop + plotH - ((normW - 30.0) / 120.0 * plotH);
                 weightPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yW));
-                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Peso")
+                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Peso"))
                 {
                     chartPts.Add(new VitalSignsChartPoint
                     {
@@ -2994,7 +3000,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 double normSys = (double)Math.Clamp(p.Systolic.Value, 60m, 220m);
                 double ySys = padTop + plotH - ((normSys - 60.0) / 160.0 * plotH);
                 sysPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, ySys));
-                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion")
+                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion"))
                 {
                     chartPts.Add(new VitalSignsChartPoint
                     {
@@ -3012,7 +3018,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 double normDia = (double)Math.Clamp(p.Diastolic.Value, 40m, 130m);
                 double yDia = padTop + plotH - ((normDia - 40.0) / 90.0 * plotH);
                 diaPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yDia));
-                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion")
+                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Presion"))
                 {
                     chartPts.Add(new VitalSignsChartPoint
                     {
@@ -3030,7 +3036,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                 double normGlu = (double)Math.Clamp(p.Glucose.Value, 50m, 300m);
                 double yGlu = padTop + plotH - ((normGlu - 50.0) / 250.0 * plotH);
                 gluPoly.Append(string.Format(CultureInfo.InvariantCulture, "{0:F1},{1:F1} ", x, yGlu));
-                if (VitalSignsFilter == "Todos" || VitalSignsFilter == "Glucosa")
+                if (marker && (VitalSignsFilter == "Todos" || VitalSignsFilter == "Glucosa"))
                 {
                     chartPts.Add(new VitalSignsChartPoint
                     {

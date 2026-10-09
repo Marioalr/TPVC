@@ -210,7 +210,27 @@
                     <Border Grid.Row="1" Padding="18,12" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" MaxHeight="420"
                             Visibility="{Binding IsVitalsChartVisible, Converter={StaticResource BoolToVis}}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <views:VitalSignsChartView />
+                            <!-- La gráfica se crea solo mientras se muestra: oculta no gasta nada al abrir
+                                 un expediente con años de consultas -->
+                            <ContentControl Focusable="False">
+                                <ContentControl.Style>
+                                    <Style TargetType="ContentControl">
+                                        <Setter Property="Content" Value="{x:Null}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsVitalsChartVisible}" Value="True">
+                                                <Setter Property="Content" Value="{Binding}" />
+                                                <Setter Property="ContentTemplate">
+                                                    <Setter.Value>
+                                                        <DataTemplate>
+                                                            <views:VitalSignsChartView />
+                                                        </DataTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ContentControl.Style>
+                            </ContentControl>
                         </ScrollViewer>
                     </Border>
 
