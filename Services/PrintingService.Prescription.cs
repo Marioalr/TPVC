@@ -242,28 +242,44 @@ public partial class PrintingService
             Background = Brushes.White
         };
 
-        doc.Blocks.Add(Fixed(BuildPrescriptionHeader(sheet), top: 0));
-        doc.Blocks.Add(Fixed(InfoRow(
+        var header = BuildPrescriptionHeader(sheet);
+        var patientRow = InfoRow(
             ("Paciente:", sheet.PatientName, null, 0),
             ("Edad:", sheet.Age, null, AgeMinWidth),
-            ("Fecha:", sheet.Date, null, DateMinWidth)), PatientRowGap));
-        doc.Blocks.Add(Fixed(InfoRow(
+            ("Fecha:", sheet.Date, null, DateMinWidth));
+        var vitalsRow = InfoRow(
             ("Alergias:", sheet.Allergies, sheet.HasAllergies ? PaperDanger : null, 0),
             ("T/A:", sheet.BloodPressure, null, BloodPressureMinWidth),
             ("Temp:", sheet.Temperature, null, TemperatureMinWidth),
             ("Peso:", sheet.Weight, null, WeightMinWidth),
             ("Talla:", sheet.Height, null, HeightMinWidth),
-            ("SpO2%:", sheet.OxygenSaturation, null, OxygenMinWidth)), VitalsRowGap));
+            ("SpO2%:", sheet.OxygenSaturation, null, OxygenMinWidth));
+        var footer = BuildPrescriptionFooter(sheet);
 
+        // Lo que queda para el cuerpo se calcula con la altura real de cada bloque: unas alergias largas
+        // ocupan dos renglones y con alturas fijas el pie pasaba a otra hoja
         double contentHeight = pageHeight - 2 * PrescriptionSheet.MarginTopBottom;
-        double fixedHeight = HeaderHeight + PatientRowGap + InfoRowHeight + VitalsRowGap + InfoRowHeight + BodyGap + FooterGap + FooterHeight;
         double contentWidth = pageWidth - 2 * PrescriptionSheet.MarginLeftRight;
+        double fixedHeight = MeasuredHeight(header, contentWidth) + PatientRowGap + MeasuredHeight(patientRow, contentWidth)
+                             + VitalsRowGap + MeasuredHeight(vitalsRow, contentWidth) + BodyGap
+                             + FooterGap + MeasuredHeight(footer, contentWidth);
+
+        doc.Blocks.Add(Fixed(header, top: 0));
+        doc.Blocks.Add(Fixed(patientRow, PatientRowGap));
+        doc.Blocks.Add(Fixed(vitalsRow, VitalsRowGap));
         doc.Blocks.Add(BuildPrescriptionBody(sheet, Math.Max(0, contentHeight - fixedHeight - PageSafety), contentWidth));
-        doc.Blocks.Add(Fixed(BuildPrescriptionFooter(sheet), FooterGap));
+        doc.Blocks.Add(Fixed(footer, FooterGap));
         return doc;
     }
 
     private static BlockUIContainer Fixed(UIElement element, double top) => new(element) { Margin = new Thickness(0, top, 0, 0) };
+
+    /// <summary>Alto que ocupará el bloque con el ancho de la hoja (nunca menos que lo previsto).</summary>
+    private static double MeasuredHeight(FrameworkElement element, double width)
+    {
+        element.Measure(new Size(width, double.PositiveInfinity));
+        return Math.Max(element.DesiredSize.Height, element.MinHeight);
+    }
 
     private static void ApplyPaperText(FrameworkElement element)
     {
