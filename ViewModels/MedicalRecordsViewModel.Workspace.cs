@@ -399,7 +399,7 @@ public partial class MedicalRecordsViewModel
     {
         if (!HasActiveConsultation || BlockIfConsultationReadOnly()) return;
 
-        if (!DialogService.Confirm(
+        if (!await _dialogs.ConfirmAsync(
                 "¿Descartar la consulta en curso?\n\nNo se guardará la nota médica ni se cobrará nada de la cuenta.",
                 "Descartar consulta"))
         {

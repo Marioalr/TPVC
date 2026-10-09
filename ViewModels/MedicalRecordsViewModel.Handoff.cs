@@ -940,7 +940,7 @@ public partial class MedicalRecordsViewModel
             : $"No se sabe si la consulta de {marker.PatientName} llegó a {marker.ToDeviceName}.\n\n" +
               "Se quitará de este equipo y su copia se apartará en un archivo (no se pierde, pero no se podrá seguir aquí).\n\n" +
               "¿Liberar este equipo?";
-        if (!DialogService.Confirm(question, "Liberar este equipo")) return;
+        if (!await _dialogs.ConfirmAsync(question, "Liberar este equipo")) return;
 
         // Con la misma compuerta que recuperar y revisar: nunca a la mitad de una resolución
         if (!await _handoffGate.WaitAsync(0))
@@ -1276,26 +1276,7 @@ public partial class MedicalRecordsViewModel
     });
 
     /// <summary>Ejecuta en el hilo de la interfaz y espera a que termine (sin interfaz, aquí mismo).</summary>
-    private Task OnUiAsync(Func<Task> action)
-    {
-        var context = _autosaveUiContext;
-        if (context == null || SynchronizationContext.Current == context) return action();
-
-        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        context.Post(async _ =>
-        {
-            try
-            {
-                await action();
-                done.SetResult();
-            }
-            catch (Exception ex)
-            {
-                done.SetException(ex);
-            }
-        }, null);
-        return done.Task;
-    }
+    private Task OnUiAsync(Func<Task> action) => _ui.RunAsync(action);
 
     private void DisposeHandoff()
     {

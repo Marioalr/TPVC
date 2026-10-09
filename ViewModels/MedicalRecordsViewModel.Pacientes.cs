@@ -51,10 +51,9 @@ public partial class MedicalRecordsViewModel
             {
                 try
                 {
-                    var app = System.Windows.Application.Current;
-                    if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                    if (_ui.IsOffUiThread)
                     {
-                        app.Dispatcher.InvokeAsync(async () => await RefreshAppointmentViewsAsync());
+                        _ui.InvokeAsync(async () => await RefreshAppointmentViewsAsync());
                         return;
                     }
                 }
@@ -836,7 +835,7 @@ public partial class MedicalRecordsViewModel
     public void CancelPatientForm()
     {
         if (IsFormNew && (!string.IsNullOrWhiteSpace(FormFirstName) || !string.IsNullOrWhiteSpace(FormLastName))
-            && !DialogService.Confirm("¿Salir sin guardar el paciente nuevo?\n\nLo capturado se perderá.", "Salir del alta"))
+            && !_dialogs.Confirm("¿Salir sin guardar el paciente nuevo?\n\nLo capturado se perderá.", "Salir del alta"))
         {
             return;
         }
@@ -1192,7 +1191,7 @@ public partial class MedicalRecordsViewModel
     public async Task CancelAppointmentAsync(PatientAppointment? appointment)
     {
         if (appointment == null) return;
-        if (!DialogService.Confirm($"¿Cancelar la cita de {appointment.PatientName} ({appointment.Date:dd/MM} {appointment.Time})?", "Cancelar cita")) return;
+        if (!await _dialogs.ConfirmAsync($"¿Cancelar la cita de {appointment.PatientName} ({appointment.Date:dd/MM} {appointment.Time})?", "Cancelar cita")) return;
         await UpdateAppointmentStatusAsync(appointment, "Cancelada");
         ShowSuccess($"Cita de {appointment.PatientName} cancelada");
         await RefreshAgendaAfterChangeAsync(appointment.PatientRecordId);
@@ -1236,7 +1235,7 @@ public partial class MedicalRecordsViewModel
         }
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+            _urls.Open(url);
         }
         catch (Exception ex)
         {
@@ -1258,7 +1257,7 @@ public partial class MedicalRecordsViewModel
             IsInfoModalVisible = true;
             return;
         }
-        if (!DialogService.Confirm($"¿Dar de baja el expediente de {patient.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Dar de baja expediente")) return;
+        if (!await _dialogs.ConfirmAsync($"¿Dar de baja el expediente de {patient.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Dar de baja expediente")) return;
 
         try
         {

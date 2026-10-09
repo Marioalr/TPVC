@@ -8,8 +8,10 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TPVC.Helpers.WpfPlatform;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -18,9 +20,17 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private readonly InventoryService? _inventoryService;
     private readonly ConsultationService? _consultationService;
     private readonly ClinicProfileService? _clinicProfileService;
-    private readonly PrintingService? _printingService;
+    private readonly IPrescriptionOutput? _printingService;
     private readonly Action? _onInventoryChangedHandler;
     private readonly Action? _onProfileChangedHandler;
+
+    // Hilo de la interfaz: se crea con el ViewModel, en el mismo hilo y momento en que antes se tomaba
+    // el contexto de sincronización del guardado automático (el constructor no cambia)
+    private readonly IUiThread _ui = new WpfUiThread();
+
+    // Confirmaciones y enlaces (WPF: DialogService y el programa del sistema)
+    private readonly IUserDialogs _dialogs = new WpfUserDialogs();
+    private readonly IUrlLauncher _urls = new ShellUrlLauncher();
 
     public Action? OnBackToHubRequested { get; set; }
 
@@ -95,10 +105,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
                     await Task.Delay(4000, token);
                     if (!token.IsCancellationRequested)
                     {
-                        var app = System.Windows.Application.Current;
-                        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                        if (_ui.IsOffUiThread)
                         {
-                            await app.Dispatcher.InvokeAsync(() => DismissInfoModal());
+                            await _ui.InvokeAsync(() => DismissInfoModal());
                         }
                         else
                         {
@@ -965,10 +974,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             {
                 try
                 {
-                    var app = System.Windows.Application.Current;
-                    if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                    if (_ui.IsOffUiThread)
                     {
-                        app.Dispatcher.InvokeAsync(async () => await LoadPatientsAsync());
+                        _ui.InvokeAsync(async () => await LoadPatientsAsync());
                         return;
                     }
                 }
@@ -1231,10 +1239,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             try
             {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+                if (_ui.IsOffUiThread)
                 {
-                    app.Dispatcher.InvokeAsync(() => UpdateActiveConsultationTimer());
+                    _ui.InvokeAsync(() => UpdateActiveConsultationTimer());
                 }
                 else
                 {
@@ -1932,7 +1939,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             {
                 // No reportar como guardada una nota que no llegó a la base de datos
                 AppLogger.Error("Error al guardar nota de consulta en BD", ex);
-                DialogService.ShowError($"No se pudo guardar la nota médica en el expediente:\n{ex.Message}");
+                _dialogs.ShowError($"No se pudo guardar la nota médica en el expediente:\n{ex.Message}");
                 return null;
             }
         }

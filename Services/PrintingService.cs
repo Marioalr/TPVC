@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using TPVC.Models;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Services;
 
@@ -15,7 +16,7 @@ namespace TPVC.Services;
 /// Servicio de impresión física y exportación digital real para recetas médicas,
 /// tickets térmicos del punto de venta y cortes de caja diarios.
 /// </summary>
-public class PrintingService
+public class PrintingService : IPrescriptionOutput
 {
     /// <summary>
     /// Imprime el ticket de compra en cualquier impresora instalada (térmica o estándar)
@@ -126,9 +127,8 @@ public class PrintingService
     /// <summary>La receta siempre dice algo de alergias: cuáles, "Negadas" o "No interrogadas".</summary>
     public static string PrescriptionAllergyText(PatientRecord patient) => patient.AllergySummary;
 
-    /// <summary>Indicaciones de la receta cuando el médico no escribió otras (vista previa, impresión y PDF).</summary>
-    public const string DefaultPrescriptionIndications =
-        "Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas.";
+    /// <summary>Indicaciones de la receta cuando el médico no escribió otras (vista previa, impresión y PDF). El texto vive en PrescriptionDefaults.</summary>
+    public const string DefaultPrescriptionIndications = PrescriptionDefaults.Indications;
 
     public string? ExportPrescriptionDocument(
         PatientRecord patient,

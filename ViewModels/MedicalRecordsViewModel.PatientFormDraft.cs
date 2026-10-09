@@ -16,23 +16,79 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class MedicalRecordsViewModel
 {
-    /// <summary>Campos que se guardan, en el orden en que se restauran (sexo y edad al final para que el formulario se ajuste).</summary>
-    private static readonly string[] PatientFormDraftFields =
+    /// <summary>
+    /// Campos que se guardan, en el orden en que se restauran (sexo y edad al final para que el formulario
+    /// se ajuste). Cada fila dice cómo leer el campo como texto y cómo devolverlo: antes se buscaba cada
+    /// propiedad por su nombre con reflexión, que dejaría de encontrarla en silencio al moverla a otro
+    /// ViewModel. Las claves (los nombres) son las mismas y los valores se convierten igual.
+    /// </summary>
+    private static readonly (string Key, Func<MedicalRecordsViewModel, string> Get, Action<MedicalRecordsViewModel, string> Set)[] PatientFormDraftFields =
     {
-        nameof(FormRecordNumber), nameof(FormFirstName), nameof(FormLastName), nameof(FormMaternalLastName),
-        nameof(FormPhone), nameof(FormEmail), nameof(FormAddress), nameof(FormBloodType),
-        nameof(FormAllergies), nameof(FormChronicDiseases), nameof(FormEmergencyContactName), nameof(FormEmergencyContactPhone),
-        nameof(FormOccupation), nameof(FormReligion), nameof(FormFamilyHistory), nameof(FormSurgeries),
-        nameof(FormTransfusions), nameof(FormHospitalizations), nameof(FormImmunizationSchedule),
-        nameof(FormMenarcheAge), nameof(FormSexualOnsetAge), nameof(FormSexualPartnersCount), nameof(FormPeriodDuration),
-        nameof(FormIsPeriodHeavy), nameof(FormPapSmear), nameof(FormPregnanciesCount), nameof(FormCesareansCount),
-        nameof(FormAbortionsCount), nameof(FormIsCurrentlyPregnant), nameof(FormGestationalWeeks),
-        nameof(FormDevelopmentalMilestones), nameof(FormDiet), nameof(FormHousingConditions), nameof(FormZoonosis),
-        nameof(FormClinicalNotes),
-        nameof(FormGender), nameof(FormAgeText), nameof(FormBirthDateText), nameof(FormOpenSection)
+        TextField(nameof(FormRecordNumber), vm => vm.FormRecordNumber, (vm, value) => vm.FormRecordNumber = value),
+        TextField(nameof(FormFirstName), vm => vm.FormFirstName, (vm, value) => vm.FormFirstName = value),
+        TextField(nameof(FormLastName), vm => vm.FormLastName, (vm, value) => vm.FormLastName = value),
+        TextField(nameof(FormMaternalLastName), vm => vm.FormMaternalLastName, (vm, value) => vm.FormMaternalLastName = value),
+        TextField(nameof(FormPhone), vm => vm.FormPhone, (vm, value) => vm.FormPhone = value),
+        TextField(nameof(FormEmail), vm => vm.FormEmail, (vm, value) => vm.FormEmail = value),
+        TextField(nameof(FormAddress), vm => vm.FormAddress, (vm, value) => vm.FormAddress = value),
+        TextField(nameof(FormBloodType), vm => vm.FormBloodType, (vm, value) => vm.FormBloodType = value),
+        TextField(nameof(FormAllergies), vm => vm.FormAllergies, (vm, value) => vm.FormAllergies = value),
+        TextField(nameof(FormChronicDiseases), vm => vm.FormChronicDiseases, (vm, value) => vm.FormChronicDiseases = value),
+        TextField(nameof(FormEmergencyContactName), vm => vm.FormEmergencyContactName, (vm, value) => vm.FormEmergencyContactName = value),
+        TextField(nameof(FormEmergencyContactPhone), vm => vm.FormEmergencyContactPhone, (vm, value) => vm.FormEmergencyContactPhone = value),
+        TextField(nameof(FormOccupation), vm => vm.FormOccupation, (vm, value) => vm.FormOccupation = value),
+        TextField(nameof(FormReligion), vm => vm.FormReligion, (vm, value) => vm.FormReligion = value),
+        TextField(nameof(FormFamilyHistory), vm => vm.FormFamilyHistory, (vm, value) => vm.FormFamilyHistory = value),
+        TextField(nameof(FormSurgeries), vm => vm.FormSurgeries, (vm, value) => vm.FormSurgeries = value),
+        TextField(nameof(FormTransfusions), vm => vm.FormTransfusions, (vm, value) => vm.FormTransfusions = value),
+        TextField(nameof(FormHospitalizations), vm => vm.FormHospitalizations, (vm, value) => vm.FormHospitalizations = value),
+        TextField(nameof(FormImmunizationSchedule), vm => vm.FormImmunizationSchedule, (vm, value) => vm.FormImmunizationSchedule = value),
+        TextField(nameof(FormMenarcheAge), vm => vm.FormMenarcheAge, (vm, value) => vm.FormMenarcheAge = value),
+        TextField(nameof(FormSexualOnsetAge), vm => vm.FormSexualOnsetAge, (vm, value) => vm.FormSexualOnsetAge = value),
+        TextField(nameof(FormSexualPartnersCount), vm => vm.FormSexualPartnersCount, (vm, value) => vm.FormSexualPartnersCount = value),
+        TextField(nameof(FormPeriodDuration), vm => vm.FormPeriodDuration, (vm, value) => vm.FormPeriodDuration = value),
+        TextField(nameof(FormIsPeriodHeavy), vm => vm.FormIsPeriodHeavy, (vm, value) => vm.FormIsPeriodHeavy = value),
+        TextField(nameof(FormPapSmear), vm => vm.FormPapSmear, (vm, value) => vm.FormPapSmear = value),
+        IntField(nameof(FormPregnanciesCount), vm => vm.FormPregnanciesCount, (vm, value) => vm.FormPregnanciesCount = value),
+        IntField(nameof(FormCesareansCount), vm => vm.FormCesareansCount, (vm, value) => vm.FormCesareansCount = value),
+        IntField(nameof(FormAbortionsCount), vm => vm.FormAbortionsCount, (vm, value) => vm.FormAbortionsCount = value),
+        BoolField(nameof(FormIsCurrentlyPregnant), vm => vm.FormIsCurrentlyPregnant, (vm, value) => vm.FormIsCurrentlyPregnant = value),
+        TextField(nameof(FormGestationalWeeks), vm => vm.FormGestationalWeeks, (vm, value) => vm.FormGestationalWeeks = value),
+        TextField(nameof(FormDevelopmentalMilestones), vm => vm.FormDevelopmentalMilestones, (vm, value) => vm.FormDevelopmentalMilestones = value),
+        TextField(nameof(FormDiet), vm => vm.FormDiet, (vm, value) => vm.FormDiet = value),
+        TextField(nameof(FormHousingConditions), vm => vm.FormHousingConditions, (vm, value) => vm.FormHousingConditions = value),
+        TextField(nameof(FormZoonosis), vm => vm.FormZoonosis, (vm, value) => vm.FormZoonosis = value),
+        TextField(nameof(FormClinicalNotes), vm => vm.FormClinicalNotes, (vm, value) => vm.FormClinicalNotes = value),
+        TextField(nameof(FormGender), vm => vm.FormGender, (vm, value) => vm.FormGender = value),
+        TextField(nameof(FormAgeText), vm => vm.FormAgeText, (vm, value) => vm.FormAgeText = value),
+        TextField(nameof(FormBirthDateText), vm => vm.FormBirthDateText, (vm, value) => vm.FormBirthDateText = value),
+        TextField(nameof(FormOpenSection), vm => vm.FormOpenSection, (vm, value) => vm.FormOpenSection = value)
     };
 
-    private static readonly HashSet<string> PatientFormDraftFieldSet = new(PatientFormDraftFields, StringComparer.Ordinal);
+    private static readonly HashSet<string> PatientFormDraftFieldSet = new(PatientFormDraftFields.Select(f => f.Key), StringComparer.Ordinal);
+
+    /// <summary>Texto tal como lo guardaba la versión con reflexión (cultura invariable; null → vacío).</summary>
+    private static string DraftText(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) TextField(
+        string key, Func<MedicalRecordsViewModel, string> get, Action<MedicalRecordsViewModel, string> set) =>
+        (key, vm => DraftText(get(vm)), set);
+
+    /// <summary>Un número que no se puede leer deja el campo como está.</summary>
+    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) IntField(
+        string key, Func<MedicalRecordsViewModel, int> get, Action<MedicalRecordsViewModel, int> set) =>
+        (key, vm => DraftText(get(vm)), (vm, text) =>
+        {
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) set(vm, number);
+        });
+
+    /// <summary>Un sí/no que no se puede leer deja el campo como está.</summary>
+    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) BoolField(
+        string key, Func<MedicalRecordsViewModel, bool> get, Action<MedicalRecordsViewModel, bool> set) =>
+        (key, vm => DraftText(get(vm)), (vm, text) =>
+        {
+            if (bool.TryParse(text, out var flag)) set(vm, flag);
+        });
 
     private readonly object _formDraftGate = new();
     private Timer? _formDraftTimer;
@@ -45,32 +101,26 @@ public partial class MedicalRecordsViewModel
     private void SchedulePatientFormDraft()
     {
         if (_draftStore == null || _suspendFormDraft || !IsPatientModalOpen) return;
-        _formDraftTimer ??= new Timer(_ => PostToUi(SavePatientFormDraftNow), null, Timeout.Infinite, Timeout.Infinite);
+        _formDraftTimer ??= new Timer(_ => _ui.Post(SavePatientFormDraftNow), null, Timeout.Infinite, Timeout.Infinite);
         _formDraftTimer.Change(AutosaveDelay, Timeout.InfiniteTimeSpan);
     }
 
     private Dictionary<string, string> CapturePatientFormFields()
     {
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in PatientFormDraftFields)
+        foreach (var field in PatientFormDraftFields)
         {
-            var value = typeof(MedicalRecordsViewModel).GetProperty(name)?.GetValue(this);
-            fields[name] = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            fields[field.Key] = field.Get(this);
         }
         return fields;
     }
 
     private void ApplyPatientFormFields(IReadOnlyDictionary<string, string> fields)
     {
-        foreach (var name in PatientFormDraftFields)
+        foreach (var field in PatientFormDraftFields)
         {
-            if (!fields.TryGetValue(name, out var text)) continue;
-            var property = typeof(MedicalRecordsViewModel).GetProperty(name);
-            if (property == null || !property.CanWrite) continue;
-
-            if (property.PropertyType == typeof(string)) property.SetValue(this, text);
-            else if (property.PropertyType == typeof(int) && int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) property.SetValue(this, number);
-            else if (property.PropertyType == typeof(bool) && bool.TryParse(text, out var flag)) property.SetValue(this, flag);
+            if (!fields.TryGetValue(field.Key, out var text)) continue;
+            field.Set(this, text);
         }
     }
 

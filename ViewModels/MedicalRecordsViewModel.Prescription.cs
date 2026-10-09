@@ -64,12 +64,12 @@ public partial class MedicalRecordsViewModel
             if (IsConsultationForSelectedPatient)
             {
                 return string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
-                    ? PrintingService.DefaultPrescriptionIndications
+                    ? PrescriptionDefaults.Indications
                     : ConsultationTreatmentPlan.Trim();
             }
             var saved = ConsultationsHistory.FirstOrDefault()?.TreatmentPlan?.Trim();
             return string.IsNullOrWhiteSpace(saved) || saved == SavedTreatmentPlanPlaceholder
-                ? PrintingService.DefaultPrescriptionIndications
+                ? PrescriptionDefaults.Indications
                 : saved;
         }
     }

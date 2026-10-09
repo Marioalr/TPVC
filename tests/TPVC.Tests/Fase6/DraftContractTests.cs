@@ -151,6 +151,68 @@ public class DraftContractTests
         Assert.AreEqual(birth, written, "El borrador del alta de v1.18 se vuelve a escribir igual:\n" + Fase6Assets.Diff(birth, written));
     }
 
+    /// <summary>
+    /// Cada clave del borrador del alta se guarda y se restaura con el campo de su mismo nombre (el
+    /// paso 2c cambió la búsqueda por nombre con reflexión por una tabla escrita a mano: una fila con
+    /// el campo equivocado se vería aquí, aunque las claves y el archivo sigan iguales).
+    /// </summary>
+    [TestMethod]
+    public async Task PatientFormDraft_EveryField_IsSavedAndRestoredUnderItsOwnName()
+    {
+        using var clinic = new Fase6Clinic();
+        var keys = Fase6Assets.NormalizeNewLines(Fase6Assets.ReadAsset("patient-form-draft-keys.txt"))
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var properties = keys.ToDictionary(k => k, k => typeof(MedicalRecordsViewModel).GetProperty(k)
+            ?? throw new AssertFailedException($"{k} no es una propiedad pública del ViewModel"));
+
+        var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
+        await records.NewPatientAsync();
+
+        // Un valor distinto en cada campo (los que el formulario ajusta solo, con valores que acepta)
+        var special = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["FormPhone"] = "5512340001",
+            ["FormEmergencyContactPhone"] = "5512340002",
+            ["FormGender"] = "Femenino",
+            ["FormBirthDateText"] = "14/03/1992",
+            ["FormOpenSection"] = "Gineco"
+        };
+        int next = 0;
+        foreach (var key in keys)
+        {
+            if (key == "FormAgeText") continue; // sale de la fecha de nacimiento
+            next++;
+            var type = properties[key].PropertyType;
+            object value = special.TryGetValue(key, out var fixedValue) ? fixedValue
+                : type == typeof(int) ? 100 + next
+                : type == typeof(bool) ? true
+                : $"Dato {next:00} de {key}";
+            properties[key].SetValue(records, value);
+        }
+
+        var expected = keys.ToDictionary(k => k, k => properties[k].GetValue(records));
+        var texts = expected.Values.Select(v => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+        Assert.AreEqual(texts.Count, texts.Distinct(StringComparer.Ordinal).Count(), "Cada campo lleva un valor distinto: " + string.Join(" | ", texts));
+
+        records.FlushConsultationDraft();
+        records.Dispose();
+
+        var fields = JsonNode.Parse(File.ReadAllText(clinic.Store().PatientFormPath))!["Fields"]!.AsObject();
+        CollectionAssert.AreEqual(keys, fields.Select(kv => kv.Key).ToArray(), "Claves en el mismo orden");
+        foreach (var key in keys)
+        {
+            Assert.AreEqual(Convert.ToString(expected[key], System.Globalization.CultureInfo.InvariantCulture), fields[key]!.GetValue<string>(), $"{key} se guarda con su propio valor");
+        }
+
+        var reopened = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
+        Assert.IsTrue(reopened.IsFormPage, "Se reabre el alta");
+        foreach (var key in keys)
+        {
+            Assert.AreEqual(expected[key], properties[key].GetValue(reopened), $"{key} se restaura en su propio campo");
+        }
+        reopened.Dispose();
+    }
+
     private static string PatientFormNormalize(string json, out string? age)
     {
         var node = JsonNode.Parse(json)!;

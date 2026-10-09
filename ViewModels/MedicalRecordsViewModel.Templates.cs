@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -74,35 +75,14 @@ public partial class MedicalRecordsViewModel
     {
         if (value == null) return;
         ApplyPosologyTemplate(value);
-        ResetSelectionLater(() => SelectedPosologyTemplate = null);
+        _ui.ResetSelectionLater(() => SelectedPosologyTemplate = null);
     }
 
     partial void OnSelectedGeneralMeasureTemplateChanged(PrescriptionTemplate? value)
     {
         if (value == null) return;
         ApplyGeneralMeasureTemplate(value);
-        ResetSelectionLater(() => SelectedGeneralMeasureTemplate = null);
-    }
-
-    /// <summary>
-    /// El ComboBox vuelve a "sin selección" para poder aplicar la misma plantilla al siguiente
-    /// medicamento; se difiere para no modificar SelectedItem dentro de su propio cambio.
-    /// </summary>
-    private static void ResetSelectionLater(Action reset)
-    {
-        try
-        {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null)
-            {
-                dispatcher.BeginInvoke(reset, System.Windows.Threading.DispatcherPriority.Background);
-                return;
-            }
-        }
-        catch
-        {
-        }
-        reset();
+        _ui.ResetSelectionLater(() => SelectedGeneralMeasureTemplate = null);
     }
 
     public void ApplyPosologyTemplate(PrescriptionTemplate? template)

@@ -9,7 +9,9 @@ namespace TPVC.Views;
 
 /// <summary>
 /// Contenedor de Pacientes. El comportamiento de cada pieza vive en su propio archivo; aquí solo
-/// quedan Esc por capas (cierra lo de más arriba) y "escribir para buscar" en el inicio y la ficha.
+/// quedan las teclas de Esc por capas (cierra lo de más arriba) y de "escribir para buscar" en el
+/// inicio y la ficha, y el foco del buscador. Qué cierra Esc y cuándo se puede buscar lo decide el
+/// ViewModel (TryCloseTopmost, CanTypeToSearch).
 /// </summary>
 public partial class MedicalRecordsView : UserControl
 {
@@ -73,20 +75,15 @@ public partial class MedicalRecordsView : UserControl
         }, DispatcherPriority.Input);
     }
 
-    private static bool IsAnySheetOpen(MedicalRecordsViewModel vm) =>
-        vm.IsInfoModalVisible || vm.IsAllergyAlertOpen || vm.IsCatalogBrowserModalOpen
-        || vm.IsPrescriptionPdfModalOpen || vm.IsFinishConsultationOpen || vm.IsPrescriptionModalOpen || vm.IsSuppliesModalOpen
-        || vm.IsServicesModalOpen || vm.IsSendConsultationSheetOpen;
-
     /// <summary>En el inicio o la ficha, teclear con el foco fuera de un campo escribe en el buscador.</summary>
     private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         if (!IsVisible || DataContext is not MedicalRecordsViewModel vm) return;
-        if (!(vm.IsHomePage || vm.IsChartPage) || vm.IsAgendaPanelOpen || IsAnySheetOpen(vm)) return;
+        if (!vm.CanTypeToSearch) return;
         if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
         if (Keyboard.FocusedElement is TextBoxBase or ComboBox or PasswordBox) return;
 
-        vm.HomeSearchText += e.Text;
+        vm.AppendTypedSearchText(e.Text);
         FocusSearchBox();
         e.Handled = true;
     }
@@ -99,24 +96,8 @@ public partial class MedicalRecordsView : UserControl
     private void HandleEscapeKey(KeyEventArgs e)
     {
         if (DataContext is not MedicalRecordsViewModel vm) return;
+        // Marcada antes de cerrar, como siempre: si cerrar una capa falla, Esc no sigue a otros controles
         e.Handled = true;
-
-        if (vm.IsInfoModalVisible) vm.DismissInfoModal();
-        else if (vm.IsAllergyAlertOpen) vm.CancelAllergyPrescription();
-        else if (vm.IsCatalogBrowserModalOpen) vm.CloseCatalogBrowser();
-        else if (vm.IsPrescriptionPdfModalOpen) vm.ClosePrescriptionPdfPreview();
-        // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
-        else if (vm.IsSendConsultationSheetOpen) vm.CloseSendConsultationSheet();
-        else if (vm.IsCie10DropdownOpen) vm.IsCie10DropdownOpen = false;
-        // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
-        else if (vm.IsFinishConsultationOpen) vm.CloseFinishConsultation();
-        else if (vm.IsPrescriptionModalOpen) vm.ClosePrescriptionModal();
-        else if (vm.IsSuppliesModalOpen) vm.CloseSuppliesModal();
-        else if (vm.IsServicesModalOpen) vm.CloseServicesModal();
-        else if (vm.IsMovingAppointment) vm.CancelMovingAppointment();
-        else if (vm.IsAgendaPanelOpen) vm.CloseAgendaPanel();
-        else if (vm.IsHomePage && vm.HasHomeQuery) vm.HomeSearchText = string.Empty;
-        else if (vm.IsChartPage) vm.GoToPatientsHome();
-        else e.Handled = false;
+        e.Handled = vm.TryCloseTopmost();
     }
 }

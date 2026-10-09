@@ -43,7 +43,6 @@ public partial class MedicalRecordsViewModel
     };
 
     private readonly object _draftGate = new();
-    private readonly SynchronizationContext? _autosaveUiContext = SynchronizationContext.Current;
     private ConsultationDraftStore? _draftStore;
     private Timer? _autosaveTimer;
     private ConsultationDraft? _pendingDraft;
@@ -234,7 +233,7 @@ public partial class MedicalRecordsViewModel
         var status = saved
             ? $"Guardado {draft.SavedAt:HH:mm:ss}"
             : "No se pudo guardar automáticamente";
-        PostToUi(() =>
+        _ui.Post(() =>
         {
             // Bajo el mismo candado que el cierre: un guardado que termina justo al cobrar no
             // deja el indicador "Guardado" en una consulta ya cerrada
@@ -361,12 +360,6 @@ public partial class MedicalRecordsViewModel
         {
             _suspendAutosave = false;
         }
-    }
-
-    private void PostToUi(Action action)
-    {
-        if (_autosaveUiContext != null) _autosaveUiContext.Post(_ => action(), null);
-        else action();
     }
 
     private static ConsultationProductItem CloneItem(ConsultationProductItem item) => new()

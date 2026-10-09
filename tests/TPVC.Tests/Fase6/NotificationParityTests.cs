@@ -184,29 +184,6 @@ public class NotificationParityTests
         golden.AssertMatches("pos-close.txt", "Avisos al cerrar la consulta desde el Punto de Venta");
     }
 
-    /// <summary>
-    /// Esc por capas tal como lo hace hoy MedicalRecordsView.HandleEscapeKey (de lo más alto a lo más bajo).
-    /// En el paso 2d esta copia se cambia por vm.TryCloseTopmost(), con el mismo archivo de referencia.
-    /// </summary>
-    private static string? EscapeLadder(MedicalRecordsViewModel vm)
-    {
-        if (vm.IsInfoModalVisible) { vm.DismissInfoModal(); return "info"; }
-        if (vm.IsAllergyAlertOpen) { vm.CancelAllergyPrescription(); return "alergia"; }
-        if (vm.IsCatalogBrowserModalOpen) { vm.CloseCatalogBrowser(); return "catálogo"; }
-        if (vm.IsPrescriptionPdfModalOpen) { vm.ClosePrescriptionPdfPreview(); return "vista previa"; }
-        if (vm.IsSendConsultationSheetOpen) { vm.CloseSendConsultationSheet(); return "enviar a"; }
-        if (vm.IsCie10DropdownOpen) { vm.IsCie10DropdownOpen = false; return "CIE-10"; }
-        if (vm.IsFinishConsultationOpen) { vm.CloseFinishConsultation(); return "terminar consulta"; }
-        if (vm.IsPrescriptionModalOpen) { vm.ClosePrescriptionModal(); return "receta"; }
-        if (vm.IsSuppliesModalOpen) { vm.CloseSuppliesModal(); return "insumos"; }
-        if (vm.IsServicesModalOpen) { vm.CloseServicesModal(); return "servicios"; }
-        if (vm.IsMovingAppointment) { vm.CancelMovingAppointment(); return "cambiar cita"; }
-        if (vm.IsAgendaPanelOpen) { vm.CloseAgendaPanel(); return "agenda"; }
-        if (vm.IsHomePage && vm.HasHomeQuery) { vm.HomeSearchText = string.Empty; return "búsqueda"; }
-        if (vm.IsChartPage) { vm.GoToPatientsHome(); return "ficha"; }
-        return null;
-    }
-
     [TestMethod]
     public void EscapeLayers()
     {
@@ -238,9 +215,11 @@ public class NotificationParityTests
             var (records, consultations) = OpenWithoutDatabase();
             open(records, consultations);
             using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
-            string? closed = null;
-            var names = RecordSync(recorder, () => closed = EscapeLadder(records));
-            Assert.AreEqual(layer, closed, "Esc cierra la capa de más arriba");
+            // Desde el paso 2d, el mismo Esc que usa MedicalRecordsView (antes, una copia de HandleEscapeKey);
+            // qué capa cierra cada Esc lo revisa EscapeLadderTests
+            bool closed = false;
+            var names = RecordSync(recorder, () => closed = records.TryCloseTopmost());
+            Assert.IsTrue(closed, $"Esc cierra la capa {layer}");
             golden.Section($"Esc: {layer}", names);
         }
         golden.AssertMatches("escape-layers.txt", "Avisos de Esc en cada capa");

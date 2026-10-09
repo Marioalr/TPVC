@@ -23,15 +23,6 @@ public class PatientsArchitectureTests
         "Process.Start", "MessageBox", "MedicalRecordsViewModel"
     };
 
-    /// <summary>
-    /// typeof(MedicalRecordsViewModel) que todavía existen (reflexión por nombre de miembro, que se rompe en
-    /// silencio al mover miembros). El paso 2c los cambia por una tabla explícita; después esta lista queda vacía.
-    /// </summary>
-    private static readonly Dictionary<string, int> PendingTypeofMedicalRecords = new(StringComparer.Ordinal)
-    {
-        ["ViewModels/MedicalRecordsViewModel.PatientFormDraft.cs"] = 2
-    };
-
     /// <summary>Niveles de dependencia (plan, §1.2): un objeto solo depende de niveles anteriores.</summary>
     private static readonly Dictionary<string, int> Tiers = new(StringComparer.Ordinal)
     {
@@ -68,23 +59,24 @@ public class PatientsArchitectureTests
         Assert.IsEmpty(problems, "ViewModels/Patients debe poder compilarse sin WPF (plan, regla 7):\n" + string.Join("\n", problems));
     }
 
+    /// <summary>
+    /// Ningún typeof(MedicalRecordsViewModel) en el programa: la reflexión por nombre de miembro se rompe en
+    /// silencio al mover miembros a otro ViewModel. El paso 2c cambió el último (el borrador del alta) por
+    /// una tabla explícita.
+    /// </summary>
     [TestMethod]
-    public void NoReflectionOnMedicalRecordsViewModel_OutsideTheKnownPendingSites()
+    public void NoReflectionOnMedicalRecordsViewModel()
     {
         var root = Fase6Assets.RepoRoot();
-        var found = new Dictionary<string, int>(StringComparer.Ordinal);
+        var found = new List<string>();
         foreach (var file in ProductionSources(root))
         {
             var code = CSharpSource.Sanitize(File.ReadAllText(file));
             var count = Regex.Matches(code, @"typeof\s*\(\s*(?:TPVC\.ViewModels\.)?MedicalRecordsViewModel\s*\)").Count;
-            if (count > 0) found[Path.GetRelativePath(root, file).Replace('\\', '/')] = count;
+            if (count > 0) found.Add($"{Path.GetRelativePath(root, file).Replace('\\', '/')}: {count} typeof(MedicalRecordsViewModel)");
         }
 
-        var unexpected = found
-            .Where(kv => kv.Value > PendingTypeofMedicalRecords.GetValueOrDefault(kv.Key))
-            .Select(kv => $"{kv.Key}: {kv.Value} typeof(MedicalRecordsViewModel)")
-            .ToList();
-        Assert.IsEmpty(unexpected, "Reflexión sobre MedicalRecordsViewModel (se rompe sin aviso al mover miembros):\n" + string.Join("\n", unexpected));
+        Assert.IsEmpty(found, "Reflexión sobre MedicalRecordsViewModel (se rompe sin aviso al mover miembros):\n" + string.Join("\n", found));
     }
 
     private static IEnumerable<string> ProductionSources(string root) =>
