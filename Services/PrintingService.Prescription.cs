@@ -421,8 +421,15 @@ public partial class PrintingService
         }
         if (sheet.Medicines.Count == 0) medicines.Blocks.Add(new Paragraph { Margin = new Thickness(0) });
 
-        // La columna entre los dos bloques sostiene la altura mínima (el pie queda al fondo de la hoja)
-        var spacer = new TableCell(new BlockUIContainer(new Border { Width = 1, Height = minHeight }) { Margin = new Thickness(0) })
+        // La columna entre los dos bloques sostiene la altura mínima (el pie queda al fondo de la hoja) con
+        // un renglón vacío de esa altura. No un BlockUIContainer: la tabla toma su ancho como el de la
+        // página y deja sin espacio a los medicamentos y a las medidas generales.
+        var spacer = new TableCell(new Paragraph(new Run("​"))
+        {
+            Margin = new Thickness(0),
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            LineHeight = Math.Max(1, minHeight)
+        })
         {
             Padding = new Thickness(0)
         };
