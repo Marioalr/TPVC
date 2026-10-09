@@ -26,18 +26,18 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Style="{StaticResource Avatar}" Width="56" Height="56" CornerRadius="28" Margin="0,0,16,0" VerticalAlignment="Top" TextElement.FontSize="20">
-                    <TextBlock Text="{Binding SelectedPatient.Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Session.SelectedPatient.Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Style="{StaticResource TextTitle}" Text="{Binding SelectedPatient.FullName}" />
+                    <TextBlock Style="{StaticResource TextTitle}" Text="{Binding Session.SelectedPatient.FullName}" />
                     <TextBlock Style="{StaticResource TextDetail}" Text="{Binding SelectedPatientMeta}" Margin="0,2,0,8" />
                     <WrapPanel>
-                        <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding SelectedPatient}" Margin="0,0,8,4">
+                        <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding Session.SelectedPatient}" Margin="0,0,8,4">
                             <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
                         </Border>
                         <Border Style="{StaticResource BadgeWarning}" Margin="0,0,8,4"
-                                Visibility="{Binding SelectedPatient.HasChronicDiseases, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="{Binding SelectedPatient.ChronicBadgeText}" TextTrimming="CharacterEllipsis" MaxWidth="360" />
+                                Visibility="{Binding Session.SelectedPatient.HasChronicDiseases, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding Session.SelectedPatient.ChronicBadgeText}" TextTrimming="CharacterEllipsis" MaxWidth="360" />
                         </Border>
                         <Border Style="{StaticResource Badge}" Margin="0,0,8,4" Visibility="{Binding HasNextAppointment, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding NextAppointmentText}" />

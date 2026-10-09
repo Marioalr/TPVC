@@ -180,7 +180,7 @@
                         </Border>
                         <Grid>
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                                <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActivePrescription}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type models:PatientPrescriptionItem}">
                                             <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,6">
@@ -202,7 +202,7 @@
                                                               IsChecked="{Binding DispenseInClinic, Mode=TwoWay}"
                                                               Command="{Binding DataContext.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                               CommandParameter="{Binding}"
-                                                              Visibility="{Binding DataContext.HasActiveConsultation, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
+                                                              Visibility="{Binding DataContext.Active.HasActiveConsultation, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
                                                               ToolTip="Se entrega en el consultorio y se carga a la cuenta de la consulta"
                                                               Content="Se surte aquí" />
                                                     <Button Grid.Column="3" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar de la receta" AutomationProperties.Name="Quitar medicamento"
@@ -217,7 +217,7 @@
                                 </ItemsControl>
                             </ScrollViewer>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24"
-                                        Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}">
+                                        Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}">
                                 <TextBlock Style="{StaticResource TextBody}" Text="Sin medicamentos en esta receta." HorizontalAlignment="Center" />
                                 <TextBlock Style="{StaticResource TextCaption}" Text="Escriba el medicamento arriba o ábralo desde el catálogo." HorizontalAlignment="Center" Margin="0,2,0,0" />
                             </StackPanel>

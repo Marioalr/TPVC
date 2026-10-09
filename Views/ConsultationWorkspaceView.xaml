@@ -31,23 +31,23 @@
                 </Grid.ColumnDefinitions>
                 <WrapPanel VerticalAlignment="Center">
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="{Binding SelectedPatient.FullName}" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource ThemeText}" />
+                        <TextBlock Text="{Binding Session.SelectedPatient.FullName}" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource ThemeText}" />
                         <TextBlock FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}">
                             <TextBlock.Text>
                                 <MultiBinding StringFormat="{}{0} · {1} · {2} · Folio de consulta {3}">
-                                    <Binding Path="SelectedPatient.AgeDisplay" />
-                                    <Binding Path="SelectedPatient.Gender" />
-                                    <Binding Path="SelectedPatient.RecordNumber" />
-                                    <Binding Path="ActiveConsultationFolio" />
+                                    <Binding Path="Session.SelectedPatient.AgeDisplay" />
+                                    <Binding Path="Session.SelectedPatient.Gender" />
+                                    <Binding Path="Session.SelectedPatient.RecordNumber" />
+                                    <Binding Path="Active.ActiveConsultationFolio" />
                                 </MultiBinding>
                             </TextBlock.Text>
                         </TextBlock>
                     </StackPanel>
-                <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding SelectedPatient}" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Border Style="{StaticResource AllergyBadge}" DataContext="{Binding Session.SelectedPatient}" VerticalAlignment="Center" Margin="12,0,0,0">
                     <TextBlock Style="{StaticResource AllergyBadgeText}" FontSize="12" />
                 </Border>
                     <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="6" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Duración de la consulta">
-                        <TextBlock Text="{Binding ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" />
+                        <TextBlock Text="{Binding Active.ActiveConsultationElapsedTime}" FontFamily="Consolas" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" />
                     </Border>
                 </WrapPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
@@ -124,11 +124,11 @@
                         <StackPanel>
                             <TextBlock Text="PACIENTE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
                         <TextBlock Text="Grupo sanguíneo" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
-                        <TextBlock Text="{Binding SelectedPatient.BloodType}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Session.SelectedPatient.BloodType}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
                         <TextBlock Text="Enfermedades crónicas" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
-                        <TextBlock Text="{Binding SelectedPatient.ChronicDiseases}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Session.SelectedPatient.ChronicDiseases}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
                         <TextBlock Text="Últimos signos vitales" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,6,0,1" />
-                        <TextBlock Text="{Binding SelectedPatient.VitalSigns}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Session.SelectedPatient.VitalSigns}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                     <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,10"
@@ -652,7 +652,7 @@
                             </Border>
                             <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
                                 <StackPanel>
-                                    <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                                    <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActivePrescription}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="0,0,0,8">
@@ -679,7 +679,7 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <TextBlock Text="Sin medicamentos en la receta." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"
-                                               Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
+                                               Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
                                 </StackPanel>
                             </Border>
                             <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ScheduleForSelectedPatientCommand}" Padding="12,6" HorizontalAlignment="Left" Margin="0,0,0,4" Content="Agendar próxima cita" ToolTip="Abre la agenda en el día de mañana con el paciente ya puesto" />
@@ -704,7 +704,7 @@
                                 <TextBlock Text="{Binding ConsultationFeeName}" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
                                 <TextBlock Grid.Column="1" Text="{Binding ConsultationFeeAmount, StringFormat='${0:N2}'}" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource ThemeText}" Margin="8,0,0,0" />
                             </Grid>
-                            <ItemsControl ItemsSource="{Binding ActiveConsultation.Items}">
+                            <ItemsControl ItemsSource="{Binding Active.ActiveConsultation.Items}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,6">

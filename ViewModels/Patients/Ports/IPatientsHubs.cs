@@ -11,8 +11,20 @@ namespace TPVC.ViewModels.Patients;
 /// </summary>
 public interface IPatientsHubs
 {
+    /// <summary>Cambió el paciente seleccionado (Session), antes de su aviso.</summary>
+    void OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue);
+
+    /// <summary>Cambió la lista de expedientes (Session).</summary>
+    void OnPatientsChanged();
+
+    /// <summary>Cambió el historial de consultas del paciente seleccionado (Session).</summary>
+    void OnConsultationsHistoryChanged(ObservableCollection<PatientConsultation> value);
+
     /// <summary>Cambió la página de Pacientes (Navigation).</summary>
     void OnPatientsPageChanged();
+
+    /// <summary>Avanzó (o se reinició) el cronómetro de la consulta en curso (Active).</summary>
+    void OnActiveConsultationElapsedTimeChanged();
 
     /// <summary>Cambiaron los servicios del catálogo (Catalog).</summary>
     void OnServicesChanged();

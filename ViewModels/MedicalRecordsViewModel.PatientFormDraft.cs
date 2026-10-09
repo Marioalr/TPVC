@@ -175,14 +175,14 @@ public partial class MedicalRecordsViewModel
 
         if (draft.PatientId > 0)
         {
-            var patient = Patients.FirstOrDefault(p => p.Id == draft.PatientId);
+            var patient = Session.Patients.FirstOrDefault(p => p.Id == draft.PatientId);
             if (patient == null)
             {
                 AppLogger.Warn($"Se descartó la edición sin guardar del expediente {draft.PatientId}: ya no existe.");
                 _draftStore.DeletePatientForm();
                 return;
             }
-            SelectedPatient = patient;
+            Session.SelectedPatient = patient;
             EditPatient();
         }
         else

@@ -32,7 +32,7 @@ public partial class MedicalRecordsViewModel
     private string _pediatricDoseResult = string.Empty;
 
     /// <summary>La dosis pediátrica por peso solo se ofrece con pacientes menores de edad.</summary>
-    public bool ShowsPediatricDose => Templates.HasPediatricDoseRules && SelectedPatient?.IsPediatric == true;
+    public bool ShowsPediatricDose => Templates.HasPediatricDoseRules && Session.SelectedPatient?.IsPediatric == true;
 
     /// <summary>Elegir una posología la copia al campo de indicaciones del medicamento que se captura.</summary>
     partial void OnSelectedPosologyTemplateChanged(PrescriptionTemplate? value)
@@ -79,12 +79,12 @@ public partial class MedicalRecordsViewModel
 
     private string SuggestPatientWeight()
     {
-        if (HasActiveConsultation && TryParseNumber(ConsultationWeight, out var current) && current > 0 && current < 70)
+        if (Active.HasActiveConsultation && TryParseNumber(ConsultationWeight, out var current) && current > 0 && current < 70)
         {
             return current.ToString("0.#", CultureInfo.InvariantCulture);
         }
 
-        var last = SelectedPatient?.Consultations
+        var last = Session.SelectedPatient?.Consultations
             .Where(c => c.Weight.HasValue && c.Weight > 0)
             .OrderByDescending(c => c.Date)
             .FirstOrDefault();

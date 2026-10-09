@@ -16,38 +16,15 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class MedicalRecordsViewModel
 {
-    private PatientRecord? _consultationRecordPatient;
-    private List<PatientPrescriptionItem> _previousPrescription = new();
-    private PatientSummarySnapshot? _summaryBeforeConsultation;
+    public bool CanRepeatPreviousPrescription => Active.HasActiveConsultation && Record.PendingPreviousPrescription.Count > 0;
 
-    /// <summary>false si la consulta se recuperó de un borrador sin la receta anterior (versiones viejas).</summary>
-    private bool _previousPrescriptionKnown;
-
-    /// <summary>Medicamentos de la receta anterior que aún no están en la de esta consulta.</summary>
-    private List<PatientPrescriptionItem> PendingPreviousPrescription
-    {
-        get
-        {
-            if (_consultationRecordPatient == null || SelectedPatient?.Id != _consultationRecordPatient.Id) return new();
-            var current = _consultationRecordPatient.ActivePrescription;
-            return _previousPrescription
-                .Where(p => !current.Any(c => SameMedicine(c, p)))
-                .ToList();
-        }
-    }
-
-    public bool CanRepeatPreviousPrescription => HasActiveConsultation && PendingPreviousPrescription.Count > 0;
-
-    public string PreviousPrescriptionSummary => string.Join(" · ", PendingPreviousPrescription.Select(p => p.MedicineName));
+    public string PreviousPrescriptionSummary => string.Join(" · ", Record.PendingPreviousPrescription.Select(p => p.MedicineName));
 
     /// <summary>"Última receta" de la ficha: durante la consulta, la emitida antes de ella.</summary>
     public IReadOnlyList<PatientPrescriptionItem> ChartPrescription =>
-        IsConsultationForSelectedPatient && _previousPrescriptionKnown
-            ? _previousPrescription
-            : (IReadOnlyList<PatientPrescriptionItem>?)SelectedPatient?.ActivePrescription ?? Array.Empty<PatientPrescriptionItem>();
-
-    private static bool SameMedicine(PatientPrescriptionItem a, PatientPrescriptionItem b) =>
-        string.Equals(a.MedicineName?.Trim(), b.MedicineName?.Trim(), StringComparison.OrdinalIgnoreCase);
+        IsConsultationForSelectedPatient && Record.PreviousPrescriptionKnown
+            ? Record.PreviousPrescription
+            : (IReadOnlyList<PatientPrescriptionItem>?)Session.SelectedPatient?.ActivePrescription ?? Array.Empty<PatientPrescriptionItem>();
 
     /// <summary>Lo que se guarda como plan cuando la consulta termina sin plan escrito.</summary>
     private const string SavedTreatmentPlanPlaceholder = "Tratamiento e indicaciones médicas según receta.";
@@ -67,7 +44,7 @@ public partial class MedicalRecordsViewModel
                     ? PrescriptionDefaults.Indications
                     : ConsultationTreatmentPlan.Trim();
             }
-            var saved = ConsultationsHistory.FirstOrDefault()?.TreatmentPlan?.Trim();
+            var saved = Session.ConsultationsHistory.FirstOrDefault()?.TreatmentPlan?.Trim();
             return string.IsNullOrWhiteSpace(saved) || saved == SavedTreatmentPlanPlaceholder
                 ? PrescriptionDefaults.Indications
                 : saved;
@@ -85,87 +62,6 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(HasActivePrescription));
     }
 
-    /// <summary>Al iniciar una consulta nueva: foto del expediente y receta vacía.</summary>
-    private void BeginConsultationOnRecord(PatientRecord patient)
-    {
-        _consultationRecordPatient = patient;
-        _summaryBeforeConsultation = PatientSummarySnapshot.Of(patient);
-        _previousPrescription = patient.ActivePrescription.Select(ClonePrescription).ToList();
-        foreach (var item in _previousPrescription) item.DispenseInClinic = false;
-        _previousPrescriptionKnown = true;
-
-        patient.ActivePrescription = new List<PatientPrescriptionItem>();
-        patient.SyncPrescriptionJson();
-        OnPropertyChanged(nameof(SelectedPatient));
-        NotifyPrescriptionStateChanged();
-    }
-
-    /// <summary>Al recuperar una consulta: su receta en curso, la anterior y la foto, tal como se guardaron.</summary>
-    private void ResumeConsultationOnRecord(PatientRecord patient, ConsultationDraft draft)
-    {
-        // Se enlazan las mismas instancias del expediente cuando existen para que "Se surte aquí"
-        // siga funcionando sobre la lista visible
-        var resumed = draft.Prescriptions
-            .Select(saved => patient.ActivePrescription.FirstOrDefault(p => p.MedicineName == saved.MedicineName && p.Dosage == saved.Dosage) ?? saved)
-            .ToList();
-
-        _consultationRecordPatient = patient;
-        _summaryBeforeConsultation = draft.PatientBefore;
-        _previousPrescriptionKnown = draft.PreviousPrescriptions != null;
-        _previousPrescription = draft.PreviousPrescriptions?.Select(ClonePrescription).ToList() ?? new();
-
-        patient.ActivePrescription = resumed;
-        patient.SyncPrescriptionJson();
-        NotifyPrescriptionStateChanged();
-    }
-
-    /// <summary>
-    /// Al terminar o descartar la consulta. Descartada: el expediente vuelve a como estaba
-    /// (resumen y receta). Terminada sin receta: la última emitida sigue siendo la anterior.
-    /// Terminada con receta: queda la nueva.
-    /// </summary>
-    private async Task EndConsultationOnRecordAsync(bool discarded)
-    {
-        var patient = _consultationRecordPatient;
-        if (patient == null) return;
-        _consultationRecordPatient = null;
-        var previous = _previousPrescription;
-        var known = _previousPrescriptionKnown;
-        var summary = _summaryBeforeConsultation;
-        _previousPrescription = new();
-        _previousPrescriptionKnown = false;
-        _summaryBeforeConsultation = null;
-
-        bool changed = false;
-        if (discarded && summary != null)
-        {
-            summary.ApplyTo(patient);
-            changed = true;
-        }
-        if (known && (discarded || patient.ActivePrescription.Count == 0)
-            && !(previous.Count == 0 && patient.ActivePrescription.Count == 0))
-        {
-            patient.ActivePrescription = previous;
-            patient.SyncPrescriptionJson();
-            changed = true;
-        }
-
-        if (changed && _inventoryService != null && patient.Id > 0)
-        {
-            try
-            {
-                await _inventoryService.SavePatientAsync(patient);
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error("No se pudo regresar el expediente a como estaba antes de la consulta", ex);
-            }
-        }
-
-        if (SelectedPatient?.Id == patient.Id) OnPropertyChanged(nameof(SelectedPatient));
-        NotifyPrescriptionStateChanged();
-    }
-
     /// <summary>
     /// Copia a esta consulta los medicamentos de la receta anterior que falten. Se revisan otra vez
     /// las alergias (pudieron registrarse después) y las existencias para "Se surte aquí".
@@ -174,13 +70,13 @@ public partial class MedicalRecordsViewModel
     public async Task RepeatPreviousPrescriptionAsync()
     {
         if (BlockIfConsultationReadOnly()) return;
-        if (!HasActiveConsultation || SelectedPatient == null) return;
+        if (!Active.HasActiveConsultation || Session.SelectedPatient == null) return;
 
         var skipped = new List<string>();
-        foreach (var item in PendingPreviousPrescription)
+        foreach (var item in Record.PendingPreviousPrescription)
         {
             var product = Catalog.FindCatalogProduct(item.MedicineName);
-            if (InventoryService.CheckMedicationAllergy(SelectedPatient, product, item.MedicineName).HasConflict)
+            if (InventoryService.CheckMedicationAllergy(Session.SelectedPatient, product, item.MedicineName).HasConflict)
             {
                 skipped.Add(item.MedicineName);
                 continue;

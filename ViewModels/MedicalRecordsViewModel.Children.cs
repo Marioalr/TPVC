@@ -18,6 +18,9 @@ public partial class MedicalRecordsViewModel
     private ClinicInfo _clinic;
     private CatalogStore _catalog;
     private PrescriptionTemplateStore _templates;
+    private PatientSession _session;
+    private ActiveConsultationSession _active;
+    private ConsultationRecordState _record;
     private VitalSignsChartViewModel _vitalsChart;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
@@ -38,10 +41,19 @@ public partial class MedicalRecordsViewModel
     /// <summary>Plantillas de receta del consultorio (posologías, medidas generales, dosis pediátrica).</summary>
     public PrescriptionTemplateStore Templates => _templates;
 
+    /// <summary>Expedientes, paciente seleccionado y su historial de consultas.</summary>
+    public PatientSession Session => _session;
+
+    /// <summary>Consulta en curso (folio, paciente, total) y su cronómetro.</summary>
+    public ActiveConsultationSession Active => _active;
+
+    /// <summary>El expediente durante la consulta en curso (receta anterior y resumen de antes).</summary>
+    public ConsultationRecordState Record => _record;
+
     /// <summary>Evolución de signos vitales de la ficha (gráfica y tabla).</summary>
     public VitalSignsChartViewModel VitalsChart => _vitalsChart;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_vitalsChart))]
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_vitalsChart))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService)
     {
         _info = new InfoDialogState(_ui);
@@ -50,6 +62,9 @@ public partial class MedicalRecordsViewModel
         _clinic = new ClinicInfo(clinicProfileService);
         _catalog = new CatalogStore(_inventoryService, this);
         _templates = new PrescriptionTemplateStore(_inventoryService, this);
+        _session = new PatientSession(this);
+        _active = new ActiveConsultationSession(_consultationService, _ui, this);
+        _record = new ConsultationRecordState(_session, _inventoryService, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
     }
 }

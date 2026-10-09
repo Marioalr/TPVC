@@ -113,7 +113,7 @@ public partial class MedicalRecordsViewModel
 
             if (TryParse(ConsultationFC, out var fc) && fc > 0)
             {
-                bool child = SelectedPatient is { Age: < 12 };
+                bool child = Session.SelectedPatient is { Age: < 12 };
                 if (!child && fc > 100) warnings.Add($"FC {fc:0}: taquicardia");
                 else if (child && fc > 140) warnings.Add($"FC {fc:0}: alta para la edad");
                 else if (fc < 50) warnings.Add($"FC {fc:0}: bradicardia");
@@ -145,17 +145,11 @@ public partial class MedicalRecordsViewModel
     private const decimal DefaultConsultationFee = 300.00m;
 
     /// <summary>Honorario + todo lo cargado durante la consulta (lo que se cobrará al terminar).</summary>
-    public decimal ConsultationAccountTotal => ConsultationFeeAmount + ActiveConsultationTotalAmount;
+    public decimal ConsultationAccountTotal => ConsultationFeeAmount + Active.ActiveConsultationTotalAmount;
 
     /// <summary>Última consulta anterior (sin contar el avance guardado de la consulta en curso).</summary>
     public PatientConsultation? PreviousConsultation =>
-        ConsultationsHistory.FirstOrDefault(c => !string.Equals(c.Folio, ActiveConsultationFolio, StringComparison.Ordinal));
-
-    partial void OnConsultationsHistoryChanged(System.Collections.ObjectModel.ObservableCollection<PatientConsultation> value)
-    {
-        ObserveConsultationsHistory(value);
-        OnPropertyChanged(nameof(PreviousConsultation));
-    }
+        Session.ConsultationsHistory.FirstOrDefault(c => !string.Equals(c.Folio, Active.ActiveConsultationFolio, StringComparison.Ordinal));
 
     private void NotifyAccountChanged()
     {
@@ -164,7 +158,7 @@ public partial class MedicalRecordsViewModel
         OnPropertyChanged(nameof(ConsultationFeeName));
         OnPropertyChanged(nameof(ConsultationFeeAmount));
         OnPropertyChanged(nameof(ConsultationAccountTotal));
-        OnPropertyChanged(nameof(ActiveConsultationTotalAmount));
+        Active.RaiseTotalAmount();
     }
 
     /// <summary>Id negativo estable para un cargo libre (servicio o insumo fuera de catálogo): se acumula si se repite.</summary>
@@ -238,29 +232,29 @@ public partial class MedicalRecordsViewModel
             item.DispenseInClinic = !item.DispenseInClinic;
             return;
         }
-        if (item == null || SelectedPatient == null) return;
+        if (item == null || Session.SelectedPatient == null) return;
 
         if (item.DispenseInClinic)
         {
-            if (!HasActiveConsultation || !ChargePrescription(item))
+            if (!Active.HasActiveConsultation || !ChargePrescription(item))
             {
                 item.DispenseInClinic = false;
-                Info.InfoModalMessage = HasActiveConsultation
+                Info.InfoModalMessage = Active.HasActiveConsultation
                     ? $"'{item.MedicineName}' no tiene existencias suficientes en el consultorio; queda solo en la receta."
                     : "Inicie la consulta para cargar medicamentos a la cuenta.";
                 Info.IsInfoModalVisible = true;
             }
         }
-        else if (HasActiveConsultation)
+        else if (Active.HasActiveConsultation)
         {
             UnchargePrescription(item);
         }
 
-        SelectedPatient.SyncPrescriptionJson();
-        OnPropertyChanged(nameof(SelectedPatient));
+        Session.SelectedPatient.SyncPrescriptionJson();
+        Session.NotifySelectedPatientMutated();
         if (_inventoryService != null)
         {
-            try { await _inventoryService.SavePatientAsync(SelectedPatient); }
+            try { await _inventoryService.SavePatientAsync(Session.SelectedPatient); }
             catch (Exception ex) { AppLogger.Error("No se pudo guardar la receta", ex); }
         }
     }
@@ -330,7 +324,7 @@ public partial class MedicalRecordsViewModel
     private void BuildCheckoutCart()
     {
         Checkout.Reset();
-        Checkout.PatientName = SelectedPatient?.FullName ?? ActiveConsultationPatientName ?? CheckoutViewModel.DefaultClient;
+        Checkout.PatientName = Session.SelectedPatient?.FullName ?? Active.ActiveConsultationPatientName ?? CheckoutViewModel.DefaultClient;
         var fee = ConsultationFeeService;
         Checkout.Cart.Add(new CartItem
         {
@@ -375,7 +369,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task DiscardActiveConsultationAsync()
     {
-        if (!HasActiveConsultation || BlockIfConsultationReadOnly()) return;
+        if (!Active.HasActiveConsultation || BlockIfConsultationReadOnly()) return;
 
         if (!await _dialogs.ConfirmAsync(
                 "¿Descartar la consulta en curso?\n\nNo se guardará la nota médica ni se cobrará nada de la cuenta.",
@@ -385,11 +379,11 @@ public partial class MedicalRecordsViewModel
         }
 
         var folio = _consultationService?.CurrentConsultation?.Folio;
-        if (_inventoryService != null && SelectedPatient != null && !string.IsNullOrWhiteSpace(folio))
+        if (_inventoryService != null && Session.SelectedPatient != null && !string.IsNullOrWhiteSpace(folio))
         {
             try
             {
-                await _inventoryService.DeleteConsultationNoteAsync(SelectedPatient.Id, folio);
+                await _inventoryService.DeleteConsultationNoteAsync(Session.SelectedPatient.Id, folio);
             }
             catch (Exception ex)
             {
@@ -398,22 +392,22 @@ public partial class MedicalRecordsViewModel
         }
 
         // El avance que se hubiera guardado deja de verse en la ficha (historial, signos, resumen)
-        var patient = SelectedPatient;
+        var patient = Session.SelectedPatient;
         if (patient != null && !string.IsNullOrWhiteSpace(folio))
         {
             foreach (var note in patient.Consultations.Where(c => c.Folio == folio).ToList()) patient.Consultations.Remove(note);
-            foreach (var note in ConsultationsHistory.Where(c => c.Folio == folio).ToList()) ConsultationsHistory.Remove(note);
+            foreach (var note in Session.ConsultationsHistory.Where(c => c.Folio == folio).ToList()) Session.ConsultationsHistory.Remove(note);
             RefreshVitalSignsEvolution(patient);
         }
 
-        await EndConsultationOnRecordAsync(discarded: true);
+        await Record.EndConsultationOnRecordAsync(discarded: true);
         _consultationService?.CloseActiveConsultation();
         _isCurrentConsultationSaved = false;
         _attendingAppointmentId = null;
         SyncActiveConsultation();
-        StopConsultationTimer();
+        Active.StopConsultationTimer();
         ClearConsultationFields();
-        Navigation.PatientsPage = SelectedPatient != null ? PageChart : PageHome;
+        Navigation.PatientsPage = Session.SelectedPatient != null ? PageChart : PageHome;
     }
 
     private void ClearConsultationFields()

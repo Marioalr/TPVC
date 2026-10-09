@@ -117,7 +117,7 @@
                 <Border Grid.Row="2" Style="{StaticResource CardSubtle}" Margin="24,0,24,0" Padding="8">
                     <Grid>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding SelectedPatient.ActiveSupplies}">
+                            <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActiveSupplies}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientSupplyItem}">
                                         <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,6">
@@ -147,7 +147,7 @@
                             </ItemsControl>
                         </ScrollViewer>
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24"
-                                    Visibility="{Binding SelectedPatient.ActiveSupplies.Count, Converter={StaticResource InverseBoolToVis}}">
+                                    Visibility="{Binding Session.SelectedPatient.ActiveSupplies.Count, Converter={StaticResource InverseBoolToVis}}">
                             <TextBlock Style="{StaticResource TextBody}" Text="Todavía no se ha usado ningún insumo." HorizontalAlignment="Center" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="Escríbalo arriba o ábralo desde el catálogo." HorizontalAlignment="Center" Margin="0,2,0,0" />
                         </StackPanel>

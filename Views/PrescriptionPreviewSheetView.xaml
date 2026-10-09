@@ -71,7 +71,7 @@
                                         <Border Background="{DynamicResource ThemeSurfaceSubtle}" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="1" CornerRadius="4" Padding="8,4">
                                             <TextBlock Text="RECETA MÉDICA INDIVIDUAL" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource ThemeAccentForeground}" />
                                         </Border>
-                                        <TextBlock Text="{Binding SelectedPatient.RecordNumber, StringFormat='Exp: {0}'}" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
+                                        <TextBlock Text="{Binding Session.SelectedPatient.RecordNumber, StringFormat='Exp: {0}'}" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -91,33 +91,33 @@
 
                                     <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,6">
                                         <TextBlock Text="Nombre del Paciente:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.FullName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Text="{Binding Session.SelectedPatient.FullName}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeText}" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,8,6">
                                         <TextBlock Text="Edad:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.AgeDisplay}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Text="{Binding Session.SelectedPatient.AgeDisplay}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,6">
                                         <TextBlock Text="Sexo:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.Gender}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Text="{Binding Session.SelectedPatient.Gender}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ThemeText}" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,8,0">
                                         <TextBlock Text="Signos Vitales Registrados:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
-                                        <TextBlock Text="{Binding SelectedPatient.VitalSigns}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource ThemeText}" />
+                                        <TextBlock Text="{Binding Session.SelectedPatient.VitalSigns}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource ThemeText}" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Row="1" Grid.Column="2">
                                         <TextBlock Text="Alergias:" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" />
                                         <!-- En rojo solo si tiene alergias: "Negadas" o "No interrogadas" no son una alarma -->
-                                        <TextBlock Text="{Binding SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap">
+                                        <TextBlock Text="{Binding Session.SelectedPatient.AllergySummary}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Foreground" Value="{DynamicResource ThemeText}" />
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding SelectedPatient.HasAllergies}" Value="True">
+                                                        <DataTrigger Binding="{Binding Session.SelectedPatient.HasAllergies}" Value="True">
                                                             <Setter Property="Foreground" Value="{DynamicResource ThemeDangerText}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -132,7 +132,7 @@
                             <Border Margin="0,0,0,16">
                                 <StackPanel>
                                     <TextBlock Text="℞ PRESCRIPCIÓN MÉDICA Y POSOLOGÍA" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource ThemeAccentForeground}" Margin="0,0,0,8" />
-                                    <ItemsControl ItemsSource="{Binding SelectedPatient.ActivePrescription}">
+                                    <ItemsControl ItemsSource="{Binding Session.SelectedPatient.ActivePrescription}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="0,6,0,8" Margin="0,0,0,4">

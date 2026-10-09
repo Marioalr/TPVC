@@ -171,7 +171,7 @@
                                             </TextBlock>
                                             <TextBlock Style="{StaticResource FieldLabel}" Text="Paciente" Margin="0,10,0,6" />
                                             <ComboBox Style="{StaticResource FieldComboBox}"
-                                                      ItemsSource="{Binding DataContext.Patients, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      ItemsSource="{Binding DataContext.Session.Patients, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                       SelectedItem="{Binding DataContext.AgendaFormPatient, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                       DisplayMemberPath="FullName"
                                                       helpers:TypeAhead.IsEnabled="True"

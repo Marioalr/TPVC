@@ -312,13 +312,13 @@ public class XamlBindingContractTests
                          xmlns:views="clr-namespace:TPVC.Views"
                          xmlns:models="clr-namespace:TPVC.Models">
                 <StackPanel>
-                    <TextBlock Text="{Binding SelectedPatient.FullName}" />
+                    <TextBlock Text="{Binding Session.SelectedPatient.FullName}" />
                     <TextBlock Text="{Binding NoSuchMember}" />
-                    <TextBox Text="{Binding ActiveConsultationFolio}" />
-                    <TextBox Text="{Binding ActiveConsultationFolio, Mode=OneWay}" />
-                    <TextBlock Text="{Binding SelectedPatient.NoSuchField}" />
+                    <TextBox Text="{Binding Active.ActiveConsultationFolio}" />
+                    <TextBox Text="{Binding Active.ActiveConsultationFolio, Mode=OneWay}" />
+                    <TextBlock Text="{Binding Session.SelectedPatient.NoSuchField}" />
                     <TextBlock Text="{Binding FacadeOnly}" />
-                    <ItemsControl ItemsSource="{Binding Patients}">
+                    <ItemsControl ItemsSource="{Binding Session.Patients}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
@@ -341,7 +341,7 @@ public class XamlBindingContractTests
                     <TextBlock>
                         <TextBlock.Text>
                             <MultiBinding StringFormat="{}{0} {1}">
-                                <Binding Path="ActiveConsultationFolio" />
+                                <Binding Path="Active.ActiveConsultationFolio" />
                                 <Binding Path="NoSuchInMultiBinding" />
                             </MultiBinding>
                         </TextBlock.Text>
@@ -361,8 +361,8 @@ public class XamlBindingContractTests
                 $"No se reportó '{fragment}' para {expression}. Reportado:\n{Report()}");
 
         Expect("NoSuchMember", "no tiene la propiedad pública 'NoSuchMember'");
-        Expect("{Binding ActiveConsultationFolio}", "TwoWay");
-        Expect("SelectedPatient.NoSuchField", "PatientRecord no tiene la propiedad pública 'NoSuchField'");
+        Expect("{Binding Active.ActiveConsultationFolio}", "TwoWay");
+        Expect("Session.SelectedPatient.NoSuchField", "PatientRecord no tiene la propiedad pública 'NoSuchField'");
         Expect("FacadeOnly", "[NotForBinding]");
         Expect("NotAPatientMember", "PatientRecord no tiene");
         Expect("PlacementTarget.Tag.NoSuchCommand", "no tiene la propiedad pública 'NoSuchCommand'");
@@ -373,7 +373,7 @@ public class XamlBindingContractTests
 
         // Lo correcto del mismo XAML sí se resuelve (con su dueño)
         var owners = analysis.Bindings.Select(b => $"{b.Path}|{b.Owner}").ToList();
-        CollectionAssert.Contains(owners, "SelectedPatient.FullName|PatientRecord.FullName");
+        CollectionAssert.Contains(owners, "Session.SelectedPatient.FullName|PatientRecord.FullName");
         CollectionAssert.Contains(owners, "FullName|PatientRecord.FullName");
         CollectionAssert.Contains(owners, "DataContext.OpenPatientChartCommand|MedicalRecordsViewModel.OpenPatientChartCommand");
         CollectionAssert.Contains(owners, "PlacementTarget.Tag.BackToHubCommand|MedicalRecordsViewModel.BackToHubCommand");

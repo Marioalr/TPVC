@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -89,7 +90,7 @@ public partial class MedicalRecordsViewModel
     {
         if (_draftStore == null) return;
 
-        if (HasActiveConsultation)
+        if (Active.HasActiveConsultation)
         {
             _draftSessionActive = true;
             ScheduleAutosave();
@@ -104,7 +105,7 @@ public partial class MedicalRecordsViewModel
 
     private void ScheduleAutosave()
     {
-        if (_draftStore == null || _suspendAutosave || !HasActiveConsultation) return;
+        if (_draftStore == null || _suspendAutosave || !Active.HasActiveConsultation) return;
 
         var draft = BuildConsultationDraft();
         if (draft == null) return;
@@ -121,7 +122,7 @@ public partial class MedicalRecordsViewModel
     public void SaveConsultationDraftNow()
     {
         if (_draftStore == null) return;
-        if (HasActiveConsultation && !_suspendAutosave)
+        if (Active.HasActiveConsultation && !_suspendAutosave)
         {
             Volatile.Write(ref _pendingDraft, BuildConsultationDraft());
         }
@@ -195,10 +196,10 @@ public partial class MedicalRecordsViewModel
             SavedToRecord = _isCurrentConsultationSaved,
             // Copias: el archivo se escribe en otro hilo mientras la consulta sigue cambiando
             Items = active.Items.Select(CloneItem).ToList(),
-            Prescriptions = ((_consultationRecordPatient ?? SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
-                .Select(ClonePrescription).ToList(),
-            PreviousPrescriptions = _previousPrescriptionKnown ? _previousPrescription.Select(ClonePrescription).ToList() : null,
-            PatientBefore = _summaryBeforeConsultation,
+            Prescriptions = ((Record.Patient ?? Session.SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
+                .Select(ConsultationRecordState.ClonePrescription).ToList(),
+            PreviousPrescriptions = Record.PreviousPrescriptionKnown ? Record.PreviousPrescription.Select(ConsultationRecordState.ClonePrescription).ToList() : null,
+            PatientBefore = Record.SummaryBeforeConsultation,
             AttendingAppointmentId = _attendingAppointmentId,
             FeeServiceSyncId = _feeServiceOverrideId is int feeId ? Catalog.Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
             ReceivedHandoffId = _receivedHandoffId,
@@ -239,7 +240,7 @@ public partial class MedicalRecordsViewModel
             // deja el indicador "Guardado" en una consulta ya cerrada
             lock (_draftGate)
             {
-                if (draft.Generation == Interlocked.Read(ref _draftGeneration) && HasActiveConsultation)
+                if (draft.Generation == Interlocked.Read(ref _draftGeneration) && Active.HasActiveConsultation)
                 {
                     AutosaveStatus = status;
                 }
@@ -270,12 +271,12 @@ public partial class MedicalRecordsViewModel
     {
         if (_draftStore == null || _draftRestoreAttempted || _consultationService == null) return;
         _draftRestoreAttempted = true;
-        if (HasActiveConsultation) return;
+        if (Active.HasActiveConsultation) return;
 
         var draft = _draftStore.Load();
         if (draft == null) return;
 
-        var patient = Patients.FirstOrDefault(p => p.Id == draft.PatientId);
+        var patient = Session.Patients.FirstOrDefault(p => p.Id == draft.PatientId);
         if (patient == null)
         {
             if (draft.Handoff != null)
@@ -320,7 +321,7 @@ public partial class MedicalRecordsViewModel
                 : null;
             _receivedHandoffId = draft.ReceivedHandoffId;
             _receivedHandoffToken = draft.ReceivedHandoffToken;
-            SelectPatient(patient);
+            Session.SelectPatient(patient);
             var active = _consultationService!.StartConsultation(patient, draft.ChiefComplaintLabel);
             if (!string.IsNullOrWhiteSpace(draft.Folio)) active.Folio = draft.Folio;
             if (draft.StartedAt != default) active.StartedAt = draft.StartedAt;
@@ -348,7 +349,7 @@ public partial class MedicalRecordsViewModel
             ConsultationSpO2 = draft.SpO2;
             ConsultationGlucose = draft.Glucose;
 
-            ResumeConsultationOnRecord(patient, draft);
+            Record.ResumeConsultationOnRecord(patient, draft);
 
             ConsultationSection = Math.Clamp(draft.Section, 1, ConsultationSectionCount);
             _isCurrentConsultationSaved = draft.SavedToRecord;
@@ -390,13 +391,5 @@ public partial class MedicalRecordsViewModel
         Folio = marker.Folio,
         Phase = marker.Phase,
         CreatedAt = marker.CreatedAt
-    };
-
-    private static PatientPrescriptionItem ClonePrescription(PatientPrescriptionItem item) => new()
-    {
-        MedicineName = item.MedicineName,
-        Dosage = item.Dosage,
-        RecommendedQuantity = item.RecommendedQuantity,
-        DispenseInClinic = item.DispenseInClinic
     };
 }

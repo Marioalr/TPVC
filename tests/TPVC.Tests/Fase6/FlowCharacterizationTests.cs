@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests.Fase6;
 
@@ -89,7 +91,7 @@ public class FlowCharacterizationTests
         Assert.IsEmpty(records.ConsultationsHistory);
         Assert.AreEqual(string.Empty, records.ConsultationChiefComplaint, "Campos de la consulta limpios");
         Assert.AreEqual(string.Empty, records.ConsultationDiagnosis);
-        Assert.AreEqual("00:00", records.ActiveConsultationElapsedTime);
+        Assert.AreEqual("00:00", records.Active.ActiveConsultationElapsedTime);
         // El aviso anterior se cerró; el que queda es el del cobro (sin servicio de avisos usa la ventana)
         StringAssert.StartsWith(records.Info.InfoModalMessage, "Consulta cobrada");
 
@@ -398,13 +400,15 @@ public class FlowCharacterizationTests
 
         // Lo que se ve en cada aviso de la consulta mientras se atiende la cita
         var seen = new List<string>();
-        records.PropertyChanged += (_, e) =>
+        PropertyChangedEventHandler onChanged = (_, e) =>
         {
-            if (e.PropertyName is not (nameof(MedicalRecordsViewModel.HasActiveConsultation) or nameof(MedicalRecordsViewModel.ConsultationChiefComplaint))) return;
+            if (e.PropertyName is not (nameof(ActiveConsultationSession.HasActiveConsultation) or nameof(MedicalRecordsViewModel.ConsultationChiefComplaint))) return;
             if (!records.HasActiveConsultation) return;
             records.SaveConsultationDraftNow();
             seen.Add($"{e.PropertyName}:{store.Load()?.AttendingAppointmentId?.ToString() ?? "sin cita"}");
         };
+        records.PropertyChanged += onChanged;
+        records.Active.PropertyChanged += onChanged;
         records.AutosaveDelay = TimeSpan.FromMilliseconds(30);
 
         records.AttendAppointment(appointment);

@@ -41,7 +41,6 @@ public partial class MedicalRecordsViewModel
     private readonly HashSet<string> _dismissedIncoming = new();
     private readonly HashSet<string> _announcedIncoming = new();
     private readonly HashSet<string> _appliedIncoming = new();
-    private readonly HashSet<int> _forceFreshPatientIds = new();
 
     /// <summary>Expediente que no se edita aquí: su consulta está en otro equipo (o se está actualizando).</summary>
     private int? _handoffLockedPatientId;
@@ -142,9 +141,9 @@ public partial class MedicalRecordsViewModel
     public bool IsHandoffAvailable => _handoff?.IsConfigured == true;
 
     /// <summary>Se puede escribir en la consulta (no se envió ni se está enviando).</summary>
-    public bool IsConsultationEditable => HasActiveConsultation && !IsConsultationHandedOff && !IsSendingHandoff;
+    public bool IsConsultationEditable => Active.HasActiveConsultation && !IsConsultationHandedOff && !IsSendingHandoff;
 
-    public bool ShowsSendConsultationButton => IsHandoffAvailable && HasActiveConsultation && !IsConsultationHandedOff;
+    public bool ShowsSendConsultationButton => IsHandoffAvailable && Active.HasActiveConsultation && !IsConsultationHandedOff;
 
     public bool CanSendConsultation => ShowsSendConsultationButton && !IsSendingHandoff && IsHandoffOnline;
 
@@ -188,7 +187,7 @@ public partial class MedicalRecordsViewModel
             if (IncomingHandoff == null) return string.Empty;
             if (IsReceivingHandoff) return "Recibiendo la consulta…";
             if (IsConsultationHandedOff) return "Primero recupere la consulta que envió a otro equipo";
-            if (HasActiveConsultation) return "Termine o descarte la consulta en curso para continuar esta aquí";
+            if (Active.HasActiveConsultation) return "Termine o descarte la consulta en curso para continuar esta aquí";
             if (Navigation.IsFormPage) return "Termine el alta o edición del expediente para continuarla aquí";
             if (IncomingHandoff.PayloadVersion > ConsultationHandoffService.ProtocolVersion) return "Actualice TPVC en este equipo para recibirla";
             return string.Empty;
@@ -220,7 +219,7 @@ public partial class MedicalRecordsViewModel
     /// <summary>La consulta se mandó a otro equipo (o se está mandando): aquí no se modifica.</summary>
     private bool BlockIfConsultationReadOnly()
     {
-        if (!HasActiveConsultation || (!IsConsultationHandedOff && !IsSendingHandoff)) return false;
+        if (!Active.HasActiveConsultation || (!IsConsultationHandedOff && !IsSendingHandoff)) return false;
         Feedback.ShowWarning(IsSendingHandoff
             ? "Se está enviando la consulta a otro equipo."
             : $"La consulta se envió a {HandoffTargetName}: aquí está en solo lectura. Use \"Recuperar\" para seguirla en este equipo.");
@@ -445,7 +444,7 @@ public partial class MedicalRecordsViewModel
             {
                 if (!_announcedIncoming.Add(row.Id)) continue;
                 // En Pacientes ya se ve el aviso; fuera de ahí (o con otra consulta abierta), un aviso breve
-                if (!_inPatientsSection || HasActiveConsultation)
+                if (!_inPatientsSection || Active.HasActiveConsultation)
                 {
                     Feedback.Info($"{row.FromDeviceName} te envió la consulta de {row.PatientName}. Ábrela en Pacientes.");
                 }
@@ -642,7 +641,7 @@ public partial class MedicalRecordsViewModel
     private void EnterHandedOffState(ConsultationHandoffMarker marker)
     {
         _outgoingHandoff = marker;
-        _handoffLockedPatientId = ActiveConsultation?.PatientId;
+        _handoffLockedPatientId = Active.ActiveConsultation?.PatientId;
         HandoffBannerDetail = null;
         CanReleaseHandoffLocally = false;
         IsConsultationHandedOff = true;
@@ -655,7 +654,7 @@ public partial class MedicalRecordsViewModel
     private void RestoreOutgoingHandoff(ConsultationHandoffMarker marker)
     {
         _outgoingHandoff = marker;
-        _handoffLockedPatientId = ActiveConsultation?.PatientId;
+        _handoffLockedPatientId = Active.ActiveConsultation?.PatientId;
         IsConsultationHandedOff = true;
         _consultationService?.SetActiveConsultationHandedOff(true);
         NotifyHandoffState();
@@ -698,9 +697,9 @@ public partial class MedicalRecordsViewModel
         var draft = BuildConsultationDraft();
         if (draft == null) return null;
 
-        var patient = Patients.FirstOrDefault(p => p.Id == active.PatientId)
-                      ?? (_consultationRecordPatient?.Id == active.PatientId ? _consultationRecordPatient : null)
-                      ?? (SelectedPatient?.Id == active.PatientId ? SelectedPatient : null);
+        var patient = Session.Patients.FirstOrDefault(p => p.Id == active.PatientId)
+                      ?? (Record.Patient?.Id == active.PatientId ? Record.Patient : null)
+                      ?? (Session.SelectedPatient?.Id == active.PatientId ? Session.SelectedPatient : null);
         if (patient == null || patient.SyncId == Guid.Empty) return null;
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
@@ -837,13 +836,10 @@ public partial class MedicalRecordsViewModel
     {
         if (_outgoingHandoff?.Id != marker.Id) return false;
         Interlocked.Increment(ref _handoffEpoch);
-        var patientId = ActiveConsultation?.PatientId;
+        var patientId = Active.ActiveConsultation?.PatientId;
 
         // Sin estas referencias el cierre no regresa la receta ni el resumen del expediente
-        _consultationRecordPatient = null;
-        _summaryBeforeConsultation = null;
-        _previousPrescription = new List<PatientPrescriptionItem>();
-        _previousPrescriptionKnown = false;
+        Record.Abandon();
         _isCurrentConsultationSaved = false;
         _attendingAppointmentId = null;
         _feeServiceOverrideId = null;
@@ -857,12 +853,12 @@ public partial class MedicalRecordsViewModel
         IsConsultationHandedOff = false;
         CanReleaseHandoffLocally = false;
         HandoffBannerDetail = null;
-        StopConsultationTimer();
+        Active.StopConsultationTimer();
         ClearConsultationFields();
 
         if (Navigation.IsConsultationPage)
         {
-            if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
+            if (Session.SelectedPatient != null) Navigation.PatientsPage = PageChart;
             else Navigation.GoToPatientsHome();
         }
         NotifyHandoffState();
@@ -897,7 +893,7 @@ public partial class MedicalRecordsViewModel
         {
             try
             {
-                if (patientId is int id) _forceFreshPatientIds.Add(id);
+                if (patientId is int id) Session.ForceFreshPatientIds.Add(id);
                 await LoadPatientsAsync();
             }
             catch (Exception ex)
@@ -980,7 +976,7 @@ public partial class MedicalRecordsViewModel
         {
             // La consulta propia sin terminar (si la hay) se recupera primero
             await InitialLoad;
-            if (HasActiveConsultation || Navigation.IsFormPage)
+            if (Active.HasActiveConsultation || Navigation.IsFormPage)
             {
                 Feedback.ShowWarning(IncomingHandoffBlockedReason.Length > 0 ? IncomingHandoffBlockedReason : "Termine lo que está abierto para continuarla aquí.");
                 return;
@@ -1140,12 +1136,12 @@ public partial class MedicalRecordsViewModel
         }
 
         // Instancias recién leídas de la base (no la que estuviera abierta con datos de antes)
-        var selected = SelectedPatient;
-        if (selected != null && selected.SyncId == patientSyncId) _forceFreshPatientIds.Add(selected.Id);
+        var selected = Session.SelectedPatient;
+        if (selected != null && selected.SyncId == patientSyncId) Session.ForceFreshPatientIds.Add(selected.Id);
         await LoadPatientsAsync();
         await LoadServicesAsync();
 
-        var patient = Patients.FirstOrDefault(p => p.SyncId == patientSyncId);
+        var patient = Session.Patients.FirstOrDefault(p => p.SyncId == patientSyncId);
         if (patient == null)
         {
             return (null, $"Todavía no llega el expediente de {row.PatientName} a este equipo. Intente de nuevo en unos segundos.");

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using TPVC.Models;
 using TPVC.ViewModels.Patients;
 
@@ -8,9 +9,56 @@ namespace TPVC.ViewModels;
 /// Puertos del coordinador (fase 6, plan §1.4): los hijos avisan aquí y el coordinador corre los
 /// mismos cuerpos de antes, en el mismo orden. Implementación explícita: no es API pública ni se enlaza.
 /// </summary>
-public partial class MedicalRecordsViewModel : IPatientsHubs
+public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow
 {
+    void IPatientsWorkflow.NotifyPrescriptionStateChanged() => NotifyPrescriptionStateChanged();
+
+    void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
+    {
+        // Solo un cambio real de paciente reinicia el estado de guardado de la consulta
+        if (oldValue?.Id != newValue?.Id || newValue == null)
+        {
+            _isCurrentConsultationSaved = false;
+        }
+        OnPropertyChanged(nameof(ShowsPediatricDose));
+        NotifyVitalSignsWarningChanged();
+        RefreshChartData();
+        NotifyPatientsPageState();
+        if (newValue != null)
+        {
+            var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
+            Session.ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
+            RefreshVitalSignsEvolution(newValue);
+            _ = LoadPatientAppointmentsAsync(newValue.Id);
+
+            if (NeedsConsultationsLoad(newValue))
+            {
+                _ = LoadConsultationsForAsync(newValue, refreshSelectedHistory: true);
+            }
+        }
+        else
+        {
+            Session.ConsultationsHistory.Clear();
+            RefreshVitalSignsEvolution(null);
+            PatientAppointmentsHistory.Clear();
+        }
+    }
+
+    void IPatientsHubs.OnPatientsChanged()
+    {
+        RefreshRecentPatients();
+        RefreshHomeResults();
+    }
+
+    void IPatientsHubs.OnConsultationsHistoryChanged(ObservableCollection<PatientConsultation> value)
+    {
+        ObserveConsultationsHistory(value);
+        OnPropertyChanged(nameof(PreviousConsultation));
+    }
+
     void IPatientsHubs.OnPatientsPageChanged() => NotifyPatientsPageState();
+
+    void IPatientsHubs.OnActiveConsultationElapsedTimeChanged() => OnPropertyChanged(nameof(ConsultationBannerText));
 
     void IPatientsHubs.OnServicesChanged() => NotifyAccountChanged();
 

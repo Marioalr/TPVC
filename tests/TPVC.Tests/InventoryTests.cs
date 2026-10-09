@@ -722,7 +722,7 @@ public class InventoryTests
         recordsVm.StartActiveConsultation();
 
         Assert.IsTrue(recordsVm.HasActiveConsultation);
-        Assert.AreEqual(recordsVm.SelectedPatient.FullName, recordsVm.ActiveConsultationPatientName);
+        Assert.AreEqual(recordsVm.SelectedPatient.FullName, recordsVm.Active.ActiveConsultationPatientName);
 
         // Descartar consulta
         await recordsVm.DiscardActiveConsultationAsync();
@@ -1084,7 +1084,7 @@ public class InventoryTests
 
         Assert.IsEmpty(posVm.Cart, "La venta se vacía al pasarla a la consulta");
         Assert.IsGreaterThanOrEqualTo(2, consultService.CurrentConsultation?.Items.Count ?? 0);
-        Assert.IsGreaterThan(0m, recordsVm.ActiveConsultationTotalAmount);
+        Assert.IsGreaterThan(0m, recordsVm.Active.ActiveConsultationTotalAmount);
     }
 
     [TestMethod]
@@ -1137,7 +1137,7 @@ public class InventoryTests
 
         // Sin consulta activa, tiempo es 00:00
         Assert.IsFalse(recordsVm.HasActiveConsultation);
-        Assert.AreEqual("00:00", recordsVm.ActiveConsultationElapsedTime);
+        Assert.AreEqual("00:00", recordsVm.Active.ActiveConsultationElapsedTime);
 
         // Iniciar consulta activa
         consultService.StartConsultation(patient, "Evaluación general");
@@ -1148,13 +1148,13 @@ public class InventoryTests
 
         // Simular paso de 12 minutos y 45 segundos
         var asOf = recordsVm.ActiveConsultation.StartedAt.AddMinutes(12).AddSeconds(45);
-        recordsVm.UpdateActiveConsultationTimer(asOf);
-        Assert.AreEqual("12:45", recordsVm.ActiveConsultationElapsedTime);
+        recordsVm.Active.UpdateActiveConsultationTimer(asOf);
+        Assert.AreEqual("12:45", recordsVm.Active.ActiveConsultationElapsedTime);
 
         // Descartar la consulta
         await recordsVm.DiscardActiveConsultationAsync();
         Assert.IsFalse(recordsVm.HasActiveConsultation);
-        Assert.AreEqual("00:00", recordsVm.ActiveConsultationElapsedTime);
+        Assert.AreEqual("00:00", recordsVm.Active.ActiveConsultationElapsedTime);
     }
 
     [TestMethod]

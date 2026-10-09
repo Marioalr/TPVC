@@ -91,18 +91,16 @@ public partial class MedicalRecordsViewModel
     // ================================================================== páginas
 
     /// <summary>Aviso "Consulta en curso · Volver" cuando se está fuera de la consulta.</summary>
-    public bool ShowsConsultationBanner => HasActiveConsultation && !Navigation.IsConsultationPage && !Navigation.IsFormPage;
+    public bool ShowsConsultationBanner => Active.HasActiveConsultation && !Navigation.IsConsultationPage && !Navigation.IsFormPage;
 
-    public string ConsultationBannerText => !HasActiveConsultation
+    public string ConsultationBannerText => !Active.HasActiveConsultation
         ? string.Empty
         : IsConsultationHandedOff
-            ? $"Consulta de {ActiveConsultationPatientName} enviada a {HandoffTargetName}: esperando que la acepte"
-            : $"Consulta en curso: {ActiveConsultationPatientName} · {ActiveConsultationElapsedTime}";
-
-    partial void OnActiveConsultationElapsedTimeChanged(string value) => OnPropertyChanged(nameof(ConsultationBannerText));
+            ? $"Consulta de {Active.ActiveConsultationPatientName} enviada a {HandoffTargetName}: esperando que la acepte"
+            : $"Consulta en curso: {Active.ActiveConsultationPatientName} · {Active.ActiveConsultationElapsedTime}";
 
     public bool IsConsultationForSelectedPatient =>
-        HasActiveConsultation && SelectedPatient != null && ActiveConsultation?.PatientId == SelectedPatient.Id;
+        Active.HasActiveConsultation && Session.SelectedPatient != null && Active.ActiveConsultation?.PatientId == Session.SelectedPatient.Id;
 
     public string ChartPrimaryActionText => IsConsultationForSelectedPatient ? "Volver a la consulta" : "Iniciar consulta";
 
@@ -122,7 +120,7 @@ public partial class MedicalRecordsViewModel
     public void EnterPatientsSection()
     {
         OnEnterPatientsSectionForHandoff();
-        if (HasActiveConsultation)
+        if (Active.HasActiveConsultation)
         {
             ShowConsultation();
         }
@@ -137,19 +135,19 @@ public partial class MedicalRecordsViewModel
     {
         if (patient == null) return;
         HomeSearchText = string.Empty;
-        SelectPatient(patient);
+        Session.SelectPatient(patient);
         Navigation.PatientsPage = PageChart;
     }
 
     [RelayCommand]
     public void ShowConsultation()
     {
-        if (!HasActiveConsultation) return;
-        var id = ActiveConsultation!.PatientId;
-        if (SelectedPatient?.Id != id)
+        if (!Active.HasActiveConsultation) return;
+        var id = Active.ActiveConsultation!.PatientId;
+        if (Session.SelectedPatient?.Id != id)
         {
-            var patient = Patients.FirstOrDefault(p => p.Id == id);
-            if (patient != null) SelectedPatient = patient;
+            var patient = Session.Patients.FirstOrDefault(p => p.Id == id);
+            if (patient != null) Session.SelectedPatient = patient;
         }
         Navigation.PatientsPage = PageConsultation;
     }
@@ -158,7 +156,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public void ShowChartFromConsultation()
     {
-        if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
+        if (Session.SelectedPatient != null) Navigation.PatientsPage = PageChart;
     }
 
     [RelayCommand]
@@ -168,11 +166,11 @@ public partial class MedicalRecordsViewModel
         {
             ShowConsultation();
         }
-        else if (HasActiveConsultation)
+        else if (Active.HasActiveConsultation)
         {
             Info.InfoModalMessage = IsConsultationHandedOff
-                ? $"La consulta de {ActiveConsultationPatientName} está enviada a {HandoffTargetName}. Recupérela o espere a que la acepte antes de iniciar otra."
-                : $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de iniciar otra.";
+                ? $"La consulta de {Active.ActiveConsultationPatientName} está enviada a {HandoffTargetName}. Recupérela o espere a que la acepte antes de iniciar otra."
+                : $"Hay una consulta en curso con {Active.ActiveConsultationPatientName}. Termínela o descártela antes de iniciar otra.";
             Info.IsInfoModalVisible = true;
         }
         else
@@ -195,8 +193,8 @@ public partial class MedicalRecordsViewModel
         OnPatientFormClosedForDraft();
         if (!Navigation.IsFormPage) return;
         // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
-        if (Navigation.PageBeforeForm == PageConsultation && HasActiveConsultation) ShowConsultation();
-        else if (SelectedPatient != null) Navigation.PatientsPage = PageChart;
+        if (Navigation.PageBeforeForm == PageConsultation && Active.HasActiveConsultation) ShowConsultation();
+        else if (Session.SelectedPatient != null) Navigation.PatientsPage = PageChart;
         else Navigation.GoToPatientsHome();
     }
 
@@ -221,12 +219,6 @@ public partial class MedicalRecordsViewModel
     public bool HasNoHomeResults => HasHomeQuery && HomeResults.Count == 0;
     public string HomeResultsSummary => HomeResults.Count == 1 ? "1 paciente" : $"{HomeResults.Count} pacientes";
     public string CreateFromSearchText => $"Crear paciente \"{HomeSearchText.Trim()}\"";
-
-    partial void OnPatientsChanged(ObservableCollection<PatientRecord> value)
-    {
-        RefreshRecentPatients();
-        RefreshHomeResults();
-    }
 
     /// <summary>
     /// Pacientes que coinciden con lo escrito (sin acentos): primero los que empiezan así, luego
@@ -262,7 +254,7 @@ public partial class MedicalRecordsViewModel
 
     private void RefreshHomeResults()
     {
-        HomeResults = new ObservableCollection<PatientRecord>(RankPatients(Patients, HomeSearchText));
+        HomeResults = new ObservableCollection<PatientRecord>(RankPatients(Session.Patients, HomeSearchText));
         OnPropertyChanged(nameof(HasHomeQuery));
         OnPropertyChanged(nameof(HasNoHomeResults));
         OnPropertyChanged(nameof(HomeResultsSummary));
@@ -272,7 +264,7 @@ public partial class MedicalRecordsViewModel
     private void RefreshRecentPatients()
     {
         RecentPatients = new ObservableCollection<PatientRecord>(
-            Patients.OrderByDescending(p => p.LastVisit).ThenBy(p => p.FullName, StringComparer.CurrentCulture).Take(12));
+            Session.Patients.OrderByDescending(p => p.LastVisit).ThenBy(p => p.FullName, StringComparer.CurrentCulture).Take(12));
     }
 
     [RelayCommand]
@@ -333,7 +325,7 @@ public partial class MedicalRecordsViewModel
     {
         await LoadTodayAppointmentsAsync();
         if (IsAgendaPanelOpen) await LoadAgendaPanelAsync();
-        if (SelectedPatient != null) await LoadPatientAppointmentsAsync(SelectedPatient.Id);
+        if (Session.SelectedPatient != null) await LoadPatientAppointmentsAsync(Session.SelectedPatient.Id);
     }
 
     public static TimeSpan ParseAppointmentTime(string? time)
@@ -352,7 +344,7 @@ public partial class MedicalRecordsViewModel
     {
         if (appointment == null) return;
 
-        var patient = appointment.PatientRecordId > 0 ? Patients.FirstOrDefault(p => p.Id == appointment.PatientRecordId) : null;
+        var patient = appointment.PatientRecordId > 0 ? Session.Patients.FirstOrDefault(p => p.Id == appointment.PatientRecordId) : null;
         if (patient == null)
         {
             // Cita sin expediente: se busca por nombre para abrirlo o crearlo
@@ -362,22 +354,22 @@ public partial class MedicalRecordsViewModel
             return;
         }
 
-        if (HasActiveConsultation)
+        if (Active.HasActiveConsultation)
         {
-            if (ActiveConsultation?.PatientId == patient.Id)
+            if (Active.ActiveConsultation?.PatientId == patient.Id)
             {
                 ShowConsultation();
             }
             else
             {
-                Info.InfoModalMessage = $"Hay una consulta en curso con {ActiveConsultationPatientName}. Termínela o descártela antes de atender otra cita.";
+                Info.InfoModalMessage = $"Hay una consulta en curso con {Active.ActiveConsultationPatientName}. Termínela o descártela antes de atender otra cita.";
                 Info.IsInfoModalVisible = true;
             }
             return;
         }
 
         IsAgendaPanelOpen = false;
-        SelectPatient(patient);
+        Session.SelectPatient(patient);
         StartActiveConsultation();
         if (!string.IsNullOrWhiteSpace(appointment.Reason)) ConsultationChiefComplaint = appointment.Reason.Trim();
         _attendingAppointmentId = appointment.Id;
@@ -446,7 +438,7 @@ public partial class MedicalRecordsViewModel
     {
         get
         {
-            var p = SelectedPatient;
+            var p = Session.SelectedPatient;
             if (p == null) return string.Empty;
             var parts = new List<string> { p.AgeDisplay };
             if (!string.IsNullOrWhiteSpace(p.Gender)) parts.Add(p.Gender);
@@ -481,7 +473,7 @@ public partial class MedicalRecordsViewModel
     /// <summary>Se llama al cambiar de paciente: antecedentes, historial y resumen de la ficha.</summary>
     private void RefreshChartData()
     {
-        var patient = SelectedPatient;
+        var patient = Session.SelectedPatient;
         AntecedentSections = new ObservableCollection<AntecedentSection>(
             patient == null ? Enumerable.Empty<AntecedentSection>() : BuildAntecedentSections(patient));
         TimelineSearchText = string.Empty;
@@ -495,7 +487,7 @@ public partial class MedicalRecordsViewModel
 
     private void RefreshTimeline()
     {
-        var all = BuildTimeline(ConsultationsHistory, PatientAppointmentsHistory);
+        var all = BuildTimeline(Session.ConsultationsHistory, PatientAppointmentsHistory);
         var kind = TimelineFilter switch
         {
             "Consultas" => TimelineKind.Consultation,
@@ -527,7 +519,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public void EditAntecedent(AntecedentSection? section)
     {
-        if (BlockIfPatientHandedOff(SelectedPatient)) return;
+        if (BlockIfPatientHandedOff(Session.SelectedPatient)) return;
         EditPatient();
         if (section != null) FormOpenSection = section.Key;
     }
@@ -766,7 +758,7 @@ public partial class MedicalRecordsViewModel
     public async Task SavePatientAndStartConsultationAsync()
     {
         await SavePatientModalAsync();
-        if (!IsPatientModalOpen && FormErrorMessage == null && SelectedPatient != null && !HasActiveConsultation)
+        if (!IsPatientModalOpen && FormErrorMessage == null && Session.SelectedPatient != null && !Active.HasActiveConsultation)
         {
             StartActiveConsultation();
         }
@@ -1002,7 +994,7 @@ public partial class MedicalRecordsViewModel
 
         CloseAgendaForm();
         slot.IsFormOpen = true;
-        AgendaFormPatient = SelectedPatient;
+        AgendaFormPatient = Session.SelectedPatient;
         AgendaFormReason = string.Empty;
         AgendaFormDuration = 30;
         AgendaFormError = null;
@@ -1106,7 +1098,7 @@ public partial class MedicalRecordsViewModel
     {
         await LoadAgendaPanelAsync();
         await LoadTodayAppointmentsAsync();
-        if (SelectedPatient != null && SelectedPatient.Id == patientId) await LoadPatientAppointmentsAsync(patientId);
+        if (Session.SelectedPatient != null && Session.SelectedPatient.Id == patientId) await LoadPatientAppointmentsAsync(patientId);
     }
 
     [RelayCommand]
@@ -1190,9 +1182,9 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task DeactivateSelectedPatientAsync()
     {
-        var patient = SelectedPatient;
+        var patient = Session.SelectedPatient;
         if (patient == null || BlockIfPatientHandedOff(patient)) return;
-        if (HasActiveConsultation && ActiveConsultation?.PatientId == patient.Id)
+        if (Active.HasActiveConsultation && Active.ActiveConsultation?.PatientId == patient.Id)
         {
             Info.InfoModalMessage = "Termine o descarte la consulta en curso antes de dar de baja el expediente.";
             Info.IsInfoModalVisible = true;
@@ -1211,7 +1203,7 @@ public partial class MedicalRecordsViewModel
             return;
         }
 
-        SelectedPatient = null;
+        Session.SelectedPatient = null;
         await LoadPatientsAsync();
         Feedback.ShowSuccess($"Expediente de {patient.FullName} dado de baja");
         Navigation.GoToPatientsHome();

@@ -33,8 +33,8 @@
                             <TextBlock Style="{StaticResource TextDetail}" Margin="0,2,0,0">
                                 <TextBlock.Text>
                                     <MultiBinding StringFormat="{}{0} · duración {1}">
-                                        <Binding Path="ActiveConsultationPatientName" />
-                                        <Binding Path="ActiveConsultationElapsedTime" />
+                                        <Binding Path="Active.ActiveConsultationPatientName" />
+                                        <Binding Path="Active.ActiveConsultationElapsedTime" />
                                     </MultiBinding>
                                 </TextBlock.Text>
                             </TextBlock>
@@ -83,8 +83,8 @@
                             <Border Grid.Column="2" Style="{StaticResource CardSubtle}">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold"
-                                               Text="{Binding SelectedPatient.ActivePrescription.Count, StringFormat='Receta · {0} medicamento(s)'}" />
-                                    <WrapPanel Margin="0,8,0,0" Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource BoolToVis}}">
+                                               Text="{Binding Session.SelectedPatient.ActivePrescription.Count, StringFormat='Receta · {0} medicamento(s)'}" />
+                                    <WrapPanel Margin="0,8,0,0" Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource BoolToVis}}">
                                         <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Margin="0,0,6,0" Command="{Binding PrintOrExportPrescriptionPdfCommand}">
                                             <StackPanel Orientation="Horizontal">
                                                 <helpers:Icon Data="{StaticResource IcoPrint}" Width="14" Height="14" Margin="0,0,6,0" />
@@ -95,7 +95,7 @@
                                         <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Command="{Binding ExportPrescriptionDocumentCommand}" Content="Guardar PDF" />
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" Text="Sin medicamentos recetados." Margin="0,4,0,0"
-                                               Visibility="{Binding SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
+                                               Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
                                 </StackPanel>
                             </Border>
                         </Grid>
