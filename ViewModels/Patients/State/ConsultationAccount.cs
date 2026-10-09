@@ -144,21 +144,34 @@ public partial class ConsultationAccount : ObservableObject
         return charged;
     }
 
-    public void ChargeService(PatientServiceItem item)
+    /// <summary>
+    /// Carga el servicio recién agregado (todas sus unidades, cada una con sus insumos por defecto, o su
+    /// cargo libre); false si no se pudo (sin consulta, bloqueada o sin precio).
+    /// </summary>
+    public bool ChargeService(PatientServiceItem item)
     {
-        var service = _catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        var service = FindService(item);
         if (service != null)
         {
-            for (int i = 0; i < Math.Max(1, item.Quantity); i++) AddServiceToActiveConsultation(service);
-            return;
+            for (int i = 0; i < Math.Max(1, item.Quantity); i++)
+            {
+                // Lo que impide cargar una unidad (sin consulta, en otro equipo) impide todas: se ve en la primera
+                if (!TryAddServiceToActiveConsultation(service)) return false;
+            }
+            return true;
         }
 
         if (!ChargeFreeLine(item.ServiceCode, item.ServiceName, $"Servicio Clínico • {item.Category}", "Servicio", item.Price, Math.Max(1, item.Quantity)))
         {
             _info.InfoModalMessage = $"'{item.ServiceName}' no tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
             _info.IsInfoModalVisible = true;
+            return false;
         }
+        return true;
     }
+
+    private ClinicalService? FindService(PatientServiceItem item) =>
+        _catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Carga piezas de un insumo: como el producto dado o, sin él, como cargo libre a su precio.
@@ -186,13 +199,12 @@ public partial class ConsultationAccount : ObservableObject
         _consultationService?.CurrentConsultation?.Items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
 
     /// <summary>
-    /// Quitar el servicio de la hoja lo quita de la cuenta tal como se cargó: por cada unidad, su
-    /// renglón y sus insumos por defecto (AddServiceToActiveConsultation), o su cargo libre.
+    /// Descuenta unidades de un servicio de la cuenta tal como se cargaron: por cada una, su renglón y
+    /// sus insumos por defecto (AddServiceToActiveConsultation), o su cargo libre.
     /// </summary>
-    public void UnchargeService(PatientServiceItem item)
+    public void UnchargeServiceUnits(PatientServiceItem item, int units)
     {
-        var units = Math.Max(1, item.Quantity);
-        var service = _catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+        var service = FindService(item);
         if (service == null)
         {
             Uncharge(FreeChargeId(item.ServiceName), units);
@@ -207,9 +219,12 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     [RelayCommand]
-    public void AddServiceToActiveConsultation(ClinicalService? service)
+    public void AddServiceToActiveConsultation(ClinicalService? service) => TryAddServiceToActiveConsultation(service);
+
+    /// <summary>Carga una unidad del servicio con sus insumos por defecto; false si no se pudo (bloqueada o sin consulta).</summary>
+    private bool TryAddServiceToActiveConsultation(ClinicalService? service)
     {
-        if (service == null || _gate.BlockIfConsultationReadOnly() || _gate.BlockIfReceivingHandoff()) return;
+        if (service == null || _gate.BlockIfConsultationReadOnly() || _gate.BlockIfReceivingHandoff()) return false;
 
         if (!_active.HasActiveConsultation)
         {
@@ -249,7 +264,9 @@ public partial class ConsultationAccount : ObservableObject
 
             _workflow.SyncActiveConsultation();
             // El cargo aparece al instante en "Cuenta de la consulta": sin ventana que interrumpa
+            return true;
         }
+        return false;
     }
 
     [RelayCommand]

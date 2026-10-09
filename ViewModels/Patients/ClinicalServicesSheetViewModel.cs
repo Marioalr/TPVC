@@ -130,6 +130,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
         ServiceModalQuantity = 1;
         ApplyServiceModalSuggestions(string.Empty);
         IsServiceModalDropdownOpen = false;
+        MarkRowsFromEarlierConsultations();
         IsServicesModalOpen = true;
     }
 
@@ -209,11 +210,15 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
         _session.SelectedPatient.ActiveServices = list;
         _session.SelectedPatient.SyncServicesJson();
 
-        // Durante la consulta, el servicio realizado se carga de inmediato a la cuenta
-        if (_active.HasActiveConsultation)
+        // Durante la consulta, el servicio realizado se carga de inmediato a la cuenta; el renglón
+        // recuerda qué consulta lo cargó para que la X descuente solo eso
+        if (_active.HasActiveConsultation && _account.ChargeService(newItem))
         {
-            _account.ChargeService(newItem);
+            newItem.ChargedConsultationFolio = _active.ActiveConsultation?.Folio;
+            newItem.ChargedUnits = qty;
+            _session.SelectedPatient.SyncServicesJson();
         }
+        newItem.IsFromEarlierConsultation = !IsFromThisConsultation(newItem);
 
         if (_inventoryService != null)
         {
@@ -238,10 +243,12 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     {
         if (_session.SelectedPatient == null || item == null || _gate.BlockIfConsultationReadOnly()) return;
 
-        // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
-        if (IsConsultationForSelectedPatient)
+        // Lo que esta consulta cargó a la cuenta por el renglón deja de cobrarse (lo de una consulta
+        // anterior ya se cobró con ella)
+        var charged = ChargedInThisConsultation(item);
+        if (charged > 0)
         {
-            _account.UnchargeService(item);
+            _account.UnchargeServiceUnits(item, charged);
         }
 
         var list = new List<PatientServiceItem>(_session.SelectedPatient.ActiveServices);
@@ -259,6 +266,26 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
         }
 
         _session.NotifySelectedPatientMutated();
+    }
+
+    /// <summary>El renglón lo cargó la consulta en curso del paciente (los demás ya se cobraron o se descartaron).</summary>
+    private bool IsFromThisConsultation(PatientServiceItem item) =>
+        IsConsultationForSelectedPatient && item.ChargedConsultationFolio == _active.ActiveConsultation?.Folio;
+
+    /// <summary>Unidades del renglón que están en la cuenta de la consulta en curso (0 si las cargó otra).</summary>
+    private int ChargedInThisConsultation(PatientServiceItem item) => IsFromThisConsultation(item) ? item.ChargedUnits : 0;
+
+    /// <summary>
+    /// La hoja conserva lo hecho en consultas anteriores: esos renglones se ven y se pueden quitar, pero
+    /// su X no descuenta nada de la cuenta de hoy (ya se cobraron con su consulta).
+    /// </summary>
+    private void MarkRowsFromEarlierConsultations()
+    {
+        if (_session.SelectedPatient == null) return;
+        foreach (var row in _session.SelectedPatient.ActiveServices)
+        {
+            row.IsFromEarlierConsultation = !IsFromThisConsultation(row);
+        }
     }
 
     [RelayCommand]
