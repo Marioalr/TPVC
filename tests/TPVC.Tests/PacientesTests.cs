@@ -9,6 +9,7 @@ using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests;
 
@@ -87,16 +88,16 @@ public class PacientesTests
             Patient("Luis Torres", "EXP-006")
         };
 
-        var result = MedicalRecordsViewModel.RankPatients(patients, "ana").Select(p => p.FullName).ToList();
+        var result = PatientsHomeViewModel.RankPatients(patients, "ana").Select(p => p.FullName).ToList();
 
         Assert.AreEqual("Ana María López", result[0], "Primero quien empieza así");
         CollectionAssert.AreEquivalent(new[] { "Carlos Anaya", "Ramírez Ana" }, result.Skip(1).Take(2).ToList(), "Luego una palabra que empieza así");
         CollectionAssert.AreEquivalent(new[] { "Juliana Pérez", "Pedro Gómez" }, result.Skip(3).ToList(), "Al final quien lo contiene (nombre o diagnóstico)");
         Assert.HasCount(5, result);
 
-        Assert.AreEqual("Pedro Gómez", MedicalRecordsViewModel.RankPatients(patients, "GOMEZ").Single().FullName, "Sin acentos ni mayúsculas");
-        Assert.AreEqual("Luis Torres", MedicalRecordsViewModel.RankPatients(patients, "exp-006").Single().FullName, "Por folio");
-        Assert.IsEmpty(MedicalRecordsViewModel.RankPatients(patients, "   "));
+        Assert.AreEqual("Pedro Gómez", PatientsHomeViewModel.RankPatients(patients, "GOMEZ").Single().FullName, "Sin acentos ni mayúsculas");
+        Assert.AreEqual("Luis Torres", PatientsHomeViewModel.RankPatients(patients, "exp-006").Single().FullName, "Por folio");
+        Assert.IsEmpty(PatientsHomeViewModel.RankPatients(patients, "   "));
     }
 
     [TestMethod]
@@ -104,9 +105,9 @@ public class PacientesTests
     {
         var patients = new[] { Patient("Elena Ruiz", phone: "55 1234 5678"), Patient("Mario Díaz", phone: "3312345678") };
 
-        Assert.AreEqual("Elena Ruiz", MedicalRecordsViewModel.RankPatients(patients, "5512345678").Single().FullName);
-        Assert.AreEqual("Elena Ruiz", MedicalRecordsViewModel.RankPatients(patients, "5678").First().FullName);
-        Assert.IsEmpty(MedicalRecordsViewModel.RankPatients(patients, "567"), "Con menos de 4 dígitos no busca en teléfonos");
+        Assert.AreEqual("Elena Ruiz", PatientsHomeViewModel.RankPatients(patients, "5512345678").Single().FullName);
+        Assert.AreEqual("Elena Ruiz", PatientsHomeViewModel.RankPatients(patients, "5678").First().FullName);
+        Assert.IsEmpty(PatientsHomeViewModel.RankPatients(patients, "567"), "Con menos de 4 dígitos no busca en teléfonos");
     }
 
     [TestMethod]
@@ -115,25 +116,25 @@ public class PacientesTests
         var (records, _, _) = await CreateRecordsAsync();
         records.EnterPatientsSection();
         Assert.IsTrue(records.Navigation.IsHomePage);
-        Assert.IsFalse(records.HasHomeQuery);
-        Assert.IsNotEmpty(records.RecentPatients, "El inicio muestra pacientes recientes");
+        Assert.IsFalse(records.Home.HasHomeQuery);
+        Assert.IsNotEmpty(records.Home.RecentPatients, "El inicio muestra pacientes recientes");
 
         var target = records.Patients.First();
         var firstWord = target.FullName.Split(' ')[0];
-        records.HomeSearchText = firstWord;
+        records.Home.HomeSearchText = firstWord;
 
-        Assert.IsTrue(records.HasHomeQuery);
-        Assert.IsNotEmpty(records.HomeResults);
-        Assert.IsFalse(records.HasNoHomeResults);
+        Assert.IsTrue(records.Home.HasHomeQuery);
+        Assert.IsNotEmpty(records.Home.HomeResults);
+        Assert.IsFalse(records.Home.HasNoHomeResults);
 
-        var expected = records.HomeResults[0];
-        records.OpenFirstHomeResult();
+        var expected = records.Home.HomeResults[0];
+        records.Home.OpenFirstHomeResult();
         Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.AreEqual(expected.Id, records.SelectedPatient?.Id);
 
-        records.HomeSearchText = "zzzz-nadie";
-        Assert.IsTrue(records.HasNoHomeResults);
-        Assert.AreEqual("Crear paciente \"zzzz-nadie\"", records.CreateFromSearchText);
+        records.Home.HomeSearchText = "zzzz-nadie";
+        Assert.IsTrue(records.Home.HasNoHomeResults);
+        Assert.AreEqual("Crear paciente \"zzzz-nadie\"", records.Home.CreateFromSearchText);
     }
 
     [TestMethod]
@@ -141,22 +142,22 @@ public class PacientesTests
     {
         var (records, _, _) = await CreateRecordsAsync();
         records.EnterPatientsSection();
-        records.HomeSearchText = "maría lópez garcía";
+        records.Home.HomeSearchText = "maría lópez garcía";
 
         await records.CreatePatientFromSearchAsync();
 
         Assert.IsTrue(records.Navigation.IsFormPage, "Abre el alta como página");
-        Assert.IsTrue(records.IsFormNew);
-        Assert.AreEqual("María", records.FormFirstName);
-        Assert.AreEqual("López", records.FormLastName);
-        Assert.AreEqual("García", records.FormMaternalLastName);
-        Assert.AreEqual(string.Empty, records.HomeSearchText);
+        Assert.IsTrue(records.PatientForm.IsFormNew);
+        Assert.AreEqual("María", records.PatientForm.FormFirstName);
+        Assert.AreEqual("López", records.PatientForm.FormLastName);
+        Assert.AreEqual("García", records.PatientForm.FormMaternalLastName);
+        Assert.AreEqual(string.Empty, records.Home.HomeSearchText);
 
         // Un folio o teléfono no se usa como nombre
-        records.CancelPatientForm();
-        records.HomeSearchText = "EXP-123";
+        records.PatientForm.CancelPatientForm();
+        records.Home.HomeSearchText = "EXP-123";
         await records.CreatePatientFromSearchAsync();
-        Assert.AreEqual(string.Empty, records.FormFirstName);
+        Assert.AreEqual(string.Empty, records.PatientForm.FormFirstName);
     }
 
     // ------------------------------------------------------------------ navegación
@@ -228,10 +229,10 @@ public class PacientesTests
 
         await records.NewPatientAsync();
         Assert.IsTrue(records.Navigation.IsFormPage);
-        Assert.AreEqual("Nuevo paciente", records.FormPageTitle);
-        Assert.AreEqual("Identificacion", records.FormOpenSection);
+        Assert.AreEqual("Nuevo paciente", records.PatientForm.FormPageTitle);
+        Assert.AreEqual("Identificacion", records.PatientForm.FormOpenSection);
 
-        records.CancelPatientForm();
+        records.PatientForm.CancelPatientForm();
         Assert.IsFalse(records.Navigation.IsFormPage);
         Assert.IsTrue(records.Navigation.IsHomePage);
     }
@@ -241,15 +242,15 @@ public class PacientesTests
     {
         var (records, _, consultations) = await CreateRecordsAsync();
         await records.NewPatientAsync();
-        records.FormFirstName = "Sofía";
-        records.FormLastName = "Hernández";
-        records.FormBirthDateText = DateTime.Today.AddYears(-34).ToString("dd/MM/yyyy");
-        records.FormGender = "Femenino";
-        records.SetAllergiesDenied();
+        records.PatientForm.FormFirstName = "Sofía";
+        records.PatientForm.FormLastName = "Hernández";
+        records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-34).ToString("dd/MM/yyyy");
+        records.PatientForm.FormGender = "Femenino";
+        records.PatientForm.SetAllergiesDenied();
 
-        await records.SavePatientAndStartConsultationAsync();
+        await records.PatientForm.SavePatientAndStartConsultationAsync();
 
-        Assert.IsNull(records.FormErrorMessage);
+        Assert.IsNull(records.PatientForm.FormErrorMessage);
         Assert.IsTrue(consultations.HasActiveConsultation);
         Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.AreEqual("Sofía Hernández", records.SelectedPatient?.FullName);
@@ -260,12 +261,12 @@ public class PacientesTests
     {
         var (records, _, _) = await CreateRecordsAsync();
         await records.NewPatientAsync();
-        records.OpenFormSection("Notas");
+        records.PatientForm.OpenFormSection("Notas");
 
-        await records.SavePatientModalAsync();
+        await records.PatientForm.SavePatientModalAsync();
 
-        Assert.IsNotNull(records.FormErrorMessage);
-        Assert.AreEqual("Identificacion", records.FormOpenSection, "Lleva al dato que falta");
+        Assert.IsNotNull(records.PatientForm.FormErrorMessage);
+        Assert.AreEqual("Identificacion", records.PatientForm.FormOpenSection, "Lleva al dato que falta");
         Assert.IsTrue(records.Navigation.IsFormPage, "No sale del alta");
     }
 
@@ -275,26 +276,26 @@ public class PacientesTests
         var (records, _, _) = await CreateRecordsAsync();
         await records.NewPatientAsync();
 
-        records.FormGender = "Masculino";
-        records.FormBirthDateText = DateTime.Today.AddYears(-40).ToString("dd/MM/yyyy");
-        var keys = records.FormSections.Select(s => s.Key).ToList();
+        records.PatientForm.FormGender = "Masculino";
+        records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-40).ToString("dd/MM/yyyy");
+        var keys = records.PatientForm.FormSections.Select(s => s.Key).ToList();
         Assert.DoesNotContain("Gineco", keys);
         Assert.DoesNotContain("Desarrollo", keys);
 
-        records.FormGender = "Femenino";
-        keys = records.FormSections.Select(s => s.Key).ToList();
+        records.PatientForm.FormGender = "Femenino";
+        keys = records.PatientForm.FormSections.Select(s => s.Key).ToList();
         Assert.Contains("Gineco", keys);
         Assert.DoesNotContain("Desarrollo", keys);
 
-        records.FormBirthDateText = DateTime.Today.AddYears(-4).ToString("dd/MM/yyyy");
-        keys = records.FormSections.Select(s => s.Key).ToList();
+        records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-4).ToString("dd/MM/yyyy");
+        keys = records.PatientForm.FormSections.Select(s => s.Key).ToList();
         Assert.DoesNotContain("Gineco", keys);
         Assert.Contains("Desarrollo", keys);
 
         // Numeración continua aunque falte una sección
-        var numbers = records.FormSections.Select(s => s.Number).ToList();
+        var numbers = records.PatientForm.FormSections.Select(s => s.Number).ToList();
         CollectionAssert.AreEqual(Enumerable.Range(1, numbers.Count).Select(n => n.ToString()).ToList(), numbers);
-        StringAssert.Contains(records.FormProgressText, "obligatoria");
+        StringAssert.Contains(records.PatientForm.FormProgressText, "obligatoria");
     }
 
     [TestMethod]
@@ -304,22 +305,22 @@ public class PacientesTests
         await records.NewPatientAsync();
 
         // Lo que ve la pantalla: el texto leído cada vez que se avisa que cambió
-        var shown = records.FormProgressText;
-        records.PropertyChanged += (_, e) =>
+        var shown = records.PatientForm.FormProgressText;
+        records.PatientForm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MedicalRecordsViewModel.FormProgressText)) shown = records.FormProgressText;
+            if (e.PropertyName == nameof(PatientFormViewModel.FormProgressText)) shown = records.PatientForm.FormProgressText;
         };
         StringAssert.Contains(shown, "Faltan 2");
 
-        records.FormFirstName = "Lucía";
-        records.FormLastName = "Pérez";
-        records.FormGender = "Femenino";
-        records.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
-        Assert.AreEqual(records.FormProgressText, shown);
+        records.PatientForm.FormFirstName = "Lucía";
+        records.PatientForm.FormLastName = "Pérez";
+        records.PatientForm.FormGender = "Femenino";
+        records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
+        Assert.AreEqual(records.PatientForm.FormProgressText, shown);
         StringAssert.Contains(shown, "Faltan 1", "Falta solo alergias");
 
-        records.FormAllergies = "Negadas";
-        Assert.AreEqual(records.FormProgressText, shown);
+        records.PatientForm.FormAllergies = "Negadas";
+        Assert.AreEqual(records.PatientForm.FormProgressText, shown);
         StringAssert.Contains(shown, "lo obligatorio está completo");
     }
 
@@ -656,13 +657,13 @@ public class PacientesTests
         using var folder = new DraftFolder();
         var records = await OpenAppAsync(folder);
         await records.NewPatientAsync();
-        var folio = records.FormRecordNumber;
-        records.FormFirstName = "Lucía";
-        records.FormLastName = "Pérez";
-        records.FormGender = "Femenino";
-        records.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
-        records.FormPregnanciesCount = 2;
-        records.OpenFormSection("Gineco");
+        var folio = records.PatientForm.FormRecordNumber;
+        records.PatientForm.FormFirstName = "Lucía";
+        records.PatientForm.FormLastName = "Pérez";
+        records.PatientForm.FormGender = "Femenino";
+        records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-30).ToString("dd/MM/yyyy");
+        records.PatientForm.FormPregnanciesCount = 2;
+        records.PatientForm.OpenFormSection("Gineco");
         records.FlushConsultationDraft();
         records.Dispose();
         Assert.IsTrue(File.Exists(folder.Store().PatientFormPath));
@@ -670,18 +671,18 @@ public class PacientesTests
         var reopened = await OpenAppAsync(folder);
 
         Assert.IsTrue(reopened.Navigation.IsFormPage, "Se reabre el alta");
-        Assert.IsTrue(reopened.IsFormNew);
-        Assert.AreEqual(folio, reopened.FormRecordNumber);
-        Assert.AreEqual("Lucía", reopened.FormFirstName);
-        Assert.AreEqual("Pérez", reopened.FormLastName);
-        Assert.AreEqual(2, reopened.FormPregnanciesCount);
-        Assert.AreEqual(30, reopened.FormAge, "La edad se recalcula de la fecha");
-        Assert.IsTrue(reopened.FormShowsGyneco);
-        Assert.AreEqual("Gineco", reopened.FormOpenSection);
+        Assert.IsTrue(reopened.PatientForm.IsFormNew);
+        Assert.AreEqual(folio, reopened.PatientForm.FormRecordNumber);
+        Assert.AreEqual("Lucía", reopened.PatientForm.FormFirstName);
+        Assert.AreEqual("Pérez", reopened.PatientForm.FormLastName);
+        Assert.AreEqual(2, reopened.PatientForm.FormPregnanciesCount);
+        Assert.AreEqual(30, reopened.PatientForm.FormAge, "La edad se recalcula de la fecha");
+        Assert.IsTrue(reopened.PatientForm.FormShowsGyneco);
+        Assert.AreEqual("Gineco", reopened.PatientForm.FormOpenSection);
 
-        reopened.SetAllergiesDenied();
-        await reopened.SavePatientModalAsync();
-        Assert.IsNull(reopened.FormErrorMessage);
+        reopened.PatientForm.SetAllergiesDenied();
+        await reopened.PatientForm.SavePatientModalAsync();
+        Assert.IsNull(reopened.PatientForm.FormErrorMessage);
         Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Guardado: ya no hay nada que recuperar");
         reopened.Dispose();
     }
@@ -693,20 +694,20 @@ public class PacientesTests
         var records = await OpenAppAsync(folder);
         var patient = records.Patients.First();
         records.OpenPatientChart(patient);
-        records.EditPatient();
-        records.FormPhone = "5598765432";
-        var typedPhone = records.FormPhone;
+        records.PatientForm.EditPatient();
+        records.PatientForm.FormPhone = "5598765432";
+        var typedPhone = records.PatientForm.FormPhone;
         records.FlushConsultationDraft();
         records.Dispose();
 
         var reopened = await OpenAppAsync(folder);
 
         Assert.IsTrue(reopened.Navigation.IsFormPage);
-        Assert.AreEqual(patient.Id, reopened.FormPatientId);
+        Assert.AreEqual(patient.Id, reopened.PatientForm.FormPatientId);
         Assert.AreEqual(patient.Id, reopened.SelectedPatient?.Id);
-        Assert.AreEqual(typedPhone, reopened.FormPhone);
+        Assert.AreEqual(typedPhone, reopened.PatientForm.FormPhone);
 
-        reopened.CancelPatientForm();
+        reopened.PatientForm.CancelPatientForm();
         Assert.IsFalse(reopened.Navigation.IsFormPage);
         Assert.IsFalse(File.Exists(folder.Store().PatientFormPath));
         reopened.Dispose();
@@ -721,7 +722,7 @@ public class PacientesTests
         await records.NewPatientAsync();
         records.FlushConsultationDraft();
         Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Un alta vacía no se recupera");
-        records.CancelPatientForm();
+        records.PatientForm.CancelPatientForm();
 
         records.OpenPatientChart(records.Patients.First());
         records.EditAntecedent(records.AntecedentSections.First());
@@ -738,7 +739,7 @@ public class PacientesTests
         records.AutosaveDelay = TimeSpan.FromMilliseconds(30);
 
         await records.NewPatientAsync();
-        records.FormFirstName = "Mateo";
+        records.PatientForm.FormFirstName = "Mateo";
 
         await WaitUntilAsync(() => File.Exists(folder.Store().PatientFormPath));
         StringAssert.Contains(File.ReadAllText(folder.Store().PatientFormPath), "Mateo");
@@ -758,7 +759,7 @@ public class PacientesTests
             new PatientAppointment { Date = day.AddDays(1), Time = "08:00", PatientName = "Otro día" }
         };
 
-        var slots = MedicalRecordsViewModel.BuildSlots(day, appointments, now: day.AddDays(-1));
+        var slots = AgendaPanelViewModel.BuildSlots(day, appointments, now: day.AddDays(-1));
 
         Assert.AreEqual(1, slots.Count(s => s.HasAppointment), "Las canceladas y las de otro día no aparecen");
         var free = slots.Where(s => s.IsFree).Select(s => s.TimeText).ToList();
@@ -773,7 +774,7 @@ public class PacientesTests
         Assert.IsTrue(slots.Select(s => s.Time).SequenceEqual(slots.Select(s => s.Time).OrderBy(t => t)), "En orden de hora");
 
         // Hoy no se ofrecen horas que ya pasaron
-        var today = MedicalRecordsViewModel.BuildSlots(day, Array.Empty<PatientAppointment>(), now: day.AddHours(13).AddMinutes(10));
+        var today = AgendaPanelViewModel.BuildSlots(day, Array.Empty<PatientAppointment>(), now: day.AddHours(13).AddMinutes(10));
         Assert.AreEqual("13:30", today.First().TimeText);
     }
 
@@ -784,50 +785,50 @@ public class PacientesTests
         var patient = records.Patients.First();
         records.OpenPatientChart(patient);
 
-        await records.ScheduleForSelectedPatientAsync();
-        Assert.IsTrue(records.IsAgendaPanelOpen);
-        Assert.AreEqual(DateTime.Today.AddDays(1), records.AgendaPanelDate);
-        Assert.HasCount(7, records.AgendaWeek);
+        await records.Agenda.ScheduleForSelectedPatientAsync();
+        Assert.IsTrue(records.Agenda.IsAgendaPanelOpen);
+        Assert.AreEqual(DateTime.Today.AddDays(1), records.Agenda.AgendaPanelDate);
+        Assert.HasCount(7, records.Agenda.AgendaWeek);
 
-        var slot = records.AgendaSlots.First(s => s.IsFree && s.TimeText == "09:00");
-        await records.OpenAgendaSlotAsync(slot);
+        var slot = records.Agenda.AgendaSlots.First(s => s.IsFree && s.TimeText == "09:00");
+        await records.Agenda.OpenAgendaSlotAsync(slot);
         Assert.IsTrue(slot.IsFormOpen);
-        Assert.AreEqual(patient.Id, records.AgendaFormPatient?.Id, "El paciente de la ficha ya viene elegido");
+        Assert.AreEqual(patient.Id, records.Agenda.AgendaFormPatient?.Id, "El paciente de la ficha ya viene elegido");
 
         // Sin motivo no se guarda
-        await records.SaveAgendaFormAsync();
-        Assert.IsNotNull(records.AgendaFormError);
+        await records.Agenda.SaveAgendaFormAsync();
+        Assert.IsNotNull(records.Agenda.AgendaFormError);
 
-        records.SetAgendaReason("Control");
-        records.AgendaFormDuration = 60;
-        await records.SaveAgendaFormAsync();
+        records.Agenda.SetAgendaReason("Control");
+        records.Agenda.AgendaFormDuration = 60;
+        await records.Agenda.SaveAgendaFormAsync();
 
         var saved = (await _service.GetAppointmentsByDayAsync(DateTime.Today.AddDays(1))).Single(a => a.PatientRecordId == patient.Id);
         Assert.AreEqual("09:00", saved.Time);
         Assert.AreEqual(60, saved.DurationMinutes);
         Assert.AreEqual("Control", saved.Reason);
-        Assert.IsFalse(records.AgendaSlots.Any(s => s.IsFree && (s.TimeText == "09:00" || s.TimeText == "09:30")), "La hora queda ocupada");
-        Assert.AreEqual(1, records.AgendaWeek.Single(d => d.Date == DateTime.Today.AddDays(1)).Count);
+        Assert.IsFalse(records.Agenda.AgendaSlots.Any(s => s.IsFree && (s.TimeText == "09:00" || s.TimeText == "09:30")), "La hora queda ocupada");
+        Assert.AreEqual(1, records.Agenda.AgendaWeek.Single(d => d.Date == DateTime.Today.AddDays(1)).Count);
 
         // Cambiar de horario: se elige la cita y luego el nuevo hueco
-        var booked = records.AgendaSlots.Single(s => s.HasAppointment).Appointment!;
-        records.StartMovingAppointment(booked);
-        Assert.IsTrue(records.IsMovingAppointment);
-        await records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree && s.TimeText == "16:00"));
-        Assert.IsFalse(records.IsMovingAppointment);
+        var booked = records.Agenda.AgendaSlots.Single(s => s.HasAppointment).Appointment!;
+        records.Agenda.StartMovingAppointment(booked);
+        Assert.IsTrue(records.Agenda.IsMovingAppointment);
+        await records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree && s.TimeText == "16:00"));
+        Assert.IsFalse(records.Agenda.IsMovingAppointment);
         var moved = (await _service.GetAppointmentsByDayAsync(DateTime.Today.AddDays(1))).Single(a => a.PatientRecordId == patient.Id);
         Assert.AreEqual(saved.Id, moved.Id, "Es la misma cita, no una nueva");
         Assert.AreEqual("16:00", moved.Time);
 
-        await records.CancelAppointmentAsync(records.AgendaSlots.Single(s => s.HasAppointment).Appointment);
+        await records.Agenda.CancelAppointmentAsync(records.Agenda.AgendaSlots.Single(s => s.HasAppointment).Appointment);
         var cancelled = (await _service.GetAppointmentsByDayAsync(DateTime.Today.AddDays(1))).Single(a => a.Id == saved.Id);
         Assert.AreEqual("Cancelada", cancelled.Status);
-        Assert.IsFalse(records.AgendaSlots.Any(s => s.HasAppointment));
+        Assert.IsFalse(records.Agenda.AgendaSlots.Any(s => s.HasAppointment));
 
         // Al volver a abrir el panel empieza en hoy
-        records.CloseAgendaPanel();
-        await records.ToggleAgendaPanelAsync();
-        Assert.AreEqual(DateTime.Today, records.AgendaPanelDate);
+        records.Agenda.CloseAgendaPanel();
+        await records.Agenda.ToggleAgendaPanelAsync();
+        Assert.AreEqual(DateTime.Today, records.Agenda.AgendaPanelDate);
     }
 
     [TestMethod]
@@ -835,14 +836,14 @@ public class PacientesTests
     {
         var (records, _, _) = await CreateRecordsAsync();
         await records.OpenAgendaPanelAsync();
-        records.AgendaPanelDate = DateTime.Today.AddDays(2);
-        await records.LoadAgendaPanelAsync();
+        records.Agenda.AgendaPanelDate = DateTime.Today.AddDays(2);
+        await records.Agenda.LoadAgendaPanelAsync();
 
-        await records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree));
-        Assert.IsNull(records.AgendaFormPatient, "Sin ficha abierta hay que elegir al paciente");
-        records.SetAgendaReason("Primera vez");
-        await records.SaveAgendaFormAsync();
-        StringAssert.Contains(records.AgendaFormError, "paciente");
+        await records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree));
+        Assert.IsNull(records.Agenda.AgendaFormPatient, "Sin ficha abierta hay que elegir al paciente");
+        records.Agenda.SetAgendaReason("Primera vez");
+        await records.Agenda.SaveAgendaFormAsync();
+        StringAssert.Contains(records.Agenda.AgendaFormError, "paciente");
     }
 
     [TestMethod]
@@ -850,14 +851,14 @@ public class PacientesTests
     {
         var (records, _, _) = await CreateRecordsAsync();
         string? opened = null;
-        records.OpenUrl = url => { opened = url; return true; };
+        records.Agenda.OpenUrl = url => { opened = url; return true; };
 
-        records.RemindByWhatsApp(new PatientAppointment { PatientName = "Ana", PatientPhone = "55 1234 5678", Date = new DateTime(2026, 10, 20), Time = "10:00" });
+        records.Agenda.RemindByWhatsApp(new PatientAppointment { PatientName = "Ana", PatientPhone = "55 1234 5678", Date = new DateTime(2026, 10, 20), Time = "10:00" });
         Assert.IsNotNull(opened);
         StringAssert.StartsWith(opened, "https://wa.me/525512345678?text=");
 
         opened = null;
-        records.RemindByWhatsApp(new PatientAppointment { PatientName = "Luis", PatientPhone = "123" });
+        records.Agenda.RemindByWhatsApp(new PatientAppointment { PatientName = "Luis", PatientPhone = "123" });
         Assert.IsNull(opened);
         Assert.IsTrue(records.Info.IsInfoModalVisible);
     }
@@ -875,8 +876,8 @@ public class PacientesTests
             Time = "23:30",
             Reason = "Dolor de garganta"
         });
-        await records.LoadTodayAppointmentsAsync();
-        var appointment = records.TodayAppointments.Single(a => a.PatientRecordId == patient.Id);
+        await records.Home.LoadTodayAppointmentsAsync();
+        var appointment = records.Home.TodayAppointments.Single(a => a.PatientRecordId == patient.Id);
 
         records.AttendAppointment(appointment);
 
@@ -892,7 +893,7 @@ public class PacientesTests
         await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage);
-        await WaitUntilAsync(() => records.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended));
+        await WaitUntilAsync(() => records.Home.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended));
         Assert.AreEqual("Atendida", (await _service.GetAppointmentsByDayAsync(DateTime.Today)).Single(a => a.Id == appointment.Id).Status);
     }
 
@@ -905,7 +906,7 @@ public class PacientesTests
 
         Assert.IsFalse(consultations.HasActiveConsultation);
         Assert.IsTrue(records.Navigation.IsHomePage);
-        Assert.AreEqual("Paciente Sin Expediente", records.HomeSearchText);
+        Assert.AreEqual("Paciente Sin Expediente", records.Home.HomeSearchText);
     }
 
     [TestMethod]
@@ -920,7 +921,7 @@ public class PacientesTests
         Assert.IsTrue(records.Navigation.IsHomePage);
         Assert.IsNull(records.SelectedPatient);
         Assert.IsFalse(records.Patients.Any(p => p.Id == patient.Id), "Deja de aparecer");
-        Assert.IsFalse(MedicalRecordsViewModel.RankPatients(records.Patients, patient.FullName).Any(p => p.Id == patient.Id));
+        Assert.IsFalse(PatientsHomeViewModel.RankPatients(records.Patients, patient.FullName).Any(p => p.Id == patient.Id));
 
         using var db = new AppDbContext(_options);
         var stored = db.Patients.Single(p => p.Id == patient.Id);

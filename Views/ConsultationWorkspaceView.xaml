@@ -682,7 +682,7 @@
                                                Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />
                                 </StackPanel>
                             </Border>
-                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ScheduleForSelectedPatientCommand}" Padding="12,6" HorizontalAlignment="Left" Margin="0,0,0,4" Content="Agendar próxima cita" ToolTip="Abre la agenda en el día de mañana con el paciente ya puesto" />
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Agenda.ScheduleForSelectedPatientCommand}" Padding="12,6" HorizontalAlignment="Left" Margin="0,0,0,4" Content="Agendar próxima cita" ToolTip="Abre la agenda en el día de mañana con el paciente ya puesto" />
                             <Button Style="{StaticResource ButtonPrimary}" Command="{Binding FinalizeConsultationCommand}" Padding="16,7" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Terminar consulta" ToolTip="Ctrl + Enter" />
                         </StackPanel>
                     </StackPanel>

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using TPVC.Models;
 using TPVC.ViewModels.Patients;
 
@@ -8,10 +9,23 @@ namespace TPVC.ViewModels;
 /// <summary>
 /// Puertos del coordinador (fase 6, plan §1.4): los hijos avisan aquí y el coordinador corre los
 /// mismos cuerpos de antes, en el mismo orden. Implementación explícita: no es API pública ni se enlaza.
+/// Hasta el paso 20, el candado de la consulta (IConsultationGate) lo resuelve Handoff.cs del coordinador.
 /// </summary>
-public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow
+public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow, IConsultationGate
 {
     void IPatientsWorkflow.NotifyPrescriptionStateChanged() => NotifyPrescriptionStateChanged();
+
+    Task IPatientsWorkflow.RefreshAgendaAfterChangeAsync(int patientId) => RefreshAgendaAfterChangeAsync(patientId);
+
+    Task IPatientsWorkflow.LoadPatientsAsync() => LoadPatientsAsync();
+
+    void IPatientsWorkflow.StartActiveConsultation() => StartActiveConsultation();
+
+    void IPatientsWorkflow.ShowConsultation() => ShowConsultation();
+
+    void IPatientsWorkflow.OpenPatientChart(PatientRecord? patient) => OpenPatientChart(patient);
+
+    bool IConsultationGate.BlockIfPatientHandedOff(PatientRecord? patient) => BlockIfPatientHandedOff(patient);
 
     void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
@@ -46,8 +60,8 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow
 
     void IPatientsHubs.OnPatientsChanged()
     {
-        RefreshRecentPatients();
-        RefreshHomeResults();
+        Home.RefreshRecentPatients();
+        Home.RefreshHomeResults();
     }
 
     void IPatientsHubs.OnConsultationsHistoryChanged(ObservableCollection<PatientConsultation> value)

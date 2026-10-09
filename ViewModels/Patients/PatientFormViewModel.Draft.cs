@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -7,14 +8,14 @@ using System.Threading.Tasks;
 using TPVC.Models;
 using TPVC.Services;
 
-namespace TPVC.ViewModels;
+namespace TPVC.ViewModels.Patients;
 
 /// <summary>
 /// Alta o edición de paciente en curso: se guarda sola en un archivo local tras una pausa al
 /// escribir y, si el programa se cierra o se va la luz, se recupera al abrir. Se borra al guardar
 /// o cancelar el formulario. Como el de la consulta, no escribe en la base mientras se captura.
 /// </summary>
-public partial class MedicalRecordsViewModel
+public partial class PatientFormViewModel
 {
     /// <summary>
     /// Campos que se guardan, en el orden en que se restauran (sexo y edad al final para que el formulario
@@ -22,7 +23,7 @@ public partial class MedicalRecordsViewModel
     /// propiedad por su nombre con reflexión, que dejaría de encontrarla en silencio al moverla a otro
     /// ViewModel. Las claves (los nombres) son las mismas y los valores se convierten igual.
     /// </summary>
-    private static readonly (string Key, Func<MedicalRecordsViewModel, string> Get, Action<MedicalRecordsViewModel, string> Set)[] PatientFormDraftFields =
+    private static readonly (string Key, Func<PatientFormViewModel, string> Get, Action<PatientFormViewModel, string> Set)[] PatientFormDraftFields =
     {
         TextField(nameof(FormRecordNumber), vm => vm.FormRecordNumber, (vm, value) => vm.FormRecordNumber = value),
         TextField(nameof(FormFirstName), vm => vm.FormFirstName, (vm, value) => vm.FormFirstName = value),
@@ -70,21 +71,21 @@ public partial class MedicalRecordsViewModel
     /// <summary>Texto tal como lo guardaba la versión con reflexión (cultura invariable; null → vacío).</summary>
     private static string DraftText(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
 
-    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) TextField(
-        string key, Func<MedicalRecordsViewModel, string> get, Action<MedicalRecordsViewModel, string> set) =>
+    private static (string, Func<PatientFormViewModel, string>, Action<PatientFormViewModel, string>) TextField(
+        string key, Func<PatientFormViewModel, string> get, Action<PatientFormViewModel, string> set) =>
         (key, vm => DraftText(get(vm)), set);
 
     /// <summary>Un número que no se puede leer deja el campo como está.</summary>
-    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) IntField(
-        string key, Func<MedicalRecordsViewModel, int> get, Action<MedicalRecordsViewModel, int> set) =>
+    private static (string, Func<PatientFormViewModel, string>, Action<PatientFormViewModel, string>) IntField(
+        string key, Func<PatientFormViewModel, int> get, Action<PatientFormViewModel, int> set) =>
         (key, vm => DraftText(get(vm)), (vm, text) =>
         {
             if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) set(vm, number);
         });
 
     /// <summary>Un sí/no que no se puede leer deja el campo como está.</summary>
-    private static (string, Func<MedicalRecordsViewModel, string>, Action<MedicalRecordsViewModel, string>) BoolField(
-        string key, Func<MedicalRecordsViewModel, bool> get, Action<MedicalRecordsViewModel, bool> set) =>
+    private static (string, Func<PatientFormViewModel, string>, Action<PatientFormViewModel, string>) BoolField(
+        string key, Func<PatientFormViewModel, bool> get, Action<PatientFormViewModel, bool> set) =>
         (key, vm => DraftText(get(vm)), (vm, text) =>
         {
             if (bool.TryParse(text, out var flag)) set(vm, flag);
@@ -102,7 +103,7 @@ public partial class MedicalRecordsViewModel
     {
         if (_draftStore == null || _suspendFormDraft || !IsPatientModalOpen) return;
         _formDraftTimer ??= new Timer(_ => _ui.Post(SavePatientFormDraftNow), null, Timeout.Infinite, Timeout.Infinite);
-        _formDraftTimer.Change(AutosaveDelay, Timeout.InfiniteTimeSpan);
+        _formDraftTimer.Change(_autosaveOptions.Delay, Timeout.InfiniteTimeSpan);
     }
 
     private Dictionary<string, string> CapturePatientFormFields()
@@ -125,7 +126,7 @@ public partial class MedicalRecordsViewModel
     }
 
     /// <summary>Guarda ya el formulario abierto (tras la pausa al escribir y al cerrar el programa).</summary>
-    private void SavePatientFormDraftNow()
+    public void SavePatientFormDraftNow()
     {
         if (_draftStore == null || _suspendFormDraft || !IsPatientModalOpen) return;
 
@@ -167,7 +168,7 @@ public partial class MedicalRecordsViewModel
     }
 
     /// <summary>Al abrir la app: si quedó un alta o una edición sin guardar, se reabre tal cual.</summary>
-    private async Task TryRestorePatientFormDraftAsync()
+    public async Task TryRestorePatientFormDraftAsync()
     {
         if (_draftStore == null) return;
         var draft = _draftStore.LoadPatientForm();
@@ -175,14 +176,14 @@ public partial class MedicalRecordsViewModel
 
         if (draft.PatientId > 0)
         {
-            var patient = Session.Patients.FirstOrDefault(p => p.Id == draft.PatientId);
+            var patient = _session.Patients.FirstOrDefault(p => p.Id == draft.PatientId);
             if (patient == null)
             {
                 AppLogger.Warn($"Se descartó la edición sin guardar del expediente {draft.PatientId}: ya no existe.");
                 _draftStore.DeletePatientForm();
                 return;
             }
-            Session.SelectedPatient = patient;
+            _session.SelectedPatient = patient;
             EditPatient();
         }
         else
@@ -200,9 +201,22 @@ public partial class MedicalRecordsViewModel
             _suspendFormDraft = false;
         }
 
-        Feedback.Info(draft.PatientId > 0
+        _feedback.Info(draft.PatientId > 0
             ? "Se recuperó la edición del expediente que no se había guardado"
             : "Se recuperó el alta de paciente que no se había guardado");
         AppLogger.Info($"Formulario de paciente recuperado (expediente {draft.PatientId}, guardado {draft.SavedAt:dd/MM HH:mm}).");
     }
+
+    /// <summary>
+    /// Un campo del borrador cambió: se programa la copia (antes era la rama del alta del guardado
+    /// automático del coordinador; los nombres de la consulta y los del alta no se cruzan).
+    /// </summary>
+    private void OnPropertyChangedForFormDraft(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == null) return;
+        if (PatientFormDraftFieldSet.Contains(e.PropertyName)) SchedulePatientFormDraft();
+    }
+
+    /// <summary>Al cerrar el coordinador, después de guardar el borrador.</summary>
+    public void DisposeFormDraftTimer() => _formDraftTimer?.Dispose();
 }

@@ -32,9 +32,9 @@ public class EscapeLadderTests
         new("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenPrescriptionModal(); }, vm => vm.IsPrescriptionModalOpen),
         new("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenSuppliesModal(); }, vm => vm.IsSuppliesModalOpen),
         new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenServicesModal(); }, vm => vm.IsServicesModalOpen),
-        new("cambiar cita", (vm, _) => { Completes(vm.OpenAgendaPanelAsync(), "Agenda"); vm.StartMovingAppointment(Appointment()); }, vm => vm.IsMovingAppointment),
-        new("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda"), vm => vm.IsAgendaPanelOpen),
-        new("búsqueda", (vm, _) => vm.HomeSearchText = "gar", vm => vm.Navigation.IsHomePage && vm.HasHomeQuery),
+        new("cambiar cita", (vm, _) => { Completes(vm.OpenAgendaPanelAsync(), "Agenda"); vm.Agenda.StartMovingAppointment(Appointment()); }, vm => vm.Agenda.IsMovingAppointment),
+        new("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda"), vm => vm.Agenda.IsAgendaPanelOpen),
+        new("búsqueda", (vm, _) => vm.Home.HomeSearchText = "gar", vm => vm.Navigation.IsHomePage && vm.Home.HasHomeQuery),
         new("ficha", (vm, _) => vm.OpenPatientChart(Mock(vm, 2)), vm => vm.Navigation.IsChartPage)
     };
 
@@ -104,7 +104,7 @@ public class EscapeLadderTests
         // Todo abierto a la vez sobre la ficha, de abajo hacia arriba
         records.OpenPatientChart(Mock(records, 2));
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
-        records.StartMovingAppointment(Appointment());
+        records.Agenda.StartMovingAppointment(Appointment());
         records.IsServicesModalOpen = true;
         records.IsSuppliesModalOpen = true;
         records.IsPrescriptionModalOpen = true;
@@ -143,15 +143,15 @@ public class EscapeLadderTests
     {
         var (records, _) = Open();
         records.Navigation.GoToPatientsHome();
-        records.HomeSearchText = "gar";
+        records.Home.HomeSearchText = "gar";
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
 
         Assert.IsTrue(records.TryCloseTopmost());
-        Assert.IsFalse(records.IsAgendaPanelOpen, "Primero la agenda");
-        Assert.AreEqual("gar", records.HomeSearchText);
+        Assert.IsFalse(records.Agenda.IsAgendaPanelOpen, "Primero la agenda");
+        Assert.AreEqual("gar", records.Home.HomeSearchText);
 
         Assert.IsTrue(records.TryCloseTopmost());
-        Assert.AreEqual(string.Empty, records.HomeSearchText, "Luego la búsqueda");
+        Assert.AreEqual(string.Empty, records.Home.HomeSearchText, "Luego la búsqueda");
         Assert.IsTrue(records.Navigation.IsHomePage);
 
         Assert.IsFalse(records.TryCloseTopmost());
@@ -207,7 +207,7 @@ public class EscapeLadderTests
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
         Assert.IsFalse(records.CanTypeToSearch, "Con la agenda abierta");
         Assert.IsFalse(records.IsAnySheetOpen, "La agenda no es una hoja");
-        records.CloseAgendaPanel();
+        records.Agenda.CloseAgendaPanel();
 
         records.IsCie10DropdownOpen = true;
         Assert.IsFalse(records.IsAnySheetOpen, "Las sugerencias CIE-10 no son una hoja");
@@ -254,13 +254,13 @@ public class EscapeLadderTests
         records.Navigation.GoToPatientsHome();
         records.AppendTypedSearchText("g");
         records.AppendTypedSearchText("ar");
-        Assert.AreEqual("gar", records.HomeSearchText);
+        Assert.AreEqual("gar", records.Home.HomeSearchText);
 
         // Desde la ficha, lo tecleado abre la búsqueda en el inicio (como escribir en el buscador)
-        records.HomeSearchText = string.Empty;
+        records.Home.HomeSearchText = string.Empty;
         records.OpenPatientChart(Mock(records, 2));
         records.AppendTypedSearchText("l");
-        Assert.AreEqual("l", records.HomeSearchText);
+        Assert.AreEqual("l", records.Home.HomeSearchText);
         Assert.IsTrue(records.Navigation.IsHomePage);
         records.Dispose();
     }

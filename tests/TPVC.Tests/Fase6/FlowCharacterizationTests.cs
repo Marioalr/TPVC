@@ -70,7 +70,7 @@ public class FlowCharacterizationTests
         records.IsSuppliesModalOpen = true;
         records.IsServicesModalOpen = true;
         records.IsCatalogBrowserModalOpen = true;
-        records.IsPatientModalOpen = true;
+        records.PatientForm.IsPatientModalOpen = true;
         records.Info.InfoModalMessage = "Aviso anterior";
         records.Info.IsInfoModalVisible = true;
 
@@ -78,14 +78,14 @@ public class FlowCharacterizationTests
         records.Checkout.CashReceived = 5000m;
         await records.Checkout.ChargeAsync();
         await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage, "La consulta se cierra y vuelve al inicio");
-        await WaitUntilAsync(() => records.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended), "La cita de hoy se ve atendida");
+        await WaitUntilAsync(() => records.Home.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended), "La cita de hoy se ve atendida");
 
         Assert.IsFalse(records.IsFinishConsultationOpen);
         Assert.IsFalse(records.IsPrescriptionModalOpen);
         Assert.IsFalse(records.IsSuppliesModalOpen);
         Assert.IsFalse(records.IsServicesModalOpen);
         Assert.IsFalse(records.IsCatalogBrowserModalOpen);
-        Assert.IsFalse(records.IsPatientModalOpen);
+        Assert.IsFalse(records.PatientForm.IsPatientModalOpen);
         Assert.IsFalse(records.Navigation.IsFormPage);
         Assert.IsNull(records.SelectedPatient, "Sin paciente seleccionado");
         Assert.IsEmpty(records.ConsultationsHistory);
@@ -131,7 +131,7 @@ public class FlowCharacterizationTests
         records.IsCatalogBrowserModalOpen = true;
         records.IsPrescriptionPdfModalOpen = true;
         records.IsAllergyAlertOpen = true;
-        records.IsAgendaPanelOpen = true;
+        records.Agenda.IsAgendaPanelOpen = true;
         records.IsSendConsultationSheetOpen = true;
         records.IsFinishConsultationOpen = true;
 
@@ -154,7 +154,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.IsCatalogBrowserModalOpen);
         Assert.IsFalse(records.IsPrescriptionPdfModalOpen);
         Assert.IsFalse(records.IsAllergyAlertOpen);
-        Assert.IsFalse(records.IsAgendaPanelOpen);
+        Assert.IsFalse(records.Agenda.IsAgendaPanelOpen);
         Assert.IsFalse(records.IsSendConsultationSheetOpen);
         Assert.IsFalse(records.IsFinishConsultationOpen);
         Assert.IsTrue(records.Navigation.IsChartPage, "Queda la ficha del paciente");
@@ -282,14 +282,14 @@ public class FlowCharacterizationTests
 
         // Alta / edición abierta sobre la instancia
         records.OpenPatientChart(patient);
-        records.EditPatient();
-        Assert.IsTrue(records.IsPatientModalOpen);
+        records.PatientForm.EditPatient();
+        Assert.IsTrue(records.PatientForm.IsPatientModalOpen);
         BumpPatientInDatabase(clinic, patient.Id, "Látex");
         await records.LoadPatientsAsync();
         Assert.AreSame(patient, records.SelectedPatient);
         Assert.AreSame(patient, records.Patients.Single(p => p.Id == patient.Id), "Con el formulario abierto la lista conserva la instancia");
         Assert.AreNotEqual("Látex", patient.Allergies);
-        records.ClosePatientModal();
+        records.PatientForm.ClosePatientModal();
 
         // Paciente de la consulta en curso
         records.ChartPrimaryAction();

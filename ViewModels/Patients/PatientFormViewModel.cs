@@ -1,0 +1,881 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using TPVC.Models;
+using TPVC.Services;
+
+namespace TPVC.ViewModels.Patients;
+
+/// <summary>
+/// Alta y edición de expediente (fase 6, paso 10): la página del formulario con sus secciones, la
+/// fecha de nacimiento con edad calculada y las secciones que solo aparecen cuando corresponden a la
+/// ficha de identificación (gineco-obstétricos en mujeres de 10 años o más, desarrollo en menores de
+/// 18). Al abrirse y cerrarse cambia la página de Pacientes; al guardar le pide al coordinador que
+/// recargue los expedientes o inicie la consulta.
+/// </summary>
+public partial class PatientFormViewModel : ObservableObject
+{
+    private readonly InventoryService? _inventoryService;
+    private readonly ConsultationService? _consultationService;
+    private readonly ConsultationDraftStore? _draftStore;
+    private readonly PatientSession _session;
+    private readonly PatientsNavigation _nav;
+    private readonly ActiveConsultationSession _active;
+    private readonly InfoDialogState _info;
+    private readonly PatientsFeedback _feedback;
+    private readonly IConsultationGate _gate;
+    private readonly IUserDialogs _dialogs;
+    private readonly IUiThread _ui;
+    private readonly AutosaveOptions _autosaveOptions;
+    private readonly IPatientsWorkflow _workflow;
+
+    public PatientFormViewModel(
+        InventoryService? inventoryService,
+        ConsultationService? consultationService,
+        ConsultationDraftStore? draftStore,
+        PatientSession session,
+        PatientsNavigation navigation,
+        ActiveConsultationSession active,
+        InfoDialogState info,
+        PatientsFeedback feedback,
+        IConsultationGate gate,
+        IUserDialogs dialogs,
+        IUiThread ui,
+        AutosaveOptions autosaveOptions,
+        IPatientsWorkflow workflow)
+    {
+        _inventoryService = inventoryService;
+        _consultationService = consultationService;
+        _draftStore = draftStore;
+        _session = session;
+        _nav = navigation;
+        _active = active;
+        _info = info;
+        _feedback = feedback;
+        _gate = gate;
+        _dialogs = dialogs;
+        _ui = ui;
+        _autosaveOptions = autosaveOptions;
+        _workflow = workflow;
+    }
+
+    // ==========================================
+    // MODAL DE ALTA / EDICIÓN DE EXPEDIENTE (NOM-004-SSA3)
+    // ==========================================
+    [ObservableProperty]
+    private bool _isPatientModalOpen;
+
+    [ObservableProperty]
+    private int _formPatientId;
+
+    [ObservableProperty]
+    private string _formRecordNumber = string.Empty;
+
+    [ObservableProperty]
+    private string _formFirstName = string.Empty;
+
+    [ObservableProperty]
+    private string _formLastName = string.Empty;
+
+    [ObservableProperty]
+    private string _formMaternalLastName = string.Empty;
+
+    [ObservableProperty]
+    private string _formFullName = string.Empty;
+
+    partial void OnFormFullNameChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            FormFirstName = string.Empty;
+            FormLastName = string.Empty;
+            FormMaternalLastName = string.Empty;
+        }
+        else if (string.IsNullOrWhiteSpace(FormFirstName) && string.IsNullOrWhiteSpace(FormLastName))
+        {
+            ParseFullName(value, out var f, out var l, out var m);
+            FormFirstName = f;
+            FormLastName = l;
+            FormMaternalLastName = m;
+        }
+    }
+
+    [ObservableProperty]
+    private string _formAgeText = string.Empty;
+
+    [ObservableProperty]
+    private int _formAge;
+
+    partial void OnFormAgeTextChanged(string value)
+    {
+        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
+        if (digitsOnly != value)
+        {
+            FormAgeText = digitsOnly;
+            return;
+        }
+
+        FormAge = int.TryParse(digitsOnly, out var age) ? age : 0;
+        RecomputeFormProfile();
+    }
+
+    partial void OnFormAgeChanged(int value)
+    {
+        // Vacío = edad sin capturar (no "0 años", que lo volvería recién nacido)
+        var str = value.ToString();
+        if (FormAgeText != str && !(value == 0 && string.IsNullOrEmpty(FormAgeText)))
+        {
+            FormAgeText = str;
+        }
+        RecomputeFormProfile();
+    }
+
+    [ObservableProperty]
+    private string _formGender = string.Empty;
+
+    partial void OnFormGenderChanged(string value) => RecomputeFormProfile();
+
+    [ObservableProperty]
+    private DateTime? _formBirthDate;
+
+    [ObservableProperty]
+    private string _formOccupation = string.Empty;
+
+    [ObservableProperty]
+    private string _formReligion = string.Empty;
+
+    // Antecedentes Heredofamiliares (AHF)
+    [ObservableProperty]
+    private string _formFamilyHistory = string.Empty;
+
+    // Antecedentes Personales Patológicos (APP)
+    [ObservableProperty]
+    private string _formSurgeries = string.Empty;
+
+    [ObservableProperty]
+    private string _formTransfusions = string.Empty;
+
+    [ObservableProperty]
+    private string _formHospitalizations = string.Empty;
+
+    [ObservableProperty]
+    private string _formImmunizationSchedule = string.Empty; // Para niños
+
+    // Antecedentes Gineco-Obstétricos (AGO) (Mujeres)
+    [ObservableProperty]
+    private string _formMenarcheAge = string.Empty;
+
+    [ObservableProperty]
+    private string _formSexualOnsetAge = string.Empty;
+
+    [ObservableProperty]
+    private string _formSexualPartnersCount = string.Empty;
+
+    [ObservableProperty]
+    private string _formPeriodDuration = string.Empty;
+
+    [ObservableProperty]
+    private string _formIsPeriodHeavy = "Normal";
+
+    [ObservableProperty]
+    private string _formPapSmear = string.Empty;
+
+    [ObservableProperty]
+    private int _formPregnanciesCount = 0;
+
+    [ObservableProperty]
+    private int _formCesareansCount = 0;
+
+    [ObservableProperty]
+    private int _formAbortionsCount = 0;
+
+    [ObservableProperty]
+    private bool _formIsCurrentlyPregnant = false;
+
+    [ObservableProperty]
+    private string _formGestationalWeeks = string.Empty;
+
+    // Hitos del Desarrollo Psicomotor (Niños)
+    [ObservableProperty]
+    private string _formDevelopmentalMilestones = string.Empty;
+
+    // Antecedentes Personales No Patológicos (APNP)
+    [ObservableProperty]
+    private string _formDiet = string.Empty;
+
+    [ObservableProperty]
+    private string _formHousingConditions = string.Empty;
+
+    [ObservableProperty]
+    private string _formZoonosis = string.Empty;
+
+    [ObservableProperty]
+    private bool _formIsFemale;
+
+    [ObservableProperty]
+    private bool _formIsPediatric;
+
+    [ObservableProperty]
+    private string _formPhone = string.Empty;
+
+    partial void OnFormPhoneChanged(string value)
+    {
+        var formatted = FormatPhoneNumber(value);
+        if (formatted != value)
+        {
+            FormPhone = formatted;
+        }
+    }
+
+    [ObservableProperty]
+    private string _formEmail = string.Empty;
+
+    [ObservableProperty]
+    private string _formAddress = string.Empty;
+
+    [ObservableProperty]
+    private string _formBloodType = BloodTypeUnknown;
+
+    [ObservableProperty]
+    private string _formAllergies = string.Empty;
+
+    [ObservableProperty]
+    private string _formChronicDiseases = string.Empty;
+
+    [ObservableProperty]
+    private string _formEmergencyContactName = string.Empty;
+
+    [ObservableProperty]
+    private string _formEmergencyContactPhone = string.Empty;
+
+    partial void OnFormEmergencyContactPhoneChanged(string value)
+    {
+        var formatted = FormatPhoneNumber(value);
+        if (formatted != value)
+        {
+            FormEmergencyContactPhone = formatted;
+        }
+    }
+
+    public static string FormatPhoneNumber(string? phone) => PatientRecord.FormatPhoneNumber(phone);
+
+    public static bool IsValidEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return true; // Permite vacío
+        var trimmed = email.Trim();
+        try
+        {
+            return Regex.IsMatch(
+                trimmed, 
+                @"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$", 
+                RegexOptions.IgnoreCase, 
+                TimeSpan.FromMilliseconds(250));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    internal static void ParseFullName(string? fullName, out string firstName, out string lastName, out string maternalLastName)
+    {
+        firstName = string.Empty;
+        lastName = string.Empty;
+        maternalLastName = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(fullName))
+            return;
+
+        var trimmed = fullName.Trim();
+
+        // Formato con coma: "Apellidos, Nombre(s)"
+        if (trimmed.Contains(','))
+        {
+            var commaParts = trimmed.Split(new[] { ',' }, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (commaParts.Length == 2)
+            {
+                firstName = commaParts[1].Trim();
+                var surnameTokens = commaParts[0].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (surnameTokens.Length == 1)
+                {
+                    lastName = surnameTokens[0];
+                }
+                else if (surnameTokens.Length >= 2)
+                {
+                    lastName = surnameTokens[0];
+                    maternalLastName = string.Join(" ", surnameTokens.Skip(1));
+                }
+                return;
+            }
+        }
+
+        // Formato regular: "Nombre(s) Paterno Materno"
+        var tokens = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 1)
+        {
+            firstName = tokens[0];
+        }
+        else if (tokens.Length == 2)
+        {
+            firstName = tokens[0];
+            lastName = tokens[1];
+        }
+        else if (tokens.Length == 3)
+        {
+            firstName = tokens[0];
+            lastName = tokens[1];
+            maternalLastName = tokens[2];
+        }
+        else
+        {
+            lastName = tokens[^2];
+            maternalLastName = tokens[^1];
+            firstName = string.Join(" ", tokens.Take(tokens.Length - 2));
+        }
+    }
+
+    [ObservableProperty]
+    private string _formClinicalNotes = string.Empty;
+
+    [ObservableProperty]
+    private string? _formErrorMessage;
+
+    public List<string> GenderOptions { get; } = new() { "Masculino", "Femenino", "Otro / No especificado" };
+    public const string BloodTypeUnknown = "No determinado";
+
+    public List<string> BloodTypeOptions { get; } = new() { BloodTypeUnknown, "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
+    public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
+
+    private static readonly string[] BirthDateFormats =
+    {
+        "d/M/yyyy", "dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "d.M.yyyy", "dd.MM.yyyy",
+        "yyyy-MM-dd", "d/M/yy", "dd/MM/yy", "ddMMyyyy"
+    };
+
+    private static readonly CultureInfo MexicanCulture = CultureInfo.GetCultureInfo("es-MX");
+
+    private bool _syncingBirthDateText;
+
+    /// <summary>Fecha de nacimiento como se escribe (día/mes/año).</summary>
+    [ObservableProperty]
+    private string _formBirthDateText = string.Empty;
+
+    partial void OnFormBirthDateTextChanged(string value)
+    {
+        if (_syncingBirthDateText) return;
+        FormBirthDate = TryParseBirthDate(value, DateTime.Today);
+    }
+
+    partial void OnFormBirthDateChanged(DateTime? value)
+    {
+        if (value is { } birth)
+        {
+            FormAge = PatientRecord.CalculateAge(birth, DateTime.Today);
+            if (TryParseBirthDate(FormBirthDateText, DateTime.Today) != birth.Date)
+            {
+                _syncingBirthDateText = true;
+                FormBirthDateText = birth.ToString("dd/MM/yyyy", MexicanCulture);
+                _syncingBirthDateText = false;
+            }
+        }
+        RecomputeFormProfile();
+    }
+
+    /// <summary>Fecha válida (no futura, máximo 130 años) o null.</summary>
+    public static DateTime? TryParseBirthDate(string? text, DateTime today)
+    {
+        var clean = text?.Trim();
+        if (string.IsNullOrEmpty(clean)) return null;
+        if (!DateTime.TryParseExact(clean, BirthDateFormats, MexicanCulture, DateTimeStyles.None, out var date)) return null;
+        if (date.Date > today.Date || date.Year < today.Year - 130) return null;
+        return date.Date;
+    }
+
+    public bool FormHasBirthDate => FormBirthDate.HasValue;
+
+    public bool FormHasAge => FormBirthDate.HasValue || !string.IsNullOrWhiteSpace(FormAgeText);
+
+    /// <summary>"34 años", "2 años 6 meses", "8 meses"... junto a la fecha.</summary>
+    public string FormAgeDisplay => FormBirthDate is { } birth
+        ? PatientRecord.FormatAge(birth, 0, DateTime.Today)
+        : FormHasAge ? PatientRecord.FormatAge(null, FormAge, DateTime.Today) : string.Empty;
+
+    /// <summary>Antecedentes gineco-obstétricos: mujeres de 10 años o más.</summary>
+    public bool FormShowsGyneco => FormIsFemale && FormHasAge && FormAge >= PatientRecord.GynecoObstetricMinAge;
+
+    [RelayCommand]
+    public void SetAllergiesDenied() => FormAllergies = "Negadas";
+
+    private void RecomputeFormProfile()
+    {
+        FormIsFemale = !string.IsNullOrWhiteSpace(FormGender) && FormGender.StartsWith("Fem", StringComparison.OrdinalIgnoreCase);
+        FormIsPediatric = FormHasAge && FormAge < 18;
+        NotifyFormProfileChanged();
+    }
+
+    private void NotifyFormProfileChanged()
+    {
+        OnPropertyChanged(nameof(FormHasBirthDate));
+        OnPropertyChanged(nameof(FormHasAge));
+        OnPropertyChanged(nameof(FormAgeDisplay));
+        OnPropertyChanged(nameof(FormShowsGyneco));
+    }
+
+    // ================================================================== reglas propias
+
+    /// <summary>
+    /// Se suscribe a sus propios avisos (el coordinador la llama donde antes se suscribía a sí mismo):
+    /// primero el borrador del alta (si hay almacén), luego la barra lateral. Mismo orden que antes.
+    /// </summary>
+    public void AttachPropertyRules()
+    {
+        if (_draftStore != null) PropertyChanged += OnPropertyChangedForFormDraft;
+        PropertyChanged += OnPropertyChangedForPacientes;
+    }
+
+    private void OnPropertyChangedForPacientes(object? sender, PropertyChangedEventArgs e)
+    {
+        var name = e.PropertyName;
+        if (name == null) return;
+
+        // La barra lateral del alta refleja lo que se va capturando
+        if (name.StartsWith("Form", StringComparison.Ordinal) && name != nameof(FormSections) && name != nameof(FormPageTitle) && name != nameof(FormProgressText))
+        {
+            OnPropertyChanged(nameof(FormSections));
+            OnPropertyChanged(nameof(FormProgressText));
+            if (name is nameof(FormFirstName) or nameof(FormLastName) or nameof(FormMaternalLastName) or nameof(FormPatientId))
+            {
+                OnPropertyChanged(nameof(FormPageTitle));
+            }
+        }
+    }
+
+    partial void OnIsPatientModalOpenChanged(bool value)
+    {
+        if (value)
+        {
+            if (!_nav.IsFormPage) _nav.PageBeforeForm = _nav.PatientsPage;
+            if (string.IsNullOrEmpty(FormOpenSection)) FormOpenSection = "Identificacion";
+            _nav.PatientsPage = PatientsNavigation.PageForm;
+            OnPatientFormOpenedForDraft();
+            return;
+        }
+
+        OnPatientFormClosedForDraft();
+        if (!_nav.IsFormPage) return;
+        // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
+        if (_nav.PageBeforeForm == PatientsNavigation.PageConsultation && _active.HasActiveConsultation) _workflow.ShowConsultation();
+        else if (_session.SelectedPatient != null) _nav.PatientsPage = PatientsNavigation.PageChart;
+        else _nav.GoToPatientsHome();
+    }
+
+    // ================================================================== alta y edición
+
+    [ObservableProperty]
+    private string _formOpenSection = "Identificacion";
+
+    [RelayCommand]
+    public void OpenFormSection(string? key)
+    {
+        if (!string.IsNullOrWhiteSpace(key)) FormOpenSection = key;
+    }
+
+    public bool IsFormNew => FormPatientId == 0;
+
+    public string FormPageTitle
+    {
+        get
+        {
+            if (IsFormNew) return "Nuevo paciente";
+            var name = string.Join(" ", new[] { FormFirstName, FormLastName, FormMaternalLastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            return string.IsNullOrWhiteSpace(name) ? "Editar expediente" : $"Editar: {name}";
+        }
+    }
+
+    public IReadOnlyList<PatientFormSection> FormSections
+    {
+        get
+        {
+            var list = new List<PatientFormSection>();
+            int number = 1;
+            void Add(string key, string title, bool required, bool complete, bool applicable = true)
+            {
+                if (!applicable) return;
+                var status = required ? (complete ? "Completa" : "Obligatoria") : (complete ? "Con datos" : "Opcional");
+                list.Add(new PatientFormSection(key, (number++).ToString(CultureInfo.InvariantCulture), title, status, complete, required, FormOpenSection == key));
+            }
+
+            static bool Any(params string?[] values) => values.Any(v => !string.IsNullOrWhiteSpace(v));
+
+            Add("Identificacion", "Identificación", true,
+                Any(FormFirstName) && Any(FormLastName) && FormHasAge && Any(FormGender));
+            Add("Alergias", "Alergias y crónicos", true, Any(FormAllergies));
+            Add("Contacto", "Contacto y emergencia", false, Any(FormPhone, FormEmail, FormAddress, FormEmergencyContactName));
+            Add("Heredofamiliares", "Heredofamiliares", false, Any(FormFamilyHistory));
+            Add("Patologicos", "Personales patológicos", false, Any(FormSurgeries, FormHospitalizations, FormTransfusions, FormImmunizationSchedule));
+            Add("Gineco", "Gineco-obstétricos", false,
+                Any(FormMenarcheAge, FormSexualOnsetAge, FormPeriodDuration, FormPapSmear) || FormPregnanciesCount > 0, FormShowsGyneco);
+            Add("Desarrollo", "Desarrollo", false, Any(FormDevelopmentalMilestones), FormIsPediatric);
+            Add("NoPatologicos", "No patológicos", false, Any(FormDiet, FormHousingConditions, FormZoonosis, FormOccupation));
+            Add("Notas", "Notas de ingreso", false, Any(FormClinicalNotes));
+            return list;
+        }
+    }
+
+    public string FormProgressText
+    {
+        get
+        {
+            var sections = FormSections;
+            var required = sections.Where(s => s.IsRequired).ToList();
+            var missing = required.Count(s => !s.IsComplete);
+            return missing == 0
+                ? $"{sections.Count(s => s.IsComplete)} de {sections.Count} secciones · lo obligatorio está completo"
+                : $"Faltan {missing} sección(es) obligatoria(s)";
+        }
+    }
+
+    partial void OnFormOpenSectionChanged(string value) => OnPropertyChanged(nameof(FormSections));
+
+    /// <summary>Un error de validación abre la sección donde está el dato que falta.</summary>
+    partial void OnFormErrorMessageChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var text = value.ToLowerInvariant();
+        if (text.Contains("alergia")) FormOpenSection = "Alergias";
+        else if (text.Contains("correo")) FormOpenSection = "Contacto";
+        else FormOpenSection = "Identificacion";
+    }
+
+    [RelayCommand]
+    public async Task SavePatientAndStartConsultationAsync()
+    {
+        await SavePatientModalAsync();
+        if (!IsPatientModalOpen && FormErrorMessage == null && _session.SelectedPatient != null && !_active.HasActiveConsultation)
+        {
+            _workflow.StartActiveConsultation();
+        }
+    }
+
+    [RelayCommand]
+    public void CancelPatientForm()
+    {
+        if (IsFormNew && (!string.IsNullOrWhiteSpace(FormFirstName) || !string.IsNullOrWhiteSpace(FormLastName))
+            && !_dialogs.Confirm("¿Salir sin guardar el paciente nuevo?\n\nLo capturado se perderá.", "Salir del alta"))
+        {
+            return;
+        }
+        ClosePatientModal();
+    }
+
+    // ==========================================
+    // OPERACIONES DE EXPEDIENTE CLÍNICO
+    // ==========================================
+
+    [RelayCommand]
+    public async Task NewPatientAsync()
+    {
+        FormPatientId = 0;
+        FormErrorMessage = null;
+
+        if (_inventoryService != null)
+        {
+            FormRecordNumber = await _inventoryService.GenerateNextRecordNumberAsync();
+        }
+        else
+        {
+            FormRecordNumber = $"EXP-{DateTime.Today.Year}-{(_session.Patients.Count + 1):D3}";
+        }
+
+        FormFirstName = string.Empty;
+        FormLastName = string.Empty;
+        FormMaternalLastName = string.Empty;
+        FormFullName = string.Empty;
+        FormBirthDateText = string.Empty;
+        FormBirthDate = null;
+        FormAgeText = string.Empty;
+        FormAge = 0;
+        FormGender = string.Empty;
+        FormPhone = string.Empty;
+        FormEmail = string.Empty;
+        FormAddress = string.Empty;
+        FormBloodType = BloodTypeUnknown;
+        FormAllergies = string.Empty;
+        FormChronicDiseases = string.Empty;
+        FormEmergencyContactName = string.Empty;
+        FormEmergencyContactPhone = string.Empty;
+
+        FormBirthDate = null;
+        FormOccupation = string.Empty;
+        FormReligion = string.Empty;
+        FormFamilyHistory = string.Empty;
+        FormSurgeries = string.Empty;
+        FormTransfusions = string.Empty;
+        FormHospitalizations = string.Empty;
+        FormImmunizationSchedule = string.Empty;
+        FormMenarcheAge = string.Empty;
+        FormSexualOnsetAge = string.Empty;
+        FormSexualPartnersCount = string.Empty;
+        FormPeriodDuration = string.Empty;
+        FormIsPeriodHeavy = "Normal";
+        FormPapSmear = string.Empty;
+        FormPregnanciesCount = 0;
+        FormCesareansCount = 0;
+        FormAbortionsCount = 0;
+        FormIsCurrentlyPregnant = false;
+        FormGestationalWeeks = string.Empty;
+        FormDevelopmentalMilestones = string.Empty;
+        FormDiet = string.Empty;
+        FormHousingConditions = string.Empty;
+        FormZoonosis = string.Empty;
+        FormIsFemale = false;
+        FormIsPediatric = false;
+
+        FormClinicalNotes = string.Empty;
+
+        IsPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void EditPatient()
+    {
+        if (_gate.BlockIfPatientHandedOff(_session.SelectedPatient)) return;
+        if (_session.SelectedPatient == null)
+        {
+            _info.InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
+            _info.IsInfoModalVisible = true;
+            return;
+        }
+
+        FormPatientId = _session.SelectedPatient.Id;
+        FormErrorMessage = null;
+
+        FormRecordNumber = _session.SelectedPatient.RecordNumber;
+        FormFullName = _session.SelectedPatient.FullName;
+
+        ParseFullName(_session.SelectedPatient.FullName, out var first, out var last, out var maternal);
+        FormFirstName = first;
+        FormLastName = last;
+        FormMaternalLastName = maternal;
+
+        FormBirthDateText = _session.SelectedPatient.BirthDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+        FormAge = _session.SelectedPatient.Age;
+        FormAgeText = _session.SelectedPatient.Age.ToString();
+        FormGender = _session.SelectedPatient.Gender;
+        FormPhone = FormatPhoneNumber(_session.SelectedPatient.Phone);
+        FormEmail = _session.SelectedPatient.Email;
+        FormAddress = _session.SelectedPatient.Address;
+        FormBloodType = string.IsNullOrWhiteSpace(_session.SelectedPatient.BloodType) ? BloodTypeUnknown : _session.SelectedPatient.BloodType;
+        FormAllergies = _session.SelectedPatient.Allergies;
+        FormChronicDiseases = _session.SelectedPatient.ChronicDiseases;
+        FormEmergencyContactName = _session.SelectedPatient.EmergencyContactName;
+        FormEmergencyContactPhone = FormatPhoneNumber(_session.SelectedPatient.EmergencyContactPhone);
+
+        FormBirthDate = _session.SelectedPatient.BirthDate;
+        FormOccupation = _session.SelectedPatient.Occupation ?? string.Empty;
+        FormReligion = _session.SelectedPatient.Religion ?? string.Empty;
+        FormFamilyHistory = _session.SelectedPatient.FamilyHistory ?? string.Empty;
+        FormSurgeries = _session.SelectedPatient.Surgeries ?? string.Empty;
+        FormTransfusions = _session.SelectedPatient.Transfusions ?? string.Empty;
+        FormHospitalizations = _session.SelectedPatient.Hospitalizations ?? string.Empty;
+        FormImmunizationSchedule = _session.SelectedPatient.ImmunizationSchedule ?? string.Empty;
+        FormMenarcheAge = _session.SelectedPatient.MenarcheAge ?? string.Empty;
+        FormSexualOnsetAge = _session.SelectedPatient.SexualOnsetAge ?? string.Empty;
+        FormSexualPartnersCount = _session.SelectedPatient.SexualPartnersCount ?? string.Empty;
+        FormPeriodDuration = _session.SelectedPatient.PeriodDuration ?? string.Empty;
+        FormIsPeriodHeavy = string.IsNullOrWhiteSpace(_session.SelectedPatient.IsPeriodHeavy) ? "Normal" : _session.SelectedPatient.IsPeriodHeavy;
+        FormPapSmear = _session.SelectedPatient.PapSmear ?? string.Empty;
+        FormPregnanciesCount = _session.SelectedPatient.PregnanciesCount;
+        FormCesareansCount = _session.SelectedPatient.CesareansCount;
+        FormAbortionsCount = _session.SelectedPatient.AbortionsCount;
+        FormIsCurrentlyPregnant = _session.SelectedPatient.IsCurrentlyPregnant;
+        FormGestationalWeeks = _session.SelectedPatient.GestationalWeeks ?? string.Empty;
+        FormDevelopmentalMilestones = _session.SelectedPatient.DevelopmentalMilestones ?? string.Empty;
+        FormDiet = _session.SelectedPatient.Diet ?? string.Empty;
+        FormHousingConditions = _session.SelectedPatient.HousingConditions ?? string.Empty;
+        FormZoonosis = _session.SelectedPatient.Zoonosis ?? string.Empty;
+        FormIsFemale = _session.SelectedPatient.IsFemale;
+        FormIsPediatric = _session.SelectedPatient.IsPediatric;
+        NotifyFormProfileChanged();
+
+        FormClinicalNotes = _session.SelectedPatient.ClinicalNotes;
+
+        IsPatientModalOpen = true;
+    }
+
+    [RelayCommand]
+    public void ClosePatientModal()
+    {
+        IsPatientModalOpen = false;
+        FormErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public async Task SavePatientModalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
+        {
+            ParseFullName(FormFullName, out var f, out var l, out var m);
+            FormFirstName = f;
+            FormLastName = l;
+            FormMaternalLastName = m;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormFirstName))
+        {
+            FormErrorMessage = "El nombre(s) del paciente es obligatorio.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormLastName))
+        {
+            FormErrorMessage = "El apellido paterno del paciente es obligatorio.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormRecordNumber))
+        {
+            FormErrorMessage = "El folio del expediente es obligatorio.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(FormBirthDateText) && FormBirthDate == null)
+        {
+            FormErrorMessage = "La fecha de nacimiento no es válida: use día/mes/año (por ejemplo 14/03/1992) y que no sea futura.";
+            return;
+        }
+
+        int parsedAge;
+        if (FormBirthDate is { } birthDate)
+        {
+            parsedAge = PatientRecord.CalculateAge(birthDate, DateTime.Today);
+        }
+        else if (!int.TryParse(FormAgeText, out parsedAge) || parsedAge < 0 || parsedAge > 130)
+        {
+            FormErrorMessage = "Capture la fecha de nacimiento (o la edad en años si no se conoce).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormGender))
+        {
+            FormErrorMessage = "Seleccione el sexo del paciente.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FormAllergies))
+        {
+            FormErrorMessage = "Indique las alergias del paciente o escriba \"Negadas\" (no es lo mismo que no haber preguntado).";
+            return;
+        }
+
+        if (!IsValidEmail(FormEmail))
+        {
+            FormErrorMessage = "El correo electrónico no tiene un formato válido (ejemplo: usuario@correo.com).";
+            return;
+        }
+
+        FormFullName = string.IsNullOrWhiteSpace(FormMaternalLastName)
+            ? $"{FormFirstName.Trim()} {FormLastName.Trim()}"
+            : $"{FormFirstName.Trim()} {FormLastName.Trim()} {FormMaternalLastName.Trim()}";
+
+        var normalizedFolio = FormRecordNumber.Trim();
+        if (_inventoryService != null)
+        {
+            var isTaken = await _inventoryService.IsRecordNumberTakenAsync(normalizedFolio, FormPatientId);
+            if (isTaken)
+            {
+                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya está en uso por otro paciente.";
+                return;
+            }
+        }
+        else
+        {
+            var duplicate = _session.Patients.Any(p => p.Id != FormPatientId && p.RecordNumber.Equals(normalizedFolio, StringComparison.OrdinalIgnoreCase));
+            if (duplicate)
+            {
+                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya existe.";
+                return;
+            }
+        }
+
+        var patient = FormPatientId > 0 && _session.SelectedPatient != null && _session.SelectedPatient.Id == FormPatientId 
+            ? _session.SelectedPatient 
+            : (FormPatientId > 0 ? _session.Patients.FirstOrDefault(p => p.Id == FormPatientId) ?? new PatientRecord() : new PatientRecord());
+        patient.Id = FormPatientId;
+
+        patient.RecordNumber = normalizedFolio;
+        patient.FullName = FormFullName.Trim();
+        patient.Age = parsedAge;
+        patient.Gender = FormGender;
+        patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        patient.Email = FormEmail?.Trim() ?? string.Empty;
+        patient.Address = FormAddress?.Trim() ?? string.Empty;
+        patient.BloodType = string.IsNullOrWhiteSpace(FormBloodType) ? BloodTypeUnknown : FormBloodType;
+        patient.Allergies = FormAllergies.Trim();
+        patient.ChronicDiseases = FormChronicDiseases?.Trim() ?? string.Empty;
+        patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
+        patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        patient.BirthDate = FormBirthDate;
+        patient.Occupation = FormOccupation?.Trim() ?? string.Empty;
+        patient.Religion = FormReligion?.Trim() ?? string.Empty;
+        patient.FamilyHistory = FormFamilyHistory?.Trim() ?? string.Empty;
+        patient.Surgeries = FormSurgeries?.Trim() ?? string.Empty;
+        patient.Transfusions = FormTransfusions?.Trim() ?? string.Empty;
+        patient.Hospitalizations = FormHospitalizations?.Trim() ?? string.Empty;
+        patient.ImmunizationSchedule = FormImmunizationSchedule?.Trim() ?? string.Empty;
+        patient.MenarcheAge = FormMenarcheAge?.Trim() ?? string.Empty;
+        patient.SexualOnsetAge = FormSexualOnsetAge?.Trim() ?? string.Empty;
+        patient.SexualPartnersCount = FormSexualPartnersCount?.Trim() ?? string.Empty;
+        patient.PeriodDuration = FormPeriodDuration?.Trim() ?? string.Empty;
+        patient.IsPeriodHeavy = FormIsPeriodHeavy?.Trim() ?? string.Empty;
+        patient.PapSmear = FormPapSmear?.Trim() ?? string.Empty;
+        patient.PregnanciesCount = FormPregnanciesCount;
+        patient.CesareansCount = FormCesareansCount;
+        patient.AbortionsCount = FormAbortionsCount;
+        patient.IsCurrentlyPregnant = FormIsCurrentlyPregnant;
+        patient.GestationalWeeks = FormGestationalWeeks?.Trim() ?? string.Empty;
+        patient.DevelopmentalMilestones = FormDevelopmentalMilestones?.Trim() ?? string.Empty;
+        patient.Diet = FormDiet?.Trim() ?? string.Empty;
+        patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
+        patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
+
+        // Los signos vitales no se capturan aquí: se conservan los registrados en las consultas
+        patient.ClinicalNotes = FormClinicalNotes.Trim();
+
+        if (_inventoryService != null)
+        {
+            try
+            {
+                var saved = await _inventoryService.SavePatientAsync(patient);
+                await _workflow.LoadPatientsAsync();
+                _session.SelectedPatient = _session.Patients.FirstOrDefault(p => p.Id == saved.Id) ?? saved;
+            }
+            catch (Exception ex)
+            {
+                FormErrorMessage = $"Error al guardar en base de datos: {ex.Message}";
+                return;
+            }
+        }
+        else
+        {
+            if (patient.Id == 0)
+            {
+                patient.Id = _session.Patients.Count > 0 ? _session.Patients.Max(p => p.Id) + 1 : 1;
+                _session.Patients.Insert(0, patient);
+            }
+            _consultationService?.UpsertPatient(patient);
+            _session.SelectedPatient = patient;
+        }
+
+        IsPatientModalOpen = false;
+        FormErrorMessage = null;
+        _feedback.ShowSuccess($"Expediente de {patient.FullName} guardado");
+    }
+}

@@ -43,24 +43,24 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Style="{StaticResource TextHeading}" Text="Agenda" />
-                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding AgendaWeekTitle}" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Agenda.AgendaWeekTitle}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource ButtonSecondary}" Content="Hoy" Command="{Binding AgendaPanelTodayCommand}" Padding="12,5" MinHeight="0" Margin="0,0,6,0" />
-                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding AgendaPanelPreviousWeekCommand}" ToolTip="Semana anterior" AutomationProperties.Name="Semana anterior">
+                    <Button Style="{StaticResource ButtonSecondary}" Content="Hoy" Command="{Binding Agenda.AgendaPanelTodayCommand}" Padding="12,5" MinHeight="0" Margin="0,0,6,0" />
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding Agenda.AgendaPanelPreviousWeekCommand}" ToolTip="Semana anterior" AutomationProperties.Name="Semana anterior">
                         <helpers:Icon Data="{StaticResource IcoChevronLeft}" />
                     </Button>
-                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding AgendaPanelNextWeekCommand}" ToolTip="Semana siguiente" AutomationProperties.Name="Semana siguiente">
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding Agenda.AgendaPanelNextWeekCommand}" ToolTip="Semana siguiente" AutomationProperties.Name="Semana siguiente">
                         <helpers:Icon Data="{StaticResource IcoChevronRight}" />
                     </Button>
-                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding CloseAgendaPanelCommand}" ToolTip="Cerrar agenda (Esc)" AutomationProperties.Name="Cerrar agenda" Margin="4,0,0,0">
+                    <Button Style="{StaticResource ButtonIcon}" Command="{Binding Agenda.CloseAgendaPanelCommand}" ToolTip="Cerrar agenda (Esc)" AutomationProperties.Name="Cerrar agenda" Margin="4,0,0,0">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </StackPanel>
             </Grid>
 
             <!-- Semana -->
-            <ItemsControl Grid.Row="1" ItemsSource="{Binding AgendaWeek}" Margin="16,4,12,12">
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding Agenda.AgendaWeek}" Margin="16,4,12,12">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="7" />
@@ -69,7 +69,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type models:AgendaDayItem}">
                         <Button x:Name="Day" Style="{StaticResource DayButton}"
-                                Command="{Binding DataContext.SelectAgendaDayCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                Command="{Binding DataContext.Agenda.SelectAgendaDayCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                 CommandParameter="{Binding}">
                             <StackPanel HorizontalAlignment="Center">
                                 <TextBlock x:Name="Name" Text="{Binding DayName}" FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextSecondary}" />
@@ -96,12 +96,12 @@
             <!-- Día elegido -->
             <Border Grid.Row="2" Padding="20,10" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,1">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding AgendaPanelTitle}" />
-                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding AgendaDaySummary}" />
-                    <Border Style="{StaticResource NoticeWarning}" Margin="0,8,0,0" Visibility="{Binding IsMovingAppointment, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Agenda.AgendaPanelTitle}" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Agenda.AgendaDaySummary}" />
+                    <Border Style="{StaticResource NoticeWarning}" Margin="0,8,0,0" Visibility="{Binding Agenda.IsMovingAppointment, Converter={StaticResource BoolToVis}}">
                         <Grid>
-                            <TextBlock Text="{Binding MovingAppointmentText}" TextWrapping="Wrap" Margin="0,0,80,0" VerticalAlignment="Center" />
-                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,2" MinHeight="0" Content="Cancelar" Command="{Binding CancelMovingAppointmentCommand}"
+                            <TextBlock Text="{Binding Agenda.MovingAppointmentText}" TextWrapping="Wrap" Margin="0,0,80,0" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,2" MinHeight="0" Content="Cancelar" Command="{Binding Agenda.CancelMovingAppointmentCommand}"
                                     Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
                         </Grid>
                     </Border>
@@ -110,7 +110,7 @@
 
             <!-- Citas y huecos libres -->
             <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding AgendaSlots}" Margin="16,8,16,16">
+                <ItemsControl ItemsSource="{Binding Agenda.AgendaSlots}" Margin="16,8,16,16">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type models:AgendaSlot}">
                             <Grid Margin="0,0,0,6">
@@ -141,11 +141,11 @@
                                             <Button.ContextMenu>
                                                 <ContextMenu Style="{StaticResource DsContextMenu}">
                                                     <MenuItem Header="Atender ahora" Command="{Binding PlacementTarget.Tag.AttendAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
-                                                    <MenuItem Header="Marcar como confirmada" Command="{Binding PlacementTarget.Tag.ConfirmAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
-                                                    <MenuItem Header="Recordar por WhatsApp" Command="{Binding PlacementTarget.Tag.RemindByWhatsAppCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
-                                                    <MenuItem Header="Agregar a Google Calendar" Command="{Binding PlacementTarget.Tag.AddToGoogleCalendarCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
-                                                    <MenuItem Header="Cambiar fecha u hora" Command="{Binding PlacementTarget.Tag.StartMovingAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
-                                                    <MenuItem Header="Cancelar la cita" Command="{Binding PlacementTarget.Tag.CancelAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Marcar como confirmada" Command="{Binding PlacementTarget.Tag.Agenda.ConfirmAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Recordar por WhatsApp" Command="{Binding PlacementTarget.Tag.Agenda.RemindByWhatsAppCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Agregar a Google Calendar" Command="{Binding PlacementTarget.Tag.Agenda.AddToGoogleCalendarCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Cambiar fecha u hora" Command="{Binding PlacementTarget.Tag.Agenda.StartMovingAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
+                                                    <MenuItem Header="Cancelar la cita" Command="{Binding PlacementTarget.Tag.Agenda.CancelAppointmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding Appointment}" />
                                                 </ContextMenu>
                                             </Button.ContextMenu>
                                         </Button>
@@ -156,7 +156,7 @@
                                 <StackPanel Grid.Column="1" Visibility="{Binding IsFree, Converter={StaticResource BoolToVis}}">
                                     <Button x:Name="FreeButton" Style="{StaticResource ButtonSecondary}" HorizontalContentAlignment="Left" Padding="12,6" MinHeight="0"
                                             BorderBrush="{DynamicResource ThemeBorder}"
-                                            Command="{Binding DataContext.OpenAgendaSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Command="{Binding DataContext.Agenda.OpenAgendaSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}">
                                         <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource ThemeTextSecondary}" />
                                     </Button>
@@ -172,13 +172,13 @@
                                             <TextBlock Style="{StaticResource FieldLabel}" Text="Paciente" Margin="0,10,0,6" />
                                             <ComboBox Style="{StaticResource FieldComboBox}"
                                                       ItemsSource="{Binding DataContext.Session.Patients, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedItem="{Binding DataContext.AgendaFormPatient, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedItem="{Binding DataContext.Agenda.AgendaFormPatient, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                       DisplayMemberPath="FullName"
                                                       helpers:TypeAhead.IsEnabled="True"
                                                       ToolTip="Despliegue y escriba el nombre" />
                                             <TextBlock Style="{StaticResource FieldLabel}" Text="Motivo" Margin="0,10,0,6" />
-                                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding DataContext.AgendaFormReason, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-                                            <ItemsControl ItemsSource="{Binding DataContext.AgendaReasonPresets, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,6,0,0">
+                                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding DataContext.Agenda.AgendaFormReason, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                            <ItemsControl ItemsSource="{Binding DataContext.Agenda.AgendaReasonPresets, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,6,0,0">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
                                                         <WrapPanel />
@@ -187,20 +187,20 @@
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <Button Style="{StaticResource ButtonSecondary}" Padding="10,3" MinHeight="0" Margin="0,0,6,6" FontSize="12" Content="{Binding}"
-                                                                Command="{Binding DataContext.SetAgendaReasonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                Command="{Binding DataContext.Agenda.SetAgendaReasonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" />
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                             <TextBlock Style="{StaticResource FieldLabel}" Text="Duración (minutos)" Margin="0,6,0,6" />
                                             <ListBox Style="{StaticResource ChipList}"
-                                                     ItemsSource="{Binding DataContext.AgendaDurations, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                     SelectedItem="{Binding DataContext.AgendaFormDuration, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                            <TextBlock Style="{StaticResource FieldError}" Text="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       Visibility="{Binding DataContext.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
+                                                     ItemsSource="{Binding DataContext.Agenda.AgendaDurations, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                     SelectedItem="{Binding DataContext.Agenda.AgendaFormDuration, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <TextBlock Style="{StaticResource FieldError}" Text="{Binding DataContext.Agenda.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Visibility="{Binding DataContext.Agenda.AgendaFormError, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                                                <Button Style="{StaticResource ButtonSecondary}" Content="Cancelar" Command="{Binding DataContext.CloseAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0" />
-                                                <Button Style="{StaticResource ButtonPrimary}" Content="Agendar" Command="{Binding DataContext.SaveAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                                <Button Style="{StaticResource ButtonSecondary}" Content="Cancelar" Command="{Binding DataContext.Agenda.CloseAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,8,0" />
+                                                <Button Style="{StaticResource ButtonPrimary}" Content="Agendar" Command="{Binding DataContext.Agenda.SaveAgendaFormCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                             </StackPanel>
                                         </StackPanel>
                                     </Border>

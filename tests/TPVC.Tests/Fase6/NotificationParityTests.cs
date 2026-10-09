@@ -202,10 +202,10 @@ public class NotificationParityTests
             ("cambiar cita", (vm, _) =>
             {
                 Completes(vm.OpenAgendaPanelAsync(), "Agenda");
-                vm.StartMovingAppointment(new PatientAppointment { Id = 9, PatientName = "Ana Ruiz", Date = new DateTime(2026, 10, 20), Time = "10:00" });
+                vm.Agenda.StartMovingAppointment(new PatientAppointment { Id = 9, PatientName = "Ana Ruiz", Date = new DateTime(2026, 10, 20), Time = "10:00" });
             }),
             ("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda")),
-            ("búsqueda", (vm, _) => vm.HomeSearchText = "gar"),
+            ("búsqueda", (vm, _) => vm.Home.HomeSearchText = "gar"),
             ("ficha", (vm, _) => vm.OpenPatientChart(Mock(vm, 2)))
         };
 
@@ -235,15 +235,15 @@ public class NotificationParityTests
 
         golden.Section("nuevo paciente desde el inicio", RecordSync(recorder, () => Completes(records.NewPatientAsync(), "Alta")));
         Assert.IsTrue(records.Navigation.IsFormPage);
-        golden.Section("cancelar el alta sin datos", RecordSync(recorder, records.CancelPatientForm));
+        golden.Section("cancelar el alta sin datos", RecordSync(recorder, records.PatientForm.CancelPatientForm));
         Assert.IsTrue(records.Navigation.IsHomePage);
 
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();
         FreezeClock(consultations);
-        golden.Section("editar el expediente durante la consulta", RecordSync(recorder, records.EditPatient));
+        golden.Section("editar el expediente durante la consulta", RecordSync(recorder, records.PatientForm.EditPatient));
         Assert.IsTrue(records.Navigation.IsFormPage);
-        golden.Section("cerrar y volver a la consulta", RecordSync(recorder, records.ClosePatientModal));
+        golden.Section("cerrar y volver a la consulta", RecordSync(recorder, records.PatientForm.ClosePatientModal));
         Assert.IsTrue(records.Navigation.IsConsultationPage);
         golden.AssertMatches("patient-form.txt", "Avisos al abrir y cerrar el alta");
     }
@@ -262,7 +262,7 @@ public class NotificationParityTests
         // despachador ya terminó y esos avisos nunca llegan (en Linux corren directo). Se llama aquí para
         // que el conjunto sea el mismo en los dos sistemas.
         await records.LoadPatientsAsync();
-        await records.LoadTodayAppointmentsAsync();
+        await records.Home.LoadTodayAppointmentsAsync();
         await recorder.WaitForQuietAsync();
         return recorder.Set;
     }
@@ -278,23 +278,23 @@ public class NotificationParityTests
 
         golden.Section("agendar desde la ficha", await RecordSetAsync(recorder, records, async () =>
         {
-            await records.ScheduleForSelectedPatientAsync();
-            await records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree && s.TimeText == "09:00"));
-            records.SetAgendaReason("Control");
-            await records.SaveAgendaFormAsync();
+            await records.Agenda.ScheduleForSelectedPatientAsync();
+            await records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree && s.TimeText == "09:00"));
+            records.Agenda.SetAgendaReason("Control");
+            await records.Agenda.SaveAgendaFormAsync();
         }));
-        Assert.IsTrue(records.AgendaSlots.Any(s => s.HasAppointment));
+        Assert.IsTrue(records.Agenda.AgendaSlots.Any(s => s.HasAppointment));
 
         golden.Section("cambiar de horario", await RecordSetAsync(recorder, records, async () =>
         {
-            records.StartMovingAppointment(records.AgendaSlots.Single(s => s.HasAppointment).Appointment);
-            await records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree && s.TimeText == "16:00"));
+            records.Agenda.StartMovingAppointment(records.Agenda.AgendaSlots.Single(s => s.HasAppointment).Appointment);
+            await records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree && s.TimeText == "16:00"));
         }));
-        Assert.AreEqual("16:00", records.AgendaSlots.Single(s => s.HasAppointment).TimeText);
+        Assert.AreEqual("16:00", records.Agenda.AgendaSlots.Single(s => s.HasAppointment).TimeText);
 
         golden.Section("cancelar la cita", await RecordSetAsync(recorder, records, () =>
-            records.CancelAppointmentAsync(records.AgendaSlots.Single(s => s.HasAppointment).Appointment)));
-        Assert.IsFalse(records.AgendaSlots.Any(s => s.HasAppointment));
+            records.Agenda.CancelAppointmentAsync(records.Agenda.AgendaSlots.Single(s => s.HasAppointment).Appointment)));
+        Assert.IsFalse(records.Agenda.AgendaSlots.Any(s => s.HasAppointment));
 
         golden.AssertMatches("agenda.txt", "Avisos de la agenda");
         records.Dispose();
@@ -302,11 +302,11 @@ public class NotificationParityTests
 
     private static void FillNewPatient(MedicalRecordsViewModel records)
     {
-        records.FormFirstName = "Sofía";
-        records.FormLastName = "Hernández";
-        records.FormGender = "Femenino";
-        records.FormBirthDateText = "14/03/1992";
-        records.SetAllergiesDenied();
+        records.PatientForm.FormFirstName = "Sofía";
+        records.PatientForm.FormLastName = "Hernández";
+        records.PatientForm.FormGender = "Femenino";
+        records.PatientForm.FormBirthDateText = "14/03/1992";
+        records.PatientForm.SetAllergiesDenied();
     }
 
     [TestMethod]
@@ -320,8 +320,8 @@ public class NotificationParityTests
             using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: false);
             await records.NewPatientAsync();
             FillNewPatient(records);
-            golden.Section("guardar el alta con base de datos", await RecordSetAsync(recorder, records, records.SavePatientModalAsync));
-            Assert.IsNull(records.FormErrorMessage);
+            golden.Section("guardar el alta con base de datos", await RecordSetAsync(recorder, records, records.PatientForm.SavePatientModalAsync));
+            Assert.IsNull(records.PatientForm.FormErrorMessage);
             Assert.IsTrue(records.Navigation.IsChartPage);
             records.Dispose();
         }
@@ -331,8 +331,8 @@ public class NotificationParityTests
         {
             Completes(offline.NewPatientAsync(), "Alta");
             FillNewPatient(offline);
-            golden.Section("guardar el alta sin base de datos", await RecordSetAsync(recorder, offline, offline.SavePatientModalAsync));
-            Assert.IsNull(offline.FormErrorMessage);
+            golden.Section("guardar el alta sin base de datos", await RecordSetAsync(recorder, offline, offline.PatientForm.SavePatientModalAsync));
+            Assert.IsNull(offline.PatientForm.FormErrorMessage);
         }
 
         golden.AssertMatches("patient-form-save.txt", "Avisos al guardar el alta");
@@ -381,7 +381,7 @@ public class NotificationParityTests
                 golden.Section("recuperar el alta al abrir", await RecordSetAsync(recorder, form, form.LoadInitialDataAsync));
             }
             Assert.IsTrue(form.Navigation.IsFormPage);
-            Assert.AreEqual("EXP-2026-777", form.FormRecordNumber);
+            Assert.AreEqual("EXP-2026-777", form.PatientForm.FormRecordNumber);
 
             golden.AssertMatches("draft-restore.txt", "Avisos al recuperar borradores");
             records.Dispose();

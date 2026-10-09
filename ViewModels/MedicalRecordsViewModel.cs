@@ -37,223 +37,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void BackToHub() => OnBackToHubRequested?.Invoke();
 
-    // ==========================================
-    // MODAL DE ALTA / EDICIÓN DE EXPEDIENTE (NOM-004-SSA3)
-    // ==========================================
-    [ObservableProperty]
-    private bool _isPatientModalOpen;
-
-    [ObservableProperty]
-    private int _formPatientId;
-
-    [ObservableProperty]
-    private string _formRecordNumber = string.Empty;
-
-    [ObservableProperty]
-    private string _formFirstName = string.Empty;
-
-    [ObservableProperty]
-    private string _formLastName = string.Empty;
-
-    [ObservableProperty]
-    private string _formMaternalLastName = string.Empty;
-
-    [ObservableProperty]
-    private string _formFullName = string.Empty;
-
-    partial void OnFormFullNameChanged(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            FormFirstName = string.Empty;
-            FormLastName = string.Empty;
-            FormMaternalLastName = string.Empty;
-        }
-        else if (string.IsNullOrWhiteSpace(FormFirstName) && string.IsNullOrWhiteSpace(FormLastName))
-        {
-            ParseFullName(value, out var f, out var l, out var m);
-            FormFirstName = f;
-            FormLastName = l;
-            FormMaternalLastName = m;
-        }
-    }
-
-    [ObservableProperty]
-    private string _formAgeText = string.Empty;
-
-    [ObservableProperty]
-    private int _formAge;
-
-    partial void OnFormAgeTextChanged(string value)
-    {
-        var digitsOnly = new string(value.Where(char.IsDigit).ToArray());
-        if (digitsOnly != value)
-        {
-            FormAgeText = digitsOnly;
-            return;
-        }
-
-        FormAge = int.TryParse(digitsOnly, out var age) ? age : 0;
-        RecomputeFormProfile();
-    }
-
-    partial void OnFormAgeChanged(int value)
-    {
-        // Vacío = edad sin capturar (no "0 años", que lo volvería recién nacido)
-        var str = value.ToString();
-        if (FormAgeText != str && !(value == 0 && string.IsNullOrEmpty(FormAgeText)))
-        {
-            FormAgeText = str;
-        }
-        RecomputeFormProfile();
-    }
-
-    [ObservableProperty]
-    private string _formGender = string.Empty;
-
-    partial void OnFormGenderChanged(string value) => RecomputeFormProfile();
-
-    [ObservableProperty]
-    private DateTime? _formBirthDate;
-
-    [ObservableProperty]
-    private string _formOccupation = string.Empty;
-
-    [ObservableProperty]
-    private string _formReligion = string.Empty;
-
-    // Antecedentes Heredofamiliares (AHF)
-    [ObservableProperty]
-    private string _formFamilyHistory = string.Empty;
-
-    // Antecedentes Personales Patológicos (APP)
-    [ObservableProperty]
-    private string _formSurgeries = string.Empty;
-
-    [ObservableProperty]
-    private string _formTransfusions = string.Empty;
-
-    [ObservableProperty]
-    private string _formHospitalizations = string.Empty;
-
-    [ObservableProperty]
-    private string _formImmunizationSchedule = string.Empty; // Para niños
-
-    // Antecedentes Gineco-Obstétricos (AGO) (Mujeres)
-    [ObservableProperty]
-    private string _formMenarcheAge = string.Empty;
-
-    [ObservableProperty]
-    private string _formSexualOnsetAge = string.Empty;
-
-    [ObservableProperty]
-    private string _formSexualPartnersCount = string.Empty;
-
-    [ObservableProperty]
-    private string _formPeriodDuration = string.Empty;
-
-    [ObservableProperty]
-    private string _formIsPeriodHeavy = "Normal";
-
-    [ObservableProperty]
-    private string _formPapSmear = string.Empty;
-
-    [ObservableProperty]
-    private int _formPregnanciesCount = 0;
-
-    [ObservableProperty]
-    private int _formCesareansCount = 0;
-
-    [ObservableProperty]
-    private int _formAbortionsCount = 0;
-
-    [ObservableProperty]
-    private bool _formIsCurrentlyPregnant = false;
-
-    [ObservableProperty]
-    private string _formGestationalWeeks = string.Empty;
-
-    // Hitos del Desarrollo Psicomotor (Niños)
-    [ObservableProperty]
-    private string _formDevelopmentalMilestones = string.Empty;
-
-    // Antecedentes Personales No Patológicos (APNP)
-    [ObservableProperty]
-    private string _formDiet = string.Empty;
-
-    [ObservableProperty]
-    private string _formHousingConditions = string.Empty;
-
-    [ObservableProperty]
-    private string _formZoonosis = string.Empty;
-
-    [ObservableProperty]
-    private bool _formIsFemale;
-
-    [ObservableProperty]
-    private bool _formIsPediatric;
-
-    [ObservableProperty]
-    private string _formPhone = string.Empty;
-
-    partial void OnFormPhoneChanged(string value)
-    {
-        var formatted = FormatPhoneNumber(value);
-        if (formatted != value)
-        {
-            FormPhone = formatted;
-        }
-    }
-
-    [ObservableProperty]
-    private string _formEmail = string.Empty;
-
-    [ObservableProperty]
-    private string _formAddress = string.Empty;
-
-    [ObservableProperty]
-    private string _formBloodType = BloodTypeUnknown;
-
-    [ObservableProperty]
-    private string _formAllergies = string.Empty;
-
-    [ObservableProperty]
-    private string _formChronicDiseases = string.Empty;
-
-    [ObservableProperty]
-    private string _formEmergencyContactName = string.Empty;
-
-    [ObservableProperty]
-    private string _formEmergencyContactPhone = string.Empty;
-
-    partial void OnFormEmergencyContactPhoneChanged(string value)
-    {
-        var formatted = FormatPhoneNumber(value);
-        if (formatted != value)
-        {
-            FormEmergencyContactPhone = formatted;
-        }
-    }
-
-    public static string FormatPhoneNumber(string? phone) => PatientRecord.FormatPhoneNumber(phone);
-
-    public static bool IsValidEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return true; // Permite vacío
-        var trimmed = email.Trim();
-        try
-        {
-            return Regex.IsMatch(
-                trimmed, 
-                @"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$", 
-                RegexOptions.IgnoreCase, 
-                TimeSpan.FromMilliseconds(250));
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    // El alta y la edición de expediente viven en PatientForm (PatientFormViewModel).
 
     public static string FormatTA(string? input)
     {
@@ -305,75 +89,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         return $"{digits.Substring(0, 3)}/{digits.Substring(3, 3)}";
     }
-
-    private static void ParseFullName(string? fullName, out string firstName, out string lastName, out string maternalLastName)
-    {
-        firstName = string.Empty;
-        lastName = string.Empty;
-        maternalLastName = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(fullName))
-            return;
-
-        var trimmed = fullName.Trim();
-
-        // Formato con coma: "Apellidos, Nombre(s)"
-        if (trimmed.Contains(','))
-        {
-            var commaParts = trimmed.Split(new[] { ',' }, 2, StringSplitOptions.RemoveEmptyEntries);
-            if (commaParts.Length == 2)
-            {
-                firstName = commaParts[1].Trim();
-                var surnameTokens = commaParts[0].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (surnameTokens.Length == 1)
-                {
-                    lastName = surnameTokens[0];
-                }
-                else if (surnameTokens.Length >= 2)
-                {
-                    lastName = surnameTokens[0];
-                    maternalLastName = string.Join(" ", surnameTokens.Skip(1));
-                }
-                return;
-            }
-        }
-
-        // Formato regular: "Nombre(s) Paterno Materno"
-        var tokens = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length == 1)
-        {
-            firstName = tokens[0];
-        }
-        else if (tokens.Length == 2)
-        {
-            firstName = tokens[0];
-            lastName = tokens[1];
-        }
-        else if (tokens.Length == 3)
-        {
-            firstName = tokens[0];
-            lastName = tokens[1];
-            maternalLastName = tokens[2];
-        }
-        else
-        {
-            lastName = tokens[^2];
-            maternalLastName = tokens[^1];
-            firstName = string.Join(" ", tokens.Take(tokens.Length - 2));
-        }
-    }
-
-    [ObservableProperty]
-    private string _formClinicalNotes = string.Empty;
-
-    [ObservableProperty]
-    private string? _formErrorMessage;
-
-    public List<string> GenderOptions { get; } = new() { "Masculino", "Femenino", "Otro / No especificado" };
-    public const string BloodTypeUnknown = "No determinado";
-
-    public List<string> BloodTypeOptions { get; } = new() { BloodTypeUnknown, "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
-    public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
 
     // ==========================================
     // NOTA MÉDICA DE LA CONSULTA EN CURSO (NOM-004-SSA3)
@@ -757,7 +472,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
-        CreateChildren(notificationService, clinicProfileService);
+        CreateChildren(notificationService, clinicProfileService, consultationDraftStore);
         Checkout = new CheckoutViewModel(inventoryService, () =>
             _clinicProfileService?.CurrentProfile?.DoctorNameWithTitle is { Length: > 0 } doctor ? doctor : "Dr. Titular")
         {
@@ -769,6 +484,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
             Failed = () => _ = LoadServicesAsync()
         };
         InitializeAutosave(consultationDraftStore);
+        PatientForm.AttachPropertyRules();
         InitializePacientes();
         InitializeHandoff(consultationHandoffService);
         _clinicProfileService = clinicProfileService;
@@ -838,9 +554,9 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         await LoadPatientsAsync();
         await LoadServicesAsync();
         await Templates.LoadPrescriptionTemplatesAsync();
-        await LoadTodayAppointmentsAsync();
+        await Home.LoadTodayAppointmentsAsync();
         TryRestoreConsultationDraft();
-        await TryRestorePatientFormDraftAsync();
+        await PatientForm.TryRestorePatientFormDraftAsync();
     }
 
     public async Task LoadPatientsAsync()
@@ -939,7 +655,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     /// (alta o edición abierta, o es el paciente de la consulta en curso).
     /// </summary>
     private bool CanReplaceSelectedPatientInstance(PatientRecord patient) =>
-        !IsPatientModalOpen
+        !PatientForm.IsPatientModalOpen
         && (Record.Patient == null || Record.Patient.Id != patient.Id)
         && !(Active.HasActiveConsultation && Active.ActiveConsultation?.PatientId == patient.Id);
 
@@ -1027,7 +743,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         DisposeHandoff();
         FlushConsultationDraft();
         _autosaveTimer?.Dispose();
-        _formDraftTimer?.Dispose();
+        PatientForm.DisposeFormDraftTimer();
         GC.SuppressFinalize(this);
     }
 
@@ -1039,311 +755,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ApplySupplySuggestions(SupplySearchText ?? string.Empty);
         ApplyServiceModalSuggestions(ServiceModalSearchText ?? string.Empty);
         ApplyCatalogBrowserFilter();
-    }
-
-    // ==========================================
-    // OPERACIONES DE EXPEDIENTE CLÍNICO
-    // ==========================================
-
-    [RelayCommand]
-    public async Task NewPatientAsync()
-    {
-        FormPatientId = 0;
-        FormErrorMessage = null;
-
-        if (_inventoryService != null)
-        {
-            FormRecordNumber = await _inventoryService.GenerateNextRecordNumberAsync();
-        }
-        else
-        {
-            FormRecordNumber = $"EXP-{DateTime.Today.Year}-{(Session.Patients.Count + 1):D3}";
-        }
-
-        FormFirstName = string.Empty;
-        FormLastName = string.Empty;
-        FormMaternalLastName = string.Empty;
-        FormFullName = string.Empty;
-        FormBirthDateText = string.Empty;
-        FormBirthDate = null;
-        FormAgeText = string.Empty;
-        FormAge = 0;
-        FormGender = string.Empty;
-        FormPhone = string.Empty;
-        FormEmail = string.Empty;
-        FormAddress = string.Empty;
-        FormBloodType = BloodTypeUnknown;
-        FormAllergies = string.Empty;
-        FormChronicDiseases = string.Empty;
-        FormEmergencyContactName = string.Empty;
-        FormEmergencyContactPhone = string.Empty;
-
-        FormBirthDate = null;
-        FormOccupation = string.Empty;
-        FormReligion = string.Empty;
-        FormFamilyHistory = string.Empty;
-        FormSurgeries = string.Empty;
-        FormTransfusions = string.Empty;
-        FormHospitalizations = string.Empty;
-        FormImmunizationSchedule = string.Empty;
-        FormMenarcheAge = string.Empty;
-        FormSexualOnsetAge = string.Empty;
-        FormSexualPartnersCount = string.Empty;
-        FormPeriodDuration = string.Empty;
-        FormIsPeriodHeavy = "Normal";
-        FormPapSmear = string.Empty;
-        FormPregnanciesCount = 0;
-        FormCesareansCount = 0;
-        FormAbortionsCount = 0;
-        FormIsCurrentlyPregnant = false;
-        FormGestationalWeeks = string.Empty;
-        FormDevelopmentalMilestones = string.Empty;
-        FormDiet = string.Empty;
-        FormHousingConditions = string.Empty;
-        FormZoonosis = string.Empty;
-        FormIsFemale = false;
-        FormIsPediatric = false;
-
-        FormClinicalNotes = string.Empty;
-
-        IsPatientModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void EditPatient()
-    {
-        if (BlockIfPatientHandedOff(Session.SelectedPatient)) return;
-        if (Session.SelectedPatient == null)
-        {
-            Info.InfoModalMessage = "Seleccione un paciente para editar su expediente clínico.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        FormPatientId = Session.SelectedPatient.Id;
-        FormErrorMessage = null;
-
-        FormRecordNumber = Session.SelectedPatient.RecordNumber;
-        FormFullName = Session.SelectedPatient.FullName;
-
-        ParseFullName(Session.SelectedPatient.FullName, out var first, out var last, out var maternal);
-        FormFirstName = first;
-        FormLastName = last;
-        FormMaternalLastName = maternal;
-
-        FormBirthDateText = Session.SelectedPatient.BirthDate?.ToString("dd/MM/yyyy") ?? string.Empty;
-        FormAge = Session.SelectedPatient.Age;
-        FormAgeText = Session.SelectedPatient.Age.ToString();
-        FormGender = Session.SelectedPatient.Gender;
-        FormPhone = FormatPhoneNumber(Session.SelectedPatient.Phone);
-        FormEmail = Session.SelectedPatient.Email;
-        FormAddress = Session.SelectedPatient.Address;
-        FormBloodType = string.IsNullOrWhiteSpace(Session.SelectedPatient.BloodType) ? BloodTypeUnknown : Session.SelectedPatient.BloodType;
-        FormAllergies = Session.SelectedPatient.Allergies;
-        FormChronicDiseases = Session.SelectedPatient.ChronicDiseases;
-        FormEmergencyContactName = Session.SelectedPatient.EmergencyContactName;
-        FormEmergencyContactPhone = FormatPhoneNumber(Session.SelectedPatient.EmergencyContactPhone);
-
-        FormBirthDate = Session.SelectedPatient.BirthDate;
-        FormOccupation = Session.SelectedPatient.Occupation ?? string.Empty;
-        FormReligion = Session.SelectedPatient.Religion ?? string.Empty;
-        FormFamilyHistory = Session.SelectedPatient.FamilyHistory ?? string.Empty;
-        FormSurgeries = Session.SelectedPatient.Surgeries ?? string.Empty;
-        FormTransfusions = Session.SelectedPatient.Transfusions ?? string.Empty;
-        FormHospitalizations = Session.SelectedPatient.Hospitalizations ?? string.Empty;
-        FormImmunizationSchedule = Session.SelectedPatient.ImmunizationSchedule ?? string.Empty;
-        FormMenarcheAge = Session.SelectedPatient.MenarcheAge ?? string.Empty;
-        FormSexualOnsetAge = Session.SelectedPatient.SexualOnsetAge ?? string.Empty;
-        FormSexualPartnersCount = Session.SelectedPatient.SexualPartnersCount ?? string.Empty;
-        FormPeriodDuration = Session.SelectedPatient.PeriodDuration ?? string.Empty;
-        FormIsPeriodHeavy = string.IsNullOrWhiteSpace(Session.SelectedPatient.IsPeriodHeavy) ? "Normal" : Session.SelectedPatient.IsPeriodHeavy;
-        FormPapSmear = Session.SelectedPatient.PapSmear ?? string.Empty;
-        FormPregnanciesCount = Session.SelectedPatient.PregnanciesCount;
-        FormCesareansCount = Session.SelectedPatient.CesareansCount;
-        FormAbortionsCount = Session.SelectedPatient.AbortionsCount;
-        FormIsCurrentlyPregnant = Session.SelectedPatient.IsCurrentlyPregnant;
-        FormGestationalWeeks = Session.SelectedPatient.GestationalWeeks ?? string.Empty;
-        FormDevelopmentalMilestones = Session.SelectedPatient.DevelopmentalMilestones ?? string.Empty;
-        FormDiet = Session.SelectedPatient.Diet ?? string.Empty;
-        FormHousingConditions = Session.SelectedPatient.HousingConditions ?? string.Empty;
-        FormZoonosis = Session.SelectedPatient.Zoonosis ?? string.Empty;
-        FormIsFemale = Session.SelectedPatient.IsFemale;
-        FormIsPediatric = Session.SelectedPatient.IsPediatric;
-        NotifyFormProfileChanged();
-
-        FormClinicalNotes = Session.SelectedPatient.ClinicalNotes;
-
-        IsPatientModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void ClosePatientModal()
-    {
-        IsPatientModalOpen = false;
-        FormErrorMessage = null;
-    }
-
-    [RelayCommand]
-    public async Task SavePatientModalAsync()
-    {
-        if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
-        {
-            ParseFullName(FormFullName, out var f, out var l, out var m);
-            FormFirstName = f;
-            FormLastName = l;
-            FormMaternalLastName = m;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormFirstName))
-        {
-            FormErrorMessage = "El nombre(s) del paciente es obligatorio.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormLastName))
-        {
-            FormErrorMessage = "El apellido paterno del paciente es obligatorio.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormRecordNumber))
-        {
-            FormErrorMessage = "El folio del expediente es obligatorio.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(FormBirthDateText) && FormBirthDate == null)
-        {
-            FormErrorMessage = "La fecha de nacimiento no es válida: use día/mes/año (por ejemplo 14/03/1992) y que no sea futura.";
-            return;
-        }
-
-        int parsedAge;
-        if (FormBirthDate is { } birthDate)
-        {
-            parsedAge = PatientRecord.CalculateAge(birthDate, DateTime.Today);
-        }
-        else if (!int.TryParse(FormAgeText, out parsedAge) || parsedAge < 0 || parsedAge > 130)
-        {
-            FormErrorMessage = "Capture la fecha de nacimiento (o la edad en años si no se conoce).";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormGender))
-        {
-            FormErrorMessage = "Seleccione el sexo del paciente.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormAllergies))
-        {
-            FormErrorMessage = "Indique las alergias del paciente o escriba \"Negadas\" (no es lo mismo que no haber preguntado).";
-            return;
-        }
-
-        if (!IsValidEmail(FormEmail))
-        {
-            FormErrorMessage = "El correo electrónico no tiene un formato válido (ejemplo: usuario@correo.com).";
-            return;
-        }
-
-        FormFullName = string.IsNullOrWhiteSpace(FormMaternalLastName)
-            ? $"{FormFirstName.Trim()} {FormLastName.Trim()}"
-            : $"{FormFirstName.Trim()} {FormLastName.Trim()} {FormMaternalLastName.Trim()}";
-
-        var normalizedFolio = FormRecordNumber.Trim();
-        if (_inventoryService != null)
-        {
-            var isTaken = await _inventoryService.IsRecordNumberTakenAsync(normalizedFolio, FormPatientId);
-            if (isTaken)
-            {
-                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya está en uso por otro paciente.";
-                return;
-            }
-        }
-        else
-        {
-            var duplicate = Session.Patients.Any(p => p.Id != FormPatientId && p.RecordNumber.Equals(normalizedFolio, StringComparison.OrdinalIgnoreCase));
-            if (duplicate)
-            {
-                FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya existe.";
-                return;
-            }
-        }
-
-        var patient = FormPatientId > 0 && Session.SelectedPatient != null && Session.SelectedPatient.Id == FormPatientId 
-            ? Session.SelectedPatient 
-            : (FormPatientId > 0 ? Session.Patients.FirstOrDefault(p => p.Id == FormPatientId) ?? new PatientRecord() : new PatientRecord());
-        patient.Id = FormPatientId;
-
-        patient.RecordNumber = normalizedFolio;
-        patient.FullName = FormFullName.Trim();
-        patient.Age = parsedAge;
-        patient.Gender = FormGender;
-        patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-        patient.Email = FormEmail?.Trim() ?? string.Empty;
-        patient.Address = FormAddress?.Trim() ?? string.Empty;
-        patient.BloodType = string.IsNullOrWhiteSpace(FormBloodType) ? BloodTypeUnknown : FormBloodType;
-        patient.Allergies = FormAllergies.Trim();
-        patient.ChronicDiseases = FormChronicDiseases?.Trim() ?? string.Empty;
-        patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
-        patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-
-        patient.BirthDate = FormBirthDate;
-        patient.Occupation = FormOccupation?.Trim() ?? string.Empty;
-        patient.Religion = FormReligion?.Trim() ?? string.Empty;
-        patient.FamilyHistory = FormFamilyHistory?.Trim() ?? string.Empty;
-        patient.Surgeries = FormSurgeries?.Trim() ?? string.Empty;
-        patient.Transfusions = FormTransfusions?.Trim() ?? string.Empty;
-        patient.Hospitalizations = FormHospitalizations?.Trim() ?? string.Empty;
-        patient.ImmunizationSchedule = FormImmunizationSchedule?.Trim() ?? string.Empty;
-        patient.MenarcheAge = FormMenarcheAge?.Trim() ?? string.Empty;
-        patient.SexualOnsetAge = FormSexualOnsetAge?.Trim() ?? string.Empty;
-        patient.SexualPartnersCount = FormSexualPartnersCount?.Trim() ?? string.Empty;
-        patient.PeriodDuration = FormPeriodDuration?.Trim() ?? string.Empty;
-        patient.IsPeriodHeavy = FormIsPeriodHeavy?.Trim() ?? string.Empty;
-        patient.PapSmear = FormPapSmear?.Trim() ?? string.Empty;
-        patient.PregnanciesCount = FormPregnanciesCount;
-        patient.CesareansCount = FormCesareansCount;
-        patient.AbortionsCount = FormAbortionsCount;
-        patient.IsCurrentlyPregnant = FormIsCurrentlyPregnant;
-        patient.GestationalWeeks = FormGestationalWeeks?.Trim() ?? string.Empty;
-        patient.DevelopmentalMilestones = FormDevelopmentalMilestones?.Trim() ?? string.Empty;
-        patient.Diet = FormDiet?.Trim() ?? string.Empty;
-        patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
-        patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
-
-        // Los signos vitales no se capturan aquí: se conservan los registrados en las consultas
-        patient.ClinicalNotes = FormClinicalNotes.Trim();
-
-        if (_inventoryService != null)
-        {
-            try
-            {
-                var saved = await _inventoryService.SavePatientAsync(patient);
-                await LoadPatientsAsync();
-                Session.SelectedPatient = Session.Patients.FirstOrDefault(p => p.Id == saved.Id) ?? saved;
-            }
-            catch (Exception ex)
-            {
-                FormErrorMessage = $"Error al guardar en base de datos: {ex.Message}";
-                return;
-            }
-        }
-        else
-        {
-            if (patient.Id == 0)
-            {
-                patient.Id = Session.Patients.Count > 0 ? Session.Patients.Max(p => p.Id) + 1 : 1;
-                Session.Patients.Insert(0, patient);
-            }
-            _consultationService?.UpsertPatient(patient);
-            Session.SelectedPatient = patient;
-        }
-
-        IsPatientModalOpen = false;
-        FormErrorMessage = null;
-        Feedback.ShowSuccess($"Expediente de {patient.FullName} guardado");
     }
 
     // ==========================================
@@ -1606,7 +1017,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsPrescriptionModalOpen = false;
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
-        IsPatientModalOpen = false;
+        PatientForm.IsPatientModalOpen = false;
         IsCatalogBrowserModalOpen = false;
         Info.DismissInfoModal();
 
@@ -2351,23 +1762,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     // ==========================================
-    // CITAS: ESTADO E HISTORIAL DEL PACIENTE (el panel de agenda vive en Pacientes)
+    // CITAS: HISTORIAL DEL PACIENTE (el panel de agenda y el estado de las citas viven en Agenda)
     // ==========================================
-
-    public async Task UpdateAppointmentStatusAsync(PatientAppointment? appt, string status)
-    {
-        if (appt == null || _inventoryService == null) return;
-
-        try
-        {
-            await _inventoryService.UpdateAppointmentStatusAsync(appt.Id, status);
-            appt.Status = status;
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("Error al actualizar estado de cita", ex);
-        }
-    }
 
     public async Task LoadPatientAppointmentsAsync(int? patientId)
     {

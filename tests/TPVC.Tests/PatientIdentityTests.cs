@@ -8,6 +8,7 @@ using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests;
 
@@ -109,52 +110,52 @@ public class PatientIdentityTests
         var vm = new MedicalRecordsViewModel();
 
         // Hombre adulto: no hay nada que llenar en gineco ni en desarrollo
-        vm.FormGender = "Masculino";
-        vm.FormAgeText = "40";
-        Assert.IsFalse(vm.FormShowsGyneco);
-        Assert.IsFalse(vm.FormIsPediatric);
+        vm.PatientForm.FormGender = "Masculino";
+        vm.PatientForm.FormAgeText = "40";
+        Assert.IsFalse(vm.PatientForm.FormShowsGyneco);
+        Assert.IsFalse(vm.PatientForm.FormIsPediatric);
 
         // Mujer adulta: solo gineco-obstétricos
-        vm.FormGender = "Femenino";
-        Assert.IsTrue(vm.FormShowsGyneco);
-        Assert.IsFalse(vm.FormIsPediatric);
+        vm.PatientForm.FormGender = "Femenino";
+        Assert.IsTrue(vm.PatientForm.FormShowsGyneco);
+        Assert.IsFalse(vm.PatientForm.FormIsPediatric);
 
         // Niña de 6 años: desarrollo, sin antecedentes gineco-obstétricos
-        vm.FormAgeText = "6";
-        Assert.IsFalse(vm.FormShowsGyneco);
-        Assert.IsTrue(vm.FormIsPediatric);
+        vm.PatientForm.FormAgeText = "6";
+        Assert.IsFalse(vm.PatientForm.FormShowsGyneco);
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric);
 
         // Adolescente: ambos
-        vm.FormAgeText = "14";
-        Assert.IsTrue(vm.FormShowsGyneco);
-        Assert.IsTrue(vm.FormIsPediatric);
+        vm.PatientForm.FormAgeText = "14";
+        Assert.IsTrue(vm.PatientForm.FormShowsGyneco);
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric);
     }
 
     [TestMethod]
     public void ClearingAge_DoesNotTurnThePatientIntoANewborn()
     {
         var vm = new MedicalRecordsViewModel();
-        vm.FormAgeText = "5";
-        Assert.IsTrue(vm.FormIsPediatric);
+        vm.PatientForm.FormAgeText = "5";
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric);
 
-        vm.FormAgeText = string.Empty;
+        vm.PatientForm.FormAgeText = string.Empty;
 
-        Assert.AreEqual(string.Empty, vm.FormAgeText, "No se rellena con 0");
-        Assert.IsFalse(vm.FormHasAge);
-        Assert.IsFalse(vm.FormIsPediatric);
+        Assert.AreEqual(string.Empty, vm.PatientForm.FormAgeText, "No se rellena con 0");
+        Assert.IsFalse(vm.PatientForm.FormHasAge);
+        Assert.IsFalse(vm.PatientForm.FormIsPediatric);
     }
 
     [TestMethod]
     public void BirthDate_ParsesCommonFormatsAndRejectsImpossibleDates()
     {
         var today = new DateTime(2026, 10, 7);
-        Assert.AreEqual(new DateTime(1992, 3, 14), MedicalRecordsViewModel.TryParseBirthDate("14/03/1992", today));
-        Assert.AreEqual(new DateTime(1992, 3, 14), MedicalRecordsViewModel.TryParseBirthDate("14-3-1992", today));
-        Assert.AreEqual(new DateTime(1992, 3, 14), MedicalRecordsViewModel.TryParseBirthDate("1992-03-14", today));
-        Assert.IsNull(MedicalRecordsViewModel.TryParseBirthDate("31/02/2020", today));
-        Assert.IsNull(MedicalRecordsViewModel.TryParseBirthDate("08/10/2026", today), "Futura");
-        Assert.IsNull(MedicalRecordsViewModel.TryParseBirthDate("01/01/1850", today), "Más de 130 años");
-        Assert.IsNull(MedicalRecordsViewModel.TryParseBirthDate("", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("14/03/1992", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("14-3-1992", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("1992-03-14", today));
+        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("31/02/2020", today));
+        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/10/2026", today), "Futura");
+        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("01/01/1850", today), "Más de 130 años");
+        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("", today));
     }
 
     [TestMethod]
@@ -165,43 +166,43 @@ public class PatientIdentityTests
         await vm.NewPatientAsync();
 
         // Nada supuesto: ni edad 30, ni masculino, ni O+, ni "ninguna" alergia, ni signos de ejemplo
-        Assert.AreEqual(string.Empty, vm.FormAgeText);
-        Assert.AreEqual(string.Empty, vm.FormGender);
-        Assert.AreEqual(MedicalRecordsViewModel.BloodTypeUnknown, vm.FormBloodType);
-        Assert.AreEqual(string.Empty, vm.FormAllergies);
+        Assert.AreEqual(string.Empty, vm.PatientForm.FormAgeText);
+        Assert.AreEqual(string.Empty, vm.PatientForm.FormGender);
+        Assert.AreEqual(PatientFormViewModel.BloodTypeUnknown, vm.PatientForm.FormBloodType);
+        Assert.AreEqual(string.Empty, vm.PatientForm.FormAllergies);
 
-        vm.FormFirstName = "Rodrigo";
-        vm.FormLastName = "Medina";
+        vm.PatientForm.FormFirstName = "Rodrigo";
+        vm.PatientForm.FormLastName = "Medina";
 
-        await vm.SavePatientModalAsync();
-        StringAssert.Contains(vm.FormErrorMessage, "fecha de nacimiento");
+        await vm.PatientForm.SavePatientModalAsync();
+        StringAssert.Contains(vm.PatientForm.FormErrorMessage, "fecha de nacimiento");
 
-        vm.FormBirthDateText = "31/02/2024";
-        await vm.SavePatientModalAsync();
-        StringAssert.Contains(vm.FormErrorMessage, "no es válida");
+        vm.PatientForm.FormBirthDateText = "31/02/2024";
+        await vm.PatientForm.SavePatientModalAsync();
+        StringAssert.Contains(vm.PatientForm.FormErrorMessage, "no es válida");
 
-        vm.FormBirthDateText = DateTime.Today.AddMonths(-30).ToString("dd/MM/yyyy");
-        Assert.AreEqual(2, vm.FormAge);
-        Assert.AreEqual("2 años 6 meses", vm.FormAgeDisplay);
-        Assert.IsTrue(vm.FormHasBirthDate);
-        await vm.SavePatientModalAsync();
-        StringAssert.Contains(vm.FormErrorMessage, "sexo");
+        vm.PatientForm.FormBirthDateText = DateTime.Today.AddMonths(-30).ToString("dd/MM/yyyy");
+        Assert.AreEqual(2, vm.PatientForm.FormAge);
+        Assert.AreEqual("2 años 6 meses", vm.PatientForm.FormAgeDisplay);
+        Assert.IsTrue(vm.PatientForm.FormHasBirthDate);
+        await vm.PatientForm.SavePatientModalAsync();
+        StringAssert.Contains(vm.PatientForm.FormErrorMessage, "sexo");
 
-        vm.FormGender = "Masculino";
-        Assert.IsTrue(vm.FormIsPediatric, "Se muestra el desarrollo");
-        Assert.IsFalse(vm.FormShowsGyneco);
-        await vm.SavePatientModalAsync();
-        StringAssert.Contains(vm.FormErrorMessage, "Negadas");
+        vm.PatientForm.FormGender = "Masculino";
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric, "Se muestra el desarrollo");
+        Assert.IsFalse(vm.PatientForm.FormShowsGyneco);
+        await vm.PatientForm.SavePatientModalAsync();
+        StringAssert.Contains(vm.PatientForm.FormErrorMessage, "Negadas");
 
-        vm.SetAllergiesDenied();
-        await vm.SavePatientModalAsync();
+        vm.PatientForm.SetAllergiesDenied();
+        await vm.PatientForm.SavePatientModalAsync();
 
-        Assert.IsNull(vm.FormErrorMessage);
+        Assert.IsNull(vm.PatientForm.FormErrorMessage);
         var saved = (await _service.GetPatientsAsync()).Single(p => p.FullName == "Rodrigo Medina");
         Assert.AreEqual(DateTime.Today.AddMonths(-30), saved.BirthDate);
         Assert.AreEqual(2, saved.Age);
         Assert.AreEqual("Negadas", saved.Allergies);
-        Assert.AreEqual(MedicalRecordsViewModel.BloodTypeUnknown, saved.BloodType);
+        Assert.AreEqual(PatientFormViewModel.BloodTypeUnknown, saved.BloodType);
         Assert.AreEqual(string.Empty, saved.VitalSigns, "Sin signos inventados");
     }
 
@@ -244,16 +245,16 @@ public class PatientIdentityTests
         var vm = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
         await vm.InitialLoad;
         vm.SelectPatient(vm.Patients.Single(p => p.Id == stored.Id));
-        vm.EditPatient();
+        vm.PatientForm.EditPatient();
 
-        Assert.AreEqual("Laura", vm.FormFirstName);
-        Assert.AreEqual("Gómez", vm.FormLastName);
-        Assert.AreEqual("Rivas", vm.FormMaternalLastName);
+        Assert.AreEqual("Laura", vm.PatientForm.FormFirstName);
+        Assert.AreEqual("Gómez", vm.PatientForm.FormLastName);
+        Assert.AreEqual("Rivas", vm.PatientForm.FormMaternalLastName);
 
-        vm.FormPhone = "5551234567";
-        await vm.SavePatientModalAsync();
+        vm.PatientForm.FormPhone = "5551234567";
+        await vm.PatientForm.SavePatientModalAsync();
 
-        Assert.IsNull(vm.FormErrorMessage);
+        Assert.IsNull(vm.PatientForm.FormErrorMessage);
         var saved = (await _service.GetPatientsAsync()).Single(p => p.Id == stored.Id);
         Assert.AreEqual("5551234567", saved.Phone);
         Assert.AreEqual(vitals, saved.VitalSigns);

@@ -339,9 +339,9 @@ internal sealed class UiSmokeSession
 
             var records = main.MedicalRecordsVM;
             Show(host, main, "Records", $"03-pacientes-inicio-{suffix}");
-            records.HomeSearchText = "mar";
+            records.Home.HomeSearchText = "mar";
             Capture(host, $"04-pacientes-busqueda-{suffix}");
-            records.HomeSearchText = string.Empty;
+            records.Home.HomeSearchText = string.Empty;
 
             records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
             Capture(host, $"05-ficha-{suffix}");
@@ -351,10 +351,10 @@ internal sealed class UiSmokeSession
             Capture(host, $"06-ficha-detalle-{suffix}");
             records.IsVitalsChartVisible = false;
 
-            WaitFor(records.ScheduleForSelectedPatientAsync());
-            WaitFor(records.OpenAgendaSlotAsync(records.AgendaSlots.First(s => s.IsFree)));
+            WaitFor(records.Agenda.ScheduleForSelectedPatientAsync());
+            WaitFor(records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree)));
             Capture(host, $"07-agenda-{suffix}");
-            records.CloseAgendaPanel();
+            records.Agenda.CloseAgendaPanel();
 
             records.ChartPrimaryAction();
             records.ConsultationChiefComplaint = "Fiebre y dolor de garganta de 2 días";
@@ -431,11 +431,11 @@ internal sealed class UiSmokeSession
 
             WaitFor(records.NewPatientAsync());
             Capture(host, $"16-alta-paciente-{suffix}");
-            records.FormGender = "Femenino";
-            records.FormBirthDateText = DateTime.Today.AddYears(-32).ToString("dd/MM/yyyy");
-            records.OpenFormSection("Gineco");
+            records.PatientForm.FormGender = "Femenino";
+            records.PatientForm.FormBirthDateText = DateTime.Today.AddYears(-32).ToString("dd/MM/yyyy");
+            records.PatientForm.OpenFormSection("Gineco");
             Capture(host, $"17-alta-gineco-{suffix}");
-            records.CancelPatientForm();
+            records.PatientForm.CancelPatientForm();
 
             var shell = main.ConfigurationShellVM;
             foreach (var sub in new[] { "Dashboard", "Inventory", "Batches", "Movements", "Services", "ClinicProfile", "Appearance", "Data", "TursoSync", "Updates", "DesignSystem" })
@@ -808,7 +808,7 @@ internal sealed class UiKeyboardPass
         _records.AutosaveDelay = TimeSpan.FromHours(1); // el borrador solo se escribe con Ctrl+S
         _main.NavigateTo("Records");
         _records.Info.DismissInfoModal();
-        _records.CloseAgendaPanel();
+        _records.Agenda.CloseAgendaPanel();
         _records.Navigation.GoToPatientsHome();
 
         _window.WindowStartupLocation = System.Windows.WindowStartupLocation.Manual;
@@ -851,15 +851,15 @@ internal sealed class UiKeyboardPass
     private void TypeToSearch(PatientRecord patient)
     {
         _records.Navigation.GoToPatientsHome();
-        _records.HomeSearchText = string.Empty;
+        _records.Home.HomeSearchText = string.Empty;
         Settle();
-        Check(TypeText("r") && _records.HomeSearchText == "r", $"Inicio: escribir con el foco fuera de un campo va al buscador (quedó \"{_records.HomeSearchText}\")");
-        Check(PressEscape() && _records.HomeSearchText.Length == 0 && _records.Navigation.IsHomePage, "Esc en el inicio borra la búsqueda");
+        Check(TypeText("r") && _records.Home.HomeSearchText == "r", $"Inicio: escribir con el foco fuera de un campo va al buscador (quedó \"{_records.Home.HomeSearchText}\")");
+        Check(PressEscape() && _records.Home.HomeSearchText.Length == 0 && _records.Navigation.IsHomePage, "Esc en el inicio borra la búsqueda");
 
         _records.OpenPatientChart(patient);
         Settle();
-        Check(TypeText("m") && _records.HomeSearchText == "m" && _records.Navigation.IsHomePage, "Ficha: escribir abre la búsqueda en el inicio");
-        Check(PressEscape() && _records.HomeSearchText.Length == 0, "Esc borra la búsqueda abierta desde la ficha");
+        Check(TypeText("m") && _records.Home.HomeSearchText == "m" && _records.Navigation.IsHomePage, "Ficha: escribir abre la búsqueda en el inicio");
+        Check(PressEscape() && _records.Home.HomeSearchText.Length == 0, "Esc borra la búsqueda abierta desde la ficha");
 
         _records.OpenPatientChart(patient);
         Settle();
@@ -882,15 +882,15 @@ internal sealed class UiKeyboardPass
     private void AgendaSlotMenu(PatientRecord patient)
     {
         _records.OpenPatientChart(patient);
-        WaitFor(_records.ScheduleForSelectedPatientAsync());
-        var slot = _records.AgendaSlots.FirstOrDefault(s => s.IsFree);
+        WaitFor(_records.Agenda.ScheduleForSelectedPatientAsync());
+        var slot = _records.Agenda.AgendaSlots.FirstOrDefault(s => s.IsFree);
         if (!Check(slot != null, "Agenda: no hay huecos libres para agendar")) return;
-        WaitFor(_records.OpenAgendaSlotAsync(slot));
-        _records.SetAgendaReason("Control");
-        WaitFor(_records.SaveAgendaFormAsync());
+        WaitFor(_records.Agenda.OpenAgendaSlotAsync(slot));
+        _records.Agenda.SetAgendaReason("Control");
+        WaitFor(_records.Agenda.SaveAgendaFormAsync());
         Settle();
-        var booked = _records.AgendaSlots.FirstOrDefault(s => s.HasAppointment && s.Appointment!.PatientRecordId == patient.Id);
-        if (!Check(booked != null, $"Agenda: no se agendó la cita ({_records.AgendaFormError})")) return;
+        var booked = _records.Agenda.AgendaSlots.FirstOrDefault(s => s.HasAppointment && s.Appointment!.PatientRecordId == patient.Id);
+        if (!Check(booked != null, $"Agenda: no se agendó la cita ({_records.Agenda.AgendaFormError})")) return;
 
         var agenda = PumpUntilFound<TPVC.Views.AgendaPanelView>(v => v.IsVisible);
         var button = agenda == null ? null : PumpUntilFound<System.Windows.Controls.Button>(agenda,
@@ -900,10 +900,10 @@ internal sealed class UiKeyboardPass
             item => Check(item.CommandParameter is PatientAppointment, $"Agenda: \"{item.Header}\" no recibe la cita"));
 
         // Esc con la cita en cambio de horario y luego con el panel
-        _records.StartMovingAppointment(booked!.Appointment);
+        _records.Agenda.StartMovingAppointment(booked!.Appointment);
         Settle();
-        Check(PressEscape() && !_records.IsMovingAppointment && _records.IsAgendaPanelOpen, "Esc cancela el cambio de horario (el panel sigue abierto)");
-        Check(PressEscape() && !_records.IsAgendaPanelOpen, "Esc cierra el panel de agenda");
+        Check(PressEscape() && !_records.Agenda.IsMovingAppointment && _records.Agenda.IsAgendaPanelOpen, "Esc cancela el cambio de horario (el panel sigue abierto)");
+        Check(PressEscape() && !_records.Agenda.IsAgendaPanelOpen, "Esc cierra el panel de agenda");
     }
 
     private void OpenAndCloseMenu(System.Windows.Controls.Button button, string what, Func<System.Windows.Controls.ContextMenu, bool> dataContextOk,

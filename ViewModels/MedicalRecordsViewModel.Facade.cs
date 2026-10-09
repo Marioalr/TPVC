@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using TPVC.Models;
 using TPVC.ViewModels.Patients;
 
@@ -46,4 +47,12 @@ public partial class MedicalRecordsViewModel
     /// <summary>Active.ActiveConsultation.</summary>
     [NotForBinding]
     public ActiveConsultation? ActiveConsultation => Active.ActiveConsultation;
+
+    /// <summary>Agenda.OpenAgendaPanelAsync.</summary>
+    [NotForBinding]
+    public Task OpenAgendaPanelAsync() => Agenda.OpenAgendaPanelAsync();
+
+    /// <summary>PatientForm.NewPatientAsync.</summary>
+    [NotForBinding]
+    public Task NewPatientAsync() => PatientForm.NewPatientAsync();
 }

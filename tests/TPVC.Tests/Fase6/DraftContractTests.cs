@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests.Fase6;
 
@@ -113,7 +114,7 @@ public class DraftContractTests
         using var clinic = new Fase6Clinic();
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
         await records.NewPatientAsync();
-        records.FormFirstName = "Lucía";
+        records.PatientForm.FormFirstName = "Lucía";
         records.FlushConsultationDraft();
         records.Dispose();
 
@@ -134,12 +135,12 @@ public class DraftContractTests
 
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
         Assert.IsTrue(records.Navigation.IsFormPage, "Se reabre el alta");
-        Assert.IsTrue(records.IsFormNew);
-        Assert.AreEqual("EXP-2026-777", records.FormRecordNumber);
-        Assert.AreEqual("Gineco", records.FormOpenSection);
-        Assert.AreEqual(2, records.FormPregnanciesCount);
-        Assert.IsTrue(records.FormIsCurrentlyPregnant);
-        Assert.IsTrue(records.FormShowsGyneco);
+        Assert.IsTrue(records.PatientForm.IsFormNew);
+        Assert.AreEqual("EXP-2026-777", records.PatientForm.FormRecordNumber);
+        Assert.AreEqual("Gineco", records.PatientForm.FormOpenSection);
+        Assert.AreEqual(2, records.PatientForm.FormPregnanciesCount);
+        Assert.IsTrue(records.PatientForm.FormIsCurrentlyPregnant);
+        Assert.IsTrue(records.PatientForm.FormShowsGyneco);
 
         records.FlushConsultationDraft();
         records.Dispose();
@@ -162,7 +163,7 @@ public class DraftContractTests
         using var clinic = new Fase6Clinic();
         var keys = Fase6Assets.NormalizeNewLines(Fase6Assets.ReadAsset("patient-form-draft-keys.txt"))
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var properties = keys.ToDictionary(k => k, k => typeof(MedicalRecordsViewModel).GetProperty(k)
+        var properties = keys.ToDictionary(k => k, k => typeof(PatientFormViewModel).GetProperty(k)
             ?? throw new AssertFailedException($"{k} no es una propiedad pública del ViewModel"));
 
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false));
@@ -187,10 +188,10 @@ public class DraftContractTests
                 : type == typeof(int) ? 100 + next
                 : type == typeof(bool) ? true
                 : $"Dato {next:00} de {key}";
-            properties[key].SetValue(records, value);
+            properties[key].SetValue(records.PatientForm, value);
         }
 
-        var expected = keys.ToDictionary(k => k, k => properties[k].GetValue(records));
+        var expected = keys.ToDictionary(k => k, k => properties[k].GetValue(records.PatientForm));
         var texts = expected.Values.Select(v => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
         Assert.AreEqual(texts.Count, texts.Distinct(StringComparer.Ordinal).Count(), "Cada campo lleva un valor distinto: " + string.Join(" | ", texts));
 
@@ -208,7 +209,7 @@ public class DraftContractTests
         Assert.IsTrue(reopened.Navigation.IsFormPage, "Se reabre el alta");
         foreach (var key in keys)
         {
-            Assert.AreEqual(expected[key], properties[key].GetValue(reopened), $"{key} se restaura en su propio campo");
+            Assert.AreEqual(expected[key], properties[key].GetValue(reopened.PatientForm), $"{key} se restaura en su propio campo");
         }
         reopened.Dispose();
     }

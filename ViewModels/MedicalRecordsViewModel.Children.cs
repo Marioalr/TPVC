@@ -22,6 +22,9 @@ public partial class MedicalRecordsViewModel
     private ActiveConsultationSession _active;
     private ConsultationRecordState _record;
     private VitalSignsChartViewModel _vitalsChart;
+    private AgendaPanelViewModel _agenda;
+    private PatientFormViewModel _patientForm;
+    private PatientsHomeViewModel _home;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
     public InfoDialogState Info => _info;
@@ -53,8 +56,17 @@ public partial class MedicalRecordsViewModel
     /// <summary>Evolución de signos vitales de la ficha (gráfica y tabla).</summary>
     public VitalSignsChartViewModel VitalsChart => _vitalsChart;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_vitalsChart))]
-    private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService)
+    /// <summary>Agenda de la semana (panel lateral).</summary>
+    public AgendaPanelViewModel Agenda => _agenda;
+
+    /// <summary>Alta y edición de expediente (página del formulario y su borrador).</summary>
+    public PatientFormViewModel PatientForm => _patientForm;
+
+    /// <summary>Inicio: buscador, pacientes recientes y citas de hoy.</summary>
+    public PatientsHomeViewModel Home => _home;
+
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_vitalsChart), nameof(_agenda), nameof(_patientForm), nameof(_home))]
+    private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore)
     {
         _info = new InfoDialogState(_ui);
         _feedback = new PatientsFeedback(notificationService, _info);
@@ -66,5 +78,9 @@ public partial class MedicalRecordsViewModel
         _active = new ActiveConsultationSession(_consultationService, _ui, this);
         _record = new ConsultationRecordState(_session, _inventoryService, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
+        _agenda = new AgendaPanelViewModel(_inventoryService, _session, _info, _feedback, _clinic, _dialogs, _urls, this);
+        _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,
+            _info, _feedback, this, _dialogs, _ui, _autosaveOptions, this);
+        _home = new PatientsHomeViewModel(_inventoryService, _session, _navigation, this);
     }
 }

@@ -65,15 +65,15 @@
 
                 <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
                     <Grid>
-                        <TextBlock Style="{StaticResource TextSection}" Text="{Binding TodayTitle}" />
+                        <TextBlock Style="{StaticResource TextSection}" Text="{Binding Home.TodayTitle}" />
                         <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Right" Padding="8,4" MinHeight="0"
-                                Command="{Binding OpenAgendaPanelCommand}" Content="Agenda" ToolTip="Abrir la agenda de la semana" />
+                                Command="{Binding Agenda.OpenAgendaPanelCommand}" Content="Agenda" ToolTip="Abrir la agenda de la semana" />
                     </Grid>
                 </Border>
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <ItemsControl ItemsSource="{Binding TodayAppointments}">
+                        <ItemsControl ItemsSource="{Binding Home.TodayAppointments}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:PatientAppointment}">
                                     <Border Padding="18,12" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
@@ -112,7 +112,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <StackPanel Margin="18,24" Visibility="{Binding HasTodayAppointments, Converter={StaticResource InverseBoolToVis}}">
+                        <StackPanel Margin="18,24" Visibility="{Binding Home.HasTodayAppointments, Converter={StaticResource InverseBoolToVis}}">
                             <helpers:Icon Data="{StaticResource IcoCalendar}" Width="28" Height="28" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Left" />
                             <TextBlock Style="{StaticResource TextBody}" Text="Sin citas para hoy." Margin="0,10,0,4" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="Puede agendar desde la agenda o desde la ficha de un paciente." />
@@ -130,7 +130,7 @@
         <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
             <Grid>
                 <!-- Sin búsqueda: atendidos recientemente -->
-                <Grid Visibility="{Binding HasHomeQuery, Converter={StaticResource InverseBoolToVis}}">
+                <Grid Visibility="{Binding Home.HasHomeQuery, Converter={StaticResource InverseBoolToVis}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -142,7 +142,7 @@
                         </StackPanel>
                     </Border>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding RecentPatients}" Margin="14,14,4,14" VerticalAlignment="Top">
+                        <ItemsControl ItemsSource="{Binding Home.RecentPatients}" Margin="14,14,4,14" VerticalAlignment="Top">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <UniformGrid Columns="2" />
@@ -188,7 +188,7 @@
                 </Grid>
 
                 <!-- Con búsqueda: resultados al escribir -->
-                <Grid Visibility="{Binding HasHomeQuery, Converter={StaticResource BoolToVis}}">
+                <Grid Visibility="{Binding Home.HasHomeQuery, Converter={StaticResource BoolToVis}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -196,13 +196,13 @@
                     <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource TextSection}" Text="Resultados" />
-                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding HomeResultsSummary}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Home.HomeResultsSummary}" VerticalAlignment="Center" Margin="12,0,0,0" />
                             <TextBlock Style="{StaticResource TextCaption}" Text="· Enter abre el primero" VerticalAlignment="Center" Margin="6,0,0,0" />
                         </StackPanel>
                     </Border>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12">
-                            <ItemsControl ItemsSource="{Binding HomeResults}">
+                            <ItemsControl ItemsSource="{Binding Home.HomeResults}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientRecord}">
                                         <Button x:Name="Row" Style="{StaticResource PatientResultRow}" Margin="0,0,0,4" Padding="9,10,12,10"
@@ -245,12 +245,12 @@
                             </ItemsControl>
 
                             <TextBlock Style="{StaticResource TextDetail}" Margin="12,8,0,8" Text="No hay pacientes que coincidan."
-                                       Visibility="{Binding HasNoHomeResults, Converter={StaticResource BoolToVis}}" />
+                                       Visibility="{Binding Home.HasNoHomeResults, Converter={StaticResource BoolToVis}}" />
 
                             <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Margin="4,8,0,0" Command="{Binding CreatePatientFromSearchCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <helpers:Icon Data="{StaticResource IcoUserPlus}" Width="18" Height="18" Margin="0,0,10,0" />
-                                    <TextBlock Text="{Binding CreateFromSearchText}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Home.CreateFromSearchText}" FontWeight="SemiBold" />
                                     <TextBlock Text="  abre el alta con el nombre ya escrito" Foreground="{DynamicResource ThemeTextSecondary}" />
                                 </StackPanel>
                             </Button>

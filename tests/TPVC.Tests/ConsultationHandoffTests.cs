@@ -607,8 +607,8 @@ public class ConsultationHandoffTests
         await pc.Records.DiscardActiveConsultationAsync();
         Assert.IsTrue(pc.Consultations.HasActiveConsultation, "Tampoco se descarta");
 
-        pc.Records.EditPatient();
-        Assert.IsFalse(pc.Records.IsPatientModalOpen, "El expediente se edita en el otro equipo");
+        pc.Records.PatientForm.EditPatient();
+        Assert.IsFalse(pc.Records.PatientForm.IsPatientModalOpen, "El expediente se edita en el otro equipo");
         StringAssert.Contains(pc.Records.Info.InfoModalMessage, patient.FullName);
     }
 

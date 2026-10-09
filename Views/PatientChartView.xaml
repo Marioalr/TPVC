@@ -45,7 +45,7 @@
                     </WrapPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
-                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ScheduleForSelectedPatientCommand}" Margin="0,0,8,0">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Agenda.ScheduleForSelectedPatientCommand}" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoCalendar}" Margin="0,0,8,0" />
                             <TextBlock Text="Agendar cita" />
@@ -57,7 +57,7 @@
                         <helpers:Icon Data="{StaticResource IcoMore}" StrokeThickness="3" />
                         <Button.ContextMenu>
                             <ContextMenu Style="{StaticResource DsContextMenu}">
-                                <MenuItem Header="Editar expediente" Command="{Binding EditPatientCommand}" />
+                                <MenuItem Header="Editar expediente" Command="{Binding PatientForm.EditPatientCommand}" />
                                 <MenuItem Header="Ver receta" Command="{Binding OpenPrescriptionPdfPreviewCommand}" />
                                 <MenuItem Header="Dar de baja el expediente" Command="{Binding DeactivateSelectedPatientCommand}" />
                             </ContextMenu>

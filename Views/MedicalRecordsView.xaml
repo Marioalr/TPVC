@@ -66,24 +66,24 @@
                              Height="44"
                              FontSize="15"
                              Padding="40,7,12,7"
-                             Text="{Binding HomeSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Text="{Binding Home.HomeSearchText, UpdateSourceTrigger=PropertyChanged}"
                              helpers:Field.Placeholder="Buscar paciente por nombre, folio o teléfono"
                              AutomationProperties.Name="Buscar paciente">
                         <TextBox.InputBindings>
-                            <KeyBinding Key="Enter" Command="{Binding OpenFirstHomeResultCommand}" />
+                            <KeyBinding Key="Enter" Command="{Binding Home.OpenFirstHomeResultCommand}" />
                         </TextBox.InputBindings>
                     </TextBox>
                     <helpers:Icon Data="{StaticResource IcoSearch}" Width="18" Height="18" HorizontalAlignment="Left" Margin="14,0,0,0"
                                   Foreground="{DynamicResource ThemeTextSecondary}" IsHitTestVisible="False" />
                 </Grid>
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
-                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ToggleAgendaPanelCommand}" Margin="0,0,8,0" ToolTip="Agenda de la semana (panel)">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Agenda.ToggleAgendaPanelCommand}" Margin="0,0,8,0" ToolTip="Agenda de la semana (panel)">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoCalendar}" Margin="0,0,8,0" />
                             <TextBlock Text="Agenda" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding NewPatientCommand}">
+                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding PatientForm.NewPatientCommand}">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
                             <TextBlock Text="Nuevo paciente" />
@@ -141,7 +141,7 @@
                             Visibility="{Binding Navigation.IsHomePage, Converter={StaticResource BoolToVis}}" />
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ChartPage}"
                             Visibility="{Binding Navigation.IsChartPage, Converter={StaticResource BoolToVis}}" />
-            <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource FormPage}"
+            <ContentControl Focusable="False" Content="{Binding PatientForm}" ContentTemplate="{StaticResource FormPage}"
                             Visibility="{Binding Navigation.IsFormPage, Converter={StaticResource BoolToVis}}" />
             <ContentControl Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ConsultationPage}"
                             Visibility="{Binding Navigation.IsConsultationPage, Converter={StaticResource BoolToVis}}" />
@@ -150,7 +150,7 @@
         <!-- ======================= PANEL DE AGENDA (no oscurece lo de atrás) ======================= -->
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="50" Focusable="False" HorizontalAlignment="Right"
                         Content="{Binding}" ContentTemplate="{StaticResource AgendaPanel}"
-                        Visibility="{Binding IsAgendaPanelOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding Agenda.IsAgendaPanelOpen, Converter={StaticResource BoolToVis}}" />
 
         <!-- ======================= HOJAS CON FONDO DIFUSO ======================= -->
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PrescriptionSheet}"

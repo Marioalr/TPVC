@@ -13,10 +13,10 @@ public partial class MedicalRecordsViewModel
         || IsServicesModalOpen || IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
-    public bool CanTypeToSearch => (Navigation.IsHomePage || Navigation.IsChartPage) && !IsAgendaPanelOpen && !IsAnySheetOpen;
+    public bool CanTypeToSearch => (Navigation.IsHomePage || Navigation.IsChartPage) && !Agenda.IsAgendaPanelOpen && !IsAnySheetOpen;
 
     /// <summary>Lo tecleado con el foco fuera de un campo se agrega al buscador.</summary>
-    public void AppendTypedSearchText(string text) => HomeSearchText += text;
+    public void AppendTypedSearchText(string text) => Home.HomeSearchText += text;
 
     /// <summary>
     /// Esc: cierra lo de más arriba (aviso, hojas, agenda, búsqueda) o vuelve de la ficha al inicio.
@@ -36,9 +36,9 @@ public partial class MedicalRecordsViewModel
         else if (IsPrescriptionModalOpen) ClosePrescriptionModal();
         else if (IsSuppliesModalOpen) CloseSuppliesModal();
         else if (IsServicesModalOpen) CloseServicesModal();
-        else if (IsMovingAppointment) CancelMovingAppointment();
-        else if (IsAgendaPanelOpen) CloseAgendaPanel();
-        else if (Navigation.IsHomePage && HasHomeQuery) HomeSearchText = string.Empty;
+        else if (Agenda.IsMovingAppointment) Agenda.CancelMovingAppointment();
+        else if (Agenda.IsAgendaPanelOpen) Agenda.CloseAgendaPanel();
+        else if (Navigation.IsHomePage && Home.HasHomeQuery) Home.HomeSearchText = string.Empty;
         else if (Navigation.IsChartPage) Navigation.GoToPatientsHome();
         else return false;
         return true;

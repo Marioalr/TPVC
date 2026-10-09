@@ -884,26 +884,26 @@ public class InventoryTests
 
         // Abrir modal de nuevo paciente
         await recordsVm.NewPatientAsync();
-        Assert.IsTrue(recordsVm.IsPatientModalOpen);
-        Assert.IsTrue(recordsVm.FormRecordNumber.StartsWith("EXP-"));
+        Assert.IsTrue(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.IsTrue(recordsVm.PatientForm.FormRecordNumber.StartsWith("EXP-"));
 
         // Intentar guardar con nombre vacío
-        recordsVm.FormFullName = "";
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsTrue(recordsVm.IsPatientModalOpen, "Debe permanecer abierto si hay error de validación");
-        Assert.IsNotNull(recordsVm.FormErrorMessage);
+        recordsVm.PatientForm.FormFullName = "";
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.PatientForm.IsPatientModalOpen, "Debe permanecer abierto si hay error de validación");
+        Assert.IsNotNull(recordsVm.PatientForm.FormErrorMessage);
 
         // Guardar con datos válidos
-        recordsVm.FormFullName = "Test Paciente Nuevo";
-        recordsVm.FormPhone = "55 0011 2233";
-        recordsVm.FormBloodType = "A+";
-        recordsVm.FormAllergies = "Ninguna";
-        recordsVm.FormGender = "Femenino";
-        recordsVm.FormBirthDateText = "10/05/1990";
-        await recordsVm.SavePatientModalAsync();
+        recordsVm.PatientForm.FormFullName = "Test Paciente Nuevo";
+        recordsVm.PatientForm.FormPhone = "55 0011 2233";
+        recordsVm.PatientForm.FormBloodType = "A+";
+        recordsVm.PatientForm.FormAllergies = "Ninguna";
+        recordsVm.PatientForm.FormGender = "Femenino";
+        recordsVm.PatientForm.FormBirthDateText = "10/05/1990";
+        await recordsVm.PatientForm.SavePatientModalAsync();
 
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
-        Assert.IsNull(recordsVm.FormErrorMessage);
+        Assert.IsFalse(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.IsNull(recordsVm.PatientForm.FormErrorMessage);
         Assert.IsNotNull(recordsVm.SelectedPatient);
         Assert.AreEqual("Test Paciente Nuevo", recordsVm.SelectedPatient.FullName);
 
@@ -1164,37 +1164,37 @@ public class InventoryTests
         await recordsVm.NewPatientAsync();
 
         // 1. Falta nombre(s)
-        recordsVm.FormFirstName = "";
-        recordsVm.FormLastName = "Pérez";
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsTrue(recordsVm.IsPatientModalOpen);
-        Assert.AreEqual("El nombre(s) del paciente es obligatorio.", recordsVm.FormErrorMessage);
+        recordsVm.PatientForm.FormFirstName = "";
+        recordsVm.PatientForm.FormLastName = "Pérez";
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.AreEqual("El nombre(s) del paciente es obligatorio.", recordsVm.PatientForm.FormErrorMessage);
 
         // 2. Falta apellido paterno
-        recordsVm.FormFirstName = "Juan";
-        recordsVm.FormLastName = "";
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsTrue(recordsVm.IsPatientModalOpen);
-        Assert.AreEqual("El apellido paterno del paciente es obligatorio.", recordsVm.FormErrorMessage);
+        recordsVm.PatientForm.FormFirstName = "Juan";
+        recordsVm.PatientForm.FormLastName = "";
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.AreEqual("El apellido paterno del paciente es obligatorio.", recordsVm.PatientForm.FormErrorMessage);
 
         // 3. Solo nombre y apellido paterno (materno opcional)
-        recordsVm.FormFirstName = "Juan";
-        recordsVm.FormLastName = "Pérez";
-        recordsVm.FormMaternalLastName = "";
+        recordsVm.PatientForm.FormFirstName = "Juan";
+        recordsVm.PatientForm.FormLastName = "Pérez";
+        recordsVm.PatientForm.FormMaternalLastName = "";
         FillRequiredIdentity(recordsVm);
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.PatientForm.IsPatientModalOpen);
         Assert.IsNotNull(recordsVm.SelectedPatient);
         Assert.AreEqual("Juan Pérez", recordsVm.SelectedPatient.FullName);
 
         // 4. Con apellido materno
         await recordsVm.NewPatientAsync();
-        recordsVm.FormFirstName = "María del Carmen";
-        recordsVm.FormLastName = "González";
-        recordsVm.FormMaternalLastName = "Trejo";
+        recordsVm.PatientForm.FormFirstName = "María del Carmen";
+        recordsVm.PatientForm.FormLastName = "González";
+        recordsVm.PatientForm.FormMaternalLastName = "Trejo";
         FillRequiredIdentity(recordsVm);
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.PatientForm.IsPatientModalOpen);
         Assert.AreEqual("María del Carmen González Trejo", recordsVm.SelectedPatient.FullName);
     }
 
@@ -1204,26 +1204,26 @@ public class InventoryTests
         var recordsVm = new MedicalRecordsViewModel();
 
         // Filtro de edad: solo dígitos
-        recordsVm.FormAgeText = "45abc$%1";
-        Assert.AreEqual("451", recordsVm.FormAgeText);
+        recordsVm.PatientForm.FormAgeText = "45abc$%1";
+        Assert.AreEqual("451", recordsVm.PatientForm.FormAgeText);
 
-        recordsVm.FormAgeText = "28";
-        Assert.AreEqual(28, recordsVm.FormAge);
+        recordsVm.PatientForm.FormAgeText = "28";
+        Assert.AreEqual(28, recordsVm.PatientForm.FormAge);
 
         // Formato automático de teléfono: xxx-xxx-xxxx
-        recordsVm.FormPhone = "(55) 1234-5678";
-        Assert.AreEqual("551-234-5678", recordsVm.FormPhone);
+        recordsVm.PatientForm.FormPhone = "(55) 1234-5678";
+        Assert.AreEqual("551-234-5678", recordsVm.PatientForm.FormPhone);
 
         // Borrado y actualización de guiones en tiempo real
-        recordsVm.FormPhone = "5512";
-        Assert.AreEqual("551-2", recordsVm.FormPhone);
+        recordsVm.PatientForm.FormPhone = "5512";
+        Assert.AreEqual("551-2", recordsVm.PatientForm.FormPhone);
 
-        recordsVm.FormPhone = "551";
-        Assert.AreEqual("551", recordsVm.FormPhone);
+        recordsVm.PatientForm.FormPhone = "551";
+        Assert.AreEqual("551", recordsVm.PatientForm.FormPhone);
 
         // Filtro de teléfono de emergencia: xxx-xxx-xxxx (máximo 10 dígitos estándar)
-        recordsVm.FormEmergencyContactPhone = "+52-55-9876-5432 ext 10";
-        Assert.AreEqual("525-598-7654", recordsVm.FormEmergencyContactPhone);
+        recordsVm.PatientForm.FormEmergencyContactPhone = "+52-55-9876-5432 ext 10";
+        Assert.AreEqual("525-598-7654", recordsVm.PatientForm.FormEmergencyContactPhone);
 
         // Almacenamiento como puros dígitos en el modelo y display con formato
         var patient = new PatientRecord { Phone = "5512345678", EmergencyContactPhone = "5598765432" };
@@ -1236,48 +1236,48 @@ public class InventoryTests
     public async Task MedicalRecordsViewModel_EmailValidation_AllowsEmptyAndValidatesFormat()
     {
         // Validación estática de formato
-        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail(null));
-        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail(""));
-        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("   "));
-        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("paciente@clinica.com"));
-        Assert.IsTrue(MedicalRecordsViewModel.IsValidEmail("dr.morales@hospital-general.org.mx"));
+        Assert.IsTrue(PatientFormViewModel.IsValidEmail(null));
+        Assert.IsTrue(PatientFormViewModel.IsValidEmail(""));
+        Assert.IsTrue(PatientFormViewModel.IsValidEmail("   "));
+        Assert.IsTrue(PatientFormViewModel.IsValidEmail("paciente@clinica.com"));
+        Assert.IsTrue(PatientFormViewModel.IsValidEmail("dr.morales@hospital-general.org.mx"));
 
-        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("correo-invalido"));
-        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@"));
-        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@dominio"));
-        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario@dominio."));
-        Assert.IsFalse(MedicalRecordsViewModel.IsValidEmail("usuario @dominio.com"));
+        Assert.IsFalse(PatientFormViewModel.IsValidEmail("correo-invalido"));
+        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@"));
+        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@dominio"));
+        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@dominio."));
+        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario @dominio.com"));
 
         // Validación en el modal de guardado
         var recordsVm = new MedicalRecordsViewModel();
         await recordsVm.NewPatientAsync();
-        recordsVm.FormFirstName = "Laura";
-        recordsVm.FormLastName = "Mora";
+        recordsVm.PatientForm.FormFirstName = "Laura";
+        recordsVm.PatientForm.FormLastName = "Mora";
         FillRequiredIdentity(recordsVm);
-        recordsVm.FormEmail = "correo-invalido";
+        recordsVm.PatientForm.FormEmail = "correo-invalido";
 
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsTrue(recordsVm.IsPatientModalOpen);
-        Assert.IsNotNull(recordsVm.FormErrorMessage);
-        Assert.IsTrue(recordsVm.FormErrorMessage.Contains("correo electrónico no tiene un formato válido"));
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsTrue(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.IsNotNull(recordsVm.PatientForm.FormErrorMessage);
+        Assert.IsTrue(recordsVm.PatientForm.FormErrorMessage.Contains("correo electrónico no tiene un formato válido"));
 
         // Con correo vacío debe permitir guardar sin problemas
-        recordsVm.FormEmail = "   ";
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
-        Assert.IsNull(recordsVm.FormErrorMessage);
+        recordsVm.PatientForm.FormEmail = "   ";
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.PatientForm.IsPatientModalOpen);
+        Assert.IsNull(recordsVm.PatientForm.FormErrorMessage);
         Assert.IsNotNull(recordsVm.SelectedPatient);
         Assert.AreEqual(string.Empty, recordsVm.SelectedPatient.Email);
 
         // Con correo válido
         await recordsVm.NewPatientAsync();
-        recordsVm.FormFirstName = "Laura";
-        recordsVm.FormLastName = "Mora";
-        recordsVm.FormRecordNumber = "EXP-2026-999";
+        recordsVm.PatientForm.FormFirstName = "Laura";
+        recordsVm.PatientForm.FormLastName = "Mora";
+        recordsVm.PatientForm.FormRecordNumber = "EXP-2026-999";
         FillRequiredIdentity(recordsVm);
-        recordsVm.FormEmail = "laura.mora@correo.com";
-        await recordsVm.SavePatientModalAsync();
-        Assert.IsFalse(recordsVm.IsPatientModalOpen);
+        recordsVm.PatientForm.FormEmail = "laura.mora@correo.com";
+        await recordsVm.PatientForm.SavePatientModalAsync();
+        Assert.IsFalse(recordsVm.PatientForm.IsPatientModalOpen);
         Assert.AreEqual("laura.mora@correo.com", recordsVm.SelectedPatient.Email);
     }
 
@@ -2230,32 +2230,32 @@ public class InventoryTests
         var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
 
         // Test Gender reactivity
-        vm.FormGender = "Femenino";
-        Assert.IsTrue(vm.FormIsFemale, "Al seleccionar Femenino, FormIsFemale debe ser true");
+        vm.PatientForm.FormGender = "Femenino";
+        Assert.IsTrue(vm.PatientForm.FormIsFemale, "Al seleccionar Femenino, FormIsFemale debe ser true");
 
-        vm.FormGender = "Masculino";
-        Assert.IsFalse(vm.FormIsFemale, "Al seleccionar Masculino, FormIsFemale debe ser false");
+        vm.PatientForm.FormGender = "Masculino";
+        Assert.IsFalse(vm.PatientForm.FormIsFemale, "Al seleccionar Masculino, FormIsFemale debe ser false");
 
         // Test Age reactivity
-        vm.FormAge = 9;
-        Assert.IsTrue(vm.FormIsPediatric, "A los 9 años debe considerarse pediátrico (< 18 años)");
+        vm.PatientForm.FormAge = 9;
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric, "A los 9 años debe considerarse pediátrico (< 18 años)");
 
-        vm.FormAge = 17;
-        Assert.IsTrue(vm.FormIsPediatric, "A los 17 años debe considerarse pediátrico (< 18 años)");
+        vm.PatientForm.FormAge = 17;
+        Assert.IsTrue(vm.PatientForm.FormIsPediatric, "A los 17 años debe considerarse pediátrico (< 18 años)");
 
-        vm.FormAge = 18;
-        Assert.IsFalse(vm.FormIsPediatric, "A los 18 años ya no se considera pediátrico");
+        vm.PatientForm.FormAge = 18;
+        Assert.IsFalse(vm.PatientForm.FormIsPediatric, "A los 18 años ya no se considera pediátrico");
 
-        vm.FormAge = 45;
-        Assert.IsFalse(vm.FormIsPediatric, "A los 45 años no es pediátrico");
+        vm.PatientForm.FormAge = 45;
+        Assert.IsFalse(vm.PatientForm.FormIsPediatric, "A los 45 años no es pediátrico");
     }
 
     /// <summary>Datos obligatorios del alta (sexo, edad o fecha y alergias) sin valores supuestos.</summary>
     private static void FillRequiredIdentity(MedicalRecordsViewModel vm)
     {
-        vm.FormGender = "Masculino";
-        vm.FormAgeText = "40";
-        vm.FormAllergies = "Negadas";
+        vm.PatientForm.FormGender = "Masculino";
+        vm.PatientForm.FormAgeText = "40";
+        vm.PatientForm.FormAllergies = "Negadas";
     }
 
     [TestMethod]

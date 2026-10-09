@@ -30,17 +30,11 @@ public partial class MedicalRecordsViewModel
 
     private Action? _onAppointmentsChangedHandler;
     private int? _attendingAppointmentId;
-    private List<PatientAppointment> _agendaWeekAppointments = new();
     private ObservableCollection<PatientConsultation>? _observedHistory;
     private ObservableCollection<PatientAppointment>? _observedAppointments;
 
-    /// <summary>Abre enlaces (WhatsApp, Google Calendar); las pruebas lo reemplazan.</summary>
-    public Func<string, bool>? OpenUrl { get; set; }
-
     private void InitializePacientes()
     {
-        PropertyChanged += OnPropertyChangedForPacientes;
-
         if (_inventoryService != null)
         {
             _onAppointmentsChangedHandler = () =>
@@ -68,23 +62,6 @@ public partial class MedicalRecordsViewModel
         if (_inventoryService != null && _onAppointmentsChangedHandler != null)
         {
             _inventoryService.OnAppointmentsChanged -= _onAppointmentsChangedHandler;
-        }
-    }
-
-    private void OnPropertyChangedForPacientes(object? sender, PropertyChangedEventArgs e)
-    {
-        var name = e.PropertyName;
-        if (name == null) return;
-
-        // La barra lateral del alta refleja lo que se va capturando
-        if (name.StartsWith("Form", StringComparison.Ordinal) && name != nameof(FormSections) && name != nameof(FormPageTitle) && name != nameof(FormProgressText))
-        {
-            OnPropertyChanged(nameof(FormSections));
-            OnPropertyChanged(nameof(FormProgressText));
-            if (name is nameof(FormFirstName) or nameof(FormLastName) or nameof(FormMaternalLastName) or nameof(FormPatientId))
-            {
-                OnPropertyChanged(nameof(FormPageTitle));
-            }
         }
     }
 
@@ -134,7 +111,7 @@ public partial class MedicalRecordsViewModel
     public void OpenPatientChart(PatientRecord? patient)
     {
         if (patient == null) return;
-        HomeSearchText = string.Empty;
+        Home.HomeSearchText = string.Empty;
         Session.SelectPatient(patient);
         Navigation.PatientsPage = PageChart;
     }
@@ -179,163 +156,32 @@ public partial class MedicalRecordsViewModel
         }
     }
 
-    partial void OnIsPatientModalOpenChanged(bool value)
-    {
-        if (value)
-        {
-            if (!Navigation.IsFormPage) Navigation.PageBeforeForm = Navigation.PatientsPage;
-            if (string.IsNullOrEmpty(FormOpenSection)) FormOpenSection = "Identificacion";
-            Navigation.PatientsPage = PageForm;
-            OnPatientFormOpenedForDraft();
-            return;
-        }
-
-        OnPatientFormClosedForDraft();
-        if (!Navigation.IsFormPage) return;
-        // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
-        if (Navigation.PageBeforeForm == PageConsultation && Active.HasActiveConsultation) ShowConsultation();
-        else if (Session.SelectedPatient != null) Navigation.PatientsPage = PageChart;
-        else Navigation.GoToPatientsHome();
-    }
-
-    // ================================================================== inicio
-
-    [ObservableProperty]
-    private string _homeSearchText = string.Empty;
-
-    partial void OnHomeSearchTextChanged(string value)
-    {
-        if (!string.IsNullOrWhiteSpace(value) && Navigation.IsChartPage) Navigation.PatientsPage = PageHome;
-        RefreshHomeResults();
-    }
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _homeResults = new();
-
-    [ObservableProperty]
-    private ObservableCollection<PatientRecord> _recentPatients = new();
-
-    public bool HasHomeQuery => !string.IsNullOrWhiteSpace(HomeSearchText);
-    public bool HasNoHomeResults => HasHomeQuery && HomeResults.Count == 0;
-    public string HomeResultsSummary => HomeResults.Count == 1 ? "1 paciente" : $"{HomeResults.Count} pacientes";
-    public string CreateFromSearchText => $"Crear paciente \"{HomeSearchText.Trim()}\"";
-
-    /// <summary>
-    /// Pacientes que coinciden con lo escrito (sin acentos): primero los que empiezan así, luego
-    /// los que tienen una palabra que empieza así y al final los que lo contienen en nombre, folio,
-    /// teléfono o diagnóstico.
-    /// </summary>
-    public static List<PatientRecord> RankPatients(IEnumerable<PatientRecord> patients, string? query, int limit = 30)
-    {
-        var q = TextSearch.Normalize(query);
-        if (q.Length == 0) return new List<PatientRecord>();
-        var digits = new string(q.Where(char.IsDigit).ToArray());
-
-        return patients
-            .Select(p =>
-            {
-                var name = TextSearch.Normalize(p.FullName);
-                var other = TextSearch.Normalize($"{p.RecordNumber} {p.LastDiagnosis}");
-                int rank;
-                if (name.StartsWith(q, StringComparison.Ordinal)) rank = 0;
-                else if ((" " + name).Contains(" " + q, StringComparison.Ordinal)) rank = 1;
-                else if (name.Contains(q, StringComparison.Ordinal) || other.Contains(q, StringComparison.Ordinal)) rank = 2;
-                else if (digits.Length >= 4 && new string((p.Phone ?? string.Empty).Where(char.IsDigit).ToArray()).Contains(digits, StringComparison.Ordinal)) rank = 2;
-                else rank = -1;
-                return (Patient: p, Rank: rank);
-            })
-            .Where(x => x.Rank >= 0)
-            .OrderBy(x => x.Rank)
-            .ThenBy(x => x.Patient.FullName, StringComparer.CurrentCulture)
-            .Take(limit)
-            .Select(x => x.Patient)
-            .ToList();
-    }
-
-    private void RefreshHomeResults()
-    {
-        HomeResults = new ObservableCollection<PatientRecord>(RankPatients(Session.Patients, HomeSearchText));
-        OnPropertyChanged(nameof(HasHomeQuery));
-        OnPropertyChanged(nameof(HasNoHomeResults));
-        OnPropertyChanged(nameof(HomeResultsSummary));
-        OnPropertyChanged(nameof(CreateFromSearchText));
-    }
-
-    private void RefreshRecentPatients()
-    {
-        RecentPatients = new ObservableCollection<PatientRecord>(
-            Session.Patients.OrderByDescending(p => p.LastVisit).ThenBy(p => p.FullName, StringComparer.CurrentCulture).Take(12));
-    }
-
-    [RelayCommand]
-    public void OpenFirstHomeResult() => OpenPatientChart(HomeResults.FirstOrDefault());
+    // ================================================================== inicio: Home
 
     [RelayCommand]
     public async Task CreatePatientFromSearchAsync()
     {
-        var typed = HomeSearchText.Trim();
-        await NewPatientAsync();
+        var typed = Home.HomeSearchText.Trim();
+        await PatientForm.NewPatientAsync();
         // Si se escribió un nombre (no un folio o teléfono), el alta empieza con él
         if (typed.Length > 0 && !typed.Any(char.IsDigit))
         {
-            ParseFullName(typed, out var first, out var last, out var maternal);
-            FormFirstName = ToTitle(first);
-            FormLastName = ToTitle(last);
-            FormMaternalLastName = ToTitle(maternal);
+            PatientFormViewModel.ParseFullName(typed, out var first, out var last, out var maternal);
+            PatientForm.FormFirstName = ToTitle(first);
+            PatientForm.FormLastName = ToTitle(last);
+            PatientForm.FormMaternalLastName = ToTitle(maternal);
         }
-        HomeSearchText = string.Empty;
+        Home.HomeSearchText = string.Empty;
     }
 
     private static string ToTitle(string text) =>
         string.IsNullOrWhiteSpace(text) ? string.Empty : Mexican.TextInfo.ToTitleCase(text.Trim().ToLower(Mexican));
 
-    [ObservableProperty]
-    private ObservableCollection<PatientAppointment> _todayAppointments = new();
-
-    public bool HasTodayAppointments => TodayAppointments.Count > 0;
-
-    public string TodayTitle
-    {
-        get
-        {
-            var text = DateTime.Today.ToString("dddd d 'de' MMMM", Mexican);
-            return "Hoy · " + text;
-        }
-    }
-
-    partial void OnTodayAppointmentsChanged(ObservableCollection<PatientAppointment> value) =>
-        OnPropertyChanged(nameof(HasTodayAppointments));
-
-    public async Task LoadTodayAppointmentsAsync()
-    {
-        if (_inventoryService == null) return;
-        try
-        {
-            var list = await _inventoryService.GetAppointmentsByDayAsync(DateTime.Today);
-            TodayAppointments = new ObservableCollection<PatientAppointment>(
-                list.Where(a => !a.IsCancelled).OrderBy(a => ParseAppointmentTime(a.Time)));
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("No se pudieron cargar las citas de hoy", ex);
-        }
-    }
-
     private async Task RefreshAppointmentViewsAsync()
     {
-        await LoadTodayAppointmentsAsync();
-        if (IsAgendaPanelOpen) await LoadAgendaPanelAsync();
+        await Home.LoadTodayAppointmentsAsync();
+        if (Agenda.IsAgendaPanelOpen) await Agenda.LoadAgendaPanelAsync();
         if (Session.SelectedPatient != null) await LoadPatientAppointmentsAsync(Session.SelectedPatient.Id);
-    }
-
-    public static TimeSpan ParseAppointmentTime(string? time)
-    {
-        if (!string.IsNullOrWhiteSpace(time))
-        {
-            if (DateTime.TryParse(time, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var parsed)) return parsed.TimeOfDay;
-            if (DateTime.TryParse(time, Mexican, DateTimeStyles.NoCurrentDateDefault, out parsed)) return parsed.TimeOfDay;
-        }
-        return new TimeSpan(10, 0, 0);
     }
 
     /// <summary>"Atender" en una cita de hoy: abre la consulta con el motivo de la cita.</summary>
@@ -348,9 +194,9 @@ public partial class MedicalRecordsViewModel
         if (patient == null)
         {
             // Cita sin expediente: se busca por nombre para abrirlo o crearlo
-            IsAgendaPanelOpen = false;
+            Agenda.IsAgendaPanelOpen = false;
             Navigation.GoToPatientsHome();
-            HomeSearchText = appointment.PatientName;
+            Home.HomeSearchText = appointment.PatientName;
             return;
         }
 
@@ -368,7 +214,7 @@ public partial class MedicalRecordsViewModel
             return;
         }
 
-        IsAgendaPanelOpen = false;
+        Agenda.IsAgendaPanelOpen = false;
         Session.SelectPatient(patient);
         StartActiveConsultation();
         if (!string.IsNullOrWhiteSpace(appointment.Reason)) ConsultationChiefComplaint = appointment.Reason.Trim();
@@ -426,7 +272,7 @@ public partial class MedicalRecordsViewModel
         {
             var next = PatientAppointmentsHistory
                 .Where(a => a.IsUpcoming)
-                .OrderBy(a => a.Date.Date + ParseAppointmentTime(a.Time))
+                .OrderBy(a => a.Date.Date + AgendaPanelViewModel.ParseAppointmentTime(a.Time))
                 .FirstOrDefault();
             return next == null ? string.Empty : $"Próxima cita: {next.Date.ToString("ddd d MMM", Mexican)}, {next.Time}";
         }
@@ -443,7 +289,7 @@ public partial class MedicalRecordsViewModel
             var parts = new List<string> { p.AgeDisplay };
             if (!string.IsNullOrWhiteSpace(p.Gender)) parts.Add(p.Gender);
             if (!string.IsNullOrWhiteSpace(p.RecordNumber)) parts.Add(p.RecordNumber);
-            if (!string.IsNullOrWhiteSpace(p.BloodType) && p.BloodType != BloodTypeUnknown) parts.Add(p.BloodType);
+            if (!string.IsNullOrWhiteSpace(p.BloodType) && p.BloodType != PatientFormViewModel.BloodTypeUnknown) parts.Add(p.BloodType);
             if (!string.IsNullOrWhiteSpace(p.Phone)) parts.Add(p.FormattedPhone);
             return string.Join(" · ", parts);
         }
@@ -520,8 +366,8 @@ public partial class MedicalRecordsViewModel
     public void EditAntecedent(AntecedentSection? section)
     {
         if (BlockIfPatientHandedOff(Session.SelectedPatient)) return;
-        EditPatient();
-        if (section != null) FormOpenSection = section.Key;
+        PatientForm.EditPatient();
+        if (section != null) PatientForm.FormOpenSection = section.Key;
     }
 
     [RelayCommand]
@@ -623,7 +469,7 @@ public partial class MedicalRecordsViewModel
 
         foreach (var a in appointments)
         {
-            var when = a.Date.Date + ParseAppointmentTime(a.Time);
+            var when = a.Date.Date + AgendaPanelViewModel.ParseAppointmentTime(a.Time);
             entries.Add((new TimelineEntry(TimelineKind.Appointment, when,
                 string.IsNullOrWhiteSpace(a.Reason) ? "Cita" : a.Reason.Trim(),
                 $"{a.Time} · {a.Status}"), 3));
@@ -676,506 +522,13 @@ public partial class MedicalRecordsViewModel
         return result;
     }
 
-    // ================================================================== alta y edición
-
-    [ObservableProperty]
-    private string _formOpenSection = "Identificacion";
-
-    [RelayCommand]
-    public void OpenFormSection(string? key)
-    {
-        if (!string.IsNullOrWhiteSpace(key)) FormOpenSection = key;
-    }
-
-    public bool IsFormNew => FormPatientId == 0;
-
-    public string FormPageTitle
-    {
-        get
-        {
-            if (IsFormNew) return "Nuevo paciente";
-            var name = string.Join(" ", new[] { FormFirstName, FormLastName, FormMaternalLastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            return string.IsNullOrWhiteSpace(name) ? "Editar expediente" : $"Editar: {name}";
-        }
-    }
-
-    public IReadOnlyList<PatientFormSection> FormSections
-    {
-        get
-        {
-            var list = new List<PatientFormSection>();
-            int number = 1;
-            void Add(string key, string title, bool required, bool complete, bool applicable = true)
-            {
-                if (!applicable) return;
-                var status = required ? (complete ? "Completa" : "Obligatoria") : (complete ? "Con datos" : "Opcional");
-                list.Add(new PatientFormSection(key, (number++).ToString(CultureInfo.InvariantCulture), title, status, complete, required, FormOpenSection == key));
-            }
-
-            static bool Any(params string?[] values) => values.Any(v => !string.IsNullOrWhiteSpace(v));
-
-            Add("Identificacion", "Identificación", true,
-                Any(FormFirstName) && Any(FormLastName) && FormHasAge && Any(FormGender));
-            Add("Alergias", "Alergias y crónicos", true, Any(FormAllergies));
-            Add("Contacto", "Contacto y emergencia", false, Any(FormPhone, FormEmail, FormAddress, FormEmergencyContactName));
-            Add("Heredofamiliares", "Heredofamiliares", false, Any(FormFamilyHistory));
-            Add("Patologicos", "Personales patológicos", false, Any(FormSurgeries, FormHospitalizations, FormTransfusions, FormImmunizationSchedule));
-            Add("Gineco", "Gineco-obstétricos", false,
-                Any(FormMenarcheAge, FormSexualOnsetAge, FormPeriodDuration, FormPapSmear) || FormPregnanciesCount > 0, FormShowsGyneco);
-            Add("Desarrollo", "Desarrollo", false, Any(FormDevelopmentalMilestones), FormIsPediatric);
-            Add("NoPatologicos", "No patológicos", false, Any(FormDiet, FormHousingConditions, FormZoonosis, FormOccupation));
-            Add("Notas", "Notas de ingreso", false, Any(FormClinicalNotes));
-            return list;
-        }
-    }
-
-    public string FormProgressText
-    {
-        get
-        {
-            var sections = FormSections;
-            var required = sections.Where(s => s.IsRequired).ToList();
-            var missing = required.Count(s => !s.IsComplete);
-            return missing == 0
-                ? $"{sections.Count(s => s.IsComplete)} de {sections.Count} secciones · lo obligatorio está completo"
-                : $"Faltan {missing} sección(es) obligatoria(s)";
-        }
-    }
-
-    partial void OnFormOpenSectionChanged(string value) => OnPropertyChanged(nameof(FormSections));
-
-    /// <summary>Un error de validación abre la sección donde está el dato que falta.</summary>
-    partial void OnFormErrorMessageChanged(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-        var text = value.ToLowerInvariant();
-        if (text.Contains("alergia")) FormOpenSection = "Alergias";
-        else if (text.Contains("correo")) FormOpenSection = "Contacto";
-        else FormOpenSection = "Identificacion";
-    }
-
-    [RelayCommand]
-    public async Task SavePatientAndStartConsultationAsync()
-    {
-        await SavePatientModalAsync();
-        if (!IsPatientModalOpen && FormErrorMessage == null && Session.SelectedPatient != null && !Active.HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-    }
-
-    [RelayCommand]
-    public void CancelPatientForm()
-    {
-        if (IsFormNew && (!string.IsNullOrWhiteSpace(FormFirstName) || !string.IsNullOrWhiteSpace(FormLastName))
-            && !_dialogs.Confirm("¿Salir sin guardar el paciente nuevo?\n\nLo capturado se perderá.", "Salir del alta"))
-        {
-            return;
-        }
-        ClosePatientModal();
-    }
-
-    // ================================================================== agenda (panel lateral)
-
-    public static readonly TimeSpan AgendaDayStart = new(8, 0, 0);
-    public static readonly TimeSpan AgendaDayEnd = new(20, 0, 0);
-    public static readonly TimeSpan AgendaSlotLength = TimeSpan.FromMinutes(30);
-
-    [ObservableProperty]
-    private bool _isAgendaPanelOpen;
-
-    [ObservableProperty]
-    private DateTime _agendaPanelDate = DateTime.Today;
-
-    [ObservableProperty]
-    private ObservableCollection<AgendaDayItem> _agendaWeek = new();
-
-    [ObservableProperty]
-    private ObservableCollection<AgendaSlot> _agendaSlots = new();
-
-    [ObservableProperty]
-    private PatientRecord? _agendaFormPatient;
-
-    [ObservableProperty]
-    private string _agendaFormReason = string.Empty;
-
-    [ObservableProperty]
-    private int _agendaFormDuration = 30;
-
-    [ObservableProperty]
-    private string? _agendaFormError;
-
-    /// <summary>Cita que se está cambiando de horario: el siguiente hueco elegido la recibe.</summary>
-    [ObservableProperty]
-    private PatientAppointment? _movingAppointment;
-
-    public IReadOnlyList<int> AgendaDurations { get; } = new[] { 15, 30, 45, 60 };
-
-    public IReadOnlyList<string> AgendaReasonPresets { get; } = new[]
-    {
-        "Consulta de seguimiento", "Primera vez", "Control", "Resultados de laboratorio", "Revisión de niño sano", "Aplicación de vacuna"
-    };
-
-    public string AgendaPanelTitle
-    {
-        get
-        {
-            var text = AgendaPanelDate.ToString("dddd d 'de' MMMM", Mexican);
-            return char.ToUpper(text[0], Mexican) + text[1..];
-        }
-    }
-
-    public string AgendaWeekTitle
-    {
-        get
-        {
-            var monday = StartOfWeek(AgendaPanelDate);
-            var sunday = monday.AddDays(6);
-            return monday.Month == sunday.Month
-                ? $"{monday.Day} – {sunday.Day} de {sunday.ToString("MMMM yyyy", Mexican)}"
-                : $"{monday.ToString("d MMM", Mexican)} – {sunday.ToString("d MMM yyyy", Mexican)}";
-        }
-    }
-
-    public string AgendaDaySummary
-    {
-        get
-        {
-            int appointments = AgendaSlots.Count(s => s.HasAppointment);
-            int free = AgendaSlots.Count(s => s.IsFree);
-            return $"{appointments} {(appointments == 1 ? "cita" : "citas")} · {free} {(free == 1 ? "hueco libre" : "huecos libres")}";
-        }
-    }
-
-    public bool IsMovingAppointment => MovingAppointment != null;
-    public string MovingAppointmentText => MovingAppointment == null ? string.Empty : $"Elija el nuevo horario para {MovingAppointment.PatientName}";
-
-    partial void OnAgendaPanelDateChanged(DateTime value)
-    {
-        OnPropertyChanged(nameof(AgendaPanelTitle));
-        OnPropertyChanged(nameof(AgendaWeekTitle));
-    }
-
-    partial void OnMovingAppointmentChanged(PatientAppointment? value)
-    {
-        OnPropertyChanged(nameof(IsMovingAppointment));
-        OnPropertyChanged(nameof(MovingAppointmentText));
-    }
-
-    private static DateTime StartOfWeek(DateTime date)
-    {
-        int diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
-        return date.Date.AddDays(-diff);
-    }
-
-    /// <summary>El panel siempre abre en hoy (la aplicación puede quedar abierta de un día a otro).</summary>
-    [RelayCommand]
-    public Task OpenAgendaPanelAsync() => ShowAgendaPanelAsync(DateTime.Today);
-
-    private async Task ShowAgendaPanelAsync(DateTime date)
-    {
-        AgendaPanelDate = date.Date;
-        IsAgendaPanelOpen = true;
-        await LoadAgendaPanelAsync();
-    }
-
-    [RelayCommand]
-    public async Task ToggleAgendaPanelAsync()
-    {
-        if (IsAgendaPanelOpen) CloseAgendaPanel();
-        else await OpenAgendaPanelAsync();
-    }
-
-    [RelayCommand]
-    public void CloseAgendaPanel()
-    {
-        IsAgendaPanelOpen = false;
-        MovingAppointment = null;
-        CloseAgendaForm();
-    }
-
-    [RelayCommand]
-    public async Task SelectAgendaDayAsync(AgendaDayItem? day)
-    {
-        if (day == null) return;
-        AgendaPanelDate = day.Date;
-        foreach (var d in AgendaWeek) d.IsSelected = d.Date == day.Date;
-        BuildAgendaSlots();
-        await Task.CompletedTask;
-    }
-
-    [RelayCommand]
-    public async Task AgendaPanelPreviousWeekAsync()
-    {
-        AgendaPanelDate = AgendaPanelDate.AddDays(-7);
-        await LoadAgendaPanelAsync();
-    }
-
-    [RelayCommand]
-    public async Task AgendaPanelNextWeekAsync()
-    {
-        AgendaPanelDate = AgendaPanelDate.AddDays(7);
-        await LoadAgendaPanelAsync();
-    }
-
-    [RelayCommand]
-    public async Task AgendaPanelTodayAsync()
-    {
-        AgendaPanelDate = DateTime.Today;
-        await LoadAgendaPanelAsync();
-    }
-
-    public async Task LoadAgendaPanelAsync()
-    {
-        var monday = StartOfWeek(AgendaPanelDate);
-        try
-        {
-            _agendaWeekAppointments = _inventoryService == null
-                ? new List<PatientAppointment>()
-                : await _inventoryService.GetAppointmentsByWeekAsync(monday);
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("No se pudo cargar la agenda", ex);
-            _agendaWeekAppointments = new List<PatientAppointment>();
-        }
-
-        AgendaWeek = new ObservableCollection<AgendaDayItem>(Enumerable.Range(0, 7).Select(i =>
-        {
-            var date = monday.AddDays(i);
-            var count = _agendaWeekAppointments.Count(a => a.Date.Date == date && !a.IsCancelled);
-            return new AgendaDayItem(date, count) { IsSelected = date == AgendaPanelDate.Date };
-        }));
-        BuildAgendaSlots();
-    }
-
-    private void BuildAgendaSlots()
-    {
-        CloseAgendaForm();
-        AgendaSlots = new ObservableCollection<AgendaSlot>(BuildSlots(AgendaPanelDate, _agendaWeekAppointments, DateTime.Now));
-        OnPropertyChanged(nameof(AgendaDaySummary));
-    }
-
-    /// <summary>
-    /// Citas del día y huecos libres de 30 minutos entre las 8:00 y las 20:00. Un hueco ocupado por
-    /// una cita (según su duración) no se ofrece; en el día de hoy no se ofrecen horas pasadas.
-    /// </summary>
-    public static List<AgendaSlot> BuildSlots(DateTime date, IEnumerable<PatientAppointment> appointments, DateTime now)
-    {
-        var dayAppointments = appointments
-            .Where(a => a.Date.Date == date.Date && !a.IsCancelled)
-            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: a.DurationMinutes > 0 ? a.DurationMinutes : 30))
-            .OrderBy(a => a.Start)
-            .ToList();
-
-        var slots = dayAppointments.Select(a => new AgendaSlot(a.Start, a.Appointment)).ToList();
-
-        for (var t = AgendaDayStart; t < AgendaDayEnd; t += AgendaSlotLength)
-        {
-            if (date.Date == now.Date && date.Date + t < now) continue;
-            var slotEnd = t + AgendaSlotLength;
-            bool busy = dayAppointments.Any(a => a.Start < slotEnd && t < a.Start + TimeSpan.FromMinutes(a.Minutes));
-            if (!busy) slots.Add(new AgendaSlot(t, null));
-        }
-
-        return slots.OrderBy(s => s.Time).ThenBy(s => s.IsFree).ToList();
-    }
-
-    [RelayCommand]
-    public async Task OpenAgendaSlotAsync(AgendaSlot? slot)
-    {
-        if (slot == null || slot.HasAppointment) return;
-
-        if (MovingAppointment is { } moving)
-        {
-            await MoveAppointmentAsync(moving, AgendaPanelDate.Date, slot.TimeText);
-            return;
-        }
-
-        CloseAgendaForm();
-        slot.IsFormOpen = true;
-        AgendaFormPatient = Session.SelectedPatient;
-        AgendaFormReason = string.Empty;
-        AgendaFormDuration = 30;
-        AgendaFormError = null;
-    }
-
-    [RelayCommand]
-    public void SetAgendaReason(string? reason)
-    {
-        if (!string.IsNullOrWhiteSpace(reason)) AgendaFormReason = reason;
-    }
-
-    [RelayCommand]
-    public void CloseAgendaForm()
-    {
-        foreach (var s in AgendaSlots) s.IsFormOpen = false;
-        AgendaFormError = null;
-    }
-
-    [RelayCommand]
-    public async Task SaveAgendaFormAsync()
-    {
-        var slot = AgendaSlots.FirstOrDefault(s => s.IsFormOpen);
-        if (slot == null) return;
-
-        var patient = AgendaFormPatient;
-        if (patient == null)
-        {
-            AgendaFormError = "Elija el paciente (escriba su nombre en la lista).";
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(AgendaFormReason))
-        {
-            AgendaFormError = "Escriba el motivo de la cita o elija uno frecuente.";
-            return;
-        }
-
-        var appointment = new PatientAppointment
-        {
-            PatientRecordId = patient.Id,
-            PatientName = patient.FullName,
-            PatientRecordNumber = patient.RecordNumber,
-            PatientPhone = patient.Phone ?? string.Empty,
-            Date = AgendaPanelDate.Date,
-            Time = slot.TimeText,
-            DurationMinutes = AgendaFormDuration > 0 ? AgendaFormDuration : 30,
-            Reason = AgendaFormReason.Trim(),
-            Status = "Programada"
-        };
-
-        try
-        {
-            if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(appointment);
-            else _agendaWeekAppointments.Add(appointment);
-        }
-        catch (Exception ex)
-        {
-            AgendaFormError = $"No se pudo guardar la cita: {ex.Message}";
-            return;
-        }
-
-        Feedback.ShowSuccess($"Cita agendada: {patient.FullName}, {appointment.Date.ToString("ddd d MMM", Mexican)} a las {appointment.Time}");
-        await RefreshAgendaAfterChangeAsync(patient.Id);
-    }
-
-    private async Task MoveAppointmentAsync(PatientAppointment appointment, DateTime date, string time)
-    {
-        var moved = new PatientAppointment
-        {
-            Id = appointment.Id,
-            SyncId = appointment.SyncId,
-            PatientRecordId = appointment.PatientRecordId,
-            PatientName = appointment.PatientName,
-            PatientRecordNumber = appointment.PatientRecordNumber,
-            PatientPhone = appointment.PatientPhone,
-            Date = date,
-            Time = time,
-            DurationMinutes = appointment.DurationMinutes,
-            Reason = appointment.Reason,
-            Notes = appointment.Notes,
-            Status = "Programada",
-            CreatedAt = appointment.CreatedAt
-        };
-
-        try
-        {
-            if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(moved);
-        }
-        catch (Exception ex)
-        {
-            Info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        MovingAppointment = null;
-        Feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
-        await RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
-    }
+    // ================================================================== agenda (panel lateral): Agenda
 
     private async Task RefreshAgendaAfterChangeAsync(int patientId)
     {
-        await LoadAgendaPanelAsync();
-        await LoadTodayAppointmentsAsync();
+        await Agenda.LoadAgendaPanelAsync();
+        await Home.LoadTodayAppointmentsAsync();
         if (Session.SelectedPatient != null && Session.SelectedPatient.Id == patientId) await LoadPatientAppointmentsAsync(patientId);
-    }
-
-    [RelayCommand]
-    public void StartMovingAppointment(PatientAppointment? appointment)
-    {
-        if (appointment == null) return;
-        CloseAgendaForm();
-        MovingAppointment = appointment;
-    }
-
-    [RelayCommand]
-    public void CancelMovingAppointment() => MovingAppointment = null;
-
-    [RelayCommand]
-    public async Task ConfirmAppointmentAsync(PatientAppointment? appointment)
-    {
-        if (appointment == null) return;
-        await UpdateAppointmentStatusAsync(appointment, "Confirmada");
-        await RefreshAgendaAfterChangeAsync(appointment.PatientRecordId);
-    }
-
-    [RelayCommand]
-    public async Task CancelAppointmentAsync(PatientAppointment? appointment)
-    {
-        if (appointment == null) return;
-        if (!await _dialogs.ConfirmAsync($"¿Cancelar la cita de {appointment.PatientName} ({appointment.Date:dd/MM} {appointment.Time})?", "Cancelar cita")) return;
-        await UpdateAppointmentStatusAsync(appointment, "Cancelada");
-        Feedback.ShowSuccess($"Cita de {appointment.PatientName} cancelada");
-        await RefreshAgendaAfterChangeAsync(appointment.PatientRecordId);
-    }
-
-    [RelayCommand]
-    public void RemindByWhatsApp(PatientAppointment? appointment)
-    {
-        if (appointment == null) return;
-        var phone = new string((appointment.PatientPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-        if (phone.Length < 10)
-        {
-            Info.InfoModalMessage = $"La cita de {appointment.PatientName} no tiene un teléfono de 10 dígitos. Agréguelo en su expediente.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-        if (phone.Length == 10) phone = "52" + phone;
-
-        var message = $"Hola {appointment.PatientName}, le recordamos su cita en {Clinic.ClinicName} el {appointment.Date.ToString("dddd d 'de' MMMM", Mexican)} a las {appointment.Time}. Por favor confirme su asistencia respondiendo a este mensaje.";
-        LaunchUrl($"https://wa.me/{phone}?text={Uri.EscapeDataString(message)}");
-    }
-
-    [RelayCommand]
-    public void AddToGoogleCalendar(PatientAppointment? appointment)
-    {
-        if (appointment == null) return;
-        var start = appointment.Date.Date + ParseAppointmentTime(appointment.Time);
-        var end = start.AddMinutes(appointment.DurationMinutes > 0 ? appointment.DurationMinutes : 30);
-        var title = Uri.EscapeDataString($"Cita: {appointment.PatientName}");
-        var details = Uri.EscapeDataString($"Motivo: {appointment.Reason}\nTeléfono: {appointment.PatientPhone}");
-        var location = Uri.EscapeDataString(string.IsNullOrWhiteSpace(Clinic.ClinicAddress) ? Clinic.ClinicName : Clinic.ClinicAddress);
-        LaunchUrl($"https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}&dates={start:yyyyMMdd'T'HHmmss}/{end:yyyyMMdd'T'HHmmss}&details={details}&location={location}");
-    }
-
-    private void LaunchUrl(string url)
-    {
-        if (OpenUrl != null)
-        {
-            OpenUrl(url);
-            return;
-        }
-        try
-        {
-            _urls.Open(url);
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Error("No se pudo abrir el enlace", ex);
-            Info.InfoModalMessage = "No se pudo abrir el navegador.";
-            Info.IsInfoModalVisible = true;
-        }
     }
 
     /// <summary>Baja lógica: deja de aparecer en búsquedas; sus consultas y recetas se conservan.</summary>
@@ -1208,8 +561,4 @@ public partial class MedicalRecordsViewModel
         Feedback.ShowSuccess($"Expediente de {patient.FullName} dado de baja");
         Navigation.GoToPatientsHome();
     }
-
-    /// <summary>"Agendar cita" desde la ficha: el panel abre en mañana y al elegir un hueco el paciente ya viene puesto.</summary>
-    [RelayCommand]
-    public Task ScheduleForSelectedPatientAsync() => ShowAgendaPanelAsync(DateTime.Today.AddDays(1));
 }

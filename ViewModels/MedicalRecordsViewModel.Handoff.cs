@@ -683,7 +683,7 @@ public partial class MedicalRecordsViewModel
         IsCatalogBrowserModalOpen = false;
         IsPrescriptionPdfModalOpen = false;
         IsAllergyAlertOpen = false;
-        IsAgendaPanelOpen = false;
+        Agenda.IsAgendaPanelOpen = false;
     }
 
     /// <summary>

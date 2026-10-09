@@ -58,8 +58,15 @@ public partial class MedicalRecordsViewModel
     private bool _suspendAutosave;
     private bool _draftRestoreAttempted;
 
+    // La pausa es la misma para la consulta y el alta de paciente (PatientForm la lee de aquí)
+    private readonly AutosaveOptions _autosaveOptions = new();
+
     /// <summary>Pausa al escribir antes de guardar (las pruebas la acortan).</summary>
-    public TimeSpan AutosaveDelay { get; set; } = TimeSpan.FromMilliseconds(1500);
+    public TimeSpan AutosaveDelay
+    {
+        get => _autosaveOptions.Delay;
+        set => _autosaveOptions.Delay = value;
+    }
 
     /// <summary>Carga inicial lanzada por el constructor (expedientes, servicios y consulta recuperada).</summary>
     public Task InitialLoad { get; private set; } = Task.CompletedTask;
@@ -82,7 +89,6 @@ public partial class MedicalRecordsViewModel
     {
         if (e.PropertyName == null) return;
         if (DraftProperties.Contains(e.PropertyName)) ScheduleAutosave();
-        else if (PatientFormDraftFieldSet.Contains(e.PropertyName)) SchedulePatientFormDraft();
     }
 
     /// <summary>Inicio, cargos a la cuenta y cierre de la consulta (desde SyncActiveConsultation).</summary>
@@ -160,7 +166,7 @@ public partial class MedicalRecordsViewModel
     public void FlushConsultationDraft()
     {
         SaveConsultationDraftNow();
-        SavePatientFormDraftNow();
+        PatientForm.SavePatientFormDraftNow();
     }
 
     private ConsultationDraft? BuildConsultationDraft()
