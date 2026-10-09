@@ -32,14 +32,14 @@
                         <TextBlock Style="{StaticResource TextHeading}" Text="Receta" />
                         <TextBlock Style="{StaticResource TextCaption}" Text="Medicamentos con su posología; lo que se surte aquí se carga a la cuenta de la consulta" />
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding OpenPrescriptionCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
+                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding Prescription.OpenPrescriptionCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
                             ToolTip="Ver todos los medicamentos del inventario">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoSearch}" Margin="0,0,6,0" />
                             <TextBlock Text="Catálogo" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePrescriptionModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding Prescription.ClosePrescriptionModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
@@ -57,7 +57,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Medicamento *" />
                             <TextBox x:Name="PrescriptionSearchTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding PrescriptionSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Prescription.PrescriptionSearchText, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Nombre o genérico"
                                      PreviewKeyDown="PrescriptionSearchTextBox_PreviewKeyDown"
                                      AutomationProperties.Name="Medicamento" />
@@ -65,7 +65,7 @@
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Indicaciones" />
                             <TextBox x:Name="PrescriptionDosageTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding PrescriptionDosage, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Prescription.PrescriptionDosage, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Ej. 1 tableta cada 8 horas por 5 días"
                                      PreviewKeyDown="PrescriptionAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Indicaciones" />
@@ -73,7 +73,7 @@
                         <StackPanel Grid.Column="4">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
                             <TextBox x:Name="PrescriptionQuantityTextBox" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
-                                     Text="{Binding PrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Prescription.PrescriptionQuantity, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="PrescriptionAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Cantidad" />
                         </StackPanel>
@@ -89,11 +89,11 @@
                         <StackPanel Visibility="{Binding Templates.HasPosologyTemplates, Converter={StaticResource BoolToVis}}">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Posología frecuente" />
                             <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding Templates.PosologyTemplates}"
-                                      SelectedItem="{Binding SelectedPosologyTemplate, Mode=TwoWay}" DisplayMemberPath="Text"
+                                      SelectedItem="{Binding Prescription.SelectedPosologyTemplate, Mode=TwoWay}" DisplayMemberPath="Text"
                                       helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Posología frecuente"
                                       ToolTip="Despliegue y escriba (ej. &quot;cada 8&quot;): el cursor salta a la opción; Enter la copia a las indicaciones" />
                         </StackPanel>
-                        <StackPanel Grid.Column="2" Visibility="{Binding ShowsPediatricDose, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Grid.Column="2" Visibility="{Binding Prescription.ShowsPediatricDose, Converter={StaticResource BoolToVis}}">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Dosis pediátrica por peso" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -102,27 +102,27 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding Templates.PediatricDoseRules}"
-                                          SelectedItem="{Binding SelectedPediatricRule, Mode=TwoWay}" DisplayMemberPath="DisplayName"
+                                          SelectedItem="{Binding Prescription.SelectedPediatricRule, Mode=TwoWay}" DisplayMemberPath="DisplayName"
                                           helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Medicamento pediátrico"
                                           ToolTip="Despliegue y escriba el medicamento para ir directo a él" />
                                 <TextBox Grid.Column="1" Style="{StaticResource FieldTextBox}" Margin="6,0,0,0" HorizontalContentAlignment="Center"
-                                         Text="{Binding PediatricWeightText, UpdateSourceTrigger=PropertyChanged}"
+                                         Text="{Binding Prescription.PediatricWeightText, UpdateSourceTrigger=PropertyChanged}"
                                          helpers:Field.Placeholder="kg" ToolTip="Peso del paciente en kg" AutomationProperties.Name="Peso en kg" />
-                                <Button Grid.Column="2" Style="{StaticResource ButtonSecondary}" Margin="6,0,0,0" Command="{Binding ApplyPediatricDoseCommand}"
+                                <Button Grid.Column="2" Style="{StaticResource ButtonSecondary}" Margin="6,0,0,0" Command="{Binding Prescription.ApplyPediatricDoseCommand}"
                                         Content="Usar" ToolTip="Copiar la dosis calculada a las indicaciones" />
                             </Grid>
-                            <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeAccentForeground}" Text="{Binding PediatricDoseResult}" Margin="0,4,0,0"
-                                       TextWrapping="Wrap" Visibility="{Binding PediatricDoseResult, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeAccentForeground}" Text="{Binding Prescription.PediatricDoseResult}" Margin="0,4,0,0"
+                                       TextWrapping="Wrap" Visibility="{Binding Prescription.PediatricDoseResult, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Grid>
 
                     <Border Style="{StaticResource Card}" Padding="6" Margin="0,10,0,0"
-                            Visibility="{Binding IsPrescriptionDropdownOpen, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding Prescription.IsPrescriptionDropdownOpen, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega a la receta · Esc cierra" Margin="10,4,10,4" />
                             <ListBox x:Name="PrescriptionSuggestionsListBox" Style="{StaticResource PlainList}" MaxHeight="200"
-                                     ItemsSource="{Binding PrescriptionProductSuggestions}"
-                                     SelectedItem="{Binding SelectedPrescriptionProduct, Mode=TwoWay}"
+                                     ItemsSource="{Binding Prescription.PrescriptionProductSuggestions}"
+                                     SelectedItem="{Binding Prescription.SelectedPrescriptionProduct, Mode=TwoWay}"
                                      PreviewKeyDown="PrescriptionSuggestionsListBox_PreviewKeyDown"
                                      PreviewMouseLeftButtonUp="PrescriptionSuggestionsListBox_PreviewMouseLeftButtonUp"
                                      AutomationProperties.Name="Sugerencias de medicamentos">
@@ -163,7 +163,7 @@
                     <DockPanel>
                         <!-- La receta empieza vacía; la anterior se repite con un clic -->
                         <Border DockPanel.Dock="Top" Style="{StaticResource Notice}" Padding="12,8" Margin="0,0,0,8"
-                                Visibility="{Binding CanRepeatPreviousPrescription, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding Prescription.CanRepeatPreviousPrescription, Converter={StaticResource BoolToVis}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -171,9 +171,9 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="Receta anterior" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding PreviousPrescriptionSummary}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Prescription.PreviousPrescriptionSummary}" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding RepeatPreviousPrescriptionCommand}"
+                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding Prescription.RepeatPreviousPrescriptionCommand}"
                                         Padding="12,5" MinHeight="0" Margin="12,0,0,0" Content="Repetir"
                                         ToolTip="Copia a esta receta los medicamentos que falten (revisa alergias y existencias)" />
                             </Grid>
@@ -200,13 +200,13 @@
                                                     </Border>
                                                     <CheckBox Grid.Column="2" Style="{StaticResource FieldCheckBox}" VerticalAlignment="Center" Margin="0,0,8,0"
                                                               IsChecked="{Binding DispenseInClinic, Mode=TwoWay}"
-                                                              Command="{Binding DataContext.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              Command="{Binding DataContext.Prescription.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                               CommandParameter="{Binding}"
                                                               Visibility="{Binding DataContext.Active.HasActiveConsultation, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
                                                               ToolTip="Se entrega en el consultorio y se carga a la cuenta de la consulta"
                                                               Content="Se surte aquí" />
                                                     <Button Grid.Column="3" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar de la receta" AutomationProperties.Name="Quitar medicamento"
-                                                            Command="{Binding DataContext.RemovePrescriptionItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            Command="{Binding DataContext.Prescription.RemovePrescriptionItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}">
                                                         <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
                                                     </Button>
@@ -239,8 +239,8 @@
                             </StackPanel>
                         </Button>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Style="{StaticResource ButtonGhost}" Command="{Binding ClosePrescriptionModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
-                            <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SavePrescriptionModalCommand}">
+                            <Button Style="{StaticResource ButtonGhost}" Command="{Binding Prescription.ClosePrescriptionModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
+                            <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Prescription.SavePrescriptionModalCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <helpers:Icon Data="{StaticResource IcoCheck}" Margin="0,0,8,0" />
                                     <TextBlock Text="Guardar" />

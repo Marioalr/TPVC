@@ -45,7 +45,7 @@ public partial class SuppliesSheetView : UserControl
                 SupplySuggestionsListBox.ScrollIntoView(item);
                 if (item is Product p)
                 {
-                    vm.SelectedSupplyProduct = p;
+                    vm.Supplies.SelectedSupplyProduct = p;
                 }
             }
             e.Handled = true;
@@ -63,7 +63,7 @@ public partial class SuppliesSheetView : UserControl
                 SupplySuggestionsListBox.ScrollIntoView(item);
                 if (item is Product p)
                 {
-                    vm.SelectedSupplyProduct = p;
+                    vm.Supplies.SelectedSupplyProduct = p;
                 }
             }
             e.Handled = true;
@@ -71,7 +71,7 @@ public partial class SuppliesSheetView : UserControl
         else if (e.Key == Key.Enter)
         {
             var product = SupplySuggestionsListBox?.SelectedItem as Product;
-            await vm.SelectAndAddSupplyProductAsync(product);
+            await vm.Supplies.SelectAndAddSupplyProductAsync(product);
             SupplySearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -90,7 +90,7 @@ public partial class SuppliesSheetView : UserControl
         if (e.Key == Key.Enter)
         {
             var product = SupplySuggestionsListBox?.SelectedItem as Product;
-            await vm.SelectAndAddSupplyProductAsync(product);
+            await vm.Supplies.SelectAndAddSupplyProductAsync(product);
             SupplySearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -104,7 +104,7 @@ public partial class SuppliesSheetView : UserControl
         {
             if (SupplySuggestionsListBox?.SelectedItem is Product product)
             {
-                await vm.SelectAndAddSupplyProductAsync(product);
+                await vm.Supplies.SelectAndAddSupplyProductAsync(product);
                 SupplySearchTextBox?.Focus();
                 e.Handled = true;
             }
@@ -115,7 +115,7 @@ public partial class SuppliesSheetView : UserControl
             {
                 if (SupplySuggestionsListBox?.SelectedItem is Product p)
                 {
-                    vm.SelectedSupplyProduct = p;
+                    vm.Supplies.SelectedSupplyProduct = p;
                 }
             }, DispatcherPriority.Input);
         }
@@ -133,7 +133,7 @@ public partial class SuppliesSheetView : UserControl
         {
             if (DataContext is MedicalRecordsViewModel vm)
             {
-                await vm.SelectAndAddSupplyProductAsync(product);
+                await vm.Supplies.SelectAndAddSupplyProductAsync(product);
                 SupplySearchTextBox?.Focus();
                 e.Handled = true;
             }

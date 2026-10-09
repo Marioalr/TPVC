@@ -21,6 +21,8 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     Task IPatientsWorkflow.LoadPatientsAsync() => LoadPatientsAsync();
 
+    Task IPatientsWorkflow.LoadServicesAsync() => LoadServicesAsync();
+
     void IPatientsWorkflow.StartActiveConsultation() => StartActiveConsultation();
 
     void IPatientsWorkflow.ShowConsultation() => ShowConsultation();
@@ -40,7 +42,7 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
         {
             _isCurrentConsultationSaved = false;
         }
-        OnPropertyChanged(nameof(ShowsPediatricDose));
+        Prescription.RaiseShowsPediatricDose();
         NotifyVitalSignsWarningChanged();
         RefreshChartData();
         NotifyPatientsPageState();
@@ -82,7 +84,7 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     void IPatientsHubs.OnServicesChanged() => NotifyAccountChanged();
 
-    void IPatientsHubs.OnPrescriptionTemplatesLoaded() => OnPropertyChanged(nameof(ShowsPediatricDose));
+    void IPatientsHubs.OnPrescriptionTemplatesLoaded() => Prescription.RaiseShowsPediatricDose();
 
     void IPatientsHubs.OnVitalSignsEvolutionPointsChanged(ObservableCollection<VitalSignsEvolutionPoint> value)
     {

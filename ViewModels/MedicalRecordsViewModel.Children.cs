@@ -28,6 +28,9 @@ public partial class MedicalRecordsViewModel
     private AgendaPanelViewModel _agenda;
     private PatientFormViewModel _patientForm;
     private PatientsHomeViewModel _home;
+    private SuppliesSheetViewModel _supplies;
+    private ClinicalServicesSheetViewModel _clinicalServices;
+    private PrescriptionSheetViewModel _prescription;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
     public InfoDialogState Info => _info;
@@ -77,7 +80,16 @@ public partial class MedicalRecordsViewModel
     /// <summary>Inicio: buscador, pacientes recientes y citas de hoy.</summary>
     public PatientsHomeViewModel Home => _home;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home))]
+    /// <summary>Hoja de insumos y material clínico.</summary>
+    public SuppliesSheetViewModel Supplies => _supplies;
+
+    /// <summary>Hoja de servicios y procedimientos clínicos.</summary>
+    public ClinicalServicesSheetViewModel ClinicalServices => _clinicalServices;
+
+    /// <summary>Hoja de receta (posología, dosis pediátrica, alerta de alergia, receta anterior y "Se surte aquí").</summary>
+    public PrescriptionSheetViewModel Prescription => _prescription;
+
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
         IPrescriptionOutput? printingService)
     {
@@ -92,12 +104,13 @@ public partial class MedicalRecordsViewModel
         _record = new ConsultationRecordState(_session, _inventoryService, this);
         _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
-        // Lo elegido en el catálogo se agrega con la hoja que lo abrió
+        // Lo elegido en el catálogo se agrega con la hoja que lo abrió (las hojas se crean después:
+        // usan el explorador para abrir el catálogo)
         _catalogBrowser = new CatalogBrowserViewModel(_catalog)
         {
-            AddMedication = SelectAndAddPrescriptionProductAsync,
-            AddSupply = SelectAndAddSupplyProductAsync,
-            AddService = SelectAndAddServiceModalSuggestionAsync
+            AddMedication = product => Prescription.SelectAndAddPrescriptionProductAsync(product),
+            AddSupply = product => Supplies.SelectAndAddSupplyProductAsync(product),
+            AddService = service => ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service)
         };
         // Las indicaciones de la receta leen el plan que escribe el médico en la consulta
         _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => ConsultationTreatmentPlan);
@@ -105,5 +118,10 @@ public partial class MedicalRecordsViewModel
         _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,
             _info, _feedback, this, _dialogs, _ui, _autosaveOptions, this);
         _home = new PatientsHomeViewModel(_inventoryService, _session, _navigation, this);
+        _supplies = new SuppliesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
+        _clinicalServices = new ClinicalServicesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
+        // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso
+        _prescription = new PrescriptionSheetViewModel(_inventoryService, _catalog, _templates, _session, _active, _record, _account, _info, _feedback,
+            _catalogBrowser, this, this, _ui, () => ConsultationWeight);
     }
 }

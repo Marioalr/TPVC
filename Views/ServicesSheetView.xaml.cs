@@ -45,7 +45,7 @@ public partial class ServicesSheetView : UserControl
                 ServiceSuggestionsListBox.ScrollIntoView(item);
                 if (item is ClinicalService s)
                 {
-                    vm.SelectedServiceModalItem = s;
+                    vm.ClinicalServices.SelectedServiceModalItem = s;
                 }
             }
             e.Handled = true;
@@ -63,7 +63,7 @@ public partial class ServicesSheetView : UserControl
                 ServiceSuggestionsListBox.ScrollIntoView(item);
                 if (item is ClinicalService s)
                 {
-                    vm.SelectedServiceModalItem = s;
+                    vm.ClinicalServices.SelectedServiceModalItem = s;
                 }
             }
             e.Handled = true;
@@ -71,7 +71,7 @@ public partial class ServicesSheetView : UserControl
         else if (e.Key == Key.Enter)
         {
             var service = ServiceSuggestionsListBox?.SelectedItem as ClinicalService;
-            await vm.SelectAndAddServiceModalSuggestionAsync(service);
+            await vm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service);
             ServiceModalSearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -90,7 +90,7 @@ public partial class ServicesSheetView : UserControl
         if (e.Key == Key.Enter)
         {
             var service = ServiceSuggestionsListBox?.SelectedItem as ClinicalService;
-            await vm.SelectAndAddServiceModalSuggestionAsync(service);
+            await vm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service);
             ServiceModalSearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -104,7 +104,7 @@ public partial class ServicesSheetView : UserControl
         {
             if (ServiceSuggestionsListBox?.SelectedItem is ClinicalService service)
             {
-                await vm.SelectAndAddServiceModalSuggestionAsync(service);
+                await vm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service);
                 ServiceModalSearchTextBox?.Focus();
                 e.Handled = true;
             }
@@ -115,7 +115,7 @@ public partial class ServicesSheetView : UserControl
             {
                 if (ServiceSuggestionsListBox?.SelectedItem is ClinicalService s)
                 {
-                    vm.SelectedServiceModalItem = s;
+                    vm.ClinicalServices.SelectedServiceModalItem = s;
                 }
             }, DispatcherPriority.Input);
         }
@@ -133,7 +133,7 @@ public partial class ServicesSheetView : UserControl
         {
             if (DataContext is MedicalRecordsViewModel vm)
             {
-                await vm.SelectAndAddServiceModalSuggestionAsync(service);
+                await vm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service);
                 ServiceModalSearchTextBox?.Focus();
                 e.Handled = true;
             }

@@ -505,20 +505,20 @@ public class DataLayerTests
         var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
         await records.LoadInitialDataAsync();
 
-        records.SelectedPosologyTemplate = records.Templates.PosologyTemplates.Single();
-        Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.PrescriptionDosage);
-        Assert.IsNull(records.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
+        records.Prescription.SelectedPosologyTemplate = records.Templates.PosologyTemplates.Single();
+        Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.Prescription.PrescriptionDosage);
+        Assert.IsNull(records.Prescription.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
 
         records.ConsultationTreatmentPlan = string.Empty;
         records.SelectedGeneralMeasureTemplate = records.Templates.GeneralMeasureTemplates.Single();
         Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationTreatmentPlan);
         Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationGeneralIndications);
 
-        records.SelectedPediatricRule = records.Templates.PediatricDoseRules.Single();
-        records.PediatricWeightText = "15";
-        StringAssert.Contains(records.PediatricDoseResult, "7 ml (140 gotas)");
-        records.ApplyPediatricDose();
-        StringAssert.StartsWith(records.PrescriptionDosage, "Dar 7 ml (140 gotas) vía oral");
+        records.Prescription.SelectedPediatricRule = records.Templates.PediatricDoseRules.Single();
+        records.Prescription.PediatricWeightText = "15";
+        StringAssert.Contains(records.Prescription.PediatricDoseResult, "7 ml (140 gotas)");
+        records.Prescription.ApplyPediatricDose();
+        StringAssert.StartsWith(records.Prescription.PrescriptionDosage, "Dar 7 ml (140 gotas) vía oral");
     }
 
     [TestMethod]

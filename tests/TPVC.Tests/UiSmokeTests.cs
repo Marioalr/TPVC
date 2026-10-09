@@ -383,19 +383,19 @@ internal sealed class UiSmokeSession
             Capture(host, $"10-ficha-con-consulta-{suffix}");
             records.ShowConsultation();
 
-            WaitFor(records.OpenPrescriptionModalAsync());
+            WaitFor(records.Prescription.OpenPrescriptionModalAsync());
             Capture(host, $"11-receta-{suffix}");
 
             // El paciente de prueba es alérgico a la penicilina: la amoxicilina debe avisar
-            records.PrescriptionMedicineName = "Amoxicilina / Ácido Clavulánico 500/125 mg";
-            records.PrescriptionDosage = "1 tableta cada 12 horas por 7 días";
-            WaitFor(records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct));
-            if (records.IsAllergyAlertOpen)
+            records.Prescription.PrescriptionMedicineName = "Amoxicilina / Ácido Clavulánico 500/125 mg";
+            records.Prescription.PrescriptionDosage = "1 tableta cada 12 horas por 7 días";
+            WaitFor(records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct));
+            if (records.Prescription.IsAllergyAlertOpen)
             {
                 Capture(host, $"11b-alerta-alergia-{suffix}");
-                records.CancelAllergyPrescription();
+                records.Prescription.CancelAllergyPrescription();
             }
-            WaitFor(records.RepeatPreviousPrescriptionAsync());
+            WaitFor(records.Prescription.RepeatPreviousPrescriptionAsync());
             records.Info.DismissInfoModal();
             Capture(host, $"11c-receta-con-medicamentos-{suffix}");
             records.Preview.OpenPrescriptionPdfPreview();
@@ -404,21 +404,21 @@ internal sealed class UiSmokeSession
             // La hoja impresa es papel: no depende del tema (se revisa una vez)
             if (suffix == "claro") CheckPrintedPrescription(records.Session.SelectedPatient!, profile.CurrentProfile, records.Preview.PrescriptionIndications);
             records.Info.DismissInfoModal();
-            records.ClosePrescriptionModal();
+            records.Prescription.ClosePrescriptionModal();
 
-            WaitFor(records.OpenSuppliesModalAsync());
+            WaitFor(records.Supplies.OpenSuppliesModalAsync());
             Capture(host, $"12-insumos-{suffix}");
-            records.CloseSuppliesModal();
+            records.Supplies.CloseSuppliesModal();
 
-            WaitFor(records.OpenServicesModalAsync());
+            WaitFor(records.ClinicalServices.OpenServicesModalAsync());
             Capture(host, $"13-servicios-{suffix}");
-            records.CloseServicesModal();
+            records.ClinicalServices.CloseServicesModal();
 
-            WaitFor(records.OpenPrescriptionModalAsync());
-            WaitFor(records.OpenPrescriptionCatalogAsync());
+            WaitFor(records.Prescription.OpenPrescriptionModalAsync());
+            WaitFor(records.Prescription.OpenPrescriptionCatalogAsync());
             Capture(host, $"14-catalogo-{suffix}");
             records.CatalogBrowser.CloseCatalogBrowser();
-            records.ClosePrescriptionModal();
+            records.Prescription.ClosePrescriptionModal();
 
             WaitFor(records.FinalizeConsultationAsync());
             Capture(host, $"15-terminar-consulta-{suffix}");
@@ -1195,18 +1195,18 @@ internal sealed class UiKeyboardPass
 
     private void PrescriptionSheet()
     {
-        WaitFor(_records.OpenPrescriptionModalAsync());
-        _records.PrescriptionSearchText = string.Empty;
+        WaitFor(_records.Prescription.OpenPrescriptionModalAsync());
+        _records.Prescription.PrescriptionSearchText = string.Empty;
         Settle();
         var sheet = PumpUntilFound<TPVC.Views.PrescriptionSheetView>(v => v.IsVisible);
         var box = sheet?.FindName("PrescriptionSearchTextBox") as System.Windows.Controls.TextBox;
         if (!Check(box != null, "Receta: no se encontró el buscador")) return;
 
-        var suggestions = _records.PrescriptionProductSuggestions.ToList();
+        var suggestions = _records.Prescription.PrescriptionProductSuggestions.ToList();
         var before = _records.SelectedPatient!.ActivePrescription.Count;
         if (Check(suggestions.Count > 1, "Receta: se esperaban al menos dos sugerencias"))
         {
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedPrescriptionProduct, suggestions[1]),
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.Prescription.SelectedPrescriptionProduct, suggestions[1]),
                 "Receta: ↓ en el buscador elige la siguiente sugerencia");
             var chosen = suggestions[1];
             Check(PressKey(box!, System.Windows.Input.Key.Enter), "Receta: Enter en el buscador se atiende");
@@ -1220,39 +1220,39 @@ internal sealed class UiKeyboardPass
         _records.Info.InfoModalMessage = "Aviso de prueba";
         _records.Info.IsInfoModalVisible = true;
         Settle();
-        Check(PressEscape() && !_records.Info.IsInfoModalVisible && _records.IsPrescriptionModalOpen, "Esc cierra primero el aviso (la receta sigue)");
-        _records.IsAllergyAlertOpen = true;
+        Check(PressEscape() && !_records.Info.IsInfoModalVisible && _records.Prescription.IsPrescriptionModalOpen, "Esc cierra primero el aviso (la receta sigue)");
+        _records.Prescription.IsAllergyAlertOpen = true;
         Settle();
-        Check(PressEscape() && !_records.IsAllergyAlertOpen && _records.IsPrescriptionModalOpen, "Esc cierra la alerta de alergia");
-        WaitFor(_records.OpenPrescriptionCatalogAsync());
+        Check(PressEscape() && !_records.Prescription.IsAllergyAlertOpen && _records.Prescription.IsPrescriptionModalOpen, "Esc cierra la alerta de alergia");
+        WaitFor(_records.Prescription.OpenPrescriptionCatalogAsync());
         Settle();
-        Check(PressEscape() && !_records.CatalogBrowser.IsCatalogBrowserModalOpen && _records.IsPrescriptionModalOpen, "Esc cierra el catálogo (la receta sigue)");
+        Check(PressEscape() && !_records.CatalogBrowser.IsCatalogBrowserModalOpen && _records.Prescription.IsPrescriptionModalOpen, "Esc cierra el catálogo (la receta sigue)");
         _records.Preview.OpenPrescriptionPdfPreview();
         Settle();
         Check(PressEscape() && !_records.Preview.IsPrescriptionPdfModalOpen, "Esc cierra la vista previa de la receta");
-        Check(PressEscape() && !_records.IsPrescriptionModalOpen, "Esc cierra la receta");
+        Check(PressEscape() && !_records.Prescription.IsPrescriptionModalOpen, "Esc cierra la receta");
     }
 
     private void SuppliesSheet()
     {
-        WaitFor(_records.OpenSuppliesModalAsync());
+        WaitFor(_records.Supplies.OpenSuppliesModalAsync());
         Settle();
         var sheet = PumpUntilFound<TPVC.Views.SuppliesSheetView>(v => v.IsVisible);
         var box = sheet?.FindName("SupplySearchTextBox") as System.Windows.Controls.TextBox;
         if (!Check(box != null, "Insumos: no se encontró el buscador")) return;
 
-        var suggestions = _records.SupplyProductSuggestions.ToList();
+        var suggestions = _records.Supplies.SupplyProductSuggestions.ToList();
         var before = _records.SelectedPatient!.ActiveSupplies.Count;
         if (Check(suggestions.Count > 1, "Insumos: se esperaban al menos dos sugerencias"))
         {
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedSupplyProduct, suggestions[1]),
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.Supplies.SelectedSupplyProduct, suggestions[1]),
                 "Insumos: ↓ en el buscador elige la siguiente sugerencia");
             Check(PressKey(box!, System.Windows.Input.Key.Enter), "Insumos: Enter en el buscador se atiende");
             Check(PumpUntil(() => _records.SelectedPatient!.ActiveSupplies.Count == before + 1), "Insumos: Enter agrega la sugerencia elegida");
         }
 
         // Enter en el buscador del catálogo agrega el primero con existencias
-        WaitFor(_records.OpenSupplyCatalogAsync());
+        WaitFor(_records.Supplies.OpenSupplyCatalogAsync());
         _records.CatalogBrowser.CatalogBrowserSearchText = "gasa";
         Settle();
         var catalog = PumpUntilFound<TPVC.Views.CatalogBrowserSheetView>(v => v.IsVisible);
@@ -1265,28 +1265,28 @@ internal sealed class UiKeyboardPass
                 "Catálogo: Enter en la búsqueda agrega el primero y cierra el catálogo");
         }
         Settle();
-        Check(PressEscape() && !_records.IsSuppliesModalOpen, "Esc cierra los insumos");
+        Check(PressEscape() && !_records.Supplies.IsSuppliesModalOpen, "Esc cierra los insumos");
     }
 
     private void ServicesSheet()
     {
-        WaitFor(_records.OpenServicesModalAsync());
+        WaitFor(_records.ClinicalServices.OpenServicesModalAsync());
         Settle();
         var sheet = PumpUntilFound<TPVC.Views.ServicesSheetView>(v => v.IsVisible);
         var box = sheet?.FindName("ServiceModalSearchTextBox") as System.Windows.Controls.TextBox;
         if (!Check(box != null, "Servicios: no se encontró el buscador")) return;
 
-        var suggestions = _records.ServiceModalSuggestions.ToList();
+        var suggestions = _records.ClinicalServices.ServiceModalSuggestions.ToList();
         var before = _records.SelectedPatient!.ActiveServices.Count;
         if (Check(suggestions.Count > 1, "Servicios: se esperaban al menos dos sugerencias"))
         {
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedServiceModalItem, suggestions[1]),
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.ClinicalServices.SelectedServiceModalItem, suggestions[1]),
                 "Servicios: ↓ en el buscador elige la siguiente sugerencia");
             Check(PressKey(box!, System.Windows.Input.Key.Enter), "Servicios: Enter en el buscador se atiende");
             Check(PumpUntil(() => _records.SelectedPatient!.ActiveServices.Count == before + 1), "Servicios: Enter agrega la sugerencia elegida");
         }
         Settle();
-        Check(PressEscape() && !_records.IsServicesModalOpen, "Esc cierra los servicios");
+        Check(PressEscape() && !_records.ClinicalServices.IsServicesModalOpen, "Esc cierra los servicios");
     }
 
     // ------------------------------------------------------------------ confirmaciones con la ventana de la app (Fase 7, 7.6)

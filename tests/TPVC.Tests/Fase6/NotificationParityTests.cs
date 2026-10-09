@@ -86,7 +86,7 @@ public class NotificationParityTests
 
         recorder.Clear();
         records.Checkout.CashReceived = 100m;
-        records.IsAllergyAlertOpen = true;
+        records.Prescription.IsAllergyAlertOpen = true;
         CollectionAssert.IsSubsetOf(new[] { "CashReceived", "IsAllergyAlertOpen" }, recorder.Names, "Avisos de los dos objetos, sin importar el dueño");
     }
 
@@ -130,12 +130,12 @@ public class NotificationParityTests
         records.StartActiveConsultation();
         FreezeClock(consultations);
         var paracetamol = records.Catalog.AvailableProducts.Single(p => p.Code == "MED-001");
-        records.PrescriptionDosage = "1 tableta cada 8 horas";
+        records.Prescription.PrescriptionDosage = "1 tableta cada 8 horas";
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
 
         golden.Section("recetar un medicamento que se surte aquí", RecordSync(recorder, () =>
-            Completes(records.SelectAndAddPrescriptionProductAsync(paracetamol), "Recetar")));
+            Completes(records.Prescription.SelectAndAddPrescriptionProductAsync(paracetamol), "Recetar")));
         Assert.IsTrue(records.SelectedPatient!.ActivePrescription.Single().DispenseInClinic, "Se cargó a la cuenta");
         golden.AssertMatches("dispense-charge.txt", "Avisos al recetar con surtido en el consultorio");
     }
@@ -190,15 +190,15 @@ public class NotificationParityTests
         var layers = new (string Layer, Action<MedicalRecordsViewModel, ConsultationService> Open)[]
         {
             ("info", (vm, _) => { vm.Info.InfoModalMessage = "Aviso"; vm.Info.IsInfoModalVisible = true; }),
-            ("alergia", (vm, _) => vm.IsAllergyAlertOpen = true),
-            ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
+            ("alergia", (vm, _) => vm.Prescription.IsAllergyAlertOpen = true),
+            ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.Prescription.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
             ("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true),
             ("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true),
             ("CIE-10", (vm, _) => vm.ConsultationDiagnosis = "farin"),
             ("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.IsFinishConsultationOpen = true; }),
-            ("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenPrescriptionModal(); }),
-            ("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenSuppliesModal(); }),
-            ("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenServicesModal(); }),
+            ("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }),
+            ("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Supplies.OpenSuppliesModal(); }),
+            ("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); }),
             ("cambiar cita", (vm, _) =>
             {
                 Completes(vm.OpenAgendaPanelAsync(), "Agenda");

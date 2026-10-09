@@ -22,6 +22,9 @@ public interface IPatientsWorkflow
     /// <summary>Recarga los expedientes de la base (después de guardar el alta o la edición).</summary>
     Task LoadPatientsAsync();
 
+    /// <summary>Recarga servicios y productos del catálogo y vuelve a filtrar las hojas y el explorador.</summary>
+    Task LoadServicesAsync();
+
     /// <summary>Inicia la consulta del paciente seleccionado ("Guardar e iniciar consulta").</summary>
     void StartActiveConsultation();
 

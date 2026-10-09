@@ -631,11 +631,11 @@
                                 <TextBlock Text="Receta" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Preview.OpenPrescriptionPdfPreviewCommand}" Padding="10,4" Margin="0,0,6,0" FontSize="11.5" Content="Vista previa" />
-                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding OpenPrescriptionModalCommand}" Padding="10,4" FontSize="11.5" Content="+ Medicamento" />
+                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Prescription.OpenPrescriptionModalCommand}" Padding="10,4" FontSize="11.5" Content="+ Medicamento" />
                                 </StackPanel>
                             </Grid>
                             <Border Style="{StaticResource Notice}" Padding="12,8" Margin="0,0,0,8"
-                                    Visibility="{Binding CanRepeatPreviousPrescription, Converter={StaticResource BoolToVis}}">
+                                    Visibility="{Binding Prescription.CanRepeatPreviousPrescription, Converter={StaticResource BoolToVis}}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -643,9 +643,9 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="Receta anterior" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding PreviousPrescriptionSummary}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Prescription.PreviousPrescriptionSummary}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding RepeatPreviousPrescriptionCommand}"
+                                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding Prescription.RepeatPreviousPrescriptionCommand}"
                                             Padding="10,4" MinHeight="0" Margin="12,0,0,0" FontSize="11.5" Content="Repetir"
                                             ToolTip="Copia a esta receta los medicamentos que falten (revisa alergias y existencias)" />
                                 </Grid>
@@ -667,7 +667,7 @@
                                                     <CheckBox Grid.Column="1"
                                                               Style="{StaticResource FieldCheckBox}"
                                                               IsChecked="{Binding DispenseInClinic, Mode=TwoWay}"
-                                                              Command="{Binding DataContext.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              Command="{Binding DataContext.Prescription.ToggleDispenseInClinicCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                               CommandParameter="{Binding}"
                                                               VerticalAlignment="Center"
                                                               Margin="12,0,0,0"
@@ -732,19 +732,19 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <StackPanel Margin="0,6,0,8">
-                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenPrescriptionModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Prescription.OpenPrescriptionModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal">
                                         <helpers:Icon Data="{StaticResource IcoPill}" Margin="0,0,8,0" />
                                         <TextBlock Text="Medicamento (receta)" />
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSuppliesModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Supplies.OpenSuppliesModalCommand}" HorizontalContentAlignment="Left" Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal">
                                         <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
                                         <TextBlock Text="Insumo o material" />
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenServicesModalCommand}" HorizontalContentAlignment="Left">
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ClinicalServices.OpenServicesModalCommand}" HorizontalContentAlignment="Left">
                                     <StackPanel Orientation="Horizontal">
                                         <helpers:Icon Data="{StaticResource IcoSyringe}" Margin="0,0,8,0" />
                                         <TextBlock Text="Servicio (inyección, curación…)" />

@@ -66,9 +66,9 @@ public class FlowCharacterizationTests
         Assert.IsTrue(records.IsFinishConsultationOpen);
 
         // Todo lo que pudiera quedar abierto detrás del cobro
-        records.IsPrescriptionModalOpen = true;
-        records.IsSuppliesModalOpen = true;
-        records.IsServicesModalOpen = true;
+        records.Prescription.IsPrescriptionModalOpen = true;
+        records.Supplies.IsSuppliesModalOpen = true;
+        records.ClinicalServices.IsServicesModalOpen = true;
         records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
         records.PatientForm.IsPatientModalOpen = true;
         records.Info.InfoModalMessage = "Aviso anterior";
@@ -81,9 +81,9 @@ public class FlowCharacterizationTests
         await WaitUntilAsync(() => records.Home.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended), "La cita de hoy se ve atendida");
 
         Assert.IsFalse(records.IsFinishConsultationOpen);
-        Assert.IsFalse(records.IsPrescriptionModalOpen);
-        Assert.IsFalse(records.IsSuppliesModalOpen);
-        Assert.IsFalse(records.IsServicesModalOpen);
+        Assert.IsFalse(records.Prescription.IsPrescriptionModalOpen);
+        Assert.IsFalse(records.Supplies.IsSuppliesModalOpen);
+        Assert.IsFalse(records.ClinicalServices.IsServicesModalOpen);
         Assert.IsFalse(records.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.IsFalse(records.PatientForm.IsPatientModalOpen);
         Assert.IsFalse(records.Navigation.IsFormPage);
@@ -125,12 +125,12 @@ public class FlowCharacterizationTests
         Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.Info.InfoModalMessage);
 
         // Lo que estuviera abierto al llegar la aceptación
-        records.IsPrescriptionModalOpen = true;
-        records.IsSuppliesModalOpen = true;
-        records.IsServicesModalOpen = true;
+        records.Prescription.IsPrescriptionModalOpen = true;
+        records.Supplies.IsSuppliesModalOpen = true;
+        records.ClinicalServices.IsServicesModalOpen = true;
         records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
         records.Preview.IsPrescriptionPdfModalOpen = true;
-        records.IsAllergyAlertOpen = true;
+        records.Prescription.IsAllergyAlertOpen = true;
         records.Agenda.IsAgendaPanelOpen = true;
         records.IsSendConsultationSheetOpen = true;
         records.IsFinishConsultationOpen = true;
@@ -148,12 +148,12 @@ public class FlowCharacterizationTests
 
         Assert.IsFalse(consultations.HasActiveConsultation, records.Info.InfoModalMessage);
         Assert.IsFalse(records.IsConsultationHandedOff);
-        Assert.IsFalse(records.IsPrescriptionModalOpen);
-        Assert.IsFalse(records.IsSuppliesModalOpen);
-        Assert.IsFalse(records.IsServicesModalOpen);
+        Assert.IsFalse(records.Prescription.IsPrescriptionModalOpen);
+        Assert.IsFalse(records.Supplies.IsSuppliesModalOpen);
+        Assert.IsFalse(records.ClinicalServices.IsServicesModalOpen);
         Assert.IsFalse(records.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.IsFalse(records.Preview.IsPrescriptionPdfModalOpen);
-        Assert.IsFalse(records.IsAllergyAlertOpen);
+        Assert.IsFalse(records.Prescription.IsAllergyAlertOpen);
         Assert.IsFalse(records.Agenda.IsAgendaPanelOpen);
         Assert.IsFalse(records.IsSendConsultationSheetOpen);
         Assert.IsFalse(records.IsFinishConsultationOpen);
@@ -309,14 +309,14 @@ public class FlowCharacterizationTests
     {
         using var clinic = new Fase6Clinic();
         var records = await clinic.OpenAsync(new ConsultationService(seedDemoPatients: false), drafts: false);
-        records.PrescriptionSearchText = "zinc";
-        records.SupplySearchText = "zinc";
-        records.ServiceModalSearchText = "zinc";
+        records.Prescription.PrescriptionSearchText = "zinc";
+        records.Supplies.SupplySearchText = "zinc";
+        records.ClinicalServices.ServiceModalSearchText = "zinc";
         records.CatalogBrowser.CatalogBrowserMode = "Medications";
         records.CatalogBrowser.CatalogBrowserSearchText = "zinc";
-        Assert.IsEmpty(records.PrescriptionProductSuggestions);
-        Assert.IsEmpty(records.SupplyProductSuggestions);
-        Assert.IsEmpty(records.ServiceModalSuggestions);
+        Assert.IsEmpty(records.Prescription.PrescriptionProductSuggestions);
+        Assert.IsEmpty(records.Supplies.SupplyProductSuggestions);
+        Assert.IsEmpty(records.ClinicalServices.ServiceModalSuggestions);
         Assert.IsEmpty(records.CatalogBrowser.CatalogBrowserFilteredProducts);
 
         // El catálogo cambia (otro equipo, o Configuración) y se vuelve a leer
@@ -329,14 +329,14 @@ public class FlowCharacterizationTests
         }
         await records.LoadServicesAsync();
 
-        CollectionAssert.AreEqual(new[] { "MED-001" }, records.PrescriptionProductSuggestions.Select(p => p.Code).ToList());
-        CollectionAssert.AreEqual(new[] { "CUR-001" }, records.SupplyProductSuggestions.Select(p => p.Code).ToList());
-        CollectionAssert.AreEqual(new[] { "SERV-005" }, records.ServiceModalSuggestions.Select(s => s.Code).ToList());
+        CollectionAssert.AreEqual(new[] { "MED-001" }, records.Prescription.PrescriptionProductSuggestions.Select(p => p.Code).ToList());
+        CollectionAssert.AreEqual(new[] { "CUR-001" }, records.Supplies.SupplyProductSuggestions.Select(p => p.Code).ToList());
+        CollectionAssert.AreEqual(new[] { "SERV-005" }, records.ClinicalServices.ServiceModalSuggestions.Select(s => s.Code).ToList());
         CollectionAssert.AreEqual(new[] { "MED-001" }, records.CatalogBrowser.CatalogBrowserFilteredProducts.Select(p => p.Code).ToList());
-        Assert.IsTrue(records.IsPrescriptionDropdownOpen);
-        Assert.IsTrue(records.IsSupplyDropdownOpen);
-        Assert.IsTrue(records.IsServiceModalDropdownOpen);
-        Assert.AreEqual("MED-001", records.SelectedPrescriptionProduct?.Code);
+        Assert.IsTrue(records.Prescription.IsPrescriptionDropdownOpen);
+        Assert.IsTrue(records.Supplies.IsSupplyDropdownOpen);
+        Assert.IsTrue(records.ClinicalServices.IsServiceModalDropdownOpen);
+        Assert.AreEqual("MED-001", records.Prescription.SelectedPrescriptionProduct?.Code);
         records.Dispose();
     }
 

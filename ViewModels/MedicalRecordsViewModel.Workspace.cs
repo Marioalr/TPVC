@@ -141,43 +141,6 @@ public partial class MedicalRecordsViewModel
         Active.RaiseTotalAmount();
     }
 
-    /// <summary>Casilla "Se surte aquí" de cada medicamento de la receta.</summary>
-    [RelayCommand]
-    public async Task ToggleDispenseInClinicAsync(PatientPrescriptionItem? item)
-    {
-        if (item != null && BlockIfConsultationReadOnly())
-        {
-            // La casilla ya cambió el valor antes de llegar aquí
-            item.DispenseInClinic = !item.DispenseInClinic;
-            return;
-        }
-        if (item == null || Session.SelectedPatient == null) return;
-
-        if (item.DispenseInClinic)
-        {
-            if (!Active.HasActiveConsultation || !Account.ChargePrescription(item))
-            {
-                item.DispenseInClinic = false;
-                Info.InfoModalMessage = Active.HasActiveConsultation
-                    ? $"'{item.MedicineName}' no tiene existencias suficientes en el consultorio; queda solo en la receta."
-                    : "Inicie la consulta para cargar medicamentos a la cuenta.";
-                Info.IsInfoModalVisible = true;
-            }
-        }
-        else if (Active.HasActiveConsultation)
-        {
-            Account.UnchargePrescription(item);
-        }
-
-        Session.SelectedPatient.SyncPrescriptionJson();
-        Session.NotifySelectedPatientMutated();
-        if (_inventoryService != null)
-        {
-            try { await _inventoryService.SavePatientAsync(Session.SelectedPatient); }
-            catch (Exception ex) { AppLogger.Error("No se pudo guardar la receta", ex); }
-        }
-    }
-
     /// <summary>
     /// Arma el cobro de la consulta: honorario + cargos acumulados. Se reconstruye cada vez para
     /// que volver a la consulta y terminar de nuevo no duplique cantidades.

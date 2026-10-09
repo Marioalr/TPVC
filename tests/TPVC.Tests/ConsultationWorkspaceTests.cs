@@ -101,11 +101,11 @@ public class ConsultationWorkspaceTests
         int stockBefore = product.CurrentStock;
 
         // Medicamento con existencias: "Se surte aquí" viene marcado y se carga a la cuenta
-        records.PrescriptionMedicineName = product.Name;
-        records.PrescriptionDosage = "1 tableta cada 8 horas";
-        records.PrescriptionQuantity = 1;
-        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
-        Assert.IsFalse(records.IsAllergyAlertOpen);
+        records.Prescription.PrescriptionMedicineName = product.Name;
+        records.Prescription.PrescriptionDosage = "1 tableta cada 8 horas";
+        records.Prescription.PrescriptionQuantity = 1;
+        await records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct);
+        Assert.IsFalse(records.Prescription.IsAllergyAlertOpen);
         Assert.AreEqual(product.Name, patient.ActivePrescription.Last().MedicineName);
         Assert.IsTrue(patient.ActivePrescription.Last().DispenseInClinic);
         Assert.AreEqual(records.Account.ConsultationFeeAmount + product.Price, records.Account.ConsultationAccountTotal);
@@ -197,20 +197,20 @@ public class ConsultationWorkspaceTests
         records.StartActiveConsultation();
 
         // La lista de sugerencias dejó preseleccionada la amoxicilina, pero se recetó otra cosa
-        records.SelectedPrescriptionProduct = amoxicillin;
-        records.PrescriptionMedicineName = "Alcohol etílico 70%";
-        records.PrescriptionQuantity = 1;
-        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
+        records.Prescription.SelectedPrescriptionProduct = amoxicillin;
+        records.Prescription.PrescriptionMedicineName = "Alcohol etílico 70%";
+        records.Prescription.PrescriptionQuantity = 1;
+        await records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct);
 
-        Assert.IsFalse(records.IsAllergyAlertOpen, "Sin falsa alerta por el producto preseleccionado");
+        Assert.IsFalse(records.Prescription.IsAllergyAlertOpen, "Sin falsa alerta por el producto preseleccionado");
         Assert.IsTrue(patient.ActivePrescription.Single().DispenseInClinic);
         Assert.AreEqual(alcohol.Id, consultations.CurrentConsultation!.Items.Single().ProductId);
 
         // La alergia real se sigue detectando aunque la preselección sea otro producto
-        records.SelectedPrescriptionProduct = alcohol;
-        records.PrescriptionMedicineName = "Amoxicilina 500mg";
-        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
-        Assert.IsTrue(records.IsAllergyAlertOpen);
+        records.Prescription.SelectedPrescriptionProduct = alcohol;
+        records.Prescription.PrescriptionMedicineName = "Amoxicilina 500mg";
+        await records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct);
+        Assert.IsTrue(records.Prescription.IsAllergyAlertOpen);
     }
 
     [TestMethod]
@@ -261,28 +261,28 @@ public class ConsultationWorkspaceTests
         Assert.IsTrue(curacion.DefaultProducts.Count > 1, "La curación lleva varios insumos por defecto");
 
         // Insumo del inventario (producto) y servicio del catálogo x2 con sus insumos por defecto
-        records.SupplyQuantity = 1;
-        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == gasa.Id));
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == gasa.Id));
         var gasaSupply = patient.ActiveSupplies.Last();
-        records.ServiceModalQuantity = 2;
-        await records.SelectAndAddServiceModalSuggestionAsync(curacion);
+        records.ClinicalServices.ServiceModalQuantity = 2;
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(curacion);
         var curacionItem = patient.ActiveServices.Last();
         Assert.AreEqual(2, Charged(-curacion.Id));
         Assert.AreEqual(1 + 2 * 2, Charged(gasa.Id), "La gasa del insumo más la de cada curación");
 
         // Insumo y servicio fuera de catálogo: cargos libres
-        records.SupplySearchText = "Férula de aluminio a la medida";
-        records.SupplyQuantity = 3;
-        await records.SelectAndAddSupplyProductAsync(null);
+        records.Supplies.SupplySearchText = "Férula de aluminio a la medida";
+        records.Supplies.SupplyQuantity = 3;
+        await records.Supplies.SelectAndAddSupplyProductAsync(null);
         var freeSupply = patient.ActiveSupplies.Last();
-        records.ServiceModalSearchText = "Retiro de puntos a domicilio";
-        await records.SelectAndAddServiceModalSuggestionAsync(null);
+        records.ClinicalServices.ServiceModalSearchText = "Retiro de puntos a domicilio";
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(null);
         var freeService = patient.ActiveServices.Last();
         Assert.AreEqual(3, ChargedByName("Férula de aluminio a la medida"));
         Assert.AreEqual(1, ChargedByName("Retiro de puntos a domicilio"));
 
         // Quitar el servicio deja de cobrar su renglón y sus insumos, pero no la gasa del insumo
-        await records.RemoveServiceItemFromPatientAsync(curacionItem);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(curacionItem);
         Assert.AreEqual(0, Charged(-curacion.Id));
         Assert.AreEqual(1, Charged(gasa.Id));
         foreach (var dp in curacion.DefaultProducts.Where(dp => dp.Product!.Id != gasa.Id))
@@ -290,9 +290,9 @@ public class ConsultationWorkspaceTests
             Assert.AreEqual(0, Charged(dp.Product!.Id), dp.Product.Name);
         }
 
-        await records.RemoveSupplyItemFromPatientAsync(gasaSupply);
-        await records.RemoveSupplyItemFromPatientAsync(freeSupply);
-        await records.RemoveServiceItemFromPatientAsync(freeService);
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(gasaSupply);
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(freeSupply);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(freeService);
 
         Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
         Assert.AreEqual(records.Account.ConsultationFeeAmount, records.Account.ConsultationAccountTotal);

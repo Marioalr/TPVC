@@ -620,8 +620,8 @@ public class ConsultationHandoffTests
         var records = pc.Records;
 
         // Agregados antes de enviarla (se cargan a la cuenta)
-        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
-        await records.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
+        await records.Supplies.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
 
         await SendToAsync(pc, tablet);
         Assert.IsTrue(records.IsConsultationHandedOff);
@@ -633,12 +633,12 @@ public class ConsultationHandoffTests
         var services = patient.ActiveServices.ToList();
         var charges = pc.Consultations.CurrentConsultation!.Items.Select(i => $"{i.ProductId}x{i.Quantity}").ToList();
 
-        await records.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
-        records.SupplySearchText = "Férula de aluminio";
-        await records.SelectAndAddSupplyProductAsync(null);
-        await records.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
-        await records.RemoveSupplyItemFromPatientAsync(supply);
-        await records.RemoveServiceItemFromPatientAsync(serviceItem);
+        await records.Supplies.SelectAndAddSupplyProductAsync(records.Catalog.AvailableProducts.Single(p => p.Id == product.Id));
+        records.Supplies.SupplySearchText = "Férula de aluminio";
+        await records.Supplies.SelectAndAddSupplyProductAsync(null);
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(supply);
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(serviceItem);
 
         Assert.AreSame(patient, records.SelectedPatient);
         CollectionAssert.AreEqual(supplies, patient.ActiveSupplies, "La hoja de insumos no cambia en solo lectura");
@@ -648,10 +648,10 @@ public class ConsultationHandoffTests
 
         // Guardar las hojas tampoco escribe el expediente
         records.Info.InfoModalMessage = null;
-        await records.SaveSuppliesModalAsync();
+        await records.Supplies.SaveSuppliesModalAsync();
         StringAssert.Contains(records.Info.InfoModalMessage, "solo lectura");
         records.Info.InfoModalMessage = null;
-        await records.SaveServicesModalAsync();
+        await records.ClinicalServices.SaveServicesModalAsync();
         StringAssert.Contains(records.Info.InfoModalMessage, "solo lectura");
     }
 

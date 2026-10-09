@@ -31,14 +31,14 @@
                         <TextBlock Style="{StaticResource TextHeading}" Text="Insumos y material" />
                         <TextBlock Style="{StaticResource TextCaption}" Text="Gasas, jeringas, vendas… lo usado se carga a la cuenta de la consulta" />
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSupplyCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
+                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding Supplies.OpenSupplyCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
                             ToolTip="Ver todos los insumos del inventario">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoSearch}" Margin="0,0,6,0" />
                             <TextBlock Text="Catálogo" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding CloseSuppliesModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding Supplies.CloseSuppliesModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
@@ -56,7 +56,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Insumo *" />
                             <TextBox x:Name="SupplySearchTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding SupplySearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Supplies.SupplySearchText, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Escriba para buscar"
                                      PreviewKeyDown="SupplySearchTextBox_PreviewKeyDown"
                                      AutomationProperties.Name="Insumo" />
@@ -64,7 +64,7 @@
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Uso o indicación" />
                             <TextBox x:Name="SupplyInstructionsTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding SupplyInstructions, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Supplies.SupplyInstructions, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Ej. curación de herida en antebrazo"
                                      PreviewKeyDown="SupplyAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Uso o indicación" />
@@ -72,19 +72,19 @@
                         <StackPanel Grid.Column="4">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
                             <TextBox x:Name="SupplyQuantityTextBox" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
-                                     Text="{Binding SupplyQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding Supplies.SupplyQuantity, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="SupplyAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Cantidad" />
                         </StackPanel>
                     </Grid>
 
                     <Border Style="{StaticResource Card}" Padding="6" Margin="0,8,0,0"
-                            Visibility="{Binding IsSupplyDropdownOpen, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding Supplies.IsSupplyDropdownOpen, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega · Esc cierra" Margin="10,4,10,4" />
                             <ListBox x:Name="SupplySuggestionsListBox" Style="{StaticResource PlainList}" MaxHeight="200"
-                                     ItemsSource="{Binding SupplyProductSuggestions}"
-                                     SelectedItem="{Binding SelectedSupplyProduct, Mode=TwoWay}"
+                                     ItemsSource="{Binding Supplies.SupplyProductSuggestions}"
+                                     SelectedItem="{Binding Supplies.SelectedSupplyProduct, Mode=TwoWay}"
                                      PreviewKeyDown="SupplySuggestionsListBox_PreviewKeyDown"
                                      PreviewMouseLeftButtonUp="SupplySuggestionsListBox_PreviewMouseLeftButtonUp"
                                      AutomationProperties.Name="Sugerencias de insumos">
@@ -136,7 +136,7 @@
                                                     <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
                                                 </Border>
                                                 <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta)" AutomationProperties.Name="Quitar insumo"
-                                                        Command="{Binding DataContext.RemoveSupplyItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        Command="{Binding DataContext.Supplies.RemoveSupplyItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}">
                                                     <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
                                                 </Button>
@@ -156,8 +156,8 @@
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14" Margin="0,16,0,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseSuppliesModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
-                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveSuppliesModalCommand}">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding Supplies.CloseSuppliesModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Supplies.SaveSuppliesModalCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoCheck}" Margin="0,0,8,0" />
                                 <TextBlock Text="Guardar" />

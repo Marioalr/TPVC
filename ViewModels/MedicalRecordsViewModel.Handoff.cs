@@ -675,12 +675,12 @@ public partial class MedicalRecordsViewModel
 
     private void CloseConsultationSheets()
     {
-        IsPrescriptionModalOpen = false;
-        IsSuppliesModalOpen = false;
-        IsServicesModalOpen = false;
+        Prescription.IsPrescriptionModalOpen = false;
+        Supplies.IsSuppliesModalOpen = false;
+        ClinicalServices.IsServicesModalOpen = false;
         CatalogBrowser.IsCatalogBrowserModalOpen = false;
         Preview.IsPrescriptionPdfModalOpen = false;
-        IsAllergyAlertOpen = false;
+        Prescription.IsAllergyAlertOpen = false;
         Agenda.IsAgendaPanelOpen = false;
     }
 

@@ -23,15 +23,15 @@ public class EscapeLadderTests
     private static readonly Layer[] Ladder =
     {
         new("info", (vm, _) => { vm.Info.InfoModalMessage = "Aviso"; vm.Info.IsInfoModalVisible = true; }, vm => vm.Info.IsInfoModalVisible),
-        new("alergia", (vm, _) => vm.IsAllergyAlertOpen = true, vm => vm.IsAllergyAlertOpen),
-        new("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.OpenPrescriptionCatalogAsync(), "Catálogo"); }, vm => vm.CatalogBrowser.IsCatalogBrowserModalOpen),
+        new("alergia", (vm, _) => vm.Prescription.IsAllergyAlertOpen = true, vm => vm.Prescription.IsAllergyAlertOpen),
+        new("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.Prescription.OpenPrescriptionCatalogAsync(), "Catálogo"); }, vm => vm.CatalogBrowser.IsCatalogBrowserModalOpen),
         new("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true, vm => vm.Preview.IsPrescriptionPdfModalOpen),
         new("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true, vm => vm.IsSendConsultationSheetOpen),
         new("CIE-10", (vm, _) => vm.ConsultationDiagnosis = "farin", vm => vm.IsCie10DropdownOpen),
         new("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.IsFinishConsultationOpen = true; }, vm => vm.IsFinishConsultationOpen),
-        new("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenPrescriptionModal(); }, vm => vm.IsPrescriptionModalOpen),
-        new("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenSuppliesModal(); }, vm => vm.IsSuppliesModalOpen),
-        new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.OpenServicesModal(); }, vm => vm.IsServicesModalOpen),
+        new("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }, vm => vm.Prescription.IsPrescriptionModalOpen),
+        new("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Supplies.OpenSuppliesModal(); }, vm => vm.Supplies.IsSuppliesModalOpen),
+        new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); }, vm => vm.ClinicalServices.IsServicesModalOpen),
         new("cambiar cita", (vm, _) => { Completes(vm.OpenAgendaPanelAsync(), "Agenda"); vm.Agenda.StartMovingAppointment(Appointment()); }, vm => vm.Agenda.IsMovingAppointment),
         new("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda"), vm => vm.Agenda.IsAgendaPanelOpen),
         new("búsqueda", (vm, _) => vm.Home.HomeSearchText = "gar", vm => vm.Navigation.IsHomePage && vm.Home.HasHomeQuery),
@@ -42,13 +42,13 @@ public class EscapeLadderTests
     private static readonly (string Name, Action<MedicalRecordsViewModel> Open)[] Sheets =
     {
         ("info", vm => vm.Info.IsInfoModalVisible = true),
-        ("alergia", vm => vm.IsAllergyAlertOpen = true),
+        ("alergia", vm => vm.Prescription.IsAllergyAlertOpen = true),
         ("catálogo", vm => vm.CatalogBrowser.IsCatalogBrowserModalOpen = true),
         ("vista previa", vm => vm.Preview.IsPrescriptionPdfModalOpen = true),
         ("terminar consulta", vm => vm.IsFinishConsultationOpen = true),
-        ("receta", vm => vm.IsPrescriptionModalOpen = true),
-        ("insumos", vm => vm.IsSuppliesModalOpen = true),
-        ("servicios", vm => vm.IsServicesModalOpen = true),
+        ("receta", vm => vm.Prescription.IsPrescriptionModalOpen = true),
+        ("insumos", vm => vm.Supplies.IsSuppliesModalOpen = true),
+        ("servicios", vm => vm.ClinicalServices.IsServicesModalOpen = true),
         ("enviar a", vm => vm.IsSendConsultationSheetOpen = true)
     };
 
@@ -105,15 +105,15 @@ public class EscapeLadderTests
         records.OpenPatientChart(Mock(records, 2));
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
         records.Agenda.StartMovingAppointment(Appointment());
-        records.IsServicesModalOpen = true;
-        records.IsSuppliesModalOpen = true;
-        records.IsPrescriptionModalOpen = true;
+        records.ClinicalServices.IsServicesModalOpen = true;
+        records.Supplies.IsSuppliesModalOpen = true;
+        records.Prescription.IsPrescriptionModalOpen = true;
         records.IsFinishConsultationOpen = true;
         records.IsCie10DropdownOpen = true;
         records.IsSendConsultationSheetOpen = true;
         records.Preview.IsPrescriptionPdfModalOpen = true;
         records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
-        records.IsAllergyAlertOpen = true;
+        records.Prescription.IsAllergyAlertOpen = true;
         records.Info.InfoModalMessage = "Aviso";
         records.Info.IsInfoModalVisible = true;
 

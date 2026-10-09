@@ -163,11 +163,11 @@
 
         <!-- ======================= HOJAS CON FONDO DIFUSO ======================= -->
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PrescriptionSheet}"
-                        Visibility="{Binding IsPrescriptionModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding Prescription.IsPrescriptionModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource SuppliesSheet}"
-                        Visibility="{Binding IsSuppliesModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding Supplies.IsSuppliesModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ServicesSheet}"
-                        Visibility="{Binding IsServicesModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding ClinicalServices.IsServicesModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="300" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CheckoutSheet}"
                         Visibility="{Binding IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="310" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CatalogSheet}"
@@ -176,8 +176,8 @@
                         Visibility="{Binding Preview.IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource SendConsultationSheet}"
                         Visibility="{Binding IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
-        <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource AllergyDialog}"
-                        Visibility="{Binding IsAllergyAlertOpen, Converter={StaticResource BoolToVis}}" />
+        <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding Prescription}" ContentTemplate="{StaticResource AllergyDialog}"
+                        Visibility="{Binding Prescription.IsAllergyAlertOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="500" Focusable="False" Content="{Binding Info}" ContentTemplate="{StaticResource InfoDialog}"
                         Visibility="{Binding Info.IsInfoModalVisible, Converter={StaticResource BoolToVis}}" />
     </Grid>

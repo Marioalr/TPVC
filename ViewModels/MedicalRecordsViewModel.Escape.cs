@@ -8,9 +8,9 @@ public partial class MedicalRecordsViewModel
 {
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>
-        Info.IsInfoModalVisible || IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
-        || Preview.IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || IsPrescriptionModalOpen || IsSuppliesModalOpen
-        || IsServicesModalOpen || IsSendConsultationSheetOpen;
+        Info.IsInfoModalVisible || Prescription.IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
+        || Preview.IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
+        || ClinicalServices.IsServicesModalOpen || IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
     public bool CanTypeToSearch => (Navigation.IsHomePage || Navigation.IsChartPage) && !Agenda.IsAgendaPanelOpen && !IsAnySheetOpen;
@@ -25,7 +25,7 @@ public partial class MedicalRecordsViewModel
     public bool TryCloseTopmost()
     {
         if (Info.IsInfoModalVisible) Info.DismissInfoModal();
-        else if (IsAllergyAlertOpen) CancelAllergyPrescription();
+        else if (Prescription.IsAllergyAlertOpen) Prescription.CancelAllergyPrescription();
         else if (CatalogBrowser.IsCatalogBrowserModalOpen) CatalogBrowser.CloseCatalogBrowser();
         else if (Preview.IsPrescriptionPdfModalOpen) Preview.ClosePrescriptionPdfPreview();
         // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
@@ -33,9 +33,9 @@ public partial class MedicalRecordsViewModel
         else if (IsCie10DropdownOpen) IsCie10DropdownOpen = false;
         // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
         else if (IsFinishConsultationOpen) CloseFinishConsultation();
-        else if (IsPrescriptionModalOpen) ClosePrescriptionModal();
-        else if (IsSuppliesModalOpen) CloseSuppliesModal();
-        else if (IsServicesModalOpen) CloseServicesModal();
+        else if (Prescription.IsPrescriptionModalOpen) Prescription.ClosePrescriptionModal();
+        else if (Supplies.IsSuppliesModalOpen) Supplies.CloseSuppliesModal();
+        else if (ClinicalServices.IsServicesModalOpen) ClinicalServices.CloseServicesModal();
         else if (Agenda.IsMovingAppointment) Agenda.CancelMovingAppointment();
         else if (Agenda.IsAgendaPanelOpen) Agenda.CloseAgendaPanel();
         else if (Navigation.IsHomePage && Home.HasHomeQuery) Home.HomeSearchText = string.Empty;

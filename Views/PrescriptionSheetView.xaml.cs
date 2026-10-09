@@ -45,7 +45,7 @@ public partial class PrescriptionSheetView : UserControl
                 PrescriptionSuggestionsListBox.ScrollIntoView(item);
                 if (item is Product p)
                 {
-                    vm.SelectedPrescriptionProduct = p;
+                    vm.Prescription.SelectedPrescriptionProduct = p;
                 }
             }
             e.Handled = true;
@@ -63,7 +63,7 @@ public partial class PrescriptionSheetView : UserControl
                 PrescriptionSuggestionsListBox.ScrollIntoView(item);
                 if (item is Product p)
                 {
-                    vm.SelectedPrescriptionProduct = p;
+                    vm.Prescription.SelectedPrescriptionProduct = p;
                 }
             }
             e.Handled = true;
@@ -71,7 +71,7 @@ public partial class PrescriptionSheetView : UserControl
         else if (e.Key == Key.Enter)
         {
             var product = PrescriptionSuggestionsListBox?.SelectedItem as Product;
-            await vm.SelectAndAddPrescriptionProductAsync(product);
+            await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
             PrescriptionSearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -90,7 +90,7 @@ public partial class PrescriptionSheetView : UserControl
         if (e.Key == Key.Enter)
         {
             var product = PrescriptionSuggestionsListBox?.SelectedItem as Product;
-            await vm.SelectAndAddPrescriptionProductAsync(product);
+            await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
             PrescriptionSearchTextBox?.Focus();
             e.Handled = true;
         }
@@ -104,7 +104,7 @@ public partial class PrescriptionSheetView : UserControl
         {
             if (PrescriptionSuggestionsListBox?.SelectedItem is Product product)
             {
-                await vm.SelectAndAddPrescriptionProductAsync(product);
+                await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
                 PrescriptionSearchTextBox?.Focus();
                 e.Handled = true;
             }
@@ -115,7 +115,7 @@ public partial class PrescriptionSheetView : UserControl
             {
                 if (PrescriptionSuggestionsListBox?.SelectedItem is Product p)
                 {
-                    vm.SelectedPrescriptionProduct = p;
+                    vm.Prescription.SelectedPrescriptionProduct = p;
                 }
             }, DispatcherPriority.Input);
         }
@@ -133,7 +133,7 @@ public partial class PrescriptionSheetView : UserControl
         {
             if (DataContext is MedicalRecordsViewModel vm)
             {
-                await vm.SelectAndAddPrescriptionProductAsync(product);
+                await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
                 PrescriptionSearchTextBox?.Focus();
                 e.Handled = true;
             }

@@ -31,14 +31,14 @@
                         <TextBlock Style="{StaticResource TextHeading}" Text="Servicios y procedimientos" />
                         <TextBlock Style="{StaticResource TextCaption}" Text="Inyección, curación, sutura, revisión especial… se cargan a la cuenta de la consulta" />
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding OpenServiceCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
+                    <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding ClinicalServices.OpenServiceCatalogCommand}" Margin="0,0,8,0" VerticalAlignment="Top"
                             ToolTip="Ver todos los servicios">
                         <StackPanel Orientation="Horizontal">
                             <helpers:Icon Data="{StaticResource IcoSearch}" Margin="0,0,6,0" />
                             <TextBlock Text="Catálogo" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding CloseServicesModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                    <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Command="{Binding ClinicalServices.CloseServicesModalCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
@@ -56,7 +56,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Servicio *" />
                             <TextBox x:Name="ServiceModalSearchTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding ServiceModalSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding ClinicalServices.ServiceModalSearchText, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Escriba para buscar"
                                      PreviewKeyDown="ServiceModalSearchTextBox_PreviewKeyDown"
                                      AutomationProperties.Name="Servicio" />
@@ -64,7 +64,7 @@
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Notas" />
                             <TextBox x:Name="ServiceModalNotesTextBox" Style="{StaticResource FieldTextBox}"
-                                     Text="{Binding ServiceModalNotes, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding ClinicalServices.ServiceModalNotes, UpdateSourceTrigger=PropertyChanged}"
                                      helpers:Field.Placeholder="Ej. sutura en brazo izquierdo"
                                      PreviewKeyDown="ServiceModalAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Notas del servicio" />
@@ -72,19 +72,19 @@
                         <StackPanel Grid.Column="4">
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
                             <TextBox x:Name="ServiceModalQuantityTextBox" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
-                                     Text="{Binding ServiceModalQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding ClinicalServices.ServiceModalQuantity, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="ServiceModalAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Cantidad" />
                         </StackPanel>
                     </Grid>
 
                     <Border Style="{StaticResource Card}" Padding="6" Margin="0,8,0,0"
-                            Visibility="{Binding IsServiceModalDropdownOpen, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding ClinicalServices.IsServiceModalDropdownOpen, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega · Esc cierra" Margin="10,4,10,4" />
                             <ListBox x:Name="ServiceSuggestionsListBox" Style="{StaticResource PlainList}" MaxHeight="200"
-                                     ItemsSource="{Binding ServiceModalSuggestions}"
-                                     SelectedItem="{Binding SelectedServiceModalItem, Mode=TwoWay}"
+                                     ItemsSource="{Binding ClinicalServices.ServiceModalSuggestions}"
+                                     SelectedItem="{Binding ClinicalServices.SelectedServiceModalItem, Mode=TwoWay}"
                                      PreviewKeyDown="ServiceSuggestionsListBox_PreviewKeyDown"
                                      PreviewMouseLeftButtonUp="ServiceSuggestionsListBox_PreviewMouseLeftButtonUp"
                                      AutomationProperties.Name="Sugerencias de servicios">
@@ -142,7 +142,7 @@
                                                 <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" Margin="12,0" VerticalAlignment="Center"
                                                            Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
                                                 <Button Grid.Column="3" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta)" AutomationProperties.Name="Quitar servicio"
-                                                        Command="{Binding DataContext.RemoveServiceItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        Command="{Binding DataContext.ClinicalServices.RemoveServiceItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}">
                                                     <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
                                                 </Button>
@@ -162,8 +162,8 @@
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14" Margin="0,16,0,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding CloseServicesModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
-                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SaveServicesModalCommand}">
+                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding ClinicalServices.CloseServicesModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ClinicalServices.SaveServicesModalCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoCheck}" Margin="0,0,8,0" />
                                 <TextBlock Text="Guardar" />

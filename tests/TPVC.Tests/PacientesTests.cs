@@ -508,8 +508,8 @@ public class PacientesTests
         records.ChartPrimaryAction();
 
         Assert.IsEmpty(patient.ActivePrescription, "La receta anterior no se arrastra a la consulta nueva");
-        Assert.IsTrue(records.CanRepeatPreviousPrescription);
-        StringAssert.Contains(records.PreviousPrescriptionSummary, previous[0]);
+        Assert.IsTrue(records.Prescription.CanRepeatPreviousPrescription);
+        StringAssert.Contains(records.Prescription.PreviousPrescriptionSummary, previous[0]);
 
         // En la ficha, durante la consulta, "Última receta" sigue siendo la anterior
         records.ShowChartFromConsultation();
@@ -536,15 +536,15 @@ public class PacientesTests
 
         records.OpenPatientChart(patient);
         records.ChartPrimaryAction();
-        await records.RepeatPreviousPrescriptionAsync();
+        await records.Prescription.RepeatPreviousPrescriptionAsync();
 
         CollectionAssert.AreEqual(previous, patient.ActivePrescription.Select(p => (p.MedicineName, p.Dosage)).ToList());
-        Assert.IsFalse(records.CanRepeatPreviousPrescription, "Ya no queda nada por repetir");
+        Assert.IsFalse(records.Prescription.CanRepeatPreviousPrescription, "Ya no queda nada por repetir");
 
         // Quitar un medicamento también lo quita de la nota (antes se guardaba aunque se hubiera quitado)
         var removed = patient.ActivePrescription[0];
-        await records.RemovePrescriptionItemFromPatientAsync(removed);
-        Assert.IsTrue(records.CanRepeatPreviousPrescription, "Lo quitado se puede volver a repetir");
+        await records.Prescription.RemovePrescriptionItemFromPatientAsync(removed);
+        Assert.IsTrue(records.Prescription.CanRepeatPreviousPrescription, "Lo quitado se puede volver a repetir");
 
         var folio = consultations.CurrentConsultation!.Folio;
         records.ConsultationDiagnosis = "Seguimiento";
@@ -565,7 +565,7 @@ public class PacientesTests
 
         records.OpenPatientChart(patient);
         records.ChartPrimaryAction();
-        await records.RepeatPreviousPrescriptionAsync();
+        await records.Prescription.RepeatPreviousPrescriptionAsync();
 
         Assert.IsFalse(patient.ActivePrescription.Any(p => p.MedicineName.StartsWith(allergic)), "No se repite lo que causa alergia");
         Assert.IsTrue(records.Info.IsInfoModalVisible);
@@ -581,9 +581,9 @@ public class PacientesTests
 
         records.OpenPatientChart(patient);
         records.ChartPrimaryAction();
-        records.PrescriptionMedicineName = "Loratadina 10 mg";
-        records.PrescriptionDosage = "1 tableta cada 24 horas";
-        await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
+        records.Prescription.PrescriptionMedicineName = "Loratadina 10 mg";
+        records.Prescription.PrescriptionDosage = "1 tableta cada 24 horas";
+        await records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct);
         CollectionAssert.AreEqual(new[] { "Loratadina 10 mg" }, await StoredPrescriptionAsync(patient.Id));
 
         await records.DiscardActiveConsultationAsync();
@@ -644,9 +644,9 @@ public class PacientesTests
 
             records.OpenPatientChart(patient);
             records.ChartPrimaryAction();
-            records.PrescriptionMedicineName = "Loratadina 10 mg";
-            records.PrescriptionDosage = "1 tableta cada 24 horas";
-            await records.SelectAndAddPrescriptionProductAsync(records.SelectedPrescriptionProduct);
+            records.Prescription.PrescriptionMedicineName = "Loratadina 10 mg";
+            records.Prescription.PrescriptionDosage = "1 tableta cada 24 horas";
+            await records.Prescription.SelectAndAddPrescriptionProductAsync(records.Prescription.SelectedPrescriptionProduct);
             records.FlushConsultationDraft();
             records.Dispose();
 
@@ -656,8 +656,8 @@ public class PacientesTests
 
             Assert.IsTrue(reopened.HasActiveConsultation);
             CollectionAssert.AreEqual(new[] { "Loratadina 10 mg" }, reopened.SelectedPatient!.ActivePrescription.Select(p => p.MedicineName).ToList());
-            Assert.IsTrue(reopened.CanRepeatPreviousPrescription);
-            StringAssert.Contains(reopened.PreviousPrescriptionSummary, previous[0]);
+            Assert.IsTrue(reopened.Prescription.CanRepeatPreviousPrescription);
+            StringAssert.Contains(reopened.Prescription.PreviousPrescriptionSummary, previous[0]);
         }
         finally
         {

@@ -1359,13 +1359,13 @@ public class InventoryTests
         var recordsVm = new MedicalRecordsViewModel();
 
         // Buscar producto existente en sugerencias de inventario
-        recordsVm.PrescriptionSearchText = "Paracetamol";
-        Assert.IsTrue(recordsVm.IsPrescriptionDropdownOpen);
-        Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Count > 0);
-        Assert.IsTrue(recordsVm.PrescriptionProductSuggestions.Any(p => p.Name.Contains("Paracetamol")));
+        recordsVm.Prescription.PrescriptionSearchText = "Paracetamol";
+        Assert.IsTrue(recordsVm.Prescription.IsPrescriptionDropdownOpen);
+        Assert.IsTrue(recordsVm.Prescription.PrescriptionProductSuggestions.Count > 0);
+        Assert.IsTrue(recordsVm.Prescription.PrescriptionProductSuggestions.Any(p => p.Name.Contains("Paracetamol")));
 
         // La primera sugerencia queda preseleccionada para agregarla con Enter
-        Assert.AreEqual(recordsVm.PrescriptionProductSuggestions.First(), recordsVm.SelectedPrescriptionProduct);
+        Assert.AreEqual(recordsVm.Prescription.PrescriptionProductSuggestions.First(), recordsVm.Prescription.SelectedPrescriptionProduct);
     }
 
     [TestMethod]
@@ -1385,11 +1385,11 @@ public class InventoryTests
         Assert.IsTrue(recordsVm.HasActiveConsultation);
 
         // Configurar medicamento con posología/indicaciones personalizadas
-        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
-        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días vía oral después de los alimentos";
-        recordsVm.PrescriptionQuantity = 2;
+        recordsVm.Prescription.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.Prescription.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días vía oral después de los alimentos";
+        recordsVm.Prescription.PrescriptionQuantity = 2;
 
-        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
+        await recordsVm.Prescription.SelectAndAddPrescriptionProductAsync(recordsVm.Prescription.SelectedPrescriptionProduct);
 
         // Verificar que se añadió a la receta activa del paciente
         Assert.AreEqual(1, recordsVm.SelectedPatient.ActivePrescription.Count);
@@ -1399,12 +1399,12 @@ public class InventoryTests
         Assert.AreEqual(2, addedItem.RecommendedQuantity);
 
         // Verificar que los campos de captura se limpian tras recetar
-        Assert.AreEqual(string.Empty, recordsVm.PrescriptionSearchText);
-        Assert.AreEqual(string.Empty, recordsVm.PrescriptionDosage);
-        Assert.AreEqual(1, recordsVm.PrescriptionQuantity);
+        Assert.AreEqual(string.Empty, recordsVm.Prescription.PrescriptionSearchText);
+        Assert.AreEqual(string.Empty, recordsVm.Prescription.PrescriptionDosage);
+        Assert.AreEqual(1, recordsVm.Prescription.PrescriptionQuantity);
 
         // Eliminar el medicamento prescrito
-        await recordsVm.RemovePrescriptionItemFromPatientAsync(addedItem);
+        await recordsVm.Prescription.RemovePrescriptionItemFromPatientAsync(addedItem);
         Assert.AreEqual(0, recordsVm.SelectedPatient.ActivePrescription.Count);
     }
 
@@ -1499,10 +1499,10 @@ public class InventoryTests
         Assert.AreEqual(0, consultationService.CurrentConsultation?.Items.Count);
 
         // 1. Medicamento con existencias: "Se surte aquí" marcado y cargado a la cuenta automáticamente
-        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
-        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
-        recordsVm.PrescriptionQuantity = 2;
-        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
+        recordsVm.Prescription.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.Prescription.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
+        recordsVm.Prescription.PrescriptionQuantity = 2;
+        await recordsVm.Prescription.SelectAndAddPrescriptionProductAsync(recordsVm.Prescription.SelectedPrescriptionProduct);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.IsTrue(patient.ActivePrescription[0].DispenseInClinic);
@@ -1513,14 +1513,14 @@ public class InventoryTests
 
         // 2. Desmarcar "Se surte aquí" quita el cargo
         patient.ActivePrescription[0].DispenseInClinic = false;
-        await recordsVm.ToggleDispenseInClinicAsync(patient.ActivePrescription[0]);
+        await recordsVm.Prescription.ToggleDispenseInClinicAsync(patient.ActivePrescription[0]);
         Assert.IsEmpty(consultationService.CurrentConsultation.Items);
 
         // 3. Medicamento que no está en el consultorio: se receta, pero no se cobra
-        recordsVm.PrescriptionMedicineName = "Medicamento de farmacia externa";
-        recordsVm.PrescriptionDosage = "1 tableta al día";
-        recordsVm.PrescriptionQuantity = 1;
-        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
+        recordsVm.Prescription.PrescriptionMedicineName = "Medicamento de farmacia externa";
+        recordsVm.Prescription.PrescriptionDosage = "1 tableta al día";
+        recordsVm.Prescription.PrescriptionQuantity = 1;
+        await recordsVm.Prescription.SelectAndAddPrescriptionProductAsync(recordsVm.Prescription.SelectedPrescriptionProduct);
 
         Assert.IsFalse(patient.ActivePrescription[1].DispenseInClinic);
         Assert.IsEmpty(consultationService.CurrentConsultation.Items);
@@ -1594,9 +1594,9 @@ public class InventoryTests
         var recordsVm = new MedicalRecordsViewModel(inventoryService: null!, new ConsultationService());
         recordsVm.SelectedPatient = null;
 
-        recordsVm.OpenPrescriptionModal();
+        recordsVm.Prescription.OpenPrescriptionModal();
 
-        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        Assert.IsFalse(recordsVm.Prescription.IsPrescriptionModalOpen);
         Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
         Assert.IsTrue(recordsVm.Info.InfoModalMessage?.Contains("Seleccione o agregue un paciente") ?? false);
     }
@@ -1613,11 +1613,11 @@ public class InventoryTests
         };
         recordsVm.SelectedPatient = patient;
 
-        recordsVm.OpenPrescriptionModal();
-        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+        recordsVm.Prescription.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.Prescription.IsPrescriptionModalOpen);
 
-        recordsVm.ClosePrescriptionModal();
-        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        recordsVm.Prescription.ClosePrescriptionModal();
+        Assert.IsFalse(recordsVm.Prescription.IsPrescriptionModalOpen);
     }
 
     [TestMethod]
@@ -1633,45 +1633,45 @@ public class InventoryTests
         recordsVm.SelectedPatient = patient;
 
         // 1. Abrir modal de receta
-        recordsVm.OpenPrescriptionModal();
-        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+        recordsVm.Prescription.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.Prescription.IsPrescriptionModalOpen);
 
         // 2. Prescribir un medicamento
-        recordsVm.PrescriptionMedicineName = "Amoxicilina 500mg";
-        recordsVm.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
-        recordsVm.PrescriptionQuantity = 2;
-        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
+        recordsVm.Prescription.PrescriptionMedicineName = "Amoxicilina 500mg";
+        recordsVm.Prescription.PrescriptionDosage = "1 cápsula cada 8 horas por 7 días";
+        recordsVm.Prescription.PrescriptionQuantity = 2;
+        await recordsVm.Prescription.SelectAndAddPrescriptionProductAsync(recordsVm.Prescription.SelectedPrescriptionProduct);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.AreEqual("Amoxicilina 500mg", patient.ActivePrescription[0].MedicineName);
 
         // 3. Guardar receta -> Cierra modal y regresa a la ventana principal
-        await recordsVm.SavePrescriptionModalAsync();
-        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        await recordsVm.Prescription.SavePrescriptionModalAsync();
+        Assert.IsFalse(recordsVm.Prescription.IsPrescriptionModalOpen);
         Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
         Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
 
         // 4. Volver a abrir la receta para continuar editando
-        recordsVm.OpenPrescriptionModal();
-        Assert.IsTrue(recordsVm.IsPrescriptionModalOpen);
+        recordsVm.Prescription.OpenPrescriptionModal();
+        Assert.IsTrue(recordsVm.Prescription.IsPrescriptionModalOpen);
 
         // 5. Agregar un segundo medicamento
-        recordsVm.PrescriptionMedicineName = "Ibuprofeno 400mg";
-        recordsVm.PrescriptionDosage = "1 tableta cada 8 horas si hay dolor";
-        recordsVm.PrescriptionQuantity = 1;
-        await recordsVm.SelectAndAddPrescriptionProductAsync(recordsVm.SelectedPrescriptionProduct);
+        recordsVm.Prescription.PrescriptionMedicineName = "Ibuprofeno 400mg";
+        recordsVm.Prescription.PrescriptionDosage = "1 tableta cada 8 horas si hay dolor";
+        recordsVm.Prescription.PrescriptionQuantity = 1;
+        await recordsVm.Prescription.SelectAndAddPrescriptionProductAsync(recordsVm.Prescription.SelectedPrescriptionProduct);
 
         Assert.AreEqual(2, patient.ActivePrescription.Count);
         Assert.AreEqual("Ibuprofeno 400mg", patient.ActivePrescription[1].MedicineName);
 
         // 6. Quitar el primer medicamento
-        await recordsVm.RemovePrescriptionItemFromPatientAsync(patient.ActivePrescription[0]);
+        await recordsVm.Prescription.RemovePrescriptionItemFromPatientAsync(patient.ActivePrescription[0]);
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.AreEqual("Ibuprofeno 400mg", patient.ActivePrescription[0].MedicineName);
 
         // 7. Guardar nuevamente
-        await recordsVm.SavePrescriptionModalAsync();
-        Assert.IsFalse(recordsVm.IsPrescriptionModalOpen);
+        await recordsVm.Prescription.SavePrescriptionModalAsync();
+        Assert.IsFalse(recordsVm.Prescription.IsPrescriptionModalOpen);
         Assert.IsTrue(patient.ActivePrescriptionJson.Contains("Ibuprofeno 400mg"));
         Assert.IsFalse(patient.ActivePrescriptionJson.Contains("Amoxicilina 500mg"));
     }
@@ -1706,12 +1706,12 @@ public class InventoryTests
         Assert.IsFalse(CatalogStore.IsProductMedication(supplyProduct));
 
         // Verificación de sugerencias en receta (solo medicamentos)
-        recordsVm.ApplyPrescriptionSuggestions("Gasa");
-        Assert.AreEqual(0, recordsVm.PrescriptionProductSuggestions.Count, "La receta no debe sugerir insumos ni material de curación");
+        recordsVm.Prescription.ApplyPrescriptionSuggestions("Gasa");
+        Assert.AreEqual(0, recordsVm.Prescription.PrescriptionProductSuggestions.Count, "La receta no debe sugerir insumos ni material de curación");
 
         // Verificación de sugerencias en insumos (solo insumos clínicos)
-        recordsVm.ApplySupplySuggestions("Paracetamol");
-        Assert.AreEqual(0, recordsVm.SupplyProductSuggestions.Count, "El catálogo de insumos no debe sugerir medicamentos");
+        recordsVm.Supplies.ApplySupplySuggestions("Paracetamol");
+        Assert.AreEqual(0, recordsVm.Supplies.SupplyProductSuggestions.Count, "El catálogo de insumos no debe sugerir medicamentos");
     }
 
     [TestMethod]
@@ -1731,14 +1731,14 @@ public class InventoryTests
         recordsVm.StartActiveConsultation();
 
         // 1. Abrir modal de insumos
-        recordsVm.OpenSuppliesModal();
-        Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
+        recordsVm.Supplies.OpenSuppliesModal();
+        Assert.IsTrue(recordsVm.Supplies.IsSuppliesModalOpen);
 
         // 2. Agregar un insumo escrito a mano (no está en el inventario)
-        recordsVm.SupplySearchText = "Guantes de Látex Quirúrgicos";
-        recordsVm.SupplyInstructions = "Uso en curación de herida";
-        recordsVm.SupplyQuantity = 2;
-        await recordsVm.SelectAndAddSupplyProductAsync(null);
+        recordsVm.Supplies.SupplySearchText = "Guantes de Látex Quirúrgicos";
+        recordsVm.Supplies.SupplyInstructions = "Uso en curación de herida";
+        recordsVm.Supplies.SupplyQuantity = 2;
+        await recordsVm.Supplies.SelectAndAddSupplyProductAsync(null);
 
         Assert.AreEqual(1, patient.ActiveSupplies.Count);
         Assert.AreEqual("Guantes de Látex Quirúrgicos", patient.ActiveSupplies[0].SupplyName);
@@ -1748,30 +1748,30 @@ public class InventoryTests
         Assert.IsTrue(consultationService.CurrentConsultation!.Items.Any(i => i.Name == "Guantes de Látex Quirúrgicos" && i.Quantity == 2));
 
         // 4. Guardar insumos -> Cierra modal y persiste JSON
-        await recordsVm.SaveSuppliesModalAsync();
-        Assert.IsFalse(recordsVm.IsSuppliesModalOpen);
+        await recordsVm.Supplies.SaveSuppliesModalAsync();
+        Assert.IsFalse(recordsVm.Supplies.IsSuppliesModalOpen);
         Assert.IsTrue(patient.ActiveSuppliesJson.Contains("Guantes de Látex Quirúrgicos"));
 
         // 5. Reabrir modal para continuar editando
-        recordsVm.OpenSuppliesModal();
-        Assert.IsTrue(recordsVm.IsSuppliesModalOpen);
+        recordsVm.Supplies.OpenSuppliesModal();
+        Assert.IsTrue(recordsVm.Supplies.IsSuppliesModalOpen);
 
         // 6. Agregar un segundo insumo
-        recordsVm.SupplySearchText = "Venda Elástica 10cm";
-        recordsVm.SupplyInstructions = "Vendaje compresivo en tobillo";
-        recordsVm.SupplyQuantity = 1;
-        await recordsVm.SelectAndAddSupplyProductAsync(null);
+        recordsVm.Supplies.SupplySearchText = "Venda Elástica 10cm";
+        recordsVm.Supplies.SupplyInstructions = "Vendaje compresivo en tobillo";
+        recordsVm.Supplies.SupplyQuantity = 1;
+        await recordsVm.Supplies.SelectAndAddSupplyProductAsync(null);
 
         Assert.AreEqual(2, patient.ActiveSupplies.Count);
 
         // 7. Eliminar el primer insumo
-        await recordsVm.RemoveSupplyItemFromPatientAsync(patient.ActiveSupplies[0]);
+        await recordsVm.Supplies.RemoveSupplyItemFromPatientAsync(patient.ActiveSupplies[0]);
         Assert.AreEqual(1, patient.ActiveSupplies.Count);
         Assert.AreEqual("Venda Elástica 10cm", patient.ActiveSupplies[0].SupplyName);
 
         // 8. Guardar de nuevo
-        await recordsVm.SaveSuppliesModalAsync();
-        Assert.IsFalse(recordsVm.IsSuppliesModalOpen);
+        await recordsVm.Supplies.SaveSuppliesModalAsync();
+        Assert.IsFalse(recordsVm.Supplies.IsSuppliesModalOpen);
         Assert.IsTrue(patient.ActiveSuppliesJson.Contains("Venda Elástica 10cm"));
         Assert.IsFalse(patient.ActiveSuppliesJson.Contains("Guantes de Látex Quirúrgicos"));
     }
@@ -1793,14 +1793,14 @@ public class InventoryTests
         recordsVm.StartActiveConsultation();
 
         // 1. Abrir modal de servicios
-        recordsVm.OpenServicesModal();
-        Assert.IsTrue(recordsVm.IsServicesModalOpen);
+        recordsVm.ClinicalServices.OpenServicesModal();
+        Assert.IsTrue(recordsVm.ClinicalServices.IsServicesModalOpen);
 
         // 2. Agregar un servicio clínico escrito a mano (no está en el catálogo)
-        recordsVm.ServiceModalSearchText = "Sutura de Herida Menor";
-        recordsVm.ServiceModalNotes = "3 puntos de sutura sin complicaciones";
-        recordsVm.ServiceModalQuantity = 1;
-        await recordsVm.SelectAndAddServiceModalSuggestionAsync(null);
+        recordsVm.ClinicalServices.ServiceModalSearchText = "Sutura de Herida Menor";
+        recordsVm.ClinicalServices.ServiceModalNotes = "3 puntos de sutura sin complicaciones";
+        recordsVm.ClinicalServices.ServiceModalQuantity = 1;
+        await recordsVm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(null);
 
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual("Sutura de Herida Menor", patient.ActiveServices[0].ServiceName);
@@ -1809,30 +1809,30 @@ public class InventoryTests
         Assert.IsTrue(consultationService.CurrentConsultation!.Items.Any(i => i.Name == "Sutura de Herida Menor"));
 
         // 4. Guardar servicios -> Cierra modal y persiste JSON
-        await recordsVm.SaveServicesModalAsync();
-        Assert.IsFalse(recordsVm.IsServicesModalOpen);
+        await recordsVm.ClinicalServices.SaveServicesModalAsync();
+        Assert.IsFalse(recordsVm.ClinicalServices.IsServicesModalOpen);
         Assert.IsTrue(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
 
         // 5. Reabrir modal para continuar editando
-        recordsVm.OpenServicesModal();
-        Assert.IsTrue(recordsVm.IsServicesModalOpen);
+        recordsVm.ClinicalServices.OpenServicesModal();
+        Assert.IsTrue(recordsVm.ClinicalServices.IsServicesModalOpen);
 
         // 6. Agregar un segundo servicio
-        recordsVm.ServiceModalSearchText = "Toma de Glucosa Capilar";
-        recordsVm.ServiceModalNotes = "Glucemia postprandial";
-        recordsVm.ServiceModalQuantity = 1;
-        await recordsVm.SelectAndAddServiceModalSuggestionAsync(null);
+        recordsVm.ClinicalServices.ServiceModalSearchText = "Toma de Glucosa Capilar";
+        recordsVm.ClinicalServices.ServiceModalNotes = "Glucemia postprandial";
+        recordsVm.ClinicalServices.ServiceModalQuantity = 1;
+        await recordsVm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(null);
 
         Assert.AreEqual(2, patient.ActiveServices.Count);
 
         // 7. Eliminar el primer servicio
-        await recordsVm.RemoveServiceItemFromPatientAsync(patient.ActiveServices[0]);
+        await recordsVm.ClinicalServices.RemoveServiceItemFromPatientAsync(patient.ActiveServices[0]);
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual("Toma de Glucosa Capilar", patient.ActiveServices[0].ServiceName);
 
         // 8. Guardar de nuevo
-        await recordsVm.SaveServicesModalAsync();
-        Assert.IsFalse(recordsVm.IsServicesModalOpen);
+        await recordsVm.ClinicalServices.SaveServicesModalAsync();
+        Assert.IsFalse(recordsVm.ClinicalServices.IsServicesModalOpen);
         Assert.IsTrue(patient.ActiveServicesJson.Contains("Toma de Glucosa Capilar"));
         Assert.IsFalse(patient.ActiveServicesJson.Contains("Sutura de Herida Menor"));
     }
@@ -2351,48 +2351,48 @@ public class InventoryTests
         vm.SelectPatient(patient);
 
         // 1. Receta médica: seleccionar producto y agregar
-        vm.OpenPrescriptionModal();
-        Assert.IsTrue(vm.IsPrescriptionModalOpen);
-        Assert.IsNotNull(vm.SelectedPrescriptionProduct);
-        var chosenMedicine = vm.SelectedPrescriptionProduct;
-        vm.PrescriptionDosage = "1 cada 12 horas por 3 días";
-        vm.PrescriptionQuantity = 1;
+        vm.Prescription.OpenPrescriptionModal();
+        Assert.IsTrue(vm.Prescription.IsPrescriptionModalOpen);
+        Assert.IsNotNull(vm.Prescription.SelectedPrescriptionProduct);
+        var chosenMedicine = vm.Prescription.SelectedPrescriptionProduct;
+        vm.Prescription.PrescriptionDosage = "1 cada 12 horas por 3 días";
+        vm.Prescription.PrescriptionQuantity = 1;
 
-        await vm.SelectAndAddPrescriptionProductAsync(chosenMedicine);
+        await vm.Prescription.SelectAndAddPrescriptionProductAsync(chosenMedicine);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMedicine.Name));
-        Assert.AreEqual(string.Empty, vm.PrescriptionSearchText);
-        Assert.AreEqual(string.Empty, vm.PrescriptionDosage);
+        Assert.AreEqual(string.Empty, vm.Prescription.PrescriptionSearchText);
+        Assert.AreEqual(string.Empty, vm.Prescription.PrescriptionDosage);
 
         // 2. Insumos: seleccionar producto y agregar
-        vm.OpenSuppliesModal();
-        Assert.IsTrue(vm.IsSuppliesModalOpen);
-        Assert.IsNotNull(vm.SelectedSupplyProduct);
-        var chosenSupply = vm.SelectedSupplyProduct;
-        vm.SupplyInstructions = "Uso durante curación";
-        vm.SupplyQuantity = 3;
+        vm.Supplies.OpenSuppliesModal();
+        Assert.IsTrue(vm.Supplies.IsSuppliesModalOpen);
+        Assert.IsNotNull(vm.Supplies.SelectedSupplyProduct);
+        var chosenSupply = vm.Supplies.SelectedSupplyProduct;
+        vm.Supplies.SupplyInstructions = "Uso durante curación";
+        vm.Supplies.SupplyQuantity = 3;
 
-        await vm.SelectAndAddSupplyProductAsync(chosenSupply);
+        await vm.Supplies.SelectAndAddSupplyProductAsync(chosenSupply);
 
         Assert.AreEqual(1, patient.ActiveSupplies.Count);
         Assert.IsTrue(patient.ActiveSupplies[0].SupplyName.Contains(chosenSupply.Name));
         Assert.AreEqual(3, patient.ActiveSupplies[0].Quantity);
-        Assert.AreEqual(string.Empty, vm.SupplySearchText);
+        Assert.AreEqual(string.Empty, vm.Supplies.SupplySearchText);
 
         // 3. Servicios: seleccionar servicio y agregar
-        vm.OpenServicesModal();
-        Assert.IsTrue(vm.IsServicesModalOpen);
-        Assert.IsNotNull(vm.SelectedServiceModalItem);
-        var chosenService = vm.SelectedServiceModalItem;
-        vm.ServiceModalNotes = "Aplicación inmediata";
-        vm.ServiceModalQuantity = 1;
+        vm.ClinicalServices.OpenServicesModal();
+        Assert.IsTrue(vm.ClinicalServices.IsServicesModalOpen);
+        Assert.IsNotNull(vm.ClinicalServices.SelectedServiceModalItem);
+        var chosenService = vm.ClinicalServices.SelectedServiceModalItem;
+        vm.ClinicalServices.ServiceModalNotes = "Aplicación inmediata";
+        vm.ClinicalServices.ServiceModalQuantity = 1;
 
-        await vm.SelectAndAddServiceModalSuggestionAsync(chosenService);
+        await vm.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(chosenService);
 
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
-        Assert.AreEqual(string.Empty, vm.ServiceModalSearchText);
+        Assert.AreEqual(string.Empty, vm.ClinicalServices.ServiceModalSearchText);
     }
 
     [TestMethod]
@@ -2608,33 +2608,33 @@ public class InventoryTests
         vm.SelectedPatient = patient;
 
         // 1. Receta médica: el menú desplegable NO debe estar abierto al inicio
-        await vm.OpenPrescriptionModalAsync();
-        Assert.IsTrue(vm.IsPrescriptionModalOpen);
-        Assert.IsFalse(vm.IsPrescriptionDropdownOpen, "El menú de sugerencias no debe desplegarse al entrar");
-        vm.PrescriptionSearchText = "Para";
-        Assert.IsTrue(vm.IsPrescriptionDropdownOpen, "El menú debe desplegarse únicamente al escribir");
-        Assert.IsTrue(vm.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de medicamentos");
-        Assert.IsTrue(vm.PrescriptionProductSuggestions.All(CatalogStore.IsProductMedication), "Solo debe tener medicamentos");
-        vm.ClosePrescriptionModal();
+        await vm.Prescription.OpenPrescriptionModalAsync();
+        Assert.IsTrue(vm.Prescription.IsPrescriptionModalOpen);
+        Assert.IsFalse(vm.Prescription.IsPrescriptionDropdownOpen, "El menú de sugerencias no debe desplegarse al entrar");
+        vm.Prescription.PrescriptionSearchText = "Para";
+        Assert.IsTrue(vm.Prescription.IsPrescriptionDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.Prescription.PrescriptionProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de medicamentos");
+        Assert.IsTrue(vm.Prescription.PrescriptionProductSuggestions.All(CatalogStore.IsProductMedication), "Solo debe tener medicamentos");
+        vm.Prescription.ClosePrescriptionModal();
 
         // 2. Insumos: el menú desplegable NO debe estar abierto al inicio
-        await vm.OpenSuppliesModalAsync();
-        Assert.IsTrue(vm.IsSuppliesModalOpen);
-        Assert.IsFalse(vm.IsSupplyDropdownOpen, "El menú de insumos no debe desplegarse al entrar");
-        vm.SupplySearchText = "Gas";
-        Assert.IsTrue(vm.IsSupplyDropdownOpen, "El menú debe desplegarse únicamente al escribir");
-        Assert.IsTrue(vm.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de insumos");
-        Assert.IsTrue(vm.SupplyProductSuggestions.All(CatalogStore.IsProductSupply), "Solo debe tener insumos");
-        vm.CloseSuppliesModal();
+        await vm.Supplies.OpenSuppliesModalAsync();
+        Assert.IsTrue(vm.Supplies.IsSuppliesModalOpen);
+        Assert.IsFalse(vm.Supplies.IsSupplyDropdownOpen, "El menú de insumos no debe desplegarse al entrar");
+        vm.Supplies.SupplySearchText = "Gas";
+        Assert.IsTrue(vm.Supplies.IsSupplyDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.Supplies.SupplyProductSuggestions.Count > 0, "Debe tener sugerencias filtradas de insumos");
+        Assert.IsTrue(vm.Supplies.SupplyProductSuggestions.All(CatalogStore.IsProductSupply), "Solo debe tener insumos");
+        vm.Supplies.CloseSuppliesModal();
 
         // 3. Servicios: el menú desplegable NO debe estar abierto al inicio
-        await vm.OpenServicesModalAsync();
-        Assert.IsTrue(vm.IsServicesModalOpen);
-        Assert.IsFalse(vm.IsServiceModalDropdownOpen, "El menú de servicios no debe desplegarse al entrar");
-        vm.ServiceModalSearchText = "Cons";
-        Assert.IsTrue(vm.IsServiceModalDropdownOpen, "El menú debe desplegarse únicamente al escribir");
-        Assert.IsTrue(vm.ServiceModalSuggestions.Count > 0, "Debe tener sugerencias filtradas de servicios");
-        vm.CloseServicesModal();
+        await vm.ClinicalServices.OpenServicesModalAsync();
+        Assert.IsTrue(vm.ClinicalServices.IsServicesModalOpen);
+        Assert.IsFalse(vm.ClinicalServices.IsServiceModalDropdownOpen, "El menú de servicios no debe desplegarse al entrar");
+        vm.ClinicalServices.ServiceModalSearchText = "Cons";
+        Assert.IsTrue(vm.ClinicalServices.IsServiceModalDropdownOpen, "El menú debe desplegarse únicamente al escribir");
+        Assert.IsTrue(vm.ClinicalServices.ServiceModalSuggestions.Count > 0, "Debe tener sugerencias filtradas de servicios");
+        vm.ClinicalServices.CloseServicesModal();
     }
 
     [TestMethod]
@@ -2651,7 +2651,7 @@ public class InventoryTests
         vm.SelectedPatient = patient;
 
         // 1. Catálogo desde Receta Médica -> Sólo Medicamentos
-        await vm.OpenPrescriptionCatalogAsync();
+        await vm.Prescription.OpenPrescriptionCatalogAsync();
         Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual("Medications", vm.CatalogBrowser.CatalogBrowserMode);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Medicamentos"));
@@ -2666,7 +2666,7 @@ public class InventoryTests
         Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMed.Name));
 
         // 2. Catálogo desde Insumos -> Sólo Insumos
-        await vm.OpenSupplyCatalogAsync();
+        await vm.Supplies.OpenSupplyCatalogAsync();
         Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual("Supplies", vm.CatalogBrowser.CatalogBrowserMode);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Insumos"));
@@ -2681,7 +2681,7 @@ public class InventoryTests
         Assert.IsTrue(patient.ActiveSupplies[0].SupplyName.Contains(chosenSupply.Name));
 
         // 3. Catálogo desde Servicios -> Procedimientos clínicos
-        await vm.OpenServiceCatalogAsync();
+        await vm.ClinicalServices.OpenServiceCatalogAsync();
         Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual("Services", vm.CatalogBrowser.CatalogBrowserMode);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Servicios"));
@@ -2814,13 +2814,13 @@ public class InventoryTests
         vm.SelectPatient(patient);
 
         // Attempting to prescribe Amoxicilina should trigger alert modal
-        await vm.SelectAndAddPrescriptionProductAsync(amoxi);
-        Assert.IsTrue(vm.IsAllergyAlertOpen, "La alerta de alergia debe abrirse para un medicamento en conflicto");
+        await vm.Prescription.SelectAndAddPrescriptionProductAsync(amoxi);
+        Assert.IsTrue(vm.Prescription.IsAllergyAlertOpen, "La alerta de alergia debe abrirse para un medicamento en conflicto");
         Assert.AreEqual(0, patient.ActivePrescription.Count, "No debe añadirse a la receta mientras esté pendiente la alerta");
 
         // Doctor confirms override under clinical discretion
-        await vm.ConfirmOverrideAllergyPrescriptionAsync();
-        Assert.IsFalse(vm.IsAllergyAlertOpen, "El modal debe cerrarse tras confirmar el override");
+        await vm.Prescription.ConfirmOverrideAllergyPrescriptionAsync();
+        Assert.IsFalse(vm.Prescription.IsAllergyAlertOpen, "El modal debe cerrarse tras confirmar el override");
         Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(amoxi.Name));
     }
 
