@@ -46,6 +46,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G3 hechos (v1.18.2–v1.18.3), faltan G4–G9 |
+| 7 | Pedidos del consultorio (2026-10-09) | Pendiente · se intercalan con la división (ver su sección) |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -281,3 +282,22 @@ errores (indicaciones de la receta, descuento de insumos y servicios, ficha con 
 Antes de dividir el ViewModel quedaron las redes de seguridad del plan técnico (contrato de enlaces de las
 pantallas, formato del borrador y del envío entre equipos, flujos, avisos y un recorrido de teclado en la
 prueba de pantallas). Pendiente: dividir `MedicalRecordsViewModel` por función (grupos G2–G9 del plan).
+
+### Fase 7 · Pedidos del consultorio (2026-10-09)
+
+Pedidos del médico tras usar la v1.18. Cada uno va en su propio commit con su prueba, nunca dentro de un
+paso de la división del ViewModel (los pasos de la división solo mueven código). Los que tocan una parte que
+la división todavía va a mover se hacen justo después del grupo que la mueve, para no hacerlos dos veces.
+
+| # | Pedido | Detalle | Cuándo |
+|---|---|---|---|
+| 7.1 | **Fecha de nacimiento con diagonales solas** | En el alta (y la edición) de paciente, al escribir `08082008` se ve `08/08/2008`: las diagonales se agregan al teclear el día y el mes, y se quitan solas al borrar (borrar después de una diagonal también borra el dígito anterior). Pegar `08/08/2008` o `8/8/2008` sigue funcionando. Solo afecta lo que se ve; se guarda igual que hoy. | Después de G5 (el alta pasa a `PatientFormViewModel`) |
+| 7.2 | **Ocultar el cronómetro de la consulta** | Clic sobre el cronómetro de la consulta lo oculta o lo muestra; se recuerda la última elección (también al cerrar el programa) en la configuración local del equipo. Oculto queda un indicador discreto para volver a mostrarlo. | Después de G7 (la consulta pasa a `ConsultationViewModel`) |
+| 7.3 | **Insumos y material con + / −** | En la hoja de insumos y material, cada renglón con botones + y − y la cantidad editable, igual que la cuenta del Punto de venta; quitar hasta 0 lo quita (y lo descuenta de la cuenta de la consulta, como ya pasa al quitarlo). | Después de G6b (la hoja pasa a `SuppliesSheetViewModel`) |
+| 7.4 | **Receta igual al modelo del Excel del médico** | La impresión y el PDF copian la hoja RECETA de su libro (`tests/TPVC.Tests/TestAssets/catalogo_muestra.xlsx`): media carta horizontal; arriba a la izquierda el escudo de la universidad y arriba a la derecha el trazo de signos vitales; al centro el nombre del médico (grande), la universidad y la "Cédula Profesional"; renglón Paciente · Edad · Fecha; renglón Alergias · T/A · Temp · Peso · Talla · SpO2 (en %); a la izquierda cada medicamento con su posología debajo; a la derecha "Medidas generales" (el plan e indicaciones); al pie el teléfono con el icono de WhatsApp y el domicilio con el icono de ubicación. En "Médico y consultorio" se agregan la universidad y los dos logotipos (se toman del Excel al importarlo, o se eligen a mano) y la vista previa muestra lo mismo que se imprime. | Independiente: después de publicar G4 |
+| 7.5 | **Borrar la búsqueda de pacientes con una X** | En la barra de búsqueda de Pacientes, una X dentro del cuadro (solo cuando hay texto) borra toda la búsqueda con un clic y deja el cursor en el cuadro. | Después de G5 (la búsqueda pasa a `PatientsHomeViewModel`) |
+| 7.6 | **Confirmaciones con el tema** | "Descartar consulta" (y las demás confirmaciones: cancelar cita, dar de baja el expediente, salir del alta sin guardar, liberar el equipo) usan el cuadro de mensaje de Windows, que no sigue el tema (blanco en modo oscuro). Se cambia por un diálogo propio con los colores del tema, el botón peligroso en rojo y Esc/Enter con la opción segura. Entra por `IUserDialogs` (G2), así que las pantallas no cambian. | Independiente: después de publicar G4 |
+
+Notas para la app de la tablet (detalle en `docs/PENDIENTES_ANDROID.md`, sección C): compartir la receta y el
+ticket desde cualquier lugar donde se vean, y vincular la tablet leyendo un código QR.
+
