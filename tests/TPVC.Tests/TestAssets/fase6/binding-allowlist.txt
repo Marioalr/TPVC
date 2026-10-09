@@ -1,0 +1,3 @@
+# Bindings que el análisis por reflexión no puede seguir (XamlBindingContractTests), revisados a mano.
+# Formato: vista|expresión tal como está en el XAML|motivo. "*" en la vista vale para todas.
+PatientsHomeView.xaml|{Binding RelativeSource={RelativeSource PreviousData}}|Separador del primer resultado (no tiene elemento anterior): lo resuelve WPF con la lista, no es un miembro del ViewModel

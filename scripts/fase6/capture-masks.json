@@ -1,0 +1,4 @@
+{
+  "_comentario": "Zonas que cambian solas con la fecha o la hora, por patrón de nombre de captura: [x, y, ancho, alto] en pixeles de 1366x860. Para encontrarlas, comparar dos juegos de capturas del paso 0 tomados en días distintos con --diff-dir: los recuadros que imprime compare_captures.py son esas zonas. Se agregan aquí antes de comparar los grupos de la fase 6.",
+  "*": []
+}

@@ -471,6 +471,9 @@ internal sealed class UiSmokeSession
             Capture(host, $"25-config-restaurar-{suffix}");
             shell.DataVM.CloseImportSheet();
         }
+
+        // Después de todas las capturas (cambia datos y muestra la ventana): menús y teclado reales
+        new UiKeyboardPass(window, main, _failures, _bindingErrors, Path.Combine(_workDir, "consulta.json")).Run();
     }
 
     private void ExecuteCloud(string sql)
@@ -721,6 +724,445 @@ internal sealed class UiSmokeSession
     {
         WaitFor((Task)task);
         return task.Result;
+    }
+
+    private static void WaitFor(Task task)
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        var timeout = new System.Threading.Timer(_ => frame.Continue = false, null, TimeSpan.FromSeconds(30), Timeout.InfiniteTimeSpan);
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        timeout.Dispose();
+        if (task.IsFaulted) ExceptionDispatchInfo.Capture(task.Exception!.InnerException ?? task.Exception).Throw();
+    }
+}
+
+/// <summary>
+/// Fase 6 (paso 1d): menús contextuales y teclado con eventos reales. La ventana se muestra fuera de la
+/// pantalla (sin activarla) para que haya PresentationSource, Loaded e IsVisible como en la aplicación:
+/// MedicalRecordsView solo atiende Esc y "escribir para buscar" cuando está cargada y visible. Se
+/// levantan PreviewKeyDown/KeyDown y PreviewTextInput de verdad (no se llama al ViewModel) y se revisa
+/// el resultado, así un manejador del código detrás que deje de hacer algo se nota aquí.
+/// </summary>
+internal sealed class UiKeyboardPass
+{
+    private const string Screen = "menus-teclado";
+
+    private readonly MainWindow _window;
+    private readonly MainViewModel _main;
+    private readonly List<string> _failures;
+    private readonly BindingErrorCollector _bindingErrors;
+    private readonly string _draftPath;
+    private MedicalRecordsViewModel _records = null!;
+    private System.Windows.PresentationSource? _source;
+
+    public UiKeyboardPass(MainWindow window, MainViewModel main, List<string> failures, BindingErrorCollector bindingErrors, string draftPath)
+    {
+        _window = window;
+        _main = main;
+        _failures = failures;
+        _bindingErrors = bindingErrors;
+        _draftPath = draftPath;
+    }
+
+    private void Fail(string message) => _failures.Add($"[{Screen}] {message}");
+
+    private bool Check(bool condition, string message)
+    {
+        if (!condition) Fail(message);
+        return condition;
+    }
+
+    public void Run()
+    {
+        _bindingErrors.Screen = Screen;
+        _records = _main.MedicalRecordsVM;
+        _records.AutosaveDelay = TimeSpan.FromHours(1); // el borrador solo se escribe con Ctrl+S
+        _main.NavigateTo("Records");
+        _records.DismissInfoModal();
+        _records.CloseAgendaPanel();
+        _records.GoToPatientsHome();
+
+        _window.WindowStartupLocation = System.Windows.WindowStartupLocation.Manual;
+        _window.Left = -32000;
+        _window.Top = -32000;
+        _window.ShowActivated = false;
+        _window.ShowInTaskbar = false;
+        _window.Show();
+        try
+        {
+            _source = System.Windows.PresentationSource.FromVisual(_window);
+            var shellView = PumpUntilFound<TPVC.Views.MedicalRecordsView>(v => v.IsLoaded && v.IsVisible);
+            if (_source == null || shellView == null)
+            {
+                Fail("La ventana no quedó cargada y visible: sin eso Esc y escribir para buscar no se pueden probar");
+                return;
+            }
+
+            var patient = _records.Patients.First(p => p.RecordNumber == "EXP-2026-002");
+            TypeToSearch(patient);
+            ChartMenu(patient);
+            AgendaSlotMenu(patient);
+            ConsultationKeys(patient);
+        }
+        catch (Exception ex)
+        {
+            Fail($"Se interrumpió: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            System.Windows.Input.Keyboard.ClearFocus();
+            _window.Close();
+            Pump();
+        }
+    }
+
+    // ------------------------------------------------------------------ escribir para buscar y Esc en inicio y ficha
+
+    private void TypeToSearch(PatientRecord patient)
+    {
+        _records.GoToPatientsHome();
+        _records.HomeSearchText = string.Empty;
+        Settle();
+        Check(TypeText("r") && _records.HomeSearchText == "r", $"Inicio: escribir con el foco fuera de un campo va al buscador (quedó \"{_records.HomeSearchText}\")");
+        Check(PressEscape() && _records.HomeSearchText.Length == 0 && _records.IsHomePage, "Esc en el inicio borra la búsqueda");
+
+        _records.OpenPatientChart(patient);
+        Settle();
+        Check(TypeText("m") && _records.HomeSearchText == "m" && _records.IsHomePage, "Ficha: escribir abre la búsqueda en el inicio");
+        Check(PressEscape() && _records.HomeSearchText.Length == 0, "Esc borra la búsqueda abierta desde la ficha");
+
+        _records.OpenPatientChart(patient);
+        Settle();
+        Check(PressEscape() && _records.IsHomePage, "Esc en la ficha vuelve al inicio");
+    }
+
+    // ------------------------------------------------------------------ menús contextuales
+
+    private void ChartMenu(PatientRecord patient)
+    {
+        _records.OpenPatientChart(patient);
+        Settle();
+        var chart = PumpUntilFound<TPVC.Views.PatientChartView>(v => v.IsVisible);
+        var button = chart == null ? null : FindDescendant<System.Windows.Controls.Button>(chart,
+            b => TPVC.Helpers.MenuOnClick.GetIsEnabled(b) && b.DataContext is MedicalRecordsViewModel);
+        if (!Check(button != null, "Ficha: no se encontró el botón ⋯ (Más acciones)")) return;
+        OpenAndCloseMenu(button!, "Ficha ⋯", menu => menu.DataContext is MedicalRecordsViewModel, expectedItems: 3);
+    }
+
+    private void AgendaSlotMenu(PatientRecord patient)
+    {
+        _records.OpenPatientChart(patient);
+        WaitFor(_records.ScheduleForSelectedPatientAsync());
+        var slot = _records.AgendaSlots.FirstOrDefault(s => s.IsFree);
+        if (!Check(slot != null, "Agenda: no hay huecos libres para agendar")) return;
+        WaitFor(_records.OpenAgendaSlotAsync(slot));
+        _records.SetAgendaReason("Control");
+        WaitFor(_records.SaveAgendaFormAsync());
+        Settle();
+        var booked = _records.AgendaSlots.FirstOrDefault(s => s.HasAppointment && s.Appointment!.PatientRecordId == patient.Id);
+        if (!Check(booked != null, $"Agenda: no se agendó la cita ({_records.AgendaFormError})")) return;
+
+        var agenda = PumpUntilFound<TPVC.Views.AgendaPanelView>(v => v.IsVisible);
+        var button = agenda == null ? null : PumpUntilFound<System.Windows.Controls.Button>(agenda,
+            b => TPVC.Helpers.MenuOnClick.GetIsEnabled(b) && ReferenceEquals(b.DataContext, booked));
+        if (!Check(button != null, "Agenda: no se encontró el botón de acciones de la cita")) return;
+        OpenAndCloseMenu(button!, "Agenda (cita)", menu => ReferenceEquals(menu.DataContext, booked), expectedItems: 6,
+            item => Check(item.CommandParameter is PatientAppointment, $"Agenda: \"{item.Header}\" no recibe la cita"));
+
+        // Esc con la cita en cambio de horario y luego con el panel
+        _records.StartMovingAppointment(booked!.Appointment);
+        Settle();
+        Check(PressEscape() && !_records.IsMovingAppointment && _records.IsAgendaPanelOpen, "Esc cancela el cambio de horario (el panel sigue abierto)");
+        Check(PressEscape() && !_records.IsAgendaPanelOpen, "Esc cierra el panel de agenda");
+    }
+
+    private void OpenAndCloseMenu(System.Windows.Controls.Button button, string what, Func<System.Windows.Controls.ContextMenu, bool> dataContextOk,
+        int expectedItems, Action<System.Windows.Controls.MenuItem>? checkItem = null)
+    {
+        // Clic real: MenuOnClick abre el menú con el DataContext del botón
+        button.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, button));
+        Pump();
+        var menu = button.ContextMenu;
+        if (!Check(menu is { IsOpen: true }, $"{what}: el menú no se abrió")) return;
+        Check(dataContextOk(menu!), $"{what}: el menú no tiene el DataContext esperado ({menu!.DataContext?.GetType().Name ?? "null"})");
+        var items = menu!.Items.OfType<System.Windows.Controls.MenuItem>().ToList();
+        Check(items.Count == expectedItems, $"{what}: {items.Count} opciones en lugar de {expectedItems}");
+        foreach (var item in items)
+        {
+            Check(item.Command != null, $"{what}: \"{item.Header}\" sin comando (binding sin resolver)");
+            checkItem?.Invoke(item);
+        }
+        menu.IsOpen = false;
+        Pump();
+        Check(!menu.IsOpen, $"{what}: el menú no se cerró");
+    }
+
+    // ------------------------------------------------------------------ consulta: Ctrl, hojas y Esc por capas
+
+    private void ConsultationKeys(PatientRecord patient)
+    {
+        if (_records.HasActiveConsultation) WaitFor(_records.DiscardActiveConsultationAsync());
+        _records.OpenPatientChart(patient);
+        _records.ChartPrimaryAction();
+        if (!Check(_records.IsConsultationPage, "No se abrió la consulta")) return;
+        Settle();
+
+        // Ctrl+↓ / Ctrl+↑ / Ctrl+S en la consulta
+        var workspace = PumpUntilFound<TPVC.Views.ConsultationWorkspaceView>(v => v.IsVisible);
+        var grid = workspace?.FindName("ConsultationWorkspace") as System.Windows.IInputElement;
+        if (Check(grid != null, "Consulta: no se encontró el área de la consulta"))
+        {
+            _records.ConsultationSection = 2;
+            Settle();
+            WithControl(() =>
+            {
+                Check(PressKey(grid!, System.Windows.Input.Key.Down) && _records.ConsultationSection == 3, $"Ctrl+↓ pasa a la sección siguiente (quedó {_records.ConsultationSection})");
+                Check(PressKey(grid!, System.Windows.Input.Key.Up) && _records.ConsultationSection == 2, $"Ctrl+↑ vuelve a la sección anterior (quedó {_records.ConsultationSection})");
+                try { File.Delete(_draftPath); } catch { }
+                _records.AutosaveStatus = string.Empty;
+                Check(PressKey(grid!, System.Windows.Input.Key.S) && File.Exists(_draftPath), "Ctrl+S guarda la consulta en curso");
+            });
+            Pump();
+            Check(_records.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal), $"Ctrl+S muestra la hora del guardado (\"{_records.AutosaveStatus}\")");
+        }
+
+        // CIE-10 abierto, "Enviar a…" y "Terminar consulta": Esc los cierra uno por uno
+        _records.ConsultationDiagnosis = "farin";
+        Settle();
+        Check(_records.IsCie10DropdownOpen, "Escribir el diagnóstico abre las sugerencias CIE-10");
+        Check(PressEscape() && !_records.IsCie10DropdownOpen, "Esc cierra las sugerencias CIE-10");
+        _records.IsSendConsultationSheetOpen = true;
+        Settle();
+        Check(PressEscape() && !_records.IsSendConsultationSheetOpen, "Esc cierra \"Enviar a…\"");
+        WaitFor(_records.FinalizeConsultationAsync());
+        Settle();
+        Check(PressEscape() && !_records.IsFinishConsultationOpen && _records.HasActiveConsultation, "Esc en \"Terminar consulta\" vuelve a la consulta sin cobrar");
+
+        PrescriptionSheet();
+        SuppliesSheet();
+        ServicesSheet();
+
+        WaitFor(_records.DiscardActiveConsultationAsync());
+        Settle();
+    }
+
+    private void PrescriptionSheet()
+    {
+        WaitFor(_records.OpenPrescriptionModalAsync());
+        _records.PrescriptionSearchText = string.Empty;
+        Settle();
+        var sheet = PumpUntilFound<TPVC.Views.PrescriptionSheetView>(v => v.IsVisible);
+        var box = sheet?.FindName("PrescriptionSearchTextBox") as System.Windows.Controls.TextBox;
+        if (!Check(box != null, "Receta: no se encontró el buscador")) return;
+
+        var suggestions = _records.PrescriptionProductSuggestions.ToList();
+        var before = _records.SelectedPatient!.ActivePrescription.Count;
+        if (Check(suggestions.Count > 1, "Receta: se esperaban al menos dos sugerencias"))
+        {
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedPrescriptionProduct, suggestions[1]),
+                "Receta: ↓ en el buscador elige la siguiente sugerencia");
+            var chosen = suggestions[1];
+            Check(PressKey(box!, System.Windows.Input.Key.Enter), "Receta: Enter en el buscador se atiende");
+            Check(PumpUntil(() => _records.SelectedPatient!.ActivePrescription.Count == before + 1),
+                "Receta: Enter agrega la sugerencia elegida");
+            Check(_records.SelectedPatient!.ActivePrescription.LastOrDefault()?.MedicineName.StartsWith(chosen.Name, StringComparison.Ordinal) == true,
+                $"Receta: se agregó otro medicamento ({_records.SelectedPatient!.ActivePrescription.LastOrDefault()?.MedicineName})");
+        }
+
+        // Capas sobre la receta: el aviso, la alerta de alergia, el catálogo y la vista previa
+        _records.InfoModalMessage = "Aviso de prueba";
+        _records.IsInfoModalVisible = true;
+        Settle();
+        Check(PressEscape() && !_records.IsInfoModalVisible && _records.IsPrescriptionModalOpen, "Esc cierra primero el aviso (la receta sigue)");
+        _records.IsAllergyAlertOpen = true;
+        Settle();
+        Check(PressEscape() && !_records.IsAllergyAlertOpen && _records.IsPrescriptionModalOpen, "Esc cierra la alerta de alergia");
+        WaitFor(_records.OpenPrescriptionCatalogAsync());
+        Settle();
+        Check(PressEscape() && !_records.IsCatalogBrowserModalOpen && _records.IsPrescriptionModalOpen, "Esc cierra el catálogo (la receta sigue)");
+        _records.OpenPrescriptionPdfPreview();
+        Settle();
+        Check(PressEscape() && !_records.IsPrescriptionPdfModalOpen, "Esc cierra la vista previa de la receta");
+        Check(PressEscape() && !_records.IsPrescriptionModalOpen, "Esc cierra la receta");
+    }
+
+    private void SuppliesSheet()
+    {
+        WaitFor(_records.OpenSuppliesModalAsync());
+        Settle();
+        var sheet = PumpUntilFound<TPVC.Views.SuppliesSheetView>(v => v.IsVisible);
+        var box = sheet?.FindName("SupplySearchTextBox") as System.Windows.Controls.TextBox;
+        if (!Check(box != null, "Insumos: no se encontró el buscador")) return;
+
+        var suggestions = _records.SupplyProductSuggestions.ToList();
+        var before = _records.SelectedPatient!.ActiveSupplies.Count;
+        if (Check(suggestions.Count > 1, "Insumos: se esperaban al menos dos sugerencias"))
+        {
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedSupplyProduct, suggestions[1]),
+                "Insumos: ↓ en el buscador elige la siguiente sugerencia");
+            Check(PressKey(box!, System.Windows.Input.Key.Enter), "Insumos: Enter en el buscador se atiende");
+            Check(PumpUntil(() => _records.SelectedPatient!.ActiveSupplies.Count == before + 1), "Insumos: Enter agrega la sugerencia elegida");
+        }
+
+        // Enter en el buscador del catálogo agrega el primero con existencias
+        WaitFor(_records.OpenSupplyCatalogAsync());
+        _records.CatalogBrowserSearchText = "gasa";
+        Settle();
+        var catalog = PumpUntilFound<TPVC.Views.CatalogBrowserSheetView>(v => v.IsVisible);
+        var catalogBox = catalog?.FindName("CatalogBrowserSearchTextBox") as System.Windows.Controls.TextBox;
+        if (Check(catalogBox != null, "Catálogo: no se encontró el buscador"))
+        {
+            var count = _records.SelectedPatient!.ActiveSupplies.Count;
+            PressKey(catalogBox!, System.Windows.Input.Key.Enter);
+            Check(PumpUntil(() => !_records.IsCatalogBrowserModalOpen && _records.SelectedPatient!.ActiveSupplies.Count == count + 1),
+                "Catálogo: Enter en la búsqueda agrega el primero y cierra el catálogo");
+        }
+        Settle();
+        Check(PressEscape() && !_records.IsSuppliesModalOpen, "Esc cierra los insumos");
+    }
+
+    private void ServicesSheet()
+    {
+        WaitFor(_records.OpenServicesModalAsync());
+        Settle();
+        var sheet = PumpUntilFound<TPVC.Views.ServicesSheetView>(v => v.IsVisible);
+        var box = sheet?.FindName("ServiceModalSearchTextBox") as System.Windows.Controls.TextBox;
+        if (!Check(box != null, "Servicios: no se encontró el buscador")) return;
+
+        var suggestions = _records.ServiceModalSuggestions.ToList();
+        var before = _records.SelectedPatient!.ActiveServices.Count;
+        if (Check(suggestions.Count > 1, "Servicios: se esperaban al menos dos sugerencias"))
+        {
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.SelectedServiceModalItem, suggestions[1]),
+                "Servicios: ↓ en el buscador elige la siguiente sugerencia");
+            Check(PressKey(box!, System.Windows.Input.Key.Enter), "Servicios: Enter en el buscador se atiende");
+            Check(PumpUntil(() => _records.SelectedPatient!.ActiveServices.Count == before + 1), "Servicios: Enter agrega la sugerencia elegida");
+        }
+        Settle();
+        Check(PressEscape() && !_records.IsServicesModalOpen, "Esc cierra los servicios");
+    }
+
+    // ------------------------------------------------------------------ eventos de teclado reales
+
+    private bool PressEscape() => PressKey(_window, System.Windows.Input.Key.Escape);
+
+    /// <summary>PreviewKeyDown y luego KeyDown (como WPF), sobre el elemento destino; true si alguien lo atendió.</summary>
+    private bool PressKey(System.Windows.IInputElement target, System.Windows.Input.Key key)
+    {
+        var preview = new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, _source!, Environment.TickCount, key)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent
+        };
+        target.RaiseEvent(preview);
+        var down = new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, _source!, Environment.TickCount, key)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent,
+            Handled = preview.Handled
+        };
+        target.RaiseEvent(down);
+        Pump();
+        return preview.Handled || down.Handled;
+    }
+
+    /// <summary>Texto tecleado con el foco fuera de cualquier campo (PreviewTextInput de la ventana).</summary>
+    private bool TypeText(string text)
+    {
+        System.Windows.Input.Keyboard.ClearFocus();
+        var composition = new System.Windows.Input.TextComposition(System.Windows.Input.InputManager.Current, _window, text);
+        var args = new System.Windows.Input.TextCompositionEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, composition)
+        {
+            RoutedEvent = System.Windows.Input.TextCompositionManager.PreviewTextInputEvent
+        };
+        _window.RaiseEvent(args);
+        Pump();
+        return args.Handled;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetKeyboardState(byte[] state);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetKeyboardState(byte[] state);
+
+    /// <summary>Ctrl presionado para este hilo (Keyboard.Modifiers lo lee del estado del teclado del hilo).</summary>
+    private void WithControl(Action action)
+    {
+        var original = new byte[256];
+        GetKeyboardState(original);
+        var pressed = (byte[])original.Clone();
+        pressed[0x11] |= 0x80; // VK_CONTROL
+        pressed[0xA2] |= 0x80; // VK_LCONTROL
+        SetKeyboardState(pressed);
+        try
+        {
+            if (Check(System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control,
+                    $"No se pudo simular Ctrl (Keyboard.Modifiers = {System.Windows.Input.Keyboard.Modifiers})"))
+            {
+                action();
+            }
+        }
+        finally
+        {
+            SetKeyboardState(original);
+        }
+    }
+
+    // ------------------------------------------------------------------ utilidades WPF
+
+    private void Settle()
+    {
+        Pump();
+        _window.UpdateLayout();
+        Pump();
+    }
+
+    private static void Pump()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
+                System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() => { }));
+        }
+    }
+
+    private bool PumpUntil(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var watch = Stopwatch.StartNew();
+        while (watch.ElapsedMilliseconds < timeoutMs)
+        {
+            Pump();
+            if (condition()) return true;
+            Thread.Sleep(15);
+        }
+        Pump();
+        return condition();
+    }
+
+    private T? PumpUntilFound<T>(Func<T, bool> predicate) where T : System.Windows.DependencyObject =>
+        PumpUntilFound(_window, predicate);
+
+    private T? PumpUntilFound<T>(System.Windows.DependencyObject root, Func<T, bool> predicate) where T : System.Windows.DependencyObject
+    {
+        T? found = null;
+        PumpUntil(() =>
+        {
+            _window.UpdateLayout();
+            found = FindDescendant(root, predicate);
+            return found != null;
+        }, 3000);
+        return found;
+    }
+
+    private static T? FindDescendant<T>(System.Windows.DependencyObject root, Func<T, bool> predicate) where T : System.Windows.DependencyObject
+    {
+        if (root is T match && predicate(match)) return match;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var found = FindDescendant(System.Windows.Media.VisualTreeHelper.GetChild(root, i), predicate);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private static void WaitFor(Task task)

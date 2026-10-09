@@ -1,0 +1,9 @@
+# Conjunto de avisos (con base de datos o tareas en segundo plano), en orden alfabético
+## recargar con una versión más nueva del expediente abierto
+CreateFromSearchText
+HasHomeQuery
+HasNoHomeResults
+HomeResults
+HomeResultsSummary
+Patients
+RecentPatients
