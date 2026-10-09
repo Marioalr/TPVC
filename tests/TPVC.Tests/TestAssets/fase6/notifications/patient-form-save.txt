@@ -17,6 +17,7 @@ HasLatestVitals
 HasNextAppointment
 HasNoHomeResults
 HasTimeline
+HasTodayAppointments
 HasVitalSignsWarning
 HomeResults
 HomeResultsSummary
@@ -44,6 +45,7 @@ ShowsIncomingHandoffNotice
 ShowsPatientsTopBar
 ShowsPediatricDose
 Timeline
+TodayAppointments
 VitalSignsEvolutionPoints
 VitalSignsWarning
 ## guardar el alta sin base de datos

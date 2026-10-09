@@ -15,12 +15,21 @@ ConsultationBannerText
 ConsultationFeeAmount
 ConsultationFeeName
 ConsultationFeeService
+ConsultationsHistory
+CreateFromSearchText
 HandoffBannerText
 HandoffDevices
 HandoffTargetName
 HasActiveConsultation
 HasActivePrescription
+HasHomeQuery
+HasNextAppointment
 HasNoHandoffDevices
+HasNoHomeResults
+HasTimeline
+HasTodayAppointments
+HomeResults
+HomeResultsSummary
 IncomingHandoffBlockedReason
 IncomingHandoffTitle
 InfoModalMessage
@@ -36,9 +45,12 @@ IsInfoModalVisible
 IsLoadingHandoffDevices
 IsSendConsultationSheetOpen
 IsSendingHandoff
+NextAppointmentText
+Patients
 PrescriptionIndications
 PreviousConsultation
 PreviousPrescriptionSummary
+RecentPatients
 SelectedHandoffDevice
 SendConsultationHint
 SendHandoffButtonText
@@ -47,6 +59,8 @@ ShowsIncomingHandoff
 ShowsIncomingHandoffNotice
 ShowsPatientsTopBar
 ShowsSendConsultationButton
+Timeline
+TodayAppointments
 ## recuperarla (PC)
 ActiveConsultation
 ActiveConsultationFolio
@@ -63,11 +77,20 @@ ConsultationBannerText
 ConsultationFeeAmount
 ConsultationFeeName
 ConsultationFeeService
+ConsultationsHistory
+CreateFromSearchText
 HandoffBannerText
 HandoffTargetName
 HasActiveConsultation
 HasActivePrescription
+HasHomeQuery
+HasNextAppointment
 HasNoHandoffDevices
+HasNoHomeResults
+HasTimeline
+HasTodayAppointments
+HomeResults
+HomeResultsSummary
 IncomingHandoffBlockedReason
 IncomingHandoffTitle
 InfoModalMessage
@@ -81,9 +104,12 @@ IsHandoffAvailable
 IsHomePage
 IsInfoModalVisible
 IsRecoveringHandoff
+NextAppointmentText
+Patients
 PrescriptionIndications
 PreviousConsultation
 PreviousPrescriptionSummary
+RecentPatients
 SendConsultationHint
 SendHandoffButtonText
 ShowsConsultationBanner
@@ -91,6 +117,8 @@ ShowsIncomingHandoff
 ShowsIncomingHandoffNotice
 ShowsPatientsTopBar
 ShowsSendConsultationButton
+Timeline
+TodayAppointments
 ## revisar y continuar aquí (tablet)
 ActiveConsultation
 ActiveConsultationFolio
@@ -246,6 +274,7 @@ HasNextAppointment
 HasNoHandoffDevices
 HasNoHomeResults
 HasTimeline
+HasTodayAppointments
 HasVitalSignsWarning
 HomeResults
 HomeResultsSummary
@@ -281,5 +310,6 @@ ShowsPatientsTopBar
 ShowsPediatricDose
 ShowsSendConsultationButton
 Timeline
+TodayAppointments
 VitalSignsEvolutionPoints
 VitalSignsWarning

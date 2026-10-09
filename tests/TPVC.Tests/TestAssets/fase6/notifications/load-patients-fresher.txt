@@ -15,6 +15,7 @@ HasLatestVitals
 HasNextAppointment
 HasNoHomeResults
 HasTimeline
+HasTodayAppointments
 HasVitalSignsWarning
 HomeResults
 HomeResultsSummary
@@ -39,5 +40,6 @@ ShowsIncomingHandoffNotice
 ShowsPatientsTopBar
 ShowsPediatricDose
 Timeline
+TodayAppointments
 VitalSignsEvolutionPoints
 VitalSignsWarning
