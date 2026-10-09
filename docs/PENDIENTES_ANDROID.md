@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-09 (TPVC v1.18.4). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-09 (TPVC v1.18.5). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -42,6 +42,15 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C6 | **Compartir receta y ticket** | Pedido del médico (2026-10-09): al ver una receta (vista previa, expediente, al terminar la consulta) o un ticket, botón **Compartir** con la hoja de compartir de Android (WhatsApp, correo, guardar): la receta como PDF con el modelo de la Fase 7.4 y el ticket como imagen o PDF. Reutilizar el generador de la receta sin WPF (separarlo de `PrintingService`, ver B2). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.18.5 (Pedidos del consultorio)
+
+- [ ] Imprimir una receta en la impresora del consultorio: sale en media carta horizontal con escudo, trazo, los dos renglones, medicamentos, medidas generales y el pie con teléfono y domicilio, en una hoja. Con muchos medicamentos sigue en otra hoja.
+- [ ] Guardar el PDF/HTML de la receta y comparar con la hoja RECETA del Excel.
+- [ ] Configuración → Médico y consultorio: elegir y quitar el escudo y la imagen del encabezado; la vista previa cambia al guardar.
+- [ ] Alta de paciente: escribir 08082008 en la fecha de nacimiento y ver 08/08/2008; borrar con Retroceso hasta vaciarla.
+- [ ] Pacientes: la X de la búsqueda la borra y deja el cursor en el cuadro.
+- [ ] Descartar una consulta en modo oscuro: el aviso sigue el tema; Enter y Esc responden "No".
 
 ### v1.18.1 (Rendimiento y limpieza)
 

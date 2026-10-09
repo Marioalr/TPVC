@@ -2,6 +2,18 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.5] - 2026-10-09
+
+### Añadido — Fase 7: pedidos del consultorio
+* **La receta copia el modelo del Excel del médico** (impresión, PDF y vista previa): media carta horizontal; escudo de la universidad a la izquierda y trazo de signos vitales a la derecha; nombre del médico, universidad y cédula al centro; renglón Paciente · Edad · Fecha; renglón Alergias · T/A · Temp · Peso · Talla · SpO2; medicamentos con su posología a la izquierda y "Medidas generales" (el plan e indicaciones de la consulta) a la derecha; al pie el teléfono con WhatsApp y el domicilio. Con muchos medicamentos sigue en otra hoja sin cortar nada. Al imprimir se propone media carta horizontal si la impresora la tiene.
+* **Escudo e imagen del encabezado** en Configuración → Médico y consultorio (Elegir… / Quitar). Al importar el Excel se toman de la hoja RECETA si aún no hay.
+* **Fecha de nacimiento con diagonales solas**: al escribir 08082008 se ve 08/08/2008; las diagonales se ponen y se quitan solas. Pegar la fecha con o sin diagonales sigue funcionando.
+* **X para borrar la búsqueda de Pacientes** con un clic (aparece cuando hay texto y deja el cursor en el cuadro).
+* **Confirmaciones y avisos de error con el tema** (descartar consulta, cancelar cita, dar de baja, salir del alta…): ya no es el cuadro blanco de Windows. "No" es la respuesta segura (Enter y Esc) y "Sí" va en rojo.
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G5)
+* Sin cambios visibles: la agenda (`AgendaPanelViewModel`), el alta de paciente con su borrador (`PatientFormViewModel`) y el inicio de Pacientes (`PatientsHomeViewModel`) salen de `MedicalRecordsViewModel`. Una revisión adversarial no encontró cambios de comportamiento.
+
 ## [1.18.4] - 2026-10-09
 
 ### Corregido
