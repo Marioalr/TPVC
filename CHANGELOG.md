@@ -2,6 +2,11 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.10] - 2026-10-09
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G8)
+* Sin cambios visibles: el envío de la consulta entre equipos (`ConsultationHandoffViewModel`: enviar, recibir, recuperar y liberar, la revisión periódica, el aviso de consulta entrante y los candados de solo lectura) sale de `MedicalRecordsViewModel` con su código sin cambios. Pasaron las pruebas entre dos equipos con un servidor Turso simulado y una revisión adversarial no encontró cambios de comportamiento.
+
 ## [1.18.9] - 2026-10-09
 
 ### Añadido — Fase 7: pedidos del consultorio

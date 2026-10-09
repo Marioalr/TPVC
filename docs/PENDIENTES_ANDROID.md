@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet)
 
-Estado al 2026-10-09 (TPVC v1.18.9). Objetivo: una app para la tablet **igual a la de Windows**
+Estado al 2026-10-09 (TPVC v1.18.10). Objetivo: una app para la tablet **igual a la de Windows**
 (expedientes NOM-004, consulta, receta, citas y cobro), sincronizada por Turso.
 
 Orden sugerido: primero lo **bloqueante** (si se omite, la tablet corrompe datos o duplica registros);
@@ -42,6 +42,10 @@ luego la preparación del código; al final lo que se construye en la propia app
 | C6 | **Compartir receta y ticket** | Pedido del médico (2026-10-09): al ver una receta (vista previa, expediente, al terminar la consulta) o un ticket, botón **Compartir** con la hoja de compartir de Android (WhatsApp, correo, guardar): la receta como PDF con el modelo de la Fase 7.4 y el ticket como imagen o PDF. Reutilizar el generador de la receta sin WPF (separarlo de `PrintingService`, ver B2). |
 
 ## D. Verificación pendiente en Windows
+
+### v1.18.10 (Envío de la consulta en su propio objeto)
+
+- [ ] Repetir la lista de v1.17.0 (dos PC con la nube activada): enviar, continuar en la otra, recuperar, liberar sin red, reabrir en solo lectura y cobrar en el segundo equipo.
 
 ### v1.18.9 (Cronómetro)
 
