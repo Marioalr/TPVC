@@ -188,6 +188,7 @@ public class ConsultationHandoffTests
 
     private string? ServerState(string? id = null)
     {
+        using var held = _server.Lock();
         using var cmd = _server.Connection.CreateCommand();
         cmd.CommandText = id == null
             ? "SELECT State FROM ConsultationHandoffs ORDER BY CreatedAtUtc DESC LIMIT 1"
@@ -198,6 +199,7 @@ public class ConsultationHandoffTests
 
     private string ServerScalar(string sql)
     {
+        using var held = _server.Lock();
         using var cmd = _server.Connection.CreateCommand();
         cmd.CommandText = sql;
         return cmd.ExecuteScalar()?.ToString() ?? string.Empty;
@@ -445,6 +447,7 @@ public class ConsultationHandoffTests
         await SendToAsync(pc, tablet);
 
         // P. ej. se restauró la base de la nube: no se sabe dónde siguió la consulta
+        using (_server.Lock())
         using (var cmd = _server.Connection.CreateCommand())
         {
             cmd.CommandText = "DELETE FROM ConsultationHandoffs";
@@ -678,6 +681,7 @@ public class ConsultationHandoffTests
         Assert.IsTrue(edited.UpdatedAtUtc > future, "La marca queda después de la que ya tenía");
 
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        using var held = _server.Lock();
         using var cmd = _server.Connection.CreateCommand();
         cmd.CommandText = "SELECT Allergies FROM Patients WHERE SyncId = $id";
         cmd.Parameters.AddWithValue("$id", TursoSyncService.FormatGuid(edited.SyncId));

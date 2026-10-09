@@ -103,6 +103,7 @@ internal sealed class Fase6Clinic : IDisposable
         Assert.IsTrue((await Sync.SyncAsync()).Success, "Primera sincronización con la nube simulada");
         if (!_ownsCloud) return;
 
+        using var held = Cloud.Lock();
         using var cmd = Cloud.Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc) VALUES " +
                           "('device-tablet', 'Tablet del consultorio', 'AndroidTablet', '1.18.0', strftime('%Y-%m-%d %H:%M:%f','now','-4 seconds'))";
@@ -111,6 +112,7 @@ internal sealed class Fase6Clinic : IDisposable
 
     public string CloudScalar(string sql)
     {
+        using var held = Cloud!.Lock();
         using var cmd = Cloud!.Connection.CreateCommand();
         cmd.CommandText = sql;
         return cmd.ExecuteScalar()?.ToString() ?? string.Empty;

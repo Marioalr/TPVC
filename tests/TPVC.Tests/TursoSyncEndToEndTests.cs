@@ -47,6 +47,25 @@ internal sealed class FakeHranaServer : HttpMessageHandler
 
     public SqliteConnection Connection => _connection;
 
+    /// <summary>
+    /// Para usar <see cref="Connection"/> desde la prueba sin cruzarse con una petición en curso: la
+    /// conexión de SQLite no admite dos usos a la vez (en la CI fallaba de vez en cuando).
+    /// </summary>
+    public IDisposable Lock()
+    {
+        _gate.Wait();
+        return new GateRelease(_gate);
+    }
+
+    private sealed class GateRelease(SemaphoreSlim gate) : IDisposable
+    {
+        private int _released;
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0) gate.Release();
+        }
+    }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (IsOffline) throw new HttpRequestException("Sin red (simulada)");
@@ -308,6 +327,7 @@ public class TursoSyncEndToEndTests
         Assert.IsTrue(result.Success, result.ErrorMessage);
         Assert.IsGreaterThan(0, result.RowsPushed);
 
+        using var held = _server.Lock();
         using var cmd = _server.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM Products";
         Assert.IsGreaterThan(0L, (long)cmd.ExecuteScalar()!);
@@ -439,6 +459,7 @@ public class TursoSyncEndToEndTests
     [TestMethod]
     public async Task LegacyV1RemoteTables_AreRenamed_NotDropped()
     {
+        using (_server.Lock())
         using (var cmd = _server.Connection.CreateCommand())
         {
             cmd.CommandText = "CREATE TABLE Products (Id INTEGER PRIMARY KEY AUTOINCREMENT, SyncId TEXT NOT NULL UNIQUE, Code TEXT NOT NULL, " +
@@ -451,6 +472,7 @@ public class TursoSyncEndToEndTests
         var result = await pc.Sync.SyncAsync();
         Assert.IsTrue(result.Success, result.ErrorMessage);
 
+        using var held = _server.Lock();
         using var check = _server.Connection.CreateCommand();
         check.CommandText = "SELECT COUNT(*) FROM legacy_v1_Products";
         Assert.AreEqual(1L, (long)check.ExecuteScalar()!, "Los datos heredados se conservan");

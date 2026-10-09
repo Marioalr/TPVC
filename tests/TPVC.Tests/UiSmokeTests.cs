@@ -478,6 +478,7 @@ internal sealed class UiSmokeSession
 
     private void ExecuteCloud(string sql)
     {
+        using var held = _cloud!.Lock();
         using var cmd = _cloud!.Connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
@@ -495,6 +496,7 @@ internal sealed class UiSmokeSession
             Diagnosis = "J00 Rinofaringitis aguda",
             Items = { new ConsultationProductItem { Code = "MED-001", Name = "Paracetamol 500 mg", UnitPrice = 45m, Quantity = 2, LineKind = "libre" } }
         };
+        using var held = _cloud!.Lock();
         using var cmd = _cloud!.Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO ConsultationHandoffs (Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, Folio, " +
                           "Payload, PayloadVersion, State, CreatedAtUtc, UpdatedAtUtc) VALUES ($id, 'device-tablet', 'Tablet del consultorio', 'device-pc', " +
