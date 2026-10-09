@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-09 (TPVC v1.18.5).
+Estado al 2026-10-09 (TPVC v1.18.6).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -45,7 +45,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 4 | Configuración | ✅ Hecho (v1.16) |
 | E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
-| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G5 hechos (v1.18.2–v1.18.5), faltan G6–G9 |
+| 6 | Cierre: rendimiento, limpieza y base para Android | En curso · rendimiento y limpieza (v1.18.1); división del ViewModel de Pacientes: G1–G5 y G6a hechos (v1.18.2–v1.18.6), faltan G6b–G9 |
 | 7 | Pedidos del consultorio (2026-10-09) | En curso · 7.1, 7.4, 7.5 y 7.6 hechos (v1.18.5); faltan 7.2 y 7.3 |
 
 ### Fase 1 · Fundamentos comunes

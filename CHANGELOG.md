@@ -2,6 +2,11 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.6] - 2026-10-09
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G6a)
+* Sin cambios visibles: el buscador del catálogo de la consulta (`CatalogBrowserViewModel`), la vista previa de la receta (`PrescriptionPreviewViewModel`) y la cuenta de la consulta (`ConsultationAccount`: cargar y descontar insumos, servicios y medicamentos) salen de `MedicalRecordsViewModel`. Una revisión adversarial no encontró cambios de comportamiento.
+
 ## [1.18.5] - 2026-10-09
 
 ### Añadido — Fase 7: pedidos del consultorio
