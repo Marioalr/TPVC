@@ -9,7 +9,7 @@ public partial class MedicalRecordsViewModel
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>
         Info.IsInfoModalVisible || Prescription.IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
-        || Preview.IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
+        || Preview.IsPrescriptionPdfModalOpen || Consultation.IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
         || ClinicalServices.IsServicesModalOpen || IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
@@ -30,9 +30,9 @@ public partial class MedicalRecordsViewModel
         else if (Preview.IsPrescriptionPdfModalOpen) Preview.ClosePrescriptionPdfPreview();
         // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
         else if (IsSendConsultationSheetOpen) CloseSendConsultationSheet();
-        else if (IsCie10DropdownOpen) IsCie10DropdownOpen = false;
+        else if (Consultation.IsCie10DropdownOpen) Consultation.IsCie10DropdownOpen = false;
         // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
-        else if (IsFinishConsultationOpen) CloseFinishConsultation();
+        else if (Consultation.IsFinishConsultationOpen) Consultation.CloseFinishConsultation();
         else if (Prescription.IsPrescriptionModalOpen) Prescription.ClosePrescriptionModal();
         else if (Supplies.IsSuppliesModalOpen) Supplies.CloseSuppliesModal();
         else if (ClinicalServices.IsServicesModalOpen) ClinicalServices.CloseServicesModal();

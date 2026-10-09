@@ -9,13 +9,16 @@ namespace TPVC.ViewModels;
 /// <summary>
 /// Puertos del coordinador (fase 6, plan §1.4): los hijos avisan aquí y el coordinador corre los
 /// mismos cuerpos de antes, en el mismo orden. Implementación explícita: no es API pública ni se enlaza.
-/// Hasta el paso 20, el candado de la consulta (IConsultationGate) lo resuelve Handoff.cs del coordinador.
+/// Hasta el paso 20, el candado de la consulta (IConsultationGate) y lo del envío que guarda el borrador
+/// (IDraftHandoffParticipant) los resuelve Handoff.cs del coordinador.
 /// </summary>
-public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow, IConsultationGate
+public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow, IConsultationGate, IDraftHandoffParticipant
 {
     void IPatientsWorkflow.SyncActiveConsultation() => SyncActiveConsultation();
 
     void IPatientsWorkflow.NotifyPrescriptionStateChanged() => NotifyPrescriptionStateChanged();
+
+    void IPatientsWorkflow.RaisePrescriptionIndications() => Preview.RaisePrescriptionIndications();
 
     Task IPatientsWorkflow.RefreshAgendaAfterChangeAsync(int patientId) => RefreshAgendaAfterChangeAsync(patientId);
 
@@ -23,7 +26,13 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     Task IPatientsWorkflow.LoadServicesAsync() => LoadServicesAsync();
 
-    void IPatientsWorkflow.StartActiveConsultation() => StartActiveConsultation();
+    void IPatientsWorkflow.StartActiveConsultation() => Consultation.StartActiveConsultation();
+
+    void IPatientsWorkflow.NotifyAccountChanged() => NotifyAccountChanged();
+
+    void IPatientsWorkflow.RefreshVitalSignsEvolution(PatientRecord? patient) => RefreshVitalSignsEvolution(patient);
+
+    Task IPatientsWorkflow.OnConsultationChargedAsync(SaleReceipt? receipt) => OnConsultationChargedAsync(receipt);
 
     void IPatientsWorkflow.ShowConsultation() => ShowConsultation();
 
@@ -35,23 +44,41 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     bool IConsultationGate.BlockIfReceivingHandoff() => BlockIfReceivingHandoff();
 
+    ConsultationHandoffMarker? IDraftHandoffParticipant.OutgoingMarker => _outgoingHandoff;
+
+    string? IDraftHandoffParticipant.ReceivedHandoffId
+    {
+        get => _receivedHandoffId;
+        set => _receivedHandoffId = value;
+    }
+
+    string? IDraftHandoffParticipant.ReceivedHandoffToken
+    {
+        get => _receivedHandoffToken;
+        set => _receivedHandoffToken = value;
+    }
+
+    void IDraftHandoffParticipant.RestoreOutgoingHandoff(ConsultationHandoffMarker marker) => RestoreOutgoingHandoff(marker);
+
+    void IDraftHandoffParticipant.OnReceivedHandoffPersisted(ConsultationDraft draft) => OnReceivedHandoffPersisted(draft);
+
     void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
         // Solo un cambio real de paciente reinicia el estado de guardado de la consulta
         if (oldValue?.Id != newValue?.Id || newValue == null)
         {
-            _isCurrentConsultationSaved = false;
+            Consultation.IsCurrentConsultationSaved = false;
         }
         Prescription.RaiseShowsPediatricDose();
-        NotifyVitalSignsWarningChanged();
-        RefreshChartData();
+        Consultation.NotifyVitalSignsWarningChanged();
+        Chart.RefreshChartData();
         NotifyPatientsPageState();
         if (newValue != null)
         {
             var list = newValue.Consultations.OrderByDescending(c => c.Date).ToList();
             Session.ConsultationsHistory = new ObservableCollection<PatientConsultation>(list);
             RefreshVitalSignsEvolution(newValue);
-            _ = LoadPatientAppointmentsAsync(newValue.Id);
+            _ = Chart.LoadPatientAppointmentsAsync(newValue.Id);
 
             if (NeedsConsultationsLoad(newValue))
             {
@@ -62,7 +89,7 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
         {
             Session.ConsultationsHistory.Clear();
             RefreshVitalSignsEvolution(null);
-            PatientAppointmentsHistory.Clear();
+            Chart.PatientAppointmentsHistory.Clear();
         }
     }
 
@@ -74,8 +101,8 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     void IPatientsHubs.OnConsultationsHistoryChanged(ObservableCollection<PatientConsultation> value)
     {
-        ObserveConsultationsHistory(value);
-        OnPropertyChanged(nameof(PreviousConsultation));
+        Chart.ObserveConsultationsHistory(value);
+        Consultation.RaisePreviousConsultation();
     }
 
     void IPatientsHubs.OnPatientsPageChanged() => NotifyPatientsPageState();
@@ -86,9 +113,5 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     void IPatientsHubs.OnPrescriptionTemplatesLoaded() => Prescription.RaiseShowsPediatricDose();
 
-    void IPatientsHubs.OnVitalSignsEvolutionPointsChanged(ObservableCollection<VitalSignsEvolutionPoint> value)
-    {
-        LatestVitals = BuildLatestVitals(value);
-        OnPropertyChanged(nameof(HasLatestVitals));
-    }
+    void IPatientsHubs.OnVitalSignsEvolutionPointsChanged(ObservableCollection<VitalSignsEvolutionPoint> value) => Chart.OnVitalSignsEvolutionPointsChanged(value);
 }

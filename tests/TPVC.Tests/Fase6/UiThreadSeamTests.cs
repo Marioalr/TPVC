@@ -307,15 +307,15 @@ public class UiThreadSeamTests
             var withContext = With(context, () => OpenWithDraftStore(Path.Combine(folder, "a.json")));
             var withoutContext = With(null, () => OpenWithDraftStore(Path.Combine(folder, "b.json")));
 
-            withContext.SaveConsultationDraftNow();
-            withoutContext.SaveConsultationDraftNow();
+            withContext.Autosave.SaveConsultationDraftNow();
+            withoutContext.Autosave.SaveConsultationDraftNow();
 
-            StringAssert.StartsWith(withoutContext.AutosaveStatus, "Guardado ");
-            Assert.AreEqual(string.Empty, withContext.AutosaveStatus, "El indicador espera al contexto del ViewModel");
+            StringAssert.StartsWith(withoutContext.Autosave.AutosaveStatus, "Guardado ");
+            Assert.AreEqual(string.Empty, withContext.Autosave.AutosaveStatus, "El indicador espera al contexto del ViewModel");
             Assert.IsTrue(context.Pending > 0);
 
             context.RunPending();
-            StringAssert.StartsWith(withContext.AutosaveStatus, "Guardado ");
+            StringAssert.StartsWith(withContext.Autosave.AutosaveStatus, "Guardado ");
 
             withContext.Dispose();
             withoutContext.Dispose();

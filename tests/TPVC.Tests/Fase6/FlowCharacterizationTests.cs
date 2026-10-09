@@ -60,10 +60,10 @@ public class FlowCharacterizationTests
         });
 
         records.AttendAppointment(appointment);
-        records.ConsultationDiagnosis = "J02 Faringitis aguda";
+        records.Consultation.ConsultationDiagnosis = "J02 Faringitis aguda";
         var folio = consultations.CurrentConsultation!.Folio;
-        await records.FinalizeConsultationAsync();
-        Assert.IsTrue(records.IsFinishConsultationOpen);
+        await records.Consultation.FinalizeConsultationAsync();
+        Assert.IsTrue(records.Consultation.IsFinishConsultationOpen);
 
         // Todo lo que pudiera quedar abierto detrás del cobro
         records.Prescription.IsPrescriptionModalOpen = true;
@@ -74,13 +74,13 @@ public class FlowCharacterizationTests
         records.Info.InfoModalMessage = "Aviso anterior";
         records.Info.IsInfoModalVisible = true;
 
-        records.Checkout.SelectedPaymentMethod = "Efectivo";
-        records.Checkout.CashReceived = 5000m;
-        await records.Checkout.ChargeAsync();
+        records.Consultation.Checkout.SelectedPaymentMethod = "Efectivo";
+        records.Consultation.Checkout.CashReceived = 5000m;
+        await records.Consultation.Checkout.ChargeAsync();
         await WaitUntilAsync(() => !consultations.HasActiveConsultation && records.Navigation.IsHomePage, "La consulta se cierra y vuelve al inicio");
         await WaitUntilAsync(() => records.Home.TodayAppointments.Any(a => a.Id == appointment.Id && a.IsAttended), "La cita de hoy se ve atendida");
 
-        Assert.IsFalse(records.IsFinishConsultationOpen);
+        Assert.IsFalse(records.Consultation.IsFinishConsultationOpen);
         Assert.IsFalse(records.Prescription.IsPrescriptionModalOpen);
         Assert.IsFalse(records.Supplies.IsSuppliesModalOpen);
         Assert.IsFalse(records.ClinicalServices.IsServicesModalOpen);
@@ -89,8 +89,8 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.Navigation.IsFormPage);
         Assert.IsNull(records.SelectedPatient, "Sin paciente seleccionado");
         Assert.IsEmpty(records.ConsultationsHistory);
-        Assert.AreEqual(string.Empty, records.ConsultationChiefComplaint, "Campos de la consulta limpios");
-        Assert.AreEqual(string.Empty, records.ConsultationDiagnosis);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationChiefComplaint, "Campos de la consulta limpios");
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationDiagnosis);
         Assert.AreEqual("00:00", records.Active.ActiveConsultationElapsedTime);
         // El aviso anterior se cerró; el que queda es el del cobro (sin servicio de avisos usa la ventana)
         StringAssert.StartsWith(records.Info.InfoModalMessage, "Consulta cobrada");
@@ -117,7 +117,7 @@ public class FlowCharacterizationTests
         records.ChartPrimaryAction();
         await Fase6Scenarios.FillConsultationAsync(records, consultations);
         var folio = consultations.CurrentConsultation!.Folio;
-        Assert.IsNotNull(await records.SaveActiveConsultationToDbAsync(), "Avance de la nota guardado antes de enviarla");
+        Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync(), "Avance de la nota guardado antes de enviarla");
 
         await records.OpenSendConsultationSheetAsync();
         records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
@@ -133,7 +133,7 @@ public class FlowCharacterizationTests
         records.Prescription.IsAllergyAlertOpen = true;
         records.Agenda.IsAgendaPanelOpen = true;
         records.IsSendConsultationSheetOpen = true;
-        records.IsFinishConsultationOpen = true;
+        records.Consultation.IsFinishConsultationOpen = true;
 
         // La instancia en memoria es "más nueva" que la base: solo una recarga forzada la cambia en la lista
         var before = records.SelectedPatient!;
@@ -156,7 +156,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.Prescription.IsAllergyAlertOpen);
         Assert.IsFalse(records.Agenda.IsAgendaPanelOpen);
         Assert.IsFalse(records.IsSendConsultationSheetOpen);
-        Assert.IsFalse(records.IsFinishConsultationOpen);
+        Assert.IsFalse(records.Consultation.IsFinishConsultationOpen);
         Assert.IsTrue(records.Navigation.IsChartPage, "Queda la ficha del paciente");
         StringAssert.Contains(records.Info.InfoModalMessage, "continúa en Tablet del consultorio");
         Assert.IsFalse(File.Exists(clinic.DraftPath), "Ya no se recupera aquí");
@@ -232,7 +232,7 @@ public class FlowCharacterizationTests
 
         // La siguiente consulta ya no lleva el envío recibido ni el honorario de otro equipo
         records.StartActiveConsultation();
-        records.SaveConsultationDraftNow();
+        records.Autosave.SaveConsultationDraftNow();
         var next = store.Load()!;
         Assert.IsNull(next.ReceivedHandoffId);
         Assert.IsNull(next.ReceivedHandoffToken);
@@ -250,10 +250,10 @@ public class FlowCharacterizationTests
         var patient = Fase6Scenarios.ScriptedPatient(records);
         records.OpenPatientChart(patient);
         await WaitUntilAsync(() => records.ConsultationsHistory.Count > 0, "Historial cargado");
-        records.TimelineSearchText = "glucosa";
-        records.IsVitalsChartVisible = true;
-        records.ToggleAntecedent(records.AntecedentSections.First());
-        var openSection = records.AntecedentSections.First().Key;
+        records.Chart.TimelineSearchText = "glucosa";
+        records.Chart.IsVitalsChartVisible = true;
+        records.Chart.ToggleAntecedent(records.Chart.AntecedentSections.First());
+        var openSection = records.Chart.AntecedentSections.First().Key;
 
         BumpPatientInDatabase(clinic, patient.Id, "Látex");
         await records.LoadPatientsAsync();
@@ -265,9 +265,9 @@ public class FlowCharacterizationTests
         Assert.AreEqual("Látex", listed.Allergies);
         Assert.AreSame(listed, records.SelectedPatient);
         Assert.AreEqual("Látex", records.SelectedPatient!.Allergies);
-        Assert.AreEqual("glucosa", records.TimelineSearchText);
-        Assert.IsTrue(records.IsVitalsChartVisible);
-        Assert.IsTrue(records.AntecedentSections.Single(s => s.Key == openSection).IsOpen);
+        Assert.AreEqual("glucosa", records.Chart.TimelineSearchText);
+        Assert.IsTrue(records.Chart.IsVitalsChartVisible);
+        Assert.IsTrue(records.Chart.AntecedentSections.Single(s => s.Key == openSection).IsOpen);
         Assert.IsTrue(records.Navigation.IsChartPage);
         records.Dispose();
     }
@@ -293,7 +293,7 @@ public class FlowCharacterizationTests
 
         // Paciente de la consulta en curso
         records.ChartPrimaryAction();
-        Assert.IsTrue(records.IsConsultationForSelectedPatient);
+        Assert.IsTrue(records.Chart.IsConsultationForSelectedPatient);
         BumpPatientInDatabase(clinic, patient.Id, "Sulfas");
         await records.LoadPatientsAsync();
         Assert.AreSame(patient, records.SelectedPatient);
@@ -352,12 +352,12 @@ public class FlowCharacterizationTests
         var patient = Fase6Scenarios.ScriptedPatient(records);
         records.OpenPatientChart(patient);
         records.ChartPrimaryAction();
-        records.ConsultationDiagnosis = "Z00 Revisión general";
-        Assert.IsNotNull(await records.SaveActiveConsultationToDbAsync());
+        records.Consultation.ConsultationDiagnosis = "Z00 Revisión general";
+        Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync());
 
         bool SavedToRecord()
         {
-            records.SaveConsultationDraftNow();
+            records.Autosave.SaveConsultationDraftNow();
             return store.Load()!.SavedToRecord;
         }
 
@@ -373,7 +373,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(SavedToRecord(), "Sin paciente: se reinicia");
 
         records.SelectedPatient = patient;
-        Assert.IsNotNull(await records.SaveActiveConsultationToDbAsync());
+        Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync());
         records.SelectedPatient = records.Patients.First(p => p.Id != patient.Id);
         Assert.IsFalse(SavedToRecord(), "Otro paciente: se reinicia");
         records.Dispose();
@@ -402,19 +402,19 @@ public class FlowCharacterizationTests
         var seen = new List<string>();
         PropertyChangedEventHandler onChanged = (_, e) =>
         {
-            if (e.PropertyName is not (nameof(ActiveConsultationSession.HasActiveConsultation) or nameof(MedicalRecordsViewModel.ConsultationChiefComplaint))) return;
+            if (e.PropertyName is not (nameof(ActiveConsultationSession.HasActiveConsultation) or nameof(ConsultationViewModel.ConsultationChiefComplaint))) return;
             if (!records.HasActiveConsultation) return;
-            records.SaveConsultationDraftNow();
+            records.Autosave.SaveConsultationDraftNow();
             seen.Add($"{e.PropertyName}:{store.Load()?.AttendingAppointmentId?.ToString() ?? "sin cita"}");
         };
-        records.PropertyChanged += onChanged;
+        records.Consultation.PropertyChanged += onChanged;
         records.Active.PropertyChanged += onChanged;
         records.AutosaveDelay = TimeSpan.FromMilliseconds(30);
 
         records.AttendAppointment(appointment);
 
         Assert.IsTrue(records.Navigation.IsConsultationPage);
-        Assert.AreEqual("Dolor de garganta", records.ConsultationChiefComplaint, "El motivo se escribe después de iniciar");
+        Assert.AreEqual("Dolor de garganta", records.Consultation.ConsultationChiefComplaint, "El motivo se escribe después de iniciar");
         CollectionAssert.Contains(seen, "ConsultationChiefComplaint:sin cita");
         Assert.IsTrue(seen.All(s => s.EndsWith(":sin cita", StringComparison.Ordinal)), "La cita se asigna al final: " + string.Join(", ", seen));
         Assert.IsTrue(seen.Count(s => s.StartsWith("HasActiveConsultation", StringComparison.Ordinal)) >= 2, "Inicio de la consulta (dos avisos)");

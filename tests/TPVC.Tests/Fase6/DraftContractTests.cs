@@ -60,7 +60,7 @@ public class DraftContractTests
         Assert.IsTrue(records.IsConsultationHandedOff);
         Assert.AreEqual("CNS-20261007-183015", consultations.CurrentConsultation!.Folio);
         Assert.AreEqual(6, consultations.CurrentConsultation.Items.Count);
-        Assert.AreEqual(4, records.ConsultationSection);
+        Assert.AreEqual(4, records.Consultation.ConsultationSection);
         Assert.AreEqual("Paracetamol 500 mg (Caja con 20 tabletas)", records.SelectedPatient!.ActivePrescription.Single().MedicineName);
 
         records.FlushConsultationDraft();
@@ -91,7 +91,7 @@ public class DraftContractTests
         });
         records.AttendAppointment(appointment);
         await Fase6Scenarios.FillConsultationAsync(records, consultations);
-        Assert.IsNotNull(await records.SaveActiveConsultationToDbAsync());
+        Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync());
 
         await records.OpenSendConsultationSheetAsync();
         records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");

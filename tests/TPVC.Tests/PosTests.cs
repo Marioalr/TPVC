@@ -274,12 +274,12 @@ public class PosTests
 
         records.SelectPatient(records.Patients.First());
         records.StartActiveConsultation();
-        records.ConsultationDiagnosis = "Revisión";
-        await records.FinalizeConsultationAsync();
-        Assert.IsTrue(records.Checkout.HasItems);
+        records.Consultation.ConsultationDiagnosis = "Revisión";
+        await records.Consultation.FinalizeConsultationAsync();
+        Assert.IsTrue(records.Consultation.Checkout.HasItems);
         Assert.HasCount(1, pos.Cart, "La venta del mostrador sigue intacta");
 
-        await records.Checkout.ChargeAsync();
+        await records.Consultation.Checkout.ChargeAsync();
 
         Assert.IsFalse(consultations.HasActiveConsultation);
         Assert.HasCount(1, pos.Cart);

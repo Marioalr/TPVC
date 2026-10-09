@@ -16,20 +16,15 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class MedicalRecordsViewModel
 {
-    /// <summary>"Última receta" de la ficha: durante la consulta, la emitida antes de ella.</summary>
-    public IReadOnlyList<PatientPrescriptionItem> ChartPrescription =>
-        IsConsultationForSelectedPatient && Record.PreviousPrescriptionKnown
-            ? Record.PreviousPrescription
-            : (IReadOnlyList<PatientPrescriptionItem>?)Session.SelectedPatient?.ActivePrescription ?? Array.Empty<PatientPrescriptionItem>();
+    // La "última receta" de la ficha (ChartPrescription) es de Chart.
 
-    // Las indicaciones de la receta (vista previa, impresión y PDF) son de Preview
-    partial void OnConsultationTreatmentPlanChanged(string value) => Preview.RaisePrescriptionIndications();
+    // Las indicaciones de la receta (vista previa, impresión y PDF) son de Preview; el plan de la
+    // consulta (Consultation) le avisa al cambiar.
 
     private void NotifyPrescriptionStateChanged()
     {
         Preview.RaisePrescriptionIndications();
         Prescription.RaiseRepeatState();
-        OnPropertyChanged(nameof(ChartPrescription));
-        OnPropertyChanged(nameof(HasActivePrescription));
+        Chart.RaisePrescriptionState();
     }
 }

@@ -27,8 +27,8 @@ public class EscapeLadderTests
         new("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.Prescription.OpenPrescriptionCatalogAsync(), "Catálogo"); }, vm => vm.CatalogBrowser.IsCatalogBrowserModalOpen),
         new("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true, vm => vm.Preview.IsPrescriptionPdfModalOpen),
         new("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true, vm => vm.IsSendConsultationSheetOpen),
-        new("CIE-10", (vm, _) => vm.ConsultationDiagnosis = "farin", vm => vm.IsCie10DropdownOpen),
-        new("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.IsFinishConsultationOpen = true; }, vm => vm.IsFinishConsultationOpen),
+        new("CIE-10", (vm, _) => vm.Consultation.ConsultationDiagnosis = "farin", vm => vm.Consultation.IsCie10DropdownOpen),
+        new("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.Consultation.IsFinishConsultationOpen = true; }, vm => vm.Consultation.IsFinishConsultationOpen),
         new("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }, vm => vm.Prescription.IsPrescriptionModalOpen),
         new("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Supplies.OpenSuppliesModal(); }, vm => vm.Supplies.IsSuppliesModalOpen),
         new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); }, vm => vm.ClinicalServices.IsServicesModalOpen),
@@ -45,7 +45,7 @@ public class EscapeLadderTests
         ("alergia", vm => vm.Prescription.IsAllergyAlertOpen = true),
         ("catálogo", vm => vm.CatalogBrowser.IsCatalogBrowserModalOpen = true),
         ("vista previa", vm => vm.Preview.IsPrescriptionPdfModalOpen = true),
-        ("terminar consulta", vm => vm.IsFinishConsultationOpen = true),
+        ("terminar consulta", vm => vm.Consultation.IsFinishConsultationOpen = true),
         ("receta", vm => vm.Prescription.IsPrescriptionModalOpen = true),
         ("insumos", vm => vm.Supplies.IsSuppliesModalOpen = true),
         ("servicios", vm => vm.ClinicalServices.IsServicesModalOpen = true),
@@ -108,8 +108,8 @@ public class EscapeLadderTests
         records.ClinicalServices.IsServicesModalOpen = true;
         records.Supplies.IsSuppliesModalOpen = true;
         records.Prescription.IsPrescriptionModalOpen = true;
-        records.IsFinishConsultationOpen = true;
-        records.IsCie10DropdownOpen = true;
+        records.Consultation.IsFinishConsultationOpen = true;
+        records.Consultation.IsCie10DropdownOpen = true;
         records.IsSendConsultationSheetOpen = true;
         records.Preview.IsPrescriptionPdfModalOpen = true;
         records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
@@ -209,10 +209,10 @@ public class EscapeLadderTests
         Assert.IsFalse(records.IsAnySheetOpen, "La agenda no es una hoja");
         records.Agenda.CloseAgendaPanel();
 
-        records.IsCie10DropdownOpen = true;
+        records.Consultation.IsCie10DropdownOpen = true;
         Assert.IsFalse(records.IsAnySheetOpen, "Las sugerencias CIE-10 no son una hoja");
         Assert.IsTrue(records.CanTypeToSearch);
-        records.IsCie10DropdownOpen = false;
+        records.Consultation.IsCie10DropdownOpen = false;
 
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();

@@ -347,7 +347,7 @@ public class XamlBindingContractTests
                         </TextBlock.Text>
                     </TextBlock>
                     <views:VitalSignsChartView DataContext="{Binding VitalsChart}" />
-                    <views:VitalSignsChartView DataContext="{Binding Checkout}" />
+                    <views:VitalSignsChartView DataContext="{Binding Consultation.Checkout}" />
                 </StackPanel>
             </UserControl>
             """;

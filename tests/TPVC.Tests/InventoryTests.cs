@@ -857,22 +857,22 @@ public class InventoryTests
         var vm = new MedicalRecordsViewModel();
 
         // 70 kg, 1.70 m -> IMC = 70 / 2.89 = 24.22 (Peso normal)
-        vm.ConsultationWeight = "70.0";
-        vm.ConsultationHeight = "1.70";
-        Assert.IsTrue(vm.ConsultationIMC.Contains("24.2"));
-        Assert.IsTrue(vm.ConsultationIMC.Contains("Peso normal"));
+        vm.Consultation.ConsultationWeight = "70.0";
+        vm.Consultation.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("24.2"));
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("Peso normal"));
 
         // 85 kg, 1.70 m -> IMC = 85 / 2.89 = 29.41 (Sobrepeso)
-        vm.ConsultationWeight = "85.0";
-        vm.ConsultationHeight = "1.70";
-        Assert.IsTrue(vm.ConsultationIMC.Contains("29.4"));
-        Assert.IsTrue(vm.ConsultationIMC.Contains("Sobrepeso"));
+        vm.Consultation.ConsultationWeight = "85.0";
+        vm.Consultation.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("29.4"));
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("Sobrepeso"));
 
         // 100 kg, 1.70 m -> IMC = 100 / 2.89 = 34.60 (Obesidad Grado I)
-        vm.ConsultationWeight = "100.0";
-        vm.ConsultationHeight = "1.70";
-        Assert.IsTrue(vm.ConsultationIMC.Contains("34.6"));
-        Assert.IsTrue(vm.ConsultationIMC.Contains("Obesidad Grado I"));
+        vm.Consultation.ConsultationWeight = "100.0";
+        vm.Consultation.ConsultationHeight = "1.70";
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("34.6"));
+        Assert.IsTrue(vm.Consultation.ConsultationIMC.Contains("Obesidad Grado I"));
     }
 
     [TestMethod]
@@ -1285,27 +1285,27 @@ public class InventoryTests
     public void MedicalRecordsViewModel_BloodPressureTA_FormatsAndCleansSlashes()
     {
         // Autoinserción de barra '/' al teclear números continuos
-        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("12080"));
-        Assert.AreEqual("90/60", MedicalRecordsViewModel.FormatTA("9060"));
-        Assert.AreEqual("135/85", MedicalRecordsViewModel.FormatTA("13585"));
+        Assert.AreEqual("120/80", ConsultationViewModel.FormatTA("12080"));
+        Assert.AreEqual("90/60", ConsultationViewModel.FormatTA("9060"));
+        Assert.AreEqual("135/85", ConsultationViewModel.FormatTA("13585"));
 
         // Respeto de barra existente y separadores comunes
-        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120-80"));
-        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120 80"));
-        Assert.AreEqual("120/80", MedicalRecordsViewModel.FormatTA("120/80"));
-        Assert.AreEqual("120/", MedicalRecordsViewModel.FormatTA("120/"));
-        Assert.AreEqual("120/8", MedicalRecordsViewModel.FormatTA("120/8"));
+        Assert.AreEqual("120/80", ConsultationViewModel.FormatTA("120-80"));
+        Assert.AreEqual("120/80", ConsultationViewModel.FormatTA("120 80"));
+        Assert.AreEqual("120/80", ConsultationViewModel.FormatTA("120/80"));
+        Assert.AreEqual("120/", ConsultationViewModel.FormatTA("120/"));
+        Assert.AreEqual("120/8", ConsultationViewModel.FormatTA("120/8"));
 
         // Al borrar hacia atrás (retroceso de la barra): no la vuelve a insertar
-        Assert.AreEqual("120", MedicalRecordsViewModel.FormatTA("120"));
-        Assert.AreEqual("12", MedicalRecordsViewModel.FormatTA("12"));
-        Assert.AreEqual("1", MedicalRecordsViewModel.FormatTA("1"));
-        Assert.AreEqual("", MedicalRecordsViewModel.FormatTA(""));
+        Assert.AreEqual("120", ConsultationViewModel.FormatTA("120"));
+        Assert.AreEqual("12", ConsultationViewModel.FormatTA("12"));
+        Assert.AreEqual("1", ConsultationViewModel.FormatTA("1"));
+        Assert.AreEqual("", ConsultationViewModel.FormatTA(""));
 
         // Comprobación de reactividad en el ViewModel
         var recordsVm = new MedicalRecordsViewModel();
-        recordsVm.ConsultationTA = "11070";
-        Assert.AreEqual("110/70", recordsVm.ConsultationTA);
+        recordsVm.Consultation.ConsultationTA = "11070";
+        Assert.AreEqual("110/70", recordsVm.Consultation.ConsultationTA);
     }
 
     [TestMethod]
@@ -1313,7 +1313,7 @@ public class InventoryTests
     {
         var consultService = new ConsultationService();
         var recordsVm = new MedicalRecordsViewModel(_inventoryService, consultService);
-        var checkout = recordsVm.Checkout;
+        var checkout = recordsVm.Consultation.Checkout;
 
         // Paciente de prueba
         recordsVm.SelectedPatient = new PatientRecord
@@ -1333,19 +1333,19 @@ public class InventoryTests
 
         // Terminar consulta -> abre el cobro de la consulta con el honorario incluido.
         // La consulta sigue activa hasta cobrar ("Volver a la consulta" permite agregar lo que faltó).
-        await recordsVm.FinalizeConsultationAsync();
+        await recordsVm.Consultation.FinalizeConsultationAsync();
 
         Assert.IsTrue(recordsVm.HasActiveConsultation, "La consulta se cierra hasta cobrar");
-        Assert.IsTrue(recordsVm.IsFinishConsultationOpen, "Debe abrir la ventana de cobro de la consulta");
+        Assert.IsTrue(recordsVm.Consultation.IsFinishConsultationOpen, "Debe abrir la ventana de cobro de la consulta");
         Assert.IsTrue(checkout.Cart.Count >= 1, "Debe tener items en la cuenta");
         Assert.IsTrue(checkout.Cart.Any(i => i.Code == "SERV-001" || i.Name.Contains("Consulta")),
             "Debe incluir la Consulta Médica General en el cobro");
 
         // Volver a la consulta y terminar de nuevo no duplica el honorario
-        recordsVm.CloseFinishConsultation();
+        recordsVm.Consultation.CloseFinishConsultation();
         Assert.IsTrue(recordsVm.HasActiveConsultation);
         Assert.IsEmpty(checkout.Cart, "La cuenta se rearma al terminar de nuevo");
-        await recordsVm.FinalizeConsultationAsync();
+        await recordsVm.Consultation.FinalizeConsultationAsync();
         Assert.AreEqual(1, checkout.Cart.Count(i => i.IsService && i.Name.Contains("Consulta")));
 
         // Al cobrar, la consulta termina
@@ -1458,8 +1458,8 @@ public class InventoryTests
         Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.Preview.PrescriptionIndications, "Plan vacío: texto general");
         var changes = new List<string>();
         recordsVm.Preview.PropertyChanged += (_, e) => changes.Add(e.PropertyName ?? string.Empty);
-        recordsVm.ConsultationTreatmentPlan = "Guardar reposo absoluto por 3 días.";
-        recordsVm.AppendGeneralIndicationPreset("Hidratación con electrolitos orales.");
+        recordsVm.Consultation.ConsultationTreatmentPlan = "Guardar reposo absoluto por 3 días.";
+        recordsVm.Consultation.AppendGeneralIndicationPreset("Hidratación con electrolitos orales.");
         Assert.AreEqual("Guardar reposo absoluto por 3 días. Hidratación con electrolitos orales.", recordsVm.Preview.PrescriptionIndications);
         Assert.Contains(nameof(PrescriptionPreviewViewModel.PrescriptionIndications), changes, "La vista previa se actualiza al escribir");
 
@@ -2045,15 +2045,15 @@ public class InventoryTests
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
 
         // Finalizar consulta: abre el modal del POS
-        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsFinishConsultationOpen, "Debe abrirse la ventana modal del POS");
-        Assert.IsTrue(mainVm.MedicalRecordsVM.Checkout.Cart.Count > 0, "Debe incluir al menos la Consulta Médica General");
+        await mainVm.MedicalRecordsVM.Consultation.FinalizeConsultationAsync();
+        Assert.IsTrue(mainVm.MedicalRecordsVM.Consultation.IsFinishConsultationOpen, "Debe abrirse la ventana modal del POS");
+        Assert.IsTrue(mainVm.MedicalRecordsVM.Consultation.Checkout.Cart.Count > 0, "Debe incluir al menos la Consulta Médica General");
 
         // Al cobrar en "Terminar consulta":
-        await mainVm.MedicalRecordsVM.Checkout.ChargeAsync();
+        await mainVm.MedicalRecordsVM.Consultation.Checkout.ChargeAsync();
 
         // 1. Debe salir de todo:
-        Assert.IsFalse(mainVm.MedicalRecordsVM.IsFinishConsultationOpen, "La ventana de terminar consulta debe cerrarse");
+        Assert.IsFalse(mainVm.MedicalRecordsVM.Consultation.IsFinishConsultationOpen, "La ventana de terminar consulta debe cerrarse");
         Assert.IsFalse(mainVm.PosVM.IsTicketModalOpen, "El Punto de Venta no se entera: la consulta tiene su propio cobro");
         Assert.IsFalse(consultService.HasActiveConsultation, "La consulta activa debe cerrarse");
         Assert.IsFalse(mainVm.MedicalRecordsVM.HasActiveConsultation, "No debe haber consulta activa en curso");
@@ -2081,12 +2081,12 @@ public class InventoryTests
 
         // Ajustar hora de inicio simulada
         consultService.CurrentConsultation.StartedAt = startTime;
-        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Cefalea tensional recurrente";
-        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
-        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Reposo, hidratación y analgésico según necesidad";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationChiefComplaint = "Cefalea tensional recurrente";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationTreatmentPlan = "Reposo, hidratación y analgésico según necesidad";
 
         // Finalizar consulta: debe guardar la consulta en base de datos con StartedAt y EndedAt
-        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+        await mainVm.MedicalRecordsVM.Consultation.FinalizeConsultationAsync();
 
         // Verificar en base de datos
         var dbPatients = await _inventoryService.GetPatientsAsync();
@@ -2271,18 +2271,18 @@ public class InventoryTests
         mainVm.MedicalRecordsVM.StartActiveConsultation();
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
 
-        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Cefalea tensional recurrente";
-        mainVm.MedicalRecordsVM.ConsultationSystemsReview = "Neurológico: Sin focalización ni alteraciones de pares craneales. Oftalmológico: Fondo de ojo sin alteraciones.";
-        mainVm.MedicalRecordsVM.ConsultationPhysicalExam = "Músculos trapecios y cervicales posteriores con contractura dolorosa bilateral.";
-        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
-        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Ibuprofeno 400mg c/8h por 3 días + calor local y ejercicios de relajación";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationChiefComplaint = "Cefalea tensional recurrente";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationSystemsReview = "Neurológico: Sin focalización ni alteraciones de pares craneales. Oftalmológico: Fondo de ojo sin alteraciones.";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationPhysicalExam = "Músculos trapecios y cervicales posteriores con contractura dolorosa bilateral.";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationDiagnosis = "Cefalea tensional episódica (G44.2)";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationTreatmentPlan = "Ibuprofeno 400mg c/8h por 3 días + calor local y ejercicios de relajación";
 
         // Terminar consulta: la nota se guarda antes de cobrar
-        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+        await mainVm.MedicalRecordsVM.Consultation.FinalizeConsultationAsync();
 
         // La consulta sigue en curso hasta cobrar ("Volver a la consulta" permite seguir trabajando)
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
-        Assert.IsTrue(mainVm.MedicalRecordsVM.IsFinishConsultationOpen);
+        Assert.IsTrue(mainVm.MedicalRecordsVM.Consultation.IsFinishConsultationOpen);
 
         // Verificar en base de datos
         var patients = await _inventoryService.GetPatientsAsync();
@@ -2308,24 +2308,24 @@ public class InventoryTests
         mainVm.MedicalRecordsVM.StartActiveConsultation();
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation);
 
-        mainVm.MedicalRecordsVM.ConsultationChiefComplaint = "Dolor lumbar agudo";
-        mainVm.MedicalRecordsVM.ConsultationDiagnosis = "Lumbalgia mecánica (M54.5)";
-        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan = "Reposo relativo por 48 horas";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationChiefComplaint = "Dolor lumbar agudo";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationDiagnosis = "Lumbalgia mecánica (M54.5)";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationTreatmentPlan = "Reposo relativo por 48 horas";
 
         // Terminar consulta guarda la nota; "Volver a la consulta" la deja abierta
-        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
-        mainVm.MedicalRecordsVM.CloseFinishConsultation();
+        await mainVm.MedicalRecordsVM.Consultation.FinalizeConsultationAsync();
+        mainVm.MedicalRecordsVM.Consultation.CloseFinishConsultation();
 
         // La consulta debe permanecer activa y con los campos intactos para continuar trabajando
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta debe mantenerse activa");
-        Assert.AreEqual("Dolor lumbar agudo", mainVm.MedicalRecordsVM.ConsultationChiefComplaint);
-        Assert.AreEqual("Lumbalgia mecánica (M54.5)", mainVm.MedicalRecordsVM.ConsultationDiagnosis);
+        Assert.AreEqual("Dolor lumbar agudo", mainVm.MedicalRecordsVM.Consultation.ConsultationChiefComplaint);
+        Assert.AreEqual("Lumbalgia mecánica (M54.5)", mainVm.MedicalRecordsVM.Consultation.ConsultationDiagnosis);
 
         // Modificar plan y agregar indicaciones adicionales
-        mainVm.MedicalRecordsVM.ConsultationTreatmentPlan += " + Paracetamol 500mg cada 8 horas";
+        mainVm.MedicalRecordsVM.Consultation.ConsultationTreatmentPlan += " + Paracetamol 500mg cada 8 horas";
 
         // Terminar de nuevo (mismo folio)
-        await mainVm.MedicalRecordsVM.FinalizeConsultationAsync();
+        await mainVm.MedicalRecordsVM.Consultation.FinalizeConsultationAsync();
 
         Assert.IsTrue(mainVm.MedicalRecordsVM.HasActiveConsultation, "La consulta continúa activa hasta cobrar");
 
@@ -2843,14 +2843,14 @@ public class InventoryTests
 
         // Autocomplete in MedicalRecordsViewModel
         var vm = new MedicalRecordsViewModel(_inventoryService, new ConsultationService());
-        vm.ConsultationDiagnosis = "diab";
-        Assert.IsTrue(vm.IsCie10DropdownOpen);
-        Assert.IsTrue(vm.Cie10Suggestions.Count > 0);
+        vm.Consultation.ConsultationDiagnosis = "diab";
+        Assert.IsTrue(vm.Consultation.IsCie10DropdownOpen);
+        Assert.IsTrue(vm.Consultation.Cie10Suggestions.Count > 0);
 
-        var chosen = vm.Cie10Suggestions.First();
-        vm.SelectCie10Suggestion(chosen);
-        Assert.IsFalse(vm.IsCie10DropdownOpen);
-        Assert.AreEqual($"{chosen.Code} - {chosen.Name}", vm.ConsultationDiagnosis);
+        var chosen = vm.Consultation.Cie10Suggestions.First();
+        vm.Consultation.SelectCie10Suggestion(chosen);
+        Assert.IsFalse(vm.Consultation.IsCie10DropdownOpen);
+        Assert.AreEqual($"{chosen.Code} - {chosen.Name}", vm.Consultation.ConsultationDiagnosis);
     }
 
     [TestMethod]

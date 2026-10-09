@@ -169,7 +169,7 @@
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="250" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ServicesSheet}"
                         Visibility="{Binding ClinicalServices.IsServicesModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="300" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CheckoutSheet}"
-                        Visibility="{Binding IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding Consultation.IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="310" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CatalogSheet}"
                         Visibility="{Binding CatalogBrowser.IsCatalogBrowserModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PreviewSheet}"

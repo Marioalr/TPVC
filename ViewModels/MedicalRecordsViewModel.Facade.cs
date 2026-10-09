@@ -55,4 +55,12 @@ public partial class MedicalRecordsViewModel
     /// <summary>PatientForm.NewPatientAsync.</summary>
     [NotForBinding]
     public Task NewPatientAsync() => PatientForm.NewPatientAsync();
+
+    /// <summary>Consultation.StartActiveConsultation.</summary>
+    [NotForBinding]
+    public void StartActiveConsultation() => Consultation.StartActiveConsultation();
+
+    /// <summary>Autosave.IsConsultationRecovered.</summary>
+    [NotForBinding]
+    public bool IsConsultationRecovered => Autosave.IsConsultationRecovered;
 }

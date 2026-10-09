@@ -82,10 +82,10 @@ public class NotificationParityTests
         var (records, _) = OpenWithoutDatabase();
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         Assert.AreSame(records, recorder.Sources[0]);
-        CollectionAssert.Contains(recorder.Sources.ToList(), records.Checkout);
+        CollectionAssert.Contains(recorder.Sources.ToList(), records.Consultation.Checkout);
 
         recorder.Clear();
-        records.Checkout.CashReceived = 100m;
+        records.Consultation.Checkout.CashReceived = 100m;
         records.Prescription.IsAllergyAlertOpen = true;
         CollectionAssert.IsSubsetOf(new[] { "CashReceived", "IsAllergyAlertOpen" }, recorder.Names, "Avisos de los dos objetos, sin importar el dueño");
     }
@@ -161,11 +161,11 @@ public class NotificationParityTests
         records.SelectPatient(Mock(records, 2));
         records.StartActiveConsultation();
         FreezeClock(consultations);
-        records.IsFinishConsultationOpen = true;
+        records.Consultation.IsFinishConsultationOpen = true;
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
 
-        golden.Section("volver a la consulta", RecordSync(recorder, records.CloseFinishConsultation));
+        golden.Section("volver a la consulta", RecordSync(recorder, records.Consultation.CloseFinishConsultation));
         golden.AssertMatches("close-finish.txt", "Avisos al volver de Terminar consulta");
     }
 
@@ -194,8 +194,8 @@ public class NotificationParityTests
             ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.Prescription.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
             ("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true),
             ("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true),
-            ("CIE-10", (vm, _) => vm.ConsultationDiagnosis = "farin"),
-            ("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.IsFinishConsultationOpen = true; }),
+            ("CIE-10", (vm, _) => vm.Consultation.ConsultationDiagnosis = "farin"),
+            ("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.Consultation.IsFinishConsultationOpen = true; }),
             ("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }),
             ("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Supplies.OpenSuppliesModal(); }),
             ("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); }),
@@ -416,7 +416,7 @@ public class NotificationParityTests
         await Fase6Scenarios.FillConsultationAsync(pcRecords, pcConsultations);
         // El primer guardado automático es inmediato (otro hilo): se espera y se guarda a mano
         await Task.Delay(200);
-        pcRecords.SaveConsultationDraftNow();
+        pcRecords.Autosave.SaveConsultationDraftNow();
 
         async Task SendAsync()
         {

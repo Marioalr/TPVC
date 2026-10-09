@@ -56,7 +56,7 @@ public class PacientesTests
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = new MedicalRecordsViewModel(_service, consultations);
         await records.LoadInitialDataAsync();
-        return (records, records.Checkout, consultations);
+        return (records, records.Consultation.Checkout, consultations);
     }
 
     private static PatientRecord Patient(string name, string record = "", string phone = "", string diagnosis = "") => new()
@@ -202,7 +202,7 @@ public class PacientesTests
         records.OpenPatientChart(patient);
         Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.IsTrue(records.Navigation.ShowsPatientsTopBar);
-        Assert.AreEqual("Iniciar consulta", records.ChartPrimaryActionText);
+        Assert.AreEqual("Iniciar consulta", records.Chart.ChartPrimaryActionText);
 
         records.ChartPrimaryAction();
         Assert.IsTrue(consultations.HasActiveConsultation);
@@ -215,7 +215,7 @@ public class PacientesTests
         Assert.IsTrue(records.Navigation.IsChartPage);
         Assert.IsTrue(records.ShowsConsultationBanner);
         StringAssert.Contains(records.ConsultationBannerText, patient.FullName);
-        Assert.AreEqual("Volver a la consulta", records.ChartPrimaryActionText);
+        Assert.AreEqual("Volver a la consulta", records.Chart.ChartPrimaryActionText);
 
         // Ir al inicio y volver a entrar regresa a la consulta en curso
         records.Navigation.GoToPatientsHome();
@@ -244,7 +244,7 @@ public class PacientesTests
         records.Navigation.GoToPatientsHome();
         records.OpenPatientChart(second);
         Assert.IsTrue(records.Navigation.IsChartPage);
-        Assert.IsFalse(records.IsConsultationForSelectedPatient);
+        Assert.IsFalse(records.Chart.IsConsultationForSelectedPatient);
         Assert.IsTrue(records.ShowsConsultationBanner, "El aviso recuerda la consulta en curso");
 
         records.ChartPrimaryAction();
@@ -363,19 +363,19 @@ public class PacientesTests
         var woman = new PatientRecord { FullName = "Ana", Gender = "Femenino", BirthDate = DateTime.Today.AddYears(-30), PregnanciesCount = 2, CesareansCount = 1 };
         var child = new PatientRecord { FullName = "Leo", Gender = "Masculino", BirthDate = DateTime.Today.AddYears(-5), ImmunizationSchedule = "Completo" };
 
-        var manKeys = MedicalRecordsViewModel.BuildAntecedentSections(man).Select(s => s.Key).ToList();
+        var manKeys = PatientChartViewModel.BuildAntecedentSections(man).Select(s => s.Key).ToList();
         CollectionAssert.AreEqual(new[] { "Heredofamiliares", "Patologicos", "NoPatologicos", "Contacto" }, manKeys);
-        var family = MedicalRecordsViewModel.BuildAntecedentSections(man)[0];
+        var family = PatientChartViewModel.BuildAntecedentSections(man)[0];
         Assert.AreEqual("Padre con diabetes", family.Summary);
         Assert.IsFalse(family.IsEmpty);
 
-        var womanSections = MedicalRecordsViewModel.BuildAntecedentSections(woman);
+        var womanSections = PatientChartViewModel.BuildAntecedentSections(woman);
         var gyneco = womanSections.Single(s => s.Key == "Gineco");
         StringAssert.Contains(gyneco.Summary, "G2 C1 A0");
         Assert.IsTrue(womanSections.Single(s => s.Key == "Heredofamiliares").IsEmpty);
         Assert.AreEqual("Sin registrar", womanSections.Single(s => s.Key == "Heredofamiliares").Summary);
 
-        var childSections = MedicalRecordsViewModel.BuildAntecedentSections(child);
+        var childSections = PatientChartViewModel.BuildAntecedentSections(child);
         Assert.IsFalse(childSections.Any(s => s.Key == "Gineco"));
         StringAssert.Contains(childSections.Single(s => s.Key == "Desarrollo").Detail, "Vacunación: Completo");
         Assert.IsFalse(childSections.Single(s => s.Key == "Patologicos").Detail.Contains("Vacunación"), "La vacunación del niño va en Desarrollo");
@@ -414,7 +414,7 @@ public class PacientesTests
         };
         var appointment = new PatientAppointment { Date = new DateTime(2026, 10, 15), Time = "09:30", Reason = "Seguimiento", Status = "Programada" };
 
-        var timeline = MedicalRecordsViewModel.BuildTimeline(new[] { older, newer }, new[] { appointment });
+        var timeline = PatientChartViewModel.BuildTimeline(new[] { older, newer }, new[] { appointment });
 
         Assert.AreEqual(TimelineKind.Appointment, timeline[0].Kind, "La cita futura arriba");
         Assert.AreEqual("Seguimiento", timeline[0].Title);
@@ -437,7 +437,7 @@ public class PacientesTests
             new VitalSignsEvolutionPoint { Date = new DateTime(2026, 10, 1), Systolic = 120, Diastolic = 80, Weight = 80.0m }
         };
 
-        var vitals = MedicalRecordsViewModel.BuildLatestVitals(points);
+        var vitals = PatientChartViewModel.BuildLatestVitals(points);
 
         var pressure = vitals.Single(v => v.Label.StartsWith("T/A"));
         Assert.AreEqual("120/80", pressure.Value);
@@ -452,7 +452,7 @@ public class PacientesTests
         Assert.AreEqual("110", glucose.Value, "El último valor registrado aunque la última consulta no lo tenga");
         Assert.AreEqual(string.Empty, glucose.Trend);
 
-        Assert.IsEmpty(MedicalRecordsViewModel.BuildLatestVitals(null));
+        Assert.IsEmpty(PatientChartViewModel.BuildLatestVitals(null));
     }
 
     [TestMethod]
@@ -468,18 +468,18 @@ public class PacientesTests
                 new PatientConsultation { Folio = "CNS-1", Date = DateTime.Today.AddDays(-7), BloodPressureSystolic = 130, BloodPressureDiastolic = 85, Weight = 70m }
             }
         };
-        Assert.IsTrue(records.HasLatestVitals);
+        Assert.IsTrue(records.Chart.HasLatestVitals);
 
         bool? shown = null;
-        records.PropertyChanged += (_, e) =>
+        records.Chart.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MedicalRecordsViewModel.HasLatestVitals)) shown = records.HasLatestVitals;
+            if (e.PropertyName == nameof(PatientChartViewModel.HasLatestVitals)) shown = records.Chart.HasLatestVitals;
         };
 
         records.SelectedPatient = null;
 
-        Assert.IsEmpty(records.LatestVitals, "No quedan los signos del paciente anterior");
-        Assert.IsFalse(records.HasLatestVitals);
+        Assert.IsEmpty(records.Chart.LatestVitals, "No quedan los signos del paciente anterior");
+        Assert.IsFalse(records.Chart.HasLatestVitals);
         Assert.AreEqual(false, shown, "La pantalla se entera");
     }
 
@@ -490,7 +490,7 @@ public class PacientesTests
 
     private static async Task ChargeAsync(MedicalRecordsViewModel records, CheckoutViewModel checkout, ConsultationService consultations)
     {
-        await records.FinalizeConsultationAsync();
+        await records.Consultation.FinalizeConsultationAsync();
         checkout.SelectedPaymentMethod = "Efectivo";
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();
@@ -513,11 +513,11 @@ public class PacientesTests
 
         // En la ficha, durante la consulta, "Última receta" sigue siendo la anterior
         records.ShowChartFromConsultation();
-        CollectionAssert.AreEqual(previous, records.ChartPrescription.Select(p => p.MedicineName).ToList());
+        CollectionAssert.AreEqual(previous, records.Chart.ChartPrescription.Select(p => p.MedicineName).ToList());
         records.ShowConsultation();
 
         // Terminar sin receta: la nota no lleva medicamentos y el expediente conserva la última receta
-        records.ConsultationDiagnosis = "Z00 Revisión general";
+        records.Consultation.ConsultationDiagnosis = "Z00 Revisión general";
         var folio = consultations.CurrentConsultation!.Folio;
         await ChargeAsync(records, checkout, consultations);
 
@@ -547,7 +547,7 @@ public class PacientesTests
         Assert.IsTrue(records.Prescription.CanRepeatPreviousPrescription, "Lo quitado se puede volver a repetir");
 
         var folio = consultations.CurrentConsultation!.Folio;
-        records.ConsultationDiagnosis = "Seguimiento";
+        records.Consultation.ConsultationDiagnosis = "Seguimiento";
         await ChargeAsync(records, checkout, consultations);
 
         var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
@@ -604,15 +604,15 @@ public class PacientesTests
         var historyBefore = records.ConsultationsHistory.Count;
 
         records.ChartPrimaryAction();
-        records.ConsultationChiefComplaint = "Paciente equivocado";
-        records.ConsultationTA = "150/95";
-        records.ConsultationDiagnosis = "R51 Cefalea";
+        records.Consultation.ConsultationChiefComplaint = "Paciente equivocado";
+        records.Consultation.ConsultationTA = "150/95";
+        records.Consultation.ConsultationDiagnosis = "R51 Cefalea";
         var folio = consultations.CurrentConsultation!.Folio;
 
         // "Terminar consulta" guarda la nota; luego "Volver a la consulta" y se descarta
-        await records.FinalizeConsultationAsync();
+        await records.Consultation.FinalizeConsultationAsync();
         Assert.AreEqual("R51 Cefalea", patient.LastDiagnosis);
-        records.CloseFinishConsultation();
+        records.Consultation.CloseFinishConsultation();
         await records.DiscardActiveConsultationAsync();
 
         Assert.AreEqual(before.Diagnosis, patient.LastDiagnosis);
@@ -621,7 +621,7 @@ public class PacientesTests
         Assert.AreEqual(before.Notes, patient.ClinicalNotes);
         Assert.IsFalse(patient.Consultations.Any(c => c.Folio == folio));
         Assert.AreEqual(historyBefore, records.ConsultationsHistory.Count);
-        Assert.IsFalse(records.Timeline.Any(t => t.Title == "R51 Cefalea"), "El historial no muestra la consulta descartada");
+        Assert.IsFalse(records.Chart.Timeline.Any(t => t.Title == "R51 Cefalea"), "El historial no muestra la consulta descartada");
 
         var stored = (await _service.GetPatientByIdAsync(patient.Id))!;
         Assert.AreEqual(before.Diagnosis, stored.LastDiagnosis);
@@ -755,7 +755,7 @@ public class PacientesTests
         records.PatientForm.CancelPatientForm();
 
         records.OpenPatientChart(records.Patients.First());
-        records.EditAntecedent(records.AntecedentSections.First());
+        records.EditAntecedent(records.Chart.AntecedentSections.First());
         records.FlushConsultationDraft();
         Assert.IsFalse(File.Exists(folder.Store().PatientFormPath), "Abrir la edición (en una sección) sin cambiar nada no se recupera");
         records.Dispose();
@@ -914,10 +914,10 @@ public class PacientesTests
         Assert.IsTrue(consultations.HasActiveConsultation);
         Assert.IsTrue(records.Navigation.IsConsultationPage);
         Assert.AreEqual(patient.Id, records.SelectedPatient?.Id);
-        Assert.AreEqual("Dolor de garganta", records.ConsultationChiefComplaint);
+        Assert.AreEqual("Dolor de garganta", records.Consultation.ConsultationChiefComplaint);
 
-        records.ConsultationDiagnosis = "J02 Faringitis aguda";
-        await records.FinalizeConsultationAsync();
+        records.Consultation.ConsultationDiagnosis = "J02 Faringitis aguda";
+        await records.Consultation.FinalizeConsultationAsync();
         checkout.SelectedPaymentMethod = "Efectivo";
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();
@@ -946,7 +946,7 @@ public class PacientesTests
         var patient = records.Patients.First();
         records.OpenPatientChart(patient);
 
-        await records.DeactivateSelectedPatientAsync();
+        await records.Chart.DeactivateSelectedPatientAsync();
 
         Assert.IsTrue(records.Navigation.IsHomePage);
         Assert.IsNull(records.SelectedPatient);

@@ -346,11 +346,11 @@ internal sealed class UiSmokeSession
 
             records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
             Capture(host, $"05-ficha-{suffix}");
-            records.ToggleAntecedent(records.AntecedentSections.First());
-            if (records.Timeline.Count > 0) records.ToggleTimelineEntry(records.Timeline[0]);
-            records.IsVitalsChartVisible = true;
+            records.Chart.ToggleAntecedent(records.Chart.AntecedentSections.First());
+            if (records.Chart.Timeline.Count > 0) records.Chart.ToggleTimelineEntry(records.Chart.Timeline[0]);
+            records.Chart.IsVitalsChartVisible = true;
             Capture(host, $"06-ficha-detalle-{suffix}");
-            records.IsVitalsChartVisible = false;
+            records.Chart.IsVitalsChartVisible = false;
 
             WaitFor(records.Agenda.ScheduleForSelectedPatientAsync());
             WaitFor(records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree)));
@@ -358,9 +358,9 @@ internal sealed class UiSmokeSession
             records.Agenda.CloseAgendaPanel();
 
             records.ChartPrimaryAction();
-            records.ConsultationChiefComplaint = "Fiebre y dolor de garganta de 2 días";
-            records.ConsultationTA = "130/85";
-            records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
+            records.Consultation.ConsultationChiefComplaint = "Fiebre y dolor de garganta de 2 días";
+            records.Consultation.ConsultationTA = "130/85";
+            records.Consultation.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
             Capture(host, $"08-consulta-{suffix}");
 
             // Enviar a otro equipo: la hoja con los equipos enlazados y la consulta en solo lectura
@@ -376,7 +376,7 @@ internal sealed class UiSmokeSession
             Show(host, main, "Pos", $"08b-pos-con-consulta-{suffix}");
             main.NavigateTo("Records");
 
-            records.ConsultationSection = 5;
+            records.Consultation.ConsultationSection = 5;
             Capture(host, $"09-consulta-tratamiento-{suffix}");
 
             records.ShowChartFromConsultation();
@@ -420,9 +420,9 @@ internal sealed class UiSmokeSession
             records.CatalogBrowser.CloseCatalogBrowser();
             records.Prescription.ClosePrescriptionModal();
 
-            WaitFor(records.FinalizeConsultationAsync());
+            WaitFor(records.Consultation.FinalizeConsultationAsync());
             Capture(host, $"15-terminar-consulta-{suffix}");
-            records.CloseFinishConsultation();
+            records.Consultation.CloseFinishConsultation();
             WaitFor(records.DiscardActiveConsultationAsync());
 
             // Una consulta que la tablet mandó a esta PC: el aviso en Pacientes
@@ -1159,31 +1159,31 @@ internal sealed class UiKeyboardPass
         var grid = workspace?.FindName("ConsultationWorkspace") as System.Windows.IInputElement;
         if (Check(grid != null, "Consulta: no se encontró el área de la consulta"))
         {
-            _records.ConsultationSection = 2;
+            _records.Consultation.ConsultationSection = 2;
             Settle();
             WithControl(() =>
             {
-                Check(PressKey(grid!, System.Windows.Input.Key.Down) && _records.ConsultationSection == 3, $"Ctrl+↓ pasa a la sección siguiente (quedó {_records.ConsultationSection})");
-                Check(PressKey(grid!, System.Windows.Input.Key.Up) && _records.ConsultationSection == 2, $"Ctrl+↑ vuelve a la sección anterior (quedó {_records.ConsultationSection})");
+                Check(PressKey(grid!, System.Windows.Input.Key.Down) && _records.Consultation.ConsultationSection == 3, $"Ctrl+↓ pasa a la sección siguiente (quedó {_records.Consultation.ConsultationSection})");
+                Check(PressKey(grid!, System.Windows.Input.Key.Up) && _records.Consultation.ConsultationSection == 2, $"Ctrl+↑ vuelve a la sección anterior (quedó {_records.Consultation.ConsultationSection})");
                 try { File.Delete(_draftPath); } catch { }
-                _records.AutosaveStatus = string.Empty;
+                _records.Autosave.AutosaveStatus = string.Empty;
                 Check(PressKey(grid!, System.Windows.Input.Key.S) && File.Exists(_draftPath), "Ctrl+S guarda la consulta en curso");
             });
             Pump();
-            Check(_records.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal), $"Ctrl+S muestra la hora del guardado (\"{_records.AutosaveStatus}\")");
+            Check(_records.Autosave.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal), $"Ctrl+S muestra la hora del guardado (\"{_records.Autosave.AutosaveStatus}\")");
         }
 
         // CIE-10 abierto, "Enviar a…" y "Terminar consulta": Esc los cierra uno por uno
-        _records.ConsultationDiagnosis = "farin";
+        _records.Consultation.ConsultationDiagnosis = "farin";
         Settle();
-        Check(_records.IsCie10DropdownOpen, "Escribir el diagnóstico abre las sugerencias CIE-10");
-        Check(PressEscape() && !_records.IsCie10DropdownOpen, "Esc cierra las sugerencias CIE-10");
+        Check(_records.Consultation.IsCie10DropdownOpen, "Escribir el diagnóstico abre las sugerencias CIE-10");
+        Check(PressEscape() && !_records.Consultation.IsCie10DropdownOpen, "Esc cierra las sugerencias CIE-10");
         _records.IsSendConsultationSheetOpen = true;
         Settle();
         Check(PressEscape() && !_records.IsSendConsultationSheetOpen, "Esc cierra \"Enviar a…\"");
-        WaitFor(_records.FinalizeConsultationAsync());
+        WaitFor(_records.Consultation.FinalizeConsultationAsync());
         Settle();
-        Check(PressEscape() && !_records.IsFinishConsultationOpen && _records.HasActiveConsultation, "Esc en \"Terminar consulta\" vuelve a la consulta sin cobrar");
+        Check(PressEscape() && !_records.Consultation.IsFinishConsultationOpen && _records.HasActiveConsultation, "Esc en \"Terminar consulta\" vuelve a la consulta sin cobrar");
 
         PrescriptionSheet();
         SuppliesSheet();

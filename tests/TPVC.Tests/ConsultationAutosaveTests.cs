@@ -57,7 +57,7 @@ public class ConsultationAutosaveTests
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = new MedicalRecordsViewModel(_service, consultations, consultationDraftStore: new ConsultationDraftStore(_draftPath));
         await records.InitialLoad;
-        return (records, records.Checkout, consultations);
+        return (records, records.Consultation.Checkout, consultations);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
@@ -77,15 +77,15 @@ public class ConsultationAutosaveTests
         var folio = consultations.CurrentConsultation!.Folio;
         var startedAt = consultations.CurrentConsultation.StartedAt;
 
-        records.ConsultationChiefComplaint = "Fiebre de 3 días";
-        records.ConsultationTA = "130/85";
-        records.ConsultationSpO2 = "95";
-        records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
-        records.ConsultationSection = 4;
+        records.Consultation.ConsultationChiefComplaint = "Fiebre de 3 días";
+        records.Consultation.ConsultationTA = "130/85";
+        records.Consultation.ConsultationSpO2 = "95";
+        records.Consultation.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
+        records.Consultation.ConsultationSection = 4;
         consultations.AddCartItemToActiveConsultation(-1, "INY-01", "Aplicación de inyección", null, null, "Servicio", 80m, 1);
 
         // Se guarda solo tras una pausa al escribir, sin pulsar nada
-        await WaitUntilAsync(() => File.Exists(_draftPath) && records.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal));
+        await WaitUntilAsync(() => File.Exists(_draftPath) && records.Autosave.AutosaveStatus.StartsWith("Guardado", StringComparison.Ordinal));
 
         // Cierre de la app (o apagón): se guarda lo último y se vuelve a abrir
         records.Dispose();
@@ -93,25 +93,25 @@ public class ConsultationAutosaveTests
 
         Assert.IsTrue(reopened.HasActiveConsultation, "La consulta se retoma al abrir");
         Assert.IsTrue(reopened.IsConsultationRecovered);
-        StringAssert.StartsWith(reopened.AutosaveStatus, "Consulta recuperada");
+        StringAssert.StartsWith(reopened.Autosave.AutosaveStatus, "Consulta recuperada");
         Assert.AreEqual(patient.Id, reopened.SelectedPatient?.Id);
         Assert.AreEqual(folio, reopenedConsultations.CurrentConsultation!.Folio, "Mismo folio: la nota no se duplica");
         Assert.AreEqual(startedAt, reopenedConsultations.CurrentConsultation.StartedAt, "La duración cuenta desde el inicio real");
-        Assert.AreEqual("Fiebre de 3 días", reopened.ConsultationChiefComplaint);
-        Assert.AreEqual("130/85", reopened.ConsultationTA);
-        Assert.AreEqual("95", reopened.ConsultationSpO2);
-        Assert.AreEqual("J00 Rinofaringitis aguda", reopened.ConsultationDiagnosis);
-        Assert.AreEqual(4, reopened.ConsultationSection);
+        Assert.AreEqual("Fiebre de 3 días", reopened.Consultation.ConsultationChiefComplaint);
+        Assert.AreEqual("130/85", reopened.Consultation.ConsultationTA);
+        Assert.AreEqual("95", reopened.Consultation.ConsultationSpO2);
+        Assert.AreEqual("J00 Rinofaringitis aguda", reopened.Consultation.ConsultationDiagnosis);
+        Assert.AreEqual(4, reopened.Consultation.ConsultationSection);
         var charge = reopenedConsultations.CurrentConsultation.Items.Single();
         Assert.AreEqual("Aplicación de inyección", charge.Name);
         Assert.AreEqual(80m, charge.UnitPrice);
 
         // Al cobrar, la consulta terminada ya no se recupera
-        await reopened.FinalizeConsultationAsync();
+        await reopened.Consultation.FinalizeConsultationAsync();
         await checkout.ChargeAsync();
         await WaitUntilAsync(() => !reopenedConsultations.HasActiveConsultation);
         Assert.IsFalse(File.Exists(_draftPath));
-        Assert.AreEqual(string.Empty, reopened.AutosaveStatus);
+        Assert.AreEqual(string.Empty, reopened.Autosave.AutosaveStatus);
     }
 
     [TestMethod]
@@ -120,12 +120,12 @@ public class ConsultationAutosaveTests
         var (records, _, _) = await OpenAppAsync();
         records.SelectPatient(records.Patients.First());
         records.StartActiveConsultation();
-        records.SaveConsultationDraftNow();
+        records.Autosave.SaveConsultationDraftNow();
         Assert.IsTrue(File.Exists(_draftPath));
 
         // Queda una escritura pendiente y se descarta la consulta antes de que ocurra
         records.AutosaveDelay = TimeSpan.FromMilliseconds(250);
-        records.ConsultationChiefComplaint = "Paciente equivocado";
+        records.Consultation.ConsultationChiefComplaint = "Paciente equivocado";
         await records.DiscardActiveConsultationAsync();
 
         await Task.Delay(600);
@@ -167,7 +167,7 @@ public class ConsultationAutosaveTests
         // Y la siguiente consulta se guarda con normalidad
         records.SelectPatient(records.Patients.First());
         records.StartActiveConsultation();
-        records.SaveConsultationDraftNow();
+        records.Autosave.SaveConsultationDraftNow();
         Assert.IsNotNull(new ConsultationDraftStore(_draftPath).Load());
     }
 
@@ -222,7 +222,7 @@ public class ConsultationAutosaveTests
         // El programa se cae (sin guardar al cerrar) y se vuelve a abrir: al cobrar, la cita queda atendida
         var (reopened, checkout, reopenedConsultations) = await OpenAppAsync();
         Assert.IsTrue(reopened.HasActiveConsultation);
-        await reopened.FinalizeConsultationAsync();
+        await reopened.Consultation.FinalizeConsultationAsync();
         checkout.SelectedPaymentMethod = "Efectivo";
         checkout.CashReceived = 5000m;
         await checkout.ChargeAsync();

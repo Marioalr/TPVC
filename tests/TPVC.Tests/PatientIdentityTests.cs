@@ -218,9 +218,9 @@ public class PatientIdentityTests
         vm.StartActiveConsultation();
         var folio = consultations.CurrentConsultation!.Folio;
 
-        vm.ConsultationChiefComplaint = "Revisión de resultados";
-        vm.ConsultationDiagnosis = "Z01 Examen de control";
-        await vm.FinalizeConsultationAsync();
+        vm.Consultation.ConsultationChiefComplaint = "Revisión de resultados";
+        vm.Consultation.ConsultationDiagnosis = "Z01 Examen de control";
+        await vm.Consultation.FinalizeConsultationAsync();
 
         var note = (await _service.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == folio);
         Assert.AreEqual(string.Empty, note.VitalSigns, "No se tomaron signos en esta consulta");

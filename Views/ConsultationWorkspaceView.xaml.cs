@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using TPVC.Models;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Views;
 
@@ -23,10 +24,10 @@ public partial class ConsultationWorkspaceView : UserControl
 
         ICommand? command = e.Key switch
         {
-            Key.Down => vm.NextConsultationSectionCommand,
-            Key.Up => vm.PreviousConsultationSectionCommand,
-            Key.Enter => vm.FinalizeConsultationCommand,
-            Key.S => vm.SaveConsultationDraftNowCommand,
+            Key.Down => vm.Consultation.NextConsultationSectionCommand,
+            Key.Up => vm.Consultation.PreviousConsultationSectionCommand,
+            Key.Enter => vm.Consultation.FinalizeConsultationCommand,
+            Key.S => vm.Autosave.SaveConsultationDraftNowCommand,
             _ => null
         };
         if (command == null) return;
@@ -97,7 +98,7 @@ public partial class ConsultationWorkspaceView : UserControl
         {
             if (ActiveCie10SuggestionsListBox?.SelectedItem is Cie10Diagnosis item)
             {
-                vm.SelectCie10Suggestion(item);
+                vm.Consultation.SelectCie10Suggestion(item);
                 e.Handled = true;
             }
         }
@@ -111,7 +112,7 @@ public partial class ConsultationWorkspaceView : UserControl
         {
             if (ActiveCie10SuggestionsListBox?.SelectedItem is Cie10Diagnosis item)
             {
-                vm.SelectCie10Suggestion(item);
+                vm.Consultation.SelectCie10Suggestion(item);
                 ActiveConsultationDiagnosisTextBox?.Focus();
                 e.Handled = true;
             }
@@ -130,7 +131,7 @@ public partial class ConsultationWorkspaceView : UserControl
         {
             if (DataContext is MedicalRecordsViewModel vm)
             {
-                vm.SelectCie10Suggestion(diag);
+                vm.Consultation.SelectCie10Suggestion(diag);
                 ActiveConsultationDiagnosisTextBox?.Focus();
                 e.Handled = true;
             }
@@ -141,13 +142,13 @@ public partial class ConsultationWorkspaceView : UserControl
 
     private void AttachToViewModel(MedicalRecordsViewModel? viewModel)
     {
-        if (_subscribed != null) _subscribed.PropertyChanged -= ViewModel_PropertyChanged;
+        if (_subscribed != null) _subscribed.Consultation.PropertyChanged -= ViewModel_PropertyChanged;
         _subscribed = viewModel;
-        if (_subscribed != null) _subscribed.PropertyChanged += ViewModel_PropertyChanged;
+        if (_subscribed != null) _subscribed.Consultation.PropertyChanged += ViewModel_PropertyChanged;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MedicalRecordsViewModel.ConsultationSection)) FocusActiveConsultationSection();
+        if (e.PropertyName == nameof(ConsultationViewModel.ConsultationSection)) FocusActiveConsultationSection();
     }
 }

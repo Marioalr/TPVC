@@ -192,7 +192,7 @@ internal sealed class UiPerfSession
         _rows.Add(("Desglose", "Pendientes del despachador", $"{afterPump - afterLoad:0} ms"));
         _rows.Add(("Desglose", "Medir y acomodar", $"{afterLayout - afterPump:0} ms"));
         _rows.Add(("Desglose", "Dibujar", $"{open.Elapsed.TotalMilliseconds - afterLayout:0} ms"));
-        _rows.Add(("Desglose", "Elementos del historial", $"{records.Timeline.Count} renglones, {CountVisuals(host)} elementos visuales"));
+        _rows.Add(("Desglose", "Elementos del historial", $"{records.Chart.Timeline.Count} renglones, {CountVisuals(host)} elementos visuales"));
 
         records.Navigation.GoToPatientsHome();
         Settle(host);

@@ -80,7 +80,7 @@ public class ConsultationWorkspaceTests
         records.SelectPatient(patient);
         records.StartActiveConsultation();
         Assert.IsTrue(records.HasActiveConsultation);
-        return (records, records.Checkout, consultations, records.SelectedPatient!);
+        return (records, records.Consultation.Checkout, consultations, records.SelectedPatient!);
     }
 
     private async Task<Product> StockedProductAsync()
@@ -112,12 +112,12 @@ public class ConsultationWorkspaceTests
         Assert.IsTrue(patient.ActivePrescription.Last().DispenseInClinic);
         Assert.AreEqual(records.Account.ConsultationFeeAmount + product.Price, records.Account.ConsultationAccountTotal);
 
-        records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
+        records.Consultation.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
         var folio = consultations.CurrentConsultation!.Folio;
 
-        await records.FinalizeConsultationAsync();
+        await records.Consultation.FinalizeConsultationAsync();
 
-        Assert.IsTrue(records.IsFinishConsultationOpen, "Se abre la ventana de terminar consulta");
+        Assert.IsTrue(records.Consultation.IsFinishConsultationOpen, "Se abre la ventana de terminar consulta");
         Assert.IsTrue(records.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
         Assert.HasCount(2, checkout.Cart, "Honorario + medicamento surtido");
         Assert.IsTrue(checkout.Cart[0].IsService);
@@ -125,10 +125,10 @@ public class ConsultationWorkspaceTests
         Assert.AreEqual(product.Id, checkout.Cart[1].ProductId);
 
         // "Volver a la consulta" y terminar otra vez no duplica cargos ni notas
-        records.CloseFinishConsultation();
+        records.Consultation.CloseFinishConsultation();
         Assert.IsEmpty(checkout.Cart);
         Assert.IsTrue(records.HasActiveConsultation);
-        await records.FinalizeConsultationAsync();
+        await records.Consultation.FinalizeConsultationAsync();
         Assert.HasCount(2, checkout.Cart);
 
         var notes = await _service.GetPatientConsultationsAsync(patient.Id);
@@ -139,7 +139,7 @@ public class ConsultationWorkspaceTests
         await checkout.ChargeAsync();
 
         await WaitUntilAsync(() => !consultations.HasActiveConsultation);
-        Assert.IsFalse(records.IsFinishConsultationOpen);
+        Assert.IsFalse(records.Consultation.IsFinishConsultationOpen);
         var after = (await _service.GetProductsAsync()).Single(p => p.Id == product.Id);
         Assert.AreEqual(stockBefore - 1, after.CurrentStock, "Se descuenta lo surtido en el consultorio");
         var sales = await _service.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1));
@@ -151,7 +151,7 @@ public class ConsultationWorkspaceTests
     {
         var (records, checkout, consultations, _) = await StartConsultationAsync();
 
-        await records.FinalizeConsultationAsync();
+        await records.Consultation.FinalizeConsultationAsync();
         foreach (var item in checkout.Cart.ToList()) checkout.RemoveFromCart(item);
         Assert.IsFalse(checkout.HasItems);
 
@@ -169,17 +169,17 @@ public class ConsultationWorkspaceTests
         var folio = consultations.CurrentConsultation!.Folio;
         int notesBefore = (await _service.GetPatientConsultationsAsync(patient.Id)).Count;
 
-        records.ConsultationChiefComplaint = "Paciente equivocado";
+        records.Consultation.ConsultationChiefComplaint = "Paciente equivocado";
         // "Terminar consulta" guarda el avance de la nota; "Volver a la consulta" la deja abierta
-        await records.FinalizeConsultationAsync();
-        records.CloseFinishConsultation();
+        await records.Consultation.FinalizeConsultationAsync();
+        records.Consultation.CloseFinishConsultation();
         Assert.HasCount(notesBefore + 1, await _service.GetPatientConsultationsAsync(patient.Id));
 
         await records.DiscardActiveConsultationAsync();
 
         Assert.IsFalse(records.HasActiveConsultation);
-        Assert.AreEqual(string.Empty, records.ConsultationChiefComplaint);
-        Assert.AreEqual(1, records.ConsultationSection);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationChiefComplaint);
+        Assert.AreEqual(1, records.Consultation.ConsultationSection);
         var notes = await _service.GetPatientConsultationsAsync(patient.Id);
         Assert.HasCount(notesBefore, notes);
         Assert.IsFalse(notes.Any(c => c.Folio == folio));
@@ -226,11 +226,11 @@ public class ConsultationWorkspaceTests
         records.StartActiveConsultation();
 
         // Un 120/80 o 70 kg de ejemplo se guardaría como si se hubiera medido
-        Assert.AreEqual(string.Empty, records.ConsultationTA);
-        Assert.AreEqual(string.Empty, records.ConsultationFC);
-        Assert.AreEqual(string.Empty, records.ConsultationTemp);
-        Assert.AreEqual(string.Empty, records.ConsultationWeight);
-        Assert.AreEqual(string.Empty, records.ConsultationHeight);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationTA);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationFC);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationTemp);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationWeight);
+        Assert.AreEqual(string.Empty, records.Consultation.ConsultationHeight);
     }
 
     [TestMethod]
@@ -238,16 +238,16 @@ public class ConsultationWorkspaceTests
     {
         var (records, _, _, _) = await StartConsultationAsync();
 
-        records.PreviousConsultationSection();
-        Assert.AreEqual(1, records.ConsultationSection);
-        for (int i = 0; i < 10; i++) records.NextConsultationSection();
-        Assert.AreEqual(MedicalRecordsViewModel.ConsultationSectionCount, records.ConsultationSection);
-        records.SetConsultationSection("3");
-        Assert.AreEqual(3, records.ConsultationSection);
-        records.SetConsultationSection("99");
-        Assert.AreEqual(MedicalRecordsViewModel.ConsultationSectionCount, records.ConsultationSection, "Fuera de rango se limita a la última sección");
-        records.SetConsultationSection("x");
-        Assert.AreEqual(MedicalRecordsViewModel.ConsultationSectionCount, records.ConsultationSection, "Texto inválido se ignora");
+        records.Consultation.PreviousConsultationSection();
+        Assert.AreEqual(1, records.Consultation.ConsultationSection);
+        for (int i = 0; i < 10; i++) records.Consultation.NextConsultationSection();
+        Assert.AreEqual(ConsultationViewModel.ConsultationSectionCount, records.Consultation.ConsultationSection);
+        records.Consultation.SetConsultationSection("3");
+        Assert.AreEqual(3, records.Consultation.ConsultationSection);
+        records.Consultation.SetConsultationSection("99");
+        Assert.AreEqual(ConsultationViewModel.ConsultationSectionCount, records.Consultation.ConsultationSection, "Fuera de rango se limita a la última sección");
+        records.Consultation.SetConsultationSection("x");
+        Assert.AreEqual(ConsultationViewModel.ConsultationSectionCount, records.Consultation.ConsultationSection, "Texto inválido se ignora");
     }
 
     [TestMethod]
@@ -438,29 +438,29 @@ public class ConsultationWorkspaceTests
 
         // Lo que ve la pantalla: el valor de HasVitalSignsWarning cada vez que se avisa
         bool? shown = null;
-        records.PropertyChanged += (_, e) =>
+        records.Consultation.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MedicalRecordsViewModel.HasVitalSignsWarning)) shown = records.HasVitalSignsWarning;
+            if (e.PropertyName == nameof(ConsultationViewModel.HasVitalSignsWarning)) shown = records.Consultation.HasVitalSignsWarning;
         };
 
         void Check(string input, Action change, bool expected)
         {
             shown = null;
             change();
-            Assert.AreEqual(expected, records.HasVitalSignsWarning, input);
+            Assert.AreEqual(expected, records.Consultation.HasVitalSignsWarning, input);
             Assert.AreEqual(expected, shown, $"{input}: la alerta en pantalla se actualiza");
         }
 
-        Check("Temp alta", () => records.ConsultationTemp = "38.5", true);
-        Check("Temp normal", () => records.ConsultationTemp = "36.5", false);
-        Check("FC alta en adulto", () => records.ConsultationFC = "120", true);
+        Check("Temp alta", () => records.Consultation.ConsultationTemp = "38.5", true);
+        Check("Temp normal", () => records.Consultation.ConsultationTemp = "36.5", false);
+        Check("FC alta en adulto", () => records.Consultation.ConsultationFC = "120", true);
         Check("Misma FC en un niño", () => records.SelectedPatient = child, false);
         Check("De vuelta al adulto", () => records.SelectedPatient = adult, true);
-        Check("FC vacía", () => records.ConsultationFC = string.Empty, false);
-        Check("SpO2 baja", () => records.ConsultationSpO2 = "88", true);
-        Check("SpO2 vacía", () => records.ConsultationSpO2 = string.Empty, false);
-        Check("Glucosa alta", () => records.ConsultationGlucose = "250", true);
-        Check("Glucosa vacía", () => records.ConsultationGlucose = string.Empty, false);
-        Check("T/A alta", () => records.ConsultationTA = "150/95", true);
+        Check("FC vacía", () => records.Consultation.ConsultationFC = string.Empty, false);
+        Check("SpO2 baja", () => records.Consultation.ConsultationSpO2 = "88", true);
+        Check("SpO2 vacía", () => records.Consultation.ConsultationSpO2 = string.Empty, false);
+        Check("Glucosa alta", () => records.Consultation.ConsultationGlucose = "250", true);
+        Check("Glucosa vacía", () => records.Consultation.ConsultationGlucose = string.Empty, false);
+        Check("T/A alta", () => records.Consultation.ConsultationTA = "150/95", true);
     }
 }

@@ -166,10 +166,10 @@ public class ConsultationHandoffTests
 
         a.Records.SelectPatient(patient);
         a.Records.StartActiveConsultation();
-        a.Records.ConsultationChiefComplaint = "Fiebre de 3 días";
-        a.Records.ConsultationTA = "130/85";
-        a.Records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
-        a.Records.ConsultationSection = 4;
+        a.Records.Consultation.ConsultationChiefComplaint = "Fiebre de 3 días";
+        a.Records.Consultation.ConsultationTA = "130/85";
+        a.Records.Consultation.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
+        a.Records.Consultation.ConsultationSection = 4;
         a.Consultations.AddCartItemToActiveConsultation(product.Id, product.Code, product.Name, product.GenericName, product.Presentation, product.Unit, product.Price, 2);
         a.Consultations.AddCartItemToActiveConsultation(-service.Id, service.Code, service.Name, null, null, "Servicio", service.Price, 1);
         a.Consultations.AddCartItemToActiveConsultation(-1_000_777, "LIBRE", "Curación especial", null, null, "Servicio", 150m, 1);
@@ -241,9 +241,9 @@ public class ConsultationHandoffTests
         Assert.IsTrue(tablet.Records.IsConsultationEditable);
         Assert.AreEqual(folio, received.Folio, "Mismo folio");
         Assert.AreEqual(startedAt, received.StartedAt, "Misma hora de inicio");
-        Assert.AreEqual("Fiebre de 3 días", tablet.Records.ConsultationChiefComplaint);
-        Assert.AreEqual("130/85", tablet.Records.ConsultationTA);
-        Assert.AreEqual(4, tablet.Records.ConsultationSection);
+        Assert.AreEqual("Fiebre de 3 días", tablet.Records.Consultation.ConsultationChiefComplaint);
+        Assert.AreEqual("130/85", tablet.Records.Consultation.ConsultationTA);
+        Assert.AreEqual(4, tablet.Records.Consultation.ConsultationSection);
 
         var tabletProduct = (await tablet.Device.Inventory.GetProductsAsync()).Single(p => p.SyncId == product.SyncId);
         var tabletService = (await tablet.Device.Inventory.GetClinicalServicesAsync()).Single(s => s.SyncId == service.SyncId);
@@ -267,9 +267,9 @@ public class ConsultationHandoffTests
         await WaitUntilAsync(() => ServerScalar("SELECT COUNT(*) FROM ConsultationHandoffs WHERE SenderAckAtUtc IS NOT NULL") == "1");
 
         // La tablet la termina y la cobra
-        await tablet.Records.FinalizeConsultationAsync();
-        tablet.Records.Checkout.SetExactCash();
-        await tablet.Records.Checkout.ChargeAsync();
+        await tablet.Records.Consultation.FinalizeConsultationAsync();
+        tablet.Records.Consultation.Checkout.SetExactCash();
+        await tablet.Records.Consultation.Checkout.ChargeAsync();
         await WaitUntilAsync(() => !tablet.Consultations.HasActiveConsultation);
 
         Assert.IsTrue((await tablet.Device.Sync.SyncAsync()).Success);
@@ -406,7 +406,7 @@ public class ConsultationHandoffTests
         StringAssert.Contains(tablet.Records.IncomingHandoffTitle, "pendiente de abrir");
         await tablet.Records.AcceptIncomingHandoffAsync();
         Assert.IsTrue(tablet.Consultations.HasActiveConsultation);
-        Assert.AreEqual("Fiebre de 3 días", tablet.Records.ConsultationChiefComplaint);
+        Assert.AreEqual("Fiebre de 3 días", tablet.Records.Consultation.ConsultationChiefComplaint);
     }
 
     [TestMethod]
@@ -600,8 +600,8 @@ public class ConsultationHandoffTests
         await SendToAsync(pc, tablet);
 
         var items = pc.Consultations.CurrentConsultation!.Items.Count;
-        await pc.Records.FinalizeConsultationAsync();
-        Assert.IsFalse(pc.Records.IsFinishConsultationOpen, "No se puede terminar aquí");
+        await pc.Records.Consultation.FinalizeConsultationAsync();
+        Assert.IsFalse(pc.Records.Consultation.IsFinishConsultationOpen, "No se puede terminar aquí");
         pc.Records.Account.RemoveItemFromActiveConsultation(pc.Consultations.CurrentConsultation.Items.First());
         Assert.AreEqual(items, pc.Consultations.CurrentConsultation.Items.Count);
         await pc.Records.DiscardActiveConsultationAsync();

@@ -358,13 +358,13 @@ public class DataLayerTests
         var patient = records.Patients.First();
         records.SelectPatient(patient);
         records.StartActiveConsultation();
-        records.ConsultationChiefComplaint = "Control sin duplicados";
-        records.ConsultationDiagnosis = "Sano";
+        records.Consultation.ConsultationChiefComplaint = "Control sin duplicados";
+        records.Consultation.ConsultationDiagnosis = "Sano";
 
-        await records.FinalizeConsultationAsync();
-        Assert.IsTrue(records.IsFinishConsultationOpen);
+        await records.Consultation.FinalizeConsultationAsync();
+        Assert.IsTrue(records.Consultation.IsFinishConsultationOpen);
 
-        await records.Checkout.ChargeAsync();
+        await records.Consultation.Checkout.ChargeAsync();
 
         var stored = (await _service.GetPatientByIdAsync(patient.Id))!;
         Assert.AreEqual(1, stored.Consultations.Count(c => c.ChiefComplaint == "Control sin duplicados"),
@@ -509,10 +509,10 @@ public class DataLayerTests
         Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.Prescription.PrescriptionDosage);
         Assert.IsNull(records.Prescription.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
 
-        records.ConsultationTreatmentPlan = string.Empty;
-        records.SelectedGeneralMeasureTemplate = records.Templates.GeneralMeasureTemplates.Single();
-        Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationTreatmentPlan);
-        Assert.AreEqual("• Mantener adecuada hidratación", records.ConsultationGeneralIndications);
+        records.Consultation.ConsultationTreatmentPlan = string.Empty;
+        records.Consultation.SelectedGeneralMeasureTemplate = records.Templates.GeneralMeasureTemplates.Single();
+        Assert.AreEqual("• Mantener adecuada hidratación", records.Consultation.ConsultationTreatmentPlan);
+        Assert.AreEqual("• Mantener adecuada hidratación", records.Consultation.ConsultationGeneralIndications);
 
         records.Prescription.SelectedPediatricRule = records.Templates.PediatricDoseRules.Single();
         records.Prescription.PediatricWeightText = "15";
@@ -525,8 +525,8 @@ public class DataLayerTests
     public void GeneralIndicationPreset_IsVisibleInTreatmentPlan()
     {
         var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
-        records.ConsultationTreatmentPlan = "Reposo";
-        records.AppendGeneralIndicationPreset("Hidratación abundante.");
-        Assert.AreEqual("Reposo Hidratación abundante.", records.ConsultationTreatmentPlan);
+        records.Consultation.ConsultationTreatmentPlan = "Reposo";
+        records.Consultation.AppendGeneralIndicationPreset("Hidratación abundante.");
+        Assert.AreEqual("Reposo Hidratación abundante.", records.Consultation.ConsultationTreatmentPlan);
     }
 }

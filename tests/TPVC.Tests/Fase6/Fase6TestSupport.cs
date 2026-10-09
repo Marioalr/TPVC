@@ -141,22 +141,22 @@ internal static class Fase6Scenarios
     /// </summary>
     public static async Task FillConsultationAsync(MedicalRecordsViewModel records, ConsultationService consultations)
     {
-        records.ConsultationChiefComplaint = "Control mensual de glucosa y presión";
-        records.ConsultationSystemsReview = "Niega poliuria y polidipsia";
-        records.ConsultationPhysicalExam = "Buen estado general, hidratada";
-        records.ConsultationTA = "135/85";
-        records.ConsultationFC = "76";
-        records.ConsultationFR = "18";
-        records.ConsultationTemp = "36.5";
-        records.ConsultationWeight = "68";
-        records.ConsultationHeight = "1.58";
-        records.ConsultationSpO2 = "97";
-        records.ConsultationGlucose = "142";
-        records.ConsultationDiagnosis = "E11.9 Diabetes mellitus tipo 2 sin complicaciones";
-        records.ConsultationTreatmentPlan = "Continuar metformina 850 mg cada 12 horas";
-        records.ConsultationNotes = "Revisión en un mes con glucosa en ayunas";
-        records.ConsultationGeneralIndications = "Dieta baja en azúcares y caminata diaria";
-        records.ConsultationSection = 4;
+        records.Consultation.ConsultationChiefComplaint = "Control mensual de glucosa y presión";
+        records.Consultation.ConsultationSystemsReview = "Niega poliuria y polidipsia";
+        records.Consultation.ConsultationPhysicalExam = "Buen estado general, hidratada";
+        records.Consultation.ConsultationTA = "135/85";
+        records.Consultation.ConsultationFC = "76";
+        records.Consultation.ConsultationFR = "18";
+        records.Consultation.ConsultationTemp = "36.5";
+        records.Consultation.ConsultationWeight = "68";
+        records.Consultation.ConsultationHeight = "1.58";
+        records.Consultation.ConsultationSpO2 = "97";
+        records.Consultation.ConsultationGlucose = "142";
+        records.Consultation.ConsultationDiagnosis = "E11.9 Diabetes mellitus tipo 2 sin complicaciones";
+        records.Consultation.ConsultationTreatmentPlan = "Continuar metformina 850 mg cada 12 horas";
+        records.Consultation.ConsultationNotes = "Revisión en un mes con glucosa en ayunas";
+        records.Consultation.ConsultationGeneralIndications = "Dieta baja en azúcares y caminata diaria";
+        records.Consultation.ConsultationSection = 4;
 
         var paracetamol = records.Catalog.AvailableProducts.Single(p => p.Code == "MED-001");
         records.Prescription.PrescriptionDosage = "1 tableta cada 8 horas por 3 días";

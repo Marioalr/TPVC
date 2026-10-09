@@ -28,9 +28,12 @@ public partial class MedicalRecordsViewModel
     private AgendaPanelViewModel _agenda;
     private PatientFormViewModel _patientForm;
     private PatientsHomeViewModel _home;
+    private PatientChartViewModel _chart;
     private SuppliesSheetViewModel _supplies;
     private ClinicalServicesSheetViewModel _clinicalServices;
     private PrescriptionSheetViewModel _prescription;
+    private ConsultationViewModel _consultation;
+    private ConsultationAutosave _autosave;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
     public InfoDialogState Info => _info;
@@ -80,6 +83,9 @@ public partial class MedicalRecordsViewModel
     /// <summary>Inicio: buscador, pacientes recientes y citas de hoy.</summary>
     public PatientsHomeViewModel Home => _home;
 
+    /// <summary>Ficha del paciente: antecedentes, historial, lo esencial, última receta y citas.</summary>
+    public PatientChartViewModel Chart => _chart;
+
     /// <summary>Hoja de insumos y material clínico.</summary>
     public SuppliesSheetViewModel Supplies => _supplies;
 
@@ -89,7 +95,13 @@ public partial class MedicalRecordsViewModel
     /// <summary>Hoja de receta (posología, dosis pediátrica, alerta de alergia, receta anterior y "Se surte aquí").</summary>
     public PrescriptionSheetViewModel Prescription => _prescription;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription))]
+    /// <summary>Consulta en curso: la nota, sus secciones, el CIE-10 y "Terminar consulta" con su cobro (Checkout).</summary>
+    public ConsultationViewModel Consultation => _consultation;
+
+    /// <summary>Guardado automático de la consulta en curso (borrador local, indicador y consulta recuperada).</summary>
+    public ConsultationAutosave Autosave => _autosave;
+
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
         IPrescriptionOutput? printingService)
     {
@@ -112,16 +124,24 @@ public partial class MedicalRecordsViewModel
             AddSupply = product => Supplies.SelectAndAddSupplyProductAsync(product),
             AddService = service => ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service)
         };
-        // Las indicaciones de la receta leen el plan que escribe el médico en la consulta
-        _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => ConsultationTreatmentPlan);
+        // Las indicaciones de la receta leen el plan que escribe el médico en la consulta (Consultation se
+        // crea después: se lee al momento)
+        _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => Consultation.ConsultationTreatmentPlan);
         _agenda = new AgendaPanelViewModel(_inventoryService, _session, _info, _feedback, _clinic, _dialogs, _urls, this);
         _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,
             _info, _feedback, this, _dialogs, _ui, _autosaveOptions, this);
         _home = new PatientsHomeViewModel(_inventoryService, _session, _navigation, this);
+        _chart = new PatientChartViewModel(_inventoryService, _session, _active, _record, _navigation, _info, _feedback, this, _dialogs, this);
         _supplies = new SuppliesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
         _clinicalServices = new ClinicalServicesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
-        // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso
+        // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso (se lee al momento)
         _prescription = new PrescriptionSheetViewModel(_inventoryService, _catalog, _templates, _session, _active, _record, _account, _info, _feedback,
-            _catalogBrowser, this, this, _ui, () => ConsultationWeight);
+            _catalogBrowser, this, this, _ui, () => Consultation.ConsultationWeight);
+        // Al final: el cobro (Checkout) se arma con la consulta, como antes justo después de los hijos y
+        // antes de cualquier suscripción
+        _consultation = new ConsultationViewModel(_inventoryService, _consultationService, clinicProfileService, _session, _active, _record, _account,
+            _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this);
+        _autosave = new ConsultationAutosave(_consultationService, consultationDraftStore, _consultation, _session, _active, _record, _account, _catalog,
+            _navigation, _ui, _autosaveOptions, this, this);
     }
 }

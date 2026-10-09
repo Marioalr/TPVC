@@ -589,7 +589,7 @@ public partial class MedicalRecordsViewModel
 
             // 3. Solo lectura aquí ANTES de que el otro equipo pueda verla, y que sobreviva a un cierre
             EnterHandedOffState(marker);
-            if (!SaveConsultationDraftChecked())
+            if (!Autosave.SaveConsultationDraftChecked())
             {
                 LeaveHandedOffState(marker);
                 HandoffSheetError = "No se pudo guardar la consulta en este equipo; no se envió.";
@@ -601,7 +601,7 @@ public partial class MedicalRecordsViewModel
             {
                 await _handoff.SendAsync(marker, ConsultationDraftStore.Serialize(payload));
                 marker.Phase = HandoffPhase.Sent;
-                SaveConsultationDraftChecked();
+                Autosave.SaveConsultationDraftChecked();
                 IsSendConsultationSheetOpen = false;
                 Feedback.ShowSuccess($"Consulta enviada a {device.DeviceName}");
             }
@@ -615,7 +615,7 @@ public partial class MedicalRecordsViewModel
                 // Pudo llegar o no: se resuelve contra la nube antes de volver a editarla aquí
                 AppLogger.Warn($"Envío de consulta dudoso ({ex.Message}); se resuelve contra la nube.");
                 marker.Phase = HandoffPhase.Unconfirmed;
-                SaveConsultationDraftChecked();
+                Autosave.SaveConsultationDraftChecked();
                 IsSendConsultationSheetOpen = false;
                 if (!await ResolveOutgoingCoreAsync(marker, userInitiated: false))
                 {
@@ -669,7 +669,7 @@ public partial class MedicalRecordsViewModel
         CanReleaseHandoffLocally = false;
         IsConsultationHandedOff = false;
         _consultationService?.SetActiveConsultationHandedOff(false);
-        SaveConsultationDraftChecked();
+        Autosave.SaveConsultationDraftChecked();
         NotifyHandoffState();
     }
 
@@ -692,7 +692,7 @@ public partial class MedicalRecordsViewModel
     {
         var active = _consultationService?.CurrentConsultation;
         if (active == null || _inventoryService == null) return null;
-        var draft = BuildConsultationDraft();
+        var draft = Autosave.BuildConsultationDraft();
         if (draft == null) return null;
 
         var patient = Session.Patients.FirstOrDefault(p => p.Id == active.PatientId)
@@ -710,7 +710,7 @@ public partial class MedicalRecordsViewModel
         draft.PatientSyncId = patient.SyncId;
         draft.PatientUpdatedAtUtc = await _inventoryService.GetPatientUpdatedAtAsync(patient.Id);
         draft.ProgressNoteSyncId = await _inventoryService.FindConsultationNoteSyncIdAsync(patient.Id, draft.Folio);
-        draft.AttendingAppointmentSyncId = _attendingAppointmentId is int appointmentId
+        draft.AttendingAppointmentSyncId = Consultation.AttendingAppointmentId is int appointmentId
             ? await _inventoryService.GetAppointmentSyncIdAsync(appointmentId)
             : null;
         var fee = Account.ConsultationFeeService;
@@ -838,12 +838,12 @@ public partial class MedicalRecordsViewModel
 
         // Sin estas referencias el cierre no regresa la receta ni el resumen del expediente
         Record.Abandon();
-        _isCurrentConsultationSaved = false;
-        _attendingAppointmentId = null;
+        Consultation.IsCurrentConsultationSaved = false;
+        Consultation.AttendingAppointmentId = null;
         Account.FeeServiceOverrideId = null;
         IsSendConsultationSheetOpen = false;
         CloseConsultationSheets();
-        IsFinishConsultationOpen = false;
+        Consultation.IsFinishConsultationOpen = false;
 
         // El cierre borra el borrador local (la consulta ya no es de este equipo)
         _consultationService?.CloseActiveConsultation();
@@ -852,7 +852,7 @@ public partial class MedicalRecordsViewModel
         CanReleaseHandoffLocally = false;
         HandoffBannerDetail = null;
         Active.StopConsultationTimer();
-        ClearConsultationFields();
+        Consultation.ClearConsultationFields();
 
         if (Navigation.IsConsultationPage)
         {
@@ -1209,16 +1209,16 @@ public partial class MedicalRecordsViewModel
         mapped.Draft.ReceivedHandoffToken = token;
         _appliedIncoming.Add(row.Id);
 
-        ApplyConsultationDraft(mapped.Patient, mapped.Draft);
-        IsConsultationRecovered = false;
-        if (!SaveConsultationDraftChecked())
+        Autosave.ApplyConsultationDraft(mapped.Patient, mapped.Draft);
+        Autosave.IsConsultationRecovered = false;
+        if (!Autosave.SaveConsultationDraftChecked())
         {
             Feedback.ShowWarning("La consulta se abrió, pero todavía no se pudo guardar su copia en este equipo; la de la nube se conserva hasta lograrlo.");
         }
 
         _dismissedIncoming.Add(row.Id);
         ShowIncomingNotice(null, accepted: false);
-        AutosaveStatus = $"Recibida de {row.FromDeviceName} · {DateTime.Now:HH:mm}";
+        Autosave.AutosaveStatus = $"Recibida de {row.FromDeviceName} · {DateTime.Now:HH:mm}";
         Navigation.PatientsPage = PageConsultation;
         NotifyAccountChanged();
         NotifyHandoffState();
