@@ -2,6 +2,11 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.9] - 2026-10-09
+
+### Añadido — Fase 7: pedidos del consultorio
+* **Ocultar el cronómetro de la consulta**: un clic sobre el cronómetro lo oculta (queda solo el reloj) y otro clic lo vuelve a mostrar. La elección se recuerda en el equipo, también al cerrar el programa (`%LocalAppData%\TPVC\preferencias.json`; no se sincroniza). Con esto quedan hechos todos los pedidos de la Fase 7.
+
 ## [1.18.8] - 2026-10-09
 
 ### Corregido
