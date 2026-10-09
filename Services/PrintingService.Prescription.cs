@@ -257,7 +257,8 @@ public partial class PrintingService
 
         double contentHeight = pageHeight - 2 * PrescriptionSheet.MarginTopBottom;
         double fixedHeight = HeaderHeight + PatientRowGap + InfoRowHeight + VitalsRowGap + InfoRowHeight + BodyGap + FooterGap + FooterHeight;
-        doc.Blocks.Add(BuildPrescriptionBody(sheet, Math.Max(0, contentHeight - fixedHeight - PageSafety)));
+        double contentWidth = pageWidth - 2 * PrescriptionSheet.MarginLeftRight;
+        doc.Blocks.Add(BuildPrescriptionBody(sheet, Math.Max(0, contentHeight - fixedHeight - PageSafety), contentWidth));
         doc.Blocks.Add(Fixed(BuildPrescriptionFooter(sheet), FooterGap));
         return doc;
     }
@@ -395,12 +396,16 @@ public partial class PrintingService
     }
 
     /// <summary>Medicamentos (nombre y posología debajo, un renglón en blanco entre ellos) y medidas generales.</summary>
-    private static Table BuildPrescriptionBody(PrescriptionSheet sheet, double minHeight)
+    private static Table BuildPrescriptionBody(PrescriptionSheet sheet, double minHeight, double contentWidth)
     {
+        // Anchos fijos calculados con el ancho de la hoja: con columnas de estrella el FlowDocument impreso
+        // daba casi todo el ancho a la columna separadora y el texto se partía letra por letra
+        const double gap = 10;
+        double usable = Math.Max(200, contentWidth - gap);
         var table = new Table { CellSpacing = 0, Margin = new Thickness(0, BodyGap, 0, 0) };
-        table.Columns.Add(new TableColumn { Width = new GridLength(7, GridUnitType.Star) });
-        table.Columns.Add(new TableColumn { Width = new GridLength(10) });
-        table.Columns.Add(new TableColumn { Width = new GridLength(3, GridUnitType.Star) });
+        table.Columns.Add(new TableColumn { Width = new GridLength(Math.Floor(usable * 0.7)) });
+        table.Columns.Add(new TableColumn { Width = new GridLength(gap) });
+        table.Columns.Add(new TableColumn { Width = new GridLength(usable - Math.Floor(usable * 0.7)) });
 
         var medicines = new TableCell { Background = PaperFill, Padding = new Thickness(8, 6, 8, 6) };
         for (int i = 0; i < sheet.Medicines.Count; i++)
