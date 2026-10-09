@@ -135,7 +135,7 @@ public class ConsultationHandoffTests
             consultationHandoffService: device.Handoff)
         {
             AutosaveDelay = TimeSpan.FromMilliseconds(30),
-            HandoffSyncLockWait = TimeSpan.FromSeconds(5)
+            Handoff = { HandoffSyncLockWait = TimeSpan.FromSeconds(5) }
         };
         await records.InitialLoad;
         return new Station { Device = device, Records = records, Consultations = consultations };
@@ -178,12 +178,12 @@ public class ConsultationHandoffTests
 
     private static async Task SendToAsync(Station from, Station to)
     {
-        await from.Records.OpenSendConsultationSheetAsync();
-        Assert.IsTrue(from.Records.IsSendConsultationSheetOpen);
-        var target = from.Records.HandoffDevices.Single(d => d.DeviceId == to.Device.Settings.CurrentSettings.DeviceId);
+        await from.Records.Handoff.OpenSendConsultationSheetAsync();
+        Assert.IsTrue(from.Records.Handoff.IsSendConsultationSheetOpen);
+        var target = from.Records.Handoff.HandoffDevices.Single(d => d.DeviceId == to.Device.Settings.CurrentSettings.DeviceId);
         Assert.IsTrue(target.IsAvailable, target.StatusText);
-        from.Records.SelectedHandoffDevice = target;
-        await from.Records.SendConsultationToSelectedDeviceAsync();
+        from.Records.Handoff.SelectedHandoffDevice = target;
+        await from.Records.Handoff.SendConsultationToSelectedDeviceAsync();
     }
 
     private string? ServerState(string? id = null)
@@ -206,7 +206,7 @@ public class ConsultationHandoffTests
     }
 
     private static int Owners(params Station[] stations) =>
-        stations.Count(s => s.Consultations.HasActiveConsultation && s.Records.IsConsultationEditable);
+        stations.Count(s => s.Consultations.HasActiveConsultation && s.Records.Handoff.IsConsultationEditable);
 
     // ================================================================== camino feliz
 
@@ -220,25 +220,25 @@ public class ConsultationHandoffTests
 
         await SendToAsync(pc, tablet);
 
-        Assert.IsTrue(pc.Records.IsConsultationHandedOff, "En la PC queda en solo lectura");
-        Assert.IsFalse(pc.Records.IsConsultationEditable);
-        Assert.IsFalse(pc.Records.IsSendConsultationSheetOpen);
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationHandedOff, "En la PC queda en solo lectura");
+        Assert.IsFalse(pc.Records.Handoff.IsConsultationEditable);
+        Assert.IsFalse(pc.Records.Handoff.IsSendConsultationSheetOpen);
         Assert.AreEqual("enviada", ServerState());
         StringAssert.Contains(File.ReadAllText(pc.Device.DraftPath), "\"Handoff\"", "La marca de envío queda en el borrador local");
         Assert.IsFalse(pc.Consultations.AddCartItemToActiveConsultation(product.Id, product.Code, product.Name, null, null, "Piezas", 1m, 1),
             "Una consulta enviada no acepta cargos (tampoco desde el POS)");
 
         // La tablet la ve en su revisión y la toma
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsNotNull(tablet.Records.IncomingHandoff);
-        StringAssert.Contains(tablet.Records.IncomingHandoffTitle, "PC del consultorio");
-        StringAssert.Contains(tablet.Records.IncomingHandoffDetail, patient.FullName);
-        Assert.IsTrue(tablet.Records.CanAcceptIncomingHandoff);
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsNotNull(tablet.Records.Handoff.IncomingHandoff);
+        StringAssert.Contains(tablet.Records.Handoff.IncomingHandoffTitle, "PC del consultorio");
+        StringAssert.Contains(tablet.Records.Handoff.IncomingHandoffDetail, patient.FullName);
+        Assert.IsTrue(tablet.Records.Handoff.CanAcceptIncomingHandoff);
 
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         var received = tablet.Consultations.CurrentConsultation;
         Assert.IsNotNull(received, tablet.Records.Info.InfoModalMessage);
-        Assert.IsTrue(tablet.Records.IsConsultationEditable);
+        Assert.IsTrue(tablet.Records.Handoff.IsConsultationEditable);
         Assert.AreEqual(folio, received.Folio, "Mismo folio");
         Assert.AreEqual(startedAt, received.StartedAt, "Misma hora de inicio");
         Assert.AreEqual("Fiebre de 3 días", tablet.Records.Consultation.ConsultationChiefComplaint);
@@ -256,9 +256,9 @@ public class ConsultationHandoffTests
         await WaitUntilAsync(() => ServerScalar("SELECT Payload FROM ConsultationHandoffs") == string.Empty);
 
         // La PC se entera en su revisión y se cierra SIN descartar
-        await pc.Records.PollHandoffsOnceAsync();
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation, pc.Records.Info.InfoModalMessage);
-        Assert.IsFalse(pc.Records.IsConsultationHandedOff);
+        Assert.IsFalse(pc.Records.Handoff.IsConsultationHandedOff);
         Assert.IsFalse(File.Exists(pc.Device.DraftPath), "La PC ya no la recupera al abrir");
         using (var db = pc.Device.Factory.CreateDbContext())
         {
@@ -289,24 +289,24 @@ public class ConsultationHandoffTests
         var (pc, tablet) = await TwoDevicesAsync();
         await StartConsultationAsync(pc);
         await SendToAsync(pc, tablet);
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsNotNull(tablet.Records.IncomingHandoff);
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsNotNull(tablet.Records.Handoff.IncomingHandoff);
 
-        await pc.Records.RecoverHandedOffConsultationAsync();
-        Assert.IsTrue(pc.Records.IsConsultationEditable, "Vuelve a editarse en la PC");
-        Assert.IsFalse(pc.Records.IsConsultationHandedOff);
+        await pc.Records.Handoff.RecoverHandedOffConsultationAsync();
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationEditable, "Vuelve a editarse en la PC");
+        Assert.IsFalse(pc.Records.Handoff.IsConsultationHandedOff);
         Assert.AreEqual("cancelada", ServerState());
         Assert.IsFalse(File.ReadAllText(pc.Device.DraftPath).Contains("\"Handoff\":{"), "El borrador ya no lleva la marca");
         Assert.IsTrue(pc.Consultations.AddCartItemToActiveConsultation(-1_000_001, "X", "Otro cargo", null, null, "Servicio", 10m, 1));
 
         // La tablet todavía muestra el aviso (no ha revisado): tomarla ya no funciona
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
         StringAssert.Contains(tablet.Records.Info.InfoModalMessage, "recuperó");
         Assert.AreEqual(1, Owners(pc, tablet));
 
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsNull(tablet.Records.IncomingHandoff, "El aviso desaparece");
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsNull(tablet.Records.Handoff.IncomingHandoff, "El aviso desaparece");
     }
 
     [TestMethod]
@@ -317,7 +317,7 @@ public class ConsultationHandoffTests
             var (pc, tablet) = await TwoDevicesAsync();
             await StartConsultationAsync(pc);
             await SendToAsync(pc, tablet);
-            await tablet.Records.PollHandoffsOnceAsync();
+            await tablet.Records.Handoff.PollHandoffsOnceAsync();
 
             // Se detiene la instrucción del que debe llegar segundo hasta que el otro termine
             var hold = new TaskCompletionSource();
@@ -327,14 +327,14 @@ public class ConsultationHandoffTests
                 if (body.Contains(holdMarker)) await hold.Task;
             };
 
-            var accept = tablet.Records.AcceptIncomingHandoffAsync();
-            var recover = pc.Records.RecoverHandedOffConsultationAsync();
+            var accept = tablet.Records.Handoff.AcceptIncomingHandoffAsync();
+            var recover = pc.Records.Handoff.RecoverHandedOffConsultationAsync();
             var first = acceptFirst ? accept : recover;
             await first;
             hold.SetResult();
             await Task.WhenAll(accept, recover);
             _server.BeforeExecuteAsync = null;
-            await pc.Records.PollHandoffsOnceAsync();
+            await pc.Records.Handoff.PollHandoffsOnceAsync();
 
             Assert.AreEqual(1, Owners(pc, tablet), $"Un solo dueño (acepta primero: {acceptFirst})");
             if (acceptFirst)
@@ -345,7 +345,7 @@ public class ConsultationHandoffTests
             }
             else
             {
-                Assert.IsTrue(pc.Records.IsConsultationEditable);
+                Assert.IsTrue(pc.Records.Handoff.IsConsultationEditable);
                 Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
                 Assert.AreEqual("cancelada", ServerState());
             }
@@ -362,15 +362,15 @@ public class ConsultationHandoffTests
         var (pc, tablet) = await TwoDevicesAsync();
         await StartConsultationAsync(pc);
         await SendToAsync(pc, tablet);
-        await tablet.Records.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
 
         // La nube aplica "aceptada" pero la respuesta no llega
         _server.DropResponseAfterExecute = body => body.Contains("AcceptToken = ?, UpdatedAtUtc");
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         _server.DropResponseAfterExecute = null;
 
         Assert.IsTrue(tablet.Consultations.HasActiveConsultation, "Pregunta a la nube con su ficha y la abre");
-        await pc.Records.PollHandoffsOnceAsync();
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation);
         Assert.AreEqual(1, Owners(pc, tablet));
     }
@@ -381,7 +381,7 @@ public class ConsultationHandoffTests
         var (pc, tablet) = await TwoDevicesAsync();
         await StartConsultationAsync(pc);
         await SendToAsync(pc, tablet);
-        await tablet.Records.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
 
         // Se aplica, se pierde la respuesta y además ya no hay red para preguntar
         _server.DropResponseAfterExecute = body =>
@@ -390,21 +390,21 @@ public class ConsultationHandoffTests
             _server.IsOffline = true;
             return true;
         };
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         _server.DropResponseAfterExecute = null;
         Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
         StringAssert.Contains(tablet.Records.Info.InfoModalMessage, "Sin conexión");
 
         // La PC ve "aceptada" y se libera; la consulta no se pierde: la copia sigue en la nube
         _server.IsOffline = false;
-        await pc.Records.PollHandoffsOnceAsync();
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation);
         Assert.AreNotEqual(string.Empty, ServerScalar("SELECT Payload FROM ConsultationHandoffs"));
 
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsTrue(tablet.Records.IsIncomingHandoffAccepted, "Se ofrece para abrirla");
-        StringAssert.Contains(tablet.Records.IncomingHandoffTitle, "pendiente de abrir");
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsTrue(tablet.Records.Handoff.IsIncomingHandoffAccepted, "Se ofrece para abrirla");
+        StringAssert.Contains(tablet.Records.Handoff.IncomingHandoffTitle, "pendiente de abrir");
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         Assert.IsTrue(tablet.Consultations.HasActiveConsultation);
         Assert.AreEqual("Fiebre de 3 días", tablet.Records.Consultation.ConsultationChiefComplaint);
     }
@@ -415,7 +415,7 @@ public class ConsultationHandoffTests
         var (pc, tablet) = await TwoDevicesAsync();
         await StartConsultationAsync(pc);
         await SendToAsync(pc, tablet);
-        await tablet.Records.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
 
         // Se toma, se pierde la respuesta y tampoco se puede preguntar
         _server.DropResponseAfterExecute = sql =>
@@ -424,17 +424,17 @@ public class ConsultationHandoffTests
             _server.IsOffline = true;
             return true;
         };
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         _server.DropResponseAfterExecute = null;
         _server.IsOffline = false;
         Assert.IsFalse(tablet.Consultations.HasActiveConsultation);
 
         // El médico vuelve a pulsar "Continuar aquí" con el aviso de antes (sin revisar otra vez):
         // la ficha del primer intento no se reemplaza y la consulta se abre aquí
-        Assert.IsNotNull(tablet.Records.IncomingHandoff);
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        Assert.IsNotNull(tablet.Records.Handoff.IncomingHandoff);
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         Assert.IsTrue(tablet.Consultations.HasActiveConsultation, tablet.Records.Info.InfoModalMessage);
-        await pc.Records.PollHandoffsOnceAsync();
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation);
         Assert.AreEqual(1, Owners(pc, tablet));
     }
@@ -453,10 +453,10 @@ public class ConsultationHandoffTests
             cmd.CommandText = "DELETE FROM ConsultationHandoffs";
             cmd.ExecuteNonQuery();
         }
-        await pc.Records.PollHandoffsOnceAsync();
-        Assert.IsTrue(pc.Records.IsConsultationHandedOff, "Sigue en solo lectura");
-        Assert.IsTrue(pc.Records.CanReleaseHandoffLocally);
-        StringAssert.Contains(pc.Records.HandoffBannerDetail, "No se encontró");
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationHandedOff, "Sigue en solo lectura");
+        Assert.IsTrue(pc.Records.Handoff.CanReleaseHandoffLocally);
+        StringAssert.Contains(pc.Records.Handoff.HandoffBannerDetail, "No se encontró");
     }
 
     [TestMethod]
@@ -471,10 +471,10 @@ public class ConsultationHandoffTests
         _server.DropResponseAfterExecute = null;
 
         // El renglón llegó, pero la PC no lo supo: lo cancela antes de volver a editarla
-        Assert.IsTrue(pc.Records.IsConsultationEditable, pc.Records.Info.InfoModalMessage);
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationEditable, pc.Records.Info.InfoModalMessage);
         Assert.AreEqual("cancelada", ServerState());
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsNull(tablet.Records.IncomingHandoff);
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsNull(tablet.Records.Handoff.IncomingHandoff);
         Assert.AreEqual(1, Owners(pc, tablet));
     }
 
@@ -483,22 +483,22 @@ public class ConsultationHandoffTests
     {
         var (pc, tablet) = await TwoDevicesAsync();
         await StartConsultationAsync(pc);
-        await pc.Records.OpenSendConsultationSheetAsync();
-        pc.Records.SelectedHandoffDevice = pc.Records.HandoffDevices.Single();
+        await pc.Records.Handoff.OpenSendConsultationSheetAsync();
+        pc.Records.Handoff.SelectedHandoffDevice = pc.Records.Handoff.HandoffDevices.Single();
 
         _server.IsOffline = true;
-        await pc.Records.SendConsultationToSelectedDeviceAsync();
-        Assert.IsTrue(pc.Records.IsConsultationEditable);
-        Assert.IsTrue(pc.Records.IsSendConsultationSheetOpen);
-        StringAssert.Contains(pc.Records.HandoffSheetError, "No se pudo subir");
+        await pc.Records.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationEditable);
+        Assert.IsTrue(pc.Records.Handoff.IsSendConsultationSheetOpen);
+        StringAssert.Contains(pc.Records.Handoff.HandoffSheetError, "No se pudo subir");
         Assert.AreEqual("0", ServerScalar("SELECT COUNT(*) FROM ConsultationHandoffs"));
 
-        await pc.Records.PollHandoffsOnceAsync();
-        Assert.IsFalse(pc.Records.CanSendConsultation, "Sin conexión el botón se desactiva");
-        StringAssert.Contains(pc.Records.SendConsultationHint, "Sin conexión");
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsFalse(pc.Records.Handoff.CanSendConsultation, "Sin conexión el botón se desactiva");
+        StringAssert.Contains(pc.Records.Handoff.SendConsultationHint, "Sin conexión");
         _server.IsOffline = false;
-        await pc.Records.PollHandoffsOnceAsync();
-        Assert.IsTrue(pc.Records.CanSendConsultation);
+        await pc.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsTrue(pc.Records.Handoff.CanSendConsultation);
     }
 
     [TestMethod]
@@ -509,19 +509,19 @@ public class ConsultationHandoffTests
         await SendToAsync(pc, tablet);
 
         _server.IsOffline = true;
-        await pc.Records.RecoverHandedOffConsultationAsync();
-        Assert.IsTrue(pc.Records.IsConsultationHandedOff, "Sin confirmar con la nube no vuelve a ser editable");
-        Assert.IsTrue(pc.Records.CanReleaseHandoffLocally);
-        StringAssert.Contains(pc.Records.HandoffBannerDetail, "No se pudo recuperar");
+        await pc.Records.Handoff.RecoverHandedOffConsultationAsync();
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationHandedOff, "Sin confirmar con la nube no vuelve a ser editable");
+        Assert.IsTrue(pc.Records.Handoff.CanReleaseHandoffLocally);
+        StringAssert.Contains(pc.Records.Handoff.HandoffBannerDetail, "No se pudo recuperar");
 
-        await pc.Records.ReleaseHandoffLocallyAsync();
+        await pc.Records.Handoff.ReleaseHandoffLocallyAsync();
         Assert.IsFalse(pc.Consultations.HasActiveConsultation, "El equipo queda libre para otra consulta");
         Assert.IsTrue(Directory.GetFiles(Path.GetDirectoryName(pc.Device.DraftPath)!, "consulta-enviada-*.json").Any(), "La copia se aparta");
 
         // Si la tablet la acepta después, sigue allá
         _server.IsOffline = false;
-        await tablet.Records.PollHandoffsOnceAsync();
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         Assert.IsTrue(tablet.Consultations.HasActiveConsultation);
     }
 
@@ -538,13 +538,13 @@ public class ConsultationHandoffTests
         pc.Records.Dispose();
         var reopened = await OpenAsync(pc.Device);
         Assert.IsTrue(reopened.Consultations.HasActiveConsultation);
-        Assert.IsTrue(reopened.Records.IsConsultationHandedOff, "Vuelve en solo lectura, no editable");
-        Assert.IsFalse(reopened.Records.IsConsultationEditable);
-        StringAssert.Contains(reopened.Records.HandoffBannerText, "Tablet del consultorio");
+        Assert.IsTrue(reopened.Records.Handoff.IsConsultationHandedOff, "Vuelve en solo lectura, no editable");
+        Assert.IsFalse(reopened.Records.Handoff.IsConsultationEditable);
+        StringAssert.Contains(reopened.Records.Handoff.HandoffBannerText, "Tablet del consultorio");
 
-        await tablet.Records.PollHandoffsOnceAsync();
-        await tablet.Records.AcceptIncomingHandoffAsync();
-        await reopened.Records.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
+        await reopened.Records.Handoff.PollHandoffsOnceAsync();
         Assert.IsFalse(reopened.Consultations.HasActiveConsultation);
         Assert.AreEqual(1, Owners(reopened, tablet));
     }
@@ -558,13 +558,13 @@ public class ConsultationHandoffTests
 
         tablet.Records.SelectPatient(tablet.Records.Patients.Last());
         tablet.Records.StartActiveConsultation();
-        await tablet.Records.PollHandoffsOnceAsync();
-        Assert.IsNotNull(tablet.Records.IncomingHandoff);
-        Assert.IsFalse(tablet.Records.CanAcceptIncomingHandoff);
-        StringAssert.Contains(tablet.Records.IncomingHandoffBlockedReason, "Termine o descarte");
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        Assert.IsNotNull(tablet.Records.Handoff.IncomingHandoff);
+        Assert.IsFalse(tablet.Records.Handoff.CanAcceptIncomingHandoff);
+        StringAssert.Contains(tablet.Records.Handoff.IncomingHandoffBlockedReason, "Termine o descarte");
 
         var own = tablet.Consultations.CurrentConsultation!.Folio;
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
         Assert.AreEqual(own, tablet.Consultations.CurrentConsultation!.Folio, "La consulta propia no se reemplaza");
         Assert.AreEqual("enviada", ServerState());
     }
@@ -584,8 +584,8 @@ public class ConsultationHandoffTests
         }
 
         await SendToAsync(pc, tablet);
-        await tablet.Records.PollHandoffsOnceAsync();
-        await tablet.Records.AcceptIncomingHandoffAsync();
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
 
         var line = tablet.Consultations.CurrentConsultation!.Items.Single(i => i.Name == product.Name);
         Assert.IsTrue(line.ProductId <= -1_000_000, "Se cobra como cargo libre (sin descontar existencias)");
@@ -624,7 +624,7 @@ public class ConsultationHandoffTests
         await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(records.Catalog.Services.Single(s => s.Id == service.Id));
 
         await SendToAsync(pc, tablet);
-        Assert.IsTrue(records.IsConsultationHandedOff);
+        Assert.IsTrue(records.Handoff.IsConsultationHandedOff);
 
         var patient = records.SelectedPatient!;
         var supply = patient.ActiveSupplies.Last();

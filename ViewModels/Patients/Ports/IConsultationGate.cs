@@ -4,8 +4,8 @@ namespace TPVC.ViewModels.Patients;
 
 /// <summary>
 /// Candado de la consulta (fase 6, plan §1.4): lo que no se puede hacer mientras la consulta está
-/// enviada a otro equipo o se está recibiendo una. Lo responde el coordinador (y después, la hoja de
-/// envío). Los miembros se agregan en el primer paso que los necesita.
+/// enviada a otro equipo o se está recibiendo una. Lo responde el coordinador con lo de Handoff
+/// (ConsultationHandoffViewModel). Los miembros se agregan en el primer paso que los necesita.
 /// </summary>
 public interface IConsultationGate
 {

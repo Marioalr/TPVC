@@ -10,7 +10,7 @@ public partial class MedicalRecordsViewModel
     public bool IsAnySheetOpen =>
         Info.IsInfoModalVisible || Prescription.IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
         || Preview.IsPrescriptionPdfModalOpen || Consultation.IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
-        || ClinicalServices.IsServicesModalOpen || IsSendConsultationSheetOpen;
+        || ClinicalServices.IsServicesModalOpen || Handoff.IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
     public bool CanTypeToSearch => (Navigation.IsHomePage || Navigation.IsChartPage) && !Agenda.IsAgendaPanelOpen && !IsAnySheetOpen;
@@ -29,7 +29,7 @@ public partial class MedicalRecordsViewModel
         else if (CatalogBrowser.IsCatalogBrowserModalOpen) CatalogBrowser.CloseCatalogBrowser();
         else if (Preview.IsPrescriptionPdfModalOpen) Preview.ClosePrescriptionPdfPreview();
         // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
-        else if (IsSendConsultationSheetOpen) CloseSendConsultationSheet();
+        else if (Handoff.IsSendConsultationSheetOpen) Handoff.CloseSendConsultationSheet();
         else if (Consultation.IsCie10DropdownOpen) Consultation.IsCie10DropdownOpen = false;
         // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
         else if (Consultation.IsFinishConsultationOpen) Consultation.CloseFinishConsultation();

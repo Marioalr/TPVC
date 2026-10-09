@@ -193,7 +193,7 @@ public class NotificationParityTests
             ("alergia", (vm, _) => vm.Prescription.IsAllergyAlertOpen = true),
             ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.Prescription.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
             ("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true),
-            ("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true),
+            ("enviar a", (vm, _) => vm.Handoff.IsSendConsultationSheetOpen = true),
             ("CIE-10", (vm, _) => vm.Consultation.ConsultationDiagnosis = "farin"),
             ("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.Consultation.IsFinishConsultationOpen = true; }),
             ("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }),
@@ -420,25 +420,25 @@ public class NotificationParityTests
 
         async Task SendAsync()
         {
-            await pcRecords.OpenSendConsultationSheetAsync();
-            pcRecords.SelectedHandoffDevice = pcRecords.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
-            await pcRecords.SendConsultationToSelectedDeviceAsync();
-            Assert.IsTrue(pcRecords.IsConsultationHandedOff, pcRecords.HandoffSheetError ?? pcRecords.Info.InfoModalMessage);
+            await pcRecords.Handoff.OpenSendConsultationSheetAsync();
+            pcRecords.Handoff.SelectedHandoffDevice = pcRecords.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
+            await pcRecords.Handoff.SendConsultationToSelectedDeviceAsync();
+            Assert.IsTrue(pcRecords.Handoff.IsConsultationHandedOff, pcRecords.Handoff.HandoffSheetError ?? pcRecords.Info.InfoModalMessage);
         }
 
         golden.Section("enviar a la tablet (PC)", await RecordSetAsync(pcRecorder, pcRecords, SendAsync));
-        golden.Section("recuperarla (PC)", await RecordSetAsync(pcRecorder, pcRecords, pcRecords.RecoverHandedOffConsultationAsync));
-        Assert.IsTrue(pcRecords.IsConsultationEditable);
+        golden.Section("recuperarla (PC)", await RecordSetAsync(pcRecorder, pcRecords, pcRecords.Handoff.RecoverHandedOffConsultationAsync));
+        Assert.IsTrue(pcRecords.Handoff.IsConsultationEditable);
 
         await SendAsync();
         golden.Section("revisar y continuar aquí (tablet)", await RecordSetAsync(tabletRecorder, tabletRecords, async () =>
         {
-            await tabletRecords.PollHandoffsOnceAsync();
-            await tabletRecords.AcceptIncomingHandoffAsync();
+            await tabletRecords.Handoff.PollHandoffsOnceAsync();
+            await tabletRecords.Handoff.AcceptIncomingHandoffAsync();
         }));
         Assert.IsTrue(tabletConsultations.HasActiveConsultation, tabletRecords.Info.InfoModalMessage);
 
-        golden.Section("la PC se entera y la suelta (PC)", await RecordSetAsync(pcRecorder, pcRecords, () => pcRecords.PollHandoffsOnceAsync()));
+        golden.Section("la PC se entera y la suelta (PC)", await RecordSetAsync(pcRecorder, pcRecords, () => pcRecords.Handoff.PollHandoffsOnceAsync()));
         Assert.IsFalse(pcConsultations.HasActiveConsultation, pcRecords.Info.InfoModalMessage);
 
         golden.AssertMatches("handoff.txt", "Avisos al pasar la consulta a otro equipo");

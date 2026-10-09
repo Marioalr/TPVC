@@ -58,10 +58,10 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         _inventoryService = inventoryService;
         _consultationService = consultationService;
         CreateChildren(notificationService, clinicProfileService, consultationDraftStore, printingService, localPreferences);
-        InitializeAutosave(consultationDraftStore);
+        Autosave.Attach();
         PatientForm.AttachPropertyRules();
         InitializePacientes();
-        InitializeHandoff(consultationHandoffService);
+        Handoff.InitializeHandoff(consultationHandoffService);
         _clinicProfileService = clinicProfileService;
 
         if (_clinicProfileService != null)
@@ -251,8 +251,8 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             Active.StopConsultationTimer();
             Account.FeeServiceOverrideId = null;
-            _receivedHandoffId = null;
-            _receivedHandoffToken = null;
+            Handoff.ReceivedHandoffId = null;
+            Handoff.ReceivedHandoffToken = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (Record.Patient != null) _ = Record.EndConsultationOnRecordAsync(discarded: false);
         }
@@ -260,7 +260,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         Autosave.OnActiveConsultationStateChangedForAutosave();
         NotifyPatientsPageState();
         NotifyPrescriptionStateChanged();
-        NotifyHandoffState();
+        Handoff.NotifyHandoffState();
     }
 
     public void Dispose()
@@ -279,7 +279,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         }
         Active.StopConsultationTimer();
         DisposePacientes();
-        DisposeHandoff();
+        Handoff.DisposeHandoff();
         FlushConsultationDraft();
         Autosave.DisposeTimer();
         PatientForm.DisposeFormDraftTimer();

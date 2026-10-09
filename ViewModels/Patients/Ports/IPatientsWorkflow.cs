@@ -45,4 +45,16 @@ public interface IPatientsWorkflow
 
     /// <summary>Abre la ficha del paciente (primer resultado del buscador con Enter).</summary>
     void OpenPatientChart(PatientRecord? patient);
+
+    /// <summary>Carga inicial del coordinador (expedientes, servicios y consulta recuperada): recibir una consulta la espera.</summary>
+    Task InitialLoad { get; }
+
+    /// <summary>Cambió la página o la consulta en curso: banderas de página, aviso de la consulta, ficha y aviso de consulta recibida.</summary>
+    void NotifyPatientsPageState();
+
+    /// <summary>Cambió el envío de la consulta: el aviso "Consulta en curso" del coordinador se vuelve a leer.</summary>
+    void RaiseConsultationBannerText();
+
+    /// <summary>Cierra las hojas de la consulta y el panel de agenda (al enviarla, soltarla o recibir una).</summary>
+    void CloseConsultationSheets();
 }

@@ -63,4 +63,12 @@ public partial class MedicalRecordsViewModel
     /// <summary>Autosave.IsConsultationRecovered.</summary>
     [NotForBinding]
     public bool IsConsultationRecovered => Autosave.IsConsultationRecovered;
+
+    /// <summary>Handoff.LeavePatientsSection.</summary>
+    [NotForBinding]
+    public void LeavePatientsSection() => Handoff.LeavePatientsSection();
+
+    /// <summary>Handoff.StartHandoffPolling.</summary>
+    [NotForBinding]
+    public void StartHandoffPolling() => Handoff.StartHandoffPolling();
 }

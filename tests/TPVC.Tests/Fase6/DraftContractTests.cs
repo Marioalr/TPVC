@@ -57,7 +57,7 @@ public class DraftContractTests
         // Se retomó tal cual: en solo lectura (estaba enviada a la tablet), con su folio y su cuenta
         Assert.IsTrue(records.HasActiveConsultation);
         Assert.IsTrue(records.IsConsultationRecovered);
-        Assert.IsTrue(records.IsConsultationHandedOff);
+        Assert.IsTrue(records.Handoff.IsConsultationHandedOff);
         Assert.AreEqual("CNS-20261007-183015", consultations.CurrentConsultation!.Folio);
         Assert.AreEqual(6, consultations.CurrentConsultation.Items.Count);
         Assert.AreEqual(4, records.Consultation.ConsultationSection);
@@ -93,10 +93,10 @@ public class DraftContractTests
         await Fase6Scenarios.FillConsultationAsync(records, consultations);
         Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync());
 
-        await records.OpenSendConsultationSheetAsync();
-        records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
-        await records.SendConsultationToSelectedDeviceAsync();
-        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.Info.InfoModalMessage);
+        await records.Handoff.OpenSendConsultationSheetAsync();
+        records.Handoff.SelectedHandoffDevice = records.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
+        await records.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(records.Handoff.IsConsultationHandedOff, records.Handoff.HandoffSheetError ?? records.Info.InfoModalMessage);
 
         var payload = clinic.CloudScalar("SELECT Payload FROM ConsultationHandoffs");
         Assert.AreNotEqual(string.Empty, payload);

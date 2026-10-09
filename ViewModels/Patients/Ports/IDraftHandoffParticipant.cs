@@ -6,7 +6,7 @@ namespace TPVC.ViewModels.Patients;
 /// Lo del envío entre equipos que el borrador de la consulta guarda y recupera (fase 6, plan §1.4 y §6):
 /// la marca de "enviada a otro equipo" y la consulta recibida (su envío y la ficha con que se tomó). El
 /// guardado automático (ConsultationAutosave) arma y aplica el borrador; esto lo responde el coordinador
-/// (hasta el paso 20, con Handoff.cs; después, la hoja de envío).
+/// con lo de Handoff (ConsultationHandoffViewModel).
 /// </summary>
 public interface IDraftHandoffParticipant
 {

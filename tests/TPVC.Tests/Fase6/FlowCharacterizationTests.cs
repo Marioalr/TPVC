@@ -119,10 +119,10 @@ public class FlowCharacterizationTests
         var folio = consultations.CurrentConsultation!.Folio;
         Assert.IsNotNull(await records.Consultation.SaveActiveConsultationToDbAsync(), "Avance de la nota guardado antes de enviarla");
 
-        await records.OpenSendConsultationSheetAsync();
-        records.SelectedHandoffDevice = records.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
-        await records.SendConsultationToSelectedDeviceAsync();
-        Assert.IsTrue(records.IsConsultationHandedOff, records.HandoffSheetError ?? records.Info.InfoModalMessage);
+        await records.Handoff.OpenSendConsultationSheetAsync();
+        records.Handoff.SelectedHandoffDevice = records.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
+        await records.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(records.Handoff.IsConsultationHandedOff, records.Handoff.HandoffSheetError ?? records.Info.InfoModalMessage);
 
         // Lo que estuviera abierto al llegar la aceptación
         records.Prescription.IsPrescriptionModalOpen = true;
@@ -132,7 +132,7 @@ public class FlowCharacterizationTests
         records.Preview.IsPrescriptionPdfModalOpen = true;
         records.Prescription.IsAllergyAlertOpen = true;
         records.Agenda.IsAgendaPanelOpen = true;
-        records.IsSendConsultationSheetOpen = true;
+        records.Handoff.IsSendConsultationSheetOpen = true;
         records.Consultation.IsFinishConsultationOpen = true;
 
         // La instancia en memoria es "más nueva" que la base: solo una recarga forzada la cambia en la lista
@@ -144,10 +144,10 @@ public class FlowCharacterizationTests
         // La tablet la tomó (en la nube) y la PC se entera en su revisión
         Assert.AreEqual("enviada", clinic.CloudScalar("SELECT State FROM ConsultationHandoffs"));
         clinic.CloudScalar("UPDATE ConsultationHandoffs SET State = 'aceptada', AcceptToken = 'ficha-tablet'");
-        await records.PollHandoffsOnceAsync();
+        await records.Handoff.PollHandoffsOnceAsync();
 
         Assert.IsFalse(consultations.HasActiveConsultation, records.Info.InfoModalMessage);
-        Assert.IsFalse(records.IsConsultationHandedOff);
+        Assert.IsFalse(records.Handoff.IsConsultationHandedOff);
         Assert.IsFalse(records.Prescription.IsPrescriptionModalOpen);
         Assert.IsFalse(records.Supplies.IsSuppliesModalOpen);
         Assert.IsFalse(records.ClinicalServices.IsServicesModalOpen);
@@ -155,7 +155,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.Preview.IsPrescriptionPdfModalOpen);
         Assert.IsFalse(records.Prescription.IsAllergyAlertOpen);
         Assert.IsFalse(records.Agenda.IsAgendaPanelOpen);
-        Assert.IsFalse(records.IsSendConsultationSheetOpen);
+        Assert.IsFalse(records.Handoff.IsSendConsultationSheetOpen);
         Assert.IsFalse(records.Consultation.IsFinishConsultationOpen);
         Assert.IsTrue(records.Navigation.IsChartPage, "Queda la ficha del paciente");
         StringAssert.Contains(records.Info.InfoModalMessage, "continúa en Tablet del consultorio");

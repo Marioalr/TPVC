@@ -34,6 +34,7 @@ public partial class MedicalRecordsViewModel
     private PrescriptionSheetViewModel _prescription;
     private ConsultationViewModel _consultation;
     private ConsultationAutosave _autosave;
+    private ConsultationHandoffViewModel _handoff;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
     public InfoDialogState Info => _info;
@@ -101,7 +102,10 @@ public partial class MedicalRecordsViewModel
     /// <summary>Guardado automático de la consulta en curso (borrador local, indicador y consulta recuperada).</summary>
     public ConsultationAutosave Autosave => _autosave;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave))]
+    /// <summary>Consulta entre equipos: "Enviar a…", solo lectura mientras está en otro equipo, recuperar, liberar y recibir.</summary>
+    public ConsultationHandoffViewModel Handoff => _handoff;
+
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
         IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences)
     {
@@ -143,5 +147,8 @@ public partial class MedicalRecordsViewModel
             _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this, localPreferences);
         _autosave = new ConsultationAutosave(_consultationService, consultationDraftStore, _consultation, _session, _active, _record, _account, _catalog,
             _navigation, _ui, _autosaveOptions, this, this);
+        // Al final: el envío entre equipos usa la consulta y su borrador
+        _handoff = new ConsultationHandoffViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _active, _navigation,
+            _feedback, _record, _account, _consultation, _autosave, _dialogs, _ui, this);
     }
 }

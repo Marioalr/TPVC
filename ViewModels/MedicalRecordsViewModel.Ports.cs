@@ -9,8 +9,8 @@ namespace TPVC.ViewModels;
 /// <summary>
 /// Puertos del coordinador (fase 6, plan §1.4): los hijos avisan aquí y el coordinador corre los
 /// mismos cuerpos de antes, en el mismo orden. Implementación explícita: no es API pública ni se enlaza.
-/// Hasta el paso 20, el candado de la consulta (IConsultationGate) y lo del envío que guarda el borrador
-/// (IDraftHandoffParticipant) los resuelve Handoff.cs del coordinador.
+/// El candado de la consulta (IConsultationGate) y lo del envío que guarda el borrador
+/// (IDraftHandoffParticipant) los resuelve Handoff (ConsultationHandoffViewModel).
 /// </summary>
 public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow, IConsultationGate, IDraftHandoffParticipant
 {
@@ -38,29 +38,37 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     void IPatientsWorkflow.OpenPatientChart(PatientRecord? patient) => OpenPatientChart(patient);
 
-    bool IConsultationGate.BlockIfConsultationReadOnly() => BlockIfConsultationReadOnly();
+    Task IPatientsWorkflow.InitialLoad => InitialLoad;
 
-    bool IConsultationGate.BlockIfPatientHandedOff(PatientRecord? patient) => BlockIfPatientHandedOff(patient);
+    void IPatientsWorkflow.NotifyPatientsPageState() => NotifyPatientsPageState();
 
-    bool IConsultationGate.BlockIfReceivingHandoff() => BlockIfReceivingHandoff();
+    void IPatientsWorkflow.RaiseConsultationBannerText() => OnPropertyChanged(nameof(ConsultationBannerText));
 
-    ConsultationHandoffMarker? IDraftHandoffParticipant.OutgoingMarker => _outgoingHandoff;
+    void IPatientsWorkflow.CloseConsultationSheets() => CloseConsultationSheets();
+
+    bool IConsultationGate.BlockIfConsultationReadOnly() => Handoff.BlockIfConsultationReadOnly();
+
+    bool IConsultationGate.BlockIfPatientHandedOff(PatientRecord? patient) => Handoff.BlockIfPatientHandedOff(patient);
+
+    bool IConsultationGate.BlockIfReceivingHandoff() => Handoff.BlockIfReceivingHandoff();
+
+    ConsultationHandoffMarker? IDraftHandoffParticipant.OutgoingMarker => Handoff.OutgoingMarker;
 
     string? IDraftHandoffParticipant.ReceivedHandoffId
     {
-        get => _receivedHandoffId;
-        set => _receivedHandoffId = value;
+        get => Handoff.ReceivedHandoffId;
+        set => Handoff.ReceivedHandoffId = value;
     }
 
     string? IDraftHandoffParticipant.ReceivedHandoffToken
     {
-        get => _receivedHandoffToken;
-        set => _receivedHandoffToken = value;
+        get => Handoff.ReceivedHandoffToken;
+        set => Handoff.ReceivedHandoffToken = value;
     }
 
-    void IDraftHandoffParticipant.RestoreOutgoingHandoff(ConsultationHandoffMarker marker) => RestoreOutgoingHandoff(marker);
+    void IDraftHandoffParticipant.RestoreOutgoingHandoff(ConsultationHandoffMarker marker) => Handoff.RestoreOutgoingHandoff(marker);
 
-    void IDraftHandoffParticipant.OnReceivedHandoffPersisted(ConsultationDraft draft) => OnReceivedHandoffPersisted(draft);
+    void IDraftHandoffParticipant.OnReceivedHandoffPersisted(ConsultationDraft draft) => Handoff.OnReceivedHandoffPersisted(draft);
 
     void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {

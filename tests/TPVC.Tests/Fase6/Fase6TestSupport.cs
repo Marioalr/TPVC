@@ -68,7 +68,7 @@ internal sealed class Fase6Clinic : IDisposable
         {
             // Sin escrituras del temporizador durante la prueba: el borrador se escribe al pedirlo
             AutosaveDelay = TimeSpan.FromHours(1),
-            HandoffSyncLockWait = TimeSpan.FromSeconds(5)
+            Handoff = { HandoffSyncLockWait = TimeSpan.FromSeconds(5) }
         };
         await records.InitialLoad;
         return records;

@@ -38,7 +38,7 @@ public partial class MedicalRecordsViewModel
     [RelayCommand]
     public async Task DiscardActiveConsultationAsync()
     {
-        if (!Active.HasActiveConsultation || BlockIfConsultationReadOnly()) return;
+        if (!Active.HasActiveConsultation || Handoff.BlockIfConsultationReadOnly()) return;
 
         if (!await _dialogs.ConfirmAsync(
                 "¿Descartar la consulta en curso?\n\nNo se guardará la nota médica ni se cobrará nada de la cuenta.",

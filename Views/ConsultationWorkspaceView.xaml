@@ -79,11 +79,11 @@
                                VerticalAlignment="Center"
                                Margin="0,0,12,0"
                                ToolTip="La consulta se guarda sola mientras escribe; si se cierra el programa o se va la luz, se recupera al abrir. Ctrl + S guarda al instante." />
-                    <TextBlock Text="{Binding SendConsultationHint}" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" VerticalAlignment="Center" Margin="0,0,8,0"
-                               Visibility="{Binding SendConsultationHint, Converter={StaticResource BoolToVis}}" />
-                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenSendConsultationSheetCommand}" Padding="10,6" Margin="0,0,6,0"
-                            IsEnabled="{Binding CanSendConsultation}"
-                            Visibility="{Binding ShowsSendConsultationButton, Converter={StaticResource BoolToVis}}"
+                    <TextBlock Text="{Binding Handoff.SendConsultationHint}" FontSize="11.5" Foreground="{DynamicResource ThemeWarningText}" VerticalAlignment="Center" Margin="0,0,8,0"
+                               Visibility="{Binding Handoff.SendConsultationHint, Converter={StaticResource BoolToVis}}" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Handoff.OpenSendConsultationSheetCommand}" Padding="10,6" Margin="0,0,6,0"
+                            IsEnabled="{Binding Handoff.CanSendConsultation}"
+                            Visibility="{Binding Handoff.ShowsSendConsultationButton, Converter={StaticResource BoolToVis}}"
                             ToolTip="Mandar esta consulta a otro equipo (tablet u otra computadora) para seguirla allá"
                             AutomationProperties.Name="Enviar la consulta a otro equipo">
                         <StackPanel Orientation="Horizontal">
@@ -92,18 +92,18 @@
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DiscardActiveConsultationCommand}" Padding="10,6" Margin="0,0,6,0" ToolTip="Paciente equivocado o se retiró: no guarda la nota ni cobra"
-                            Visibility="{Binding IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}">
+                            Visibility="{Binding Handoff.IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}">
                         <TextBlock Text="Descartar" Foreground="{DynamicResource ThemeDangerText}" />
                     </Button>
                     <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Consultation.FinalizeConsultationCommand}" Padding="18,8" Content="Terminar consulta" ToolTip="Revisar la cuenta y cobrar (Ctrl + Enter)"
-                            Visibility="{Binding IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}" />
+                            Visibility="{Binding Handoff.IsConsultationHandedOff, Converter={StaticResource InverseBoolToVis}}" />
                 </WrapPanel>
             </Grid>
         </Border>
 
         <!-- Enviada a otro equipo: aquí solo se puede ver, recuperar o (sin conexión) liberar el equipo -->
         <Border Grid.Row="1" Style="{StaticResource NoticeWarning}" Padding="14,10" Margin="0,0,0,12"
-                Visibility="{Binding IsConsultationHandedOff, Converter={StaticResource BoolToVis}}">
+                Visibility="{Binding Handoff.IsConsultationHandedOff, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -112,18 +112,18 @@
                 </Grid.ColumnDefinitions>
                 <helpers:Icon Data="{StaticResource IcoLock}" Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding HandoffBannerText}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding HandoffBannerDetail}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
-                               Visibility="{Binding HandoffBannerDetail, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="{Binding Handoff.HandoffBannerText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Handoff.HandoffBannerDetail}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                               Visibility="{Binding Handoff.HandoffBannerDetail, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <Button Style="{StaticResource ButtonGhost}" Command="{Binding ReleaseHandoffLocallyCommand}" Padding="10,5" MinHeight="0" Margin="0,0,8,0"
+                    <Button Style="{StaticResource ButtonGhost}" Command="{Binding Handoff.ReleaseHandoffLocallyCommand}" Padding="10,5" MinHeight="0" Margin="0,0,8,0"
                             Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold"
                             Content="Liberar este equipo" ToolTip="Dejar de esperar aquí sin confirmar con la nube"
-                            IsEnabled="{Binding IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
-                            Visibility="{Binding CanReleaseHandoffLocally, Converter={StaticResource BoolToVis}}" />
-                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding RecoverHandedOffConsultationCommand}" Padding="14,5" MinHeight="0"
-                            IsEnabled="{Binding IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
+                            IsEnabled="{Binding Handoff.IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
+                            Visibility="{Binding Handoff.CanReleaseHandoffLocally, Converter={StaticResource BoolToVis}}" />
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Handoff.RecoverHandedOffConsultationCommand}" Padding="14,5" MinHeight="0"
+                            IsEnabled="{Binding Handoff.IsRecoveringHandoff, Converter={StaticResource InverseBool}}"
                             Content="Recuperar" ToolTip="Seguir la consulta en este equipo (si el otro aún no la acepta)" />
                 </StackPanel>
             </Grid>
@@ -229,7 +229,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=1}">
                             <TextBox Text="{Binding Consultation.ConsultationChiefComplaint, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" Padding="10,8" FontSize="13.5" Margin="0,0,0,8" ToolTip="Motivo de consulta y padecimiento actual" />
                             <WrapPanel>
                                 <TextBlock Text="Frecuentes:" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,6" />
@@ -316,7 +316,7 @@
                                 </Border>
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=2}">
                             <UniformGrid Columns="4">
                                 <StackPanel Margin="0,0,10,10">
                                     <TextBlock Text="T/A (mmHg)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,3" />
@@ -416,7 +416,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=3}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=3}">
                             <TextBlock Text="Interrogatorio por aparatos y sistemas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
                             <WrapPanel>
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Consultation.AppendSystemsReviewLineCommand}" MinHeight="0" CommandParameter="Respiratorio: sin alteraciones." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="Respiratorio normal" />
@@ -494,7 +494,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=4}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=4}">
                             <TextBox x:Name="ActiveConsultationDiagnosisTextBox"
                                      Text="{Binding Consultation.ConsultationDiagnosis, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource FieldTextBox}"
@@ -623,7 +623,7 @@
 
                             </Grid>
                         </Button>
-                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=5}">
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=5}">
                             <TextBlock Text="Plan terapéutico, cuidados e indicaciones" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
                             <WrapPanel>
                                 <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Consultation.AppendGeneralIndicationPresetCommand}" MinHeight="0" CommandParameter="Hidratación abundante (mínimo 2 litros de agua al día)." Padding="10,4" Margin="0,0,6,6" FontSize="11.5" Content="+ Hidratación" />
@@ -713,7 +713,7 @@
 
             <!-- Cuenta de la consulta: todo lo que se usó, listo para cobrar al terminar -->
             <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
-                <StackPanel IsEnabled="{Binding IsConsultationEditable}">
+                <StackPanel IsEnabled="{Binding Handoff.IsConsultationEditable}">
                     <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,10">
                         <StackPanel>
                             <TextBlock Text="CUENTA DE LA CONSULTA" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,8" />

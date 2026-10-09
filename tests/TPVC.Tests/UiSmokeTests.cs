@@ -364,13 +364,13 @@ internal sealed class UiSmokeSession
             Capture(host, $"08-consulta-{suffix}");
 
             // Enviar a otro equipo: la hoja con los equipos enlazados y la consulta en solo lectura
-            WaitFor(records.OpenSendConsultationSheetAsync());
+            WaitFor(records.Handoff.OpenSendConsultationSheetAsync());
             Capture(host, $"08c-consulta-enviar-a-{suffix}");
-            WaitFor(records.SendConsultationToSelectedDeviceAsync());
+            WaitFor(records.Handoff.SendConsultationToSelectedDeviceAsync());
             Capture(host, $"08d-consulta-enviada-{suffix}");
             Show(host, main, "Pos", $"08e-pos-consulta-enviada-{suffix}");
             main.NavigateTo("Records");
-            WaitFor(records.RecoverHandedOffConsultationAsync());
+            WaitFor(records.Handoff.RecoverHandedOffConsultationAsync());
 
             // El POS con una consulta en curso (se puede abrir o pasarle la venta)
             Show(host, main, "Pos", $"08b-pos-con-consulta-{suffix}");
@@ -427,10 +427,10 @@ internal sealed class UiSmokeSession
 
             // Una consulta que la tablet mandó a esta PC: el aviso en Pacientes
             InsertIncomingHandoff(records.Patients.First(), suffix);
-            WaitFor(records.PollHandoffsOnceAsync());
+            WaitFor(records.Handoff.PollHandoffsOnceAsync());
             Show(host, main, "Records", $"15b-pacientes-consulta-recibida-{suffix}");
             ExecuteCloud("UPDATE ConsultationHandoffs SET State = 'cancelada', Payload = '' WHERE FromDeviceId = 'device-tablet'");
-            WaitFor(records.PollHandoffsOnceAsync());
+            WaitFor(records.Handoff.PollHandoffsOnceAsync());
 
             WaitFor(records.NewPatientAsync());
             Capture(host, $"16-alta-paciente-{suffix}");
@@ -1193,9 +1193,9 @@ internal sealed class UiKeyboardPass
         Settle();
         Check(_records.Consultation.IsCie10DropdownOpen, "Escribir el diagnóstico abre las sugerencias CIE-10");
         Check(PressEscape() && !_records.Consultation.IsCie10DropdownOpen, "Esc cierra las sugerencias CIE-10");
-        _records.IsSendConsultationSheetOpen = true;
+        _records.Handoff.IsSendConsultationSheetOpen = true;
         Settle();
-        Check(PressEscape() && !_records.IsSendConsultationSheetOpen, "Esc cierra \"Enviar a…\"");
+        Check(PressEscape() && !_records.Handoff.IsSendConsultationSheetOpen, "Esc cierra \"Enviar a…\"");
         WaitFor(_records.Consultation.FinalizeConsultationAsync());
         Settle();
         Check(PressEscape() && !_records.Consultation.IsFinishConsultationOpen && _records.HasActiveConsultation, "Esc en \"Terminar consulta\" vuelve a la consulta sin cobrar");
