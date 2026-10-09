@@ -398,11 +398,11 @@ internal sealed class UiSmokeSession
             WaitFor(records.RepeatPreviousPrescriptionAsync());
             records.Info.DismissInfoModal();
             Capture(host, $"11c-receta-con-medicamentos-{suffix}");
-            records.OpenPrescriptionPdfPreview();
+            records.Preview.OpenPrescriptionPdfPreview();
             Capture(host, $"11d-vista-previa-receta-{suffix}");
-            records.ClosePrescriptionPdfPreview();
+            records.Preview.ClosePrescriptionPdfPreview();
             // La hoja impresa es papel: no depende del tema (se revisa una vez)
-            if (suffix == "claro") CheckPrintedPrescription(records.Session.SelectedPatient!, profile.CurrentProfile, records.PrescriptionIndications);
+            if (suffix == "claro") CheckPrintedPrescription(records.Session.SelectedPatient!, profile.CurrentProfile, records.Preview.PrescriptionIndications);
             records.Info.DismissInfoModal();
             records.ClosePrescriptionModal();
 
@@ -417,7 +417,7 @@ internal sealed class UiSmokeSession
             WaitFor(records.OpenPrescriptionModalAsync());
             WaitFor(records.OpenPrescriptionCatalogAsync());
             Capture(host, $"14-catalogo-{suffix}");
-            records.CloseCatalogBrowser();
+            records.CatalogBrowser.CloseCatalogBrowser();
             records.ClosePrescriptionModal();
 
             WaitFor(records.FinalizeConsultationAsync());
@@ -1226,10 +1226,10 @@ internal sealed class UiKeyboardPass
         Check(PressEscape() && !_records.IsAllergyAlertOpen && _records.IsPrescriptionModalOpen, "Esc cierra la alerta de alergia");
         WaitFor(_records.OpenPrescriptionCatalogAsync());
         Settle();
-        Check(PressEscape() && !_records.IsCatalogBrowserModalOpen && _records.IsPrescriptionModalOpen, "Esc cierra el catálogo (la receta sigue)");
-        _records.OpenPrescriptionPdfPreview();
+        Check(PressEscape() && !_records.CatalogBrowser.IsCatalogBrowserModalOpen && _records.IsPrescriptionModalOpen, "Esc cierra el catálogo (la receta sigue)");
+        _records.Preview.OpenPrescriptionPdfPreview();
         Settle();
-        Check(PressEscape() && !_records.IsPrescriptionPdfModalOpen, "Esc cierra la vista previa de la receta");
+        Check(PressEscape() && !_records.Preview.IsPrescriptionPdfModalOpen, "Esc cierra la vista previa de la receta");
         Check(PressEscape() && !_records.IsPrescriptionModalOpen, "Esc cierra la receta");
     }
 
@@ -1253,7 +1253,7 @@ internal sealed class UiKeyboardPass
 
         // Enter en el buscador del catálogo agrega el primero con existencias
         WaitFor(_records.OpenSupplyCatalogAsync());
-        _records.CatalogBrowserSearchText = "gasa";
+        _records.CatalogBrowser.CatalogBrowserSearchText = "gasa";
         Settle();
         var catalog = PumpUntilFound<TPVC.Views.CatalogBrowserSheetView>(v => v.IsVisible);
         var catalogBox = catalog?.FindName("CatalogBrowserSearchTextBox") as System.Windows.Controls.TextBox;
@@ -1261,7 +1261,7 @@ internal sealed class UiKeyboardPass
         {
             var count = _records.SelectedPatient!.ActiveSupplies.Count;
             PressKey(catalogBox!, System.Windows.Input.Key.Enter);
-            Check(PumpUntil(() => !_records.IsCatalogBrowserModalOpen && _records.SelectedPatient!.ActiveSupplies.Count == count + 1),
+            Check(PumpUntil(() => !_records.CatalogBrowser.IsCatalogBrowserModalOpen && _records.SelectedPatient!.ActiveSupplies.Count == count + 1),
                 "Catálogo: Enter en la búsqueda agrega el primero y cierra el catálogo");
         }
         Settle();

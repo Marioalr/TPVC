@@ -13,6 +13,8 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow, IConsultationGate
 {
+    void IPatientsWorkflow.SyncActiveConsultation() => SyncActiveConsultation();
+
     void IPatientsWorkflow.NotifyPrescriptionStateChanged() => NotifyPrescriptionStateChanged();
 
     Task IPatientsWorkflow.RefreshAgendaAfterChangeAsync(int patientId) => RefreshAgendaAfterChangeAsync(patientId);
@@ -25,7 +27,11 @@ public partial class MedicalRecordsViewModel : IPatientsHubs, IPatientsWorkflow,
 
     void IPatientsWorkflow.OpenPatientChart(PatientRecord? patient) => OpenPatientChart(patient);
 
+    bool IConsultationGate.BlockIfConsultationReadOnly() => BlockIfConsultationReadOnly();
+
     bool IConsultationGate.BlockIfPatientHandedOff(PatientRecord? patient) => BlockIfPatientHandedOff(patient);
+
+    bool IConsultationGate.BlockIfReceivingHandoff() => BlockIfReceivingHandoff();
 
     void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {

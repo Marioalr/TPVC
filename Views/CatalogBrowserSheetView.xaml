@@ -28,23 +28,23 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource TextHeading}" Text="{Binding CatalogBrowserTitle}" />
-                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding CatalogBrowserSummary}" VerticalAlignment="Bottom" Margin="12,0,0,4" />
+                            <TextBlock Style="{StaticResource TextHeading}" Text="{Binding CatalogBrowser.CatalogBrowserTitle}" />
+                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding CatalogBrowser.CatalogBrowserSummary}" VerticalAlignment="Bottom" Margin="12,0,0,4" />
                         </StackPanel>
-                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding CatalogBrowserSubtitle}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding CatalogBrowser.CatalogBrowserSubtitle}" TextWrapping="Wrap" />
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseCatalogBrowserCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CatalogBrowser.CloseCatalogBrowserCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
 
                 <Grid Grid.Row="1" Margin="24,12,24,10">
                     <TextBox x:Name="CatalogBrowserSearchTextBox" Style="{StaticResource FieldTextBox}" Height="44" Padding="40,7,12,7"
-                             Text="{Binding CatalogBrowserSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Text="{Binding CatalogBrowser.CatalogBrowserSearchText, UpdateSourceTrigger=PropertyChanged}"
                              helpers:Field.Placeholder="Nombre, genérico, código o descripción · Enter agrega el primero"
                              AutomationProperties.Name="Buscar en el catálogo">
                         <TextBox.InputBindings>
-                            <KeyBinding Key="Enter" Command="{Binding AddFirstFromCatalogBrowserCommand}" />
+                            <KeyBinding Key="Enter" Command="{Binding CatalogBrowser.AddFirstFromCatalogBrowserCommand}" />
                         </TextBox.InputBindings>
                     </TextBox>
                     <helpers:Icon Data="{StaticResource IcoSearch}" Width="18" Height="18" HorizontalAlignment="Left" Margin="14,0,0,0"
@@ -54,8 +54,8 @@
                 <Grid Grid.Row="2">
                     <!-- Medicamentos o insumos -->
                     <ListBox Style="{StaticResource PlainList}" Padding="16,0"
-                             ItemsSource="{Binding CatalogBrowserFilteredProducts}"
-                             Visibility="{Binding IsCatalogBrowserServicesMode, Converter={StaticResource InverseBoolToVis}}"
+                             ItemsSource="{Binding CatalogBrowser.CatalogBrowserFilteredProducts}"
+                             Visibility="{Binding CatalogBrowser.IsCatalogBrowserServicesMode, Converter={StaticResource InverseBoolToVis}}"
                              AutomationProperties.Name="Productos">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:Product}">
@@ -84,7 +84,7 @@
                                     <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
                                                Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
                                     <Button Grid.Column="3" Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Margin="16,0,0,0"
-                                            Command="{Binding DataContext.AddProductFromCatalogBrowserCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Command="{Binding DataContext.CatalogBrowser.AddProductFromCatalogBrowserCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}">
                                         <StackPanel Orientation="Horizontal">
                                             <helpers:Icon Data="{StaticResource IcoPlus}" Width="14" Height="14" Margin="0,0,6,0" />
@@ -98,8 +98,8 @@
 
                     <!-- Servicios -->
                     <ListBox Style="{StaticResource PlainList}" Padding="16,0"
-                             ItemsSource="{Binding CatalogBrowserFilteredServices}"
-                             Visibility="{Binding IsCatalogBrowserServicesMode, Converter={StaticResource BoolToVis}}"
+                             ItemsSource="{Binding CatalogBrowser.CatalogBrowserFilteredServices}"
+                             Visibility="{Binding CatalogBrowser.IsCatalogBrowserServicesMode, Converter={StaticResource BoolToVis}}"
                              AutomationProperties.Name="Servicios">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type models:ClinicalService}">
@@ -124,7 +124,7 @@
                                     <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
                                                Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
                                     <Button Grid.Column="2" Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Margin="16,0,0,0"
-                                            Command="{Binding DataContext.AddServiceFromCatalogBrowserCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Command="{Binding DataContext.CatalogBrowser.AddServiceFromCatalogBrowserCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}">
                                         <StackPanel Orientation="Horizontal">
                                             <helpers:Icon Data="{StaticResource IcoPlus}" Width="14" Height="14" Margin="0,0,6,0" />
@@ -137,7 +137,7 @@
                     </ListBox>
 
                     <TextBlock Style="{StaticResource TextDetail}" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Nada coincide con lo escrito."
-                               Visibility="{Binding HasNoCatalogBrowserResults, Converter={StaticResource BoolToVis}}" />
+                               Visibility="{Binding CatalogBrowser.HasNoCatalogBrowserResults, Converter={StaticResource BoolToVis}}" />
                 </Grid>
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,12">

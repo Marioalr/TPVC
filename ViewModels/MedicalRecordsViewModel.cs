@@ -20,7 +20,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private readonly InventoryService? _inventoryService;
     private readonly ConsultationService? _consultationService;
     private readonly ClinicProfileService? _clinicProfileService;
-    private readonly IPrescriptionOutput? _printingService;
     private readonly Action? _onInventoryChangedHandler;
     private readonly Action? _onProfileChangedHandler;
 
@@ -220,9 +219,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     private int _prescriptionQuantity = 1;
 
     [ObservableProperty]
-    private bool _isPrescriptionPdfModalOpen;
-
-    [ObservableProperty]
     private bool _isPrescriptionModalOpen;
 
     // ==========================================
@@ -395,68 +391,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsServiceModalDropdownOpen = !string.IsNullOrWhiteSpace(query) && ServiceModalSuggestions.Count > 0;
     }
 
-    // ==========================================
-    // EXPLORADOR DE CATÁLOGO (MEDICAMENTOS, INSUMOS, SERVICIOS)
-    // ==========================================
-    [ObservableProperty]
-    private bool _isCatalogBrowserModalOpen;
-
-    [ObservableProperty]
-    private string _catalogBrowserTitle = "Catálogo";
-
-    [ObservableProperty]
-    private string _catalogBrowserSubtitle = "Explore y seleccione un elemento del catálogo";
-
-    [ObservableProperty]
-    private string _catalogBrowserMode = "Medications"; // "Medications", "Supplies", "Services"
-
-    [ObservableProperty]
-    private string _catalogBrowserSearchText = string.Empty;
-
-    [ObservableProperty]
-    private ObservableCollection<Product> _catalogBrowserFilteredProducts = new();
-
-    [ObservableProperty]
-    private ObservableCollection<ClinicalService> _catalogBrowserFilteredServices = new();
-
-    partial void OnCatalogBrowserSearchTextChanged(string value)
-    {
-        ApplyCatalogBrowserFilter();
-    }
-
-    public void ApplyCatalogBrowserFilter()
-    {
-        var q = TextSearch.Normalize(CatalogBrowserSearchText ?? string.Empty);
-
-        if (CatalogBrowserMode == "Medications")
-        {
-            var list = Catalog.AvailableProducts.Where(CatalogStore.IsProductMedication);
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
-            }
-            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
-        }
-        else if (CatalogBrowserMode == "Supplies")
-        {
-            var list = Catalog.AvailableProducts.Where(CatalogStore.IsProductSupply);
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
-            }
-            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
-        }
-        else if (CatalogBrowserMode == "Services")
-        {
-            var list = Catalog.Services.AsEnumerable();
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                list = list.Where(s => TextSearch.Matches(q, s.Name, s.Code, s.Category, s.Description));
-            }
-            CatalogBrowserFilteredServices = new ObservableCollection<ClinicalService>(list.OrderBy(s => s.Name));
-        }
-    }
-
     public MedicalRecordsViewModel() : this(null, null, null, null, null, null)
     {
     }
@@ -472,7 +406,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
-        CreateChildren(notificationService, clinicProfileService, consultationDraftStore);
+        CreateChildren(notificationService, clinicProfileService, consultationDraftStore, printingService);
         Checkout = new CheckoutViewModel(inventoryService, () =>
             _clinicProfileService?.CurrentProfile?.DoctorNameWithTitle is { Length: > 0 } doctor ? doctor : "Dr. Titular")
         {
@@ -488,7 +422,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         InitializePacientes();
         InitializeHandoff(consultationHandoffService);
         _clinicProfileService = clinicProfileService;
-        _printingService = printingService;
 
         if (_clinicProfileService != null)
         {
@@ -711,7 +644,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         else
         {
             Active.StopConsultationTimer();
-            _feeServiceOverrideId = null;
+            Account.FeeServiceOverrideId = null;
             _receivedHandoffId = null;
             _receivedHandoffToken = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
@@ -754,7 +687,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         ApplyPrescriptionSuggestions(PrescriptionSearchText ?? string.Empty);
         ApplySupplySuggestions(SupplySearchText ?? string.Empty);
         ApplyServiceModalSuggestions(ServiceModalSearchText ?? string.Empty);
-        ApplyCatalogBrowserFilter();
+        CatalogBrowser.ApplyCatalogBrowserFilter();
     }
 
     // ==========================================
@@ -822,7 +755,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         var treatmentPlan = !string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
             ? ConsultationTreatmentPlan.Trim()
-            : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : SavedTreatmentPlanPlaceholder);
+            : (!string.IsNullOrWhiteSpace(ConsultationGeneralIndications) ? ConsultationGeneralIndications.Trim() : PrescriptionPreviewViewModel.SavedTreatmentPlanPlaceholder);
 
         var systemsReview = !string.IsNullOrWhiteSpace(ConsultationSystemsReview)
             ? ConsultationSystemsReview.Trim()
@@ -1018,7 +951,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
         PatientForm.IsPatientModalOpen = false;
-        IsCatalogBrowserModalOpen = false;
+        CatalogBrowser.IsCatalogBrowserModalOpen = false;
         Info.DismissInfoModal();
 
         // 2. Finalizar y cerrar la consulta médica en el servicio y detener cronómetro
@@ -1122,7 +1055,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         if (Active.HasActiveConsultation)
         {
             var dispensed = product != null && CatalogStore.ProductMatchesName(product, name) ? product : null;
-            newItem.DispenseInClinic = ChargePrescription(newItem, dispensed);
+            newItem.DispenseInClinic = Account.ChargePrescription(newItem, dispensed);
         }
 
         var currentList = new List<PatientPrescriptionItem>(Session.SelectedPatient.ActivePrescription) { newItem };
@@ -1150,62 +1083,6 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void AddServiceToActiveConsultation(ClinicalService? service)
-    {
-        if (service == null || BlockIfConsultationReadOnly() || BlockIfReceivingHandoff()) return;
-
-        if (!Active.HasActiveConsultation)
-        {
-            StartActiveConsultation();
-        }
-
-        if (_consultationService?.CurrentConsultation != null)
-        {
-            _consultationService.AddCartItemToActiveConsultation(
-                -service.Id,
-                service.Code,
-                service.Name,
-                $"Servicio Clínico • {service.Category}",
-                $"Duración: {service.EstimatedDurationMinutes} min",
-                "Servicio",
-                service.Price,
-                1
-            );
-
-            // Agregar también los insumos por defecto del servicio si existen
-            foreach (var dp in service.DefaultProducts)
-            {
-                if (dp.Product != null)
-                {
-                    _consultationService.AddCartItemToActiveConsultation(
-                        dp.Product.Id,
-                        dp.Product.Code,
-                        dp.Product.Name,
-                        dp.Product.GenericName,
-                        dp.Product.Presentation,
-                        dp.Product.Unit,
-                        dp.Product.Price,
-                        Math.Max(1, dp.Quantity)
-                    );
-                }
-            }
-
-            SyncActiveConsultation();
-            // El cargo aparece al instante en "Cuenta de la consulta": sin ventana que interrumpa
-        }
-    }
-
-    [RelayCommand]
-    public void RemoveItemFromActiveConsultation(ConsultationProductItem? item)
-    {
-        if (_consultationService?.CurrentConsultation == null || item == null || BlockIfConsultationReadOnly()) return;
-
-        _consultationService.CurrentConsultation.Items.Remove(item);
-        _consultationService.CurrentConsultation.NotifyItemsChanged();
-        SyncActiveConsultation();
-    }
-
-    [RelayCommand]
     public void AppendGeneralIndicationPreset(string text)
     {
         if (string.IsNullOrWhiteSpace(ConsultationGeneralIndications))
@@ -1227,7 +1104,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
         if (item.DispenseInClinic && Active.HasActiveConsultation)
         {
-            UnchargePrescription(item);
+            Account.UnchargePrescription(item);
         }
 
         var list = new List<PatientPrescriptionItem>(Session.SelectedPatient.ActivePrescription);
@@ -1294,12 +1171,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
         }
-        CatalogBrowserMode = "Medications";
-        CatalogBrowserTitle = "Catálogo de Medicamentos";
-        CatalogBrowserSubtitle = "Explore todos los fármacos registrados y agregue el medicamento a la receta médica del paciente.";
-        CatalogBrowserSearchText = string.Empty;
-        ApplyCatalogBrowserFilter();
-        IsCatalogBrowserModalOpen = true;
+        CatalogBrowser.CatalogBrowserMode = "Medications";
+        CatalogBrowser.CatalogBrowserTitle = "Catálogo de Medicamentos";
+        CatalogBrowser.CatalogBrowserSubtitle = "Explore todos los fármacos registrados y agregue el medicamento a la receta médica del paciente.";
+        CatalogBrowser.CatalogBrowserSearchText = string.Empty;
+        CatalogBrowser.ApplyCatalogBrowserFilter();
+        CatalogBrowser.IsCatalogBrowserModalOpen = true;
     }
 
     [RelayCommand]
@@ -1373,12 +1250,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
         }
-        CatalogBrowserMode = "Supplies";
-        CatalogBrowserTitle = "Catálogo de Insumos y Material de Curación";
-        CatalogBrowserSubtitle = "Explore todos los insumos clínicos disponibles y agregue el material utilizado al expediente.";
-        CatalogBrowserSearchText = string.Empty;
-        ApplyCatalogBrowserFilter();
-        IsCatalogBrowserModalOpen = true;
+        CatalogBrowser.CatalogBrowserMode = "Supplies";
+        CatalogBrowser.CatalogBrowserTitle = "Catálogo de Insumos y Material de Curación";
+        CatalogBrowser.CatalogBrowserSubtitle = "Explore todos los insumos clínicos disponibles y agregue el material utilizado al expediente.";
+        CatalogBrowser.CatalogBrowserSearchText = string.Empty;
+        CatalogBrowser.ApplyCatalogBrowserFilter();
+        CatalogBrowser.IsCatalogBrowserModalOpen = true;
     }
 
     [RelayCommand]
@@ -1432,7 +1309,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo)
         if (Active.HasActiveConsultation)
         {
-            ChargeSupply(newItem, product ?? Catalog.FindCatalogProduct(name));
+            Account.ChargeSupply(newItem, product ?? Catalog.FindCatalogProduct(name));
         }
 
         if (_inventoryService != null)
@@ -1461,7 +1338,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
         if (IsConsultationForSelectedPatient)
         {
-            UnchargeSupply(item);
+            Account.UnchargeSupply(item);
         }
 
         var list = new List<PatientSupplyItem>(Session.SelectedPatient.ActiveSupplies);
@@ -1545,86 +1422,12 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         {
             await LoadServicesAsync();
         }
-        CatalogBrowserMode = "Services";
-        CatalogBrowserTitle = "Catálogo de Servicios y Procedimientos Clínicos";
-        CatalogBrowserSubtitle = "Explore el catálogo oficial de servicios clínicos y agregue el procedimiento realizado al expediente.";
-        CatalogBrowserSearchText = string.Empty;
-        ApplyCatalogBrowserFilter();
-        IsCatalogBrowserModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void CloseCatalogBrowser()
-    {
-        IsCatalogBrowserModalOpen = false;
-    }
-
-    [RelayCommand]
-    public async Task AddProductFromCatalogBrowserAsync(Product? product)
-    {
-        if (product == null) return;
-
-        if (CatalogBrowserMode == "Medications")
-        {
-            await SelectAndAddPrescriptionProductAsync(product);
-            IsCatalogBrowserModalOpen = false;
-        }
-        else if (CatalogBrowserMode == "Supplies")
-        {
-            await SelectAndAddSupplyProductAsync(product);
-            IsCatalogBrowserModalOpen = false;
-        }
-    }
-
-    /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
-    [RelayCommand]
-    public async Task AddFirstFromCatalogBrowserAsync()
-    {
-        if (CatalogBrowserMode == "Services")
-        {
-            await AddServiceFromCatalogBrowserAsync(CatalogBrowserFilteredServices.FirstOrDefault());
-        }
-        else
-        {
-            // En insumos solo sirve lo que hay; en la receta se puede recetar aunque no se surta aquí
-            var first = CatalogBrowserMode == "Supplies"
-                ? CatalogBrowserFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0)
-                : CatalogBrowserFilteredProducts.FirstOrDefault();
-            await AddProductFromCatalogBrowserAsync(first);
-        }
-    }
-
-    public bool IsCatalogBrowserServicesMode => CatalogBrowserMode == "Services";
-
-    public string CatalogBrowserSummary => IsCatalogBrowserServicesMode
-        ? (CatalogBrowserFilteredServices.Count == 1 ? "1 servicio" : $"{CatalogBrowserFilteredServices.Count} servicios")
-        : (CatalogBrowserFilteredProducts.Count == 1 ? "1 producto" : $"{CatalogBrowserFilteredProducts.Count} productos");
-
-    public bool HasNoCatalogBrowserResults => IsCatalogBrowserServicesMode
-        ? CatalogBrowserFilteredServices.Count == 0
-        : CatalogBrowserFilteredProducts.Count == 0;
-
-    partial void OnCatalogBrowserModeChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsCatalogBrowserServicesMode));
-        NotifyCatalogBrowserResults();
-    }
-
-    partial void OnCatalogBrowserFilteredProductsChanged(ObservableCollection<Product> value) => NotifyCatalogBrowserResults();
-    partial void OnCatalogBrowserFilteredServicesChanged(ObservableCollection<ClinicalService> value) => NotifyCatalogBrowserResults();
-
-    private void NotifyCatalogBrowserResults()
-    {
-        OnPropertyChanged(nameof(CatalogBrowserSummary));
-        OnPropertyChanged(nameof(HasNoCatalogBrowserResults));
-    }
-
-    [RelayCommand]
-    public async Task AddServiceFromCatalogBrowserAsync(ClinicalService? service)
-    {
-        if (service == null) return;
-        await SelectAndAddServiceModalSuggestionAsync(service);
-        IsCatalogBrowserModalOpen = false;
+        CatalogBrowser.CatalogBrowserMode = "Services";
+        CatalogBrowser.CatalogBrowserTitle = "Catálogo de Servicios y Procedimientos Clínicos";
+        CatalogBrowser.CatalogBrowserSubtitle = "Explore el catálogo oficial de servicios clínicos y agregue el procedimiento realizado al expediente.";
+        CatalogBrowser.CatalogBrowserSearchText = string.Empty;
+        CatalogBrowser.ApplyCatalogBrowserFilter();
+        CatalogBrowser.IsCatalogBrowserModalOpen = true;
     }
 
     [RelayCommand]
@@ -1690,7 +1493,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Durante la consulta, el servicio realizado se carga de inmediato a la cuenta
         if (Active.HasActiveConsultation)
         {
-            ChargeService(newItem);
+            Account.ChargeService(newItem);
         }
 
         if (_inventoryService != null)
@@ -1719,7 +1522,7 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
         // Lo que se cargó a la cuenta al agregarlo durante la consulta deja de cobrarse
         if (IsConsultationForSelectedPatient)
         {
-            UnchargeService(item);
+            Account.UnchargeService(item);
         }
 
         var list = new List<PatientServiceItem>(Session.SelectedPatient.ActiveServices);
@@ -1791,122 +1594,4 @@ public partial class MedicalRecordsViewModel : ObservableObject, IDisposable
 
     /// <summary>Recalcula la gráfica de signos del paciente dado o, si no se da, del paciente abierto.</summary>
     public void RefreshVitalSignsEvolution(PatientRecord? patient = null) => VitalsChart.RefreshVitalSignsEvolution(patient ?? Session.SelectedPatient);
-
-    [RelayCommand]
-    public void OpenPrescriptionPdfPreview()
-    {
-        if (Session.SelectedPatient == null)
-        {
-            Info.InfoModalMessage = "Seleccione un paciente para visualizar la receta médica.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        if (Session.SelectedPatient.ActivePrescription.Count == 0)
-        {
-            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para generar el documento.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        IsPrescriptionPdfModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void ClosePrescriptionPdfPreview()
-    {
-        IsPrescriptionPdfModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void PrintOrExportPrescriptionPdf()
-    {
-        if (Session.SelectedPatient == null || Session.SelectedPatient.ActivePrescription.Count == 0)
-        {
-            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para imprimir.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
-        {
-            DoctorName = Clinic.DoctorName,
-            DoctorLicense = Clinic.DoctorLicense,
-            DoctorSpecialty = Clinic.DoctorSpecialty,
-            ClinicName = Clinic.ClinicName,
-            ClinicAddress = Clinic.ClinicAddress,
-            ClinicPhone = Clinic.ClinicPhone
-        };
-
-        if (_printingService != null)
-        {
-            bool printed = _printingService.PrintPrescription(
-                Session.SelectedPatient, 
-                Session.SelectedPatient.ActivePrescription, 
-                profile, 
-                PrescriptionIndications);
-
-            if (printed)
-            {
-                Info.InfoModalMessage = "¡Receta médica enviada a la impresora física con éxito!";
-            }
-            else
-            {
-                Info.InfoModalMessage = "Impresión de receta cancelada o no se seleccionó impresora.";
-            }
-        }
-        else
-        {
-            Info.InfoModalMessage = "La receta oficial NOM-004-SSA3 ha sido formateada con éxito para emisión física o guardado en PDF.";
-        }
-
-        Info.IsInfoModalVisible = true;
-        IsPrescriptionPdfModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void ExportPrescriptionDocument()
-    {
-        if (Session.SelectedPatient == null || Session.SelectedPatient.ActivePrescription.Count == 0)
-        {
-            Info.InfoModalMessage = "No hay medicamentos ni consumibles registrados en la receta actual para exportar.";
-            Info.IsInfoModalVisible = true;
-            return;
-        }
-
-        var profile = _clinicProfileService?.CurrentProfile ?? new ClinicProfile
-        {
-            DoctorName = Clinic.DoctorName,
-            DoctorLicense = Clinic.DoctorLicense,
-            DoctorSpecialty = Clinic.DoctorSpecialty,
-            ClinicName = Clinic.ClinicName,
-            ClinicAddress = Clinic.ClinicAddress,
-            ClinicPhone = Clinic.ClinicPhone
-        };
-
-        if (_printingService != null)
-        {
-            string? filePath = _printingService.ExportPrescriptionDocument(
-                Session.SelectedPatient, 
-                Session.SelectedPatient.ActivePrescription, 
-                profile, 
-                PrescriptionIndications);
-
-            if (!string.IsNullOrEmpty(filePath))
-            {
-                Info.InfoModalMessage = $"¡Receta médica oficial exportada con éxito!\nGuardada en: {filePath}";
-            }
-            else
-            {
-                Info.InfoModalMessage = "Exportación de receta cancelada.";
-            }
-        }
-        else
-        {
-            Info.InfoModalMessage = "Servicio de exportación no disponible en este entorno.";
-        }
-
-        Info.IsInfoModalVisible = true;
-        IsPrescriptionPdfModalOpen = false;
-    }
 }

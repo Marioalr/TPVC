@@ -9,6 +9,12 @@ namespace TPVC.ViewModels.Patients;
 /// </summary>
 public interface IConsultationGate
 {
+    /// <summary>La consulta se mandó a otro equipo (o se está mandando): aquí no se modifica. true y un aviso.</summary>
+    bool BlockIfConsultationReadOnly();
+
     /// <summary>El expediente no se edita aquí mientras su consulta está en otro equipo (o se actualiza con lo de allá): true y un aviso.</summary>
     bool BlockIfPatientHandedOff(PatientRecord? patient);
+
+    /// <summary>Se está recibiendo una consulta de otro equipo: true y un aviso.</summary>
+    bool BlockIfReceivingHandoff();
 }

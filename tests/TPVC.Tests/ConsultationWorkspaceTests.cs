@@ -108,7 +108,7 @@ public class ConsultationWorkspaceTests
         Assert.IsFalse(records.IsAllergyAlertOpen);
         Assert.AreEqual(product.Name, patient.ActivePrescription.Last().MedicineName);
         Assert.IsTrue(patient.ActivePrescription.Last().DispenseInClinic);
-        Assert.AreEqual(records.ConsultationFeeAmount + product.Price, records.ConsultationAccountTotal);
+        Assert.AreEqual(records.Account.ConsultationFeeAmount + product.Price, records.Account.ConsultationAccountTotal);
 
         records.ConsultationDiagnosis = "J00 Rinofaringitis aguda";
         var folio = consultations.CurrentConsultation!.Folio;
@@ -119,7 +119,7 @@ public class ConsultationWorkspaceTests
         Assert.IsTrue(records.HasActiveConsultation, "La consulta sigue activa hasta cobrar");
         Assert.HasCount(2, checkout.Cart, "Honorario + medicamento surtido");
         Assert.IsTrue(checkout.Cart[0].IsService);
-        Assert.AreEqual(records.ConsultationFeeAmount, checkout.Cart[0].UnitPrice);
+        Assert.AreEqual(records.Account.ConsultationFeeAmount, checkout.Cart[0].UnitPrice);
         Assert.AreEqual(product.Id, checkout.Cart[1].ProductId);
 
         // "Volver a la consulta" y terminar otra vez no duplica cargos ni notas
@@ -295,7 +295,7 @@ public class ConsultationWorkspaceTests
         await records.RemoveServiceItemFromPatientAsync(freeService);
 
         Assert.IsEmpty(items, "Sin cargos de lo que ya no está en el expediente");
-        Assert.AreEqual(records.ConsultationFeeAmount, records.ConsultationAccountTotal);
+        Assert.AreEqual(records.Account.ConsultationFeeAmount, records.Account.ConsultationAccountTotal);
         CollectionAssert.DoesNotContain(patient.ActiveSupplies, gasaSupply);
         CollectionAssert.DoesNotContain(patient.ActiveSupplies, freeSupply);
         CollectionAssert.DoesNotContain(patient.ActiveServices, curacionItem);

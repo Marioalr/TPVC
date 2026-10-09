@@ -85,14 +85,14 @@
                                     <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold"
                                                Text="{Binding Session.SelectedPatient.ActivePrescription.Count, StringFormat='Receta · {0} medicamento(s)'}" />
                                     <WrapPanel Margin="0,8,0,0" Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource BoolToVis}}">
-                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Margin="0,0,6,0" Command="{Binding PrintOrExportPrescriptionPdfCommand}">
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Margin="0,0,6,0" Command="{Binding Preview.PrintOrExportPrescriptionPdfCommand}">
                                             <StackPanel Orientation="Horizontal">
                                                 <helpers:Icon Data="{StaticResource IcoPrint}" Width="14" Height="14" Margin="0,0,6,0" />
                                                 <TextBlock Text="Imprimir" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Margin="0,0,6,0" Command="{Binding OpenPrescriptionPdfPreviewCommand}" Content="Vista previa" />
-                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Command="{Binding ExportPrescriptionDocumentCommand}" Content="Guardar PDF" />
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Margin="0,0,6,0" Command="{Binding Preview.OpenPrescriptionPdfPreviewCommand}" Content="Vista previa" />
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,5" Command="{Binding Preview.ExportPrescriptionDocumentCommand}" Content="Guardar PDF" />
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" Text="Sin medicamentos recetados." Margin="0,4,0,0"
                                                Visibility="{Binding Session.SelectedPatient.ActivePrescription.Count, Converter={StaticResource InverseBoolToVis}}" />

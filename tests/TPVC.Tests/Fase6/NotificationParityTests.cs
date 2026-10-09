@@ -150,7 +150,7 @@ public class NotificationParityTests
         using var recorder = new PatientsNotificationRecorder(records, sameThreadOnly: true);
         var golden = new Golden(Ordered);
 
-        golden.Section("cargar un servicio con sus insumos", RecordSync(recorder, () => records.AddServiceToActiveConsultation(records.Catalog.Services.First(s => s.DefaultProducts.Count > 0))));
+        golden.Section("cargar un servicio con sus insumos", RecordSync(recorder, () => records.Account.AddServiceToActiveConsultation(records.Catalog.Services.First(s => s.DefaultProducts.Count > 0))));
         golden.AssertMatches("add-service.txt", "Avisos al cargar un servicio");
     }
 
@@ -192,7 +192,7 @@ public class NotificationParityTests
             ("info", (vm, _) => { vm.Info.InfoModalMessage = "Aviso"; vm.Info.IsInfoModalVisible = true; }),
             ("alergia", (vm, _) => vm.IsAllergyAlertOpen = true),
             ("catálogo", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); Completes(vm.OpenPrescriptionCatalogAsync(), "Catálogo"); }),
-            ("vista previa", (vm, _) => vm.IsPrescriptionPdfModalOpen = true),
+            ("vista previa", (vm, _) => vm.Preview.IsPrescriptionPdfModalOpen = true),
             ("enviar a", (vm, _) => vm.IsSendConsultationSheetOpen = true),
             ("CIE-10", (vm, _) => vm.ConsultationDiagnosis = "farin"),
             ("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.IsFinishConsultationOpen = true; }),

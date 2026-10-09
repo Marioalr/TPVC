@@ -602,7 +602,7 @@ public class ConsultationHandoffTests
         var items = pc.Consultations.CurrentConsultation!.Items.Count;
         await pc.Records.FinalizeConsultationAsync();
         Assert.IsFalse(pc.Records.IsFinishConsultationOpen, "No se puede terminar aquí");
-        pc.Records.RemoveItemFromActiveConsultation(pc.Consultations.CurrentConsultation.Items.First());
+        pc.Records.Account.RemoveItemFromActiveConsultation(pc.Consultations.CurrentConsultation.Items.First());
         Assert.AreEqual(items, pc.Consultations.CurrentConsultation.Items.Count);
         await pc.Records.DiscardActiveConsultationAsync();
         Assert.IsTrue(pc.Consultations.HasActiveConsultation, "Tampoco se descarta");

@@ -171,9 +171,9 @@
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="300" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CheckoutSheet}"
                         Visibility="{Binding IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="310" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CatalogSheet}"
-                        Visibility="{Binding IsCatalogBrowserModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding CatalogBrowser.IsCatalogBrowserModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PreviewSheet}"
-                        Visibility="{Binding IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding Preview.IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource SendConsultationSheet}"
                         Visibility="{Binding IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource AllergyDialog}"

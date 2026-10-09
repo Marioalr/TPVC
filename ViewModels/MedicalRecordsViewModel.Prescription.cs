@@ -26,36 +26,12 @@ public partial class MedicalRecordsViewModel
             ? Record.PreviousPrescription
             : (IReadOnlyList<PatientPrescriptionItem>?)Session.SelectedPatient?.ActivePrescription ?? Array.Empty<PatientPrescriptionItem>();
 
-    /// <summary>Lo que se guarda como plan cuando la consulta termina sin plan escrito.</summary>
-    private const string SavedTreatmentPlanPlaceholder = "Tratamiento e indicaciones médicas según receta.";
-
-    /// <summary>
-    /// Indicaciones de la receta (vista previa, impresión y PDF): en consulta, el plan e indicaciones
-    /// que escribe el médico; fuera de ella, las de la última consulta guardada; si no hay, el texto general.
-    /// Antes la receta siempre llevaba el texto general aunque el médico hubiera escrito otras.
-    /// </summary>
-    public string PrescriptionIndications
-    {
-        get
-        {
-            if (IsConsultationForSelectedPatient)
-            {
-                return string.IsNullOrWhiteSpace(ConsultationTreatmentPlan)
-                    ? PrescriptionDefaults.Indications
-                    : ConsultationTreatmentPlan.Trim();
-            }
-            var saved = Session.ConsultationsHistory.FirstOrDefault()?.TreatmentPlan?.Trim();
-            return string.IsNullOrWhiteSpace(saved) || saved == SavedTreatmentPlanPlaceholder
-                ? PrescriptionDefaults.Indications
-                : saved;
-        }
-    }
-
-    partial void OnConsultationTreatmentPlanChanged(string value) => OnPropertyChanged(nameof(PrescriptionIndications));
+    // Las indicaciones de la receta (vista previa, impresión y PDF) son de Preview
+    partial void OnConsultationTreatmentPlanChanged(string value) => Preview.RaisePrescriptionIndications();
 
     private void NotifyPrescriptionStateChanged()
     {
-        OnPropertyChanged(nameof(PrescriptionIndications));
+        Preview.RaisePrescriptionIndications();
         OnPropertyChanged(nameof(CanRepeatPreviousPrescription));
         OnPropertyChanged(nameof(PreviousPrescriptionSummary));
         OnPropertyChanged(nameof(ChartPrescription));

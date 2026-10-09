@@ -1423,21 +1423,21 @@ public class InventoryTests
             }
         };
 
-        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+        Assert.IsFalse(recordsVm.Preview.IsPrescriptionPdfModalOpen);
 
         // Abrir vista previa de la receta PDF NOM-004-SSA3
-        recordsVm.OpenPrescriptionPdfPreview();
-        Assert.IsTrue(recordsVm.IsPrescriptionPdfModalOpen);
+        recordsVm.Preview.OpenPrescriptionPdfPreview();
+        Assert.IsTrue(recordsVm.Preview.IsPrescriptionPdfModalOpen);
 
         // Cerrar vista previa
-        recordsVm.ClosePrescriptionPdfPreview();
-        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+        recordsVm.Preview.ClosePrescriptionPdfPreview();
+        Assert.IsFalse(recordsVm.Preview.IsPrescriptionPdfModalOpen);
 
         // Abrir e imprimir / exportar
-        recordsVm.OpenPrescriptionPdfPreview();
-        Assert.IsTrue(recordsVm.IsPrescriptionPdfModalOpen);
-        recordsVm.PrintOrExportPrescriptionPdf();
-        Assert.IsFalse(recordsVm.IsPrescriptionPdfModalOpen);
+        recordsVm.Preview.OpenPrescriptionPdfPreview();
+        Assert.IsTrue(recordsVm.Preview.IsPrescriptionPdfModalOpen);
+        recordsVm.Preview.PrintOrExportPrescriptionPdf();
+        Assert.IsFalse(recordsVm.Preview.IsPrescriptionPdfModalOpen);
         Assert.IsTrue(recordsVm.Info.IsInfoModalVisible);
         Assert.IsTrue(recordsVm.Info.InfoModalMessage?.Contains("PDF") == true);
     }
@@ -1451,17 +1451,17 @@ public class InventoryTests
         recordsVm.SelectedPatient = patient;
 
         // Sin consulta ni historial: el texto general
-        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications);
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.Preview.PrescriptionIndications);
 
         // En consulta: el plan que escribe el médico (también lo que agregan los botones rápidos)
         recordsVm.StartActiveConsultation();
-        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications, "Plan vacío: texto general");
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.Preview.PrescriptionIndications, "Plan vacío: texto general");
         var changes = new List<string>();
-        recordsVm.PropertyChanged += (_, e) => changes.Add(e.PropertyName ?? string.Empty);
+        recordsVm.Preview.PropertyChanged += (_, e) => changes.Add(e.PropertyName ?? string.Empty);
         recordsVm.ConsultationTreatmentPlan = "Guardar reposo absoluto por 3 días.";
         recordsVm.AppendGeneralIndicationPreset("Hidratación con electrolitos orales.");
-        Assert.AreEqual("Guardar reposo absoluto por 3 días. Hidratación con electrolitos orales.", recordsVm.PrescriptionIndications);
-        Assert.Contains(nameof(MedicalRecordsViewModel.PrescriptionIndications), changes, "La vista previa se actualiza al escribir");
+        Assert.AreEqual("Guardar reposo absoluto por 3 días. Hidratación con electrolitos orales.", recordsVm.Preview.PrescriptionIndications);
+        Assert.Contains(nameof(PrescriptionPreviewViewModel.PrescriptionIndications), changes, "La vista previa se actualiza al escribir");
 
         // Fuera de consulta: las de la última consulta guardada (no el texto de relleno)
         await recordsVm.DiscardActiveConsultationAsync();
@@ -1471,10 +1471,10 @@ public class InventoryTests
             new() { Folio = "CNS-2", Date = DateTime.Today, TreatmentPlan = "Paracetamol si hay fiebre; control en una semana." },
             new() { Folio = "CNS-1", Date = DateTime.Today.AddDays(-30), TreatmentPlan = "Dieta blanda." }
         };
-        Assert.AreEqual("Paracetamol si hay fiebre; control en una semana.", recordsVm.PrescriptionIndications);
+        Assert.AreEqual("Paracetamol si hay fiebre; control en una semana.", recordsVm.Preview.PrescriptionIndications);
         recordsVm.ConsultationsHistory[0].TreatmentPlan = "Tratamiento e indicaciones médicas según receta.";
         recordsVm.ConsultationsHistory = new System.Collections.ObjectModel.ObservableCollection<PatientConsultation>(recordsVm.ConsultationsHistory);
-        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.PrescriptionIndications);
+        Assert.AreEqual(PrintingService.DefaultPrescriptionIndications, recordsVm.Preview.PrescriptionIndications);
     }
 
     [TestMethod]
@@ -1569,7 +1569,7 @@ public class InventoryTests
         recordsVm.Catalog.Services.Add(service);
 
         // Agregar servicio a la consulta activa
-        recordsVm.AddServiceToActiveConsultation(service);
+        recordsVm.Account.AddServiceToActiveConsultation(service);
 
         // Debe haber 2 ítems en la cuenta: el servicio + las 2 gasas
         var items = consultationService.CurrentConsultation!.Items;
@@ -1582,7 +1582,7 @@ public class InventoryTests
 
         // Quitar el insumo de la cuenta
         var insumoItem = items.First(i => i.ProductName == "Gasa Estéril 10x10");
-        recordsVm.RemoveItemFromActiveConsultation(insumoItem);
+        recordsVm.Account.RemoveItemFromActiveConsultation(insumoItem);
 
         Assert.AreEqual(1, items.Count);
         Assert.AreEqual(200.00m, consultationService.CurrentConsultation.TotalAmount);
@@ -2652,45 +2652,45 @@ public class InventoryTests
 
         // 1. Catálogo desde Receta Médica -> Sólo Medicamentos
         await vm.OpenPrescriptionCatalogAsync();
-        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
-        Assert.AreEqual("Medications", vm.CatalogBrowserMode);
-        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Medicamentos"));
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
+        Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Medications", vm.CatalogBrowser.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Medicamentos"));
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.Count > 0);
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
 
         // Agregar medicamento desde catálogo
-        var chosenMed = vm.CatalogBrowserFilteredProducts.First();
-        await vm.AddProductFromCatalogBrowserAsync(chosenMed);
-        Assert.IsFalse(vm.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras agregar");
+        var chosenMed = vm.CatalogBrowser.CatalogBrowserFilteredProducts.First();
+        await vm.CatalogBrowser.AddProductFromCatalogBrowserAsync(chosenMed);
+        Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras agregar");
         Assert.AreEqual(1, patient.ActivePrescription.Count);
         Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMed.Name));
 
         // 2. Catálogo desde Insumos -> Sólo Insumos
         await vm.OpenSupplyCatalogAsync();
-        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
-        Assert.AreEqual("Supplies", vm.CatalogBrowserMode);
-        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Insumos"));
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.Count > 0);
-        Assert.IsTrue(vm.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");
+        Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Supplies", vm.CatalogBrowser.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Insumos"));
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.Count > 0);
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");
 
         // Agregar insumo desde catálogo
-        var chosenSupply = vm.CatalogBrowserFilteredProducts.First();
-        await vm.AddProductFromCatalogBrowserAsync(chosenSupply);
-        Assert.IsFalse(vm.IsCatalogBrowserModalOpen);
+        var chosenSupply = vm.CatalogBrowser.CatalogBrowserFilteredProducts.First();
+        await vm.CatalogBrowser.AddProductFromCatalogBrowserAsync(chosenSupply);
+        Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual(1, patient.ActiveSupplies.Count);
         Assert.IsTrue(patient.ActiveSupplies[0].SupplyName.Contains(chosenSupply.Name));
 
         // 3. Catálogo desde Servicios -> Procedimientos clínicos
         await vm.OpenServiceCatalogAsync();
-        Assert.IsTrue(vm.IsCatalogBrowserModalOpen);
-        Assert.AreEqual("Services", vm.CatalogBrowserMode);
-        Assert.IsTrue(vm.CatalogBrowserTitle.Contains("Servicios"));
-        Assert.IsTrue(vm.CatalogBrowserFilteredServices.Count > 0);
+        Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
+        Assert.AreEqual("Services", vm.CatalogBrowser.CatalogBrowserMode);
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Servicios"));
+        Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredServices.Count > 0);
 
         // Agregar servicio desde catálogo
-        var chosenService = vm.CatalogBrowserFilteredServices.First();
-        await vm.AddServiceFromCatalogBrowserAsync(chosenService);
-        Assert.IsFalse(vm.IsCatalogBrowserModalOpen);
+        var chosenService = vm.CatalogBrowser.CatalogBrowserFilteredServices.First();
+        await vm.CatalogBrowser.AddServiceFromCatalogBrowserAsync(chosenService);
+        Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual(1, patient.ActiveServices.Count);
         Assert.AreEqual(chosenService.Name, patient.ActiveServices[0].ServiceName);
     }

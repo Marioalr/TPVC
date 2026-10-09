@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using TPVC.Models;
 using TPVC.ViewModels;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.Views;
 
@@ -22,16 +23,16 @@ public partial class CatalogBrowserSheetView : UserControl
         Loaded += (_, _) => FocusSearch();
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is MedicalRecordsViewModel oldVm) oldVm.PropertyChanged -= ViewModel_PropertyChanged;
-            if (e.NewValue is MedicalRecordsViewModel newVm) newVm.PropertyChanged += ViewModel_PropertyChanged;
+            if (e.OldValue is MedicalRecordsViewModel oldVm) oldVm.CatalogBrowser.PropertyChanged -= ViewModel_PropertyChanged;
+            if (e.NewValue is MedicalRecordsViewModel newVm) newVm.CatalogBrowser.PropertyChanged += ViewModel_PropertyChanged;
         };
     }
 
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MedicalRecordsViewModel.IsCatalogBrowserModalOpen)
-            && sender is MedicalRecordsViewModel { IsCatalogBrowserModalOpen: false }
+        if (e.PropertyName == nameof(CatalogBrowserViewModel.IsCatalogBrowserModalOpen)
+            && sender is CatalogBrowserViewModel { IsCatalogBrowserModalOpen: false }
             && IsVisible)
         {
             FocusSearch();

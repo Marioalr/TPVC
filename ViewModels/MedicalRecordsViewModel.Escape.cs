@@ -8,8 +8,8 @@ public partial class MedicalRecordsViewModel
 {
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>
-        Info.IsInfoModalVisible || IsAllergyAlertOpen || IsCatalogBrowserModalOpen
-        || IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || IsPrescriptionModalOpen || IsSuppliesModalOpen
+        Info.IsInfoModalVisible || IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
+        || Preview.IsPrescriptionPdfModalOpen || IsFinishConsultationOpen || IsPrescriptionModalOpen || IsSuppliesModalOpen
         || IsServicesModalOpen || IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
@@ -26,8 +26,8 @@ public partial class MedicalRecordsViewModel
     {
         if (Info.IsInfoModalVisible) Info.DismissInfoModal();
         else if (IsAllergyAlertOpen) CancelAllergyPrescription();
-        else if (IsCatalogBrowserModalOpen) CloseCatalogBrowser();
-        else if (IsPrescriptionPdfModalOpen) ClosePrescriptionPdfPreview();
+        else if (CatalogBrowser.IsCatalogBrowserModalOpen) CatalogBrowser.CloseCatalogBrowser();
+        else if (Preview.IsPrescriptionPdfModalOpen) Preview.ClosePrescriptionPdfPreview();
         // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
         else if (IsSendConsultationSheetOpen) CloseSendConsultationSheet();
         else if (IsCie10DropdownOpen) IsCie10DropdownOpen = false;

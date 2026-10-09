@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.ViewModels.Patients;
 
 namespace TPVC.ViewModels;
 
@@ -44,9 +45,6 @@ public partial class MedicalRecordsViewModel
 
     /// <summary>Expediente que no se edita aquí: su consulta está en otro equipo (o se está actualizando).</summary>
     private int? _handoffLockedPatientId;
-
-    /// <summary>Honorario que usaba el equipo que envió la consulta (Id local).</summary>
-    private int? _feeServiceOverrideId;
 
     /// <summary>La consulta en pantalla se recibió de otro equipo (su envío y la ficha con que se tomó).</summary>
     private string? _receivedHandoffId;
@@ -680,8 +678,8 @@ public partial class MedicalRecordsViewModel
         IsPrescriptionModalOpen = false;
         IsSuppliesModalOpen = false;
         IsServicesModalOpen = false;
-        IsCatalogBrowserModalOpen = false;
-        IsPrescriptionPdfModalOpen = false;
+        CatalogBrowser.IsCatalogBrowserModalOpen = false;
+        Preview.IsPrescriptionPdfModalOpen = false;
         IsAllergyAlertOpen = false;
         Agenda.IsAgendaPanelOpen = false;
     }
@@ -715,7 +713,7 @@ public partial class MedicalRecordsViewModel
         draft.AttendingAppointmentSyncId = _attendingAppointmentId is int appointmentId
             ? await _inventoryService.GetAppointmentSyncIdAsync(appointmentId)
             : null;
-        var fee = ConsultationFeeService;
+        var fee = Account.ConsultationFeeService;
         draft.FeeServiceSyncId = fee != null && fee.Id > 0 ? refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Service && r.Id == fee.Id)?.SyncId : null;
 
         foreach (var item in draft.Items)
@@ -842,7 +840,7 @@ public partial class MedicalRecordsViewModel
         Record.Abandon();
         _isCurrentConsultationSaved = false;
         _attendingAppointmentId = null;
-        _feeServiceOverrideId = null;
+        Account.FeeServiceOverrideId = null;
         IsSendConsultationSheetOpen = false;
         CloseConsultationSheets();
         IsFinishConsultationOpen = false;
@@ -1169,7 +1167,7 @@ public partial class MedicalRecordsViewModel
             if (match == null)
             {
                 if (kind != null) freeLines.Add(item.Name);
-                item.ProductId = FreeChargeId(item.Name);
+                item.ProductId = ConsultationAccount.FreeChargeId(item.Name);
             }
             else
             {

@@ -207,7 +207,7 @@ public partial class MedicalRecordsViewModel
             PreviousPrescriptions = Record.PreviousPrescriptionKnown ? Record.PreviousPrescription.Select(ConsultationRecordState.ClonePrescription).ToList() : null,
             PatientBefore = Record.SummaryBeforeConsultation,
             AttendingAppointmentId = _attendingAppointmentId,
-            FeeServiceSyncId = _feeServiceOverrideId is int feeId ? Catalog.Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
+            FeeServiceSyncId = Account.FeeServiceOverrideId is int feeId ? Catalog.Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
             ReceivedHandoffId = _receivedHandoffId,
             ReceivedHandoffToken = _receivedHandoffToken,
             // La marca de "enviada a otro equipo" va en TODAS las copias (también al cerrar el
@@ -322,7 +322,7 @@ public partial class MedicalRecordsViewModel
         try
         {
             // Antes de iniciarla: la cuenta se muestra ya con el honorario y la cita correctos
-            _feeServiceOverrideId = draft.FeeServiceSyncId is Guid feeSyncId
+            Account.FeeServiceOverrideId = draft.FeeServiceSyncId is Guid feeSyncId
                 ? Catalog.Services.FirstOrDefault(s => s.IsActive && s.SyncId == feeSyncId)?.Id
                 : null;
             _receivedHandoffId = draft.ReceivedHandoffId;

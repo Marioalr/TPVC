@@ -69,7 +69,7 @@ public class FlowCharacterizationTests
         records.IsPrescriptionModalOpen = true;
         records.IsSuppliesModalOpen = true;
         records.IsServicesModalOpen = true;
-        records.IsCatalogBrowserModalOpen = true;
+        records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
         records.PatientForm.IsPatientModalOpen = true;
         records.Info.InfoModalMessage = "Aviso anterior";
         records.Info.IsInfoModalVisible = true;
@@ -84,7 +84,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.IsPrescriptionModalOpen);
         Assert.IsFalse(records.IsSuppliesModalOpen);
         Assert.IsFalse(records.IsServicesModalOpen);
-        Assert.IsFalse(records.IsCatalogBrowserModalOpen);
+        Assert.IsFalse(records.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.IsFalse(records.PatientForm.IsPatientModalOpen);
         Assert.IsFalse(records.Navigation.IsFormPage);
         Assert.IsNull(records.SelectedPatient, "Sin paciente seleccionado");
@@ -128,8 +128,8 @@ public class FlowCharacterizationTests
         records.IsPrescriptionModalOpen = true;
         records.IsSuppliesModalOpen = true;
         records.IsServicesModalOpen = true;
-        records.IsCatalogBrowserModalOpen = true;
-        records.IsPrescriptionPdfModalOpen = true;
+        records.CatalogBrowser.IsCatalogBrowserModalOpen = true;
+        records.Preview.IsPrescriptionPdfModalOpen = true;
         records.IsAllergyAlertOpen = true;
         records.Agenda.IsAgendaPanelOpen = true;
         records.IsSendConsultationSheetOpen = true;
@@ -151,8 +151,8 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.IsPrescriptionModalOpen);
         Assert.IsFalse(records.IsSuppliesModalOpen);
         Assert.IsFalse(records.IsServicesModalOpen);
-        Assert.IsFalse(records.IsCatalogBrowserModalOpen);
-        Assert.IsFalse(records.IsPrescriptionPdfModalOpen);
+        Assert.IsFalse(records.CatalogBrowser.IsCatalogBrowserModalOpen);
+        Assert.IsFalse(records.Preview.IsPrescriptionPdfModalOpen);
         Assert.IsFalse(records.IsAllergyAlertOpen);
         Assert.IsFalse(records.Agenda.IsAgendaPanelOpen);
         Assert.IsFalse(records.IsSendConsultationSheetOpen);
@@ -213,7 +213,7 @@ public class FlowCharacterizationTests
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = await clinic.OpenAsync(consultations);
         Assert.IsTrue(records.HasActiveConsultation);
-        Assert.AreEqual("SERV-002", records.ConsultationFeeService?.Code, "Honorario del equipo que la envió");
+        Assert.AreEqual("SERV-002", records.Account.ConsultationFeeService?.Code, "Honorario del equipo que la envió");
         var patient = records.SelectedPatient!;
         Assert.IsEmpty(patient.ActivePrescription, "La consulta aún no tiene receta");
 
@@ -223,7 +223,7 @@ public class FlowCharacterizationTests
         Assert.IsFalse(records.HasActiveConsultation);
         Assert.IsFalse(File.Exists(clinic.DraftPath), "El borrador se borra");
         Assert.IsFalse(records.IsConsultationRecovered);
-        Assert.AreEqual("SERV-001", records.ConsultationFeeService?.Code, "Vuelve el honorario propio");
+        Assert.AreEqual("SERV-001", records.Account.ConsultationFeeService?.Code, "Vuelve el honorario propio");
         await WaitUntilAsync(() => patient.ActivePrescription.Count == 2, "Vuelve la receta anterior");
         CollectionAssert.AreEqual(
             new[] { "Tiras Reactivas para Glucosa Capilar", "Alcohol Etílico Desnaturalizado 70%" },
@@ -312,12 +312,12 @@ public class FlowCharacterizationTests
         records.PrescriptionSearchText = "zinc";
         records.SupplySearchText = "zinc";
         records.ServiceModalSearchText = "zinc";
-        records.CatalogBrowserMode = "Medications";
-        records.CatalogBrowserSearchText = "zinc";
+        records.CatalogBrowser.CatalogBrowserMode = "Medications";
+        records.CatalogBrowser.CatalogBrowserSearchText = "zinc";
         Assert.IsEmpty(records.PrescriptionProductSuggestions);
         Assert.IsEmpty(records.SupplyProductSuggestions);
         Assert.IsEmpty(records.ServiceModalSuggestions);
-        Assert.IsEmpty(records.CatalogBrowserFilteredProducts);
+        Assert.IsEmpty(records.CatalogBrowser.CatalogBrowserFilteredProducts);
 
         // El catálogo cambia (otro equipo, o Configuración) y se vuelve a leer
         using (var db = new AppDbContext(clinic.Options))
@@ -332,7 +332,7 @@ public class FlowCharacterizationTests
         CollectionAssert.AreEqual(new[] { "MED-001" }, records.PrescriptionProductSuggestions.Select(p => p.Code).ToList());
         CollectionAssert.AreEqual(new[] { "CUR-001" }, records.SupplyProductSuggestions.Select(p => p.Code).ToList());
         CollectionAssert.AreEqual(new[] { "SERV-005" }, records.ServiceModalSuggestions.Select(s => s.Code).ToList());
-        CollectionAssert.AreEqual(new[] { "MED-001" }, records.CatalogBrowserFilteredProducts.Select(p => p.Code).ToList());
+        CollectionAssert.AreEqual(new[] { "MED-001" }, records.CatalogBrowser.CatalogBrowserFilteredProducts.Select(p => p.Code).ToList());
         Assert.IsTrue(records.IsPrescriptionDropdownOpen);
         Assert.IsTrue(records.IsSupplyDropdownOpen);
         Assert.IsTrue(records.IsServiceModalDropdownOpen);

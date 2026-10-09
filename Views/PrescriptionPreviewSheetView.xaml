@@ -29,7 +29,7 @@
                         <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la receta" />
                         <TextBlock Style="{StaticResource TextCaption}" Text="Así se imprime o se guarda: media carta horizontal, con el formato de su receta de Excel" />
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePrescriptionPdfPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding Preview.ClosePrescriptionPdfPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
                     </Button>
                 </Grid>
@@ -231,7 +231,7 @@
                                         <StackPanel>
                                             <TextBlock Text="Medidas generales:" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,4" />
                                             <!-- Lo mismo que se imprime: el plan e indicaciones que escribió el médico, o el texto general -->
-                                            <TextBlock Text="{Binding PrescriptionIndications}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Preview.PrescriptionIndications}" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -268,16 +268,16 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Command="{Binding ClosePrescriptionPdfPreviewCommand}" Content="Cerrar" />
+                    <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Command="{Binding Preview.ClosePrescriptionPdfPreviewCommand}" Content="Cerrar" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ExportPrescriptionDocumentCommand}" Margin="0,0,8,0"
+                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Preview.ExportPrescriptionDocumentCommand}" Margin="0,0,8,0"
                                 ToolTip="Guardar la receta como documento (HTML/PDF)">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
                                 <TextBlock Text="Guardar documento" />
                             </StackPanel>
                         </Button>
-                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding PrintOrExportPrescriptionPdfCommand}" ToolTip="Imprimir la receta">
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Preview.PrintOrExportPrescriptionPdfCommand}" ToolTip="Imprimir la receta">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoPrint}" Margin="0,0,8,0" />
                                 <TextBlock Text="Imprimir" />

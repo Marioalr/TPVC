@@ -231,7 +231,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding OpenPrescriptionPdfPreviewCommand}"
+                        <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding Preview.OpenPrescriptionPdfPreviewCommand}"
                                 ToolTip="Vista previa de la receta para imprimir o guardar en PDF">
                             <StackPanel Orientation="Horizontal">
                                 <helpers:Icon Data="{StaticResource IcoFile}" Margin="0,0,8,0" />

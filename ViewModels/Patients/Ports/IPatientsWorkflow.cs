@@ -10,6 +10,9 @@ namespace TPVC.ViewModels.Patients;
 /// </summary>
 public interface IPatientsWorkflow
 {
+    /// <summary>Cambió la consulta en curso en el servicio (inicio, cargos, cierre): todos los dueños se ponen al día.</summary>
+    void SyncActiveConsultation();
+
     /// <summary>Cambió la receta de la consulta o la anterior: ficha, hoja de receta y vista previa.</summary>
     void NotifyPrescriptionStateChanged();
 

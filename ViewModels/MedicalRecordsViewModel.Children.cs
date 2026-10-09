@@ -21,7 +21,10 @@ public partial class MedicalRecordsViewModel
     private PatientSession _session;
     private ActiveConsultationSession _active;
     private ConsultationRecordState _record;
+    private ConsultationAccount _account;
     private VitalSignsChartViewModel _vitalsChart;
+    private CatalogBrowserViewModel _catalogBrowser;
+    private PrescriptionPreviewViewModel _preview;
     private AgendaPanelViewModel _agenda;
     private PatientFormViewModel _patientForm;
     private PatientsHomeViewModel _home;
@@ -53,8 +56,17 @@ public partial class MedicalRecordsViewModel
     /// <summary>El expediente durante la consulta en curso (receta anterior y resumen de antes).</summary>
     public ConsultationRecordState Record => _record;
 
+    /// <summary>Cuenta de la consulta: honorario y cargos (receta que se surte aquí, insumos y servicios).</summary>
+    public ConsultationAccount Account => _account;
+
     /// <summary>Evolución de signos vitales de la ficha (gráfica y tabla).</summary>
     public VitalSignsChartViewModel VitalsChart => _vitalsChart;
+
+    /// <summary>Explorador del catálogo (medicamentos, insumos o servicios) que abren las hojas.</summary>
+    public CatalogBrowserViewModel CatalogBrowser => _catalogBrowser;
+
+    /// <summary>Vista previa de la receta, su impresión y su exportación.</summary>
+    public PrescriptionPreviewViewModel Preview => _preview;
 
     /// <summary>Agenda de la semana (panel lateral).</summary>
     public AgendaPanelViewModel Agenda => _agenda;
@@ -65,8 +77,9 @@ public partial class MedicalRecordsViewModel
     /// <summary>Inicio: buscador, pacientes recientes y citas de hoy.</summary>
     public PatientsHomeViewModel Home => _home;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_vitalsChart), nameof(_agenda), nameof(_patientForm), nameof(_home))]
-    private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore)
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home))]
+    private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
+        IPrescriptionOutput? printingService)
     {
         _info = new InfoDialogState(_ui);
         _feedback = new PatientsFeedback(notificationService, _info);
@@ -77,7 +90,17 @@ public partial class MedicalRecordsViewModel
         _session = new PatientSession(this);
         _active = new ActiveConsultationSession(_consultationService, _ui, this);
         _record = new ConsultationRecordState(_session, _inventoryService, this);
+        _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
+        // Lo elegido en el catálogo se agrega con la hoja que lo abrió
+        _catalogBrowser = new CatalogBrowserViewModel(_catalog)
+        {
+            AddMedication = SelectAndAddPrescriptionProductAsync,
+            AddSupply = SelectAndAddSupplyProductAsync,
+            AddService = SelectAndAddServiceModalSuggestionAsync
+        };
+        // Las indicaciones de la receta leen el plan que escribe el médico en la consulta
+        _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => ConsultationTreatmentPlan);
         _agenda = new AgendaPanelViewModel(_inventoryService, _session, _info, _feedback, _clinic, _dialogs, _urls, this);
         _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,
             _info, _feedback, this, _dialogs, _ui, _autosaveOptions, this);
