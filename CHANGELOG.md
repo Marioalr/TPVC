@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.18.2] - 2026-10-08
+
+### Interno — Fase 6: división del ViewModel de Pacientes (grupo G2)
+* Sin cambios visibles. Primer paso para dividir `MedicalRecordsViewModel` por función (base de la app de la tablet), según `docs/fase6/PLAN_DIVISION_VIEWMODEL.md`.
+* El hilo de la interfaz, los diálogos de confirmación, abrir enlaces y la impresión de la receta pasan por puntos de extensión sin WPF (`ViewModels/Patients/Platform`), con sus versiones de Windows en `Helpers/WpfPlatform`. Cada llamada conserva su orden y su manejo de errores.
+* El borrador del alta de paciente usa una tabla explícita de campos (antes, reflexión sobre los nombres de las propiedades).
+* La tecla Esc (qué se cierra primero) y la búsqueda al teclear en Pacientes viven en el ViewModel; la vista solo pasa las teclas.
+* Pruebas nuevas de estos puntos y de la escalera de Esc (321 en total). Las pruebas con la nube simulada ya no fallan de vez en cuando en la CI de Windows.
+
 ## [1.18.1] - 2026-10-08
 
 ### Cambiado — Fase 6 del rediseño (primera parte): rendimiento y limpieza

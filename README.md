@@ -1,7 +1,7 @@
 # TPVC - Sistema de Inventario para Consultorio Médico
 
 [![CI](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml/badge.svg)](https://github.com/Marioalr/TPVC/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v1.18.1-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
+[![Version](https://img.shields.io/badge/version-v1.18.2-blue.svg)](https://github.com/Marioalr/TPVC/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D7.svg)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/database-SQLite-003B57.svg)](https://www.sqlite.org/)
@@ -118,7 +118,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **302 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **321 pruebas** unitarias y de integración
 
 ---
 
