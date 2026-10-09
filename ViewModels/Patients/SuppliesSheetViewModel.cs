@@ -307,8 +307,15 @@ public partial class SuppliesSheetViewModel : ObservableObject
             return;
         }
 
-        var product = _catalog.FindCatalogProduct(item.SupplyName);
+        // El mismo producto (o cargo libre) con que se cargó, aunque otro del inventario se llame igual
+        int lineId = _account.SupplyLineId(item);
+        var product = lineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == lineId) : null;
         int difference = quantity - item.Quantity;
+        if (difference > 0 && lineId > 0 && product == null)
+        {
+            _feedback.ShowWarning($"'{item.SupplyName}' ya no está en el inventario: no se pueden cargar más piezas.");
+            return;
+        }
         if (difference > 0 && product != null)
         {
             int room = product.CurrentStock - _account.ChargedProductUnits(product.Id);

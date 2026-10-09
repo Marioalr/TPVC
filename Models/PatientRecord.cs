@@ -66,6 +66,10 @@ public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ChargedUnits { get; set; }
 
+    /// <summary>Renglón de la cuenta con que se cargó: Id del producto o, fuera del inventario, el del cargo libre.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int ChargedLineId { get; set; }
+
     private bool _isFromEarlierConsultation;
 
     /// <summary>La hoja lo marca al abrirse: renglón de otra consulta, que solo se ve o se quita.</summary>

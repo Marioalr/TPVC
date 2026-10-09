@@ -429,6 +429,39 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
+    public async Task SupplyPlusMinus_UseTheProductItWasChargedWith_EvenIfAnotherHasTheSameName()
+    {
+        var (records, _, consultations, patient) = await StartConsultationAsync();
+        var items = consultations.CurrentConsultation!.Items;
+        int Charged(int productId) => items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
+        var product = records.Catalog.AvailableProducts.First(p => CatalogStore.IsProductSupply(p) && p.CurrentStock >= 3 && p.Price > 0);
+
+        // Otro producto con el mismo nombre y presentación, sin existencias, que la búsqueda por nombre encontraría primero
+        var twin = new Product { Id = 987654, Code = "GEMELO", Name = product.Name, Presentation = product.Presentation, Unit = product.Unit, Price = product.Price + 10, CurrentStock = 0 };
+        records.Catalog.AvailableProducts.Insert(0, twin);
+        var rowName = string.IsNullOrWhiteSpace(product.Presentation) ? product.Name : $"{product.Name} ({product.Presentation})";
+        Assert.AreSame(twin, records.Catalog.FindCatalogProduct(rowName));
+
+        records.Supplies.SupplyQuantity = 1;
+        await records.Supplies.SelectAndAddSupplyProductAsync(product);
+        var row = patient.ActiveSupplies.Last();
+        Assert.AreEqual(product.Id, row.ChargedLineId);
+        Assert.AreEqual(1, Charged(product.Id));
+
+        records.Info.IsInfoModalVisible = false;
+        await records.Supplies.IncreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(2, row.Quantity);
+        Assert.AreEqual(2, Charged(product.Id));
+        Assert.AreEqual(0, Charged(twin.Id));
+        Assert.IsFalse(records.Info.IsInfoModalVisible, "El tope es el del producto elegido, no el del otro");
+
+        await records.Supplies.DecreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(1, Charged(product.Id));
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(row);
+        Assert.IsEmpty(items, "La X descuenta el producto con que se cargó");
+    }
+
+    [TestMethod]
     public void VitalSignsWarning_IsRefreshedWhenAnyOfItsInputsChanges()
     {
         var records = new MedicalRecordsViewModel(inventoryService: null, new ConsultationService(seedDemoPatients: false));

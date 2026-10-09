@@ -127,10 +127,15 @@ public partial class ConsultationAccount : ObservableObject
         if (product != null) Uncharge(product.Id, Math.Max(1, item.RecommendedQuantity));
     }
 
-    /// <summary>Carga el insumo recién agregado (todas sus piezas); false si no se pudo (sin consulta o sin precio).</summary>
+    /// <summary>
+    /// Carga el insumo recién agregado (todas sus piezas) y anota en el renglón con qué renglón de la
+    /// cuenta se cargó; false si no se pudo (sin consulta o sin precio).
+    /// </summary>
     public bool ChargeSupply(PatientSupplyItem item, Product? knownProduct)
     {
-        bool charged = ChargeSupplyUnits(item, knownProduct, Math.Max(1, item.Quantity));
+        var product = knownProduct ?? _catalog.FindCatalogProduct(item.SupplyName);
+        bool charged = ChargeSupplyUnits(item, product, Math.Max(1, item.Quantity));
+        if (charged) item.ChargedLineId = product?.Id ?? FreeChargeId(item.SupplyName);
         if (!charged)
         {
             _info.InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
@@ -156,23 +161,25 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>
-    /// Carga piezas de un insumo: como producto del inventario o, fuera de él, como cargo libre a su
-    /// precio. Devuelve false si no hay consulta o el cargo libre no tiene precio.
+    /// Carga piezas de un insumo: como el producto dado o, sin él, como cargo libre a su precio.
+    /// Devuelve false si no hay consulta o el cargo libre no tiene precio.
     /// </summary>
-    public bool ChargeSupplyUnits(PatientSupplyItem item, Product? knownProduct, int units)
+    public bool ChargeSupplyUnits(PatientSupplyItem item, Product? product, int units)
     {
-        var product = knownProduct ?? _catalog.FindCatalogProduct(item.SupplyName);
         return product != null
             ? ChargeProduct(product, units, item.SupplyName)
             : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, units);
     }
 
+    /// <summary>
+    /// Renglón de la cuenta de un insumo: el que se anotó al cargarlo o, en renglones anteriores a
+    /// v1.18.7, el que corresponde a su nombre.
+    /// </summary>
+    public int SupplyLineId(PatientSupplyItem item) =>
+        item.ChargedLineId != 0 ? item.ChargedLineId : _catalog.FindCatalogProduct(item.SupplyName)?.Id ?? FreeChargeId(item.SupplyName);
+
     /// <summary>Descuenta piezas de un insumo de la cuenta, del mismo renglón con que se cargaron (producto o cargo libre).</summary>
-    public void UnchargeSupplyUnits(PatientSupplyItem item, int units)
-    {
-        var product = _catalog.FindCatalogProduct(item.SupplyName);
-        Uncharge(product?.Id ?? FreeChargeId(item.SupplyName), units);
-    }
+    public void UnchargeSupplyUnits(PatientSupplyItem item, int units) => Uncharge(SupplyLineId(item), units);
 
     /// <summary>Piezas de un producto que ya están en la cuenta de la consulta (de cualquier hoja o servicio).</summary>
     public int ChargedProductUnits(int productId) =>
