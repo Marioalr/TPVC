@@ -36,16 +36,7 @@ public class UiPerfTests
     public void Measure_StartupScreensChartAndMemory()
     {
         if (!OperatingSystem.IsWindows()) return;
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try { new UiPerfSession().Execute(); }
-            catch (Exception ex) { failure = ex; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+        WpfTestThread.Run(() => new UiPerfSession().Execute());
     }
 }
 
@@ -220,6 +211,9 @@ internal sealed class UiPerfSession
         _rows.Add(("Memoria", "Objetos vivos (GC)", $"{GC.GetTotalMemory(forceFullCollection: true) / 1048576.0:0.0} MB"));
         _rows.Add(("Memoria", "Memoria privada del proceso", $"{process.PrivateMemorySize64 / 1048576.0:0} MB"));
         _rows.Add(("Memoria", "Conjunto de trabajo", $"{process.WorkingSet64 / 1048576.0:0} MB"));
+
+        // El hilo de la interfaz es el mismo para la prueba de humo: no dejarle la ventana abierta
+        window.Close();
     }
 
     /// <summary>Un paciente de la demostración con cientos de consultas con signos (como años de seguimiento).</summary>
