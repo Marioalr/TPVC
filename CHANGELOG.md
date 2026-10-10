@@ -2,6 +2,18 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.1] - 2026-10-10
+
+### Interno — Fase 8, paso 8.3: contrato de sincronización exportado
+* Sin cambios visibles. Lo que la app de Android tiene que cumplir para sincronizar igual que la PC queda en archivos que genera el propio código de la PC:
+  * `contracts/sync/schema.json` (revisión 1): las 13 tablas en el orden de subida, cada columna con su tipo, si acepta nulo, el valor que va en lugar del nulo, cómo se interpreta cada fecha (UTC, hora del consultorio o solo fecha) y los valores de los enums. Además, las referencias y qué pasa al borrar el principal, las columnas únicas, el DDL de la nube con su huella y las reglas del protocolo por escrito.
+  * `contracts/golden/`: vectores de la codificación de valores, de qué versión gana (con el SQL real de la nube), de la marca de cada cambio y de UUIDv5. Explicación en `contracts/README.md`.
+* `GoldenVectorTests` compara los archivos con el código: un cambio en el modelo o en una regla sin regenerarlos hace fallar la CI, y al regenerarlos exige que el esquema solo agregue y que suba la revisión.
+* El mapeo del modelo salió de `TursoSyncService` a `Services/SyncSchema.cs`, y las reglas a `SyncRules` y `SyncIds`, sin cambiar lo que hacen: el motor y el contrato leen lo mismo.
+* La PC escribe la revisión del contrato en `_tpvc_meta.contract`. Al actualizar, cada nube repite una vez la revisión de su esquema; las tablas no cambian.
+* `Sale.PatientName` y `SaleItem.ProductName` viajan como columnas aparte con el mismo valor que `CustomerName` y `Description`; el contrato los marca como alias.
+* 373 pruebas.
+
 ## [1.20.0] - 2026-10-10
 
 ### Añadido — Fase 8, paso 8.2: la cuota de Turso protegida
