@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using TPVC.Models;
+using TPVC.Services;
 
 namespace TPVC.Data;
 
@@ -140,7 +141,7 @@ public class AppDbContext : DbContext
     private static DateTime AfterStoredStamp(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<ISyncEntity> entry, DateTime now)
     {
         var stored = (DateTime)entry.Property(nameof(ISyncEntity.UpdatedAtUtc)).OriginalValue!;
-        return stored >= now ? stored.AddMilliseconds(1) : now;
+        return SyncRules.NextLocalStamp(now, stored, TimeSpan.Zero);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -426,7 +426,8 @@ public class TursoClient : IDisposable
         return new JsonObject { ["type"] = "text", ["value"] = value.ToString() };
     }
 
-    private static object? ExtractValue(JsonNode? node)
+    /// <summary>Valor de una fila de Hrana ({"type","value"}) → valor de .NET: long, double, string o null.</summary>
+    public static object? ExtractValue(JsonNode? node)
     {
         if (node == null) return null;
 

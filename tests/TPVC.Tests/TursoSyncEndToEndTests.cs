@@ -125,6 +125,13 @@ public class TursoSyncEndToEndTests
         Assert.IsGreaterThan(0L, (long)cmd.ExecuteScalar()!);
         cmd.CommandText = "SELECT COUNT(*) FROM Products WHERE CategorySyncId IS NULL";
         Assert.AreEqual(0L, (long)cmd.ExecuteScalar()!, "Cada producto sube con el SyncId de su categoría");
+
+        // Paso 8.3: la nube guarda la revisión del contrato (contracts/sync/schema.json) junto a la huella
+        cmd.CommandText = "SELECT Value FROM _tpvc_meta WHERE Key = 'contract'";
+        Assert.AreEqual(SyncContract.Revision.ToString(), cmd.ExecuteScalar());
+        cmd.CommandText = "SELECT Value FROM _tpvc_meta WHERE Key = 'schema'";
+        var schema = System.Text.Json.Nodes.JsonNode.Parse(SyncContract.BuildSchemaJson(pc.Factory.CreateDbContext().Model))!;
+        Assert.AreEqual(schema["fingerprint"]!.GetValue<string>(), cmd.ExecuteScalar(), "La huella de la nube es la del contrato exportado");
     }
 
     [TestMethod]

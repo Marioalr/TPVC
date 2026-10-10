@@ -35,19 +35,10 @@ public class TursoSyncService
 
     /// <summary>Hora del servidor (UTC) en el formato de las marcas de sincronización.</summary>
     public const string ServerNowSql = "strftime('%Y-%m-%d %H:%M:%f','now')";
-    private const string TombstonesTable = "SyncTombstones";
-    private const string MetaTable = "_tpvc_meta";
+    private const string TombstonesTable = SyncSchema.TombstonesTable;
+    private const string MetaTable = SyncSchema.MetaTable;
     private const int PushChunkSize = 80;
     private const int PullPageSize = 500;
-
-    /// <summary>
-    /// Referencias enteras sin relación declarada en EF que también deben traducirse a SyncId.
-    /// </summary>
-    private static readonly (Type Entity, string Property, Type Principal)[] SoftReferences =
-    {
-        (typeof(SaleItem), nameof(SaleItem.ProductId), typeof(Product)),
-        (typeof(SaleItem), nameof(SaleItem.ClinicalServiceId), typeof(ClinicalService)),
-    };
 
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly TursoSettingsService _settingsService;
@@ -57,7 +48,7 @@ public class TursoSyncService
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Debouncer _autoSyncDebouncer = new();
 
-    private List<TableMap>? _tableMaps;
+    private SyncSchema? _schema;
     private string? _verifiedSchemaUrl;
     private string? _registeredDeviceUrl;
     private int _suppressAutoSync;
@@ -479,197 +470,19 @@ public class TursoSyncService
     }
 
     // =========================================================================
-    // MAPEO GENÉRICO DEL MODELO
+    // MAPEO DEL MODELO Y ESQUEMA REMOTO (Services/SyncSchema.cs)
     // =========================================================================
 
-    private sealed class SyncColumn
+    private SyncSchema GetSchema()
     {
-        public required string Name { get; init; }
-        public required Type ClrType { get; init; }
-        public required bool IsNullable { get; init; }
-        public required PropertyInfo Property { get; init; }
-        public required string RemoteType { get; init; }
-    }
-
-    private sealed class SyncReference
-    {
-        public required PropertyInfo Property { get; init; }
-        public required Type PrincipalType { get; init; }
-        public required string RemoteColumn { get; init; }
-        public required bool IsRequired { get; init; }
-    }
-
-    private sealed class TableMap
-    {
-        public required Type ClrType { get; init; }
-        public required string Table { get; init; }
-        public required List<SyncColumn> Columns { get; init; }
-        public required List<SyncReference> References { get; init; }
-        public required List<PropertyInfo> UniqueProperties { get; init; }
-
-        public IEnumerable<string> RemoteColumnNames =>
-            Columns.Select(c => c.Name).Concat(References.Select(r => r.RemoteColumn));
-
-        public string UpsertSql
-        {
-            get
-            {
-                var cols = RemoteColumnNames.ToList();
-                var insertCols = string.Join(", ", new[] { "\"SyncId\"", "\"UpdatedAtUtc\"", "\"SyncedAtUtc\"", "\"OriginDeviceId\"" }
-                    .Concat(cols.Select(Q)));
-                var values = string.Join(", ", new[] { "?", "?", ServerNowSql, "?" }.Concat(cols.Select(_ => "?")));
-                var updates = string.Join(", ", new[] { "UpdatedAtUtc", "SyncedAtUtc", "OriginDeviceId" }.Concat(cols)
-                    .Select(c => $"{Q(c)} = excluded.{Q(c)}"));
-                // Un registro que otro equipo ya borró (y su borrado es igual o más nuevo) no se vuelve
-                // a crear: la subida reenvía filas con marca adelantada que pudieron borrarse en la nube
-                return $"INSERT INTO {Q(Table)} ({insertCols}) SELECT {values} " +
-                       $"WHERE NOT EXISTS (SELECT 1 FROM {Q(TombstonesTable)} WHERE \"EntityType\" = ? AND \"SyncId\" = ? AND \"DeletedAtUtc\" >= ?) " +
-                       $"ON CONFLICT(\"SyncId\") DO UPDATE SET {updates} " +
-                       $"WHERE excluded.\"UpdatedAtUtc\" > {Q(Table)}.\"UpdatedAtUtc\";";
-            }
-        }
-    }
-
-    private static string Q(string identifier) => $"\"{identifier.Replace("\"", "\"\"")}\"";
-
-    private List<TableMap> GetTableMaps()
-    {
-        if (_tableMaps != null) return _tableMaps;
-
+        if (_schema != null) return _schema;
         using var db = _contextFactory.CreateDbContext();
-        var maps = new List<TableMap>();
-
-        foreach (var entityType in db.Model.GetEntityTypes().Where(t => typeof(ISyncEntity).IsAssignableFrom(t.ClrType)))
-        {
-            var table = entityType.GetTableName();
-            if (string.IsNullOrEmpty(table)) continue;
-            var storeObject = StoreObjectIdentifier.Table(table, entityType.GetSchema());
-
-            var references = new List<SyncReference>();
-            var referenceProps = new HashSet<string>();
-
-            foreach (var fk in entityType.GetForeignKeys())
-            {
-                if (fk.Properties.Count != 1 || !typeof(ISyncEntity).IsAssignableFrom(fk.PrincipalEntityType.ClrType)) continue;
-                var prop = fk.Properties[0];
-                if (prop.PropertyInfo == null) continue;
-                references.Add(new SyncReference
-                {
-                    Property = prop.PropertyInfo,
-                    PrincipalType = fk.PrincipalEntityType.ClrType,
-                    RemoteColumn = ReferenceColumnName(prop.Name),
-                    IsRequired = !prop.IsNullable
-                });
-                referenceProps.Add(prop.Name);
-            }
-
-            foreach (var (entity, propertyName, principal) in SoftReferences.Where(r => r.Entity == entityType.ClrType))
-            {
-                var prop = entityType.FindProperty(propertyName);
-                if (prop?.PropertyInfo == null || referenceProps.Contains(propertyName)) continue;
-                references.Add(new SyncReference
-                {
-                    Property = prop.PropertyInfo,
-                    PrincipalType = principal,
-                    RemoteColumn = ReferenceColumnName(propertyName),
-                    IsRequired = false
-                });
-                referenceProps.Add(propertyName);
-            }
-
-            var columns = entityType.GetProperties()
-                .Where(p => !p.IsPrimaryKey()
-                            && p.PropertyInfo != null
-                            && p.Name != nameof(ISyncEntity.SyncId)
-                            && p.Name != nameof(ISyncEntity.UpdatedAtUtc)
-                            && !referenceProps.Contains(p.Name))
-                .Select(p => new SyncColumn
-                {
-                    Name = p.GetColumnName(storeObject) ?? p.Name,
-                    ClrType = p.ClrType,
-                    IsNullable = p.IsNullable,
-                    Property = p.PropertyInfo!,
-                    RemoteType = RemoteTypeFor(p.ClrType)
-                })
-                .ToList();
-
-            var uniqueProps = entityType.GetIndexes()
-                .Where(i => i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name != nameof(ISyncEntity.SyncId)
-                            && i.Properties[0].ClrType == typeof(string) && i.Properties[0].PropertyInfo != null)
-                .Select(i => i.Properties[0].PropertyInfo!)
-                .ToList();
-
-            maps.Add(new TableMap
-            {
-                ClrType = entityType.ClrType,
-                Table = table,
-                Columns = columns,
-                References = references,
-                UniqueProperties = uniqueProps
-            });
-        }
-
-        _tableMaps = OrderByDependencies(maps);
-        return _tableMaps;
+        return _schema = SyncSchema.FromModel(db.Model);
     }
 
-    /// <summary>ProductId → ProductSyncId, PatientRecordId → PatientRecordSyncId...</summary>
-    private static string ReferenceColumnName(string propertyName) =>
-        (propertyName.EndsWith("Id", StringComparison.Ordinal) ? propertyName[..^2] : propertyName) + "SyncId";
+    private IReadOnlyList<TableMap> GetTableMaps() => GetSchema().Tables;
 
-    private static string RemoteTypeFor(Type clrType)
-    {
-        var t = Nullable.GetUnderlyingType(clrType) ?? clrType;
-        if (t == typeof(bool) || t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte) || t.IsEnum) return "INTEGER";
-        if (t == typeof(double) || t == typeof(float)) return "REAL";
-        return "TEXT"; // string, decimal (exacto), DateTime, Guid
-    }
-
-    /// <summary>Principales antes que dependientes (Categoría → Producto → Lote → Movimiento...).</summary>
-    private static List<TableMap> OrderByDependencies(List<TableMap> maps)
-    {
-        var ordered = new List<TableMap>();
-        var pending = maps.OrderBy(m => m.Table, StringComparer.Ordinal).ToList();
-        while (pending.Count > 0)
-        {
-            var next = pending.FirstOrDefault(m => m.References.All(r =>
-                r.PrincipalType == m.ClrType || ordered.Any(o => o.ClrType == r.PrincipalType) || pending.All(p => p.ClrType != r.PrincipalType)))
-                ?? pending[0];
-            ordered.Add(next);
-            pending.Remove(next);
-        }
-        return ordered;
-    }
-
-    // =========================================================================
-    // ESQUEMA REMOTO
-    // =========================================================================
-
-    private IEnumerable<string> BuildSchemaStatements()
-    {
-        yield return $"CREATE TABLE IF NOT EXISTS {Q(MetaTable)} (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
-
-        foreach (var map in GetTableMaps())
-        {
-            var cols = map.Columns.Select(c => $"{Q(c.Name)} {c.RemoteType}")
-                .Concat(map.References.Select(r => $"{Q(r.RemoteColumn)} TEXT"));
-            yield return $"CREATE TABLE IF NOT EXISTS {Q(map.Table)} (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, " +
-                         $"\"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, {string.Join(", ", cols)})";
-            yield return $"CREATE INDEX IF NOT EXISTS {Q($"IX_{map.Table}_SyncedAtUtc")} ON {Q(map.Table)} (\"SyncedAtUtc\")";
-        }
-
-        yield return $"CREATE TABLE IF NOT EXISTS {Q(TombstonesTable)} (\"EntityType\" TEXT NOT NULL, \"SyncId\" TEXT NOT NULL, " +
-                     "\"DeletedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, PRIMARY KEY (\"EntityType\", \"SyncId\"))";
-        yield return $"CREATE INDEX IF NOT EXISTS \"IX_SyncTombstones_SyncedAtUtc\" ON {Q(TombstonesTable)} (\"SyncedAtUtc\")";
-
-        yield return "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, " +
-                     "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)";
-        yield return "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, " +
-                     "AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)";
-
-        // Consultas enviadas entre equipos (no se replica: cada equipo la consulta directamente)
-        foreach (var ddl in ConsultationHandoffService.HandoffTableDdl) yield return ddl;
-    }
+    private static string Q(string identifier) => SyncSchema.Q(identifier);
 
     /// <summary>
     /// Crea o actualiza el esquema remoto. Las tablas creadas por versiones 1.8.x (con Id entero y sin
@@ -680,9 +493,9 @@ public class TursoSyncService
     {
         if (_verifiedSchemaUrl == client.DatabaseUrl) return;
 
-        var statements = BuildSchemaStatements().ToList();
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"v{RemoteSchemaVersion}|" + string.Join("|", statements))))[..16];
+        var schema = GetSchema();
+        var statements = schema.Statements;
+        var fingerprint = schema.Fingerprint;
 
         var probe = await client.QueryBatchAsync(new (string, object?[]?)[]
         {
@@ -744,6 +557,10 @@ public class TursoSyncService
             }
         }
 
+        // La revisión del contrato (contracts/sync/schema.json) va antes que la huella: si la petición se
+        // corta a la mitad, la siguiente sincronización vuelve a escribir las dos
+        ddl.Add(($"INSERT INTO {Q(MetaTable)} (\"Key\", \"Value\") VALUES ('contract', ?) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\";",
+            new object?[] { SyncContract.Revision.ToString(CultureInfo.InvariantCulture) }));
         ddl.Add(($"INSERT INTO {Q(MetaTable)} (\"Key\", \"Value\") VALUES ('schema', ?) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\";",
             new object?[] { fingerprint }));
 
@@ -844,16 +661,12 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         var tablesByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m.Table);
         foreach (var t in tombstones)
         {
-            statements.Add((
-                $"INSERT INTO {Q(TombstonesTable)} (\"EntityType\", \"SyncId\", \"DeletedAtUtc\", \"SyncedAtUtc\", \"OriginDeviceId\") " +
-                $"VALUES (?, ?, ?, {ServerNowSql}, ?) ON CONFLICT(\"EntityType\", \"SyncId\") DO UPDATE SET " +
-                "\"DeletedAtUtc\" = excluded.\"DeletedAtUtc\", \"SyncedAtUtc\" = excluded.\"SyncedAtUtc\", \"OriginDeviceId\" = excluded.\"OriginDeviceId\" " +
-                $"WHERE excluded.\"DeletedAtUtc\" > {Q(TombstonesTable)}.\"DeletedAtUtc\";",
+            statements.Add((SyncSchema.TombstoneUpsertSql,
                 new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }));
 
             if (tablesByType.TryGetValue(t.EntityType, out var table))
             {
-                statements.Add(($"DELETE FROM {Q(table)} WHERE \"SyncId\" = ? AND \"UpdatedAtUtc\" <= ?;",
+                statements.Add((SyncSchema.DeleteTombstonedRowSql(table),
                     new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }));
             }
         }
@@ -1005,7 +818,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             locals.TryGetValue(syncId, out var local);
 
             // Last-Write-Wins: la versión local igual o más nueva se conserva
-            if (local != null && local.UpdatedAtUtc >= remoteUpdated) continue;
+            if (!SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated)) continue;
 
             // Resolver referencias (SyncId remoto → Id local)
             var resolved = new List<(PropertyInfo Property, int? Id)>();
@@ -1152,7 +965,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     {
         var local = await db.Set<T>().FirstOrDefaultAsync(e => EF.Property<Guid>(e, nameof(ISyncEntity.SyncId)) == syncId, ct);
         // Si aquí se modificó después del borrado remoto, se conserva (LWW)
-        if (local == null || local.UpdatedAtUtc > deletedAtUtc) return false;
+        if (local == null || !SyncRules.RemoteTombstoneDeletes(local.UpdatedAtUtc, deletedAtUtc)) return false;
         db.Set<T>().Remove(local);
         await db.SaveChangesAsync(ct);
         return true;
@@ -1254,7 +1067,7 @@ ON CONFLICT(Id) DO UPDATE SET
     }
 
     /// <summary>GUID canónico del protocolo: minúsculas con guiones (igual en Windows y Android).</summary>
-    public static string FormatGuid(Guid g) => g.ToString("D");
+    public static string FormatGuid(Guid g) => SyncIds.Format(g);
 
     /// <summary>
     /// Fechas sin conversión de zona horaria: UpdatedAtUtc ya está en UTC y las fechas de negocio
@@ -1284,7 +1097,8 @@ ON CONFLICT(Id) DO UPDATE SET
     private static Guid? ParseGuid(object? raw) =>
         raw != null && Guid.TryParse(raw.ToString(), out var g) ? g : null;
 
-    private static object? ToRemoteValue(object? value) => value switch
+    /// <summary>Valor del modelo → valor que se manda a Turso (contracts/golden/values.json, "encode").</summary>
+    public static object? ToRemoteValue(object? value) => value switch
     {
         null => null,
         Guid g => FormatGuid(g),
@@ -1294,7 +1108,11 @@ ON CONFLICT(Id) DO UPDATE SET
         _ => value
     };
 
-    private static object? FromRemoteValue(object? raw, Type targetType, bool isNullable)
+    /// <summary>
+    /// Valor leído de Turso → valor del modelo (contracts/golden/values.json, "decode"). Un nulo en una
+    /// columna obligatoria se vuelve "", 0, false o 0001-01-01.
+    /// </summary>
+    public static object? FromRemoteValue(object? raw, Type targetType, bool isNullable)
     {
         var t = Nullable.GetUnderlyingType(targetType) ?? targetType;
 

@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>1.20.0</Version>
-    <AssemblyVersion>1.20.0.0</AssemblyVersion>
-    <FileVersion>1.20.0.0</FileVersion>
+    <Version>1.20.1</Version>
+    <AssemblyVersion>1.20.1.0</AssemblyVersion>
+    <FileVersion>1.20.1.0</FileVersion>
     <Authors>Marioalr</Authors>
     <Company>TPVC</Company>
     <Product>TPVC - Sistema de Inventario para Consultorio Médico</Product>
@@ -19,6 +19,11 @@
          abre más rápido porque no tiene que compilarlo cada vez que arranca -->
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>
+
+  <!-- Las pruebas usan el mapeo interno de la sincronización (SyncSchema) para generar el contrato -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="TPVC.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />

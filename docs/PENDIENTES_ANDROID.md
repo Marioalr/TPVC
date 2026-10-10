@@ -1,10 +1,10 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.20.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.20.1). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
-**Decidido el 2026-10-09 (plan de la Fase 8; hecho el paso 8.2 en v1.20.0):** se conserva la arquitectura original.
+**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 y 8.3, en v1.20.0 y v1.20.1):** se conserva la arquitectura original.
 La PC, la tablet y el celular tienen cada uno su propia base SQLite y se sincronizan por Turso (plan gratuito)
 con el protocolo v2, como ya lo hace la PC; el celular escribe solo citas y entradas de mercancía. La app es
 Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de `ConsultationHandoffs`, y los dos lados
@@ -16,7 +16,7 @@ mercancía; y la cuenta de Turso no tiene token de la API, así que se usan toke
 QR, que es solo una facilidad, queda limitado a la red local. Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (el 8.2 ya está hecho en v1.20.0; sincronización sin pérdidas, siembra segura, registro de
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (el 8.2 y el 8.3 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
 equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
@@ -49,6 +49,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 | B3 | **Dividir los ViewModels gigantes** | ✅ v1.19.0 (Fase 6): `MedicalRecordsViewModel` quedó dividido en `ViewModels/Patients/` (sin WPF; lo vigila `PatientsArchitectureTests`), coordinado por `PatientsWorkspace`; `MedicalRecordsViewModel` solo arma la `PatientsPlatform` de WPF. Con Kotlin estos ViewModels no corren en Android: son solo la **referencia de comportamiento** de las pantallas de la app. Referencia por pantalla: **inicio** → `PatientsHomeViewModel`; **ficha** → `PatientChartViewModel` y `VitalSignsChartViewModel`; **alta y edición** → `PatientFormViewModel`; **agenda** → `AgendaPanelViewModel`; **consulta** → `ConsultationViewModel` y `ConsultationAutosave`; **hojas de la consulta** → `PrescriptionSheetViewModel`, `SuppliesSheetViewModel`, `ClinicalServicesSheetViewModel` y `CatalogBrowserViewModel`; **vista previa de la receta** → `PrescriptionPreviewViewModel`; **terminar y cobrar** → `CheckoutViewModel`; **consulta entre equipos** → `ConsultationHandoffViewModel`. Detalle en `docs/ARQUITECTURA_TECNICA.md` §9. |
 | B4 | **Reglas de permisos por rol** | `DevicePermissions` ya define la matriz (PC / tablet / celular), pero hoy solo es informativa: en producción solo se usa `GetRoleDescription`. Plan Fase 8, pasos 8.10 y 8.14: el rol sale de `DeviceRegistry`, que solo escribe la PC, y la matriz gana cuatro permisos: `CanViewClinicalRecords`, `CanShareDocuments`, `CanScheduleAppointments` y `CanRegisterStockEntries`. La cuenta de Turso no tiene token de la API (respuesta 4 del médico), así que se usa el nivel C: todos los tokens son `full-access` y **los límites por rol los aplica la app**. El celular ve expedientes, agenda citas, revisa inventario y registra entradas de mercancía, sin notas, recetas ni ventas (respuesta 3). Matriz en el plan, §4.6. |
 | B5 | **Pruebas en Windows de la interfaz** | ✅ Desde v1.13 la CI de Windows recorre las pantallas (bindings rotos, recursos inexistentes, colores) y guarda capturas en claro y oscuro (artefacto `capturas-interfaz`). La lista de la sección D cubre lo que necesita interacción real. |
+| B6 | **Contrato para la app** | ✅ v1.20.1 (paso 8.3): `contracts/sync/schema.json` (tablas en orden de subida, columnas con su tipo, `timeKind`, valor del nulo y enums, referencias y qué pasa al borrar, DDL y huella) y los vectores de `contracts/golden/` (valores Hrana, gana el más reciente, marca local y UUIDv5). Se generan desde el código de la PC y la CI falla si no coinciden. Ver `contracts/README.md`. Lo usa la app desde K1. |
 
 ## C. Lo que la app Android debe resolver
 
@@ -64,7 +65,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 
 ## D. Verificación pendiente en Windows
 
-### Fase 8 (plan: se revisa al publicar cada paso; hecho el 8.2 en v1.20.0, abajo)
+### Fase 8 (plan: se revisa al publicar cada paso; hechos el 8.2 y el 8.3, abajo)
 
 En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
@@ -81,6 +82,10 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.20.1 (Fase 8, paso 8.3: contrato de sincronización)
+
+- [ ] Con la nube activa, después de actualizar: la primera sincronización revisa una vez el esquema de la nube (tarda un poco más) y todo sigue igual; *Nube y dispositivos* no muestra errores y lo capturado sigue llegando a la otra PC.
 
 ### v1.20.0 (Fase 8, paso 8.2: la cuota de Turso protegida)
 

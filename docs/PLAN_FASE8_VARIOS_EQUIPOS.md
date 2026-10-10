@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-10 (TPVC v1.20.0). **Hecho: el paso 8.2 (v1.20.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-10 (TPVC v1.20.1). **Hechos: los pasos 8.2 (v1.20.0) y 8.3 (v1.20.1).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -513,6 +513,14 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.3 · Contrato de sincronización exportado
+- **Hecho en v1.20.1 (2026-10-10).** `contracts/sync/schema.json` (revisión 1) y `contracts/golden/` (`values`, `lww`, `stamping`, `uuid5`), con `contracts/README.md`. Decisiones al programarlo:
+  - El mapeo del modelo salió de `TursoSyncService` a `Services/SyncSchema.cs` sin cambiar su comportamiento: el motor y el contrato leen lo mismo. Las reglas puras quedaron en `SyncRules` (gana el más reciente, marca local, subida rechazada) y `SyncIds` (UUIDv5), y el motor y `AppDbContext` las usan.
+  - `lww.json` prueba las reglas de la nube con el SQL real (`UpsertSql`, `SyncSchema.TombstoneUpsertSql` y `DeleteTombstonedRowSql`) ejecutado sobre `FakeHranaServer`, no con una copia en C#. La regla de la subida rechazada (`SyncRules.AfterRejectedUpsert`) ya tiene vectores; el motor la usa desde 8.6.
+  - `Sale.PatientName` y `SaleItem.ProductName` **sí** se mapean como columnas extra (alias con get y set de `CustomerName` y `Description`): viajan dos veces con el mismo valor y el contrato los marca con `aliasOf`.
+  - Toda fecha declara su `timeKind` en `SyncContract.TimeKinds`; una columna de fecha nueva sin declararlo hace fallar la exportación. `LastVisit` es `clinicLocal` (sale de la fecha de la consulta, con hora) y `NextAppointmentDate`, `dateOnly`.
+  - `ClientSetNull` (lo que EF usa por omisión en una referencia opcional) se reporta como `restrict`, porque en SQLite queda como NO ACTION. Hoy ninguna referencia sincronizada lo usa.
+  - Espacio de nombres de TPVC para los UUIDv5: `uuid5(URL, "https://github.com/Marioalr/TPVC/sync")` = `ff997a05-ea47-5008-a4c1-6d022b9f1a6f`. Los derivados (`SyncIds.Derived`) unen el prefijo y los SyncId en minúsculas con `:`.
+  - La revisión entra a la huella del esquema: al actualizar, cada nube repite una vez la revisión del esquema (sin cambiar tablas) y escribe `_tpvc_meta.contract`. Al regenerar, `GoldenVectorTests` exige que un cambio de tablas, columnas o enums solo agregue y suba `SyncContract.Revision`.
 - **Cambia:**
   - `contracts/sync/schema.json`, generado desde `GetTableMaps`. Lleva:
     - las tablas en el orden de `OrderByDependencies` y el `EntityType` de cada una (el nombre de la clase C#: `PatientRecord`, `PatientAppointment`…). **La subida va en este orden**, en la PC y en Kotlin;

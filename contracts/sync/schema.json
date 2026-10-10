@@ -1,0 +1,2594 @@
+{
+  "contract": 1,
+  "protocol": 2,
+  "fingerprint": "7B16D3CA6D5D992F",
+  "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
+  "rules": [
+    "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
+    "La subida va tabla por tabla en el orden de 'tables' (los principales antes que sus dependientes) y al final las lápidas. Cada lápida es su upsert seguido de DELETE de la fila con UpdatedAtUtc <= DeletedAtUtc.",
+    "UpdatedAtUtc la pone el equipo que escribe (contracts/golden/stamping.json); SyncedAtUtc la pone la nube con su propia hora (strftime('%Y-%m-%d %H:%M:%f','now')); OriginDeviceId es el DeviceId del equipo que escribió.",
+    "Gana la versión con UpdatedAtUtc estrictamente más nueva; con marcas iguales se conserva la que ya está (contracts/golden/lww.json).",
+    "Valores con la codificación de contracts/golden/values.json. Las fechas viajan como yyyy-MM-dd HH:mm:ss.fffffff, sin zona y sin conversión al escribir; 'timeKind' dice si son UTC, hora local del consultorio (America/Mexico_City) o solo fecha.",
+    "Todo SyncId viaja, y entra a un UUIDv5 (contracts/golden/uuid5.json), en minúsculas. En la base local de la PC están en mayúsculas (así guarda EF Core los Guid en SQLite); se comparan como GUID, no como texto.",
+    "Una columna obligatoria que llega nula se guarda con su 'nullValue'.",
+    "El upsert escribe solo las columnas que el equipo conoce (ON CONFLICT DO UPDATE SET columna por columna, nunca INSERT OR REPLACE), para no borrar las que agregue una versión más nueva.",
+    "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
+    "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Hasta el paso 8.16, un folio repetido que llega se guarda con sufijo -R1, -R2… solo en el equipo que lo recibe y no se sube.",
+    "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl') y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos.",
+    "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar."
+  ],
+  "tables": [
+    {
+      "order": 1,
+      "table": "Categories",
+      "entityType": "Category",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Description",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Icon",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Name",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        }
+      ],
+      "references": [],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"Categories\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Description\" TEXT, \"Icon\" TEXT, \"Name\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_Categories_SyncedAtUtc\" ON \"Categories\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 2,
+      "table": "ClinicalServices",
+      "entityType": "ClinicalService",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Category",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Code",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "Description",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "EstimatedDurationMinutes",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "IsActive",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Name",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Price",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "decimal",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": "0"
+          }
+        }
+      ],
+      "references": [],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"ClinicalServices\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Category\" TEXT, \"Code\" TEXT, \"CreatedAt\" TEXT, \"Description\" TEXT, \"EstimatedDurationMinutes\" INTEGER, \"IsActive\" INTEGER, \"Name\" TEXT, \"Price\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_ClinicalServices_SyncedAtUtc\" ON \"ClinicalServices\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 3,
+      "table": "Patients",
+      "entityType": "PatientRecord",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "AbortionsCount",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "ActivePrescriptionJson",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "ActiveServicesJson",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "ActiveSuppliesJson",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Address",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Age",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Allergies",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "BirthDate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "dateOnly"
+        },
+        {
+          "name": "BloodType",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "CesareansCount",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "ChronicDiseases",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "ClinicalNotes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "DevelopmentalMilestones",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Diet",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Email",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "EmergencyContactName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "EmergencyContactPhone",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "FamilyHistory",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "FullName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Gender",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "GestationalWeeks",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Hospitalizations",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "HousingConditions",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "ImmunizationSchedule",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "IsActive",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "IsCurrentlyPregnant",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "IsPeriodHeavy",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "LastDiagnosis",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "LastVisit",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          },
+          "note": "Resumen: la fecha de la última consulta. Quien guarda una nota la actualiza en la misma escritura."
+        },
+        {
+          "name": "MenarcheAge",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "NextAppointmentDate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "dateOnly",
+          "note": "Resumen: la fecha de la siguiente cita. Quien agenda la actualiza en la misma escritura."
+        },
+        {
+          "name": "NextAppointmentNotes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "NextAppointmentReason",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "NextAppointmentTime",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Occupation",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PapSmear",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PeriodDuration",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Phone",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PregnanciesCount",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "RecordNumber",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Religion",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "SexualOnsetAge",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "SexualPartnersCount",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Surgeries",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Transfusions",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "VitalSigns",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Zoonosis",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        }
+      ],
+      "references": [],
+      "unique": [
+        [
+          "RecordNumber"
+        ]
+      ],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 4,
+      "table": "Appointments",
+      "entityType": "PatientAppointment",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "CreatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "Date",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "dateOnly",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "DurationMinutes",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Notes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PatientName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PatientPhone",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PatientRecordNumber",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Reason",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Status",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Time",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PatientRecordSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "PatientRecordSyncId",
+          "localProperty": "PatientRecordId",
+          "principal": "PatientRecord",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"Appointments\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CreatedAt\" TEXT, \"Date\" TEXT, \"DurationMinutes\" INTEGER, \"Notes\" TEXT, \"PatientName\" TEXT, \"PatientPhone\" TEXT, \"PatientRecordNumber\" TEXT, \"Reason\" TEXT, \"Status\" TEXT, \"Time\" TEXT, \"PatientRecordSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_Appointments_SyncedAtUtc\" ON \"Appointments\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 5,
+      "table": "PatientConsultations",
+      "entityType": "PatientConsultation",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "BMI",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "BloodPressureDiastolic",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "BloodPressureSystolic",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "ChiefComplaint",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Date",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "Diagnosis",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "EndedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal"
+        },
+        {
+          "name": "Folio",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Glucose",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "HeartRate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "Height",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "Notes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "OxygenSaturation",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "PhysicalExamination",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PrescriptionsJson",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "RespiratoryRate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "StartedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal"
+        },
+        {
+          "name": "SystemsReview",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Temperature",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "TreatmentPlan",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "VitalSigns",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Weight",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false
+        },
+        {
+          "name": "PatientRecordSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "PatientRecordSyncId",
+          "localProperty": "PatientRecordId",
+          "principal": "PatientRecord",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_PatientConsultations_SyncedAtUtc\" ON \"PatientConsultations\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 6,
+      "table": "PediatricDoseRules",
+      "entityType": "PediatricDoseRule",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "DoseText",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "DropsPerMl",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": true,
+          "clrType": "int",
+          "derived": false
+        },
+        {
+          "name": "IsActive",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Medication",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "MlPerKg",
+          "role": "data",
+          "remoteType": "REAL",
+          "nullable": true,
+          "clrType": "double",
+          "derived": false
+        },
+        {
+          "name": "SortOrder",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        }
+      ],
+      "references": [],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"PediatricDoseRules\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"DoseText\" TEXT, \"DropsPerMl\" INTEGER, \"IsActive\" INTEGER, \"Medication\" TEXT, \"MlPerKg\" REAL, \"SortOrder\" INTEGER)",
+        "CREATE INDEX IF NOT EXISTS \"IX_PediatricDoseRules_SyncedAtUtc\" ON \"PediatricDoseRules\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 7,
+      "table": "PrescriptionTemplates",
+      "entityType": "PrescriptionTemplate",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "IsActive",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Kind",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "SortOrder",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Text",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Title",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        }
+      ],
+      "references": [],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"PrescriptionTemplates\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"IsActive\" INTEGER, \"Kind\" TEXT, \"SortOrder\" INTEGER, \"Text\" TEXT, \"Title\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_PrescriptionTemplates_SyncedAtUtc\" ON \"PrescriptionTemplates\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 8,
+      "table": "Products",
+      "entityType": "Product",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Code",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "CurrentStock",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Existencias del producto. Hoy viaja como valor y se aplica al bajar; quien registra una venta o un movimiento la actualiza en la misma escritura. Pasa a derivada en el paso 8.20."
+        },
+        {
+          "name": "GenericName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "IsActive",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Location",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "MinStock",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Name",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Notes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "OptimalStock",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Presentation",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Price",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "decimal",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": "0"
+          }
+        },
+        {
+          "name": "RequiresRefrigeration",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Unit",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "UpdatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "CategorySyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "CategorySyncId",
+          "localProperty": "CategoryId",
+          "principal": "Category",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "restrict"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"Unit\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_Products_SyncedAtUtc\" ON \"Products\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 9,
+      "table": "ProductBatches",
+      "entityType": "ProductBatch",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "BatchNumber",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "ExpirationDate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "dateOnly",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "IsDepleted",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Notes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Quantity",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "ReceivedDate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "ProductSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "ProductSyncId",
+          "localProperty": "ProductId",
+          "principal": "Product",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 10,
+      "table": "InventoryMovements",
+      "entityType": "InventoryMovement",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Date",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "MovementType",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "enum",
+          "derived": false,
+          "enumType": "MovementType",
+          "enumValues": {
+            "EntradaCompra": 0,
+            "EntradaAjuste": 1,
+            "SalidaConsulta": 2,
+            "SalidaCaducidad": 3,
+            "SalidaMerma": 4,
+            "AjusteInventario": 5,
+            "SalidaVenta": 6,
+            "EntradaDevolucion": 7
+          },
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Quantity",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Reason",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Responsible",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "StockAfter",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "StockBefore",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "BatchSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        },
+        {
+          "name": "ProductSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "BatchSyncId",
+          "localProperty": "BatchId",
+          "principal": "ProductBatch",
+          "required": false,
+          "kind": "foreignKey",
+          "onDelete": "setNull"
+        },
+        {
+          "column": "ProductSyncId",
+          "localProperty": "ProductId",
+          "principal": "Product",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 11,
+      "table": "Sales",
+      "entityType": "Sale",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "CancellationReason",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "CancelledAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal"
+        },
+        {
+          "name": "Cashier",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "CustomerName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Date",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "Folio",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "IsCancelled",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "PatientName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          },
+          "aliasOf": "CustomerName"
+        },
+        {
+          "name": "PaymentMethod",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Total",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "decimal",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": "0"
+          }
+        }
+      ],
+      "references": [],
+      "unique": [
+        [
+          "Folio"
+        ]
+      ],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 12,
+      "table": "SaleItems",
+      "entityType": "SaleItem",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Code",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Description",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "IsService",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "bool",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "ProductName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          },
+          "aliasOf": "Description"
+        },
+        {
+          "name": "Quantity",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Subtotal",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "decimal",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": "0"
+          }
+        },
+        {
+          "name": "UnitPrice",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "decimal",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": "0"
+          }
+        },
+        {
+          "name": "SaleSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        },
+        {
+          "name": "ProductSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        },
+        {
+          "name": "ClinicalServiceSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "SaleSyncId",
+          "localProperty": "SaleId",
+          "principal": "Sale",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        },
+        {
+          "column": "ProductSyncId",
+          "localProperty": "ProductId",
+          "principal": "Product",
+          "required": false,
+          "kind": "soft",
+          "onDelete": "none"
+        },
+        {
+          "column": "ClinicalServiceSyncId",
+          "localProperty": "ClinicalServiceId",
+          "principal": "ClinicalService",
+          "required": false,
+          "kind": "soft",
+          "onDelete": "none"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 13,
+      "table": "ServiceDefaultProducts",
+      "entityType": "ServiceDefaultProduct",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Instructions",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Quantity",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "ClinicalServiceSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        },
+        {
+          "name": "ProductSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "ClinicalServiceSyncId",
+          "localProperty": "ClinicalServiceId",
+          "principal": "ClinicalService",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        },
+        {
+          "column": "ProductSyncId",
+          "localProperty": "ProductId",
+          "principal": "Product",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "restrict"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"ServiceDefaultProducts\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Instructions\" TEXT, \"Quantity\" INTEGER, \"ClinicalServiceSyncId\" TEXT, \"ProductSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_ServiceDefaultProducts_SyncedAtUtc\" ON \"ServiceDefaultProducts\" (\"SyncedAtUtc\")"
+      ]
+    }
+  ],
+  "tombstones": {
+    "table": "SyncTombstones",
+    "key": [
+      "EntityType",
+      "SyncId"
+    ],
+    "columns": [
+      {
+        "name": "EntityType",
+        "role": "system",
+        "remoteType": "TEXT",
+        "nullable": false,
+        "note": "El 'entityType' de la tabla borrada (nombre de la clase de C#)."
+      },
+      {
+        "name": "SyncId",
+        "role": "system",
+        "remoteType": "TEXT",
+        "nullable": false,
+        "note": "SyncId del registro borrado."
+      },
+      {
+        "name": "DeletedAtUtc",
+        "role": "system",
+        "remoteType": "TEXT",
+        "nullable": false,
+        "timeKind": "utc",
+        "note": "Marca del borrado, con la misma regla que UpdatedAtUtc."
+      },
+      {
+        "name": "SyncedAtUtc",
+        "role": "system",
+        "remoteType": "TEXT",
+        "nullable": false,
+        "timeKind": "utc",
+        "note": "Hora de la nube al escribir la lápida."
+      },
+      {
+        "name": "OriginDeviceId",
+        "role": "system",
+        "remoteType": "TEXT",
+        "nullable": true,
+        "note": "DeviceId del equipo que borró."
+      }
+    ],
+    "ddl": [
+      "CREATE TABLE IF NOT EXISTS \"SyncTombstones\" (\"EntityType\" TEXT NOT NULL, \"SyncId\" TEXT NOT NULL, \"DeletedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, PRIMARY KEY (\"EntityType\", \"SyncId\"))",
+      "CREATE INDEX IF NOT EXISTS \"IX_SyncTombstones_SyncedAtUtc\" ON \"SyncTombstones\" (\"SyncedAtUtc\")"
+    ]
+  },
+  "otherTables": [
+    {
+      "table": "_tpvc_meta",
+      "replicated": false,
+      "purpose": "Claves de la nube que escribe solo la PC: 'schema' (la huella) y 'contract' (la revisión).",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"_tpvc_meta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)"
+      ]
+    },
+    {
+      "table": "ClinicProfiles",
+      "replicated": false,
+      "purpose": "Perfil del consultorio, una sola fila (Id = 1). Gana el UpdatedAtUtc más nuevo; hoy solo lo edita la PC.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)"
+      ]
+    },
+    {
+      "table": "RegisteredDevices",
+      "replicated": false,
+      "purpose": "Latido de cada equipo (LastSeenUtc con la hora de la nube). No se replica.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)"
+      ]
+    },
+    {
+      "table": "ConsultationHandoffs",
+      "replicated": false,
+      "purpose": "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS ConsultationHandoffs (Id TEXT PRIMARY KEY NOT NULL, FromDeviceId TEXT NOT NULL, FromDeviceName TEXT NOT NULL, ToDeviceId TEXT NOT NULL, ToDeviceName TEXT NOT NULL, PatientSyncId TEXT NOT NULL, PatientName TEXT NOT NULL, Folio TEXT NOT NULL, Payload TEXT NOT NULL, PayloadVersion INTEGER NOT NULL, State TEXT NOT NULL, AcceptToken TEXT, SenderAckAtUtc TEXT, CreatedAtUtc TEXT NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)"
+      ]
+    }
+  ],
+  "ddl": [
+    "CREATE TABLE IF NOT EXISTS \"_tpvc_meta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"Categories\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Description\" TEXT, \"Icon\" TEXT, \"Name\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_Categories_SyncedAtUtc\" ON \"Categories\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"ClinicalServices\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Category\" TEXT, \"Code\" TEXT, \"CreatedAt\" TEXT, \"Description\" TEXT, \"EstimatedDurationMinutes\" INTEGER, \"IsActive\" INTEGER, \"Name\" TEXT, \"Price\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_ClinicalServices_SyncedAtUtc\" ON \"ClinicalServices\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"Appointments\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CreatedAt\" TEXT, \"Date\" TEXT, \"DurationMinutes\" INTEGER, \"Notes\" TEXT, \"PatientName\" TEXT, \"PatientPhone\" TEXT, \"PatientRecordNumber\" TEXT, \"Reason\" TEXT, \"Status\" TEXT, \"Time\" TEXT, \"PatientRecordSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_Appointments_SyncedAtUtc\" ON \"Appointments\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_PatientConsultations_SyncedAtUtc\" ON \"PatientConsultations\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"PediatricDoseRules\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"DoseText\" TEXT, \"DropsPerMl\" INTEGER, \"IsActive\" INTEGER, \"Medication\" TEXT, \"MlPerKg\" REAL, \"SortOrder\" INTEGER)",
+    "CREATE INDEX IF NOT EXISTS \"IX_PediatricDoseRules_SyncedAtUtc\" ON \"PediatricDoseRules\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"PrescriptionTemplates\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"IsActive\" INTEGER, \"Kind\" TEXT, \"SortOrder\" INTEGER, \"Text\" TEXT, \"Title\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_PrescriptionTemplates_SyncedAtUtc\" ON \"PrescriptionTemplates\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"Unit\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_Products_SyncedAtUtc\" ON \"Products\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"ServiceDefaultProducts\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Instructions\" TEXT, \"Quantity\" INTEGER, \"ClinicalServiceSyncId\" TEXT, \"ProductSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_ServiceDefaultProducts_SyncedAtUtc\" ON \"ServiceDefaultProducts\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"SyncTombstones\" (\"EntityType\" TEXT NOT NULL, \"SyncId\" TEXT NOT NULL, \"DeletedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, PRIMARY KEY (\"EntityType\", \"SyncId\"))",
+    "CREATE INDEX IF NOT EXISTS \"IX_SyncTombstones_SyncedAtUtc\" ON \"SyncTombstones\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS ConsultationHandoffs (Id TEXT PRIMARY KEY NOT NULL, FromDeviceId TEXT NOT NULL, FromDeviceName TEXT NOT NULL, ToDeviceId TEXT NOT NULL, ToDeviceName TEXT NOT NULL, PatientSyncId TEXT NOT NULL, PatientName TEXT NOT NULL, Folio TEXT NOT NULL, Payload TEXT NOT NULL, PayloadVersion INTEGER NOT NULL, State TEXT NOT NULL, AcceptToken TEXT, SenderAckAtUtc TEXT, CreatedAtUtc TEXT NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)"
+  ]
+}
