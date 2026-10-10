@@ -8,7 +8,8 @@
     "Marcas en UTC con el formato del protocolo (yyyy-MM-dd HH:mm:ss.fffffff); null = no existe.",
     "pull-row y pull-tombstone: lo que decide el equipo al bajar (SyncRules.RemoteRowWins y RemoteTombstoneDeletes).",
     "server-upsert y server-tombstone: lo que hace la nube con el SQL que manda el equipo (TableMap.UpsertSql, SyncSchema.TombstoneUpsertSql y DeleteTombstonedRowSql), ejecutado de verdad sobre SQLite. 'affectedRows' es lo que Turso regresa en affected_row_count.",
-    "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe."
+    "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe.",
+    "rejected-upsert-row: con la fila de la nube en mano, se aplica si su marca es igual o más nueva que la local (SyncRules.ServerRowAppliesAfterReject). No se relee en la primera subida completa, donde casi todo afecta 0 filas."
   ],
   "cases": [
     {
@@ -295,6 +296,50 @@
       },
       "expected": {
         "resolution": "RetryLater"
+      }
+    },
+    {
+      "name": "subida rechazada, aplicar la fila de la nube · empate: se aplica la de la nube",
+      "input": {
+        "check": "rejected-upsert-row",
+        "localUpdatedAtUtc": "2026-10-10 15:00:01.0000000",
+        "serverUpdatedAtUtc": "2026-10-10 15:00:01.0000000"
+      },
+      "expected": {
+        "apply": true
+      }
+    },
+    {
+      "name": "subida rechazada, aplicar la fila de la nube · la de la nube es más nueva",
+      "input": {
+        "check": "rejected-upsert-row",
+        "localUpdatedAtUtc": "2026-10-10 15:00:01.0000000",
+        "serverUpdatedAtUtc": "2026-10-10 15:00:02.0000000"
+      },
+      "expected": {
+        "apply": true
+      }
+    },
+    {
+      "name": "subida rechazada, aplicar la fila de la nube · la local se volvió a editar después de subir: se conserva",
+      "input": {
+        "check": "rejected-upsert-row",
+        "localUpdatedAtUtc": "2026-10-10 15:00:02.0000000",
+        "serverUpdatedAtUtc": "2026-10-10 15:00:01.0000000"
+      },
+      "expected": {
+        "apply": false
+      }
+    },
+    {
+      "name": "subida rechazada, aplicar la fila de la nube · ya no existe aquí: se aplica",
+      "input": {
+        "check": "rejected-upsert-row",
+        "localUpdatedAtUtc": null,
+        "serverUpdatedAtUtc": "2026-10-10 15:00:01.0000000"
+      },
+      "expected": {
+        "apply": true
       }
     }
   ]

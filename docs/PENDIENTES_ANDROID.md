@@ -1,10 +1,10 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.20.3). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.20.4). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
-**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 a 8.5, en v1.20.0 a v1.20.3):** se conserva la arquitectura original.
+**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 a 8.6, en v1.20.0 a v1.20.4):** se conserva la arquitectura original.
 La PC, la tablet y el celular tienen cada uno su propia base SQLite y se sincronizan por Turso (plan gratuito)
 con el protocolo v2, como ya lo hace la PC; el celular escribe solo citas y entradas de mercancía. La app es
 Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de `ConsultationHandoffs`, y los dos lados
@@ -16,7 +16,7 @@ mercancía; y la cuenta de Turso no tiene token de la API, así que se usan toke
 QR, que es solo una facilidad, queda limitado a la red local. Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.5 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.6 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
 equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
@@ -65,7 +65,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 
 ## D. Verificación pendiente en Windows
 
-### Fase 8 (plan: se revisa al publicar cada paso; hechos del 8.2 al 8.5, abajo)
+### Fase 8 (plan: se revisa al publicar cada paso; hechos del 8.2 al 8.6, abajo)
 
 En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
@@ -82,6 +82,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.20.4 (Fase 8, paso 8.6: descarga eficiente y desempates)
+
+- [ ] Con la nube activa, después de actualizar: la primera sincronización no vuelve a bajar todo (tarda como siempre) y en *Nube y dispositivos* la cuota de hoy apenas cambia.
+- [ ] Con dos PC: editar el mismo paciente en las dos sin sincronizar y luego sincronizar las dos (dos veces): las dos terminan con la misma versión.
+- [ ] Desconectar el internet a media «Sincronización completa» y volver a sincronizar: termina sin empezar de cero.
+- [ ] Ctrl+S en una consulta y cerrar el programa de inmediato: al volver a abrir, la consulta tiene lo último que se escribió.
 
 ### v1.20.3 (Fase 8, paso 8.5: registro de cambios)
 

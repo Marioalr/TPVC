@@ -46,7 +46,8 @@ internal sealed record FakeRecordedRequest(int Number, IReadOnlyList<FakeRecorde
 /// Servidor Hrana v2 (/v2/pipeline) simulado sobre SQLite. Copia de Turso lo que importa a la app:
 /// <list type="bullet">
 /// <item>Valida la codificación de valores: un entero enviado como número JSON provoca HTTP 400 Bad Request.</item>
-/// <item>Un resultado por instrucción y sin transacción: cada instrucción se confirma sola.</item>
+/// <item>Un resultado por instrucción y sin transacción: cada instrucción se confirma sola. Una petición "batch"
+/// con BEGIN/COMMIT y condiciones sí es atómica (V14, comprobado en Turso real el 2026-10-10).</item>
 /// <item>Un escritor a la vez (<see cref="Lock"/>).</item>
 /// <item>Reloj del servidor inyectable (<see cref="Clock"/>): reemplaza 'now' en las instrucciones.</item>
 /// <item>Estimación de lo cobrado (<see cref="BilledRowsRead"/>, <see cref="BilledRowsWritten"/>): cada fila recorrida
@@ -85,6 +86,9 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     /// <summary>Se espera antes de aplicar la petición (para forzar el orden entre dos equipos).</summary>
     public Func<string, Task>? BeforeExecuteAsync { get; set; }
 
+    /// <summary>La instrucción cuyo SQL cumple esto falla con SQLITE_CONSTRAINT, sin ejecutarse.</summary>
+    public Func<string, bool>? FailWhen { get; set; }
+
     /// <summary>Hora del servidor (UTC). null = la hora real de la máquina.</summary>
     public Func<DateTime>? Clock { get; set; }
 
@@ -100,7 +104,8 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     /// </summary>
     public int? MaxResponseBytes { get; set; }
 
-    public FakeScanPolicy ScanPolicy { get; set; } = FakeScanPolicy.Warn;
+    /// <summary>Desde el paso 8.6 un SCAN de una tabla sincronizada hace fallar la instrucción (F1, V15).</summary>
+    public FakeScanPolicy ScanPolicy { get; set; } = FakeScanPolicy.Fail;
 
     /// <summary>Instrucciones a las que se les permite un SCAN aunque <see cref="ScanPolicy"/> sea Fail.</summary>
     public List<Func<string, bool>> ScanExceptions { get; } = new();
@@ -155,9 +160,10 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         if (IsOffline) throw new HttpRequestException("Sin red (simulada)");
         var text = await request.Content!.ReadAsStringAsync(cancellationToken);
 
-        // Los ganchos ven el SQL tal cual (en el JSON las comillas simples van escapadas)
+        // Los ganchos ven el SQL tal cual (en el JSON las comillas simples van escapadas), también el de los pasos de un batch
         var sql = string.Join("\n", JsonNode.Parse(text)!["requests"]!.AsArray()
-            .Select(r => r?["stmt"]?["sql"]?.GetValue<string>())
+            .SelectMany(Statements)
+            .Select(s => s["sql"]?.GetValue<string>())
             .Where(q => q != null));
         if (BeforeExecuteAsync != null) await BeforeExecuteAsync(sql);
 
@@ -195,6 +201,22 @@ internal sealed class FakeHranaServer : HttpMessageHandler
             };
         }
 
+        // Validación estricta del protocolo (como el servidor real): un entero como número JSON rechaza todo
+        foreach (var stmt in body["requests"]!.AsArray().SelectMany(Statements))
+        {
+            foreach (var arg in stmt["args"]?.AsArray() ?? new JsonArray())
+            {
+                if (arg!["type"]!.GetValue<string>() == "integer" && arg["value"] is JsonValue v && v.GetValueKind() != System.Text.Json.JsonValueKind.String)
+                {
+                    Record(number, recorded, HttpStatusCode.BadRequest);
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent("Failed to deserialize the JSON body: invalid type: integer, expected a string")
+                    };
+                }
+            }
+        }
+
         foreach (var req in body["requests"]!.AsArray())
         {
             var type = req!["type"]!.GetValue<string>();
@@ -204,73 +226,153 @@ internal sealed class FakeHranaServer : HttpMessageHandler
                 continue;
             }
 
-            var stmt = req["stmt"]!;
-            var sql = stmt["sql"]!.GetValue<string>();
-            var args = stmt["args"]?.AsArray() ?? new JsonArray();
-
-            // Validación estricta del protocolo (como el servidor real)
-            foreach (var arg in args)
+            if (type == "batch")
             {
-                var argType = arg!["type"]!.GetValue<string>();
-                if (argType == "integer" && arg["value"] is JsonValue v && v.GetValueKind() != System.Text.Json.JsonValueKind.String)
-                {
-                    Record(number, recorded, HttpStatusCode.BadRequest);
-                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
-                    {
-                        Content = new StringContent("Failed to deserialize the JSON body: invalid type: integer, expected a string")
-                    };
-                }
-            }
-
-            if (Blocked == FakeBlockedMode.StatementError)
-            {
-                results.Add(Error("Operation was blocked: monthly quota exceeded", "BLOCKED"));
-                recorded.Add(new FakeRecordedStatement(sql, (JsonArray)args.DeepClone(), 0, 0, "BLOCKED"));
+                results.Add(RunBatch(req["batch"]!["steps"]!.AsArray(), recorded, ref responseBytes));
                 continue;
             }
 
-            StatementCount++;
-            JsonObject result;
-            long rowsRead = 0, rowsWritten = 0;
-            string? errorCode = null;
-            try
-            {
-                var scanError = ReviewQueryPlan(sql, args);
-                if (scanError != null)
-                {
-                    errorCode = "SCAN_FORBIDDEN";
-                    result = Error(scanError, errorCode);
-                }
-                else
-                {
-                    var executed = Execute(sql, args);
-                    rowsRead = executed.RowsRead;
-                    rowsWritten = executed.RowsWritten;
-                    result = new JsonObject { ["type"] = "ok", ["response"] = new JsonObject { ["type"] = "execute", ["result"] = executed.Result } };
-                }
-            }
-            catch (FakeSqliteException ex)
-            {
-                errorCode = "SQLITE_ERROR";
-                result = Error(ex.Message, errorCode);
-            }
-
-            responseBytes += Encoding.UTF8.GetByteCount(result.ToJsonString());
-            if (MaxResponseBytes is { } max && responseBytes > max)
-            {
-                errorCode = "RESPONSE_TOO_LARGE";
-                result = Error($"Response is too large (más de {max} bytes, simulado)", errorCode);
-            }
-
-            BilledRowsRead += rowsRead;
-            BilledRowsWritten += rowsWritten;
-            recorded.Add(new FakeRecordedStatement(sql, (JsonArray)args.DeepClone(), rowsRead, rowsWritten, errorCode));
+            var (result, _) = RunStatement(req["stmt"]!, recorded, ref responseBytes);
             results.Add(result);
         }
+
+        // Al cerrar el stream, una transacción que quedó abierta se deshace
+        if (raw.sqlite3_get_autocommit(_connection.Handle!) == 0) Execute("ROLLBACK", new JsonArray());
 
         Record(number, recorded, HttpStatusCode.OK);
         var payload = new JsonObject { ["baton"] = null, ["results"] = results };
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
+    }
+
+    /// <summary>Las instrucciones de una petición: la suya ("execute") o las de sus pasos ("batch").</summary>
+    private static IEnumerable<JsonNode> Statements(JsonNode? request)
+    {
+        if (request?["stmt"] is { } stmt) yield return stmt;
+        foreach (var step in request?["batch"]?["steps"]?.AsArray() ?? new JsonArray())
+        {
+            if (step?["stmt"] is { } stepStmt) yield return stepStmt;
+        }
+    }
+
+    /// <summary>
+    /// Una instrucción: su resultado Hrana ({"type":"ok",…} o {"type":"error",…}) y, si salió bien, el "result" con
+    /// columnas, filas y filas afectadas. Se graba con lo que habría cobrado Turso.
+    /// </summary>
+    private (JsonObject Response, JsonObject? Result) RunStatement(JsonNode stmt, List<FakeRecordedStatement> recorded, ref long responseBytes)
+    {
+        var sql = stmt["sql"]!.GetValue<string>();
+        var args = stmt["args"]?.AsArray() ?? new JsonArray();
+
+        if (Blocked == FakeBlockedMode.StatementError)
+        {
+            recorded.Add(new FakeRecordedStatement(sql, (JsonArray)args.DeepClone(), 0, 0, "BLOCKED"));
+            return (Error("Operation was blocked: monthly quota exceeded", "BLOCKED"), null);
+        }
+
+        StatementCount++;
+        JsonObject response;
+        JsonObject? result = null;
+        long rowsRead = 0, rowsWritten = 0;
+        string? errorCode = null;
+        try
+        {
+            var scanError = ReviewQueryPlan(sql, args);
+            if (scanError != null)
+            {
+                errorCode = "SCAN_FORBIDDEN";
+                response = Error(scanError, errorCode);
+            }
+            else if (FailWhen?.Invoke(sql) == true)
+            {
+                errorCode = "SQLITE_CONSTRAINT";
+                response = Error("Falla simulada de la instrucción", errorCode);
+            }
+            else
+            {
+                var executed = Execute(sql, args);
+                rowsRead = executed.RowsRead;
+                rowsWritten = executed.RowsWritten;
+                result = executed.Result;
+                response = new JsonObject { ["type"] = "ok", ["response"] = new JsonObject { ["type"] = "execute", ["result"] = result } };
+            }
+        }
+        catch (FakeSqliteException ex)
+        {
+            errorCode = "SQLITE_ERROR";
+            response = Error(ex.Message, errorCode);
+        }
+
+        responseBytes += Encoding.UTF8.GetByteCount(response.ToJsonString());
+        if (MaxResponseBytes is { } max && responseBytes > max)
+        {
+            errorCode = "RESPONSE_TOO_LARGE";
+            response = Error($"Response is too large (más de {max} bytes, simulado)", errorCode);
+            result = null;
+        }
+
+        BilledRowsRead += rowsRead;
+        BilledRowsWritten += rowsWritten;
+        recorded.Add(new FakeRecordedStatement(sql, (JsonArray)args.DeepClone(), rowsRead, rowsWritten, errorCode));
+        return (response, result);
+    }
+
+    /// <summary>
+    /// Una petición "batch" de Hrana: cada paso corre si su condición se cumple (ok, error, not, and, or de los pasos
+    /// anteriores) y responde con step_results y step_errors (null en los pasos que no corrieron). BEGIN, COMMIT y
+    /// ROLLBACK son transacciones reales de SQLite, así que la petición es atómica como en Turso (V14).
+    /// </summary>
+    private JsonObject RunBatch(JsonArray steps, List<FakeRecordedStatement> recorded, ref long responseBytes)
+    {
+        if (Blocked == FakeBlockedMode.StatementError)
+        {
+            recorded.Add(new FakeRecordedStatement("batch", new JsonArray(), 0, 0, "BLOCKED"));
+            return Error("Operation was blocked: monthly quota exceeded", "BLOCKED");
+        }
+
+        var outcomes = new List<bool?>();
+        var stepResults = new JsonArray();
+        var stepErrors = new JsonArray();
+        foreach (var step in steps)
+        {
+            if (step!["condition"] is { } condition && !Evaluate(condition, outcomes))
+            {
+                outcomes.Add(null);
+                stepResults.Add(null);
+                stepErrors.Add(null);
+                continue;
+            }
+
+            var (response, result) = RunStatement(step["stmt"]!, recorded, ref responseBytes);
+            bool ok = response["type"]!.GetValue<string>() == "ok";
+            outcomes.Add(ok);
+            stepResults.Add(ok ? result!.DeepClone() : null);
+            stepErrors.Add(ok ? null : response["error"]!.DeepClone());
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "ok",
+            ["response"] = new JsonObject
+            {
+                ["type"] = "batch",
+                ["result"] = new JsonObject { ["step_results"] = stepResults, ["step_errors"] = stepErrors }
+            }
+        };
+    }
+
+    private bool Evaluate(JsonNode condition, List<bool?> outcomes)
+    {
+        int Step() => condition["step"]!.GetValue<int>();
+        return condition["type"]!.GetValue<string>() switch
+        {
+            "ok" => Step() < outcomes.Count && outcomes[Step()] == true,
+            "error" => Step() < outcomes.Count && outcomes[Step()] == false,
+            "not" => !Evaluate(condition["cond"]!, outcomes),
+            "and" => condition["conds"]!.AsArray().All(c => Evaluate(c!, outcomes)),
+            "or" => condition["conds"]!.AsArray().Any(c => Evaluate(c!, outcomes)),
+            "is_autocommit" => raw.sqlite3_get_autocommit(_connection.Handle!) != 0,
+            var other => throw new InvalidOperationException($"Condición de batch desconocida: {other}")
+        };
     }
 
     private void Record(int number, List<FakeRecordedStatement> statements, HttpStatusCode status)
@@ -288,6 +390,7 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     private sealed record Executed(JsonObject Result, long RowsRead, long RowsWritten);
 
     private static readonly Regex LimitAtEnd = new(@"\bLIMIT\s+\d+\s*;?\s*$", RegexOptions.IgnoreCase);
+    private static readonly Regex TransactionControl = new(@"^\s*(BEGIN|COMMIT|ROLLBACK|END)\b", RegexOptions.IgnoreCase);
     private static readonly Regex AlterTable = new(@"^\s*ALTER\s+TABLE\s+""?(\w+)""?", RegexOptions.IgnoreCase);
     private static readonly Regex CreateIndex = new(
         @"^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?""?(\w+)""?\s+ON\s+""?(\w+)""?", RegexOptions.IgnoreCase);
@@ -337,10 +440,13 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         bool sorted = raw.sqlite3_stmt_status(stmt, raw.SQLITE_STMTSTATUS_SORT, 0) > 0;
         long changes = raw.sqlite3_total_changes(db) - changesBefore;
 
-        // Un ORDER BY que se resuelve ordenando lee todas las filas candidatas antes de cortar en el LIMIT
-        long sortedCandidates = sorted && LimitAtEnd.IsMatch(originalSql) ? CountCandidates(sql, args) : 0;
+        // Un ORDER BY que se resuelve ordenando lee todas las filas candidatas antes de cortar en el LIMIT. Si solo ordena
+        // el último término (recorre el índice en orden, como la consulta de páginas desde el paso 8.6), se detiene al
+        // llenar el LIMIT: cuentan las filas devueltas (en Turso, V15: ~2,000 leídas por página de 500)
+        long sortedCandidates = sorted && LimitAtEnd.IsMatch(originalSql) && !SortsOnlyLastTerms(sql, args) ? CountCandidates(sql, args) : 0;
 
-        long rowsRead = EstimateRowsRead(fullScanSteps, sortedCandidates, rows.Count, changes, ddlScan);
+        // BEGIN, COMMIT y ROLLBACK no tocan filas
+        long rowsRead = TransactionControl.IsMatch(sql) ? 0 : EstimateRowsRead(fullScanSteps, sortedCandidates, rows.Count, changes, ddlScan);
         var result = new JsonObject { ["cols"] = cols, ["rows"] = rows, ["affected_row_count"] = changes };
         return new Executed(result, rowsRead, changes);
     }
@@ -419,6 +525,25 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     private bool IndexExists(string name) =>
         ScalarLong("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
             new JsonArray(new JsonObject { ["type"] = "text", ["value"] = name })) > 0;
+
+    /// <summary>"USE TEMP B-TREE FOR LAST TERM OF ORDER BY" (o "LAST n TERMS"): un ordenamiento parcial.</summary>
+    private bool SortsOnlyLastTerms(string sql, JsonArray args)
+    {
+        try
+        {
+            using var stmt = Prepare("EXPLAIN QUERY PLAN " + sql, args);
+            int detailColumn = raw.sqlite3_column_count(stmt) - 1;
+            while (raw.sqlite3_step(stmt) == raw.SQLITE_ROW)
+            {
+                if (raw.sqlite3_column_text(stmt, detailColumn).utf8_to_string().Contains("FOR LAST", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+        catch (FakeSqliteException)
+        {
+            return false;
+        }
+    }
 
     private long CountCandidates(string sql, JsonArray args)
     {

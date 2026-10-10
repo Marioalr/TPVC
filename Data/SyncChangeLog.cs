@@ -243,12 +243,19 @@ public static class SyncChangeLog
     /// Guarda lo que llegó de la nube con los triggers apagados (una fila en <see cref="ApplyStateTable"/> dentro de la
     /// misma transacción): lo recibido no se anota para volver a subir y sus borrados no dejan lápida.
     /// </summary>
-    public static async Task<int> SaveRemoteChangesAsync(AppDbContext db, CancellationToken ct = default)
+    /// <param name="meta">Claves de <see cref="DbMeta"/> que se guardan en la misma transacción (el cursor de bajada de la
+    /// página: nunca queda adelante de lo aplicado).</param>
+    public static async Task<int> SaveRemoteChangesAsync(AppDbContext db, CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? meta = null)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync($"INSERT OR IGNORE INTO {Q(ApplyStateTable)} (\"Applying\") VALUES (1);", ct);
         var saved = await db.SaveChangesAsync(ct);
         await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(ApplyStateTable)};", ct);
+        foreach (var (key, value) in meta ?? new Dictionary<string, string>())
+        {
+            await DbMeta.SetAsync(db, key, value, ct);
+        }
         await tx.CommitAsync(ct);
         return saved;
     }
@@ -324,12 +331,13 @@ public static class SyncChangeLog
     }
 
     /// <summary>
-    /// Después de restaurar un respaldo: es otro archivo (identidad nueva) y la siguiente subida manda todo, como
-    /// antes con el cursor de reloj.
+    /// Después de restaurar un respaldo: es otro archivo (identidad nueva), la siguiente subida manda todo y la bajada
+    /// empieza de cero, como antes con los cursores de la configuración.
     /// </summary>
     public static void ResetAfterRestore(AppDbContext db)
     {
         DbMeta.Remove(db, DbMeta.LastPushedSeq);
+        DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.Set(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString());
     }
 }

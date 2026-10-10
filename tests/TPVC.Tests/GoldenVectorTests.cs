@@ -221,11 +221,25 @@ public class GoldenVectorTests
                 new JsonObject { ["resolution"] = SyncRules.AfterRejectedUpsert(rowExists, tombstoneExists).ToString() }));
         }
 
+        foreach (var (name, local, server) in new (string, string?, string)[]
+                 {
+                     ("empate: se aplica la de la nube", T(1), T(1)),
+                     ("la de la nube es más nueva", T(1), T(2)),
+                     ("la local se volvió a editar después de subir: se conserva", T(2), T(1)),
+                     ("ya no existe aquí: se aplica", null, T(1)),
+                 })
+        {
+            cases.Add(Case($"subida rechazada, aplicar la fila de la nube · {name}",
+                new JsonObject { ["check"] = "rejected-upsert-row", ["localUpdatedAtUtc"] = local, ["serverUpdatedAtUtc"] = server },
+                new JsonObject { ["apply"] = SyncRules.ServerRowAppliesAfterReject(ParseDate(local), ParseDate(server)!.Value) }));
+        }
+
         CheckOrWrite("contracts/golden/lww.json", VectorFile("lww", cases,
             "Marcas en UTC con el formato del protocolo (yyyy-MM-dd HH:mm:ss.fffffff); null = no existe.",
             "pull-row y pull-tombstone: lo que decide el equipo al bajar (SyncRules.RemoteRowWins y RemoteTombstoneDeletes).",
             "server-upsert y server-tombstone: lo que hace la nube con el SQL que manda el equipo (TableMap.UpsertSql, SyncSchema.TombstoneUpsertSql y DeleteTombstonedRowSql), ejecutado de verdad sobre SQLite. 'affectedRows' es lo que Turso regresa en affected_row_count.",
-            "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe."));
+            "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe.",
+            "rejected-upsert-row: con la fila de la nube en mano, se aplica si su marca es igual o más nueva que la local (SyncRules.ServerRowAppliesAfterReject). No se relee en la primera subida completa, donde casi todo afecta 0 filas."));
     }
 
     /// <summary>Estado inicial de la nube para una fila de Categories, y la instrucción real que manda la PC.</summary>
@@ -259,7 +273,7 @@ public class GoldenVectorTests
 
         var rowAfter = (await client.QueryAsync($"SELECT \"UpdatedAtUtc\" FROM \"{map.Table}\" WHERE \"SyncId\" = ?", new object?[] { SampleSyncId }))
             .FirstOrDefault()?["UpdatedAtUtc"]?.ToString();
-        var tombstoneAfter = (await client.QueryAsync("SELECT \"DeletedAtUtc\" FROM \"SyncTombstones\" WHERE \"SyncId\" = ?", new object?[] { SampleSyncId }))
+        var tombstoneAfter = (await client.QueryAsync("SELECT \"DeletedAtUtc\" FROM \"SyncTombstones\" WHERE \"EntityType\" = 'Category' AND \"SyncId\" = ?", new object?[] { SampleSyncId }))
             .FirstOrDefault()?["DeletedAtUtc"]?.ToString();
         return (affected, rowAfter, tombstoneAfter);
     }

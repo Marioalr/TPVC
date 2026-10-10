@@ -29,6 +29,12 @@ public static class DbMeta
     /// </summary>
     public const string ClockOffsetMs = "ClockOffsetMs";
 
+    /// <summary>
+    /// Cursor de bajada de cada tabla (paso 8.6): "PullCursor:Products" → "SyncedAtUtc|SyncId" de la última fila
+    /// aplicada, sin pasar de la marca de agua de la sincronización. Un corte a media descarga sigue desde ahí.
+    /// </summary>
+    public const string PullCursorPrefix = "PullCursor:";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";
@@ -48,4 +54,22 @@ public static class DbMeta
         db.Database.ExecuteSqlRawAsync(UpsertSql, new object[] { key, value }, ct);
 
     public static void Remove(AppDbContext db, string key) => db.Database.ExecuteSqlRaw(DeleteSql, key);
+
+    /// <summary>Las claves que empiezan con <paramref name="prefix"/>, con su valor.</summary>
+    public static async Task<Dictionary<string, string>> GetByPrefixAsync(AppDbContext db, string prefix, CancellationToken ct = default)
+    {
+        var rows = await db.Database.SqlQueryRaw<Entry>(
+                "SELECT \"Key\", \"Value\" FROM \"DbMeta\" WHERE substr(\"Key\", 1, {0}) = {1}", prefix.Length, prefix)
+            .ToListAsync(ct);
+        return rows.Where(r => r.Value != null).ToDictionary(r => r.Key, r => r.Value!, StringComparer.Ordinal);
+    }
+
+    public static void RemoveByPrefix(AppDbContext db, string prefix) =>
+        db.Database.ExecuteSqlRaw("DELETE FROM \"DbMeta\" WHERE substr(\"Key\", 1, {0}) = {1}", prefix.Length, prefix);
+
+    internal sealed class Entry
+    {
+        public string Key { get; set; } = string.Empty;
+        public string? Value { get; set; }
+    }
 }
