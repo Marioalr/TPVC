@@ -20,6 +20,11 @@
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>
 
+  <!-- Las pruebas usan el mapeo interno de la sincronización (SyncSchema) para generar el contrato -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="TPVC.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
