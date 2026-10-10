@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -52,12 +53,57 @@ public class ConsultationAutosaveTests
         try { Directory.Delete(Path.GetDirectoryName(_draftPath)!, recursive: true); } catch { }
     }
 
-    private async Task<(MedicalRecordsViewModel Records, CheckoutViewModel Checkout, ConsultationService Consultations)> OpenAppAsync()
+    private async Task<(MedicalRecordsViewModel Records, CheckoutViewModel Checkout, ConsultationService Consultations)> OpenAppAsync(TimeProvider? autosaveClock = null)
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = new MedicalRecordsViewModel(_service, consultations, consultationDraftStore: new ConsultationDraftStore(_draftPath));
+        if (autosaveClock != null) records.AutosaveClock = autosaveClock;
         await records.InitialLoad;
         return (records, records.Consultation.Checkout, consultations);
+    }
+
+    /// <summary>
+    /// Reloj del guardado automático que nunca se dispara solo: la escritura pendiente corre cuando la
+    /// prueba llama a Fire, en el hilo que la llama (como el temporizador al terminar la pausa).
+    /// </summary>
+    private sealed class ManualAutosaveClock : TimeProvider
+    {
+        private readonly object _gate = new();
+        private volatile ManualTimer[] _timers = [];
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state);
+            lock (_gate) _timers = [.. _timers, timer];
+            return timer;
+        }
+
+        // Sin candados ni copias: se llama en un ciclo cerrado para que los disparos coincidan seguido
+        // con lo que hace el hilo de la prueba
+        public void Fire()
+        {
+            foreach (var timer in _timers) timer.Fire();
+        }
+
+        private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+        {
+            public void Fire() => callback(state);
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Lo que hay en disco ahora, sin estorbar a una escritura que esté reemplazando el archivo (null si
+    /// todavía no hay copia).
+    /// </summary>
+    private ConsultationDraft? ReadDraftOnDisk()
+    {
+        if (!File.Exists(_draftPath)) return null;
+        using var stream = new FileStream(_draftPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return ConsultationDraftStore.Deserialize(reader.ReadToEnd());
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
@@ -117,22 +163,61 @@ public class ConsultationAutosaveTests
     [TestMethod]
     public async Task DiscardedConsultation_IsNotResurrectedByAPendingSave()
     {
-        var (records, _, _) = await OpenAppAsync();
+        var clock = new ManualAutosaveClock();
+        var (records, _, _) = await OpenAppAsync(clock);
         records.SelectPatient(records.Patients.First());
         records.StartActiveConsultation();
         records.Autosave.SaveConsultationDraftNow();
         Assert.IsTrue(File.Exists(_draftPath));
 
         // Queda una escritura pendiente y se descarta la consulta antes de que ocurra
-        records.AutosaveDelay = TimeSpan.FromMilliseconds(250);
         records.Consultation.ConsultationChiefComplaint = "Paciente equivocado";
         await records.DiscardActiveConsultationAsync();
 
-        await Task.Delay(600);
+        // El temporizador se dispara tarde, con la consulta ya descartada
+        clock.Fire();
         Assert.IsFalse(File.Exists(_draftPath), "Una escritura atrasada no revive la consulta descartada");
 
         var (reopened, _, _) = await OpenAppAsync();
         Assert.IsFalse(reopened.HasActiveConsultation);
+    }
+
+    [TestMethod]
+    public async Task SaveNow_ReturnsWithTheCopyOnDisk_EvenIfTheTimerFiresAtTheSameTime()
+    {
+        var clock = new ManualAutosaveClock();
+        var (records, _, _) = await OpenAppAsync(clock);
+        records.SelectPatient(records.Patients.First());
+        records.StartActiveConsultation();
+        records.Consultation.ConsultationNotes = "Lo último que se escribió";
+        clock.Fire();
+
+        // El temporizador se dispara sin parar en otro hilo: en la app basta con que uno de esos disparos
+        // coincida con Ctrl+S o con el cierre del programa. Antes la escritura automática se llevaba la
+        // copia que Guardar ya acababa de dejar y Guardar ya regresaba sin ella en disco (la primera vez,
+        // sin archivo); al cerrar, el programa podía terminar antes que esa escritura y perder lo último.
+        using var stop = new CancellationTokenSource();
+        var timerThread = Task.Factory.StartNew(() =>
+        {
+            while (!stop.IsCancellationRequested) clock.Fire();
+        }, TaskCreationOptions.LongRunning);
+        try
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                var calledAt = DateTime.Now;
+                records.Autosave.SaveConsultationDraftNow();
+                var onDisk = ReadDraftOnDisk();
+                Assert.IsNotNull(onDisk);
+                Assert.IsTrue(onDisk.SavedAt >= calledAt, $"Guardar ya regresó antes de que su copia estuviera en disco (intento {i})");
+                Assert.AreEqual("Lo último que se escribió", onDisk.Notes);
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            await timerThread;
+        }
     }
 
     [TestMethod]

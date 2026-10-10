@@ -218,6 +218,16 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         set => _autosaveOptions.Delay = value;
     }
 
+    /// <summary>
+    /// Reloj del guardado automático de la consulta (las pruebas ponen uno manual). Se pone antes de
+    /// iniciar la consulta: el temporizador se crea con la primera copia.
+    /// </summary>
+    public TimeProvider AutosaveClock
+    {
+        get => _autosaveOptions.Clock;
+        set => _autosaveOptions.Clock = value;
+    }
+
     /// <summary>Carga inicial lanzada por el constructor (expedientes, servicios y consulta recuperada).</summary>
     public Task InitialLoad { get; private set; } = Task.CompletedTask;
 

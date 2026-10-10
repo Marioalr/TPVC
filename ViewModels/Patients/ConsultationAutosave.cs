@@ -87,7 +87,7 @@ public partial class ConsultationAutosave : ObservableObject
 
     private readonly object _draftGate = new();
     private ConsultationDraftStore? _draftStore;
-    private Timer? _autosaveTimer;
+    private ITimer? _autosaveTimer;
     private ConsultationDraft? _pendingDraft;
     private long _draftGeneration;
 
@@ -99,6 +99,8 @@ public partial class ConsultationAutosave : ObservableObject
     private bool _draftSessionActive;
     private bool _suspendAutosave;
     private bool _draftRestoreAttempted;
+
+    private DateTime UtcNow => _autosaveOptions.Clock.GetUtcNow().UtcDateTime;
 
     /// <summary>Texto discreto en la barra de la consulta: "Guardado 10:42:15".</summary>
     [ObservableProperty]
@@ -149,13 +151,16 @@ public partial class ConsultationAutosave : ObservableObject
         if (draft == null) return;
         Volatile.Write(ref _pendingDraft, draft);
 
-        var sinceLastWrite = DateTime.UtcNow - _lastDraftWriteUtc;
+        var sinceLastWrite = UtcNow - _lastDraftWriteUtc;
         var due = sinceLastWrite >= AutosaveMaxWait ? TimeSpan.Zero : _autosaveOptions.Delay;
-        _autosaveTimer ??= new Timer(_ => WritePendingDraft(), null, Timeout.Infinite, Timeout.Infinite);
+        _autosaveTimer ??= _autosaveOptions.Clock.CreateTimer(_ => WritePendingDraft(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _autosaveTimer.Change(due, Timeout.InfiniteTimeSpan);
     }
 
-    /// <summary>Guarda ya la consulta en curso (Ctrl+S y al cerrar la aplicación).</summary>
+    /// <summary>
+    /// Guarda ya la consulta en curso (Ctrl+S y al cerrar la aplicación). Regresa con la copia en disco,
+    /// aunque el temporizador la esté escribiendo en ese momento.
+    /// </summary>
     [RelayCommand]
     public void SaveConsultationDraftNow()
     {
@@ -185,7 +190,7 @@ public partial class ConsultationAutosave : ObservableObject
             saved = _draftStore.Save(draft);
             if (saved)
             {
-                _lastDraftWriteUtc = DateTime.UtcNow;
+                _lastDraftWriteUtc = UtcNow;
                 _lastWrittenDraftSequence = Math.Max(_lastWrittenDraftSequence, draft.Sequence);
                 _draftSessionActive = true;
             }
@@ -243,12 +248,18 @@ public partial class ConsultationAutosave : ObservableObject
 
     private void WritePendingDraft()
     {
-        var draft = Interlocked.Exchange(ref _pendingDraft, null);
-        if (draft == null || _draftStore == null) return;
+        if (_draftStore == null) return;
 
+        ConsultationDraft? draft;
         bool saved;
         lock (_draftGate)
         {
+            // La copia se toma dentro del candado. Si el temporizador se lleva la que Guardar ya acaba de
+            // dejar, Guardar ya espera aquí a que termine de escribirse; antes regresaba sin ella en disco
+            // y, al cerrar el programa, esa escritura podía quedar a medias y perderse lo último escrito
+            draft = Interlocked.Exchange(ref _pendingDraft, null);
+            if (draft == null) return;
+
             // Si la consulta terminó mientras esperaba, no se resucita su borrador
             if (draft.Generation != Interlocked.Read(ref _draftGeneration)) return;
             if (draft.Sequence <= _lastWrittenDraftSequence) return;
@@ -256,7 +267,7 @@ public partial class ConsultationAutosave : ObservableObject
             saved = _draftStore.Save(draft);
             if (saved)
             {
-                _lastDraftWriteUtc = DateTime.UtcNow;
+                _lastDraftWriteUtc = UtcNow;
                 _lastWrittenDraftSequence = draft.Sequence;
             }
         }
@@ -285,7 +296,7 @@ public partial class ConsultationAutosave : ObservableObject
         {
             Interlocked.Increment(ref _draftGeneration);
             Volatile.Write(ref _pendingDraft, null);
-            _autosaveTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            _autosaveTimer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _draftStore?.Delete();
             _lastDraftWriteUtc = DateTime.MinValue;
             AutosaveStatus = string.Empty;
