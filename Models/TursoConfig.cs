@@ -223,4 +223,7 @@ public class TursoSyncResult
     public int RowsPulled { get; set; }
     public long ElapsedMilliseconds { get; set; }
     public string? ErrorMessage { get; set; }
+
+    /// <summary>Filas apartadas al terminar (se reintentan en cada sincronización).</summary>
+    public int ParkedRows { get; set; }
 }

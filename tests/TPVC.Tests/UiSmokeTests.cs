@@ -454,6 +454,22 @@ internal sealed class UiSmokeSession
             tursoSync.ResumeAfterConsumptionBrake();
             WaitFor(tursoSync.SyncAsync());
 
+            // Paso 8.4: filas apartadas ("N cambios sin sincronizar")
+            using (var db = factory.CreateDbContext())
+            {
+                db.SyncParkedRows.Add(new SyncParkedRow { Direction = SyncParkedRow.Pull, EntityType = nameof(PatientConsultation), SyncId = Guid.NewGuid(), Reason = "Captura" });
+                db.SyncParkedRows.Add(new SyncParkedRow { Direction = SyncParkedRow.Pull, EntityType = nameof(InventoryMovement), SyncId = Guid.NewGuid(), Reason = "Captura" });
+                db.SaveChanges();
+            }
+            shell.TursoSyncVM.LoadFromSettings();
+            Show(host, main, "TursoSync", $"20c-config-tursosync-apartados-{suffix}");
+            using (var db = factory.CreateDbContext())
+            {
+                db.SyncParkedRows.RemoveRange(db.SyncParkedRows);
+                db.SaveChanges();
+            }
+            shell.TursoSyncVM.LoadFromSettings();
+
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");
             shell.SettingsSearchText = string.Empty;

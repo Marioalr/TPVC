@@ -349,12 +349,14 @@ public class TursoSyncService
             var (pushed, pulled) = await Task.Run(() => SyncCoreAsync(fullResync, ct), ct);
             sw.Stop();
 
+            var parkedRows = RefreshParkedCount();
             var result = new TursoSyncResult
             {
                 Success = true,
                 RowsPushed = pushed,
                 RowsPulled = pulled,
-                ElapsedMilliseconds = sw.ElapsedMilliseconds
+                ElapsedMilliseconds = sw.ElapsedMilliseconds,
+                ParkedRows = parkedRows
             };
 
             // Turso volvió a aceptar instrucciones: termina la pausa por cuota agotada
@@ -362,7 +364,8 @@ public class TursoSyncService
             if (PauseReason == TursoSyncPauseReason.ConsumptionBrake)
                 SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
             else
-                SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)");
+                SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)" +
+                    (parkedRows > 0 ? $" · {ParkedText(parkedRows)}" : string.Empty));
             SyncCompleted?.Invoke(result);
 
             if (pulled > 0)
@@ -602,9 +605,17 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         var statements = new List<(string Sql, object?[]? Args)>();
         var idMaps = new Dictionary<Type, Dictionary<int, Guid>>();
 
+        // Lo apartado en subidas anteriores se vuelve a intentar aunque el cursor ya lo haya pasado
+        var parkedBefore = await db.SyncParkedRows.AsNoTracking()
+            .Where(p => p.Direction == SyncParkedRow.Push)
+            .ToListAsync(ct);
+        var parkNow = new Dictionary<(string EntityType, Guid SyncId), string>();
+        var included = new HashSet<(string EntityType, Guid SyncId)>();
+
         foreach (var map in GetTableMaps())
         {
-            var changed = await LoadChangedAsync(db, map.ClrType, fromUtc, toUtc, ct);
+            var parkedIds = parkedBefore.Where(p => p.EntityType == map.ClrType.Name).Select(p => p.SyncId).ToList();
+            var changed = await LoadChangedAsync(db, map.ClrType, fromUtc, toUtc, parkedIds, ct);
             if (changed.Count == 0) continue;
 
             var sql = map.UpsertSql;
@@ -618,7 +629,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 };
                 args.AddRange(map.Columns.Select(c => ToRemoteValue(c.Property.GetValue(entity))));
 
-                bool skip = false;
+                string? missing = null;
                 foreach (var reference in map.References)
                 {
                     var localId = reference.Property.GetValue(entity) as int?;
@@ -635,17 +646,19 @@ ON CONFLICT(DeviceId) DO UPDATE SET
 
                     if (principalSyncId == null && reference.IsRequired)
                     {
-                        skip = true;
+                        missing = $"le falta {reference.PrincipalType.Name} (Id local {localId})";
                         break;
                     }
                     args.Add(principalSyncId.HasValue ? FormatGuid(principalSyncId.Value) : null);
                 }
 
-                if (skip)
+                if (missing != null)
                 {
-                    AppLogger.Warn($"Turso: {map.Table} {entity.SyncId} omitido (referencia requerida inexistente).");
+                    // Se aparta: se reintenta en cada subida hasta que exista su principal
+                    parkNow[(map.ClrType.Name, entity.SyncId)] = $"No se pudo subir: {missing}.";
                     continue;
                 }
+                included.Add((map.ClrType.Name, entity.SyncId));
                 args.Add(map.ClrType.Name);
                 args.Add(FormatGuid(entity.SyncId));
                 args.Add(FormatDate(entity.UpdatedAtUtc));
@@ -678,24 +691,71 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             applied += await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
         }
 
+        // Ya subió todo: lo que se pudo subir sale de las apartadas y lo que no, se aparta (o suma un intento).
+        // Una apartada cuya fila ya no existe aquí (se borró) también sale: su lápida sube por su lado.
+        await UpdateParkedPushAsync(db, parkedBefore, parkNow, included, ct);
         return applied;
     }
 
-    private static async Task<List<ISyncEntity>> LoadChangedAsync(AppDbContext db, Type clrType, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+    private async Task UpdateParkedPushAsync(AppDbContext db, List<SyncParkedRow> parkedBefore,
+        Dictionary<(string EntityType, Guid SyncId), string> parkNow, HashSet<(string EntityType, Guid SyncId)> included, CancellationToken ct)
+    {
+        if (parkedBefore.Count == 0 && parkNow.Count == 0) return;
+
+        var nowUtc = DateTime.UtcNow;
+        var tracked = await db.SyncParkedRows.Where(p => p.Direction == SyncParkedRow.Push).ToListAsync(ct);
+        foreach (var row in tracked)
+        {
+            var key = (row.EntityType, row.SyncId);
+            if (parkNow.TryGetValue(key, out var reason))
+            {
+                row.Reason = reason;
+                row.Attempts++;
+                row.LastAttemptUtc = nowUtc;
+                parkNow.Remove(key);
+            }
+            else
+            {
+                if (included.Contains(key)) AppLogger.Info($"Turso: {row.EntityType} {row.SyncId} apartado subió.");
+                db.SyncParkedRows.Remove(row);
+            }
+        }
+
+        foreach (var ((entityType, syncId), reason) in parkNow)
+        {
+            AppLogger.Warn($"Turso: {entityType} {syncId} apartado. {reason}");
+            db.SyncParkedRows.Add(new SyncParkedRow
+            {
+                Direction = SyncParkedRow.Push,
+                EntityType = entityType,
+                SyncId = syncId,
+                Reason = reason,
+                FirstParkedAtUtc = nowUtc,
+                LastAttemptUtc = nowUtc
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task<List<ISyncEntity>> LoadChangedAsync(AppDbContext db, Type clrType, DateTime fromUtc, DateTime toUtc,
+        List<Guid> parkedIds, CancellationToken ct)
     {
         var method = typeof(TursoSyncService).GetMethod(nameof(LoadChangedGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
             .MakeGenericMethod(clrType);
-        return await (Task<List<ISyncEntity>>)method.Invoke(null, new object[] { db, fromUtc, toUtc, ct })!;
+        return await (Task<List<ISyncEntity>>)method.Invoke(null, new object[] { db, fromUtc, toUtc, parkedIds, ct })!;
     }
 
-    private static async Task<List<ISyncEntity>> LoadChangedGenericAsync<T>(AppDbContext db, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+    private static async Task<List<ISyncEntity>> LoadChangedGenericAsync<T>(AppDbContext db, DateTime fromUtc, DateTime toUtc,
+        List<Guid> parkedIds, CancellationToken ct)
         where T : class, ISyncEntity
     {
         // Sin tope superior: un registro con marca posterior al corte (guardado durante la subida o
         // con marca adelantada para ganarle a un equipo con el reloj adelantado) sube igual; la nube
         // descarta lo que no sea más nuevo, así que volver a subirlo no cambia nada
         var list = await db.Set<T>().AsNoTracking()
-            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc)
+            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc
+                        || parkedIds.Contains(EF.Property<Guid>(e, nameof(ISyncEntity.SyncId))))
             .ToListAsync(ct);
         return list.Cast<ISyncEntity>().ToList();
     }
@@ -745,7 +805,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             await foreach (var page in ReadPagesAsync(client, map.Table, deviceId, fromWatermark, skipOwnRows, ct))
             {
                 rowsRead += page.Count;
-                applied += await ApplyPageAsync(map, page, syncIdMaps, ct);
+                applied += await ApplyPageAsync(map, page, syncIdMaps, deadPrincipals: null, ct);
             }
             // Esta tabla pudo recibir filas nuevas: refrescar su mapa para las tablas dependientes
             syncIdMaps.Remove(map.ClrType);
@@ -757,7 +817,176 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             applied += await ApplyTombstonesAsync(page, ct);
         }
 
+        // Lo apartado en esta y en otras sincronizaciones se vuelve a intentar con lo que ya llegó
+        var (retried, retryReads) = await RetryParkedPullAsync(client, ct);
+        return (applied + retried, rowsRead + retryReads);
+    }
+
+    // =========================================================================
+    // FILAS APARTADAS (paso 8.4)
+    // =========================================================================
+
+    /// <summary>Cuántas filas están apartadas (en pantalla: "N cambios sin sincronizar").</summary>
+    public int ParkedCount { get; private set; }
+
+    /// <summary>"1 cambio sin sincronizar" / "N cambios sin sincronizar".</summary>
+    public static string ParkedText(int count) => count == 1 ? "1 cambio sin sincronizar" : $"{count} cambios sin sincronizar";
+
+    /// <summary>Vuelve a contar las filas apartadas (0 si la base todavía no tiene la tabla).</summary>
+    public int RefreshParkedCount()
+    {
+        try
+        {
+            using var db = _contextFactory.CreateDbContext();
+            ParkedCount = db.SyncParkedRows.Count();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"Turso: no se pudieron contar las filas apartadas: {ex.Message}");
+        }
+        return ParkedCount;
+    }
+
+    /// <summary>Fila remota → texto para guardarla apartada (cada valor como argumento Hrana, sin perder su tipo).</summary>
+    private static string SerializeRemoteRow(Dictionary<string, object?> row)
+    {
+        var json = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (column, value) in row) json[column] = TursoClient.FormatArg(value);
+        return json.ToJsonString();
+    }
+
+    private static Dictionary<string, object?> DeserializeRemoteRow(string payload)
+    {
+        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (column, value) in System.Text.Json.Nodes.JsonNode.Parse(payload)!.AsObject()) row[column] = TursoClient.ExtractValue(value);
+        return row;
+    }
+
+    /// <summary>
+    /// Reintenta lo apartado al bajar. Antes pregunta (aquí y en la nube) qué principales que faltan tienen lápida:
+    /// con lápida, una referencia opcional se aplica en nulo y una fila con su principal obligatorio borrado se descarta.
+    /// </summary>
+    private async Task<(int Applied, int RowsRead)> RetryParkedPullAsync(TursoClient client, CancellationToken ct)
+    {
+        List<SyncParkedRow> parked;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            parked = await db.SyncParkedRows.AsNoTracking().Where(p => p.Direction != SyncParkedRow.Push).ToListAsync(ct);
+        }
+        if (parked.Count == 0) return (0, 0);
+
+        int applied = 0, rowsRead = 0;
+        var maps = GetTableMaps();
+        var syncIdMaps = new Dictionary<Type, Dictionary<Guid, int>>();
+        var rowsByType = parked.Where(p => p.Direction == SyncParkedRow.Pull && p.Payload != null)
+            .GroupBy(p => p.EntityType)
+            .ToDictionary(g => g.Key, g => g.Select(p => DeserializeRemoteRow(p.Payload!)).ToList());
+
+        // Principales que faltan aquí: ¿se borraron?
+        var missing = new Dictionary<Type, HashSet<Guid>>();
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            foreach (var map in maps.Where(m => rowsByType.ContainsKey(m.ClrType.Name)))
+            {
+                foreach (var reference in map.References)
+                {
+                    if (!syncIdMaps.TryGetValue(reference.PrincipalType, out var lookup))
+                    {
+                        lookup = await LoadSyncIdToIdAsync(db, reference.PrincipalType, ct);
+                        syncIdMaps[reference.PrincipalType] = lookup;
+                    }
+                    foreach (var row in rowsByType[map.ClrType.Name])
+                    {
+                        if (ParseGuid(row.GetValueOrDefault(reference.RemoteColumn)) is { } principal && !lookup.ContainsKey(principal))
+                        {
+                            if (!missing.TryGetValue(reference.PrincipalType, out var set)) missing[reference.PrincipalType] = set = new HashSet<Guid>();
+                            set.Add(principal);
+                        }
+                    }
+                }
+            }
+        }
+
+        var dead = new HashSet<(Type, Guid)>();
+        if (missing.Count > 0)
+        {
+            using var db = _contextFactory.CreateDbContext();
+            foreach (var (type, ids) in missing)
+            {
+                var idList = ids.ToList();
+                foreach (var local in await db.SyncTombstones.AsNoTracking()
+                             .Where(t => t.EntityType == type.Name && idList.Contains(t.SyncId)).Select(t => t.SyncId).ToListAsync(ct))
+                {
+                    dead.Add((type, local));
+                }
+
+                var placeholders = string.Join(", ", idList.Select(_ => "?"));
+                var remote = await client.QueryAsync(
+                    $"SELECT \"SyncId\" FROM {Q(TombstonesTable)} WHERE \"EntityType\" = ? AND \"SyncId\" IN ({placeholders});",
+                    new object?[] { type.Name }.Concat(idList.Select(g => (object?)FormatGuid(g))).ToArray(), ct);
+                rowsRead += Math.Max(1, remote.Count);
+                foreach (var r in remote)
+                {
+                    if (ParseGuid(r.GetValueOrDefault("SyncId")) is { } g) dead.Add((type, g));
+                }
+            }
+        }
+
+        // Filas, en el orden de dependencias (un principal apartado se aplica antes que sus dependientes)
+        syncIdMaps.Clear();
+        foreach (var map in maps)
+        {
+            if (!rowsByType.TryGetValue(map.ClrType.Name, out var rows)) continue;
+            applied += await ApplyPageAsync(map, rows, syncIdMaps, dead, ct);
+            syncIdMaps.Remove(map.ClrType);
+        }
+
+        // Lápidas
+        var tombstones = parked.Where(p => p.Direction == SyncParkedRow.Tombstone).Select(p => new Dictionary<string, object?>
+        {
+            ["EntityType"] = p.EntityType,
+            ["SyncId"] = FormatGuid(p.SyncId),
+            ["DeletedAtUtc"] = p.Payload
+        }).ToList();
+        if (tombstones.Count > 0) applied += await ApplyTombstonesAsync(tombstones, ct);
+
         return (applied, rowsRead);
+    }
+
+    /// <summary>Aparta (o actualiza) una fila en el contexto de la página: se guarda junto con lo que sí se aplicó.</summary>
+    private static void Park(AppDbContext db, Dictionary<(string, Guid), SyncParkedRow> parked, string direction, string entityType,
+        Guid syncId, string? payload, string reason)
+    {
+        var nowUtc = DateTime.UtcNow;
+        if (parked.TryGetValue((entityType, syncId), out var existing))
+        {
+            existing.Payload = payload;
+            existing.Reason = reason;
+            existing.Attempts++;
+            existing.LastAttemptUtc = nowUtc;
+            return;
+        }
+
+        AppLogger.Warn($"Turso: {entityType} {syncId} apartado. {reason}");
+        var row = new SyncParkedRow
+        {
+            Direction = direction,
+            EntityType = entityType,
+            SyncId = syncId,
+            Payload = payload,
+            Reason = reason,
+            FirstParkedAtUtc = nowUtc,
+            LastAttemptUtc = nowUtc
+        };
+        db.SyncParkedRows.Add(row);
+        parked[(entityType, syncId)] = row;
+    }
+
+    private static void Unpark(AppDbContext db, Dictionary<(string, Guid), SyncParkedRow> parked, string entityType, Guid syncId)
+    {
+        if (!parked.Remove((entityType, syncId), out var row)) return;
+        if (db.Entry(row).State == EntityState.Added) db.Entry(row).State = EntityState.Detached;
+        else db.SyncParkedRows.Remove(row);
     }
 
     private static async IAsyncEnumerable<List<Dictionary<string, object?>>> ReadPagesAsync(
@@ -787,19 +1016,27 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         }
     }
 
-    private async Task<int> ApplyPageAsync(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps, CancellationToken ct)
+    private async Task<int> ApplyPageAsync(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
+        ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct)
     {
         var method = typeof(TursoSyncService).GetMethod(nameof(ApplyPageGenericAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(map.ClrType);
-        return await (Task<int>)method.Invoke(this, new object[] { map, rows, syncIdMaps, ct })!;
+        return await (Task<int>)method.Invoke(this, new object?[] { map, rows, syncIdMaps, deadPrincipals, ct })!;
     }
 
-    private async Task<int> ApplyPageGenericAsync<T>(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps, CancellationToken ct)
+    /// <summary>
+    /// Aplica una página de filas remotas. Una fila cuyo principal (obligatorio u opcional) todavía no existe aquí se
+    /// aparta en la misma transacción y se reintenta al final de cada descarga (<see cref="RetryParkedPullAsync"/>).
+    /// <paramref name="deadPrincipals"/> son los principales que se sabe que se borraron.
+    /// </summary>
+    private async Task<int> ApplyPageGenericAsync<T>(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
+        ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct)
         where T : class, ISyncEntity, new()
     {
         using var db = _contextFactory.CreateDbContext();
         db.ApplyingRemoteChanges = true;
 
+        var entityType = map.ClrType.Name;
         var incoming = rows
             .Select(r => (Row: r, SyncId: ParseGuid(r.GetValueOrDefault("SyncId"))))
             .Where(x => x.SyncId.HasValue)
@@ -809,6 +1046,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 .Where(e => ids.Contains(EF.Property<Guid>(e, nameof(ISyncEntity.SyncId))))
                 .ToListAsync(ct))
             .ToDictionary(e => e.SyncId);
+        var parked = (await db.SyncParkedRows
+                .Where(p => p.Direction == SyncParkedRow.Pull && p.EntityType == entityType && ids.Contains(p.SyncId))
+                .ToListAsync(ct))
+            .ToDictionary(p => (p.EntityType, p.SyncId));
 
         int applied = 0;
         foreach (var (row, syncIdNullable) in incoming)
@@ -817,12 +1058,17 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             var remoteUpdated = ParseDate(row.GetValueOrDefault("UpdatedAtUtc"));
             locals.TryGetValue(syncId, out var local);
 
-            // Last-Write-Wins: la versión local igual o más nueva se conserva
-            if (!SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated)) continue;
+            // Last-Write-Wins: la versión local igual o más nueva se conserva (y lo apartado de esta fila ya no hace falta)
+            if (!SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated))
+            {
+                Unpark(db, parked, entityType, syncId);
+                continue;
+            }
 
             // Resolver referencias (SyncId remoto → Id local)
             var resolved = new List<(PropertyInfo Property, int? Id)>();
-            bool missingRequired = false;
+            string? parkReason = null;
+            string? dropReason = null;
             foreach (var reference in map.References)
             {
                 var principalSyncId = ParseGuid(row.GetValueOrDefault(reference.RemoteColumn));
@@ -837,20 +1083,44 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                     if (lookup.TryGetValue(principalSyncId.Value, out var id)) localId = id;
                 }
 
-                if (localId == null && reference.IsRequired)
+                if (principalSyncId.HasValue && localId == null)
                 {
-                    missingRequired = true;
+                    if (deadPrincipals?.Contains((reference.PrincipalType, principalSyncId.Value)) == true)
+                    {
+                        // El principal se borró: una referencia opcional queda en nulo; sin el obligatorio la fila no puede existir
+                        if (reference.IsRequired)
+                        {
+                            dropReason = $"su {reference.PrincipalType.Name} {principalSyncId} se borró";
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        parkReason = $"Todavía no llega a este equipo su {reference.PrincipalType.Name} {FormatGuid(principalSyncId.Value)}.";
+                        break;
+                    }
+                }
+                else if (localId == null && reference.IsRequired)
+                {
+                    dropReason = $"llegó sin {reference.RemoteColumn}";
                     break;
                 }
                 resolved.Add((reference.Property, localId));
             }
 
-            if (missingRequired)
+            if (parkReason != null)
             {
-                AppLogger.Warn($"Turso: {map.Table} {syncId} no se aplicó (falta su registro relacionado en este equipo).");
+                Park(db, parked, SyncParkedRow.Pull, entityType, syncId, SerializeRemoteRow(row), parkReason);
+                continue;
+            }
+            if (dropReason != null)
+            {
+                AppLogger.Warn($"Turso: {map.Table} {syncId} no se aplicó: {dropReason}.");
+                Unpark(db, parked, entityType, syncId);
                 continue;
             }
 
+            Unpark(db, parked, entityType, syncId);
             if (local == null)
             {
                 local = new T { SyncId = syncId };
@@ -936,6 +1206,13 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         int applied = 0;
         var mapsByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m);
 
+        Dictionary<(string, Guid), SyncParkedRow> parked;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            parked = (await db.SyncParkedRows.AsNoTracking().Where(p => p.Direction == SyncParkedRow.Tombstone).ToListAsync(ct))
+                .ToDictionary(p => (p.EntityType, p.SyncId));
+        }
+
         foreach (var row in rows)
         {
             var syncId = ParseGuid(row.GetValueOrDefault("SyncId"));
@@ -943,6 +1220,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             if (syncId == null || !mapsByType.TryGetValue(entityType, out var map)) continue;
 
             var deletedAt = ParseDate(row.GetValueOrDefault("DeletedAtUtc"));
+            string? failure = null;
             try
             {
                 using var db = _contextFactory.CreateDbContext();
@@ -951,11 +1229,26 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                     .MakeGenericMethod(map.ClrType);
                 if (await (Task<bool>)method.Invoke(null, new object[] { db, syncId.Value, deletedAt, ct })!) applied++;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // P. ej. una categoría que todavía tiene productos en este equipo
-                AppLogger.Warn($"Turso: no se pudo aplicar el borrado de {entityType} {syncId}: {ex.Message}");
+                // P. ej. una categoría que todavía tiene productos en este equipo: se aparta y se reintenta
+                failure = (ex.InnerException ?? ex).Message;
             }
+
+            // Se borró, ya no estaba o aquí es más nueva: sale de las apartadas. Si falló, se aparta (o suma un intento)
+            if (failure == null && !parked.ContainsKey((entityType, syncId.Value))) continue;
+            using var parkDb = _contextFactory.CreateDbContext();
+            var tracked = parked.TryGetValue((entityType, syncId.Value), out var existing)
+                ? new Dictionary<(string, Guid), SyncParkedRow> { [(entityType, syncId.Value)] = parkDb.SyncParkedRows.Attach(existing).Entity }
+                : new Dictionary<(string, Guid), SyncParkedRow>();
+            if (failure != null)
+                Park(parkDb, tracked, SyncParkedRow.Tombstone, entityType, syncId.Value, FormatDate(deletedAt), $"No se pudo aplicar su borrado: {failure}");
+            else
+                Unpark(parkDb, tracked, entityType, syncId.Value);
+            await parkDb.SaveChangesAsync(ct);
+
+            if (failure == null) parked.Remove((entityType, syncId.Value));
+            else if (existing == null) parked[(entityType, syncId.Value)] = tracked[(entityType, syncId.Value)];
         }
         return applied;
     }

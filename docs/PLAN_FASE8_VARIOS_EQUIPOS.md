@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-10 (TPVC v1.20.1). **Hechos: los pasos 8.2 (v1.20.0) y 8.3 (v1.20.1).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-10 (TPVC v1.20.2). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1) y 8.4 (v1.20.2).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -539,6 +539,13 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 ### Etapa 1 · Sincronización sin pérdidas
 
 #### 8.4 · Filas apartadas (H4)
+- **Hecho en v1.20.2 (2026-10-10).** Decisiones al programarlo:
+  - La fila remota apartada se guarda con cada valor como argumento Hrana (`TursoClient.FormatArg`), así se vuelve a aplicar sin perder su tipo.
+  - Lo apartado al bajar se reintenta **al final de cada descarga** (no hasta la siguiente): lo que llega en la misma sincronización se aplica en ella. Antes de reintentar se pregunta, aquí y en la nube (una instrucción por tipo de principal), qué principales que faltan tienen lápida.
+  - Una fila cuyo principal **obligatorio** tiene lápida se descarta con un aviso en la bitácora (el plan solo decía qué hacer con la opcional): no puede existir sin él, y apartarla dejaría el contador arriba para siempre.
+  - Al subir, la fila apartada se vuelve a leer y se intenta aunque el cursor de reloj ya la pasó. Con las llaves foráneas activas solo pasa con filas huérfanas.
+  - `SaveClinicalServiceAsync` compara por `ProductId` (si un producto se repite, gana el último) y solo cambia cantidad e indicaciones.
+  - El contador sale en el estado ("✓ Sincronizado … · N cambios sin sincronizar") y en *Nube y dispositivos*, con una explicación.
 - **Cambia:**
   - `SyncParkedRows` (tabla local). Lo que hoy se omite con solo un aviso, dejando avanzar el cursor, se aparta, se reintenta en cada sincronización y se cuenta en pantalla ("N cambios sin sincronizar"):
     - en la subida, la fila cuya referencia obligatoria no tiene `SyncId` (`TursoSyncService.cs:634-646`);
