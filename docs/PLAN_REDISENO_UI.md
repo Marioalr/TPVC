@@ -30,7 +30,8 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 7. **Un solo lenguaje visual.** Mismos colores (siempre del tema), tipografía, espaciado, iconos y
    botones en todas las pantallas: un botón principal por pantalla, el resto secundarios.
 8. **Ligero.** Cada pantalla y ventana se crea al abrirse (no veinte ventanas ocultas en memoria),
-   listas virtualizadas y ViewModels separados por función (reutilizables en la app Android).
+   listas virtualizadas y ViewModels separados por función, sin WPF (la app Android, en Kotlin, no los
+   reutiliza: son su referencia de comportamiento).
 
 ---
 
@@ -43,10 +44,11 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 2 | Pacientes y consulta (expediente) | ✅ Hecho (v1.14) · pendientes al final de su sección |
 | 3 | Punto de venta (POS) | ✅ Hecho (v1.15) |
 | 4 | Configuración | ✅ Hecho (v1.16) |
-| E | Consulta entre equipos (PC ↔ tablet) | ✅ Parte de la PC hecha (v1.17) · la tablet, con su app |
+| E | Consulta entre equipos (PC ↔ tablet) | ✅ Entre dos PC hecha (v1.17) · PC ↔ tablet por la red del consultorio: plan de la Fase 8 (pasos 8.22–8.23) |
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
+| 8 | Datos para varios equipos en la red | Plan (`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`) |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -177,25 +179,33 @@ panel). Pendiente: revisar en Windows con datos reales (lista en `PENDIENTES_AND
 Poder **mandar una consulta en curso de la PC a la tablet y de la tablet a la PC** (por ejemplo,
 empezar el interrogatorio en el escritorio y terminar la exploración en el consultorio con la tablet).
 
+**Plan de la Fase 8 (2026-10-09, todavía sin código):** entre PC y PC quedó hecho en v1.17, como se describe
+abajo. Entre la PC y la tablet ya no irá por Turso sino por la red del consultorio (pasos 8.22–8.23): la
+consulta de la tablet vive en la PC, así que solo cambia el dueño y la copia no viaja; el envío vive en la PC
+(`LanHandoffs`) con los mismos estados y reglas, y si la tablet se apaga a media consulta la PC la ofrece con
+"Continuar aquí". La tabla en Turso queda solo entre dos PC (modo `SharedPcs`, congelado y no recomendado).
+Detalle en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` §3.9.
+
 - **Qué viaja**: la misma copia de trabajo del guardado automático (v1.11): nota, signos, receta,
   cuenta, folio y hora de inicio. Así no hay un segundo formato que mantener.
 - **Un solo dueño a la vez**: al enviarla, el equipo que la manda la deja en **solo lectura** ("Enviada
   a la tablet · Recuperar"); el otro la acepta y desde ese momento es el único que la edita. "Recuperar"
   antes de que la acepten cancela el envío. Nunca dos equipos escriben la misma consulta.
-- **Cómo llega**: una tabla `consultation_handoffs` en Turso (de, para, paciente, folio, copia, estado:
-  enviada / aceptada / cancelada). El equipo que espera revisa solo esa tabla cada pocos segundos
-  mientras está en Pacientes (una consulta pequeña, sin sincronizar todo). Aviso al recibirla:
+- **Cómo llega** (entre dos PC): una tabla `consultation_handoffs` en Turso (de, para, paciente, folio,
+  copia, estado: enviada / aceptada / cancelada). El equipo que espera revisa solo esa tabla cada pocos
+  segundos mientras está en Pacientes (una consulta pequeña, sin sincronizar todo). Aviso al recibirla:
   "La PC te envió la consulta de … · Continuar aquí".
 - **Antes de enviar** se suben los cambios pendientes del paciente (expediente y receta) para que el
   otro equipo lo tenga completo. Los cargos de la cuenta viajan con el `SyncId` del producto o servicio
   (el `Id` local no sirve en otro equipo). El folio se conserva (no se le agrega `-R1`).
 - **Sin conexión**: el botón se desactiva y dice por qué; la consulta sigue en el equipo actual.
-- **Cobro**: cobra el equipo que termina la consulta; el descuento de inventario se sincroniza como
-  cualquier venta (ver el pendiente de existencias en `docs/PENDIENTES_ANDROID.md`).
+- **Cobro**: cobra el equipo que termina la consulta; entre dos PC el descuento de inventario se
+  sincroniza como cualquier venta (ver A1 en `docs/PENDIENTES_ANDROID.md`). Lo que se cobre en la tablet
+  lo registrará la PC (plan de la Fase 8).
 - **Interfaz**: "Enviar a…" en la barra de la consulta abre una hoja con los equipos enlazados y su
   última conexión; en el otro equipo, el aviso y "Continuar aquí". Detalle visual en la propuesta.
-- Se construye junto con la app de la tablet; la parte de la PC (enviar, recibir, solo lectura) puede
-  ir antes y probarse entre dos PC.
+- La parte de la PC (enviar, recibir, solo lectura) se hizo primero y se probó entre dos PC (v1.17); la de la
+  tablet va con la Fase 8 y su app.
 
 **Hecho en v1.17 (parte de la PC, probada PC ↔ PC):** `ConsultationHandoffService` y la tabla
 `ConsultationHandoffs` (contrato en `docs/TURSO_SYNC_ARCHITECTURE.md` §4.5), `MedicalRecordsViewModel.Handoff.cs`
@@ -213,8 +223,8 @@ en cuatro frentes (dueño único, integridad, interfaz y regresiones) encontró 
 reemplazaba la ficha del primer intento (quedaba sin dueño), "Liberar" podía cruzarse con una resolución en curso,
 la copia de la nube se borraba aunque el guardado local hubiera fallado, la subida sin tope podía revivir en la nube
 registros borrados por otro equipo y en solo lectura no se podían abrir las demás secciones; todo corregido con pruebas.
-Pendiente: la app de la tablet implementa el mismo contrato; revisar en Windows con dos PC reales
-(lista en `PENDIENTES_ANDROID.md`, D v1.17).
+Pendiente: revisar en Windows con dos PC reales (lista en `PENDIENTES_ANDROID.md`, D v1.17). La tablet no
+usará este contrato: irá por la red del consultorio (plan de la Fase 8, pasos 8.22–8.23).
 
 ### Fase 5 · Revisión de la visualización de los temas (casi al final)
 
@@ -307,5 +317,26 @@ la división todavía va a mover se hacen justo después del grupo que la mueve,
 | 7.6 | **Confirmaciones con el tema** | "Descartar consulta" (y las demás confirmaciones: cancelar cita, dar de baja el expediente, salir del alta sin guardar, liberar el equipo) usan el cuadro de mensaje de Windows, que no sigue el tema (blanco en modo oscuro). Se cambia por un diálogo propio con los colores del tema, el botón peligroso en rojo y Esc/Enter con la opción segura. Entra por `IUserDialogs` (G2), así que las pantallas no cambian. | ✅ v1.18.5 |
 
 Notas para la app de la tablet (detalle en `docs/PENDIENTES_ANDROID.md`, sección C): compartir la receta y el
-ticket desde cualquier lugar donde se vean, y vincular la tablet leyendo un código QR.
+ticket desde cualquier lugar donde se vean, y vincular la tablet leyendo un código QR. Con el plan de la
+Fase 8, el QR sirve para conectarse a la PC por la red del consultorio y no lleva el token de Turso (paso
+8.17), y se comparte el PDF que la app arma con el HTML de la receta que genera la PC (pasos 8.13 y 8.19).
+
+### Fase 8 · Datos para varios equipos en la red (plan)
+
+Por ahora es solo el plan (`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`): la PC es el servidor del consultorio y la
+única que escribe, la tablet y el celular (app en Kotlin) le piden todo por la red del consultorio, y Turso
+queda solo como respaldo. Aquí, lo que toca la interfaz de la PC.
+
+Pantallas y avisos nuevos de la PC, con los mismos principios (un botón principal, colores del tema, avisos
+breves, confirmación solo en lo irreversible) que se agregarán a `UiSmokeTests` (capturas y contraste en los
+cuatro temas):
+
+| Pantalla o aviso | Qué muestra | Paso |
+|---|---|---|
+| **Uso de la nube** | En *Nube y dispositivos*: "Solo respaldo (recomendado) / Compartir entre computadoras". | 8.2 |
+| **Vincular tablet o celular** | Elegir el rol; el QR durante 10 min con "Esperando a que el equipo lea el código…" y "Generar otro código"; la confirmación "¿Vincular «Tablet Samsung» como Tablet?" con *Vincular* y *Rechazar*. Reemplaza el paquete de vinculación de hoy. | 8.17 |
+| **Equipos vinculados** | Cada equipo con "En línea" o "Visto hace…", *Quitar* y *Cambiar rol*. | 8.17 |
+| **Probar conexión** (red del consultorio) | Direcciones, puerto, perfil de red (aviso si es Pública) y firewall, con "Permitir en el firewall de Windows". No es el «Probar conexión» de Turso que ya está en la misma pantalla. | 8.18 |
+| Aviso **"Consulta en curso en la tablet"** | Fijo en Pacientes, con el paciente, "Ver" (solo lectura) y "Continuar aquí"; si la tablet pierde la conexión: "Consulta en la tablet sin conexión desde 10:42 · Continuar aquí". | 8.22 |
+| **Aviso al cerrar** | Si un equipo se vio en los últimos 10 min: "La tablet y el celular dejarán de recibir cambios hasta que vuelva a abrir TPVC. ¿Cerrar de todos modos?". | 8.18 |
 

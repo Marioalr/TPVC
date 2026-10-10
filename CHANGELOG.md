@@ -2,6 +2,12 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [Sin publicar]
+
+### Documentación — Plan de la Fase 8: varios equipos en la red local
+* Plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (todavía sin código): la PC será el servidor del consultorio y la única que escribe; la tablet y el celular, con una app en **Kotlin**, le pedirán todo por HTTPS en la red local y se vincularán con un QR; Turso (plan gratuito) quedará solo como respaldo y recuperación de la PC. Incluye el contrato de la red (versión 1), cómo quedan los bloqueantes A1–A5 y los demás riesgos, 24 pasos en la PC (cada uno publicable por separado) y el esqueleto de la app Android.
+* Actualizados `docs/PENDIENTES_ANDROID.md`, `docs/TURSO_SYNC_ARCHITECTURE.md` (límites vigentes del plan gratuito de Turso), `docs/PLAN_REDISENO_UI.md`, `docs/ARQUITECTURA_TECNICA.md` y el README.
+
 ## [1.19.0] - 2026-10-09
 
 ### Cambiado — Fin de la Fase 6: el módulo de Pacientes, listo para la tablet

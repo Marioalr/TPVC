@@ -16,9 +16,10 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * 🩺 **[Plan de Consulta y Servicios Clínicos (docs/PLAN_DE_CONSULTA.md)](docs/PLAN_DE_CONSULTA.md)**: Hoja de ruta conforme a la norma técnica mexicana NOM-004-SSA3, catálogo de servicios médicos, paquetes con insumos por defecto y diagramas Mermaid.
 * 📖 **[Manual de Usuario (docs/MANUAL_DE_USUARIO.md)](docs/MANUAL_DE_USUARIO.md)**: Guía práctica completa para el personal del consultorio (manejo de la vista principal dividida, punto de venta con carrito, expedientes, lotes y temas).
 * 🏗️ **[Arquitectura Técnica (docs/ARQUITECTURA_TECNICA.md)](docs/ARQUITECTURA_TECNICA.md)**: Diagramas Mermaid, modelo de base de datos relacional, algoritmo de venta POS FEFO y especificaciones de ingeniería.
-* ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2 multi-dispositivo (Windows / Android), esquema remoto y garantías.
-* 📱 **[Pendientes antes de la app Android (docs/PENDIENTES_ANDROID.md)](docs/PENDIENTES_ANDROID.md)**: Bloqueantes de datos, preparación del código compartido y alcance de la tablet.
-* 🎨 **[Plan de rediseño de la interfaz (docs/PLAN_REDISENO_UI.md)](docs/PLAN_REDISENO_UI.md)**: Principios, fases (expediente, POS, configuración, revisión de temas) y propuesta visual.
+* ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2, esquema remoto y garantías. Con la Fase 8, Turso queda solo como respaldo y recuperación de la PC.
+* 🖧 **[Fase 8: varios equipos en la red local (docs/PLAN_FASE8_VARIOS_EQUIPOS.md)](docs/PLAN_FASE8_VARIOS_EQUIPOS.md)**: Plan para que la PC sea el servidor del consultorio, la tablet y el celular (Kotlin) se conecten por la red local y Turso quede como respaldo.
+* 📱 **[Pendientes antes de la app Android (docs/PENDIENTES_ANDROID.md)](docs/PENDIENTES_ANDROID.md)**: Bloqueantes de datos, preparación en la PC y alcance de la app en Kotlin para la tablet y el celular.
+* 🎨 **[Plan de rediseño de la interfaz (docs/PLAN_REDISENO_UI.md)](docs/PLAN_REDISENO_UI.md)**: Principios, fases (expediente, POS, configuración, revisión de temas, cierre y pedidos del consultorio) y propuesta visual.
 * 📝 **[Historial de Versiones (CHANGELOG.md)](CHANGELOG.md)**: Registro de cambios detallado siguiendo *Semantic Versioning*.
 * ⚖️ **[Licencia MIT](LICENSE)**: Términos y condiciones de uso del software.
 
