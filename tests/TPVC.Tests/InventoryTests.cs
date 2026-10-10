@@ -282,6 +282,7 @@ public class InventoryTests
     }
 
     [TestMethod]
+    [TestCategory("Windows")]
     public void BoolToVisibilityConverter_HandlesIntsStringsObjectsAndBoolsCorrectly()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -402,6 +403,7 @@ public class InventoryTests
     }
 
     [TestMethod]
+    [TestCategory("Windows")]
     public void ComparisonToVisibilityConverter_ConvertsValuesCorrectly()
     {
         if (!OperatingSystem.IsWindows()) return;

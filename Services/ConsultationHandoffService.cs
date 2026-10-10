@@ -110,6 +110,9 @@ public sealed class ConsultationHandoffService
     /// </summary>
     public async Task<HandoffPollResult> PollAsync(string? outgoingId, CancellationToken ct = default)
     {
+        // Es automática: con la cuota agotada o el freno de consumo activo no se pregunta a la nube
+        _sync.ThrowIfAutomaticSyncPaused();
+
         using var client = CreateClient();
         await EnsureTablesAsync(client, ct);
 
@@ -356,11 +359,15 @@ public sealed class ConsultationHandoffService
         || ex is HandoffNotSentException { InnerException: { } inner } && IsConnectivityFailure(inner);
 
     /// <summary>Texto breve para el médico.</summary>
-    public static string Describe(Exception ex) => IsConnectivityFailure(ex)
-        ? "Sin conexión con la nube"
-        : ex is TursoException { ErrorCode: "HTTP_401" or "HTTP_403" }
-            ? "La nube rechazó el token (revise Configuración › Nube y dispositivos)"
-            : ex.Message;
+    public static string Describe(Exception ex) => ex switch
+    {
+        _ when IsConnectivityFailure(ex) => "Sin conexión con la nube",
+        TursoException { ErrorCode: "HTTP_401" or "HTTP_403" } => "La nube rechazó el token (revise Configuración › Nube y dispositivos)",
+        TursoException { ErrorCode: TursoException.QuotaExhaustedCode } => "Se agotó la cuota mensual de Turso (se reintenta cada hora)",
+        TursoException { ErrorCode: TursoException.ConsumptionBrakeCode } => "Sincronización pausada: consumo anormal (Configuración › Nube y dispositivos)",
+        TursoException { ErrorCode: TursoException.ArchivedCode } => "La base de Turso está archivada (Configuración › Nube y dispositivos)",
+        _ => ex.Message
+    };
 
     // ================================================================== utilidades
 

@@ -8,15 +8,19 @@ using TPVC.Models;
 namespace TPVC.Services;
 
 /// <summary>
-/// Gestiona la persistencia segura de la configuración de Turso Cloud,
-/// cifrado de tokens de autenticación y exportación de credenciales para dispositivos Android.
+/// Gestiona la persistencia segura de la configuración de Turso Cloud, el cifrado del token y los
+/// contadores de consumo (del mes, para la pantalla, y del día, para el freno de consumo).
 /// </summary>
 public class TursoSettingsService
 {
     private readonly string _configFilePath;
+    private readonly object _usageLock = new();
     public TursoSettings CurrentSettings { get; private set; } = new();
 
     public event Action? SettingsChanged;
+
+    /// <summary>Reloj de los contadores del mes y del día (reemplazable en pruebas).</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
 
     public TursoSettingsService(string? customPath = null)
     {
@@ -46,6 +50,9 @@ public class TursoSettingsService
                     {
                         CurrentSettings.AuthToken = UnprotectToken(CurrentSettings.ProtectedAuthToken);
                     }
+
+                    // La PC siempre es WindowsDesktop: antes había un selector y alguien pudo elegir otro rol
+                    CurrentSettings.DeviceRole = DeviceRole.WindowsDesktop;
                     EnsureMonthlyMetricsPeriod();
                     return;
                 }
@@ -96,10 +103,75 @@ public class TursoSettingsService
 
     public void RecordUsage(long rowsRead, long rowsWritten)
     {
-        EnsureMonthlyMetricsPeriod();
-        CurrentSettings.MonthlyRowsRead += rowsRead;
-        CurrentSettings.MonthlyRowsWritten += rowsWritten;
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            CurrentSettings.MonthlyRowsRead += rowsRead;
+            CurrentSettings.MonthlyRowsWritten += rowsWritten;
+            CurrentSettings.DailyRowsRead += rowsRead;
+            CurrentSettings.DailyRowsWritten += rowsWritten;
+            TryWriteToDisk();
+        }
+    }
 
+    /// <summary>Cuenta una descarga completa de hoy (para el freno de consumo).</summary>
+    public void RecordFullPull()
+    {
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            CurrentSettings.DailyFullPulls++;
+            TryWriteToDisk();
+        }
+    }
+
+    /// <summary>Activa el freno de consumo; queda activo (también al reabrir el programa) hasta <see cref="ResumeAfterConsumptionBrake"/>.</summary>
+    public void TripConsumptionBrake()
+    {
+        lock (_usageLock)
+        {
+            if (CurrentSettings.ConsumptionBrakeTrippedUtc != null) return;
+            CurrentSettings.ConsumptionBrakeTrippedUtc = Clock.GetUtcNow().UtcDateTime;
+            TryWriteToDisk();
+        }
+    }
+
+    /// <summary>
+    /// "Reanudar": quita el freno y vuelve a contar el día desde cero, así el freno se vuelve a activar
+    /// solo si el consumo anormal continúa.
+    /// </summary>
+    public void ResumeAfterConsumptionBrake()
+    {
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            CurrentSettings.ConsumptionBrakeTrippedUtc = null;
+            CurrentSettings.DailyRowsRead = 0;
+            CurrentSettings.DailyRowsWritten = 0;
+            CurrentSettings.DailyFullPulls = 0;
+            TryWriteToDisk();
+        }
+    }
+
+    public TursoQuotaSummary GetQuotaSummary()
+    {
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            return new TursoQuotaSummary
+            {
+                RowsReadThisMonth = CurrentSettings.MonthlyRowsRead,
+                RowsWrittenThisMonth = CurrentSettings.MonthlyRowsWritten,
+                EstimatedStorageMegabytes = Math.Round(Math.Max(1.0, (CurrentSettings.MonthlyRowsWritten * 0.001)), 2),
+                RowsReadToday = CurrentSettings.DailyRowsRead,
+                RowsWrittenToday = CurrentSettings.DailyRowsWritten,
+                FullPullsToday = CurrentSettings.DailyFullPulls
+            };
+        }
+    }
+
+    private void TryWriteToDisk()
+    {
         try
         {
             var dir = Path.GetDirectoryName(_configFilePath);
@@ -113,48 +185,24 @@ public class TursoSettingsService
         }
     }
 
-    public TursoQuotaSummary GetQuotaSummary()
-    {
-        EnsureMonthlyMetricsPeriod();
-        return new TursoQuotaSummary
-        {
-            RowsReadThisMonth = CurrentSettings.MonthlyRowsRead,
-            RowsWrittenThisMonth = CurrentSettings.MonthlyRowsWritten,
-            EstimatedStorageMegabytes = Math.Round(Math.Max(1.0, (CurrentSettings.MonthlyRowsWritten * 0.001)), 2)
-        };
-    }
-
-    /// <summary>
-    /// Genera un paquete JSON para vincular fácilmente una Tablet Android o Celular Android
-    /// con la base de datos de Turso sin tener que teclear manualmente URLs ni tokens.
-    /// </summary>
-    public string GenerateAndroidPairingPayload(DeviceRole targetRole, string? clinicName = null, string? doctorName = null)
-    {
-        var pairing = new
-        {
-            Version = typeof(TursoSettingsService).Assembly.GetName().Version?.ToString(3) ?? "1",
-            // El dispositivo Android debe hablar la misma versión del protocolo (ver docs/TURSO_SYNC_ARCHITECTURE.md)
-            SyncProtocolVersion = TursoSyncService.RemoteSchemaVersion,
-            DatabaseUrl = CurrentSettings.DatabaseUrl,
-            AuthToken = CurrentSettings.AuthToken,
-            AssignedRole = targetRole.ToString(),
-            RoleDescription = DevicePermissions.GetRoleDescription(targetRole),
-            ClinicName = clinicName ?? "Consultorio Médico",
-            DoctorName = doctorName ?? "Dr. Titular",
-            CreatedAtUtc = DateTime.UtcNow
-        };
-
-        return JsonSerializer.Serialize(pairing, new JsonSerializerOptions { WriteIndented = true });
-    }
-
+    /// <summary>Reinicia los contadores del mes (UTC) y los del día (hora del consultorio) cuando cambian.</summary>
     private void EnsureMonthlyMetricsPeriod()
     {
-        var currentPeriod = DateTime.UtcNow.ToString("yyyy-MM");
+        var currentPeriod = Clock.GetUtcNow().UtcDateTime.ToString("yyyy-MM");
         if (CurrentSettings.MonthlyMetricsPeriod != currentPeriod)
         {
             CurrentSettings.MonthlyMetricsPeriod = currentPeriod;
             CurrentSettings.MonthlyRowsRead = 0;
             CurrentSettings.MonthlyRowsWritten = 0;
+        }
+
+        var today = Clock.GetLocalNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        if (CurrentSettings.DailyMetricsDay != today)
+        {
+            CurrentSettings.DailyMetricsDay = today;
+            CurrentSettings.DailyRowsRead = 0;
+            CurrentSettings.DailyRowsWritten = 0;
+            CurrentSettings.DailyFullPulls = 0;
         }
     }
 

@@ -31,6 +31,7 @@ public class UiPerfTests
 {
     [TestMethod]
     [TestCategory("Rendimiento")]
+    [TestCategory("Windows")]
     [Timeout(300_000, CooperativeCancellation = true)]
     public void Measure_StartupScreensChartAndMemory()
     {

@@ -16,216 +16,6 @@ using TPVC.Services;
 
 namespace TPVC.Tests;
 
-/// <summary>
-/// Servidor Hrana v2 (/v2/pipeline) simulado sobre SQLite. Valida la codificación de valores
-/// igual que Turso: un entero enviado como número JSON provoca HTTP 400 Bad Request.
-/// </summary>
-internal sealed class FakeHranaServer : HttpMessageHandler
-{
-    private readonly SqliteConnection _connection;
-
-    // Turso atiende las escrituras de una en una; dos equipos a la vez no comparten la conexión
-    private readonly SemaphoreSlim _gate = new(1, 1);
-
-    public int RequestCount { get; private set; }
-    public int StatementCount { get; private set; }
-
-    /// <summary>Sin red: la petición falla antes de llegar.</summary>
-    public bool IsOffline { get; set; }
-
-    /// <summary>La petición se aplica pero la respuesta se pierde (la red cae justo después).</summary>
-    public Func<string, bool>? DropResponseAfterExecute { get; set; }
-
-    /// <summary>Se espera antes de aplicar la petición (para forzar el orden entre dos equipos).</summary>
-    public Func<string, Task>? BeforeExecuteAsync { get; set; }
-
-    public FakeHranaServer(string dbPath)
-    {
-        _connection = new SqliteConnection($"Data Source={dbPath};Pooling=False");
-        _connection.Open();
-    }
-
-    public SqliteConnection Connection => _connection;
-
-    /// <summary>
-    /// Para usar <see cref="Connection"/> desde la prueba sin cruzarse con una petición en curso: la
-    /// conexión de SQLite no admite dos usos a la vez (en la CI fallaba de vez en cuando).
-    /// </summary>
-    public IDisposable Lock()
-    {
-        _gate.Wait();
-        return new GateRelease(_gate);
-    }
-
-    private sealed class GateRelease(SemaphoreSlim gate) : IDisposable
-    {
-        private int _released;
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _released, 1) == 0) gate.Release();
-        }
-    }
-
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        if (IsOffline) throw new HttpRequestException("Sin red (simulada)");
-        var text = await request.Content!.ReadAsStringAsync(cancellationToken);
-
-        // Los ganchos ven el SQL tal cual (en el JSON las comillas simples van escapadas)
-        var sql = string.Join("\n", JsonNode.Parse(text)!["requests"]!.AsArray()
-            .Select(r => r?["stmt"]?["sql"]?.GetValue<string>())
-            .Where(q => q != null));
-        if (BeforeExecuteAsync != null) await BeforeExecuteAsync(sql);
-
-        HttpResponseMessage response;
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            if (_disposed) throw new HttpRequestException("Servidor simulado cerrado");
-            response = Process(text);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-
-        if (DropResponseAfterExecute?.Invoke(sql) == true) throw new HttpRequestException("Se perdió la respuesta (simulada)");
-        return response;
-    }
-
-    private HttpResponseMessage Process(string text)
-    {
-        RequestCount++;
-        var body = JsonNode.Parse(text)!;
-        var results = new JsonArray();
-
-        foreach (var req in body["requests"]!.AsArray())
-        {
-            var type = req!["type"]!.GetValue<string>();
-            if (type == "close")
-            {
-                results.Add(new JsonObject { ["type"] = "ok", ["response"] = new JsonObject { ["type"] = "close" } });
-                continue;
-            }
-
-            var stmt = req["stmt"]!;
-            var sql = stmt["sql"]!.GetValue<string>();
-            var args = stmt["args"]?.AsArray() ?? new JsonArray();
-
-            // Validación estricta del protocolo (como el servidor real)
-            foreach (var arg in args)
-            {
-                var argType = arg!["type"]!.GetValue<string>();
-                if (argType == "integer" && arg["value"] is JsonValue v && v.GetValueKind() != System.Text.Json.JsonValueKind.String)
-                {
-                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
-                    {
-                        Content = new StringContent("Failed to deserialize the JSON body: invalid type: integer, expected a string")
-                    };
-                }
-            }
-
-            StatementCount++;
-            try
-            {
-                results.Add(new JsonObject { ["type"] = "ok", ["response"] = new JsonObject { ["type"] = "execute", ["result"] = Execute(sql, args) } });
-            }
-            catch (SqliteException ex)
-            {
-                results.Add(new JsonObject { ["type"] = "error", ["error"] = new JsonObject { ["message"] = ex.Message, ["code"] = "SQLITE_ERROR" } });
-            }
-        }
-
-        var payload = new JsonObject { ["baton"] = null, ["results"] = results };
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
-    }
-
-    private JsonObject Execute(string sql, JsonArray args)
-    {
-        using var cmd = _connection.CreateCommand();
-        var sb = new StringBuilder();
-        int index = 0;
-        bool inString = false;
-        foreach (var c in sql)
-        {
-            if (c == '\'') inString = !inString;
-            if (c == '?' && !inString)
-            {
-                index++;
-                sb.Append("$p").Append(index);
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-        cmd.CommandText = sb.ToString();
-
-        for (int i = 0; i < args.Count; i++)
-        {
-            var arg = args[i]!;
-            object value = arg["type"]!.GetValue<string>() switch
-            {
-                "null" => DBNull.Value,
-                "integer" => long.Parse(arg["value"]!.GetValue<string>()),
-                "float" => arg["value"]!.GetValue<double>(),
-                "text" => arg["value"]!.GetValue<string>(),
-                _ => DBNull.Value
-            };
-            cmd.Parameters.AddWithValue($"$p{i + 1}", value);
-        }
-
-        var trimmed = sql.TrimStart();
-        if (trimmed.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("PRAGMA", StringComparison.OrdinalIgnoreCase))
-        {
-            using var reader = cmd.ExecuteReader();
-            var cols = new JsonArray();
-            for (int i = 0; i < reader.FieldCount; i++) cols.Add(new JsonObject { ["name"] = reader.GetName(i) });
-            var rows = new JsonArray();
-            while (reader.Read())
-            {
-                var row = new JsonArray();
-                for (int i = 0; i < reader.FieldCount; i++)
-                {
-                    row.Add(reader.IsDBNull(i) ? new JsonObject { ["type"] = "null" } : reader.GetValue(i) switch
-                    {
-                        long l => new JsonObject { ["type"] = "integer", ["value"] = l.ToString() },
-                        double d => new JsonObject { ["type"] = "float", ["value"] = d },
-                        var o => new JsonObject { ["type"] = "text", ["value"] = o.ToString() }
-                    });
-                }
-                rows.Add(row);
-            }
-            return new JsonObject { ["cols"] = cols, ["rows"] = rows, ["affected_row_count"] = 0 };
-        }
-
-        var affected = cmd.ExecuteNonQuery();
-        return new JsonObject { ["cols"] = new JsonArray(), ["rows"] = new JsonArray(), ["affected_row_count"] = affected };
-    }
-
-    private bool _disposed;
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            // Una petición en segundo plano (p. ej. borrar la copia de una consulta) puede seguir en
-            // curso al terminar la prueba: se espera a que termine y las siguientes fallan como sin red
-            _gate.Wait();
-            try
-            {
-                _disposed = true;
-                _connection.Dispose();
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
-        base.Dispose(disposing);
-    }
-}
-
 [TestClass]
 [DoNotParallelize]
 public class TursoSyncEndToEndTests
@@ -270,7 +60,7 @@ public class TursoSyncEndToEndTests
         }
     }
 
-    private Device CreateDevice(string name, bool seed)
+    private Device CreateDevice(string name, bool seed, TimeProvider? clock = null)
     {
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         AppDbContext.ConfigureSqlite(builder, $"Data Source={TempFile(".db")}");
@@ -289,6 +79,7 @@ public class TursoSyncEndToEndTests
         }
 
         var settings = new TursoSettingsService(TempFile(".json"));
+        if (clock != null) settings.Clock = clock;
         var s = settings.CurrentSettings;
         s.IsSyncEnabled = true;
         s.AutoSyncOnChanges = false;
@@ -304,6 +95,7 @@ public class TursoSyncEndToEndTests
         {
             ClientFactory = (url, token) => new TursoClient(url, token, new HttpClient(_server, disposeHandler: false))
         };
+        if (clock != null) sync.Clock = clock;
 
         return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync };
     }
@@ -491,6 +283,120 @@ public class TursoSyncEndToEndTests
 
         // Sin cambios: marca de agua + 1 lectura por tabla + tombstones + perfil (sin DDL)
         Assert.IsLessThan(25, perIdleSync, $"Una sincronización sin cambios no debe reenviar el esquema ({perIdleSync} sentencias)");
+    }
+
+    [TestMethod]
+    public async Task IdleSync_Costs16Requests()
+    {
+        // Base para medir los pasos siguientes: marca de agua + una lectura por cada una de las 13 tablas
+        // + lápidas + perfil del consultorio, sin esquema ni registro del equipo (una vez por sesión)
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        _server.ClearRecording();
+        var before = _server.RequestCount;
+        var readsBefore = _server.BilledRowsRead;
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        Assert.AreEqual(16, _server.RequestCount - before, "Una sincronización sin cambios = 16 peticiones");
+        Assert.AreEqual(0, _server.Requests.SelectMany(r => r.Statements).Sum(s => s.RowsWritten), "Sin cambios no se escribe nada");
+        foreach (var request in _server.Requests)
+        {
+            foreach (var s in request.Statements) Console.WriteLine($"#{request.Number} lecturas={s.RowsRead} {s.Sql}");
+        }
+        Console.WriteLine($"Lecturas estimadas de la sincronización sin cambios: {_server.BilledRowsRead - readsBefore}");
+    }
+
+    [TestMethod]
+    public async Task Blocked_PausesAutomaticSyncForAnHour_ThenRetries()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var pc = CreateDevice("pc", seed: true, clock);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        _server.Blocked = FakeBlockedMode.StatementError;
+        var blocked = await pc.Sync.SyncAsync();
+        Assert.IsFalse(blocked.Success);
+        StringAssert.StartsWith(blocked.ErrorMessage, "Se agotó la cuota mensual de Turso");
+        Assert.AreEqual(TursoSyncPauseReason.QuotaExhausted, pc.Sync.PauseReason);
+        Assert.AreEqual(TursoSyncStatus.Paused, pc.Sync.Status);
+        StringAssert.StartsWith(pc.Sync.StatusMessage, "Se agotó la cuota mensual de Turso · siguiente intento a las ", "En el estado, una sola línea");
+
+        // Lo automático (sincronizar tras guardar, la revisión de consultas) espera sin llegar a Turso
+        var requests = _server.RequestCount;
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        var handoff = new ConsultationHandoffService(pc.Sync, pc.Settings);
+        var poll = await Assert.ThrowsExactlyAsync<TursoException>(() => handoff.PollAsync(null));
+        Assert.AreEqual(TursoException.QuotaExhaustedCode, poll.ErrorCode);
+        Assert.AreEqual("Se agotó la cuota mensual de Turso (se reintenta cada hora)", ConsultationHandoffService.Describe(poll));
+        clock.Advance(TimeSpan.FromMinutes(59));
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        Assert.AreEqual(requests, _server.RequestCount, "Durante la hora de pausa no se pregunta a Turso");
+
+        // Pasada la hora, el siguiente intento automático vuelve a sincronizar
+        clock.Advance(TimeSpan.FromMinutes(2));
+        _server.Blocked = FakeBlockedMode.None;
+        var retried = await pc.Sync.SyncAsync(isBackgroundAutoSync: true);
+        Assert.IsTrue(retried.Success, retried.ErrorMessage);
+        Assert.AreEqual(TursoSyncPauseReason.None, pc.Sync.PauseReason);
+        Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status);
+    }
+
+    [TestMethod]
+    public async Task RepeatedFullDownload_TripsTheConsumptionBrake_UntilResume()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success, "1.ª descarga completa: la primera sincronización");
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success, "2.ª: «Sincronización completa»");
+
+        var requests = _server.RequestCount;
+        var third = await pc.Sync.InitialUploadToTursoAsync();
+        Assert.IsFalse(third.Success);
+        StringAssert.StartsWith(third.ErrorMessage, "Sincronización pausada: consumo anormal");
+        Assert.AreEqual(requests, _server.RequestCount, "La tercera no llega a subir ni a bajar nada");
+        Assert.AreEqual(TursoSyncPauseReason.ConsumptionBrake, pc.Sync.PauseReason);
+        Assert.AreEqual(TursoSyncStatus.Paused, pc.Sync.Status);
+        Assert.AreEqual(TursoConsumptionBrake.PausedTitle, pc.Sync.StatusMessage);
+
+        // Lo automático se detiene; lo que pide el médico sigue, y la pausa se queda hasta "Reanudar"
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        Assert.AreEqual(requests, _server.RequestCount);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(TursoSyncStatus.Paused, pc.Sync.Status, "Una sincronización a mano no quita el freno");
+        Assert.IsNotNull(pc.Settings.CurrentSettings.ConsumptionBrakeTrippedUtc);
+
+        pc.Sync.ResumeAfterConsumptionBrake();
+        Assert.AreEqual(TursoSyncPauseReason.None, pc.Sync.PauseReason);
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success, "Después de «Reanudar» el día se cuenta desde cero");
+    }
+
+    [TestMethod]
+    public async Task DailyEstimatedUsageOverTheCap_TripsTheConsumptionBrake()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // Una sincronización que deja el día arriba del tope de lecturas activa el freno al terminar
+        pc.Settings.RecordUsage(TursoConsumptionBrake.MaxRowsReadPerDay, 0);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(TursoSyncPauseReason.ConsumptionBrake, pc.Sync.PauseReason);
+        Assert.AreEqual(TursoSyncStatus.Paused, pc.Sync.Status);
+
+        // La revisión de consultas no pasa por la sincronización: su consumo también cuenta
+        pc.Sync.ResumeAfterConsumptionBrake();
+        pc.Sync.AddExternalUsage(rowsRead: 0, rowsWritten: TursoConsumptionBrake.MaxRowsWrittenPerDay + 1);
+        Assert.AreEqual(TursoSyncPauseReason.ConsumptionBrake, pc.Sync.PauseReason);
+        var handoff = new ConsultationHandoffService(pc.Sync, pc.Settings);
+        var poll = await Assert.ThrowsExactlyAsync<TursoException>(() => handoff.PollAsync(null));
+        Assert.AreEqual(TursoException.ConsumptionBrakeCode, poll.ErrorCode);
+
+        // "Reanudar" anota lo pendiente en el mes: la siguiente revisión normal no vuelve a activar el freno
+        var monthBefore = pc.Settings.GetQuotaSummary().RowsWrittenThisMonth;
+        pc.Sync.ResumeAfterConsumptionBrake();
+        pc.Sync.AddExternalUsage(rowsRead: 3, rowsWritten: 1);
+        Assert.AreEqual(TursoSyncPauseReason.None, pc.Sync.PauseReason);
+        Assert.AreEqual(monthBefore + TursoConsumptionBrake.MaxRowsWrittenPerDay + 1, pc.Settings.GetQuotaSummary().RowsWrittenThisMonth);
+        Assert.IsTrue((await handoff.PollAsync(null)).Incoming.Count == 0);
     }
 
     [TestMethod]

@@ -68,7 +68,48 @@ public enum TursoSyncStatus
     Syncing,
     Success,
     Offline,
-    Error
+    Error,
+
+    /// <summary>La sincronización automática está detenida: cuota de Turso agotada o freno de consumo.</summary>
+    Paused
+}
+
+/// <summary>Por qué está detenida la sincronización automática.</summary>
+public enum TursoSyncPauseReason
+{
+    None,
+
+    /// <summary>Turso respondió BLOCKED: se reintenta sola cada hora.</summary>
+    QuotaExhausted,
+
+    /// <summary>El freno de consumo vio un uso anormal: sigue detenida hasta "Reanudar".</summary>
+    ConsumptionBrake
+}
+
+/// <summary>
+/// Freno de consumo: protege la cuota del plan gratuito de un ciclo descontrolado (por ejemplo, una
+/// descarga completa repetida cada pocos segundos). El uso normal queda ~100 veces por debajo de estos topes.
+/// Las cifras son las del estimador local (<see cref="TursoSettings.DailyRowsRead"/>), no las del panel de Turso.
+/// </summary>
+public static class TursoConsumptionBrake
+{
+    public const int MaxFullPullsPerDay = 2;
+    public const long MaxRowsReadPerDay = 3_000_000L;
+    public const long MaxRowsWrittenPerDay = 30_000L;
+
+    /// <summary>Tras BLOCKED, la sincronización automática espera esto antes de reintentar.</summary>
+    public static readonly TimeSpan QuotaRetryInterval = TimeSpan.FromHours(1);
+
+    /// <summary>Para el estado (barra de estado y resumen de Configuración).</summary>
+    public const string PausedTitle = "Sincronización pausada: consumo anormal";
+
+    /// <summary>Para el aviso de Nube y dispositivos, debajo del título.</summary>
+    public const string PausedDetail =
+        "Este equipo usó hoy mucho más de lo normal de la cuota de Turso y la sincronización automática se detuvo " +
+        "para no agotarla. Revise que todo esté en orden y pulse «Reanudar».";
+
+    /// <summary>Para los errores (título y detalle).</summary>
+    public const string PausedMessage = PausedTitle + ". " + PausedDetail;
 }
 
 /// <summary>
@@ -94,7 +135,10 @@ public class TursoSettings
     /// <summary>Nombre asignado al dispositivo.</summary>
     public string DeviceName { get; set; } = Environment.MachineName;
 
-    /// <summary>Rol de este dispositivo.</summary>
+    /// <summary>
+    /// Rol de este dispositivo. En la PC siempre es <see cref="DeviceRole.WindowsDesktop"/> (paso 8.2: se quitó
+    /// el selector); el de la tablet y el celular lo asignará la PC al vincularlos.
+    /// </summary>
     public DeviceRole DeviceRole { get; set; } = DeviceRole.WindowsDesktop;
 
     /// <summary>Sincronizar automáticamente en segundo plano tras cambios locales.</summary>
@@ -127,26 +171,46 @@ public class TursoSettings
 
     /// <summary>Mes y año de las métricas registradas (formato YYYY-MM).</summary>
     public string MonthlyMetricsPeriod { get; set; } = DateTime.UtcNow.ToString("yyyy-MM");
+
+    /// <summary>Día (hora del consultorio, yyyy-MM-dd) de los contadores diarios del freno de consumo.</summary>
+    public string? DailyMetricsDay { get; set; }
+
+    /// <summary>Filas leídas estimadas hoy (desde la medianoche o desde el último "Reanudar").</summary>
+    public long DailyRowsRead { get; set; }
+
+    /// <summary>Filas escritas estimadas hoy (desde la medianoche o desde el último "Reanudar").</summary>
+    public long DailyRowsWritten { get; set; }
+
+    /// <summary>Descargas completas de hoy (sincronización completa o primera descarga).</summary>
+    public int DailyFullPulls { get; set; }
+
+    /// <summary>Cuándo se activó el freno de consumo; null = no está activo. Se conserva al cerrar el programa.</summary>
+    public DateTime? ConsumptionBrakeTrippedUtc { get; set; }
 }
 
 /// <summary>
-/// Resumen del consumo de cuota gratuita en Turso.
+/// Resumen del consumo de cuota gratuita en Turso (estimación de este equipo; la cifra real está en el panel de Turso).
 /// </summary>
 public class TursoQuotaSummary
 {
-    // Límites oficiales del plan gratuito de Turso
-    public const long FreeTierMonthlyRowsReadLimit = 1_000_000_000L; // 1,000 Millones
-    public const long FreeTierMonthlyRowsWriteLimit = 25_000_000L;    // 25 Millones
+    // Límites del plan gratuito de Turso (https://turso.tech/pricing, consultado el 2026-10-09)
+    public const long FreeTierMonthlyRowsReadLimit = 500_000_000L;  // 500 millones
+    public const long FreeTierMonthlyRowsWriteLimit = 10_000_000L;  // 10 millones
+    public const double FreeTierStorageMegabytes = 5_000;           // 5 GB
 
     public long RowsWrittenThisMonth { get; set; }
     public long RowsReadThisMonth { get; set; }
     public double EstimatedStorageMegabytes { get; set; }
 
+    public long RowsReadToday { get; set; }
+    public long RowsWrittenToday { get; set; }
+    public int FullPullsToday { get; set; }
+
     public double PercentageWritesUsed => (double)RowsWrittenThisMonth / FreeTierMonthlyRowsWriteLimit * 100.0;
     public double PercentageReadsUsed => (double)RowsReadThisMonth / FreeTierMonthlyRowsReadLimit * 100.0;
 
     public string FreeTierStatusDescription =>
-        $"100% Gratuito: {PercentageWritesUsed:F4}% de escrituras y {PercentageReadsUsed:F4}% de lecturas usadas de la cuota mensual.";
+        $"Este mes, este equipo lleva {PercentageReadsUsed:0.###}% de las lecturas y {PercentageWritesUsed:0.###}% de las escrituras del plan gratuito (estimado).";
 }
 
 /// <summary>

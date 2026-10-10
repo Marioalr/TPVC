@@ -1,9 +1,9 @@
 # Arquitectura de Sincronización Turso Cloud (TPVC)
 
 ## 1. Resumen Ejecutivo
-TPVC es **local-first (offline-first)**: la base de la PC (`consultorio.db`) es la que se usa en el consultorio y funciona al 100% sin internet. Hoy (v1.19.0) la PC sincroniza en los dos sentidos con **Turso Cloud (libSQL)**: unos segundos después de cada guardado sube sus cambios y descarga los de otros equipos, así que dos PC pueden compartir la misma nube.
+TPVC es **local-first (offline-first)**: la base de la PC (`consultorio.db`) es la que se usa en el consultorio y funciona al 100% sin internet. Hoy (v1.20.0) la PC sincroniza en los dos sentidos con **Turso Cloud (libSQL)**: unos segundos después de cada guardado sube sus cambios y descarga los de otros equipos, así que dos PC pueden compartir la misma nube.
 
-**Plan Fase 8 (decidido el 2026-10-09; todavía no implementado, ver `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`):**
+**Plan Fase 8 (decidido el 2026-10-09; hecho el paso 8.2 en v1.20.0 y el resto todavía no, ver `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`):**
 - Los tres equipos (la PC, una tablet y un celular Android) sincronizan por Turso con este protocolo v2 (§4), cada uno sobre su propia base local. La tablet sube y baja, también sin conexión; el celular baja todo y sube solo citas y entradas de mercancía (§3).
 - La app Android es Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de la consulta entre equipos (§4.5), y los dos lados se comparan con los archivos de `contracts/`.
 - La PC es la única que crea o migra el esquema remoto (§4.2) y la única que vincula y revoca equipos (§5).
@@ -26,7 +26,7 @@ Cómo cuenta Turso (<https://docs.turso.tech/help/usage-and-billing>):
 - `ALTER TABLE` y `CREATE INDEX` recorren toda la tabla (una lectura por fila), y `ALTER` puede escribir cada fila.
 - Al pasar un límite, toda instrucción falla con el código `BLOCKED`, también la consulta entre equipos.
 
-La app todavía muestra los límites viejos: 1,000 millones de lecturas y 25 millones de escrituras en `TursoQuotaSummary` (`Models/TursoConfig.cs`), y además 9 GB y la leyenda "consume menos del 0.05%" en `TursoSyncViewModel.RefreshQuotaDisplay`. Se corrigen en el paso 8.2.
+Desde v1.20.0 la app muestra estos límites (`TursoQuotaSummary`, `Models/TursoConfig.cs`) y, en *Nube y dispositivos*, el consumo estimado del mes y del día frente a los topes del freno. Hasta v1.19.0 mostraba límites viejos (1,000 millones de lecturas, 25 millones de escrituras y 9 GB) y la leyenda "consume menos del 0.05%".
 
 ### Uso estimado (plan §3.2)
 Supuestos: 30 días al mes; la PC abierta 10 h al día (8 en Pacientes); la tablet al frente 6 h (5 en pantallas de pacientes); el celular 0.5 h; ~150 sincronizaciones al día por guardados y ~400 filas cambiadas al día.
@@ -50,7 +50,11 @@ Supuestos: 30 días al mes; la PC abierta 10 h al día (8 en Pacientes); la tabl
 - **F1 · La descarga completa lee de más.** Con la consulta de página de hoy (`TursoSyncService.ReadPagesAsync`), SQLite sin `ANALYZE` (como una base nueva de Turso) ordena todo lo que queda de la tabla en cada página de 500: una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ?` (paso 8.6). Falta confirmarlo en Turso real (V15).
 - **F2 · La revisión de consultas lee de más.** `IX_ConsultationHandoffs_To (ToDeviceId, State)` solo se usa por `ToDeviceId`, así que cada revisión recorre todas las filas que se conservan para ese equipo. Un índice parcial lo baja a ~0 filas (paso 8.24, §4.5).
 
-**Freno de consumo (paso 8.2).** El riesgo no está en el uso normal (margen de ~100×) sino en un ciclo descontrolado: repetir una descarga completa cada 4 s gasta ~540M lecturas en un día, se acaba el mes de los tres equipos y Turso responde `BLOCKED` a todo. Por eso la PC (y después la app) hará como máximo 2 descargas completas al día, con un tope diario de 3M lecturas y 30k escrituras estimadas; al pasarlo se pausa la sincronización automática ("Sincronización pausada: consumo anormal", con *Reanudar*). `BLOCKED` se traducirá a "Se agotó la cuota mensual de Turso", y la sincronización automática esperará 1 h.
+**Freno de consumo (paso 8.2, desde v1.20.0 en la PC).** El riesgo no está en el uso normal (margen de ~100×) sino en un ciclo descontrolado: repetir una descarga completa cada 4 s gasta ~540M lecturas en un día, se acaba el mes de los tres equipos y Turso responde `BLOCKED` a todo. Por eso la PC (y después la app) hace como máximo 2 descargas completas al día, con un tope diario de 3M lecturas y 30k escrituras estimadas (`TursoConsumptionBrake`, `Models/TursoConfig.cs`):
+- Una descarga completa es la «Sincronización completa» o la primera sincronización (sin marca de agua); se revisa antes de subir nada y se cuenta al empezar a bajar.
+- Los topes del día suman lo de la sincronización y lo de la revisión de consultas entre equipos (`AddExternalUsage`). El día es el del consultorio (hora local) y se reinicia a medianoche.
+- Al pasar un tope se pausa la sincronización automática (sincronizar tras guardar, al abrir, y la revisión de consultas): estado "Sincronización pausada: consumo anormal" y aviso con *Reanudar* en *Nube y dispositivos*. La pausa se guarda en `turso_config.json` y sigue al reabrir el programa. Lo que pide el médico ("Sincronizar ahora", enviar una consulta) sigue funcionando; otra descarga completa espera a *Reanudar*, que vuelve a contar el día desde cero.
+- `BLOCKED` se traduce a "Se agotó la cuota mensual de Turso" (`TursoException.QuotaExhaustedCode`): la sincronización automática y la revisión de consultas esperan 1 h y luego se reintenta sola. Una base archivada por el plan gratuito (10 días sin uso) se traduce con las instrucciones para reactivarla (`turso group unarchive <grupo>`).
 
 > El contador de la pantalla *Nube y dispositivos* (`RecordUsage`) es una estimación. La cifra real está en el panel de Turso.
 
@@ -99,8 +103,8 @@ Papel de cada equipo (plan §2.2):
 | `CanScheduleAppointments`: agendar citas (nuevo, paso 8.10) | sí | sí | sí |
 | `CanRegisterStockEntries`: registrar entradas de mercancía, lote y movimiento de entrada (nuevo, paso 8.10) | sí | no | sí |
 
-- Hoy los permisos son solo informativos: en la app solo se usa `GetRoleDescription`, dentro del paquete de vinculación (§5). El rol lo elige cada equipo en un selector de *Nube y dispositivos* y se escribe en `RegisteredDevices`.
-- **Plan Fase 8:** el rol de la PC queda fijo en `WindowsDesktop` (paso 8.2). El de la tablet y el celular sale de `DeviceRegistry` (paso 8.10, §4.2), la autoridad sobre el rol, el código de folios y la revocación de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La app de Kotlin oculta pantallas y bloquea escrituras según el rol que lee ahí.
+- Hoy los permisos son solo informativos: la PC no los usa (el paquete de vinculación que mostraba `GetRoleDescription` se retiró en v1.20.0, §5). El rol se escribe en `RegisteredDevices` con cada latido.
+- **Desde v1.20.0 (paso 8.2)** el rol de la PC queda fijo en `WindowsDesktop`: se quitó el selector y una PC guardada con otro rol se corrige al abrir. **Plan Fase 8:** el de la tablet y el celular sale de `DeviceRegistry` (paso 8.10, §4.2), la autoridad sobre el rol, el código de folios y la revocación de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La app de Kotlin oculta pantallas y bloquea escrituras según el rol que lee ahí.
 - **Todo lo de esta tabla lo hace cumplir la app.** Con el nivel C (§6) la tablet y el celular usan un mismo token `full-access`: Turso no distingue roles. El corte de caja de la tablet solo se oculta en su interfaz.
 - La consulta entre equipos es solo para la PC y la tablet: `GetLinkedDevicesAsync` ya excluye el celular.
 
@@ -165,7 +169,7 @@ Hoy, una fila cuya referencia obligatoria no tiene `SyncId` se omite en la subid
 - **Hora del servidor** (paso 8.7): la primera instrucción de cada sincronización regresa la hora del servidor, `generation`, `protocol`, `minClientProtocol` y `clinicId`. Las marcas locales salen de `max(UtcNow + desfase, guardada + 1 ms)`, con aviso si el desfase pasa de 2 min, y lo pendiente con marca en el futuro se vuelve a marcar antes de subir. La «Sincronización completa» da un reporte (filas apartadas, conteo local contra remoto, tablas `legacy_v1_*`) y solo si sale limpio escribe `fullUploadAtUtc`, sin el cual no se puede vincular (A6).
 
 ### 4.4 Garantías
-- **Sin transacción:** `TursoClient.ExecuteBatchAsync` no es transaccional aunque su comentario lo diga (el comentario se corrige en el paso 8.2): cada sentencia del pipeline se confirma sola. La subida es idempotente, así que un lote que falla a medias se reintenta completo sin dañar nada.
+- **Sin transacción:** `TursoClient.ExecuteBatchAsync` no es transaccional aunque su comentario lo diga (el comentario se corrigió en v1.20.0): cada sentencia del pipeline se confirma sola. La subida es idempotente, así que un lote que falla a medias se reintenta completo sin dañar nada.
 - **Sin ciclos:** lo recibido conserva su marca y no vuelve a subirse ni a descargarse.
 - **Relojes desfasados:** las descargas usan el reloj del servidor, no el del dispositivo. Desde v1.17 un cambio local siempre lleva una marca posterior a la que ya tenía la fila (`max(ahora, marca guardada + 1 ms)`), también en los borrados: una edición hecha después de recibir una fila de un equipo con el reloj adelantado ya no la descarta la nube.
 - **Folios duplicados** (dos equipos crean `EXP-2026-005` sin conexión): el registro recibido se guarda como `EXP-2026-005-R1` en lugar de bloquear la sincronización. El `-R` solo existe en el equipo que recibe y no se sube, así que el mismo registro queda con dos folios. **Plan Fase 8 (pasos 8.16 y 8.17, respuesta 1 del médico):** un solo consecutivo por serie. Con conexión, cualquier equipo toma el siguiente EXP o TKT de `FolioCounters` con una sola instrucción atómica (`INSERT … ON CONFLICT(Series) DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber`; V16, §6). Sin conexión, el folio lleva el código del equipo de `DeviceRegistry` (`EXP-2026-T1-001`, `TKT-20261009-T1-0001`; la PC, `P1`) y sube así. La PC principal lo regulariza en segundo plano, como máximo una vez al día, con la nube al día y sin consulta ni venta en curso: le da el siguiente número del contador y guarda el folio con letra en `Patients.OriginalFolio` o `Sales.OriginalFolio`, que la búsqueda también compara. El cambio sube por el ciclo normal. CNS sigue saliendo de la hora: sin conexión lleva la letra y nunca se regulariza. Los folios que ya existen no cambian. `RecordNumber` y `Folio` pasan de índice único a índice normal y el `-R` deja de aplicarse. Las filas viejas con `-R` se quedan, y un folio repetido aparece en un aviso de la PC.
@@ -217,10 +221,10 @@ Versión mínima para recibir: TPVC 1.17.0 (la hoja "Enviar a…" marca como inc
 
 ## 5. Vinculación de la tablet y el celular
 
-### Hoy (v1.19.0): paquete en claro (se retira en el paso 8.2)
-En *Configuración → Nube y dispositivos → Vincular tablet y celular*, "Generar código" abre una ventana con un JSON **en texto claro** (`TursoSettingsService.GenerateAndroidPairingPayload`) para copiar y pegar: URL de la base, **token completo de Turso**, rol, descripción del rol, consultorio y médico. No hay QR ni cifrado, no vence, y todavía no existe una app que lo lea. "Copiar código" lo pone en el portapapeles, donde puede quedar en el historial de Windows.
+### Hasta v1.19.0: paquete en claro (retirado en v1.20.0, paso 8.2)
+Hasta v1.19.0, en *Configuración → Nube y dispositivos → Vincular tablet y celular*, "Generar código" abría una ventana con un JSON **en texto claro** (`TursoSettingsService.GenerateAndroidPairingPayload`) para copiar y pegar: URL de la base, **token completo de Turso**, rol, descripción del rol, consultorio y médico. No había QR ni cifrado, no vencía, y ninguna app lo leía. "Copiar código" lo ponía en el portapapeles, donde pudo quedar en el historial de Windows.
 
-Quien tenga ese texto puede leer y escribir toda la base de la nube, y el rol no se aplica en ningún lado. **No debe usarse para vincular.** El paso 8.2 retira `GenerateAndroidPairingPayload`, su ventana (`OpenPairingModal`) y `CopyPairingPayload`.
+Quien tenga ese texto puede leer y escribir toda la base de la nube. v1.20.0 retiró `GenerateAndroidPairingPayload`, su ventana (`OpenPairingModal`) y `CopyPairingPayload`; los botones dicen "Disponible con la vinculación por QR". Si alguna vez se copió ese código, conviene rotar el token de la PC (§6). Desde v1.20.0 la URL de Turso además solo se acepta con `https://` o `libsql://` (`http://` solo para `localhost`), porque el token viaja en cada petición.
 
 ### Plan Fase 8: QR en la red local (paso 8.14; detalle en el plan §4.4 y §4.5)
 El QR es solo una facilidad y queda limitado a la red del consultorio (respuesta 4 del médico). No hay base de vinculación en Turso ni token en el QR. La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.fullUploadAtUtc` (paso 8.7), ya se pegó el "token para tablet y celular" (§6) y hay menos de 3 equipos activos. La PC y el equipo deben estar en el mismo Wi-Fi.
@@ -244,7 +248,7 @@ Quien fotografía el QR no obtiene nada fuera de la red local o después de los 
 
 ## 6. Guía Rápida de Configuración en Turso
 
-> **El token de la PC no sale de la PC.** Se pega solo en TPVC de Windows, que lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json`. No lo copie a la tablet ni al celular (el paquete de vinculación de hoy lo lleva en claro, ver §5). Con la Fase 8 la tablet y el celular usarán otro token, el "token para tablet y celular", que la PC les entrega cifrado al vincularlos en la red local (§5), nunca en el QR.
+> **El token de la PC no sale de la PC.** Se pega solo en TPVC de Windows, que lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json`. No lo copie a la tablet ni al celular (el paquete de vinculación que lo llevaba en claro se retiró en v1.20.0, ver §5). Con la Fase 8 la tablet y el celular usarán otro token, el "token para tablet y celular", que la PC les entrega cifrado al vincularlos en la red local (§5), nunca en el QR.
 
 **Plan Fase 8 (credenciales, plan §4.3): nivel C.** La cuenta de Turso no tiene token de la API de la plataforma (respuesta 4 del médico), así que la PC no puede crear ni rotar tokens.
 - Dos tokens creados a mano en el panel o con la CLI, `full-access` y sin vencimiento: el de la PC (como hoy) y un "token para tablet y celular", que se pega una vez en la PC (cifrado con DPAPI) y que en el equipo queda envuelto con el Android Keystore.
@@ -293,9 +297,9 @@ Se hacen antes del paso indicado, siempre en un grupo o una cuenta de prueba. El
 |---|---|---|---|
 | V3 | Qué responde Hrana a un token rotado o desconocido (HTTP 401 o un código Hrana) | 8.14 | Pendiente |
 | V4 | Cuánto dura la interrupción al rotar | 8.15 | Pendiente |
-| V7 | Texto y estado HTTP de `BLOCKED` | 8.2 | Pendiente |
-| V9 | Si el plan gratuito archiva una base sin uso y qué error da | 8.2 | Pendiente |
-| V10 | Si las entradas de índice cuentan como filas escritas | 8.2 | Pendiente |
+| V7 | Texto y estado HTTP de `BLOCKED` | 8.2 | Pendiente. v1.20.0 salió sin comprobarlo: reconoce `BLOCKED` como código de error Hrana o en el cuerpo de una respuesta HTTP de error (también "Operation was blocked"). La documentación de Turso solo dice que la instrucción falla con el código `BLOCKED` |
+| V9 | Si el plan gratuito archiva una base sin uso y qué error da | 8.2 | Pendiente. Según la documentación de Turso, el plan gratuito archiva tras 10 días sin uso y se reactiva con `turso group unarchive <grupo>`; falta el error que recibe el cliente. v1.20.0 lo reconoce por la palabra "archived" en el error |
+| V10 | Si las entradas de índice cuentan como filas escritas | 8.2 | Pendiente. No cambia el código: solo el margen de §2 (~0.5% o ~1.5% del mes) |
 | V11 | Si el plan gratuito tiene bitácora de auditoría, y de cuántos días | 8.15 | Pendiente |
 | V12 | El tope de tamaño de una respuesta Hrana | 8.6 | Pendiente |
 | V14 | Si una petición `batch` de Hrana con `BEGIN`/`COMMIT` es atómica en Turso | 8.6 | Pendiente |

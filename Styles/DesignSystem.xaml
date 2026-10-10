@@ -899,6 +899,9 @@
             <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Static models:TursoSyncStatus.Offline}">
                 <Setter Property="Fill" Value="{DynamicResource ThemeStatusWarning}" />
             </DataTrigger>
+            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Static models:TursoSyncStatus.Paused}">
+                <Setter Property="Fill" Value="{DynamicResource ThemeStatusWarning}" />
+            </DataTrigger>
             <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Static models:TursoSyncStatus.Error}">
                 <Setter Property="Fill" Value="{DynamicResource ThemeStatusDanger}" />
             </DataTrigger>

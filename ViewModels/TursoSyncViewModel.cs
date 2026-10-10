@@ -1,28 +1,17 @@
 using System;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
-public class DeviceRoleOption
-{
-    public DeviceRole Role { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
-}
-
 public partial class TursoSyncViewModel : ObservableObject
 {
     private readonly TursoSyncService _syncService;
     private readonly TursoSettingsService _settingsService;
-    private readonly ClinicProfileService _clinicProfileService;
 
     [ObservableProperty]
     private bool _isSyncEnabled;
@@ -38,9 +27,6 @@ public partial class TursoSyncViewModel : ObservableObject
 
     [ObservableProperty]
     private string _deviceName = string.Empty;
-
-    [ObservableProperty]
-    private DeviceRole _selectedRole = DeviceRole.WindowsDesktop;
 
     [ObservableProperty]
     private bool _autoSyncOnChanges = true;
@@ -75,14 +61,16 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _quotaDetailedText = string.Empty;
 
+    /// <summary>El freno de consumo detuvo la sincronización automática (se quita con "Reanudar").</summary>
     [ObservableProperty]
-    private bool _isPairingModalOpen;
+    private bool _isConsumptionBrakeActive;
+
+    /// <summary>Turso respondió BLOCKED: la sincronización automática se reintenta cada hora.</summary>
+    [ObservableProperty]
+    private bool _isQuotaExhausted;
 
     [ObservableProperty]
-    private string _pairingJsonPayload = string.Empty;
-
-    [ObservableProperty]
-    private string _pairingRoleTitle = string.Empty;
+    private string _pauseNoticeText = string.Empty;
 
     [ObservableProperty]
     private bool _isHelpGuideOpen;
@@ -90,21 +78,10 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _saveStatusMessage = string.Empty;
 
-    public ObservableCollection<DeviceRoleOption> RoleOptions { get; } = new()
-    {
-        new() { Role = DeviceRole.WindowsDesktop, DisplayName = "PC Windows 11 (Principal / Caja / Consultorio)" },
-        new() { Role = DeviceRole.AndroidTablet, DisplayName = "Tablet Android (Consultorio / Asistente)" },
-        new() { Role = DeviceRole.AndroidMobileAdmin, DisplayName = "Celular Android (Solo Administración)" }
-    };
-
-    public TursoSyncViewModel(
-        TursoSyncService syncService,
-        TursoSettingsService settingsService,
-        ClinicProfileService clinicProfileService)
+    public TursoSyncViewModel(TursoSyncService syncService, TursoSettingsService settingsService)
     {
         _syncService = syncService;
         _settingsService = settingsService;
-        _clinicProfileService = clinicProfileService;
 
         _syncService.StatusChanged += (s, m) =>
         {
@@ -114,6 +91,7 @@ public partial class TursoSyncViewModel : ObservableObject
                 StatusMessage = m;
                 RefreshLastSyncText();
                 RefreshQuotaDisplay();
+                RefreshPauseState();
             });
         };
 
@@ -123,6 +101,7 @@ public partial class TursoSyncViewModel : ObservableObject
             {
                 RefreshLastSyncText();
                 RefreshQuotaDisplay();
+                RefreshPauseState();
             });
         };
 
@@ -149,7 +128,6 @@ public partial class TursoSyncViewModel : ObservableObject
         DatabaseUrl = settings.DatabaseUrl;
         AuthToken = settings.AuthToken;
         DeviceName = settings.DeviceName;
-        SelectedRole = settings.DeviceRole;
         AutoSyncOnChanges = settings.AutoSyncOnChanges;
         AutoSyncOnStartup = settings.AutoSyncOnStartup;
 
@@ -158,6 +136,7 @@ public partial class TursoSyncViewModel : ObservableObject
 
         RefreshLastSyncText();
         RefreshQuotaDisplay();
+        RefreshPauseState();
     }
 
     private void RefreshLastSyncText()
@@ -173,11 +152,27 @@ public partial class TursoSyncViewModel : ObservableObject
         var quota = _settingsService.GetQuotaSummary();
         QuotaSummaryText = quota.FreeTierStatusDescription;
         QuotaDetailedText =
-            $"• Escrituras este mes: {quota.RowsWrittenThisMonth:N0} de 25,000,000 ({quota.PercentageWritesUsed:F4}%)\n" +
-            $"• Lecturas este mes: {quota.RowsReadThisMonth:N0} de 1,000,000,000 ({quota.PercentageReadsUsed:F4}%)\n" +
-            $"• Espacio estimado ocupado: ~{quota.EstimatedStorageMegabytes:F2} MB de 9,000 MB (9 GB gratuitos)\n" +
-            "• Máximo de dispositivos: 3 (Win11, Tablet Android, Celular Admin). Rara vez más de 2 simultáneos.\n" +
-            "✓ Garantía: Esta arquitectura Local-First consume menos del 0.05% de los límites gratuitos de Turso.";
+            $"• Lecturas este mes: {quota.RowsReadThisMonth:N0} de {TursoQuotaSummary.FreeTierMonthlyRowsReadLimit:N0} ({quota.PercentageReadsUsed:0.###}%)\n" +
+            $"• Escrituras este mes: {quota.RowsWrittenThisMonth:N0} de {TursoQuotaSummary.FreeTierMonthlyRowsWriteLimit:N0} ({quota.PercentageWritesUsed:0.###}%)\n" +
+            $"• Espacio estimado: ~{quota.EstimatedStorageMegabytes:0.##} MB de 5 GB\n" +
+            $"• Hoy: {quota.RowsReadToday:N0} lecturas, {quota.RowsWrittenToday:N0} escrituras y {quota.FullPullsToday} descargas completas. " +
+            $"El freno de consumo detiene la sincronización automática si pasa de {TursoConsumptionBrake.MaxRowsReadPerDay:N0} lecturas, " +
+            $"{TursoConsumptionBrake.MaxRowsWrittenPerDay:N0} escrituras o {TursoConsumptionBrake.MaxFullPullsPerDay} descargas completas en el día.\n" +
+            "Son cifras estimadas por este equipo; las reales están en el panel de Turso.";
+    }
+
+    private void RefreshPauseState()
+    {
+        var reason = _syncService.PauseReason;
+        IsConsumptionBrakeActive = reason == TursoSyncPauseReason.ConsumptionBrake;
+        IsQuotaExhausted = reason == TursoSyncPauseReason.QuotaExhausted;
+        // El título ya está en el estado, justo encima: el aviso da el detalle
+        PauseNoticeText = reason switch
+        {
+            TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedDetail,
+            TursoSyncPauseReason.QuotaExhausted => TursoException.QuotaExhaustedDetail,
+            _ => string.Empty
+        };
     }
 
     [RelayCommand]
@@ -293,7 +288,7 @@ public partial class TursoSyncViewModel : ObservableObject
         settings.DatabaseUrl = DatabaseUrl?.Trim() ?? string.Empty;
         settings.AuthToken = AuthToken?.Trim() ?? string.Empty;
         settings.DeviceName = string.IsNullOrWhiteSpace(DeviceName) ? Environment.MachineName : DeviceName.Trim();
-        settings.DeviceRole = SelectedRole;
+        settings.DeviceRole = DeviceRole.WindowsDesktop;
         settings.AutoSyncOnChanges = AutoSyncOnChanges;
         settings.AutoSyncOnStartup = AutoSyncOnStartup;
 
@@ -336,7 +331,18 @@ public partial class TursoSyncViewModel : ObservableObject
             IsBusy = false;
             RefreshLastSyncText();
             RefreshQuotaDisplay();
+            RefreshPauseState();
         }
+    }
+
+    /// <summary>"Reanudar" después del freno de consumo: quita la pausa y sincroniza en ese momento.</summary>
+    [RelayCommand]
+    public async Task ResumeSyncAsync()
+    {
+        _syncService.ResumeAfterConsumptionBrake();
+        RefreshPauseState();
+        RefreshQuotaDisplay();
+        await SyncNowAsync();
     }
 
     [RelayCommand]
@@ -381,48 +387,7 @@ public partial class TursoSyncViewModel : ObservableObject
             IsBusy = false;
             RefreshLastSyncText();
             RefreshQuotaDisplay();
-        }
-    }
-
-    [RelayCommand]
-    public void OpenPairingModal(string roleTarget)
-    {
-        var role = roleTarget switch
-        {
-            "Tablet" => DeviceRole.AndroidTablet,
-            "Mobile" => DeviceRole.AndroidMobileAdmin,
-            _ => DeviceRole.AndroidTablet
-        };
-
-        PairingRoleTitle = role == DeviceRole.AndroidTablet
-            ? "Vincular Tablet Android (Consultorio / Asistente)"
-            : "Vincular Celular Android (Solo Administración)";
-
-        var clinic = _clinicProfileService.CurrentProfile;
-        PairingJsonPayload = _settingsService.GenerateAndroidPairingPayload(role, clinic.ClinicName, clinic.DoctorNameWithTitle);
-        IsPairingModalOpen = true;
-    }
-
-    [RelayCommand]
-    public void ClosePairingModal()
-    {
-        IsPairingModalOpen = false;
-    }
-
-    [RelayCommand]
-    public void CopyPairingPayload()
-    {
-        if (!string.IsNullOrEmpty(PairingJsonPayload))
-        {
-            try
-            {
-                Clipboard.SetText(PairingJsonPayload);
-                SaveStatusMessage = "✓ Código de vinculación copiado al portapapeles.";
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error("No se pudo copiar al portapapeles", ex);
-            }
+            RefreshPauseState();
         }
     }
 

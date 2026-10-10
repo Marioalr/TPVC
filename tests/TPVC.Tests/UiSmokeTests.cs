@@ -27,6 +27,7 @@ namespace TPVC.Tests;
 public class UiSmokeTests
 {
     [TestMethod]
+    [TestCategory("Windows")]
     [Timeout(300_000, CooperativeCancellation = true)]
     public void Screens_LoadWithoutBindingErrors_AndKeepThemeColors()
     {
@@ -445,6 +446,13 @@ internal sealed class UiSmokeSession
             {
                 Show(host, main, sub, $"20-config-{sub.ToLowerInvariant()}-{suffix}");
             }
+
+            // Paso 8.2: el freno de consumo detiene la sincronización automática y ofrece "Reanudar"
+            tursoSettings.RecordUsage(TursoConsumptionBrake.MaxRowsReadPerDay + 1, 0);
+            WaitFor(tursoSync.SyncAsync());
+            Show(host, main, "TursoSync", $"20b-config-tursosync-freno-{suffix}");
+            tursoSync.ResumeAfterConsumptionBrake();
+            WaitFor(tursoSync.SyncAsync());
 
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");

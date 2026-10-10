@@ -190,7 +190,12 @@ Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y not
 * **Restaurar base de datos** (.db): reemplaza toda la información por la del archivo. Por ser irreversible pide escribir **CONFIRMAR** (también al volver a un respaldo).
 
 ### Nube y dispositivos
-Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre y uso de este equipo, **códigos para vincular la tablet y el celular**, la cuota gratuita y una guía plegable para crear la base gratis.
+Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, la vinculación de la tablet y el celular (llegará por QR en la red del consultorio; por ahora los botones dicen "Disponible con la vinculación por QR"), la cuota gratuita y una guía plegable para crear la base gratis.
+* La URL debe empezar con `libsql://` o `https://` (la que da Turso): una dirección `http://` sin cifrar no se acepta, porque el token viajaría en claro.
+* **Cuota gratuita**: lo que este equipo lleva del mes (500 millones de lecturas, 10 millones de escrituras y 5 GB) y lo de hoy. Son estimaciones; la cifra real está en el panel de Turso.
+* **Sincronización pausada: consumo anormal**: si en un día se usa mucho más de lo normal, la sincronización automática se detiene para no agotar la cuota del mes. Revise que todo esté en orden y pulse **Reanudar**. Mientras tanto el programa trabaja con sus datos y **Sincronizar ahora** sigue funcionando.
+* **Se agotó la cuota mensual de Turso**: la nube no acepta cambios hasta el siguiente mes (o hasta cambiar de plan). El programa sigue trabajando con sus datos y vuelve a intentar cada hora.
+* **La base de Turso está archivada**: el plan gratuito archiva la base después de 10 días sin uso (por ejemplo, en vacaciones). El mensaje explica cómo reactivarla; después, **Sincronizar ahora**.
 
 ### Actualizaciones
 Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.

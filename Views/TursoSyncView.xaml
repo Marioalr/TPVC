@@ -9,9 +9,9 @@
              d:DataContext="{d:DesignInstance Type=vm:TursoSyncViewModel}"
              d:DesignHeight="900" d:DesignWidth="1000">
 
-    <!-- Nube y dispositivos: estado de la sincronización con Turso, la conexión (URL y token), este  -->
-    <!-- equipo, la vinculación de la tablet y el celular, y la cuota gratuita. Importar y restaurar -->
-    <!-- datos se mudó a "Respaldos y datos".                                                        -->
+    <!-- Nube y dispositivos: estado de la sincronización con Turso (con el aviso de pausa y "Reanudar"),  -->
+    <!-- la conexión (URL y token), este equipo, la vinculación de la tablet y el celular (por QR, en un   -->
+    <!-- paso posterior) y la cuota gratuita. Importar y restaurar datos se mudó a "Respaldos y datos".   -->
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="28,24,28,24" MaxWidth="880" HorizontalAlignment="Left">
@@ -53,6 +53,21 @@
                             </Button>
                         </Grid>
                         <ProgressBar IsIndeterminate="True" Height="4" Margin="0,14,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+
+                        <!-- Sincronización automática detenida: cuota de Turso agotada o freno de consumo -->
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,14,0,0" Visibility="{Binding PauseNoticeText, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding PauseNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding ResumeSyncCommand}" Content="Reanudar" Margin="12,0,0,0"
+                                        VerticalAlignment="Center" Visibility="{Binding IsConsumptionBrakeActive, Converter={StaticResource BoolToVis}}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        ToolTip="Quita la pausa y vuelve a contar el consumo de hoy desde cero" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 
@@ -134,23 +149,13 @@
                 <!-- Este equipo -->
                 <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource TextSection}" Text="Este equipo" Margin="0,0,0,12" />
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre del equipo" />
-                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding DeviceName, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Uso" />
-                                <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding RoleOptions}" SelectedValue="{Binding SelectedRole}"
-                                          SelectedValuePath="Role" DisplayMemberPath="DisplayName" AutomationProperties.Name="Uso del equipo" />
-                            </StackPanel>
-                        </Grid>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Este equipo" />
+                        <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,12" TextWrapping="Wrap"
+                                   Text="Esta computadora es la PC del consultorio: tiene acceso completo y es la que vincula la tablet y el celular." />
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre del equipo" />
+                            <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding DeviceName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Nombre del equipo" />
+                        </StackPanel>
                         <CheckBox Style="{StaticResource FieldCheckBox}" IsChecked="{Binding AutoSyncOnChanges}" Content="Sincronizar solo, en segundo plano, después de cada cambio" Margin="0,0,0,8" />
                         <CheckBox Style="{StaticResource FieldCheckBox}" IsChecked="{Binding AutoSyncOnStartup}" Content="Sincronizar al abrir el programa" />
                     </StackPanel>
@@ -161,7 +166,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource TextSection}" Text="Vincular tablet y celular" />
                         <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,12" TextWrapping="Wrap"
-                                   Text="Genera un código para pegar en la app de Android; se conecta sola, sin escribir la URL ni el token." />
+                                   Text="Se vincularán leyendo un código QR en la red del consultorio, sin que el token salga de esta computadora. Llega con la app de Android." />
                         <UniformGrid Columns="2">
                             <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="0,0,6,0">
                                 <StackPanel>
@@ -170,8 +175,8 @@
                                         <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Tablet" />
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
-                                               Text="Consulta y recepción: expedientes, recetas, citas y cobro." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding OpenPairingModalCommand}" CommandParameter="Tablet" Content="Generar código" />
+                                               Text="Consulta y recepción: expedientes, recetas, citas y cobro, también sin internet." />
+                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Disponible con la vinculación por QR" />
                                 </StackPanel>
                             </Border>
                             <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="6,0,0,0">
@@ -181,8 +186,8 @@
                                         <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Celular" />
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
-                                               Text="Solo consulta: ventas del día, cortes, existencias y alertas." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding OpenPairingModalCommand}" CommandParameter="Mobile" Content="Generar código" />
+                                               Text="Ve expedientes, agenda citas, revisa existencias y registra entradas de mercancía." />
+                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Disponible con la vinculación por QR" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
@@ -250,38 +255,5 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
-
-        <!-- ======================= HOJA: CÓDIGO DE VINCULACIÓN ======================= -->
-        <Grid Panel.ZIndex="60" Visibility="{Binding IsPairingModalOpen, Converter={StaticResource BoolToVis}}">
-            <Border Style="{StaticResource SheetScrim}" />
-            <Border Style="{StaticResource SheetCard}" Width="600" MaxHeight="620" Padding="24,20">
-                <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource TextHeading}" Text="{Binding PairingRoleTitle}" VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePairingModalCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar">
-                            <helpers:Icon Data="{StaticResource IcoClose}" />
-                        </Button>
-                    </Grid>
-                    <TextBlock Style="{StaticResource TextDetail}" TextWrapping="Wrap" Margin="0,0,0,12"
-                               Text="Copie este código y péguelo en la app de Android la primera vez que la abra. Contiene el token: no lo comparta." />
-                    <Border Style="{StaticResource CardSubtle}" Padding="12" MaxHeight="260">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <TextBox Text="{Binding PairingJsonPayload, Mode=OneWay}" IsReadOnly="True" Background="Transparent" BorderThickness="0"
-                                     CaretBrush="{DynamicResource ThemeText}" SelectionBrush="{DynamicResource ThemeAccent}"
-                                     FontFamily="{StaticResource FontFamilyMono}" FontSize="12" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap"
-                                     AutomationProperties.Name="Código de vinculación" />
-                        </ScrollViewer>
-                    </Border>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                        <Button Style="{StaticResource ButtonGhost}" Command="{Binding ClosePairingModalCommand}" Content="Cerrar" Margin="0,0,8,0" />
-                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding CopyPairingPayloadCommand}" Content="Copiar código" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Grid>
     </Grid>
 </UserControl>
