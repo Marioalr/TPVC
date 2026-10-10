@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-10 (TPVC v1.20.2).
+Estado al 2026-10-10 (TPVC v1.20.3).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -48,7 +48,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
-| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.4 hechos (v1.20.0 a v1.20.2); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
+| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.5 hechos (v1.20.0 a v1.20.3); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
 
 ### Fase 1 · Fundamentos comunes
 

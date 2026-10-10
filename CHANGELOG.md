@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.3] - 2026-10-10
+
+### Corregido — Fase 8, paso 8.5: qué subir a la nube ya no depende del reloj
+* Lo que se guarda con el reloj de la computadora atrasado ya sube a la nube. Antes, si la hora de Windows se atrasaba después de sincronizar, lo capturado hasta la siguiente sincronización no subía nunca (solo al volver a editarlo o con «Sincronización completa»).
+* Lo que se borra junto con otro registro (en cascada) también se borra en los demás equipos: antes solo viajaba el borrado que el programa hacía uno por uno.
+* Por dentro: un registro de cambios local (`SyncChangeLog`) que llenan triggers de SQLite en las 13 tablas sincronizadas. La subida manda lo anotado después del último número que ya subió (`LastPushedSeq`, guardado dentro de la base en `DbMeta`). Los mismos triggers ponen las lápidas de los borrados, con la misma regla de marca de siempre (los vectores de `stamping.json`). Lo que llega de la nube no se anota y no vuelve a subir.
+* La primera sincronización después de actualizar sube todo una vez (la nube descarta lo que ya tenía). Antes de instalar el registro, el programa hace un respaldo «antes-registro-de-cambios». Después de restaurar un respaldo, la siguiente subida también manda todo, como antes.
+* 395 pruebas.
+
 ## [1.20.2] - 2026-10-10
 
 ### Corregido — Fase 8, paso 8.4: nada se pierde al sincronizar por llegar en desorden

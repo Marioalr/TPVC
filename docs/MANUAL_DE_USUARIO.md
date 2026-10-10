@@ -185,7 +185,7 @@ Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y not
 * **Colores propios** (`#RRGGBB`) para fondo, tarjetas y acento: la **vista previa** de la derecha cambia mientras escribe (con el contraste del texto) y se aplican con **Aplicar colores**.
 
 ### Respaldos y datos
-* **Respaldar ahora** y la lista de **respaldos guardados** (se respalda solo al abrir el programa y antes de importar o restaurar; se guardan los últimos 14). **Volver a este** regresa la información al momento de ese respaldo.
+* **Respaldar ahora** y la lista de **respaldos guardados** (se respalda solo al abrir el programa, antes de importar o restaurar y antes de las actualizaciones que cambian la base, como «antes-registro-de-cambios» en la 1.20.3; se guardan los últimos 14). **Volver a este** regresa la información al momento de ese respaldo.
 * **Importar catálogo de Excel** (.xlsx o .csv): medicamentos, plantillas de receta, dosis pediátricas y datos del médico. Se explican los pasos y basta con **Importar**: antes se crea un respaldo y no se borra nada.
 * **Restaurar base de datos** (.db): reemplaza toda la información por la del archivo. Por ser irreversible pide escribir **CONFIRMAR** (también al volver a un respaldo).
 

@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TPVC.Data;
 using TPVC.Models;
@@ -299,6 +300,41 @@ public class GoldenVectorTests
             "Marca de un cambio local (alta, edición o borrado): max(nowUtc + clockOffsetMs, storedUpdatedAtUtc + 1 ms). Un borrado usa la marca guardada de la fila que se borra.",
             "clockOffsetMs es el desfase con la hora de la nube (paso 8.7); hasta entonces la PC usa 0.",
             "Todas las marcas en UTC con el formato del protocolo (yyyy-MM-dd HH:mm:ss.fffffff)."));
+    }
+
+    [TestMethod]
+    public void TombstoneTriggerStamp_FollowsTheSameVectors()
+    {
+        // La lápida que pone el trigger de borrado (paso 8.5) aplica la misma regla, escrita en SQL de SQLite
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        string? Stamp(string? stored, string now, long offsetMs)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT " + SyncChangeLog.StampSql("$stored", "$now", "$offset");
+            cmd.Parameters.AddWithValue("$stored", (object?)stored ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$now", now);
+            cmd.Parameters.AddWithValue("$offset", offsetMs);
+            return cmd.ExecuteScalar() as string;
+        }
+
+        var vectors = JsonNode.Parse(File.ReadAllText(RepoPath("contracts/golden/stamping.json")))!;
+        foreach (var c in vectors["cases"]!.AsArray())
+        {
+            var input = c!["input"]!;
+            Assert.AreEqual(c["expected"]!.GetValue<string>(),
+                Stamp(input["storedUpdatedAtUtc"]?.GetValue<string>(), input["nowUtc"]!.GetValue<string>(), input["clockOffsetMs"]!.GetValue<long>()),
+                c["name"]!.GetValue<string>());
+        }
+
+        // Las marcas como las guarda EF Core (sin ceros a la derecha) y el cambio de segundo, de día y de año
+        const string now = "2026-10-10 15:00:00.1234567";
+        foreach (var stored in new[] { "2026-10-10 15:05:00.12", "2026-10-10 15:05:00", "2026-10-10 15:05:00.999", "2026-12-31 23:59:59.9999999" })
+        {
+            var expected = TursoSyncService.FormatDate(SyncRules.NextLocalStamp(
+                TursoSyncService.ParseDate(now), TursoSyncService.ParseDate(stored), TimeSpan.Zero));
+            Assert.AreEqual(expected, Stamp(stored, now, 0), stored);
+        }
     }
 
     // ================================================================== contracts/golden/uuid5.json

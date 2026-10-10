@@ -93,16 +93,16 @@ public class AppDbContext : DbContext
     }
 
     /// <summary>
-    /// Asigna SyncId / UpdatedAtUtc y registra tombstones de borrados físicos,
-    /// dejando la base lista para una sincronización incremental con servidor.
-    /// </summary>
-    /// <summary>
-    /// true mientras se aplican cambios descargados de la nube: se conservan SyncId y
-    /// UpdatedAtUtc remotos y no se generan tombstones. Sin esto, cada registro recibido
-    /// parecería un cambio local nuevo y se volvería a subir (ciclo infinito entre dispositivos).
+    /// true mientras se aplican cambios descargados de la nube: se conservan SyncId y UpdatedAtUtc remotos.
+    /// Sin esto, cada registro recibido tendría una marca local nueva. (Que no se anote para volver a subir
+    /// lo decide <see cref="SyncChangeLog.SaveRemoteChangesAsync"/>.)
     /// </summary>
     public bool ApplyingRemoteChanges { get; set; }
 
+    /// <summary>
+    /// Asigna SyncId y UpdatedAtUtc. Desde el paso 8.5 la lápida de un borrado la ponen los triggers del registro
+    /// de cambios (<see cref="SyncChangeLog"/>), también la de cada fila borrada en cascada.
+    /// </summary>
     private void StampSyncMetadata()
     {
         if (ApplyingRemoteChanges) return;
@@ -118,17 +118,6 @@ public class AppDbContext : DbContext
                     break;
                 case EntityState.Modified:
                     entry.Entity.UpdatedAtUtc = AfterStoredStamp(entry, now);
-                    break;
-                case EntityState.Deleted:
-                    if (entry.Entity.SyncId != Guid.Empty)
-                    {
-                        SyncTombstones.Add(new SyncTombstone
-                        {
-                            EntityType = entry.Metadata.ClrType.Name,
-                            SyncId = entry.Entity.SyncId,
-                            DeletedAtUtc = AfterStoredStamp(entry, now)
-                        });
-                    }
                     break;
             }
         }
@@ -155,6 +144,10 @@ public class AppDbContext : DbContext
         {
             modelBuilder.Entity(entityType.ClrType).HasIndex(nameof(ISyncEntity.SyncId)).IsUnique();
             modelBuilder.Entity(entityType.ClrType).HasIndex(nameof(ISyncEntity.UpdatedAtUtc));
+
+            // Estas tablas tienen los triggers del registro de cambios (paso 8.5): EF Core pide no usar RETURNING
+            // en tablas con triggers en SQLite
+            modelBuilder.Entity(entityType.ClrType).ToTable(t => t.UseSqlReturningClause(false));
         }
 
         // Indices

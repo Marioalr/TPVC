@@ -225,13 +225,15 @@ public class DataImportService
             {
                 ctx.Database.EnsureCreated();
                 DatabaseInitializer.EnsureSchema(ctx);
+
+                // La base cambió por completo: la siguiente sincronización con Turso debe ser completa (la subida
+                // manda todo una vez; el cursor vive dentro de la base)
+                SyncChangeLog.ResetAfterRestore(ctx);
             }
 
-            // La base cambió por completo: la siguiente sincronización con Turso debe ser completa
             if (_tursoSettingsService != null)
             {
                 var settings = _tursoSettingsService.CurrentSettings;
-                settings.LastPushedLocalUtc = null;
                 settings.LastPulledServerWatermark = null;
                 _tursoSettingsService.SaveSettings(settings);
             }

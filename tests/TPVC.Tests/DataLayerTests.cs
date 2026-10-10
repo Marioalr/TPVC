@@ -264,9 +264,11 @@ public class DataLayerTests
     [TestMethod]
     public async Task EnsureSchema_UpgradesLegacyDatabase_AddingMissingTablesColumnsAndBackfillingSyncIds()
     {
-        // Simular una base v1.4.0: sin tabla de ventas ni columnas de sincronización en Products
+        // Simular una base v1.4.0: sin tabla de ventas ni columnas de sincronización en Products (ni el
+        // registro de cambios del paso 8.5, cuyos triggers usan esas columnas)
         using (var db = NewContext())
         {
+            ChangeLogTestSupport.RemoveChangeLog(db);
             await db.Database.ExecuteSqlRawAsync("DROP TABLE SaleItems; DROP TABLE Sales;");
             await db.Database.ExecuteSqlRawAsync("DROP INDEX IX_Products_SyncId; DROP INDEX IX_Products_UpdatedAtUtc;");
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE Products DROP COLUMN SyncId; ALTER TABLE Products DROP COLUMN UpdatedAtUtc;");
