@@ -9,4 +9,10 @@ namespace TPVC.ViewModels.Patients;
 public sealed class AutosaveOptions
 {
     public TimeSpan Delay { get; set; } = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>
+    /// Reloj y temporizador del guardado automático de la consulta. Las pruebas ponen uno manual para
+    /// decidir cuándo se dispara la escritura en lugar de esperar un tiempo fijo.
+    /// </summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
