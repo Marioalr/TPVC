@@ -137,6 +137,12 @@ jobs:
           cp -r "$RUNNER_TEMP/windowsdesktop/shared/Microsoft.WindowsDesktop.App" "$DOTNET_ROOT/shared/"
           dotnet --list-runtimes
 
+      # Los ensamblados de WPF vienen precompilados (ReadyToRun) para Windows y Linux los rechaza ("incorrect
+      # format"); se dejan como IL puro, que el runtime compila al vuelo. Ver scripts/strip-readytorun.ps1
+      - name: Strip ReadyToRun from Microsoft.WindowsDesktop.App
+        shell: pwsh
+        run: ./scripts/strip-readytorun.ps1 -Path "$env:DOTNET_ROOT/shared/Microsoft.WindowsDesktop.App/$env:WINDOWSDESKTOP_VERSION"
+
       - name: Restore Dependencies
         run: dotnet restore TPVC.sln
 

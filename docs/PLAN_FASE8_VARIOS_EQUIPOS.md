@@ -481,6 +481,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - Pausados: sincronizar tras guardar, al abrir y la revisión de consultas entre equipos (`ThrowIfAutomaticSyncPaused`, sin llegar a Turso). Siguen: "Sincronizar ahora" y lo que hace la consulta entre equipos a pedido del médico. Con el freno activo, otra descarga completa espera a *Reanudar*.
   - Tras `BLOCKED`, un solo reintento automático a la hora (`Task.Delay` con `TimeProvider`); una sincronización buena quita la pausa.
   - Estimador de `FakeHranaServer`: pasos de recorrido completo (`SQLITE_STMTSTATUS_FULLSCAN_STEP` + 1), filas que entran a un ordenamiento antes del `LIMIT` (cuenta de la consulta sin el `LIMIT`), filas devueltas o cambiadas y la tabla entera en `ALTER` y `CREATE INDEX`; mínimo 1. Las filas leídas por un índice sin ordenar no se ven en SQLite.
+  - El runtime de escritorio del zip de Windows viene precompilado (ReadyToRun) para Windows y el de Linux lo rechaza ("incorrect format"); la CI le quita esa parte con `scripts/strip-readytorun.ps1` (marca de solo IL y sin los directorios nativos del PE) y Linux compila el IL al vuelo.
   - `[TestCategory("Windows")]`: `UiSmokeTests`, `UiPerfTests`, dos de Apariencia y dos convertidores de WPF. Ninguna prueba usa DPAPI real (fuera de Windows el token se guarda como `B64:`).
 - **Antes:** [T] V7, V9 y V10 (§4.2).
 - **Cambia:**
