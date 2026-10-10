@@ -188,7 +188,7 @@ Al mes, según <https://turso.tech/pricing> (consultado el 2026-10-09): 500M fil
 La app todavía muestra los límites viejos (`TursoQuotaSummary`, `Models/TursoConfig.cs:138-139`; `TursoSyncViewModel.RefreshQuotaDisplay`, :175-180). Se corrigen en 8.2.
 
 **Dos hallazgos que entran en el plan:**
-- **F1 · La descarga completa lee muchísimo de más.** Medido con SQLite 3.53, parámetros enlazados y sin `ANALYZE`, como en una base nueva de Turso. Con la consulta de `TursoSyncService.cs:775`, el planificador usa "MULTI-INDEX OR" y ordena todo lo que queda de la tabla en cada página de 500. Una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ? AND (…)` (paso 8.6). Falta confirmar el plan de consulta en Turso real (V15).
+- **F1 · La descarga completa lee muchísimo de más.** Medido con SQLite 3.53, parámetros enlazados y sin `ANALYZE`, como en una base nueva de Turso. Con la consulta de `TursoSyncService.cs:775`, el planificador usa "MULTI-INDEX OR" y ordena todo lo que queda de la tabla en cada página de 500. Una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ? AND (…)` (paso 8.6). Confirmado en Turso real el 2026-10-10 (V15): la primera página de 500 lee 26,666 filas con la consulta de hoy y ~2,000 con la corregida.
 - **F2 · La revisión de consultas lee de más.** `IX_ConsultationHandoffs_To (ToDeviceId, State)` solo se usa por `ToDeviceId`, así que cada revisión recorre todas las filas que se conservan para ese equipo (hasta 7 o 365 días). Un índice parcial `(ToDeviceId) WHERE State='enviada' OR (State='aceptada' AND Payload<>'')` lo baja a ~0 filas sin cambiar la consulta (paso 8.24). SQLite solo lo usa si el `WHERE` de la consulta repite esa condición, así que el SQL va literal en el contrato (8.13).
 
 ### 3.2 Uso estimado
@@ -591,7 +591,10 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** medio, porque toca el esquema y el núcleo de la sincronización. Va solo.
 
 #### 8.6 · Descarga eficiente y desempates (F1)
-- **Antes:** [T] V12, V14 y V15 con una copia real de ~20k filas.
+- **Antes:** [T] V12, V14 y V15 con una copia real de ~20k filas. **Hechas el 2026-10-10** con `scripts/verify-turso-hrana.ps1` y 20k filas sintéticas con la forma de las tablas (los planes dependen de tablas e índices, no del contenido; así no sale ningún dato del consultorio). Resultados en `docs/TURSO_SYNC_ARCHITECTURE.md` §6:
+  - V12: sin tope hasta 64 MB en una instrucción. El tamaño de página y "una tabla por petición" en la descarga completa se quedan para acotar memoria y tiempo, sobre todo en Android, no por Turso.
+  - V14: un `batch` con `BEGIN`/`COMMIT` y `ROLLBACK` si un paso falla es atómico. Aplica la opción transaccional de abajo.
+  - V15: confirmado F1 (26,666 filas leídas en la primera página con la consulta de hoy, ~2,000 con `>=` adelante) y F2 (2,006 contra 6 con el índice parcial).
 - **Cambia:**
   - Consulta de página `WHERE "SyncedAtUtc" >= ? AND ("SyncedAtUtc" > ? OR ("SyncedAtUtc" = ? AND "SyncId" > ?)) …`.
   - **Bajada incremental:** una sola petición con la marca de agua (primero), la página 1 de las 13 tablas, las lápidas y el perfil. Solo se piden más páginas de las tablas que llenaron la suya.

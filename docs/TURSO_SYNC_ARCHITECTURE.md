@@ -47,8 +47,8 @@ Supuestos: 30 días al mes; la PC abierta 10 h al día (8 en Pacientes); la tabl
 - Cada `ALTER` de 8.17, 8.19, 8.20, 8.22 y 8.23 cuesta ~20k lecturas y hasta ~20k escrituras; el índice parcial de 8.24 recorre `ConsultationHandoffs` una vez. Todo junto queda abajo del 1–2% de un mes.
 
 **Dos hallazgos (plan §3.1):**
-- **F1 · La descarga completa lee de más.** Con la consulta de página de hoy (`TursoSyncService.ReadPagesAsync`), SQLite sin `ANALYZE` (como una base nueva de Turso) ordena todo lo que queda de la tabla en cada página de 500: una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ?` (paso 8.6). Falta confirmarlo en Turso real (V15).
-- **F2 · La revisión de consultas lee de más.** `IX_ConsultationHandoffs_To (ToDeviceId, State)` solo se usa por `ToDeviceId`, así que cada revisión recorre todas las filas que se conservan para ese equipo. Un índice parcial lo baja a ~0 filas (paso 8.24, §4.5).
+- **F1 · La descarga completa lee de más.** Con la consulta de página de hoy (`TursoSyncService.ReadPagesAsync`), SQLite sin `ANALYZE` (como una base nueva de Turso) ordena todo lo que queda de la tabla en cada página de 500: una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ?` (paso 8.6). Confirmado en Turso real (V15, §6): 26,666 filas leídas en la primera página de 500 con la consulta de hoy y ~2,000 con la corregida.
+- **F2 · La revisión de consultas lee de más.** `IX_ConsultationHandoffs_To (ToDeviceId, State)` solo se usa por `ToDeviceId`, así que cada revisión recorre todas las filas que se conservan para ese equipo. Un índice parcial lo baja a ~0 filas (paso 8.24, §4.5). Confirmado en Turso real (V15): 2,006 filas leídas sin él y 6 con él.
 
 **Freno de consumo (paso 8.2, desde v1.20.0 en la PC).** El riesgo no está en el uso normal (margen de ~100×) sino en un ciclo descontrolado: repetir una descarga completa cada 4 s gasta ~540M lecturas en un día, se acaba el mes de los tres equipos y Turso responde `BLOCKED` a todo. Por eso la PC (y después la app) hace como máximo 2 descargas completas al día, con un tope diario de 3M lecturas y 30k escrituras estimadas (`TursoConsumptionBrake`, `Models/TursoConfig.cs`):
 - Una descarga completa es la «Sincronización completa» o la primera sincronización (sin marca de agua); se revisa antes de subir nada y se cuenta al empezar a bajar.
@@ -123,7 +123,7 @@ Papel de cada equipo (plan §2.2):
 - Valores (`args`) según la especificación Hrana:
   - `{"type":"integer","value":"42"}` → **el entero va como texto**. Enviarlo como número JSON hace que Turso responda **HTTP 400** a todo el pipeline (era el error de v1.8.x).
   - `{"type":"float","value":1.5}`, `{"type":"text","value":"..."}`, `{"type":"null"}`.
-- Cada sentencia de un pipeline se confirma por separado (no hay transacción, ni dentro de un lote ni entre lotes); todas las escrituras son *upserts* idempotentes, así que reintentar un lote es seguro. Si una petición con `BEGIN`/`COMMIT` es atómica en Turso se comprueba antes del paso 8.6 (V14, §6).
+- Cada sentencia de un pipeline se confirma por separado (no hay transacción, ni dentro de un lote ni entre lotes); todas las escrituras son *upserts* idempotentes, así que reintentar un lote es seguro. Una petición `batch` con `BEGIN`/`COMMIT` (y `ROLLBACK` si un paso falla) sí es atómica en Turso (V14, §6); la usa el paso 8.6.
 
 ### 4.2 Esquema remoto
 Se genera automáticamente desde el modelo de EF Core: **cada entidad `ISyncEntity` tiene una tabla con el mismo nombre y TODAS sus columnas** (no un subconjunto), más:
@@ -301,9 +301,9 @@ Se hacen antes del paso indicado, siempre en un grupo o una cuenta de prueba. El
 | V9 | Si el plan gratuito archiva una base sin uso y qué error da | 8.2 | Pendiente. Según la documentación de Turso, el plan gratuito archiva tras 10 días sin uso y se reactiva con `turso group unarchive <grupo>`; falta el error que recibe el cliente. v1.20.0 lo reconoce por la palabra "archived" en el error |
 | V10 | Si las entradas de índice cuentan como filas escritas | 8.2 | Pendiente. No cambia el código: solo el margen de §2 (~0.5% o ~1.5% del mes) |
 | V11 | Si el plan gratuito tiene bitácora de auditoría, y de cuántos días | 8.15 | Pendiente |
-| V12 | El tope de tamaño de una respuesta Hrana | 8.6 | Pendiente |
-| V14 | Si una petición `batch` de Hrana con `BEGIN`/`COMMIT` es atómica en Turso | 8.6 | Pendiente |
-| V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 | Pendiente |
+| V12 | El tope de tamaño de una respuesta Hrana | 8.6 | Comprobado el 2026-10-10 (`scripts/verify-turso-hrana.ps1`): una instrucción devolvió 64 MB sin error; no se encontró tope. El tamaño de página lo deciden la memoria y el tiempo de cada equipo, no Turso |
+| V14 | Si una petición `batch` de Hrana con `BEGIN`/`COMMIT` es atómica en Turso | 8.6 | Comprobado el 2026-10-10: sí. Un `batch` con `BEGIN`, dos `INSERT` (el segundo falla por `NOT NULL`), `COMMIT` si todo salió bien y `ROLLBACK` si no, deja 0 filas; sin error deja las 2 |
+| V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 | Comprobado el 2026-10-10 con 20k filas sintéticas. F1: la consulta de hoy usa `MULTI-INDEX OR` y ordena con un B-tree temporal; la primera página lee 26,666 filas y una de en medio 13,335 para devolver 500. Con `"SyncedAtUtc" >= ?` adelante usa el índice en orden (`SEARCH … (SyncedAtUtc>?)`, solo ordena el último término) y cada página lee ~2,000, sin importar el tamaño de la tabla. F2: la revisión lee 2,006 filas sin el índice parcial y 6 con él; Turso lo usa con la consulta tal como está |
 | V16 | Que `INSERT … ON CONFLICT DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber` corra por Hrana como una sola instrucción atómica y regrese el número, también con dos equipos a la vez. Si no: leer el número n y `UPDATE … SET LastNumber = n + 1 WHERE Series = ? AND LastNumber = n`, que se reintenta si afecta 0 filas | 8.16 | Pendiente |
 
 V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de vinculación.
