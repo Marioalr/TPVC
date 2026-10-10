@@ -13,6 +13,10 @@ public partial class TursoSyncViewModel : ObservableObject
     private readonly TursoSyncService _syncService;
     private readonly TursoSettingsService _settingsService;
 
+    // Avisos del servicio que siguen en la cola de la interfaz (solo se toca dentro de _uiQueueGate)
+    private readonly object _uiQueueGate = new();
+    private int _pendingUiUpdates;
+
     [ObservableProperty]
     private bool _isSyncEnabled;
 
@@ -112,17 +116,34 @@ public partial class TursoSyncViewModel : ObservableObject
         LoadFromSettings();
     }
 
-    private static void RunOnUIThread(Action action)
+    /// <summary>
+    /// Lleva a la interfaz un aviso del servicio sin esperarla: un Invoke síncrono detenía el hilo
+    /// de la sincronización mientras la interfaz estuviera ocupada (y para siempre si el hilo del
+    /// despachador ya había terminado). InvokeAsync con la misma prioridad conserva el orden de los
+    /// avisos; uno que llega en el hilo de la interfaz mientras otros siguen en cola también se
+    /// encola, para no adelantárseles.
+    /// </summary>
+    private void RunOnUIThread(Action action)
     {
-        var app = Application.Current;
-        if (app?.Dispatcher != null && !app.Dispatcher.CheckAccess())
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null)
         {
-            app.Dispatcher.Invoke(action);
+            lock (_uiQueueGate)
+            {
+                if (!dispatcher.CheckAccess() || _pendingUiUpdates > 0)
+                {
+                    _pendingUiUpdates++;
+                    dispatcher.InvokeAsync(() =>
+                    {
+                        try { action(); }
+                        finally { lock (_uiQueueGate) _pendingUiUpdates--; }
+                    });
+                    return;
+                }
+            }
         }
-        else
-        {
-            action();
-        }
+
+        action();
     }
 
     public void LoadFromSettings()

@@ -258,9 +258,9 @@ public class NotificationParityTests
         recorder.Clear();
         await action();
         // Lo que la app hace al avisar el inventario de cambios en pacientes y citas. En la app lo corre
-        // el despachador de WPF; en la CI de Windows otra prueba deja creada una Application cuyo
-        // despachador ya terminó y esos avisos nunca llegan (en Linux corren directo). Se llama aquí para
-        // que el conjunto sea el mismo en los dos sistemas.
+        // el despachador de WPF; en Windows las pruebas de interfaz dejan creada una Application cuyo
+        // despachador ya no atiende su cola y esos avisos nunca llegan (en Linux corren directo). Se
+        // llama aquí para que el conjunto sea el mismo en los dos sistemas.
         await records.LoadPatientsAsync();
         await records.Home.LoadTodayAppointmentsAsync();
         await recorder.WaitForQuietAsync();

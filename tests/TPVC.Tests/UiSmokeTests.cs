@@ -39,19 +39,7 @@ public class UiSmokeTests
 internal static class UiSmokeRunner
 {
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void Run()
-    {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try { new UiSmokeSession().Execute(); }
-            catch (Exception ex) { failure = ex; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
-    }
+    public static void Run() => WpfTestThread.Run(() => new UiSmokeSession().Execute());
 }
 
 internal sealed class BindingErrorCollector : TraceListener

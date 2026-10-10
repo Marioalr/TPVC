@@ -86,8 +86,8 @@ public class UiThreadSeamTests
 
     /// <summary>
     /// null: WPF no puede ni iniciarse (Linux: Application.Current lanza excepción). false: no hay
-    /// aplicación. true: hay una (en la CI de Windows otra prueba la deja creada, con su despachador ya
-    /// terminado).
+    /// aplicación. true: hay una (en Windows la dejan creada las pruebas de interfaz, en el hilo de
+    /// WpfTestThread).
     /// </summary>
     private static bool? WpfApplicationExists()
     {
