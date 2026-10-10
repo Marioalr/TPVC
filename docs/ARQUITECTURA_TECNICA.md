@@ -23,7 +23,7 @@ graph TD
 2. **Reactividad Automática sin Botones Manuales**: El `InventoryService` expone un bus de eventos en memoria (`OnInventoryChanged`) que notifica a todos los ViewModels activos ante cualquier mutación de datos (compras, consumos, ventas o ajustes), refrescando el estado del sistema en tiempo real.
 3. **Persistencia Autónoma y Portabilidad**: Cero dependencias de servicios en la nube para la operación clínica cotidiana. La base de datos es un archivo único `.db` alojado en el directorio de datos locales del usuario (`%LocalAppData%\TPVC\consultorio.db`).
 4. **Seguridad Sanitaria Garantizada (FEFO)**: Tanto el consumo en consulta como las ventas en el POS priorizan automáticamente la deducción de los lotes con fecha de caducidad más próxima.
-5. **La PC también será el servidor del consultorio** (Plan Fase 8, pasos 8.15–8.24; todavía no implementado): TPVC.exe atenderá a la tablet y al celular (app Android en Kotlin) por HTTPS en la red local y será el único equipo que escribe en `consultorio.db`. Turso quedará solo como respaldo de la PC. Con el servidor apagado, TPVC funcionará igual que hoy. Ver §10 y [`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`](PLAN_FASE8_VARIOS_EQUIPOS.md).
+5. **Tres equipos con su propia base, sincronizados por Turso** (Plan Fase 8; todavía no implementado): la PC, una tablet y un celular Android (app en Kotlin nativo) trabajan cada uno sobre su base local y se sincronizan por Turso con el protocolo v2 (`docs/TURSO_SYNC_ARCHITECTURE.md` §4). La PC es la única que crea o migra el esquema remoto y es la referencia del protocolo. Con la nube apagada, TPVC funciona igual que hoy. Ver §10 y [`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`](PLAN_FASE8_VARIOS_EQUIPOS.md).
 
 ---
 
@@ -96,6 +96,7 @@ erDiagram
   * `4`: `SalidaMerma` (Material dañado o rotura de esterilidad)
   * `5`: `AjusteInventario` (Alineación con conteo físico)
   * `6`: `SalidaVenta` (Venta en farmacia / Punto de Venta POS)
+  * `7`: `EntradaDevolucion` (Devolución por cancelación de ticket)
 * **`ExpirationStatus`** (Calculado en tiempo de ejecución):
   * `Vigente`: Expiración a más de 60 días naturales.
   * `ProximoAVencer`: Expiración dentro de los próximos 60 días naturales.
@@ -172,11 +173,14 @@ TPVC/
 │       └── ci.yml               # Pipeline de integración continua (Build & Test)
 ├── android/                     # (plan Fase 8) App Android en Kotlin, con su propio flujo de CI (android.yml); fase siguiente
 ├── contracts/                   # (plan Fase 8) Lo que comparten C# y Kotlin
-│   ├── golden/                  # Vectores compartidos de reglas (paso 8.14)
-│   └── lan-api/v1/              # openapi.json y examples/*.json del servidor del consultorio (pasos 8.19 y 8.24)
+│   ├── sync/                    # schema.json: contrato de sincronización generado desde GetTableMaps (paso 8.3)
+│   ├── golden/                  # Vectores compartidos de reglas (pasos 8.3, 8.11 y 8.26)
+│   ├── hrana/                   # Intercambios grabados con FakeHranaServer y el SQL literal que repite Kotlin (pasos 8.13 y 8.25)
+│   └── scenarios/               # Escenarios de varios equipos: filas esperadas en la nube y en cada equipo (paso 8.25)
 ├── docs/
 │   ├── MANUAL_DE_USUARIO.md     # Guía detallada para el personal médico
-│   ├── PLAN_FASE8_VARIOS_EQUIPOS.md # Plan de la Fase 8: datos para varios equipos en la red local
+│   ├── PLAN_FASE8_VARIOS_EQUIPOS.md # Plan de la Fase 8: datos listos para tres equipos con Turso
+│   ├── FAKE_HRANA_SPEC.md       # (plan Fase 8, paso 8.13) Qué copia de Turso el servidor simulado
 │   └── ARQUITECTURA_TECNICA.md  # Este documento de ingeniería
 ├── Data/
 │   ├── AppDbContext.cs          # Contexto EF Core SQLite
@@ -189,8 +193,7 @@ TPVC/
 │   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente
 │   └── ThemeSettings.cs         # Modelo de configuración visual
 ├── Services/
-│   ├── Documents/               # (plan Fase 8, paso 8.13) Generadores puros sin WPF: receta en HTML, ticket en texto y HTML
-│   ├── Lan/                     # (plan Fase 8, pasos 8.16–8.24) Servidor del consultorio sin WPF: Kestrel, certificado, lan.db, rutas (§10)
+│   ├── Documents/               # (plan Fase 8, paso 8.11) Generadores puros sin WPF: receta en HTML, ticket en texto y HTML
 │   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
 │   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2)
@@ -262,14 +265,16 @@ El proyecto incluye 8 pruebas unitarias automatizadas en `tests/TPVC.Tests` util
 
 ### Pruebas planeadas para varios equipos (Plan Fase 8)
 Hoy la CI (`ci.yml`) corre solo en `windows-latest`: una vez en UTC y otra con la zona de México (`tzutil`); las de `Rendimiento` corren aparte. Lo siguiente todavía no existe:
-* **Job de Linux** (paso 8.3): `ubuntu-latest` con `dotnet test --filter "TestCategory!=Windows&TestCategory!=Rendimiento"`, dos veces: en UTC y con `TZ=America/Mexico_City`. Las pruebas que crean tipos de WPF o necesitan DPAPI real (`UiSmokeTests` y las que fallen en Linux) se marcan `[TestCategory("Windows")]`. Se puede porque el proyecto de pruebas ya compila en Linux con `EnableWindowsTargeting` (`Directory.Build.props`). La CI de Windows sigue mandando para WPF.
-* **Vectores compartidos** (paso 8.14): `contracts/golden/*.json` con la forma `{rule, culture: "es-MX", today, now, cases:[{name, input, expected}]}`. `GoldenVectorTests` compara contra ellos y los reescribe con `TPVC_WRITE_GOLDEN=1`; las pruebas JUnit de Kotlin leen los mismos archivos. Todo redondeo lleva un caso de punto medio (.NET usa redondeo bancario) y los desempates llevan nombres con acentos. Cambiar una regla sin regenerar los archivos rompe la CI.
-* **Ejemplos del contrato** (pasos 8.19 y 8.24): `contracts/lan-api/v1/examples/*.json`, grabados con `TPVC_WRITE_CONTRACTS=1` y por `FakeTabletClient` (cliente de referencia en C# que vincula por TLS en loopback). Kotlin los reproduce con `MockWebServer` como si fuera la PC.
-* **Deriva de OpenAPI** (paso 8.19): `contracts/lan-api/v1/openapi.json` se genera con `Microsoft.AspNetCore.OpenApi`, y una prueba falla si las rutas cambian sin regenerarlo.
+* **Job de Linux** (paso 8.2): `ubuntu-latest` con `dotnet test --filter "TestCategory!=Windows&TestCategory!=Rendimiento"`, dos veces: en UTC y con `TZ=America/Mexico_City`. El proyecto de pruebas es `net10.0-windows` con `UseWPF`, y su testhost exige `Microsoft.WindowsDesktop.App`, que `setup-dotnet` no instala en Linux: `EnableWindowsTargeting` (`Directory.Build.props`) permite compilar, no ejecutar. Por eso el job descarga el `windowsdesktop-runtime-10.0.x-win-x64.zip` oficial, con versión fijada, y copia `shared/Microsoft.WindowsDesktop.App` a `$DOTNET_ROOT/shared`. Las pruebas que crean tipos de WPF o necesitan DPAPI real (`UiSmokeTests` y las que fallen en Linux) se marcan `[TestCategory("Windows")]`. La CI de Windows sigue mandando para WPF.
+* **Vectores compartidos** (pasos 8.3, 8.11 y 8.26): `contracts/golden/*.json` con la forma `{rule, culture: "es-MX", today, now, cases:[{name, input, expected}]}`. `GoldenVectorTests` compara contra ellos y los reescribe con `TPVC_WRITE_GOLDEN=1`; las pruebas JUnit de Kotlin leen los mismos archivos. Todo redondeo lleva un caso de punto medio (.NET usa redondeo bancario) y los desempates llevan nombres con acentos. Cambiar una regla sin regenerar los archivos rompe la CI.
+* **Deriva del contrato** (paso 8.3): `contracts/sync/schema.json` se genera desde `GetTableMaps`; un cambio en el modelo de EF sin regenerarlo rompe la CI.
+* **Intercambios grabados** (pasos 8.13 y 8.25): `contracts/hrana/*.jsonl`, grabados por `FakeHranaServer` con los valores generados reemplazados por marcadores, más el SQL **literal** de cada instrucción que Kotlin tiene que repetir (un índice parcial solo se usa si el `WHERE` repite su condición). Kotlin los reproduce con `MockWebServer`.
+* **Escenarios de varios equipos** (paso 8.25): `contracts/scenarios/*.json`, pasos por estado (editar, sincronizar en el equipo A o B, salto de reloj, corte a media subida) con las filas esperadas en la nube y en cada equipo, por `SyncId`. La CI de Kotlin los corre con el motor de la PC y el de Kotlin sobre el mismo servidor simulado.
+* **Instrumentos de `FakeHranaServer`** (pasos 8.2, 8.13 y 8.14): reloj del servidor inyectable, estimación de lecturas cobradas, grabadora de peticiones, revisión con `EXPLAIN QUERY PLAN` (falla ante un SCAN de una tabla sincronizada desde 8.6), tope de tamaño de respuesta, respuesta `BLOCKED` a pedido y mapa de tokens (completo, de solo lectura o por tabla; un token vencido recibe 401). Se expone como servidor HTTP de pruebas (`TPVC_FAKE_TURSO_HOST=1`) que escucha solo en 127.0.0.1 y nunca entra a `TPVC.exe`. Qué copia de Turso queda en `docs/FAKE_HRANA_SPEC.md`.
 
 ---
 
-## 8. Capa de Datos (v1.5.0) y Preparación para Servidor
+## 8. Capa de Datos (v1.5.0) y Preparación para Varios Equipos
 
 ### Contextos de vida corta
 `InventoryService` recibe un `IDbContextFactory<AppDbContext>` y crea un contexto por operación:
@@ -291,15 +296,17 @@ Todas las entidades de negocio implementan `ISyncEntity`:
 | `SyncId` (GUID, único) | Identidad global del registro; los `Id` enteros son locales a cada dispositivo. |
 | `UpdatedAtUtc` (indexado) | Permite pedir "todo lo modificado desde X" (sincronización incremental). |
 | `SyncTombstones` | Registro de borrados físicos para propagarlos a otros dispositivos. |
-| `SyncChangeLog` *(plan Fase 8, paso 8.5)* | Registro de cambios que llenan triggers de SQLite (`AFTER INSERT/UPDATE/DELETE`) en las 13 tablas `ISyncEntity`: un renglón por registro (`EntityType`, `SyncId`, `Deleted`) con una secuencia `Seq` que solo sube; también registra los borrados en cascada. Será el cursor del respaldo a Turso y de los avisos a los equipos. Las entidades con triggers declararán `HasTrigger` (o `UseSqlReturningClause(false)`) para que EF Core no use `RETURNING`. |
-| `DbMeta(Generation)` *(plan Fase 8, paso 8.5)* | GUID que cambia en cada restauración, para que los equipos sepan que la base cambió por completo. |
-| `LanRequestLog` *(plan Fase 8, paso 8.20)* | Comandos ya aplicados por equipo (`deviceId`, `Idempotency-Key`, hash del cuerpo y respuesta), confirmados en la misma transacción que su efecto (§10). Vive en `consultorio.db` porque SQLite en modo WAL no confirma de forma atómica entre dos archivos. |
+| `SyncChangeLog` *(plan Fase 8, paso 8.5)* | Registro de cambios (`Seq` autoincremental, `EntityType`, `SyncId`, `Deleted`, único por `EntityType` y `SyncId`) que llenan triggers de SQLite (`AFTER INSERT`, `AFTER UPDATE OF <columnas no derivadas>`, `AFTER DELETE`) generados desde `GetTableMaps` en las 13 tablas `ISyncEntity`. Escriben con `INSERT OR REPLACE` (una fila editada otra vez recibe un `Seq` nuevo), también ven los borrados en cascada y de ellos salen las lápidas. Es el cursor de subida (`Seq > LastPushedSeq`). Cada trigger lleva en su nombre un hash de su definición y se vuelve a crear si cambia; las 13 entidades usan `UseSqlReturningClause(false)` para que EF Core no use `RETURNING`. Una fila `SyncApplyState.Applying` apaga los triggers durante la bajada, y lo que se decide al bajar y sí debe subir se registra con `MarkForUpload`. |
+| `SyncParkedRows` *(plan Fase 8, paso 8.4)* | Filas que no se pudieron subir o aplicar (referencia que falta, lápida que falla). Se reintentan en cada sincronización y la pantalla dice "N cambios sin sincronizar". |
+| `DbMeta` *(plan Fase 8, pasos 8.5, 8.7, 8.8, 8.9 y 8.20)* | `clinicId`, `generation`, `DbInstanceId`, `LastPushedSeq`, desfase del reloj contra el servidor, revisión del contrato con la que se bajó cada tabla, `StockLedgerVersion`, `CloudJoined` y "reemplazo en curso". El último número de cada serie de folios vive fuera de la base (`folios.json`, paso 8.17). |
+
+Columnas nuevas del plan Fase 8 (todavía no existen): `PatientRecord.FieldStampsJson` (marca por campo, 8.22) y `MergedIntoSyncId` (8.23); `InventoryMovement.Delta` con signo y `SaleItemId` (8.19) y `CountedQuantity` (8.20); `Sale.LedgerVersion` (8.19); `ProductBatch.ClosedAtUtc` (8.19). Dentro de las hojas `Active*Json`, cada renglón gana `RowId`, y `ChargedLineKind`, `ChargedLineSyncId` o `ServiceSyncId` (8.18). `MovementType` gana `SaldoInicial = 8` (8.19) y `Conteo = 9` (8.20).
 
 `AppDbContext.SaveChanges` asigna `SyncId` y `UpdatedAtUtc` y registra los `SyncTombstones` automáticamente. Los borrados de productos y pacientes siguen siendo lógicos (`IsActive = false`), por lo que también se sincronizan como actualización.
 
-**Guardado de pacientes por campo** *(plan Fase 8, paso 8.9)*: hoy `InventoryService.SavePatientAsync` copia el objeto completo (`SetValues`), así que un guardado con una copia vieja puede pisar lo que escribió otro flujo. Con `PatientPatch`, cada cambio `{field, before, after}` se aplica solo si el valor actual es `before` (si ya es `after`, no hace nada; si no es ninguno, es conflicto), en una transacción (`InventoryService.SavePatientChangesAsync`) que devuelve los conflictos. Las hojas JSON se combinan por renglón con su `SyncId`. La PC y la API de la red usarán el mismo código.
+**Guardado de pacientes por campo** *(plan Fase 8, pasos 8.21 y 8.22)*: hoy `InventoryService.SavePatientAsync` copia el objeto completo (`SetValues`), así que un guardado con una copia vieja puede pisar lo que escribió otro flujo, también con la PC sola. En 8.21, `SavePatientAsync(editado, base)` copia sobre la fila recién leída solo los campos que cambiaron respecto a la foto tomada al cargar. En 8.22, al bajar, `PatientMerge.Merge` (pura) combina por campo con `FieldStampsJson` (gana la marca mayor) y las hojas `Active*Json` por renglón con su `RowId`; si el resultado difiere de la versión remota, se marca y se registra para subir. `NextAppointment*` y `LastVisit` pasan a ser derivadas, recalculadas desde Citas y Consultas.
 
-**Servidor**: la idea anterior (intercambiar cambios con *last-write-wins* por `UpdatedAtUtc` y folios con prefijo por equipo) se descartó. En el plan Fase 8 solo la PC escribe y asigna los folios; ver §10.
+**Varios equipos** *(plan Fase 8)*: la idea de v1.5 (*last-write-wins* por `UpdatedAtUtc` y folios con prefijo por equipo) se queda y se completa: LWW por fila con la hora del servidor (8.7), combinación por campo en pacientes (8.22), existencias como libro de movimientos con conteos como ancla (8.19–8.20) y folios con código de equipo (8.17). Ver §10.
 
 ### Ventas persistidas
 Tablas `Sales` y `SaleItems`: cada ticket guarda folio consecutivo diario (`TKT-yyyyMMdd-0001`), cliente, método de pago, total y partidas (productos **y servicios clínicos**, que antes no quedaban registrados). Base para corte de caja y reportes de ingresos.
@@ -308,7 +315,7 @@ Tablas `Sales` y `SaleItems`: cada ticket guarda folio consecutivo diario (`TKT-
 
 ## 9. Módulo Pacientes (`ViewModels/Patients`, v1.19.0)
 
-Desde la Fase 6 el apartado Pacientes (inicio, ficha, alta, consulta, receta, agenda y cobro de la consulta) ya no es un solo ViewModel de miles de líneas: cada parte de la pantalla tiene su **dueño** y un **coordinador**, `PatientsWorkspace`, corre los flujos que cruzan a varios dueños. Todo lo que está bajo `ViewModels/Patients/` (espacio de nombres `TPVC.ViewModels.Patients`) **no usa WPF**. Como la app Android será Kotlin nativo, este código no se reutiliza en la tablet: es la referencia de comportamiento, y en el plan Fase 8 puede correr sin pantalla en la PC para las consultas de la tablet (paso 8.21, ver *Sin pantalla en el servidor*; `docs/PENDIENTES_ANDROID.md`, B3). `MedicalRecordsViewModel` es una subclase sellada que solo arma la plataforma de WPF; las vistas (`d:DataContext`), `CachedViewConverter` (que busca `MedicalRecordsView` por el nombre del tipo), `MainViewModel`, `App` y las pruebas lo siguen usando con ese nombre. El detalle (decisiones, pasos y reglas de cada movimiento) está en [`docs/fase6/PLAN_DIVISION_VIEWMODEL.md`](fase6/PLAN_DIVISION_VIEWMODEL.md).
+Desde la Fase 6 el apartado Pacientes (inicio, ficha, alta, consulta, receta, agenda y cobro de la consulta) ya no es un solo ViewModel de miles de líneas: cada parte de la pantalla tiene su **dueño** y un **coordinador**, `PatientsWorkspace`, corre los flujos que cruzan a varios dueños. Todo lo que está bajo `ViewModels/Patients/` (espacio de nombres `TPVC.ViewModels.Patients`) **no usa WPF**. Como la app Android será Kotlin nativo, este código no se reutiliza en la tablet: es la referencia de comportamiento (`docs/PENDIENTES_ANDROID.md`, B3). `MedicalRecordsViewModel` es una subclase sellada que solo arma la plataforma de WPF; las vistas (`d:DataContext`), `CachedViewConverter` (que busca `MedicalRecordsView` por el nombre del tipo), `MainViewModel`, `App` y las pruebas lo siguen usando con ese nombre. El detalle (decisiones, pasos y reglas de cada movimiento) está en [`docs/fase6/PLAN_DIVISION_VIEWMODEL.md`](fase6/PLAN_DIVISION_VIEWMODEL.md).
 
 ### Carpetas y niveles
 
@@ -364,7 +371,7 @@ Cinco vistas sin código propio tienen como `DataContext` a su dueño: `PatientF
 | `IConsultationGate` | `PatientsWorkspace`, que responde con `Handoff` | Candado de la consulta: enviada a otro equipo o recibiendo una. |
 | `IDraftHandoffParticipant` | `PatientsWorkspace`, que responde con `Handoff` | Lo del envío que guarda el borrador: la marca de "enviada" y la consulta recibida. |
 | `IPatientsSection` | `PatientsWorkspace` (miembros públicos) | Lo que usan `MainViewModel`, `App` y las pruebas: la fachada `[NotForBinding]` (`Patients`, `SelectedPatient`, `HasActiveConsultation`, `StartActiveConsultation`…) más `InitialLoad`, `LoadPatientsAsync`, `EnterPatientsSection`, `FlushConsultationDraft`, `OnBackToHubRequested` y `Dispose`. |
-| `IUiThread`, `IUserDialogs`, `IUrlLauncher`, `IPrescriptionOutput` | WPF: `WpfUiThread`, `WpfUserDialogs`, `ShellUrlLauncher`, `PrintingService`. Pruebas: `InlineUiThread` y las propias (en el plan Fase 8, también el servidor sin pantalla de 8.21). | La plataforma, que llega en `PatientsPlatform`. |
+| `IUiThread`, `IUserDialogs`, `IUrlLauncher`, `IPrescriptionOutput` | WPF: `WpfUiThread`, `WpfUserDialogs`, `ShellUrlLauncher`, `PrintingService`. Pruebas: `InlineUiThread` y las propias. | La plataforma, que llega en `PatientsPlatform`. |
 
 Los miembros de la fachada son atajos en C# a su dueño: nunca se avisan ni se enlazan desde XAML (`NotificationTargetsTests` y `XamlBindingContractTests` lo revisan).
 
@@ -385,55 +392,38 @@ Cada flujo que cruza dueños es **un solo método** del coordinador (`PatientsWo
 
 `PatientsArchitectureTests` (sin WPF y niveles), `XamlBindingContractTests` (cada binding de las vistas se resuelve por reflexión; el manifiesto `TestAssets/fase6/patients-bindings.txt` muestra el dueño de cada uno), `NotificationParityTests` y `NotificationTargetsTests` (los mismos avisos, en el mismo orden y en el objeto correcto), `DraftContractTests` (borrador, envío entre equipos y alta: archivos de referencia que no cambian), `FlowCharacterizationTests`, `EscapeLadderTests`, `UiThreadSeamTests` y `PatientsWorkspaceReuseTests`, que crea `PatientsWorkspace` sin WPF (hilo en línea, confirmaciones escritas, impresora y enlaces que solo anotan) y corre una consulta completa: alta, receta que se surte aquí, cobro y una consulta recibida de otro equipo por la nube simulada.
 
-### Sin pantalla en el servidor (plan Fase 8, paso 8.21)
-
-Todavía no existe. Para que la tablet haga una consulta, la PC tiene que cumplir el contrato de la consulta (plan §3.8) dentro de su proceso. Se decide con una prueba de concepto:
-- **(a) `RemoteConsultationHost`**, el primer intento: un `PatientsWorkspace` sin pantalla por cada consulta de la tablet, con su propio `ConsultationService` y su borrador por equipo, un hilo serial propio, diálogos que contestan según `confirm`, y sin impresión ni nube. Se empieza por aquí porque `PatientsWorkspaceReuseTests` ya corre una consulta completa sin WPF y `NotificationParityTests` ya tiene dos `ConsultationService` en el mismo proceso.
-- **(b) `ConsultationEngine`**, el plan B: se extrae de `ConsultationAccount` y las hojas, y trabaja sobre el borrador. Se usa si (a) no pasa los criterios.
-- En los dos casos, `OpenConsultationRegistry` lleva la consulta de la PC y las de la tablet, y no deja abrir dos veces al mismo paciente ni repetir un folio CNS.
-
-Criterios de sí o no (son las pruebas del paso): la misma consulta por el motor y por la PC deja filas idénticas (nota, hojas, venta, movimientos y cita "Atendida"); contestar "No" a una confirmación no cambia nada; no corre ningún temporizador ni despachador de WPF; la memoria por consulta está medida y una consulta abandonada se cierra por tiempo; un reinicio de la PC la recupera. A la app de Kotlin le da igual si queda (a) o (b).
-
 ---
 
-## 10. Servidor del consultorio (plan Fase 8)
+## 10. Varios equipos con Turso (plan Fase 8)
 
-**Nada de esta sección está implementado todavía.** Es el resumen técnico de [`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`](PLAN_FASE8_VARIOS_EQUIPOS.md) (§2, §3 y pasos 8.15–8.24). Todo queda detrás del interruptor "Conectar tablet y celular por la red del consultorio", apagado por defecto: apagado, nada escucha y TPVC funciona igual que en v1.19.
+**Nada de esta sección está implementado todavía.** Es el resumen técnico de [`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`](PLAN_FASE8_VARIOS_EQUIPOS.md) (§2, §5 y §6). Cada equipo (la PC, la tablet y el celular) trabajará sobre su propia base y se sincronizará por Turso con el protocolo v2 (`docs/TURSO_SYNC_ARCHITECTURE.md` §4); no hay servidor en la PC ni conexión directa entre equipos. Cada paso es una versión publicable que deja la PC funcionando sola, con pruebas que corren en Linux contra `FakeHranaServer` (§7). Con la nube apagada, TPVC funciona igual que en v1.19.
 
 ### Quién escribe
-- `consultorio.db` en la PC (`AppDbContext.DbPath`) es la única base de negocio. Solo la PC pone `UpdatedAtUtc`, asigna los folios EXP, TKT y CNS, y ejecuta el código de existencias (`RegisterSaleAsync`, `CancelSaleAsync`, FEFO con `DeductFromBatches`, `EnsureStock`).
-- La tablet y el celular no escriben filas: mandan comandos y la PC los ejecuta con el mismo código que usan sus pantallas. Se refieren a los registros por `SyncId`; los `Id` enteros solo existen en la PC.
+- **PC:** todo. Es la única que crea o migra el esquema remoto, escribe `DeviceRegistry` y `_tpvc_meta`, vincula y revoca equipos, y edita catálogo, inventario, perfil y membrete. Siembra solo en una base nueva.
+- **Tablet:** pacientes, notas, citas, ventas, movimientos, lápidas, su latido y `ConsultationHandoffs`. Nunca corre DDL, no siembra y no escribe catálogo.
+- **Celular:** nada (token de solo lectura, pregunta 3 del plan).
+- Turso no ejecuta reglas del negocio: cada motor (C# y Kotlin) las aplica por su cuenta, y los dos se comparan con los archivos de `contracts/` (§7).
 
-### Kestrel y certificado (pasos 8.15 y 8.16)
-- HTTPS/1.1 con TLS 1.2 o 1.3, servido por Kestrel dentro de TPVC.exe (`Services/Lan/LanServerHost`) en el puerto TCP 47820 (configurable).
-- Necesita `FrameworkReference Microsoft.AspNetCore.App`. Hoy TPVC se publica dependiente del runtime (`--self-contained false` en `scripts/build-installer.ps1` y `.sh`), así que la publicación autónoma va antes y sola (8.15).
-- Certificado autofirmado ECDSA P-256, válido 10 años, creado la primera vez (`LanCertificateStore`). Se guarda como PFX en `%LocalAppData%\TPVC\lan\`, con su contraseña protegida por DPAPI como el token de Turso. Los equipos confían solo en el SHA-256 del SPKI que traía el QR. Si se reinstala la PC, hay que volver a vincular.
-- Solo acepta direcciones privadas (RFC 1918 y link-local). Límites: 16 KB de encabezados, 4 MB de cuerpo, 30 s de inactividad y 16 conexiones.
-- Descartados: `HttpListener` (fuera de localhost pide `netsh` como administrador), un servidor HTTP propio sobre `SslStream` y HTTP sin TLS.
+### Piezas nuevas en la PC
 
-### `lan.db` (`LanDbContext`, paso 8.16)
-Archivo aparte con `PairedDevices`, `PairingCodes`, `LanAccessLog` (bitácora de accesos, se conserva al menos 5 años), `LanHandoffs` y `HostedConsultations`. Así, restaurar `consultorio.db` nunca revive un equipo quitado ni olvida uno nuevo. No entra en la huella de Turso ni en `EnsureSchema`. `LanRequestLog` se queda en `consultorio.db` (§8).
+| Pieza | Paso | Qué hace |
+|---|---|---|
+| `SyncParkedRows` | 8.4 | Aparta y reintenta lo que hoy se omite con solo un aviso (§8). |
+| `SyncChangeLog` | 8.5 | Cursor de subida por secuencia, sin depender del reloj; lápidas desde los triggers, cascadas incluidas (§8). |
+| Descarga por páginas | 8.6 | Consulta con `"SyncedAtUtc" >= ?` adelante, cursor guardado después de cada página y desempate releyendo la fila del servidor. |
+| `ISyncClock` e identidad de la nube | 8.7 | Marcas con la hora del servidor (`max(UtcNow + desfase, guardada + 1 ms)`), `clinicId`, `protocol` y reporte de la «Sincronización completa». |
+| Siembra segura, "Unirse a una nube existente" y "Recuperar desde la nube" | 8.8 | Pacientes demo solo desde el asistente, catálogo sembrado con `SyncId` fijos (UUIDv5) y `CloudJoined`. |
+| Generación con cerca | 8.9 | "Reemplazar la nube con este respaldo" o "Desconectar"; los demás equipos vuelven a bajar todo una vez y ofrecen "Volver a aplicar". |
+| `DeviceRegistry` y PC principal | 8.10 | Rol, código de folios, revocación y renovación de cada equipo; `primaryDeviceId`; compatibilidad por `HandoffProtocol`; aviso de un `DeviceId` clonado. |
+| `Services/Documents/` | 8.11 | `PrescriptionHtmlBuilder`, `TicketText` y `TicketHtml` sin WPF; de ahí sale el PDF que arma Android. |
+| `ClinicAssets` | 8.12 | El membrete en la nube; se baja solo cuando cambia su hash. |
+| Tokens por equipo y vinculación por QR | 8.14–8.16 | Nivel A o C, base de vinculación aparte, código de 10 dígitos, código de confirmación, credencial sellada, renovación, *Quitar* y "Perdí este equipo" (`docs/TURSO_SYNC_ARCHITECTURE.md` §5 y §6). |
+| `FolioFactory` | 8.17 | Folios con código de equipo (`EXP-2026-T1-001`; la PC principal sin código), índice normal sin `-R` y último número por serie fuera de la base. |
+| Renglones con identidad | 8.18 | `ChargedLineSyncId`, `ServiceSyncId` y `RowId` en las hojas del paciente, en lugar de los `Id` locales. |
+| `StockLedger` | 8.19–8.20 | Kardex completo (`Delta`, un movimiento por lote, devoluciones deterministas, lotes cerrados), saldos iniciales una sola vez y conteos como ancla. `RecomputeAsync` recalcula `CurrentStock` y los lotes, que pasan a ser derivados. Se permite quedar en negativo, con aviso. |
+| Guardado por campo y `PatientMerge` | 8.21–8.22 | `SavePatientAsync(editado, base)` guarda solo lo que cambió (8.21); `PatientMerge.Merge` combina por campo y por renglón al bajar (8.22). Ver §8. |
+| Empalmes y duplicados | 8.23 | `AppointmentRules.Overlaps`, regla de duplicados y sincronización rápida antes de agendar y de cobrar. Desde aquí `schema.json` solo admite cambios aditivos. |
+| `SyncScheduler` | 8.24 | Cadencia sin WPF, con `TimeProvider`: la revisión lee `LastPushUtc` de los otros equipos, latido cada 60 s, descarga de seguridad cada 10 min e índice parcial de `ConsultationHandoffs`. |
 
-### Rutas (pasos 8.16–8.23)
-- Todo bajo `/api/v1/`, JSON UTF-8 en camelCase; errores en `application/problem+json` con `title` en español, listo para mostrar.
-- `GET /hello` y `POST /pair` van sin token. Las demás llevan `Authorization: Bearer tpvc1.<deviceId>.<secret>` y cada ruta declara su permiso de `DevicePermissions` (más `CanViewClinicalRecords` y `CanShareDocuments`, nuevos). Una prueba por reflexión revisa que todas lo declaren.
-- Lecturas ya armadas para mostrar (inicio, pacientes, ficha, agenda, catálogo, reportes, inventario, tickets, perfil y documentos), calculadas con las funciones que ya existen (`RankPatients`, `BuildSlots`, `GetDailyCashCutAsync`…), con ETag.
-- Escrituras: alta y cambios de pacientes, citas y ventas; la consulta de la tablet (`/consultations…`, contrato que no copia el interior de los ViewModels) y la consulta entre equipos (`/handoffs…`).
-- Avisos por espera larga: `GET /events?after=<seq>&wait=25` sobre `SyncChangeLog`, que contesta en menos de 1 s tras un guardado. `409 generation_changed` si la base se restauró y `410 cursor_expired` si el cursor es demasiado viejo.
-- Versiones: dentro de v1 solo cambios aditivos; un cambio incompatible abre `/api/v2/`. Una app vieja recibe `426 protocol_unsupported`. El contrato queda en `contracts/lan-api/v1/openapi.json` (§7).
-
-### Idempotencia (pasos 8.12 y 8.20)
-- Todo `POST`, `PATCH` y `PUT` lleva `Idempotency-Key` (UUID generado en el equipo), y las altas llevan el `syncId` del registro nuevo, también generado en el equipo.
-- La PC guarda `(deviceId, Idempotency-Key)`, el hash del cuerpo y la respuesta en `LanRequestLog`, **en la misma transacción que el efecto**. Misma clave y mismo cuerpo: devuelve la respuesta guardada, sin una segunda venta. Misma clave con otro cuerpo: `422 idempotency_mismatch`. El registro se depura a los 7 días.
-- La PC aplica los comandos de cada equipo de uno en uno, en orden.
-- Por eso terminar la consulta pasa a ser una sola transacción (`ConsultationFinishService`, 8.12): nota, resumen del paciente, hojas, venta con FEFO y cita "Atendida" en un solo `SaveChanges`.
-- Escrituras del servidor y de la UI al mismo tiempo: WAL, `busy_timeout`, `SqlitePoolOpenGuard` y una prueba de estrés.
-
-### Despachador de avisos (paso 8.11)
-Hoy `InventoryService.Raise` llama a los suscriptores en el hilo que hizo el cambio, y las pantallas de la PC suponen el hilo de la UI. Con el servidor, los cambios también llegarán desde hilos de Kestrel. `Raise` pasará por un `IChangeEventDispatcher` inyectable (`Dispatcher.BeginInvoke` en WPF, el mismo hilo en las pruebas), y `TursoSyncService.RunOnUiThread` usará el mismo. Los avisos a los equipos no pasan por estos eventos: salen de `SyncChangeLog` por `/events`.
-
-### Política al restaurar (pasos 8.7 y 8.16)
-- Las vinculaciones se quedan (`lan.db` no se restaura).
-- La `Generation` cambia: los equipos reciben `409 generation_changed`, borran lo que tenían guardado y vuelven a pedirlo. Un comando creado bajo otra generación nunca se reenvía solo; la app muestra "La PC restauró un respaldo: revise estos pendientes".
-- Los envíos y las consultas de la tablet que ya no coinciden con la base restaurada se cancelan y se muestran al médico.
-- Con la nube activa, la PC pregunta si reemplaza la copia de Turso (`docs/TURSO_SYNC_ARCHITECTURE.md` §7).
+### App Android en Kotlin (fase siguiente)
+Carpeta `android/` con su propio flujo de CI (`android.yml`) y cuatro módulos: `:sync` (cliente Hrana, motor v2, consulta entre equipos y vinculación), `:domain` (reglas portadas, con sus vectores), `:data` (Room + SQLCipher, con llaves por `SyncId`) y `:app` (Compose). Sale en dos cortes: el celular (K0–K4) cuando existan los pasos 8.2–8.16, y la tablet (K5–K10) después de 8.17–8.26. Detalle en el plan §7.

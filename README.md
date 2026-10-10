@@ -16,8 +16,8 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * 🩺 **[Plan de Consulta y Servicios Clínicos (docs/PLAN_DE_CONSULTA.md)](docs/PLAN_DE_CONSULTA.md)**: Hoja de ruta conforme a la norma técnica mexicana NOM-004-SSA3, catálogo de servicios médicos, paquetes con insumos por defecto y diagramas Mermaid.
 * 📖 **[Manual de Usuario (docs/MANUAL_DE_USUARIO.md)](docs/MANUAL_DE_USUARIO.md)**: Guía práctica completa para el personal del consultorio (manejo de la vista principal dividida, punto de venta con carrito, expedientes, lotes y temas).
 * 🏗️ **[Arquitectura Técnica (docs/ARQUITECTURA_TECNICA.md)](docs/ARQUITECTURA_TECNICA.md)**: Diagramas Mermaid, modelo de base de datos relacional, algoritmo de venta POS FEFO y especificaciones de ingeniería.
-* ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2, esquema remoto y garantías. Con la Fase 8, Turso queda solo como respaldo y recuperación de la PC.
-* 🖧 **[Fase 8: varios equipos en la red local (docs/PLAN_FASE8_VARIOS_EQUIPOS.md)](docs/PLAN_FASE8_VARIOS_EQUIPOS.md)**: Plan para que la PC sea el servidor del consultorio, la tablet y el celular (Kotlin) se conecten por la red local y Turso quede como respaldo.
+* ☁️ **[Sincronización con Turso (docs/TURSO_SYNC_ARCHITECTURE.md)](docs/TURSO_SYNC_ARCHITECTURE.md)**: Protocolo v2: hoy sincroniza la PC y, con la Fase 8, también la tablet y el celular; esquema remoto y garantías.
+* 🖧 **[Fase 8: datos listos para tres equipos con Turso (docs/PLAN_FASE8_VARIOS_EQUIPOS.md)](docs/PLAN_FASE8_VARIOS_EQUIPOS.md)**: Plan para que los tres equipos (app Android en Kotlin) escriban sin perder datos, vinculación por QR y pasos en la PC.
 * 📱 **[Pendientes antes de la app Android (docs/PENDIENTES_ANDROID.md)](docs/PENDIENTES_ANDROID.md)**: Bloqueantes de datos, preparación en la PC y alcance de la app en Kotlin para la tablet y el celular.
 * 🎨 **[Plan de rediseño de la interfaz (docs/PLAN_REDISENO_UI.md)](docs/PLAN_REDISENO_UI.md)**: Principios, fases (expediente, POS, configuración, revisión de temas, cierre y pedidos del consultorio) y propuesta visual.
 * 📝 **[Historial de Versiones (CHANGELOG.md)](CHANGELOG.md)**: Registro de cambios detallado siguiendo *Semantic Versioning*.
@@ -97,7 +97,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 - Totalmente autónomo: no requiere internet ni configuración de servidores externos.
 - **Respaldo automático diario** en `%LocalAppData%\TPVC\backups` (se conservan 14) y botón **Respaldar Ahora** en Ajustes.
 - **Migración automática del esquema**: al actualizar, las tablas y columnas nuevas se agregan sin tocar los datos existentes.
-- **Lista para sincronizar**: cada registro tiene un identificador global (`SyncId`), marca de modificación UTC y registro de borrados, base para un futuro servidor con varios dispositivos (Windows / Android).
+- **Lista para sincronizar**: cada registro tiene un identificador global (`SyncId`), marca de modificación UTC y registro de borrados, base para sincronizar varios dispositivos (Windows / Android) por Turso.
 - Bitácora de errores en `%LocalAppData%\TPVC\logs` para diagnóstico.
 
 ### 10. Instalador Oficial en 3 Vistas (Experiencia de Prueba)
