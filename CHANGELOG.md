@@ -5,7 +5,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 ## [Sin publicar]
 
 ### Documentación — Plan de la Fase 8: datos listos para tres equipos con Turso
-* Plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (todavía sin código): la PC, la tablet y el celular (app en **Kotlin** nativo) trabajarán cada uno sobre su propia base y se sincronizarán por Turso (plan gratuito) con el protocolo v2; la consulta pasará entre equipos por `ConsultationHandoffs`. Incluye el uso estimado de Turso con tres equipos, la vinculación por QR, cómo quedan los bloqueantes A1–A6 y los demás riesgos, 25 pasos en la PC (8.2–8.26, cada uno publicable por separado) y el esqueleto de la app Android (K0–K10). Reemplaza un borrador del mismo día que convertía la PC en servidor de la red local; el médico lo descartó.
+* Plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (todavía sin código): la PC, la tablet y el celular (app en **Kotlin** nativo) trabajarán cada uno sobre su propia base y se sincronizarán por Turso (plan gratuito) con el protocolo v2; la consulta pasará entre equipos por `ConsultationHandoffs`. Incluye el uso estimado de Turso con tres equipos, la vinculación por QR en la red local, los folios consecutivos con su regularización diaria, cómo quedan los bloqueantes A1–A6 y los demás riesgos, 25 pasos en la PC (8.2–8.26, cada uno publicable por separado) y el esqueleto de la app Android (K0–K10 y K4b). Reemplaza un borrador del mismo día que convertía la PC en servidor de la red local; el médico lo descartó.
 * Actualizados `docs/PENDIENTES_ANDROID.md`, `docs/TURSO_SYNC_ARCHITECTURE.md` (límites vigentes del plan gratuito de Turso), `docs/PLAN_REDISENO_UI.md`, `docs/ARQUITECTURA_TECNICA.md` y el README.
 
 ## [1.19.0] - 2026-10-09

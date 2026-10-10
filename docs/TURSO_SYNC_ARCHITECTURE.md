@@ -4,10 +4,11 @@
 TPVC es **local-first (offline-first)**: la base de la PC (`consultorio.db`) es la que se usa en el consultorio y funciona al 100% sin internet. Hoy (v1.19.0) la PC sincroniza en los dos sentidos con **Turso Cloud (libSQL)**: unos segundos después de cada guardado sube sus cambios y descarga los de otros equipos, así que dos PC pueden compartir la misma nube.
 
 **Plan Fase 8 (decidido el 2026-10-09; todavía no implementado, ver `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`):**
-- Los tres equipos (la PC, una tablet y un celular Android) sincronizan por Turso con este protocolo v2 (§4), cada uno sobre su propia base local. La tablet sube y baja; el celular solo baja.
+- Los tres equipos (la PC, una tablet y un celular Android) sincronizan por Turso con este protocolo v2 (§4), cada uno sobre su propia base local. La tablet sube y baja, también sin conexión; el celular baja todo y sube solo citas y entradas de mercancía (§3).
 - La app Android es Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de la consulta entre equipos (§4.5), y los dos lados se comparan con los archivos de `contracts/`.
 - La PC es la única que crea o migra el esquema remoto (§4.2) y la única que vincula y revoca equipos (§5).
 - El borrador del mismo día, con la PC como servidor de la red local y Turso solo como respaldo, se descartó (plan §2.6).
+- Respuestas del médico del mismo día (plan §9): un solo consecutivo de folios desde Turso, con la letra del equipo solo sin conexión (§4.4); la tablet cobra sin internet; el celular agenda y registra entradas de mercancía (§3); y la cuenta no tiene token de la API, así que se usan tokens creados a mano (nivel C, §6); el QR, que es solo una facilidad, queda limitado a la red local (§5).
 
 ---
 
@@ -32,18 +33,18 @@ Supuestos: 30 días al mes; la PC abierta 10 h al día (8 en Pacientes); la tabl
 
 | Concepto | Hoy (v1.19.0, solo la PC) | Hoy, si los tres equipos hicieran lo mismo | Fase 8 (tres equipos, plan) | Proporción del plan gratuito (Fase 8) |
 |---|---|---|---|---|
-| Peticiones al día | ~8,700, más del 90% de la revisión de consultas de cada 4 s y el latido de cada 30 s (§4.5) | ~23,000 | ~12,800 (PC ~7.9k, tablet ~4.9k, celular ~30) | El plan no limita peticiones |
+| Peticiones al día | ~8,700, más del 90% de la revisión de consultas de cada 4 s y el latido de cada 30 s (§4.5) | ~23,000 | ~12,800 (PC ~7.9k, tablet ~4.9k, celular ~40) | El plan no limita peticiones |
 | Filas leídas al mes | 0.4M–4.2M | hasta ~12M | 2M–4.5M: cada revisión lee 4–11 filas (con el índice parcial de F2) y hay ~600 bajadas al día de ~25 filas | 0.4–0.9% de 500M |
-| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, 960 latidos (cada 60 s, solo PC y tablet), ~400 filas de datos y ~300 `LastPushUtc` | ~0.5% de 10M; hasta ~1.5% si Turso cuenta las entradas de índice (V10) |
+| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, ~975 latidos (960 de la PC y la tablet, cada 60 s, y ~15 del celular), ~400 filas de datos y ~300 `LastPushUtc` | ~0.5% de 10M; hasta ~1.5% si Turso cuenta las entradas de índice (V10) |
 | Peor caso: PC y tablet abiertas 24 h en Pacientes | — | — | ~45k peticiones al día; ~7M lecturas y ~120k escrituras al mes | 1.4% y 1.2% |
 | Almacenamiento | Decenas de MB al año | Igual | Igual, más ~1 MB del membrete (`ClinicAssets`) | < 1% de 5 GB |
-| Bases | 1 | 1 | 2: la del consultorio y la de vinculación, solas en su grupo (§6) | 2 de 100 |
+| Bases | 1 | 1 | 1, sola en su grupo (§6) | 1 de 100 |
 
 **Costos de una sola vez (plan):**
 - Vincular un equipo o hacer una «Sincronización completa» lee todo una vez: ~20–30k filas después del paso 8.6. Hoy cuesta ~N²/1000 por tabla (F1).
 - La primera subida con el cursor nuevo (8.5) y «Reemplazar la nube» (8.9) escriben ~20k filas (0.2% del mes) en el peor caso. Reemplazar además lee la nube una vez para guardar lo que se perdería.
 - La verificación de la primera subida completa (8.7) lee ~20k filas una vez.
-- Cada `ALTER` de 8.19, 8.20, 8.22 y 8.23 cuesta ~20k lecturas y hasta ~20k escrituras; el índice parcial de 8.24 recorre `ConsultationHandoffs` una vez. Todo junto queda abajo del 1–2% de un mes.
+- Cada `ALTER` de 8.17, 8.19, 8.20, 8.22 y 8.23 cuesta ~20k lecturas y hasta ~20k escrituras; el índice parcial de 8.24 recorre `ConsultationHandoffs` una vez. Todo junto queda abajo del 1–2% de un mes.
 
 **Dos hallazgos (plan §3.1):**
 - **F1 · La descarga completa lee de más.** Con la consulta de página de hoy (`TursoSyncService.ReadPagesAsync`), SQLite sin `ANALYZE` (como una base nueva de Turso) ordena todo lo que queda de la tabla en cada página de 500: una tabla de 20k filas cuesta ~275k lecturas en lugar de ~20k. Las descargas incrementales no se ven afectadas. Se corrige anteponiendo `"SyncedAtUtc" >= ?` (paso 8.6). Falta confirmarlo en Turso real (V15).
@@ -57,50 +58,51 @@ Supuestos: 30 días al mes; la PC abierta 10 h al día (8 en Pacientes); la tabl
 
 ## 3. Equipos y permisos
 
-Tres equipos: la PC con Windows, una tablet Android y un celular Android. El 99% del tiempo están en la misma red, pero la red local no se usa como canal: todo pasa por Turso. Hoy (v1.19.0) solo existe la app de la PC. Topología del plan Fase 8:
+Tres equipos: la PC con Windows, una tablet Android y un celular Android. El 99% del tiempo están en la misma red, pero la red local no se usa como canal de datos: todo pasa por Turso. La única conexión local es la vinculación por QR, de 10 min y un solo uso (§5). Hoy (v1.19.0) solo existe la app de la PC. Topología del plan Fase 8:
 
 ```
  ┌──────────────────────┐    ┌──────────────────────┐    ┌──────────────────────┐
  │ PC Windows (TPVC.exe)│    │ Tablet (Kotlin)      │    │ Celular (Kotlin)     │
  │ consultorio.db       │    │ Room + SQLCipher     │    │ Room + SQLCipher     │
- │ motor v2 (C#)        │    │ motor v2 (Kotlin)    │    │ motor v2, solo baja  │
+ │ motor v2 (C#)        │    │ motor v2 (Kotlin)    │    │ motor v2 (Kotlin)    │
  └──────────┬───────────┘    └──────────┬───────────┘    └──────────┬───────────┘
-            │ sube y baja               │ sube y baja               │ solo baja
+            │ sube y baja               │ sube y baja               │ sube y baja
             ▼                           ▼                           ▼
  ┌──────────────────────────────────────────────────────────────────────────────┐
- │ Turso · base del consultorio (libSQL, Hrana v2 por HTTPS): 13 tablas         │
- │ sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,                 │
- │ RegisteredDevices, DeviceRegistry, ConsultationHandoffs, _tpvc_meta          │
- ├──────────────────────────────────────────────────────────────────────────────┤
- │ Turso · base de vinculación (mismo grupo): DevicePairings, sin expedientes   │
+ │ Turso · base del consultorio, sola en su grupo (libSQL, Hrana v2 por HTTPS): │
+ │ 13 tablas sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,       │
+ │ RegisteredDevices, DeviceRegistry, ConsultationHandoffs, FolioCounters,      │
+ │ _tpvc_meta                                                                   │
  └──────────────────────────────────────────────────────────────────────────────┘
+  Solo al vincular, una vez: la PC entrega la credencial por la red local (§5).
 ```
 
 Papel de cada equipo (plan §2.2):
-- **PC** (`WindowsDesktop`): escribe todo. Es la única que crea o migra el esquema remoto, escribe `DeviceRegistry` y `_tpvc_meta`, vincula y revoca equipos, y edita catálogo, inventario, perfil y membrete.
-- **Tablet** (`AndroidTablet`): escribe pacientes, notas, citas, ventas, movimientos, lápidas, su latido y `ConsultationHandoffs`. El inventario lo ve, no lo edita.
-- **Celular** (`AndroidMobileAdmin`): solo baja. No escribe nada, ni el latido, y no envía ni recibe consultas.
+- **PC** (`WindowsDesktop`): escribe todo. Es la única que crea o migra el esquema remoto, escribe `DeviceRegistry` y `_tpvc_meta`, vincula y revoca equipos, edita catálogo, inventario, perfil y membrete, y regulariza los folios hechos sin conexión (solo la PC principal).
+- **Tablet** (`AndroidTablet`): escribe pacientes, notas, citas, ventas (también sin conexión), movimientos, lápidas, su latido, `FolioCounters` y `ConsultationHandoffs`. El inventario lo ve, no lo edita.
+- **Celular** (`AndroidMobileAdmin`): ve expedientes, agenda citas, revisa inventario y registra entradas de mercancía. Escribe citas, lotes y movimientos de entrada (con sus lápidas), y su latido solo con la app al frente; nada clínico, ni recetas ni ventas, y no envía ni recibe consultas. Su primera versión solo baja (app K4); lo que escribe llega en K4b.
 
 ### Matriz de permisos (`DevicePermissions`, `Models/TursoConfig.cs`)
 
-| Permiso | PC (`WindowsDesktop`) | Tablet (`AndroidTablet`) | Celular (`AndroidMobileAdmin`) | Quién lo hará cumplir (plan) |
-|---|:---:|:---:|:---:|---|
-| `CanManageClinicalRecords`: editar expedientes y consulta | sí | sí | no (pregunta 3 del plan) | Turso en el celular (token de solo lectura); la app en la tablet |
-| `CanPrescribeMedications`: recetar | sí | sí | no | Igual |
-| `CanProcessSales`: cobrar y vender | sí | sí | no | Igual |
-| `CanManageInventory`: editar inventario y catálogo | sí | no (solo ve) | no (solo ve) | Turso si V1 (§6); si no, la app |
-| `CanViewDashboard`: resumen | sí | sí | sí | — |
-| `CanViewCashCut`: corte de caja | sí | no (oculto) | sí | La app |
-| `CanViewStockAlerts`: alertas de existencias y compra sugerida | sí | sí | sí | — |
-| `CanConfigureSystem`: configuración, Excel, respaldos, Turso, vincular, perfil y membrete | sí | no | no | Turso si V1 (sin `schema_*`); si no, la app |
-| `CanViewClinicalRecords`: ver expedientes (nuevo, paso 8.10) | sí | sí | sí | La app |
-| `CanShareDocuments`: compartir receta y ticket (nuevo, paso 8.10) | sí | sí | sí | La app |
+| Permiso | PC (`WindowsDesktop`) | Tablet (`AndroidTablet`) | Celular (`AndroidMobileAdmin`) |
+|---|:---:|:---:|:---:|
+| `CanManageClinicalRecords`: editar expedientes y consulta | sí | sí | no |
+| `CanPrescribeMedications`: recetar | sí | sí | no |
+| `CanProcessSales`: cobrar y vender, también sin conexión | sí | sí | no |
+| `CanManageInventory`: editar inventario y catálogo (productos, precios, conteos, cerrar lotes) | sí | no (solo ve) | no (solo ve) |
+| `CanViewDashboard`: resumen | sí | sí | sí |
+| `CanViewCashCut`: corte de caja | sí | no (oculto) | sí (supuesto por confirmar, plan §9) |
+| `CanViewStockAlerts`: alertas de existencias y compra sugerida | sí | sí | sí |
+| `CanConfigureSystem`: configuración, Excel, respaldos, Turso, vincular, perfil y membrete | sí | no | no |
+| `CanViewClinicalRecords`: ver expedientes (nuevo, paso 8.10) | sí | sí | sí |
+| `CanShareDocuments`: compartir receta y ticket (nuevo, paso 8.10) | sí | sí | sí |
+| `CanScheduleAppointments`: agendar citas (nuevo, paso 8.10) | sí | sí | sí |
+| `CanRegisterStockEntries`: registrar entradas de mercancía, lote y movimiento de entrada (nuevo, paso 8.10) | sí | no | sí |
 
 - Hoy los permisos son solo informativos: en la app solo se usa `GetRoleDescription`, dentro del paquete de vinculación (§5). El rol lo elige cada equipo en un selector de *Nube y dispositivos* y se escribe en `RegisteredDevices`.
-- **Plan Fase 8:** el rol de la PC queda fijo en `WindowsDesktop` (paso 8.2). El de la tablet y el celular sale de `DeviceRegistry` (paso 8.10, §4.2), la autoridad sobre el rol, el código de folios, la revocación y la renovación del token de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La app de Kotlin oculta pantallas según el rol que lee ahí.
-- Turso hace cumplir el token de solo lectura del celular. Los límites de la tablet (sin esquema, sin catálogo ni configuración) solo los hace cumplir Turso si acepta permisos por tabla (V1); si no, los aplica la app (paso 8.14). La tablet necesita leer todas las tablas sincronizadas (sus propios tickets están en `Sales`), así que el corte de caja solo se oculta en su interfaz.
+- **Plan Fase 8:** el rol de la PC queda fijo en `WindowsDesktop` (paso 8.2). El de la tablet y el celular sale de `DeviceRegistry` (paso 8.10, §4.2), la autoridad sobre el rol, el código de folios y la revocación de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La app de Kotlin oculta pantallas y bloquea escrituras según el rol que lee ahí.
+- **Todo lo de esta tabla lo hace cumplir la app.** Con el nivel C (§6) la tablet y el celular usan un mismo token `full-access`: Turso no distingue roles. El corte de caja de la tablet solo se oculta en su interfaz.
 - La consulta entre equipos es solo para la PC y la tablet: `GetLinkedDevicesAsync` ya excluye el celular.
-- Pregunta 3 del plan, solo para el celular: si solo consulta, su token es de solo lectura y Turso lo hace cumplir. Si debe agendar, necesita escribir citas y expedientes (agendar también escribe en el expediente) y se pierde esa garantía.
 
 ---
 
@@ -138,11 +140,11 @@ Se genera automáticamente desde el modelo de EF Core: **cada entidad `ISyncEnti
 
 **Plan Fase 8 (plan §2.3):**
 - **Solo una PC con Windows crea o migra el esquema remoto** (paso 8.10). Hoy cualquier cliente corre DDL: `EnsureRemoteSchemaAsync` empieza con `CREATE TABLE IF NOT EXISTS _tpvc_meta` y puede renombrar tablas a `legacy_v1_*`, y la consulta entre equipos corre su `CREATE` en cada proceso nuevo (`ConsultationHandoffService.EnsureTablesAsync`). Kotlin nunca ejecutará DDL y se negará a sincronizar si falta `_tpvc_meta.schema` ("Sincronice primero la PC").
-- **Tablas nuevas:** `DeviceRegistry` (paso 8.10; solo la PC; rol, código de folios, revocación y renovación de cada equipo), `ClinicAssets` (escudo y encabezado del membrete, paso 8.12) y `DevicePairings` en una **base de vinculación aparte**, sin datos clínicos (paso 8.15, §5).
+- **Tablas nuevas:** `DeviceRegistry` (paso 8.10; solo la PC; rol, código de folios y revocación de cada equipo), `ClinicAssets` (escudo y encabezado del membrete, paso 8.12) y `FolioCounters` (`Series` PK, como `EXP-2026` o `TKT-20261009`, y `LastNumber`; paso 8.16, §4.4). `FolioCounters` la crea la PC y la incrementan la PC y la tablet con una sola instrucción; no es tabla sincronizada (sin `SyncId`), sus filas nunca se borran y "Reemplazar la nube" no la toca (§7). No hay base de vinculación: la credencial se entrega por la red local (§5).
 - **Columnas nuevas, todas aceptan nulo:**
   - En tablas que no salen del modelo de EF, con `ALTER` explícito incluido en la huella: `RegisteredDevices.Platform`, `SyncProtocol`, `HandoffProtocol`, `ContractRevision`, `LastPushUtc`, `PendingCount`, `OldestPendingUtc` e `InstanceNonce` (8.10); `ClinicProfiles.CrestImageHash` y `HeaderImageHash` (8.12).
-  - En tablas sincronizadas: `InventoryMovements.Delta` y `SaleItemSyncId`, `Sales.LedgerVersion` y `ProductBatches.ClosedAtUtc` (8.19); `InventoryMovements.CountedQuantity` (8.20); `Patients.FieldStampsJson` (8.22); `Patients.MergedIntoSyncId` (8.23). Cada `ALTER` recorre su tabla una vez (§2).
-- **Claves de `_tpvc_meta`** (solo las escribe la PC): `clinicId` (8.7), `generation` y `generationReady` (8.7, 8.9; §7), `protocol` y `minClientProtocol` (2 desde 8.7, 3 desde 8.20), `contract` (revisión aditiva de `schema.json`, 8.3), `manifest` (8.7), `fullUploadAtUtc` (fecha de la primera subida completa verificada, 8.7) y `primaryDeviceId` (la PC principal, 8.10).
+  - En tablas sincronizadas: `Patients.OriginalFolio` y `Sales.OriginalFolio` (8.17); `InventoryMovements.Delta` y `SaleItemSyncId`, `Sales.LedgerVersion` y `ProductBatches.ClosedAtUtc` (8.19); `InventoryMovements.CountedQuantity` (8.20); `Patients.FieldStampsJson` (8.22); `Patients.MergedIntoSyncId` (8.23). Cada `ALTER` recorre su tabla una vez (§2).
+- **Claves de `_tpvc_meta`** (solo las escribe la PC): `clinicId` (8.7), `generation` y `generationReady` (8.7, 8.9; §7), `protocol` y `minClientProtocol` (2 desde 8.7, 3 desde 8.20), `contract` (revisión aditiva de `schema.json`, 8.3), `manifest` (8.7), `fullUploadAtUtc` (fecha de la primera subida completa verificada, 8.7) y `primaryDeviceId` (la PC principal, 8.10: la única que regulariza folios, 8.17, y crea saldos iniciales, 8.20).
 - **Fechas:** `schema.json` marca el `timeKind` de cada columna (8.3): `utc` (`UpdatedAtUtc`, `SyncedAtUtc`), `clinicLocal` (fechas del negocio en la hora del consultorio, `America/Mexico_City`, que hoy salen de `DateTime.Now`) o `dateOnly` (`BirthDate`, fecha de la cita).
 
 ### 4.3 Ciclo de sincronización
@@ -166,7 +168,7 @@ Hoy, una fila cuya referencia obligatoria no tiene `SyncId` se omite en la subid
 - **Sin transacción:** `TursoClient.ExecuteBatchAsync` no es transaccional aunque su comentario lo diga (el comentario se corrige en el paso 8.2): cada sentencia del pipeline se confirma sola. La subida es idempotente, así que un lote que falla a medias se reintenta completo sin dañar nada.
 - **Sin ciclos:** lo recibido conserva su marca y no vuelve a subirse ni a descargarse.
 - **Relojes desfasados:** las descargas usan el reloj del servidor, no el del dispositivo. Desde v1.17 un cambio local siempre lleva una marca posterior a la que ya tenía la fila (`max(ahora, marca guardada + 1 ms)`), también en los borrados: una edición hecha después de recibir una fila de un equipo con el reloj adelantado ya no la descarta la nube.
-- **Folios duplicados** (dos equipos crean `EXP-2026-005` sin conexión): el registro recibido se guarda como `EXP-2026-005-R1` en lugar de bloquear la sincronización. El `-R` solo existe en el equipo que recibe y no se sube, así que el mismo registro queda con dos folios. **Plan Fase 8 (paso 8.17, pregunta 1):** cada equipo lleva su código en el folio (`EXP-2026-T1-001`, `TKT-20261009-T1-0001`; la PC principal no lleva código y sus folios no cambian), `RecordNumber` y `Folio` pasan de índice único a índice normal y el `-R` deja de aplicarse. Las filas viejas con `-R` se quedan, y un folio repetido aparece en un aviso de la PC.
+- **Folios duplicados** (dos equipos crean `EXP-2026-005` sin conexión): el registro recibido se guarda como `EXP-2026-005-R1` en lugar de bloquear la sincronización. El `-R` solo existe en el equipo que recibe y no se sube, así que el mismo registro queda con dos folios. **Plan Fase 8 (pasos 8.16 y 8.17, respuesta 1 del médico):** un solo consecutivo por serie. Con conexión, cualquier equipo toma el siguiente EXP o TKT de `FolioCounters` con una sola instrucción atómica (`INSERT … ON CONFLICT(Series) DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber`; V16, §6). Sin conexión, el folio lleva el código del equipo de `DeviceRegistry` (`EXP-2026-T1-001`, `TKT-20261009-T1-0001`; la PC, `P1`) y sube así. La PC principal lo regulariza en segundo plano, como máximo una vez al día, con la nube al día y sin consulta ni venta en curso: le da el siguiente número del contador y guarda el folio con letra en `Patients.OriginalFolio` o `Sales.OriginalFolio`, que la búsqueda también compara. El cambio sube por el ciclo normal. CNS sigue saliendo de la hora: sin conexión lleva la letra y nunca se regulariza. Los folios que ya existen no cambian. `RecordNumber` y `Folio` pasan de índice único a índice normal y el `-R` deja de aplicarse. Las filas viejas con `-R` se quedan, y un folio repetido aparece en un aviso de la PC.
 - **Sincronización completa** (botón "Sincronización completa"): ignora las marcas y sube/descarga todo; útil al enlazar un equipo nuevo. Después de restaurar un respaldo regresa de la nube las filas más nuevas y deshace la restauración (§7). Con la Fase 8, restaurar y recuperar seguirán §7.
 
 **Plan Fase 8, garantías nuevas cuando escriban varios equipos:**
@@ -204,7 +206,7 @@ Copia (`Payload`): el `ConsultationDraft` del guardado automático en JSON (nomb
 Versión mínima para recibir: TPVC 1.17.0 (la hoja "Enviar a…" marca como incompatibles los equipos con `AppVersion` anterior). El celular no aparece en "Enviar a…".
 
 **Plan Fase 8:**
-- La tablet implementará este mismo contrato en Kotlin (app K8): mismas instrucciones y en el mismo orden. El celular no envía ni recibe.
+- La tablet implementará este mismo contrato en Kotlin (app K8): mismas instrucciones y en el mismo orden. El celular no envía ni recibe: aunque escribe su latido, su rol lo deja fuera de la lista.
 - **Compatibilidad** (paso 8.10): un equipo puede recibir si `RegisteredDevices.HandoffProtocol >= 1`. Si esa columna está vacía (PC v1.17–v1.19), sigue la regla de `AppVersion`. Así la app Android puede numerar sus versiones desde 1.0.0. Los equipos revocados en `DeviceRegistry` se excluyen.
 - **Marcas por campo en la copia** (paso 8.22): hoy aceptar solo compara el `UpdatedAtUtc` de la fila del paciente. La copia llevará además las marcas por campo del paciente y la de la nota, y quien recibe exigirá que cada marca local sea mayor o igual ("Intente de nuevo en unos segundos"). Es un campo aditivo: `PayloadVersion` sigue en 1.
 - **Cadencia** (paso 8.24, `Services/SyncScheduler.cs`): la misma revisión lee `RegisteredDevices.LastPushUtc` de los otros equipos y, si es posterior a la última descarga, sincroniza en ese momento; más una descarga de seguridad cada 10 min. El latido pasa a 60 s. La revisión rápida (4 s, en Pacientes) solo corre con un envío pendiente o con un equipo capaz de recibir consultas visto en los últimos 30 días; si no, cada 30 s.
@@ -220,32 +222,34 @@ En *Configuración → Nube y dispositivos → Vincular tablet y celular*, "Gene
 
 Quien tenga ese texto puede leer y escribir toda la base de la nube, y el rol no se aplica en ningún lado. **No debe usarse para vincular.** El paso 8.2 retira `GenerateAndroidPairingPayload`, su ventana (`OpenPairingModal`) y `CopyPairingPayload`.
 
-### Plan Fase 8: QR con código y base de vinculación (paso 8.15; detalle en el plan §4.4 y §4.5)
-La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.fullUploadAtUtc` (paso 8.7) y hay menos de 3 equipos activos.
-1. **El médico la inicia** en *Nube y dispositivos → Equipos vinculados → Vincular tablet o celular*. La PC crea un `PairingId` aleatorio, reserva un código de equipo (`T1`, `C1`…: el mayor de `DeviceRegistry` + 1), crea un token de 15 min de la base de vinculación (nivel A, §6) o toma el fijo (nivel C), e inserta en `DevicePairings` una fila `State='esperando'` que vence en 15 min, con la hora del servidor.
-2. **El QR** es `tpvc-pair:1:` + base64url(sal | nonce | AES-256-GCM(k, JSON)), con k = PBKDF2-SHA256(código de 10 dígitos, sal, 200k iteraciones). El JSON lleva la URL y el token de la base de vinculación, el `PairingId`, el `clinicId`, el rol, el código de equipo, el nombre del consultorio y el vencimiento. **Ningún token de la base del consultorio.** El código de 10 dígitos aparece debajo del QR, en dos grupos de cinco. El mismo texto pegado sirve para que otra PC con Windows se una ("Unirse con código", código `P2`…).
-3. **El equipo reclama la fila** (se niega si no tiene bloqueo de pantalla seguro): lee el QR, pide el código, genera su propio `DeviceId` y un par de llaves P-256, y corre en la base de vinculación `UPDATE DevicePairings SET State='reclamada', … WHERE PairingId=? AND State='esperando' AND ExpiresAtUtc > <hora del servidor>`. Una fila afectada = ganó; cero = "Este código ya se usó". Muestra un código de confirmación de 6 dígitos, sacado de SHA-256(`PairingId` ‖ llave pública).
-4. **El médico confirma en la PC**, que pregunta "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913". Con *No*, la fila queda `cancelada`.
-5. **Con *Sí*, la PC** crea el token del equipo (nivel A) o toma el del rol (nivel C), inserta la fila en `DeviceRegistry` con la llave pública del equipo y deja la credencial (URL de la base del consultorio, token, vencimiento, rol, código y `clinicId`) **sellada para esa llave**: ECDH P-256, HKDF-SHA256 y AES-256-GCM.
-6. **El equipo termina:** descifra la credencial, la guarda envuelta con el Android Keystore y cierra la fila; la PC la borra.
+### Plan Fase 8: QR en la red local (paso 8.14; detalle en el plan §4.4 y §4.5)
+El QR es solo una facilidad y queda limitado a la red del consultorio (respuesta 4 del médico). No hay base de vinculación en Turso ni token en el QR. La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.fullUploadAtUtc` (paso 8.7), ya se pegó el "token para tablet y celular" (§6) y hay menos de 3 equipos activos. La PC y el equipo deben estar en el mismo Wi-Fi.
+1. **El médico la inicia** en *Nube y dispositivos → Equipos vinculados → Vincular tablet o celular* y elige el rol. La PC crea un `PairingId` de 16 bytes y un secreto de 128 bits, reserva un código de equipo (`T1`, `C1`…: el mayor de `DeviceRegistry` + 1) y abre un `TcpListener` (`System.Net.Sockets`) en un puerto al azar, **solo en sus direcciones privadas** (RFC 1918 y de enlace local) y solo mientras dura la ventana, 10 min como máximo. No pide administrador ni `urlacl`, ni usa Kestrel. La primera vez, el Firewall de Windows puede preguntar si permite a TPVC en redes privadas.
+2. **El QR** es `tpvc-pair:1:` + base64url(JSON) con las direcciones y el puerto de la PC, el `PairingId`, el secreto, el rol, el código de equipo, el nombre del consultorio y el vencimiento. **Ningún token.** El mismo texto pegado sirve para que otra PC con Windows se una ("Unirse con código", código `P2`…).
+3. **El equipo se presenta** (se niega si no tiene bloqueo de pantalla seguro): genera su propio `DeviceId`, se conecta a la PC y manda el `PairingId`, su `DeviceId`, nombre, modelo y un nonce con un HMAC-SHA256 que prueba que tiene el secreto. El secreto nunca viaja. La PC atiende un solo equipo por ventana; tres HMAC inválidos la cierran. Los dos muestran un código de confirmación de 6 dígitos sacado del secreto y del mensaje del equipo. Las llaves salen de HKDF-SHA256(secreto, sal = `PairingId`).
+4. **El médico confirma en la PC**, que pregunta "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913". Con *No*, la PC cierra la ventana sin mandar nada.
+5. **Con *Sí*, la PC** inserta la fila en `DeviceRegistry`, manda AES-256-GCM de {URL de la base del consultorio, token para tablet y celular, rol, código y `clinicId`} y cierra el `TcpListener`.
+6. **El equipo termina:** descifra la credencial, la guarda envuelta con el Android Keystore y empieza su primera descarga.
 
-Quien fotografía el QR, aun con el código, solo obtiene la base de vinculación, sin datos clínicos (V13). A lo más puede competir por el reclamo, y el médico vería un nombre o un código de confirmación extraño. El token de datos nunca está en el QR.
+**Respaldo** si falla la red local (aislamiento de clientes del Wi-Fi, Firewall): en el equipo se teclean la URL y el token para tablet y celular; el equipo escribe su latido y la PC pregunta si lo vincula, con los últimos 6 caracteres de su `DeviceId` en las dos pantallas.
 
-### Plan Fase 8: renovación, quitar y equipo perdido (paso 8.16; plan §4.7)
-- **Renovación** (nivel A): cuando al token de un equipo le quedan menos de 30 días, la PC crea uno nuevo, lo sella con `DeviceRegistry.PublicKey` y lo deja en `DeviceRegistry.RenewedCredential`. El equipo lo recoge en su siguiente sincronización. En el nivel C los tokens no vencen.
+Quien fotografía el QR no obtiene nada fuera de la red local o después de los 10 min. Dentro de la ventana, a lo más compite por la vinculación, y el médico vería un nombre o un código de confirmación que no coincide. Quien escucha el Wi-Fi sin el QR solo ve el HMAC y la credencial cifrada.
+
+### Plan Fase 8: quitar y equipo perdido (paso 8.15; plan §4.7)
 - **Quitar:** la PC muestra antes los cambios pendientes del equipo (`PendingCount` y `OldestPendingUtc` de su latido). El equipo sube lo pendiente, o lo exporta a un archivo, y luego borra su base, su credencial y sus borradores.
-- **Perdí este equipo:** revocar (`RevokedAtUtc`, motivo "perdido") y "Cortar acceso ahora", que rota las llaves de **todo el grupo** porque Turso no revoca tokens uno por uno. Los demás equipos reciben 401 y muestran "Vuelva a vincular" sin perder sus cambios pendientes. Un token vencido nunca borra nada.
+- **Perdí este equipo:** revocar en `DeviceRegistry` (`RevokedAtUtc`, motivo "perdido"; si el equipo lee su fila revocada, se borra sin subir) y "Cortar acceso ahora", marcado por defecto. Sin token de la API la PC no puede rotar sola, así que guía al médico: rotar los tokens de **todo el grupo** en el panel de Turso o con `turso db tokens invalidate` (Turso no revoca tokens uno por uno), crear el token nuevo de la PC y el de tablet y celular, pegarlos en la PC y volver a vincular los demás equipos con un QR nuevo.
+- **Ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación): un equipo con cambios pendientes se bloquea, muestra "Vuelva a vincular" y los conserva; uno sin nada pendiente se borra solo tras dos 401 con 10 min de diferencia.
 
 ---
 
 ## 6. Guía Rápida de Configuración en Turso
 
-> **El token de la PC no sale de la PC.** Se pega solo en TPVC de Windows, que lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json`. No lo copie a la tablet ni al celular (el paquete de vinculación de hoy lo lleva en claro, ver §5). Con la Fase 8 cada equipo recibirá su propio token, sellado para su llave al vincularse (§5), nunca en el QR.
+> **El token de la PC no sale de la PC.** Se pega solo en TPVC de Windows, que lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json`. No lo copie a la tablet ni al celular (el paquete de vinculación de hoy lo lleva en claro, ver §5). Con la Fase 8 la tablet y el celular usarán otro token, el "token para tablet y celular", que la PC les entrega cifrado al vincularlos en la red local (§5), nunca en el QR.
 
-**Plan Fase 8 (credenciales, plan §4.3; pregunta 4 del plan):**
-- La base del consultorio y la de vinculación van **solas en su grupo** de Turso: la única forma de cortar un token es rotar las llaves del grupo, y eso corta a todas las bases del grupo.
-- **Nivel A** (recomendado): un token de la API de la plataforma limitado al grupo, solo con `db:mint-token` y `db:rotate-creds`, cifrado con DPAPI en la PC. Con él la PC crea su propio token `full-access` de 90 días, el de 15 min del QR y el de cada equipo (180 días; `read-only` en el celular), y los renueva.
-- **Nivel C** (si no hay token de la API): tokens creados a mano en el panel, sin vencimiento: el de la PC (como hoy), uno por rol y uno fijo de la base de vinculación. Solo se cortan rotando el grupo.
+**Plan Fase 8 (credenciales, plan §4.3): nivel C.** La cuenta de Turso no tiene token de la API de la plataforma (respuesta 4 del médico), así que la PC no puede crear ni rotar tokens.
+- Dos tokens creados a mano en el panel o con la CLI, `full-access` y sin vencimiento: el de la PC (como hoy) y un "token para tablet y celular", que se pega una vez en la PC (cifrado con DPAPI) y que en el equipo queda envuelto con el Android Keystore.
+- La base del consultorio va **sola en su grupo** de Turso: la única forma de cortar un token es rotar las llaves del grupo (`turso db tokens invalidate`), y eso corta a todas las bases del grupo. Después de rotar se crean y pegan los dos tokens nuevos en la PC y se vuelven a vincular los demás equipos (§5).
+- **El costo, dicho claro:** cada equipo guarda un token `full-access` sobre todos los expedientes. Los límites por rol los aplica la app (§3), así que quien saque el token de un equipo puede hacer todo hasta la rotación. Por eso la app usa SQLCipher, la credencial envuelta con el Keystore y bloqueo de pantalla obligatorio.
 - Las pruebas de tokens y de rotación se hacen en otro grupo o en otra cuenta, **nunca en el grupo del consultorio**: una rotación ahí corta al médico.
 
 ### Opción A: Mediante Turso CLI
@@ -266,8 +270,11 @@ turso db show tpvc-clinica --url
 # 5. Generar token de autenticación
 turso db tokens create tpvc-clinica
 
-# 6. (Plan Fase 8, paso 8.15; todavía no se usa) Base de vinculación, en el mismo grupo que la del consultorio
-turso db create tpvc-vinculacion --group <grupo de tpvc-clinica>
+# 6. (Plan Fase 8, paso 8.14; todavía no se usa) Segundo token, el "token para tablet y celular", para pegarlo en la PC
+turso db tokens create tpvc-clinica
+
+# Cortar acceso (plan Fase 8, paso 8.15): rota los tokens de todo el grupo; después se crean y pegan los dos nuevos
+turso db tokens invalidate tpvc-clinica
 ```
 
 ### Opción B: Mediante Consola Web de Turso
@@ -277,28 +284,25 @@ turso db create tpvc-vinculacion --group <grupo de tpvc-clinica>
 4. Copiar la **Database URL** y generar un **Auth Token** desde la pestaña *Settings > Tokens*.
 5. Pegar ambos valores en TPVC Windows en **Configuración > Nube y dispositivos**.
 6. Hacer clic en **"Probar conexión"** y posteriormente en **"Sincronización completa"**.
-7. (Plan Fase 8, paso 8.15; todavía no se usa) Crear en el mismo grupo una segunda base, `tpvc-vinculacion`, para la vinculación por QR. La tabla `DevicePairings` la crea la PC.
+7. (Plan Fase 8, paso 8.14; todavía no se usa) Generar un segundo token, el "token para tablet y celular", y pegarlo en TPVC Windows. Nunca se pega directo en la tablet ni en el celular, salvo en el respaldo a mano cuando la vinculación por la red local no funciona (§5).
 
 ### Comprobaciones en una base de prueba real (plan §4.2)
 Se hacen antes del paso indicado, siempre en un grupo o una cuenta de prueba. El resultado se anota aquí.
 
 | # | Qué se comprueba | Antes de | Resultado |
 |---|---|---|---|
-| V1 | Si la API de la plataforma acepta permisos por tabla, y con qué campo | 8.14 | Pendiente |
-| V2 | Si en el plan gratuito funciona un token de grupo con solo `db:mint-token` y `db:rotate-creds` (nivel A o C) | 8.14 | Pendiente |
-| V3 | Qué responde Hrana a una instrucción prohibida y a un token vencido o rotado; si un token de solo lectura rechaza `CREATE TABLE IF NOT EXISTS` sobre una tabla que ya existe | 8.14 | Pendiente |
-| V4 | Cuánto dura la interrupción al rotar | 8.16 | Pendiente |
-| V5 | El largo real de un token (tamaño del QR) | 8.15 | Pendiente |
-| V6 | Si el cliente puede leer el `exp` del JWT (vencido o revocado) | 8.14 | Pendiente |
+| V3 | Qué responde Hrana a un token rotado o desconocido (HTTP 401 o un código Hrana) | 8.14 | Pendiente |
+| V4 | Cuánto dura la interrupción al rotar | 8.15 | Pendiente |
 | V7 | Texto y estado HTTP de `BLOCKED` | 8.2 | Pendiente |
-| V8 | Cuántos grupos permite el plan gratuito | 8.14 | Pendiente |
 | V9 | Si el plan gratuito archiva una base sin uso y qué error da | 8.2 | Pendiente |
 | V10 | Si las entradas de índice cuentan como filas escritas | 8.2 | Pendiente |
-| V11 | Si el plan gratuito tiene bitácora de auditoría, y de cuántos días | 8.16 | Pendiente |
+| V11 | Si el plan gratuito tiene bitácora de auditoría, y de cuántos días | 8.15 | Pendiente |
 | V12 | El tope de tamaño de una respuesta Hrana | 8.6 | Pendiente |
-| V13 | Que un token de la base de vinculación no abra la base del consultorio del mismo grupo | 8.15 | Pendiente |
 | V14 | Si una petición `batch` de Hrana con `BEGIN`/`COMMIT` es atómica en Turso | 8.6 | Pendiente |
 | V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 | Pendiente |
+| V16 | Que `INSERT … ON CONFLICT DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber` corra por Hrana como una sola instrucción atómica y regrese el número, también con dos equipos a la vez. Si no: leer el número n y `UPDATE … SET LastNumber = n + 1 WHERE Series = ? AND LastNumber = n`, que se reintenta si afecta 0 filas | 8.16 | Pendiente |
+
+V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de vinculación.
 
 ---
 
@@ -320,7 +324,7 @@ La restauración (`DataImportService`) pregunta:
 - **"Reemplazar la nube con este respaldo":**
   1. Antes de borrar, baja de la nube las filas que no están en el respaldo o son más nuevas, muestra los conteos por tabla ("se perderán 12 notas y 30 ventas de la tablet") y las guarda en un archivo `.db`.
   2. Guarda "reemplazo en curso" en `DbMeta`; si TPVC se cierra, lo continúa al abrir.
-  3. Escribe la generación nueva, borra las tablas sincronizadas y las lápidas de la nube, y sube todo (~0.2% del mes) con el reporte del paso 8.7.
+  3. Escribe la generación nueva, borra las tablas sincronizadas y las lápidas de la nube (no `FolioCounters`), y sube todo (~0.2% del mes) con el reporte del paso 8.7.
   4. Al final escribe `generationReady` con la generación nueva y un `fullUploadAtUtc` nuevo.
 - **"Desconectar esta PC de la nube".**
 
@@ -332,6 +336,6 @@ La restauración (`DataImportService`) pregunta:
 - Los pacientes demo solo salen del asistente, y el catálogo que siembra una base nueva lleva `SyncId` fijos (UUIDv5), así que dos siembras no se duplican.
 
 ### Reglas comunes
-- El último número de cada serie de folios EXP y TKT se guarda **fuera de la base** (`folios.json` en `%LocalAppData%\TPVC`, paso 8.17), para que restaurar un respaldo o reemplazar la nube no repita un folio ya impreso.
+- El consecutivo de cada serie EXP y TKT vive en `FolioCounters`, en Turso, y "Reemplazar la nube" no lo toca. El último número de cada serie **con letra** (los folios hechos sin conexión) se guarda **fuera de la base** (`folios.json` en `%LocalAppData%\TPVC`; en Android, un archivo que no se borra al volver a bajar todo; paso 8.16). Así restaurar un respaldo o reemplazar la nube no repite un folio ya impreso.
 - Las operaciones que reescriben la base o la nube (pasos 8.5, 8.8, 8.9 y 8.20) hacen un respaldo antes.
 - El membrete viaja en `ClinicAssets` (paso 8.12). Las preferencias de cada equipo (`HideConsultationTimer`) no se sincronizan.

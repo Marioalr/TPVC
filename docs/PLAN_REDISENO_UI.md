@@ -311,9 +311,9 @@ la división todavía va a mover se hacen justo después del grupo que la mueve,
 
 Notas para la app de la tablet (detalle en `docs/PENDIENTES_ANDROID.md`, sección C): compartir la receta y el
 ticket desde cualquier lugar donde se vean, y vincular la tablet leyendo un código QR. Con el plan de la
-Fase 8, el QR se abre con un código de 10 dígitos y vincula por Turso sin llevar ningún token de la base del
-consultorio (paso 8.15), y el PDF lo arma el propio equipo desde el modelo de la receta, con el membrete
-sincronizado (pasos 8.11 y 8.12).
+Fase 8, el QR funciona solo en la red del consultorio y no lleva ningún token: la PC entrega la credencial
+cifrada con un secreto del QR, y si la red local falla se teclea a mano (paso 8.14). El PDF lo arma el propio
+equipo desde el modelo de la receta, con el membrete sincronizado (pasos 8.11 y 8.12).
 
 ### Fase 8 · Datos listos para tres equipos con Turso (plan)
 
@@ -321,7 +321,11 @@ Por ahora es solo el plan (`docs/PLAN_FASE8_VARIOS_EQUIPOS.md`); nada está impl
 el celular (app en Kotlin nativo) trabajarán cada uno sobre su propia base y se sincronizarán por Turso (plan
 gratuito) con el protocolo v2, como ya lo hace la PC; la consulta pasará entre equipos por
 `ConsultationHandoffs`. La Fase 8 cierra los huecos que hoy perderían o duplicarían datos cuando escriban dos
-equipos y deja listo lo que la app necesita antes de su primera pantalla. Aquí, lo que toca la interfaz de la PC.
+equipos y deja listo lo que la app necesita antes de su primera pantalla. Con las respuestas del médico del
+mismo día: la tablet cobra también sin internet (la meta es no notar diferencia entre la PC y la app), el
+celular agenda y registra entradas de mercancía, los folios siguen un solo consecutivo (con la letra del equipo
+solo sin conexión, regularizada una vez al día en la PC) y el QR queda limitado a la red local. Aquí, lo que toca
+la interfaz de la PC.
 
 Pantallas y avisos nuevos de la PC, con los mismos principios (un botón principal, colores del tema, avisos
 breves, confirmación solo en lo irreversible) que se agregarán a `UiSmokeTests` (capturas y contraste en los
@@ -329,8 +333,8 @@ cuatro temas):
 
 | Pantalla o aviso | Qué muestra | Paso |
 |---|---|---|
-| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (revocar y "Cortar acceso ahora"); "Esta PC reemplaza a la principal". | 8.10, 8.16 |
-| **Vincular tablet o celular** | Elegir el rol; el QR durante 15 min con el código de 10 dígitos debajo, en dos grupos de cinco; la confirmación "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913" con *Sí* y *No*. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación de hoy, que se retira en 8.2. | 8.15 |
+| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (revocar y "Cortar acceso ahora", guiado: rotar los tokens en el panel de Turso y pegar los dos nuevos); "Vuelva a vincular" en los demás; "Esta PC reemplaza a la principal". | 8.10, 8.15 |
+| **Vincular tablet o celular** | El campo para pegar una vez el "token para tablet y celular". Elegir el rol; el QR durante 10 min, solo en la red del consultorio; la confirmación "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913" con *Sí* y *No*, con el mismo código en las dos pantallas; el respaldo "Teclear a mano" con la aprobación del equipo nuevo. La primera vez, el Firewall de Windows puede pedir permitir TPVC en redes privadas. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación de hoy, que se retira en 8.2. | 8.14 |
 | **Unirse a una nube existente**, **Recuperar desde la nube** y **Esta PC ya usaba esta nube** | Si la nube ya tiene su `clinicId` y la base local no (pegar URL y token, como hoy), la sincronización no arranca y ofrece unirse, "Reemplazar con la nube" (teclear CONFIRMAR, respaldo antes) o "Esta PC ya usaba esta nube". "Recuperar desde la nube" baja todo a una PC nueva o descompuesta. | 8.7, 8.8 |
 | Pregunta al **restaurar** con la nube activa | "Reemplazar la nube con este respaldo" o "Desconectar esta PC de la nube", con la lista por tabla de lo que se perdería ("se perderán 12 notas y 30 ventas de la tablet"); después, "Volver a aplicar N cambios". | 8.9 |
 | **"N cambios sin sincronizar"** | Filas apartadas que se reintentan en cada sincronización; vuelve a cero solo. | 8.4 |
@@ -338,5 +342,6 @@ cuatro temas):
 | **"Sincronización pausada: consumo anormal"** y **"Se agotó la cuota mensual de Turso"** | El freno de consumo, con *Reanudar*; la cuota agotada reintenta cada hora. | 8.2 |
 | Insignia **"−1 · revisar inventario"** | Productos en negativo y también un lote negativo aunque el total sea positivo, con alerta en el resumen. Se corrige con un conteo. | 8.20 |
 | **"Empalme"** en la agenda | Antes de agendar: "Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?"; después de bajar, la marca en la agenda y un aviso. | 8.23 |
-| **Banner de duplicados** y **aviso de folios repetidos** | Pares recientes de pacientes que podrían ser el mismo; folios iguales en filas viejas o tecleados a mano. | 8.23, 8.17 |
+| **Banner de duplicados** y **aviso de folios repetidos** | Pares recientes de pacientes que podrían ser el mismo; folios iguales en filas viejas o tecleados a mano. | 8.23, 8.16 |
+| **"Folio sin conexión: …"** | En la ficha, en el detalle del ticket y en la reimpresión, debajo del folio nuevo de un registro que se creó sin internet y que la PC regularizó; buscar por cualquiera de los dos folios lo encuentra. La regularización corre sola en segundo plano, una vez al día, sin consulta ni venta en curso. | 8.17 |
 
