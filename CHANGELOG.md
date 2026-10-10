@@ -2,6 +2,22 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.4] - 2026-10-10
+
+### Cambiado — Fase 8, paso 8.6: la sincronización lee menos y dos equipos terminan iguales
+* Una sincronización sin cambios es **una sola petición** a Turso (antes 16), y lee una sola foto de la nube.
+* La descarga lee cada fila más o menos una vez. Antes, cada página ordenaba todo lo que faltaba de la tabla: la primera página de una tabla de 20 mil filas leía unas 27 mil (comprobado en Turso real, V15).
+* Un corte de internet a media descarga ya no empieza de cero: cada tabla recuerda hasta dónde llegó.
+* Si dos equipos guardan el mismo registro con la misma marca y distinto contenido, ahora terminan con la misma versión (la de la nube). Antes cada uno se quedaba con la suya para siempre.
+* Lo que sube va en transacciones: una venta llega a la nube con sus renglones, o no llega.
+* Al actualizar, la primera sincronización no vuelve a bajar todo.
+* Por dentro: consulta de páginas con `"SyncedAtUtc" >= ?` adelante, páginas de 100 o 500 filas que se reducen solas, cursor por tabla en `DbMeta`, relectura de lo que la nube rechaza (regla nueva con sus vectores en `contracts/golden/lww.json`) y peticiones `batch` atómicas (V14). Las comprobaciones V12, V14 y V15 se hicieron en Turso real con `scripts/verify-turso-hrana.ps1`.
+
+### Corregido
+* **Guardar ya** (Ctrl+S, cerrar el programa o apagar Windows) regresa con la copia de la consulta en disco aunque el guardado automático se dispare en ese momento. Antes, en ese caso podía regresar sin ella y, al cerrar, perderse lo último que se escribió.
+* Los avisos de la sincronización ya no esperan a la pantalla: si la interfaz estaba ocupada, la sincronización se detenía. También dejó de colgarse la suite de pruebas completa en una PC.
+* 404 pruebas.
+
 ## [1.20.3] - 2026-10-10
 
 ### Corregido — Fase 8, paso 8.5: qué subir a la nube ya no depende del reloj
