@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<SyncTombstone> SyncTombstones => Set<SyncTombstone>();
+    public DbSet<SyncParkedRow> SyncParkedRows => Set<SyncParkedRow>();
     public DbSet<PrescriptionTemplate> PrescriptionTemplates => Set<PrescriptionTemplate>();
     public DbSet<PediatricDoseRule> PediatricDoseRules => Set<PediatricDoseRule>();
 
@@ -266,6 +267,11 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<SyncTombstone>()
             .HasIndex(t => t.DeletedAtUtc);
+
+        // Filas apartadas por la sincronización (paso 8.4): una por fila y dirección
+        modelBuilder.Entity<SyncParkedRow>()
+            .HasIndex(p => new { p.Direction, p.EntityType, p.SyncId })
+            .IsUnique();
 
         // Plantillas de receta importadas del Excel del consultorio
         modelBuilder.Entity<PrescriptionTemplate>()

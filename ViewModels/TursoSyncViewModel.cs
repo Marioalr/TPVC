@@ -72,6 +72,10 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _pauseNoticeText = string.Empty;
 
+    /// <summary>"N cambios sin sincronizar: se reintentan solos…" (filas apartadas, paso 8.4); vacío si no hay.</summary>
+    [ObservableProperty]
+    private string _parkedNoticeText = string.Empty;
+
     [ObservableProperty]
     private bool _isHelpGuideOpen;
 
@@ -91,7 +95,7 @@ public partial class TursoSyncViewModel : ObservableObject
                 StatusMessage = m;
                 RefreshLastSyncText();
                 RefreshQuotaDisplay();
-                RefreshPauseState();
+                RefreshNotices();
             });
         };
 
@@ -101,7 +105,7 @@ public partial class TursoSyncViewModel : ObservableObject
             {
                 RefreshLastSyncText();
                 RefreshQuotaDisplay();
-                RefreshPauseState();
+                RefreshNotices();
             });
         };
 
@@ -134,9 +138,10 @@ public partial class TursoSyncViewModel : ObservableObject
         Status = _syncService.Status;
         StatusMessage = _syncService.StatusMessage;
 
+        _syncService.RefreshParkedCount();
         RefreshLastSyncText();
         RefreshQuotaDisplay();
-        RefreshPauseState();
+        RefreshNotices();
     }
 
     private void RefreshLastSyncText()
@@ -161,8 +166,14 @@ public partial class TursoSyncViewModel : ObservableObject
             "Son cifras estimadas por este equipo; las reales están en el panel de Turso.";
     }
 
-    private void RefreshPauseState()
+    private void RefreshNotices()
     {
+        var parked = _syncService.ParkedCount;
+        ParkedNoticeText = parked > 0
+            ? $"{TursoSyncService.ParkedText(parked)}: registros que todavía no se pueden subir o aplicar (por ejemplo, porque aún no llega " +
+              "el expediente o el lote al que pertenecen). Se reintentan solos en cada sincronización."
+            : string.Empty;
+
         var reason = _syncService.PauseReason;
         IsConsumptionBrakeActive = reason == TursoSyncPauseReason.ConsumptionBrake;
         IsQuotaExhausted = reason == TursoSyncPauseReason.QuotaExhausted;
@@ -331,7 +342,7 @@ public partial class TursoSyncViewModel : ObservableObject
             IsBusy = false;
             RefreshLastSyncText();
             RefreshQuotaDisplay();
-            RefreshPauseState();
+            RefreshNotices();
         }
     }
 
@@ -340,7 +351,7 @@ public partial class TursoSyncViewModel : ObservableObject
     public async Task ResumeSyncAsync()
     {
         _syncService.ResumeAfterConsumptionBrake();
-        RefreshPauseState();
+        RefreshNotices();
         RefreshQuotaDisplay();
         await SyncNowAsync();
     }
@@ -387,7 +398,7 @@ public partial class TursoSyncViewModel : ObservableObject
             IsBusy = false;
             RefreshLastSyncText();
             RefreshQuotaDisplay();
-            RefreshPauseState();
+            RefreshNotices();
         }
     }
 

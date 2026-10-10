@@ -1080,8 +1080,20 @@ public class InventoryService
             existing.EstimatedDurationMinutes = service.EstimatedDurationMinutes;
             existing.IsActive = service.IsActive;
 
-            db.ServiceDefaultProducts.RemoveRange(existing.DefaultProducts);
-            foreach (var dp in defaults)
+            // Por producto, sin borrar y volver a insertar: cada renglón conserva su SyncId, solo sube lo que cambió
+            // y no se generan lápidas de lo que sigue igual (paso 8.4)
+            var wanted = defaults.GroupBy(d => d.ProductId).ToDictionary(g => g.Key, g => g.Last());
+            foreach (var current in existing.DefaultProducts.ToList())
+            {
+                if (!wanted.Remove(current.ProductId, out var desired))
+                {
+                    db.ServiceDefaultProducts.Remove(current);
+                    continue;
+                }
+                if (current.Quantity != desired.Quantity) current.Quantity = desired.Quantity;
+                if (current.Instructions != desired.Instructions) current.Instructions = desired.Instructions;
+            }
+            foreach (var dp in wanted.Values)
             {
                 dp.ClinicalServiceId = existing.Id;
                 db.ServiceDefaultProducts.Add(dp);

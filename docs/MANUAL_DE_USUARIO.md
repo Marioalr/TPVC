@@ -194,6 +194,7 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
 * La URL debe empezar con `libsql://` o `https://` (la que da Turso): una dirección `http://` sin cifrar no se acepta, porque el token viajaría en claro.
 * **Cuota gratuita**: lo que este equipo lleva del mes (500 millones de lecturas, 10 millones de escrituras y 5 GB) y lo de hoy. Son estimaciones; la cifra real está en el panel de Turso.
 * **Sincronización pausada: consumo anormal**: si en un día se usa mucho más de lo normal, la sincronización automática se detiene para no agotar la cuota del mes. Revise que todo esté en orden y pulse **Reanudar**. Mientras tanto el programa trabaja con sus datos y **Sincronizar ahora** sigue funcionando.
+* **N cambios sin sincronizar**: registros que todavía no se pueden subir o aplicar (por ejemplo, una consulta que llegó antes que su expediente). Se reintentan solos en cada sincronización y el aviso desaparece cuando quedan al día.
 * **Se agotó la cuota mensual de Turso**: la nube no acepta cambios hasta el siguiente mes (o hasta cambiar de plan). El programa sigue trabajando con sus datos y vuelve a intentar cada hora.
 * **La base de Turso está archivada**: el plan gratuito archiva la base después de 10 días sin uso (por ejemplo, en vacaciones). El mensaje explica cómo reactivarla; después, **Sincronizar ahora**.
 

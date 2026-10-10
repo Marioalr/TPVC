@@ -2,6 +2,18 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.2] - 2026-10-10
+
+### Corregido — Fase 8, paso 8.4: nada se pierde al sincronizar por llegar en desorden
+* Lo que la sincronización no podía subir o aplicar se perdía con solo un aviso en la bitácora. Ahora se **aparta y se reintenta** en cada sincronización:
+  * una consulta, cita o movimiento que llega antes que su expediente o su lote (antes, un movimiento quedaba sin su lote para siempre);
+  * un borrado que no se puede aplicar todavía (por ejemplo, una categoría que aquí aún tiene productos);
+  * un registro que no se puede subir porque le falta su principal.
+* Si el principal se borró en otro equipo, el registro se aplica sin esa referencia opcional o, si era obligatoria, se descarta.
+* *Nube y dispositivos* y el estado de la sincronización dicen **"N cambios sin sincronizar"** mientras haya registros apartados; el aviso vuelve a cero solo.
+* Editar los insumos por omisión de un servicio ya no los borra y los vuelve a crear: cada renglón conserva su identidad y a la otra PC solo llega lo que cambió.
+* 379 pruebas.
+
 ## [1.20.1] - 2026-10-10
 
 ### Interno — Fase 8, paso 8.3: contrato de sincronización exportado

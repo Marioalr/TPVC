@@ -1,10 +1,10 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.20.1). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.20.2). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
-**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 y 8.3, en v1.20.0 y v1.20.1):** se conserva la arquitectura original.
+**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 a 8.4, en v1.20.0 a v1.20.2):** se conserva la arquitectura original.
 La PC, la tablet y el celular tienen cada uno su propia base SQLite y se sincronizan por Turso (plan gratuito)
 con el protocolo v2, como ya lo hace la PC; el celular escribe solo citas y entradas de mercancía. La app es
 Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de `ConsultationHandoffs`, y los dos lados
@@ -16,7 +16,7 @@ mercancía; y la cuenta de Turso no tiene token de la API, así que se usan toke
 QR, que es solo una facilidad, queda limitado a la red local. Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (el 8.2 y el 8.3 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.4 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
 equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
@@ -58,14 +58,14 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 | C1 | **Enlace por QR** | Pedido del médico (2026-10-09): vincular la tablet leyendo un QR. Hasta v1.19.0 *Nube y dispositivos* generaba un paquete JSON en claro con el token completo de Turso, sin vencimiento y sin QR (`GenerateAndroidPairingPayload`), que nada leía; se retiró en v1.20.0 (paso 8.2) y los botones dicen "Disponible con la vinculación por QR". Plan Fase 8, paso 8.14: el QR es solo una facilidad y queda **limitado a la red del consultorio** (respuesta 4 del médico). El médico pega una vez en la PC un "token para tablet y celular" creado a mano en el panel de Turso. Al vincular, la PC escucha 10 min solo en sus direcciones privadas; el QR lleva sus direcciones y puerto y un secreto de 128 bits, **sin ningún token**. El equipo prueba que tiene el secreto, los dos muestran el mismo código de confirmación de 6 dígitos y, con *Sí*, la PC le manda la credencial cifrada con AES-256-GCM. El secreto nunca viaja por la red. Si la red local falla (aislamiento de clientes del Wi-Fi, Firewall de Windows), la URL y el token se teclean a mano. *Quitar* y "Perdí este equipo" (rotar los tokens del grupo en el panel de Turso y volver a vincular los demás) en el paso 8.15. En la app: K3. Detalle en el plan, §4.3–§4.7. |
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). Plan Fase 8: la receta para compartir se dibuja en el propio equipo con `PdfDocument` desde el modelo `PrescriptionSheet` (vectores del paso 8.11), en media carta horizontal y con el membrete de `ClinicAssets` (paso 8.12); para imprimir, la plantilla portada de `PrescriptionHtmlBuilder` (que se separa de `PrintingService.BuildPrescriptionHtml` en 8.11) en un WebView con la impresión del sistema. El ticket sale del texto de 42 columnas de `TicketText` (8.11). La impresora térmica Bluetooth (ESC/POS, con el ticket en texto) queda para más adelante (K10). |
 | C3a | **Consulta entre equipos** | La PC ya envía y recibe (v1.17, probado PC ↔ PC con un servidor Turso simulado). La tablet debe implementar el mismo contrato de `ConsultationHandoffs` (`docs/TURSO_SYNC_ARCHITECTURE.md` §4.5): revisar la tabla cada pocos segundos en Pacientes, tomarla con ficha (`AcceptToken`) y preguntar si la respuesta se pierde, borrar la copia de la nube solo tras guardarla, recuperar con la instrucción inserta-o-cancela, marca de solo lectura persistente, y traducir `PatientSyncId`/`CatalogSyncId` a sus Id locales (o cargo libre). Su `DeviceRole` es `AndroidTablet`. La referencia de comportamiento es `ConsultationHandoffViewModel` (`ViewModels/Patients`, sin WPF desde v1.19.0). Plan Fase 8: "Enviar a…" contará como compatible un equipo con `RegisteredDevices.HandoffProtocol` ≥ 1 (paso 8.10; si la columna está vacía sigue la regla de hoy, `AppVersion` ≥ 1.17.0), así la app puede numerar sus versiones desde 1.0.0; la revisión y el latido siguen la cadencia del paso 8.24; y la copia lleva las marcas por campo del paciente y de la nota, que quien acepta exige tener (8.22). En la app: K8. |
-| C3 | **Modo sin conexión** | La tablet trabaja sobre su base local (Room + SQLCipher) y sincroniza por Turso al volver la red, igual que la PC. Indicador visible «N cambios sin sincronizar» (plan Fase 8, paso 8.4). La tablet **cobra también sin conexión** (respuesta 2 del médico: no debe notarse diferencia entre la PC y la app): venta, movimientos por lote, nota y cita "Atendida", con el folio con letra (8.16); una existencia puede quedar en negativo con el aviso "revisar inventario" y se corrige con un conteo (8.20). En la app: K7. El celular consulta lo último que bajó, y lo que agenda o registra sin red sube al volver (K4b). |
+| C3 | **Modo sin conexión** | La tablet trabaja sobre su base local (Room + SQLCipher) y sincroniza por Turso al volver la red, igual que la PC. Indicador visible «N cambios sin sincronizar» (en la PC desde v1.20.2, paso 8.4). La tablet **cobra también sin conexión** (respuesta 2 del médico: no debe notarse diferencia entre la PC y la app): venta, movimientos por lote, nota y cita "Atendida", con el folio con letra (8.16); una existencia puede quedar en negativo con el aviso "revisar inventario" y se corrige con un conteo (8.20). En la app: K7. El celular consulta lo último que bajó, y lo que agenda o registra sin red sube al volver (K4b). |
 | C4 | **Interfaz táctil** | Plan Fase 8 (app, pasos K6–K9; pila en el plan §7): rehacer las pantallas en **Jetpack Compose** (Material 3, un solo código para la tablet y el celular): consulta, receta con plantillas y calculadora pediátrica, agenda, cobro. Los atajos de teclado no aplican. Mismas reglas de la consulta que en la PC: la consulta nunca manda al POS, *Se surte aquí* viene marcado por defecto y no existe "terminar sin cobrar". Tomar como modelo la consulta de v1.10 (secciones en el orden de la entrevista, cuenta de la consulta a la derecha y ventana *Terminar consulta*), Pacientes de v1.14 (inicio con citas de hoy, ficha única, alta por secciones, agenda en panel) y el cobro de v1.15 (`CheckoutViewModel`: cuenta, forma de pago, recibido y cambio). Kotlin porta las reglas puras de la PC y las comprueba con los vectores compartidos (pasos 8.11 y 8.26): `TextSearch.FindBestMatchIndex`, `PatientsHomeViewModel.RankPatients`, `PatientChartViewModel.BuildTimeline` y `BuildAntecedentSections`, `AgendaPanelViewModel.BuildSlots`, `PosViewModel.RankProducts` y `ParseQuantityPrefix`, signos e IMC, dosis pediátrica, alergias, cuenta de la consulta y máscara de fecha. |
 | C5 | **Funciones solo-PC** | Importar Excel, restaurar base, configuración de Turso e inventario completo quedan en la PC (rol `WindowsDesktop`). |
 | C6 | **Compartir receta y ticket** | Pedido del médico (2026-10-09): al ver una receta (vista previa, expediente, al terminar la consulta) o un ticket, botón **Compartir** con la hoja de compartir de Android (WhatsApp, correo, guardar): la receta como PDF con el modelo de la Fase 7.4 y el ticket como imagen o PDF. Plan Fase 8: el PDF se arma en el propio equipo, sin la PC: la receta con `PdfDocument` desde el modelo `PrescriptionSheet` y el membrete de `ClinicAssets` (pasos 8.11 y 8.12), y el ticket con `TicketText` (8.11); permiso nuevo `CanShareDocuments` (8.10). En la app: K4 (celular) y K7 (tablet). |
 
 ## D. Verificación pendiente en Windows
 
-### Fase 8 (plan: se revisa al publicar cada paso; hechos el 8.2 y el 8.3, abajo)
+### Fase 8 (plan: se revisa al publicar cada paso; hechos del 8.2 al 8.4, abajo)
 
 En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
@@ -82,6 +82,11 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.20.2 (Fase 8, paso 8.4: filas apartadas)
+
+- [ ] Con dos PC sincronizando: *Nube y dispositivos* no muestra "cambios sin sincronizar" en un día normal; si llegara a aparecer, vuelve a cero solo en las siguientes sincronizaciones.
+- [ ] Editar un servicio con insumos por omisión (cambiar una cantidad) y sincronizar: en la otra PC el servicio queda con los mismos insumos y la cantidad nueva.
 
 ### v1.20.1 (Fase 8, paso 8.3: contrato de sincronización)
 

@@ -406,6 +406,203 @@ public class TursoSyncEndToEndTests
         Assert.IsTrue((await handoff.PollAsync(null)).Incoming.Count == 0);
     }
 
+    // ================================================================== filas apartadas (paso 8.4)
+
+    private void ExecuteCloud(string sql)
+    {
+        using var held = _server.Lock();
+        using var cmd = _server.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private object? CloudScalar(string sql)
+    {
+        using var held = _server.Lock();
+        using var cmd = _server.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        return cmd.ExecuteScalar();
+    }
+
+    /// <summary>Saca una fila de la nube como si todavía no hubiera llegado; <see cref="ReleaseHeldRow"/> la regresa.</summary>
+    private void HoldCloudRow(string table, Guid syncId) =>
+        ExecuteCloud($"CREATE TABLE held_{table} AS SELECT * FROM \"{table}\" WHERE SyncId = '{TursoSyncService.FormatGuid(syncId)}'; " +
+                     $"DELETE FROM \"{table}\" WHERE SyncId = '{TursoSyncService.FormatGuid(syncId)}';");
+
+    private void ReleaseHeldRow(string table) =>
+        ExecuteCloud($"INSERT INTO \"{table}\" SELECT * FROM held_{table}; " +
+                     $"UPDATE \"{table}\" SET SyncedAtUtc = {TursoSyncService.ServerNowSql} WHERE SyncId IN (SELECT SyncId FROM held_{table}); " +
+                     $"DROP TABLE held_{table};");
+
+    [TestMethod]
+    public async Task RowWithoutItsRequiredPrincipal_IsParked_AndAppliedWhenThePrincipalArrives()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var patient = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente Apartado", Age = 40 });
+        await pc.Inventory.AddConsultationNoteAsync(patient.Id, new PatientConsultation { ChiefComplaint = "Cefalea tensional" });
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // La consulta llega a la tablet antes que su expediente
+        HoldCloudRow("Patients", patient.SyncId);
+        var tablet = CreateDevice("tablet", seed: false);
+        var first = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(first.Success, first.ErrorMessage);
+        Assert.AreEqual(1, first.ParkedRows, "La consulta se aparta en lugar de perderse");
+        StringAssert.EndsWith(tablet.Sync.StatusMessage, "· 1 cambio sin sincronizar");
+
+        ReleaseHeldRow("Patients");
+        var second = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(second.Success, second.ErrorMessage);
+        Assert.AreEqual(0, second.ParkedRows, "El contador vuelve a cero solo");
+        Assert.AreEqual(0, tablet.Sync.ParkedCount);
+
+        var onTablet = (await tablet.Inventory.GetPatientsAsync()).Single(p => p.SyncId == patient.SyncId);
+        var full = (await tablet.Inventory.GetPatientByIdAsync(onTablet.Id))!;
+        Assert.IsTrue(full.Consultations.Any(c => c.ChiefComplaint == "Cefalea tensional"), "La consulta apartada se aplicó al llegar su expediente");
+    }
+
+    /// <summary>Una venta deja un movimiento con el lote del que salió (FEFO).</summary>
+    private static async Task SellOneFromABatchAsync(Device device)
+    {
+        var batch = (await device.Inventory.GetBatchesAsync()).First(b => !b.IsDepleted && b.Quantity > 2);
+        var product = (await device.Inventory.GetProductsAsync()).Single(p => p.Id == batch.ProductId);
+        await device.Inventory.RegisterSaleAsync(new[] { (product.Id, 1, product.Price) }, "Público General", "Efectivo");
+    }
+
+    [TestMethod]
+    public async Task MovementThatArrivesBeforeItsBatch_EndsUpWithItsBatch()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        await SellOneFromABatchAsync(pc);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var batchSyncId = Guid.Parse((string)CloudScalar("SELECT BatchSyncId FROM InventoryMovements WHERE BatchSyncId IS NOT NULL LIMIT 1")!);
+        var movements = (long)CloudScalar($"SELECT COUNT(*) FROM InventoryMovements WHERE BatchSyncId = '{TursoSyncService.FormatGuid(batchSyncId)}'")!;
+
+        // Antes la referencia opcional se guardaba en nulo y el movimiento nunca volvía a aplicarse
+        HoldCloudRow("ProductBatches", batchSyncId);
+        var tablet = CreateDevice("tablet", seed: false);
+        var first = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(first.Success, first.ErrorMessage);
+        Assert.AreEqual((int)movements, first.ParkedRows);
+
+        ReleaseHeldRow("ProductBatches");
+        Assert.AreEqual(0, (await tablet.Sync.SyncAsync()).ParkedRows);
+
+        using var db = tablet.Factory.CreateDbContext();
+        var batchId = db.ProductBatches.Single(b => b.SyncId == batchSyncId).Id;
+        Assert.AreEqual((int)movements, db.InventoryMovements.Count(m => m.BatchId == batchId), "Cada movimiento terminó con su lote");
+    }
+
+    [TestMethod]
+    public async Task OptionalReferenceToADeletedPrincipal_IsAppliedEmpty()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        await SellOneFromABatchAsync(pc);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var batchSyncId = Guid.Parse((string)CloudScalar("SELECT BatchSyncId FROM InventoryMovements WHERE BatchSyncId IS NOT NULL LIMIT 1")!);
+
+        // El lote se borró en la nube (con su lápida) y sus movimientos se quedaron: se aplican sin lote
+        var id = TursoSyncService.FormatGuid(batchSyncId);
+        ExecuteCloud($"DELETE FROM ProductBatches WHERE SyncId = '{id}'; INSERT INTO SyncTombstones VALUES ('ProductBatch', '{id}', " +
+                     $"{TursoSyncService.ServerNowSql}, {TursoSyncService.ServerNowSql}, 'device-pc');");
+        var tablet = CreateDevice("tablet", seed: false);
+        var result = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.AreEqual(0, result.ParkedRows, "En la misma sincronización: la lápida del principal deja aplicar la fila");
+
+        using var db = tablet.Factory.CreateDbContext();
+        var cloudMovements = (long)CloudScalar($"SELECT COUNT(*) FROM InventoryMovements WHERE BatchSyncId = '{id}'")!;
+        Assert.IsGreaterThan(0L, cloudMovements);
+        Assert.AreEqual(db.InventoryMovements.Count(), (int)(long)CloudScalar("SELECT COUNT(*) FROM InventoryMovements")!, "Ningún movimiento se perdió");
+    }
+
+    [TestMethod]
+    public async Task TombstoneThatFails_IsParked_AndRetried()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // Una categoría borrada en otro equipo que aquí todavía tiene productos: su borrado falla
+        var categories = await tablet.Inventory.GetCategoriesAsync();
+        var products = await tablet.Inventory.GetProductsAsync();
+        var doomed = categories.First(c => products.Any(p => p.CategoryId == c.Id));
+        var keep = categories.First(c => c.Id != doomed.Id);
+        var id = TursoSyncService.FormatGuid(doomed.SyncId);
+        ExecuteCloud($"INSERT INTO SyncTombstones VALUES ('Category', '{id}', {TursoSyncService.ServerNowSql}, {TursoSyncService.ServerNowSql}, 'device-pc');");
+
+        var failed = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(failed.Success, failed.ErrorMessage);
+        Assert.AreEqual(1, failed.ParkedRows, "La lápida se aparta en lugar de perderse");
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            var parked = db.SyncParkedRows.Single();
+            Assert.AreEqual(SyncParkedRow.Tombstone, parked.Direction);
+            Assert.AreEqual(2, parked.Attempts, "Se intentó al bajarla y otra vez al final de la descarga");
+        }
+
+        // Aquí se mueven sus productos a otra categoría: el siguiente intento la borra
+        foreach (var product in products.Where(p => p.CategoryId == doomed.Id))
+        {
+            product.CategoryId = keep.Id;
+            await tablet.Inventory.SaveProductAsync(product);
+        }
+        var retried = await tablet.Sync.SyncAsync();
+        Assert.AreEqual(0, retried.ParkedRows);
+        Assert.IsFalse((await tablet.Inventory.GetCategoriesAsync()).Any(c => c.SyncId == doomed.SyncId));
+    }
+
+    [TestMethod]
+    public async Task RowThatCannotBePushed_IsParked_AndRetriedAfterTheCursorPassedIt()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // Un lote huérfano (su producto no existe): no puede subir sin el SyncId de su producto
+        var orphanSyncId = Guid.NewGuid();
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Database.OpenConnection();
+            db.Database.ExecuteSqlRaw("PRAGMA foreign_keys = OFF;");
+            db.ProductBatches.Add(new ProductBatch { SyncId = orphanSyncId, ProductId = 999_999, BatchNumber = "HUERFANO", ExpirationDate = DateTime.Today.AddYears(1), Quantity = 3 });
+            db.SaveChanges();
+        }
+
+        var first = await pc.Sync.SyncAsync();
+        Assert.IsTrue(first.Success, first.ErrorMessage);
+        Assert.AreEqual(1, first.ParkedRows);
+        Assert.AreEqual(0L, (long)CloudScalar($"SELECT COUNT(*) FROM ProductBatches WHERE SyncId = '{TursoSyncService.FormatGuid(orphanSyncId)}'")!);
+
+        // Aparece su producto: el lote sube aunque el cursor de subida ya pasó su marca
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Products.Add(new Product { Id = 999_999, Code = "PRD-APARTADO", Name = "Producto que faltaba", CategoryId = db.Categories.First().Id });
+            db.SaveChanges();
+        }
+        var second = await pc.Sync.SyncAsync();
+        Assert.IsTrue(second.Success, second.ErrorMessage);
+        Assert.AreEqual(0, second.ParkedRows);
+        Assert.AreEqual(1L, (long)CloudScalar($"SELECT COUNT(*) FROM ProductBatches WHERE SyncId = '{TursoSyncService.FormatGuid(orphanSyncId)}' AND ProductSyncId IS NOT NULL")!);
+    }
+
+    [TestMethod]
+    public async Task EditingAServiceKeepsItsDefaultProducts_WithoutTombstones()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var service = (await pc.Inventory.GetClinicalServicesAsync()).First(s => s.DefaultProducts.Count > 0);
+        var before = service.DefaultProducts.ToDictionary(d => d.ProductId, d => d.SyncId);
+
+        var edited = service.DefaultProducts.Select(d => (d.ProductId, d.Quantity + 1, d.Instructions)).ToList();
+        await pc.Inventory.SaveClinicalServiceAsync(service, edited);
+
+        using var db = pc.Factory.CreateDbContext();
+        var after = db.ServiceDefaultProducts.Where(d => d.ClinicalServiceId == service.Id).ToList();
+        CollectionAssert.AreEquivalent(before.Values.ToList(), after.Select(d => d.SyncId).ToList(), "Cada renglón conserva su SyncId");
+        Assert.IsTrue(after.All(d => d.Quantity == service.DefaultProducts.Single(o => o.ProductId == d.ProductId).Quantity + 1));
+        Assert.IsFalse(db.SyncTombstones.Any(t => t.EntityType == nameof(ServiceDefaultProduct)), "Editar no deja lápidas");
+    }
+
     [TestMethod]
     public async Task ClinicProfile_LastWriteWinsAcrossDevices()
     {

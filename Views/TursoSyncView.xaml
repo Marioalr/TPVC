@@ -43,6 +43,9 @@
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource TextSection}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                                 <TextBlock Style="{StaticResource TextCaption}" Text="{Binding LastSyncText}" Margin="0,2,0,0" />
+                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ParkedNoticeText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource ThemeWarningText}"
+                                           Visibility="{Binding ParkedNoticeText, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                             <Button Grid.Column="2" Style="{StaticResource ButtonPrimary}" Command="{Binding SyncNowCommand}" Margin="12,0,0,0" VerticalAlignment="Center"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">

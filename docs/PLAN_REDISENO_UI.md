@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-10 (TPVC v1.20.1).
+Estado al 2026-10-10 (TPVC v1.20.2).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -48,7 +48,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
-| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 y 8.3 hechos (v1.20.0 y v1.20.1); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
+| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.4 hechos (v1.20.0 a v1.20.2); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -337,7 +337,7 @@ cuatro temas):
 | **Vincular tablet o celular** | El campo para pegar una vez el "token para tablet y celular". Elegir el rol; el QR durante 10 min, solo en la red del consultorio; la confirmación "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913" con *Sí* y *No*, con el mismo código en las dos pantallas; el respaldo "Teclear a mano" con la aprobación del equipo nuevo. La primera vez, el Firewall de Windows puede pedir permitir TPVC en redes privadas. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación en claro, que se retiró en 8.2 (v1.20.0). | 8.14 |
 | **Unirse a una nube existente**, **Recuperar desde la nube** y **Esta PC ya usaba esta nube** | Si la nube ya tiene su `clinicId` y la base local no (pegar URL y token, como hoy), la sincronización no arranca y ofrece unirse, "Reemplazar con la nube" (teclear CONFIRMAR, respaldo antes) o "Esta PC ya usaba esta nube". "Recuperar desde la nube" baja todo a una PC nueva o descompuesta. | 8.7, 8.8 |
 | Pregunta al **restaurar** con la nube activa | "Reemplazar la nube con este respaldo" o "Desconectar esta PC de la nube", con la lista por tabla de lo que se perdería ("se perderán 12 notas y 30 ventas de la tablet"); después, "Volver a aplicar N cambios". | 8.9 |
-| **"N cambios sin sincronizar"** | Filas apartadas que se reintentan en cada sincronización; vuelve a cero solo. | 8.4 |
+| **"N cambios sin sincronizar"** | Filas apartadas que se reintentan en cada sincronización; vuelve a cero solo. En el estado y en *Nube y dispositivos* (captura `20c-config-tursosync-apartados`). | 8.4 ✅ v1.20.2 |
 | **Aviso de hora** | "La hora de esta computadora difiere N min de la nube", si pasa de 2 min. | 8.7 |
 | **"Sincronización pausada: consumo anormal"** y **"Se agotó la cuota mensual de Turso"** | El freno de consumo, con *Reanudar*; la cuota agotada reintenta cada hora. El estado dice el título en una línea (también en la barra de estado: "Turso: En pausa") y el aviso de abajo da el detalle. Capturas en los cuatro temas (`20b-config-tursosync-freno`). | 8.2 ✅ v1.20.0 |
 | Insignia **"−1 · revisar inventario"** | Productos en negativo y también un lote negativo aunque el total sea positivo, con alerta en el resumen. Se corrige con un conteo. | 8.20 |
