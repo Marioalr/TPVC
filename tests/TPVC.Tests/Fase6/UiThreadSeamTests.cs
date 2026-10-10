@@ -295,7 +295,10 @@ public class UiThreadSeamTests
         Assert.IsTrue(task.IsCompletedSuccessfully);
     }
 
+    // Prueba el anfitrión de WPF (MedicalRecordsViewModel con WpfUiThread): en Linux, donde WPF no puede
+    // iniciarse, no aplica. La parte sin WPF la cubre Workspace_WithoutWpf_RunsAFullConsultation_AndAcceptsAHandoff
     [TestMethod]
+    [TestCategory("Windows")]
     public void MedicalRecords_TakesTheContextWhenItIsCreated()
     {
         // El indicador "Guardado hh:mm:ss" del guardado automático se pone en el contexto que había al

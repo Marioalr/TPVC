@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.19.0";
+    private string _appVersion = "1.20.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -185,7 +185,7 @@ public partial class MainViewModel : ObservableObject
         DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications);
         UpdatesVM = new UpdatesViewModel(updateService);
         ServicesCatalogVM = new ServicesCatalogViewModel(inventoryService, Notifications);
-        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService, _clinicProfileService);
+        TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService);
 
         ConfigurationShellVM = new ConfigurationShellViewModel(
             NavigateTo,
@@ -691,6 +691,10 @@ public partial class MainViewModel : ObservableObject
             case TursoSyncStatus.Error:
                 TursoStatusText = "Turso: Sin conexión";
                 TursoStatusToolTip = $"Operando localmente sin riesgo de pérdida de datos.\n{message}";
+                break;
+            case TursoSyncStatus.Paused:
+                TursoStatusText = "Turso: En pausa";
+                TursoStatusToolTip = $"Operando localmente sin riesgo de pérdida de datos. Clic para ver el detalle.\n{message}";
                 break;
         }
     }

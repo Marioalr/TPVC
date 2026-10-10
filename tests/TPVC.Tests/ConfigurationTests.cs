@@ -173,6 +173,7 @@ public class ConfigurationTests
     }
 
     [TestMethod]
+    [TestCategory("Windows")]
     public void Appearance_ApplyCustomColorsValidatesAndSwitchesToCustomMode()
     {
         if (!OperatingSystem.IsWindows()) return; // aplicar el tema usa los recursos de WPF
@@ -214,6 +215,7 @@ public class ConfigurationTests
     }
 
     [TestMethod]
+    [TestCategory("Windows")]
     public void Appearance_SelectAccentMarksOnlyThatSwatch()
     {
         if (!OperatingSystem.IsWindows()) return; // aplicar el tema usa los recursos de WPF

@@ -70,11 +70,67 @@ public class TursoSyncService
     private long _externalRowsRead;
     private long _externalRowsWritten;
 
+    // Turso respondió BLOCKED (cuota agotada): la sincronización automática espera hasta esta hora (ticks UTC;
+    // 0 = sin pausa). Se lee desde la interfaz y se escribe desde la sincronización: entero de 64 bits atómico
+    private long _quotaRetryAtTicks;
+    private int _quotaRetryScheduled;
+
+    private DateTime? StoredQuotaRetryAtUtc
+    {
+        get
+        {
+            var ticks = Interlocked.Read(ref _quotaRetryAtTicks);
+            return ticks == 0 ? null : new DateTime(ticks, DateTimeKind.Utc);
+        }
+        set => Interlocked.Exchange(ref _quotaRetryAtTicks, value?.Ticks ?? 0);
+    }
+
     /// <summary>Crea el cliente HTTP de Turso (reemplazable en pruebas por un servidor simulado).</summary>
     public Func<string, string, TursoClient> ClientFactory { get; set; } = (url, token) => new TursoClient(url, token);
 
+    /// <summary>Reloj de la pausa por cuota agotada (reemplazable en pruebas).</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
     public TursoSyncStatus Status { get; private set; } = TursoSyncStatus.NotConfigured;
     public string StatusMessage { get; private set; } = "Sin configurar";
+
+    /// <summary>Por qué está detenida la sincronización automática (el freno manda sobre la cuota agotada).</summary>
+    public TursoSyncPauseReason PauseReason
+    {
+        get
+        {
+            if (_settingsService.CurrentSettings.ConsumptionBrakeTrippedUtc != null) return TursoSyncPauseReason.ConsumptionBrake;
+            return QuotaRetryAtUtc != null ? TursoSyncPauseReason.QuotaExhausted : TursoSyncPauseReason.None;
+        }
+    }
+
+    /// <summary>Hora (UTC) del siguiente intento automático tras BLOCKED; null si la cuota no está agotada (o ya pasó la hora).</summary>
+    public DateTime? QuotaRetryAtUtc
+    {
+        get
+        {
+            var retryAt = StoredQuotaRetryAtUtc;
+            return retryAt != null && Clock.GetUtcNow().UtcDateTime < retryAt.Value ? retryAt : null;
+        }
+    }
+
+    /// <summary>Detalle de la pausa, para el aviso de Nube y dispositivos y los errores.</summary>
+    private string PauseMessage => PauseReason switch
+    {
+        TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedMessage,
+        TursoSyncPauseReason.QuotaExhausted => $"{TursoException.QuotaExhaustedMessage} Siguiente intento: {RetryAtLocalText}.",
+        _ => string.Empty
+    };
+
+    /// <summary>La pausa en una línea, para el estado (barra de estado y resumen de Configuración).</summary>
+    private string PauseTitle => PauseReason switch
+    {
+        TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedTitle,
+        TursoSyncPauseReason.QuotaExhausted => $"{TursoException.QuotaExhaustedTitle} · siguiente intento a las {RetryAtLocalText}",
+        _ => string.Empty
+    };
+
+    private string RetryAtLocalText => (QuotaRetryAtUtc ?? Clock.GetUtcNow().UtcDateTime).ToLocalTime().ToString("HH:mm");
 
     public event Action<TursoSyncStatus, string>? StatusChanged;
     public event Action<TursoSyncResult>? SyncCompleted;
@@ -111,6 +167,10 @@ public class TursoSyncService
         if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
         {
             SetStatus(TursoSyncStatus.NotConfigured, "Sincronización en la nube desactivada (Modo Local SQLite)");
+        }
+        else if (PauseReason != TursoSyncPauseReason.None)
+        {
+            SetStatus(TursoSyncStatus.Paused, PauseTitle);
         }
         else if (Status != TursoSyncStatus.Error)
         {
@@ -166,14 +226,99 @@ public class TursoSyncService
             });
         }
 
+        // Cuota agotada o freno de consumo: solo lo que pide el médico (o la consulta entre equipos) sigue
+        if (isBackgroundAutoSync && PauseReason != TursoSyncPauseReason.None)
+        {
+            return Task.FromResult(new TursoSyncResult { Success = false, ErrorMessage = PauseMessage });
+        }
+
         return RunExclusiveAsync(isBackgroundAutoSync, fullResync: false, ct, lockWait);
     }
 
     /// <summary>Suma al monitor de cuota lo leído y escrito fuera de la sincronización.</summary>
     public void AddExternalUsage(long rowsRead, long rowsWritten)
     {
-        Interlocked.Add(ref _externalRowsRead, rowsRead);
-        Interlocked.Add(ref _externalRowsWritten, rowsWritten);
+        var pendingRead = Interlocked.Add(ref _externalRowsRead, rowsRead);
+        var pendingWritten = Interlocked.Add(ref _externalRowsWritten, rowsWritten);
+
+        // La revisión de consultas no pasa por la sincronización: un ciclo descontrolado ahí también frena
+        if (_settingsService.CurrentSettings.ConsumptionBrakeTrippedUtc != null) return;
+        var today = _settingsService.GetQuotaSummary();
+        if (today.RowsReadToday + pendingRead > TursoConsumptionBrake.MaxRowsReadPerDay
+            || today.RowsWrittenToday + pendingWritten > TursoConsumptionBrake.MaxRowsWrittenPerDay)
+        {
+            TripConsumptionBrake("la revisión de consultas entre equipos pasó el tope diario");
+        }
+    }
+
+    /// <summary>
+    /// Para lo automático que no es la sincronización (la revisión de consultas entre equipos): lanza si la
+    /// sincronización automática está detenida, sin llegar a Turso.
+    /// </summary>
+    public void ThrowIfAutomaticSyncPaused()
+    {
+        var reason = PauseReason;
+        if (reason == TursoSyncPauseReason.None) return;
+        throw new TursoException(PauseMessage,
+            reason == TursoSyncPauseReason.QuotaExhausted ? TursoException.QuotaExhaustedCode : TursoException.ConsumptionBrakeCode);
+    }
+
+    /// <summary>"Reanudar" después del freno de consumo: el día se vuelve a contar desde cero.</summary>
+    public void ResumeAfterConsumptionBrake()
+    {
+        // Lo que la revisión de consultas leyó y todavía no se anotaba cuenta para el mes, no para el día nuevo
+        // (si no, el freno se volvería a activar en la siguiente revisión)
+        _settingsService.RecordUsage(Interlocked.Exchange(ref _externalRowsRead, 0), Interlocked.Exchange(ref _externalRowsWritten, 0));
+        _settingsService.ResumeAfterConsumptionBrake();
+        AppLogger.Warn("Turso: el médico reanudó la sincronización después del freno de consumo.");
+        if (Status == TursoSyncStatus.Syncing) return;
+        if (PauseReason == TursoSyncPauseReason.QuotaExhausted)
+            SetStatus(TursoSyncStatus.Paused, PauseTitle);
+        else
+            SetStatus(TursoSyncStatus.Idle, "Sincronización reanudada");
+    }
+
+    private void TripConsumptionBrake(string why)
+    {
+        if (_settingsService.CurrentSettings.ConsumptionBrakeTrippedUtc != null) return;
+        _settingsService.TripConsumptionBrake();
+        var q = _settingsService.GetQuotaSummary();
+        AppLogger.Warn($"Turso: freno de consumo activado ({why}). Hoy: {q.RowsReadToday:N0} lecturas, {q.RowsWrittenToday:N0} escrituras, " +
+                       $"{q.FullPullsToday} descargas completas.");
+        if (Status != TursoSyncStatus.Syncing) SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
+    }
+
+    /// <summary>Activa el freno si el consumo estimado de hoy pasó un tope.</summary>
+    private void CheckDailyConsumption()
+    {
+        var q = _settingsService.GetQuotaSummary();
+        if (q.RowsReadToday > TursoConsumptionBrake.MaxRowsReadPerDay)
+            TripConsumptionBrake($"más de {TursoConsumptionBrake.MaxRowsReadPerDay:N0} lecturas en el día");
+        else if (q.RowsWrittenToday > TursoConsumptionBrake.MaxRowsWrittenPerDay)
+            TripConsumptionBrake($"más de {TursoConsumptionBrake.MaxRowsWrittenPerDay:N0} escrituras en el día");
+    }
+
+    /// <summary>Tras BLOCKED: sin sincronización automática durante una hora, y un intento solo al terminar.</summary>
+    private void PauseForExhaustedQuota()
+    {
+        StoredQuotaRetryAtUtc = Clock.GetUtcNow().UtcDateTime + TursoConsumptionBrake.QuotaRetryInterval;
+        AppLogger.Warn($"Turso respondió BLOCKED (cuota mensual agotada): sincronización automática en pausa hasta {StoredQuotaRetryAtUtc:HH:mm} UTC.");
+
+        if (Interlocked.Exchange(ref _quotaRetryScheduled, 1) == 1) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TursoConsumptionBrake.QuotaRetryInterval, Clock);
+                Interlocked.Exchange(ref _quotaRetryScheduled, 0);
+                await SyncAsync(isBackgroundAutoSync: true);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Exchange(ref _quotaRetryScheduled, 0);
+                AppLogger.Warn($"Turso: el reintento tras la cuota agotada no pudo completarse: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
@@ -221,7 +366,12 @@ public class TursoSyncService
                 ElapsedMilliseconds = sw.ElapsedMilliseconds
             };
 
-            SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)");
+            // Turso volvió a aceptar instrucciones: termina la pausa por cuota agotada
+            StoredQuotaRetryAtUtc = null;
+            if (PauseReason == TursoSyncPauseReason.ConsumptionBrake)
+                SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
+            else
+                SetStatus(TursoSyncStatus.Success, $"✓ Sincronizado ({pushed} subidos, {pulled} recibidos • {sw.ElapsedMilliseconds} ms)");
             SyncCompleted?.Invoke(result);
 
             if (pulled > 0)
@@ -234,10 +384,23 @@ public class TursoSyncService
         catch (Exception ex)
         {
             sw.Stop();
-            AppLogger.Error("Falló la sincronización con Turso", ex);
-
-            var offline = ex is TursoException { ErrorCode: "NETWORK_ERROR" or "TIMEOUT" };
-            SetStatus(offline ? TursoSyncStatus.Offline : TursoSyncStatus.Error, $"Error de sincronización: {ex.Message}");
+            var code = (ex as TursoException)?.ErrorCode;
+            if (code is TursoException.QuotaExhaustedCode)
+            {
+                PauseForExhaustedQuota();
+                SetStatus(TursoSyncStatus.Paused, PauseTitle);
+            }
+            else if (code is TursoException.ConsumptionBrakeCode)
+            {
+                SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
+            }
+            else
+            {
+                AppLogger.Error("Falló la sincronización con Turso", ex);
+                var offline = code is "NETWORK_ERROR" or "TIMEOUT";
+                SetStatus(offline ? TursoSyncStatus.Offline : TursoSyncStatus.Error,
+                    code is TursoException.ArchivedCode ? ex.Message : $"Error de sincronización: {ex.Message}");
+            }
 
             var result = new TursoSyncResult
             {
@@ -258,6 +421,11 @@ public class TursoSyncService
     private async Task<(int Pushed, int Pulled)> SyncCoreAsync(bool fullResync, CancellationToken ct)
     {
         var settings = _settingsService.CurrentSettings;
+
+        // Una sincronización completa (o la primera) sube y baja todo: el freno la revisa antes de empezar
+        bool fullPull = fullResync || settings.LastPulledServerWatermark == null;
+        if (fullPull) EnsureFullPullAllowed();
+
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
         await EnsureRemoteSchemaAsync(client, ct);
@@ -275,9 +443,10 @@ public class TursoSyncService
 
         // 2. PULL: lo que otros dispositivos escribieron en el servidor desde la última descarga
         //    (la nueva marca se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
+        var lastPulled = fullResync ? null : settings.LastPulledServerWatermark;
+        if (fullPull) _settingsService.RecordFullPull(); // se cuenta al empezar a bajar, cuando la red ya respondió
         var watermarkRows = await client.QueryAsync($"SELECT strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds') AS wm;", null, ct);
         var newWatermark = watermarkRows.FirstOrDefault()?["wm"]?.ToString();
-        var lastPulled = fullResync ? null : settings.LastPulledServerWatermark;
         var (pulled, rowsRead) = await PullRemoteChangesAsync(client, settings.DeviceId, lastPulled, skipOwnRows: !fullResync, ct);
 
         // 3. Perfil del consultorio (último en modificarse gana)
@@ -289,8 +458,24 @@ public class TursoSyncService
         _settingsService.RecordUsage(rowsRead + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
             pushed + 1 + Interlocked.Exchange(ref _externalRowsWritten, 0));
         _settingsService.SaveSettings(settings);
+        CheckDailyConsumption();
 
         return (pushed, pulled);
+    }
+
+    /// <summary>
+    /// Una descarga completa lee toda la nube (~20–30k filas): como máximo <see cref="TursoConsumptionBrake.MaxFullPullsPerDay"/>
+    /// al día. La siguiente activa el freno y no se hace (un error que borre la marca de agua en cada vuelta
+    /// gastaría la cuota del mes en horas).
+    /// </summary>
+    private void EnsureFullPullAllowed()
+    {
+        if (_settingsService.CurrentSettings.ConsumptionBrakeTrippedUtc != null
+            || _settingsService.GetQuotaSummary().FullPullsToday >= TursoConsumptionBrake.MaxFullPullsPerDay)
+        {
+            TripConsumptionBrake($"se pidió una descarga completa más después de {TursoConsumptionBrake.MaxFullPullsPerDay} en el día");
+            throw new TursoException(TursoConsumptionBrake.PausedMessage, TursoException.ConsumptionBrakeCode);
+        }
     }
 
     // =========================================================================

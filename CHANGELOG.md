@@ -2,7 +2,28 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
-## [Sin publicar]
+## [1.20.0] - 2026-10-10
+
+### Añadido — Fase 8, paso 8.2: la cuota de Turso protegida
+* **Freno de consumo**: si este equipo usa en un día mucho más de lo normal de la cuota gratuita de Turso (más de 3 millones de lecturas o 30 mil escrituras estimadas, o una tercera descarga completa), la sincronización automática se detiene con el aviso "Sincronización pausada: consumo anormal" y el botón **Reanudar** en *Configuración › Nube y dispositivos*. El uso normal queda unas 100 veces por debajo; el freno es para un error que repita una descarga sin parar. Mientras está activo, "Sincronizar ahora" y enviar una consulta a otro equipo siguen funcionando; otra "Sincronización completa" espera a *Reanudar*. El freno sigue activo al reabrir el programa.
+* **Cuota agotada**: cuando Turso responde `BLOCKED`, la app dice "Se agotó la cuota mensual de Turso", sigue trabajando con sus datos y reintenta sola cada hora; la revisión de consultas entre equipos también espera.
+* **Base archivada**: si el plan gratuito archivó la base después de 10 días sin uso, el mensaje explica cómo reactivarla (`turso group unarchive`).
+* La barra de estado dice "Turso: En pausa" en los dos casos.
+
+### Cambiado
+* *Nube y dispositivos* muestra los límites vigentes del plan gratuito (500 millones de lecturas, 10 millones de escrituras y 5 GB) y el consumo de hoy frente a los topes del freno. Se quitó la leyenda "consume menos del 0.05%".
+* El uso de esta computadora queda fijo como PC del consultorio: se quitó el selector "Uso" (una PC configurada con otro uso se corrige sola al abrir).
+* La URL de Turso solo se acepta con `https://` o `libsql://`; `http://` sin cifrar, solo para un servidor de pruebas en el mismo equipo (`localhost`).
+
+### Seguridad
+* Se retiró "Generar código" para la tablet y el celular: era un texto en claro con el token completo de Turso, sin vencimiento, que se copiaba al portapapeles. La vinculación llegará por QR en la red del consultorio (paso 8.14), sin que el token salga de la PC; mientras, los botones dicen "Disponible con la vinculación por QR".
+
+### Interno
+* CI: job nuevo en Linux (`ubuntu-latest`) con las pruebas que no usan WPF ni DPAPI, en UTC y en la zona de México. Copia el runtime de escritorio de Windows (versión y SHA-512 fijos) porque el proyecto de pruebas es `net10.0-windows`. Las pruebas que solo corren en Windows llevan `[TestCategory("Windows")]`; la CI de Windows las sigue corriendo todas.
+* `FakeHranaServer`, el servidor Turso simulado (ahora en su propio archivo): reloj del servidor inyectable, estimación de filas leídas y escritas que cobraría Turso, grabadora de peticiones, revisión con `EXPLAIN QUERY PLAN` que avisa ante un recorrido completo de una tabla sincronizada (fallará desde el paso 8.6), tope de tamaño de respuesta y `BLOCKED` a pedido.
+* Prueba base para los pasos siguientes: una sincronización sin cambios = 16 peticiones (16 filas leídas estimadas).
+* Falta comprobar en una base de prueba de Turso: V7 (texto y estado HTTP de `BLOCKED`), V9 (error de una base archivada) y V10 (si las entradas de índice cuentan como escrituras). Mientras, la app reconoce `BLOCKED` por el código o el texto del error, y una base archivada por la palabra "archived".
+* La prueba de pantallas captura *Nube y dispositivos* con el freno activo en los cuatro temas. 367 pruebas.
 
 ### Documentación — Plan de la Fase 8: datos listos para tres equipos con Turso
 * Plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (todavía sin código): la PC, la tablet y el celular (app en **Kotlin** nativo) trabajarán cada uno sobre su propia base y se sincronizarán por Turso (plan gratuito) con el protocolo v2; la consulta pasará entre equipos por `ConsultationHandoffs`. Incluye el uso estimado de Turso con tres equipos, la vinculación por QR en la red local, los folios consecutivos con su regularización diaria, cómo quedan los bloqueantes A1–A6 y los demás riesgos, 25 pasos en la PC (8.2–8.26, cada uno publicable por separado) y el esqueleto de la app Android (K0–K10 y K4b). Reemplaza un borrador del mismo día que convertía la PC en servidor de la red local; el médico lo descartó.

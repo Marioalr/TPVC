@@ -97,3 +97,63 @@ jobs:
         with:
           name: TPVC-v${{ steps.version.outputs.value }}-win-x64
           path: ./publish/TPVC-v${{ steps.version.outputs.value }}-win-x64.zip
+
+  # Las pruebas que no dependen de WPF ni de DPAPI, también en Linux (paso 8.2 del plan de la Fase 8): la
+  # sincronización con el servidor Turso simulado, la consulta entre equipos y las reglas del negocio corren
+  # igual que corre la app de Kotlin. La CI de Windows sigue mandando para todo lo de WPF.
+  linux-tests:
+    name: Unit Tests (Linux)
+    runs-on: ubuntu-latest
+    env:
+      # El proyecto de pruebas es net10.0-windows con UseWPF: su testhost exige Microsoft.WindowsDesktop.App,
+      # que setup-dotnet no instala en Linux (EnableWindowsTargeting permite compilar, no ejecutar). Se copia
+      # del zip oficial de Windows, con versión y SHA-512 fijos (releases.json de .NET 10); de ahí solo se
+      # cargan ensamblados .NET. Al subir de versión, tomar los dos valores del mismo releases.json.
+      WINDOWSDESKTOP_VERSION: '10.0.12'
+      WINDOWSDESKTOP_SHA512: '8b79f679c348aa08a10ee4e1ca75be54b135ae951b7328400fea8499f9eb8450ccb18f9f708af6182b2bcd88fcca719aa282939e907b017422f519de8dd42534'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # .NET en una carpeta propia (con permiso de escritura) para poder agregarle el runtime de escritorio
+      - name: Choose .NET install folder
+        run: echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/dotnet" >> "$GITHUB_ENV"
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add Microsoft.WindowsDesktop.App runtime
+        run: |
+          set -euo pipefail
+          zip="$RUNNER_TEMP/windowsdesktop-runtime.zip"
+          curl -fsSL --retry 3 -o "$zip" \
+            "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/${WINDOWSDESKTOP_VERSION}/windowsdesktop-runtime-${WINDOWSDESKTOP_VERSION}-win-x64.zip"
+          echo "${WINDOWSDESKTOP_SHA512}  $zip" | sha512sum -c -
+          unzip -q "$zip" "shared/Microsoft.WindowsDesktop.App/*" -d "$RUNNER_TEMP/windowsdesktop"
+          cp -r "$RUNNER_TEMP/windowsdesktop/shared/Microsoft.WindowsDesktop.App" "$DOTNET_ROOT/shared/"
+          dotnet --list-runtimes
+
+      # Los ensamblados de WPF vienen precompilados (ReadyToRun) para Windows y Linux los rechaza ("incorrect
+      # format"); se dejan como IL puro, que el runtime compila al vuelo. Ver scripts/strip-readytorun.ps1
+      - name: Strip ReadyToRun from Microsoft.WindowsDesktop.App
+        shell: pwsh
+        run: ./scripts/strip-readytorun.ps1 -Path "$env:DOTNET_ROOT/shared/Microsoft.WindowsDesktop.App/$env:WINDOWSDESKTOP_VERSION"
+
+      - name: Restore Dependencies
+        run: dotnet restore TPVC.sln
+
+      - name: Build Solution
+        run: dotnet build TPVC.sln --configuration Release --no-restore
+
+      - name: Execute Unit Tests (UTC)
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity normal --filter "TestCategory!=Windows&TestCategory!=Rendimiento"
+
+      # Las fechas del negocio se guardan en hora del consultorio: repetir en la zona de México
+      - name: Execute Unit Tests (zona horaria de México)
+        env:
+          TZ: America/Mexico_City
+        run: dotnet test TPVC.sln --configuration Release --no-build --verbosity minimal --filter "TestCategory!=Windows&TestCategory!=Rendimiento"

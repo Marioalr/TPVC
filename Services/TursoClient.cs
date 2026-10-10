@@ -21,12 +21,51 @@ public static class TursoSyncFormats
 
 public class TursoException : Exception
 {
+    /// <summary>Se acabó la cuota mensual del plan: Turso rechaza toda instrucción con el código BLOCKED.</summary>
+    public const string QuotaExhaustedCode = "BLOCKED";
+
+    /// <summary>El plan gratuito archivó la base por falta de uso.</summary>
+    public const string ArchivedCode = "ARCHIVED";
+
+    /// <summary>No se llegó a Turso: el freno de consumo de este equipo detuvo la sincronización automática.</summary>
+    public const string ConsumptionBrakeCode = "CONSUMPTION_BRAKE";
+
+    public const string QuotaExhaustedTitle = "Se agotó la cuota mensual de Turso";
+
+    public const string QuotaExhaustedDetail =
+        "La nube no acepta lecturas ni escrituras hasta que empiece el siguiente mes o se cambie de plan. " +
+        "Esta computadora sigue trabajando con sus datos; la sincronización automática se reintenta cada hora.";
+
+    public const string QuotaExhaustedMessage = QuotaExhaustedTitle + ". " + QuotaExhaustedDetail;
+
+    public const string ArchivedMessage =
+        "La base de Turso está archivada: el plan gratuito archiva las bases que pasan 10 días sin uso. Para reactivarla, " +
+        "en PowerShell escriba «turso group unarchive default» (o el nombre del grupo de la base del consultorio) o hágalo " +
+        "desde el panel de Turso, y después vuelva a sincronizar. Esta computadora sigue trabajando con sus datos.";
+
     public string? ErrorCode { get; }
 
     public TursoException(string message, string? errorCode = null, Exception? inner = null)
         : base(message, inner)
     {
         ErrorCode = errorCode;
+    }
+
+    /// <summary>
+    /// Reconoce la cuota agotada y la base archivada en el código o el texto de un error de Turso. Turso
+    /// documenta el código BLOCKED pero no el estado HTTP ni el texto (V7), ni el error de una base archivada (V9):
+    /// por eso se busca en los dos lugares.
+    /// </summary>
+    public static string? ClassifyServiceError(string? code, string? text)
+    {
+        if (string.Equals(code, QuotaExhaustedCode, StringComparison.OrdinalIgnoreCase)) return QuotaExhaustedCode;
+        if (!string.IsNullOrEmpty(text))
+        {
+            if (text.Contains(QuotaExhaustedCode, StringComparison.Ordinal)
+                || text.Contains("operation was blocked", StringComparison.OrdinalIgnoreCase)) return QuotaExhaustedCode;
+            if (text.Contains("archived", StringComparison.OrdinalIgnoreCase)) return ArchivedCode;
+        }
+        return string.Equals(code, ArchivedCode, StringComparison.OrdinalIgnoreCase) ? ArchivedCode : null;
     }
 }
 
@@ -98,6 +137,8 @@ public class TursoClient : IDisposable
     /// <summary>
     /// Normaliza la URL de Turso a un endpoint válido del protocolo Hrana (/v2/pipeline).
     /// Soporta esquemas libsql://, https://, turso:// y hosts planos con validación de host.
+    /// Solo https: el token viaja en cada petición. http:// se acepta únicamente para localhost y
+    /// 127.0.0.1 (un servidor de pruebas en el mismo equipo), nunca para una dirección de la red local.
     /// </summary>
     public static string NormalizePipelineUrl(string url)
     {
@@ -138,11 +179,19 @@ public class TursoClient : IDisposable
         if (Uri.TryCreate(clean, UriKind.Absolute, out var parsedUri))
         {
             var host = parsedUri.Host;
-            if (!host.Contains('.') && !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1")
+            bool isLoopback = host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host == "127.0.0.1";
+            if (!host.Contains('.') && !isLoopback)
             {
                 throw new ArgumentException(
                     $"La dirección '{host}' parece ser solo el nombre de la base de datos. " +
                     "Turso requiere la URL completa del host (por ejemplo: libsql://{host}-usuario.turso.io o https://{host}.turso.io).");
+            }
+
+            if (parsedUri.Scheme == Uri.UriSchemeHttp && !isLoopback)
+            {
+                throw new ArgumentException(
+                    $"La dirección '{url.Trim()}' usa http:// sin cifrar: el token de Turso viajaría en claro por la red. " +
+                    "Use la URL libsql:// o https:// que da Turso.");
             }
         }
 
@@ -259,7 +308,8 @@ public class TursoClient : IDisposable
     }
 
     /// <summary>
-    /// Ejecuta múltiples sentencias SQL en un solo pipeline HTTP transaccional.
+    /// Ejecuta varias sentencias SQL en un solo viaje HTTP. No es transaccional: Turso confirma cada
+    /// sentencia por separado, así que si una falla las anteriores ya quedaron aplicadas.
     /// </summary>
     public async Task<int> ExecuteBatchAsync(IEnumerable<(string Sql, object?[]? Args)> statements, CancellationToken ct = default)
     {
@@ -439,6 +489,13 @@ public class TursoClient : IDisposable
         {
             var msg = result["error"]?["message"]?.GetValue<string>() ?? "Error desconocido en Turso";
             var code = result["error"]?["code"]?.GetValue<string>();
+            switch (TursoException.ClassifyServiceError(code, msg))
+            {
+                case TursoException.QuotaExhaustedCode:
+                    throw new TursoException(TursoException.QuotaExhaustedMessage, TursoException.QuotaExhaustedCode);
+                case TursoException.ArchivedCode:
+                    throw new TursoException(TursoException.ArchivedMessage, TursoException.ArchivedCode);
+            }
             throw new TursoException(msg, code);
         }
     }
@@ -480,6 +537,14 @@ public class TursoClient : IDisposable
 
         if (!resp.IsSuccessStatusCode)
         {
+            switch (TursoException.ClassifyServiceError(null, respContent))
+            {
+                case TursoException.QuotaExhaustedCode:
+                    throw new TursoException(TursoException.QuotaExhaustedMessage, TursoException.QuotaExhaustedCode);
+                case TursoException.ArchivedCode:
+                    throw new TursoException(TursoException.ArchivedMessage, TursoException.ArchivedCode);
+            }
+
             var code = (int)resp.StatusCode;
             string diag = code switch
             {

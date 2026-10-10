@@ -68,6 +68,58 @@ public class TursoTests
     }
 
     [TestMethod]
+    public void TursoClient_NormalizePipelineUrl_AcceptsHttpOnlyOnThisComputer()
+    {
+        // El token viaja en cada petición: sin cifrar solo hacia un servidor de pruebas en el mismo equipo
+        var lan = Assert.ThrowsExactly<ArgumentException>(() => TursoClient.NormalizePipelineUrl("http://192.168.1.10:8080"));
+        StringAssert.Contains(lan.Message, "http://");
+        Assert.ThrowsExactly<ArgumentException>(() => TursoClient.NormalizePipelineUrl("http://consultorio.turso.io"));
+
+        Assert.AreEqual("http://localhost:8080/v2/pipeline", TursoClient.NormalizePipelineUrl("http://localhost:8080"));
+        Assert.AreEqual("http://127.0.0.1:8080/v2/pipeline", TursoClient.NormalizePipelineUrl("http://127.0.0.1:8080/"));
+        Assert.AreEqual("https://192.168.1.10/v2/pipeline", TursoClient.NormalizePipelineUrl("https://192.168.1.10"));
+    }
+
+    [TestMethod]
+    public async Task TursoClient_TranslatesBlocked_FromStatementErrorOrHttpBody()
+    {
+        // V7: Turso documenta el código BLOCKED, pero no si llega como error de la instrucción o de la petición
+        var statementError = "{\"results\":[{\"type\":\"error\",\"error\":{\"message\":\"Operation was blocked\",\"code\":\"BLOCKED\"}}]}";
+        using (var client = new TursoClient("https://dummy.turso.io", "token", new HttpClient(new MockHttpMessageHandler(HttpStatusCode.OK, statementError))))
+        {
+            var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => client.QueryAsync("SELECT 1;"));
+            Assert.AreEqual(TursoException.QuotaExhaustedCode, ex.ErrorCode);
+            StringAssert.StartsWith(ex.Message, "Se agotó la cuota mensual de Turso");
+        }
+
+        using (var client = new TursoClient("https://dummy.turso.io", "token",
+                   new HttpClient(new MockHttpMessageHandler(HttpStatusCode.Forbidden, "{\"error\":\"BLOCKED: quota exceeded\"}"))))
+        {
+            var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => client.ExecuteAsync("DELETE FROM X;"));
+            Assert.AreEqual(TursoException.QuotaExhaustedCode, ex.ErrorCode);
+        }
+
+        // Un 403 cualquiera sigue siendo un problema del token, no de la cuota
+        using (var client = new TursoClient("https://dummy.turso.io", "token",
+                   new HttpClient(new MockHttpMessageHandler(HttpStatusCode.Forbidden, "{\"error\":\"Unauthorized: invalid JWT\"}"))))
+        {
+            var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => client.QueryAsync("SELECT 1;"));
+            Assert.AreEqual("HTTP_403", ex.ErrorCode);
+        }
+    }
+
+    [TestMethod]
+    public async Task TursoClient_TranslatesArchivedDatabase_WithInstructionsToUnarchive()
+    {
+        // V9: el texto exacto de Turso para una base archivada falta comprobarlo; se reconoce por "archived"
+        using var client = new TursoClient("https://dummy.turso.io", "token",
+            new HttpClient(new MockHttpMessageHandler(HttpStatusCode.BadRequest, "{\"error\":\"database is archived\"}")));
+        var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => client.QueryAsync("SELECT 1;"));
+        Assert.AreEqual(TursoException.ArchivedCode, ex.ErrorCode);
+        StringAssert.Contains(ex.Message, "turso group unarchive");
+    }
+
+    [TestMethod]
     public void TursoClient_CleanToken_StripsQuotesWhitespaceAndBearerPrefix()
     {
         Assert.AreEqual("eyJhbGciOi...", TursoClient.CleanToken("Bearer eyJhbGciOi..."));
@@ -112,36 +164,74 @@ public class TursoTests
         var quota = service.GetQuotaSummary();
         Assert.AreEqual(500, quota.RowsReadThisMonth);
         Assert.AreEqual(120, quota.RowsWrittenThisMonth);
-        Assert.IsTrue(quota.PercentageWritesUsed < 1.0); // Extremadamente bajo respecto a 25M
-        Assert.IsTrue(quota.PercentageReadsUsed < 1.0);  // Extremadamente bajo respecto a 1B
+        Assert.AreEqual(500, quota.RowsReadToday);
+        Assert.AreEqual(120, quota.RowsWrittenToday);
+        Assert.AreEqual(0.0001, quota.PercentageReadsUsed, 1e-12, "500 de 500 millones");
+        Assert.AreEqual(0.0012, quota.PercentageWritesUsed, 1e-12, "120 de 10 millones");
     }
 
     [TestMethod]
-    public void TursoSettingsService_GenerateAndroidPairingPayload_GeneratesValidJson()
+    public void TursoQuotaSummary_UsesCurrentFreeTierLimits()
     {
+        // https://turso.tech/pricing (consultado el 2026-10-09)
+        Assert.AreEqual(500_000_000L, TursoQuotaSummary.FreeTierMonthlyRowsReadLimit);
+        Assert.AreEqual(10_000_000L, TursoQuotaSummary.FreeTierMonthlyRowsWriteLimit);
+        Assert.AreEqual(5_000.0, TursoQuotaSummary.FreeTierStorageMegabytes);
+    }
+
+    [TestMethod]
+    public void TursoSettingsService_DailyCounters_ResetAtMidnight_AndBrakeSurvivesRestart()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 10, 10, 15, 0, 0, TimeSpan.Zero));
+        var service = new TursoSettingsService(_tempConfigPath) { Clock = clock };
+        service.RecordUsage(1_000, 10);
+        service.RecordFullPull();
+        service.TripConsumptionBrake();
+
+        var reloaded = new TursoSettingsService(_tempConfigPath) { Clock = clock };
+        Assert.AreEqual(1_000, reloaded.GetQuotaSummary().RowsReadToday);
+        Assert.AreEqual(1, reloaded.GetQuotaSummary().FullPullsToday);
+        Assert.IsNotNull(reloaded.CurrentSettings.ConsumptionBrakeTrippedUtc, "El freno sigue activo al reabrir el programa");
+
+        clock.Advance(TimeSpan.FromHours(10)); // pasa la medianoche
+        var nextDay = reloaded.GetQuotaSummary();
+        Assert.AreEqual(0, nextDay.RowsReadToday);
+        Assert.AreEqual(0, nextDay.FullPullsToday);
+        Assert.AreEqual(1_000, nextDay.RowsReadThisMonth, "El mes sigue sumando");
+        Assert.IsNotNull(reloaded.CurrentSettings.ConsumptionBrakeTrippedUtc, "Cambiar de día no quita el freno: solo «Reanudar»");
+
+        reloaded.RecordUsage(50, 0);
+        reloaded.ResumeAfterConsumptionBrake();
+        Assert.IsNull(reloaded.CurrentSettings.ConsumptionBrakeTrippedUtc);
+        Assert.AreEqual(0, reloaded.GetQuotaSummary().RowsReadToday, "Reanudar vuelve a contar el día desde cero");
+    }
+
+    [TestMethod]
+    public void TursoSettingsService_PcRoleIsAlwaysWindowsDesktop()
+    {
+        // Antes había un selector de "Uso": una PC configurada como tablet se corrige al abrir
         var service = new TursoSettingsService(_tempConfigPath);
-        service.CurrentSettings.DatabaseUrl = "https://clinica-test.turso.io";
-        service.CurrentSettings.AuthToken = "secret-token-abc";
+        service.SaveSettings(new TursoSettings { DatabaseUrl = "https://clinica.turso.io", DeviceRole = DeviceRole.AndroidTablet });
 
-        // 1. Tablet Android
-        var tabletJson = service.GenerateAndroidPairingPayload(DeviceRole.AndroidTablet, "Clínica San José", "Dr. Martínez");
-        Assert.IsNotNull(tabletJson);
-        using (var doc = JsonDocument.Parse(tabletJson))
+        var reloaded = new TursoSettingsService(_tempConfigPath);
+        Assert.AreEqual(DeviceRole.WindowsDesktop, reloaded.CurrentSettings.DeviceRole);
+    }
+
+    [TestMethod]
+    public void NubeYDispositivos_NoLongerHandsOutTheTokenInPlainText()
+    {
+        // Paso 8.2: se retiró el paquete de vinculación en claro (token completo, sin vencimiento, por el portapapeles)
+        Assert.IsNull(typeof(TursoSettingsService).GetMethod("GenerateAndroidPairingPayload"));
+        foreach (var member in new[] { "PairingJsonPayload", "IsPairingModalOpen", "OpenPairingModalCommand", "CopyPairingPayloadCommand", "SelectedRole" })
         {
-            var root = doc.RootElement;
-            Assert.AreEqual("https://clinica-test.turso.io", root.GetProperty("DatabaseUrl").GetString());
-            Assert.AreEqual("secret-token-abc", root.GetProperty("AuthToken").GetString());
-            Assert.AreEqual("AndroidTablet", root.GetProperty("AssignedRole").GetString());
+            Assert.IsNull(typeof(TPVC.ViewModels.TursoSyncViewModel).GetProperty(member), $"{member} ya no debe existir");
         }
 
-        // 2. Celular Android Admin
-        var mobileJson = service.GenerateAndroidPairingPayload(DeviceRole.AndroidMobileAdmin, "Clínica San José", "Dr. Martínez");
-        Assert.IsNotNull(mobileJson);
-        using (var doc = JsonDocument.Parse(mobileJson))
-        {
-            var root = doc.RootElement;
-            Assert.AreEqual("AndroidMobileAdmin", root.GetProperty("AssignedRole").GetString());
-        }
+        var root = AppContext.BaseDirectory;
+        while (root != null && !File.Exists(Path.Combine(root, "TPVC.sln"))) root = Path.GetDirectoryName(root);
+        Assert.IsNotNull(root, "No se encontró la carpeta del proyecto");
+        var viewModel = File.ReadAllText(Path.Combine(root, "ViewModels", "TursoSyncViewModel.cs"));
+        Assert.IsFalse(viewModel.Contains("Clipboard.SetText", StringComparison.Ordinal), "Nube y dispositivos no copia nada al portapapeles");
     }
 
     [TestMethod]
