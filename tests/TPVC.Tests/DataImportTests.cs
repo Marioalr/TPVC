@@ -331,6 +331,56 @@ public class DataImportTests
         }
     }
 
+    [TestMethod]
+    public async Task RestoringABackupFromBeforeTheChangeLog_GetsItsTriggers()
+    {
+        // Un respaldo de v1.19: sin triggers, sin registro de cambios y sin DbMeta
+        string sourceDbPath = Path.Combine(_tempDir, "respaldo_v1_19.db");
+        var sourceOptions = new DbContextOptionsBuilder<AppDbContext>().UseSqlite($"Data Source={sourceDbPath}").Options;
+        using (var sourceDb = new AppDbContext(sourceOptions))
+        {
+            DatabaseInitializer.Initialize(sourceDb, seedDemoData: false);
+            ChangeLogTestSupport.RemoveChangeLog(sourceDb);
+        }
+        SqliteConnection.ClearAllPools();
+
+        var result = await _importService.ImportDatabaseFileAsync(sourceDbPath);
+        Assert.IsTrue(result.Success, result.Message);
+
+        using var db = _factory.CreateDbContext();
+        Assert.HasCount(SyncSchema.FromModel(db.Model).Tables.Count * 3, ChangeLogTestSupport.TriggerNames(db));
+        Assert.IsNull(DbMeta.Get(db, DbMeta.LastPushedSeq), "La siguiente subida manda todo");
+
+        var category = db.Categories.First();
+        category.Description = "Editada después de restaurar";
+        db.SaveChanges();
+        Assert.IsNotNull(ChangeLogTestSupport.SeqOf(db, nameof(Category), category.SyncId), "Lo que se guarda después se anota");
+    }
+
+    [TestMethod]
+    public async Task RestoringABackup_ResetsThePushCursor_AndTheDatabaseIdentity()
+    {
+        string sourceDbPath = Path.Combine(_tempDir, "respaldo_con_cursor.db");
+        var sourceOptions = new DbContextOptionsBuilder<AppDbContext>().UseSqlite($"Data Source={sourceDbPath}").Options;
+        string sourceInstance;
+        using (var sourceDb = new AppDbContext(sourceOptions))
+        {
+            DatabaseInitializer.Initialize(sourceDb, seedDemoData: false);
+            DbMeta.Set(sourceDb, DbMeta.LastPushedSeq, "42");
+            sourceInstance = DbMeta.Get(sourceDb, DbMeta.DbInstanceId)!;
+        }
+        SqliteConnection.ClearAllPools();
+
+        var result = await _importService.ImportDatabaseFileAsync(sourceDbPath);
+        Assert.IsTrue(result.Success, result.Message);
+
+        using var db = _factory.CreateDbContext();
+        Assert.IsNull(DbMeta.Get(db, DbMeta.LastPushedSeq), "Como antes con el cursor de reloj: la base cambió por completo");
+        var instance = DbMeta.Get(db, DbMeta.DbInstanceId);
+        Assert.IsNotNull(instance);
+        Assert.AreNotEqual(sourceInstance, instance, "Es otro archivo");
+    }
+
     private static string SampleCatalogPath()
     {
         string samplePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestAssets", "catalogo_muestra.xlsx");

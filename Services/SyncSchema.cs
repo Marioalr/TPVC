@@ -26,6 +26,9 @@ internal sealed class SyncReference
     public required PropertyInfo Property { get; init; }
     public required Type PrincipalType { get; init; }
     public required string RemoteColumn { get; init; }
+
+    /// <summary>La columna en la base local (el Id entero: "ProductId").</summary>
+    public required string LocalColumn { get; init; }
     public required bool IsRequired { get; init; }
 
     /// <summary>Qué hace EF al borrar el principal; null = referencia suave, sin llave foránea.</summary>
@@ -132,6 +135,7 @@ internal sealed class SyncSchema
                     Property = prop.PropertyInfo,
                     PrincipalType = fk.PrincipalEntityType.ClrType,
                     RemoteColumn = ReferenceColumnName(prop.Name),
+                    LocalColumn = prop.GetColumnName(storeObject) ?? prop.Name,
                     IsRequired = !prop.IsNullable,
                     DeleteBehavior = fk.DeleteBehavior
                 });
@@ -147,6 +151,7 @@ internal sealed class SyncSchema
                     Property = prop.PropertyInfo,
                     PrincipalType = principal,
                     RemoteColumn = ReferenceColumnName(propertyName),
+                    LocalColumn = prop.GetColumnName(storeObject) ?? propertyName,
                     IsRequired = false,
                     DeleteBehavior = null
                 });

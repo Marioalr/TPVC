@@ -57,6 +57,10 @@ public class BackupService
     public Task<string> CreateBackupNowAsync() =>
         Task.Run(() => CreateBackup(UniquePath($"consultorio-{DateTime.Now:yyyyMMdd-HHmmss}")));
 
+    /// <summary>Respaldo antes de un cambio en la base ("consultorio-20261010-153000-antes-….db").</summary>
+    public string CreateNamedBackup(string label) =>
+        CreateBackup(UniquePath($"consultorio-{DateTime.Now:yyyyMMdd-HHmmss}-{label}"));
+
     /// <summary>Dos respaldos en el mismo segundo no se pisan: el segundo lleva "-2", "-3"…</summary>
     private string UniquePath(string baseName)
     {

@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using TPVC.Data;
@@ -28,6 +29,7 @@ namespace TPVC.Services;
 ///   con el reloj atrasado no puede "esconder" cambios.
 /// * "OriginDeviceId" evita descargar de vuelta lo que el propio dispositivo subió.
 /// * Los borrados físicos viajan en "SyncTombstones".
+/// * Qué subir lo dice el registro de cambios local (<see cref="SyncChangeLog"/>, paso 8.5), no el reloj del equipo.
 /// </summary>
 public class TursoSyncService
 {
@@ -49,6 +51,7 @@ public class TursoSyncService
     private readonly Debouncer _autoSyncDebouncer = new();
 
     private SyncSchema? _schema;
+    private bool _changeLogVerified;
     private string? _verifiedSchemaUrl;
     private string? _registeredDeviceUrl;
     private int _suppressAutoSync;
@@ -420,6 +423,14 @@ public class TursoSyncService
         bool fullPull = fullResync || settings.LastPulledServerWatermark == null;
         if (fullPull) EnsureFullPullAllowed();
 
+        if (!_changeLogVerified)
+        {
+            // La base ya lo trae desde que abre el programa (DatabaseInitializer); esto cubre una que llegue sin él
+            using var db = _contextFactory.CreateDbContext();
+            SyncChangeLog.EnsureInstalled(db, backupBeforeFirstInstall: false);
+            _changeLogVerified = true;
+        }
+
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
         await EnsureRemoteSchemaAsync(client, ct);
@@ -430,10 +441,8 @@ public class TursoSyncService
             _registeredDeviceUrl = settings.DatabaseUrl;
         }
 
-        // 1. PUSH: lo modificado localmente desde la última subida
-        var cutoffUtc = DateTime.UtcNow;
-        var lastPushed = fullResync ? DateTime.MinValue : settings.LastPushedLocalUtc ?? DateTime.MinValue;
-        int pushed = await PushLocalChangesAsync(client, settings.DeviceId, lastPushed, cutoffUtc, ct);
+        // 1. PUSH: lo anotado en el registro de cambios desde la última subida (paso 8.5)
+        int pushed = await PushLocalChangesAsync(client, settings.DeviceId, fullResync, ct);
 
         // 2. PULL: lo que otros dispositivos escribieron en el servidor desde la última descarga
         //    (la nueva marca se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
@@ -446,7 +455,6 @@ public class TursoSyncService
         // 3. Perfil del consultorio (último en modificarse gana)
         await SyncClinicProfileAsync(client, ct);
 
-        settings.LastPushedLocalUtc = cutoffUtc;
         if (!string.IsNullOrWhiteSpace(newWatermark)) settings.LastPulledServerWatermark = newWatermark;
         settings.LastSyncUtc = DateTime.UtcNow;
         _settingsService.RecordUsage(rowsRead + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
@@ -599,28 +607,83 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     // PUSH
     // =========================================================================
 
-    private async Task<int> PushLocalChangesAsync(TursoClient client, string deviceId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+    /// <summary>
+    /// Sube lo anotado en <see cref="SyncChangeLog"/> después del cursor (<see cref="DbMeta.LastPushedSeq"/>), tabla por
+    /// tabla en el orden del contrato: cada fila que todavía existe aquí sube completa y la que ya no, como su lápida
+    /// más reciente. El cursor avanza solo si todo subió.
+    /// </summary>
+    private async Task<int> PushLocalChangesAsync(TursoClient client, string deviceId, bool fullResync, CancellationToken ct)
     {
         using var db = _contextFactory.CreateDbContext();
-        var statements = new List<(string Sql, object?[]? Args)>();
-        var idMaps = new Dictionary<Type, Dictionary<int, Guid>>();
+        var tables = GetTableMaps();
 
-        // Lo apartado en subidas anteriores se vuelve a intentar aunque el cursor ya lo haya pasado
-        var parkedBefore = await db.SyncParkedRows.AsNoTracking()
-            .Where(p => p.Direction == SyncParkedRow.Push)
-            .ToListAsync(ct);
+        // Primera subida con el registro (al actualizar, o con una base restaurada) o "Sincronización completa":
+        // todo se anota y sube una vez; la nube descarta lo que ya tenía
+        long? cursor = fullResync ? null : await SyncChangeLog.ReadPushCursorAsync(db, ct);
+        if (cursor == null) await SyncChangeLog.BackfillAsync(db, tables, ct);
+        long fromSeq = cursor ?? 0;
+
+        var statements = new List<(string Sql, object?[]? Args)>();
         var parkNow = new Dictionary<(string EntityType, Guid SyncId), string>();
         var included = new HashSet<(string EntityType, Guid SyncId)>();
+        List<SyncParkedRow> parkedBefore;
+        long toSeq;
 
-        foreach (var map in GetTableMaps())
+        // Una sola foto del registro, sus filas y sus lápidas (solo lectura). Lo que se guarde mientras tanto recibe
+        // un Seq mayor que toSeq y sube en la siguiente
+        await db.Database.OpenConnectionAsync(ct);
+        using (var snapshot = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: true))
+        {
+            await db.Database.UseTransactionAsync(snapshot, ct);
+            var logged = await SyncChangeLog.ReadSinceAsync(db, fromSeq, ct);
+            toSeq = logged.Count > 0 ? logged[^1].Seq : fromSeq;
+            var loggedTypes = logged.Select(e => e.EntityType).ToHashSet(StringComparer.Ordinal);
+
+            // Lo apartado en subidas anteriores se vuelve a intentar aunque el cursor ya lo haya pasado
+            parkedBefore = await db.SyncParkedRows.AsNoTracking()
+                .Where(p => p.Direction == SyncParkedRow.Push)
+                .ToListAsync(ct);
+
+            await BuildPushStatementsAsync(db, tables, deviceId, fromSeq, toSeq, loggedTypes, parkedBefore, statements, parkNow, included, ct);
+            await db.Database.UseTransactionAsync(null, ct);
+        }
+
+        // Se cuentan las filas que la nube sí cambió: reenviar algo que ya tenía no cuenta como subido
+        int applied = 0;
+        for (int i = 0; i < statements.Count; i += PushChunkSize)
+        {
+            applied += await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
+        }
+
+        // Ya subió todo: lo que se pudo subir sale de las apartadas y lo que no, se aparta (o suma un intento).
+        // Una apartada cuya fila ya no existe aquí (se borró) también sale: su lápida sube por su lado.
+        await UpdateParkedPushAsync(db, parkedBefore, parkNow, included, ct);
+        await SyncChangeLog.SavePushCursorAsync(db, toSeq, ct);
+        if (cursor == null)
+        {
+            AppLogger.Info($"Turso: subida completa con el registro de cambios hasta el Seq {toSeq} ({statements.Count} instrucciones, {applied} filas cambiaron en la nube).");
+        }
+        return applied;
+    }
+
+    private async Task BuildPushStatementsAsync(AppDbContext db, IReadOnlyList<TableMap> tables, string deviceId, long fromSeq, long toSeq,
+        HashSet<string> loggedTypes, List<SyncParkedRow> parkedBefore, List<(string Sql, object?[]? Args)> statements,
+        Dictionary<(string EntityType, Guid SyncId), string> parkNow, HashSet<(string EntityType, Guid SyncId)> included, CancellationToken ct)
+    {
+        var idMaps = new Dictionary<Type, Dictionary<int, Guid>>();
+        var found = new HashSet<(string EntityType, Guid SyncId)>();
+
+        foreach (var map in tables)
         {
             var parkedIds = parkedBefore.Where(p => p.EntityType == map.ClrType.Name).Select(p => p.SyncId).ToList();
-            var changed = await LoadChangedAsync(db, map.ClrType, fromUtc, toUtc, parkedIds, ct);
+            if (parkedIds.Count == 0 && !loggedTypes.Contains(map.ClrType.Name)) continue;
+            var changed = await LoadLoggedAsync(db, map, fromSeq, toSeq, parkedIds, ct);
             if (changed.Count == 0) continue;
 
             var sql = map.UpsertSql;
             foreach (var entity in changed)
             {
+                found.Add((map.ClrType.Name, entity.SyncId));
                 var args = new List<object?>
                 {
                     FormatGuid(entity.SyncId),
@@ -666,12 +729,13 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             }
         }
 
-        // Borrados físicos: se registran y se aplican en la nube salvo que allá exista una versión más nueva
-        // Sin tope superior: un borrado con marca adelantada al reloj (ver AppDbContext) también sube
-        var tombstones = await db.SyncTombstones.AsNoTracking()
-            .Where(t => t.DeletedAtUtc > fromUtc)
-            .ToListAsync(ct);
-        var tablesByType = GetTableMaps().ToDictionary(m => m.ClrType.Name, m => m.Table);
+        // Borrados: lo anotado que ya no existe aquí sube como su lápida más reciente (también los borrados en
+        // cascada, que anotó el trigger de cada tabla hija). La nube lo aplica salvo que tenga una versión más nueva
+        var tombstones = (await db.SyncTombstones.FromSqlRaw(SyncChangeLog.LoggedTombstonesSql, fromSeq, toSeq).AsNoTracking().ToListAsync(ct))
+            .Where(t => !found.Contains((t.EntityType, t.SyncId)))
+            .GroupBy(t => (t.EntityType, t.SyncId))
+            .Select(g => g.MaxBy(t => t.DeletedAtUtc)!);
+        var tablesByType = tables.ToDictionary(m => m.ClrType.Name, m => m.Table);
         foreach (var t in tombstones)
         {
             statements.Add((SyncSchema.TombstoneUpsertSql,
@@ -683,18 +747,6 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                     new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }));
             }
         }
-
-        // Se cuentan las filas que la nube sí cambió: reenviar algo que ya tenía no cuenta como subido
-        int applied = 0;
-        for (int i = 0; i < statements.Count; i += PushChunkSize)
-        {
-            applied += await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
-        }
-
-        // Ya subió todo: lo que se pudo subir sale de las apartadas y lo que no, se aparta (o suma un intento).
-        // Una apartada cuya fila ya no existe aquí (se borró) también sale: su lápida sube por su lado.
-        await UpdateParkedPushAsync(db, parkedBefore, parkNow, included, ct);
-        return applied;
     }
 
     private async Task UpdateParkedPushAsync(AppDbContext db, List<SyncParkedRow> parkedBefore,
@@ -738,25 +790,31 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         await db.SaveChangesAsync(ct);
     }
 
-    private static async Task<List<ISyncEntity>> LoadChangedAsync(AppDbContext db, Type clrType, DateTime fromUtc, DateTime toUtc,
+    private static async Task<List<ISyncEntity>> LoadLoggedAsync(AppDbContext db, TableMap map, long fromSeq, long toSeq,
         List<Guid> parkedIds, CancellationToken ct)
     {
-        var method = typeof(TursoSyncService).GetMethod(nameof(LoadChangedGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
-            .MakeGenericMethod(clrType);
-        return await (Task<List<ISyncEntity>>)method.Invoke(null, new object[] { db, fromUtc, toUtc, parkedIds, ct })!;
+        var method = typeof(TursoSyncService).GetMethod(nameof(LoadLoggedGenericAsync), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(map.ClrType);
+        return await (Task<List<ISyncEntity>>)method.Invoke(null, new object[] { db, map, fromSeq, toSeq, parkedIds, ct })!;
     }
 
-    private static async Task<List<ISyncEntity>> LoadChangedGenericAsync<T>(AppDbContext db, DateTime fromUtc, DateTime toUtc,
+    /// <summary>Las filas de la tabla anotadas en (fromSeq, toSeq], más las apartadas al subir.</summary>
+    private static async Task<List<ISyncEntity>> LoadLoggedGenericAsync<T>(AppDbContext db, TableMap map, long fromSeq, long toSeq,
         List<Guid> parkedIds, CancellationToken ct)
         where T : class, ISyncEntity
     {
-        // Sin tope superior: un registro con marca posterior al corte (guardado durante la subida o
-        // con marca adelantada para ganarle a un equipo con el reloj adelantado) sube igual; la nube
-        // descarta lo que no sea más nuevo, así que volver a subirlo no cambia nada
-        var list = await db.Set<T>().AsNoTracking()
-            .Where(e => EF.Property<DateTime>(e, nameof(ISyncEntity.UpdatedAtUtc)) > fromUtc
-                        || parkedIds.Contains(EF.Property<Guid>(e, nameof(ISyncEntity.SyncId))))
+        var list = await db.Set<T>()
+            .FromSqlRaw(SyncChangeLog.LoggedRowsSql(map.Table), map.ClrType.Name, fromSeq, toSeq)
+            .AsNoTracking()
             .ToListAsync(ct);
+
+        var parkedMissing = parkedIds.Except(list.Select(e => e.SyncId)).ToList();
+        if (parkedMissing.Count > 0)
+        {
+            list.AddRange(await db.Set<T>().AsNoTracking()
+                .Where(e => parkedMissing.Contains(EF.Property<Guid>(e, nameof(ISyncEntity.SyncId))))
+                .ToListAsync(ct));
+        }
         return list.Cast<ISyncEntity>().ToList();
     }
 
@@ -1143,7 +1201,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         }
 
         await ResolveUniqueConflictsAsync(db, map, ct);
-        await db.SaveChangesAsync(ct);
+        await SyncChangeLog.SaveRemoteChangesAsync(db, ct);
         return applied;
     }
 
@@ -1260,7 +1318,8 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         // Si aquí se modificó después del borrado remoto, se conserva (LWW)
         if (local == null || !SyncRules.RemoteTombstoneDeletes(local.UpdatedAtUtc, deletedAtUtc)) return false;
         db.Set<T>().Remove(local);
-        await db.SaveChangesAsync(ct);
+        // Sin lápida aquí ni anotación para subir, tampoco de lo que se borre en cascada: el borrado ya viene de la nube
+        await SyncChangeLog.SaveRemoteChangesAsync(db, ct);
         return true;
     }
 

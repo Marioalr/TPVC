@@ -32,60 +32,69 @@ public static partial class DatabaseInitializer
 
         try
         {
-            // Atajo: si la huella del modelo coincide con la guardada, el esquema ya está al día
-            int fingerprint = ComputeModelFingerprint(context.Model);
-            if (ReadUserVersion(connection) == fingerprint)
-            {
-                return;
-            }
+            MigrateModelTables(context, connection);
 
-            var model = context.GetService<IDesignTimeModel>().Model;
-            var differ = context.GetService<IMigrationsModelDiffer>();
-            var generator = context.GetService<IMigrationsSqlGenerator>();
-            var desired = differ.GetDifferences(null, model.GetRelationalModel());
-
-            var existingTables = QueryNames(connection, "SELECT name FROM sqlite_master WHERE type = 'table'");
-            var pending = new List<MigrationOperation>();
-
-            foreach (var create in desired.OfType<CreateTableOperation>())
-            {
-                if (!existingTables.Contains(create.Name))
-                {
-                    pending.Add(create);
-                    continue;
-                }
-
-                var columns = QueryNames(connection, $"SELECT name FROM pragma_table_info('{create.Name}')");
-                foreach (var column in create.Columns.Where(c => !columns.Contains(c.Name)))
-                {
-                    pending.Add(new AddColumnOperation
-                    {
-                        Table = create.Name,
-                        Name = column.Name,
-                        ClrType = column.ClrType,
-                        ColumnType = column.ColumnType,
-                        IsNullable = column.IsNullable,
-                        DefaultValue = column.IsNullable ? null : (column.DefaultValue ?? DefaultValueFor(column.ClrType))
-                    });
-                }
-            }
-
-            Execute(context, generator, model, pending);
-            BackfillSyncColumns(context, model);
-
-            var existingIndexes = QueryNames(connection, "SELECT name FROM sqlite_master WHERE type = 'index'");
-            var missingIndexes = desired.OfType<CreateIndexOperation>()
-                .Where(i => !existingIndexes.Contains(i.Name))
-                .Cast<MigrationOperation>()
-                .ToList();
-            Execute(context, generator, model, missingIndexes);
-
-            context.Database.ExecuteSqlRaw($"PRAGMA user_version = {fingerprint};");
+            // Fuera del atajo de user_version: un respaldo viejo restaurado también recibe los triggers, y un
+            // trigger cuya definición cambió (una columna nueva) se vuelve a crear
+            SyncChangeLog.EnsureInstalled(context);
         }
         finally
         {
             if (openedHere) context.Database.CloseConnection();
         }
+    }
+
+    private static void MigrateModelTables(AppDbContext context, DbConnection connection)
+    {
+        // Atajo: si la huella del modelo coincide con la guardada, el esquema ya está al día
+        int fingerprint = ComputeModelFingerprint(context.Model);
+        if (ReadUserVersion(connection) == fingerprint)
+        {
+            return;
+        }
+
+        var model = context.GetService<IDesignTimeModel>().Model;
+        var differ = context.GetService<IMigrationsModelDiffer>();
+        var generator = context.GetService<IMigrationsSqlGenerator>();
+        var desired = differ.GetDifferences(null, model.GetRelationalModel());
+
+        var existingTables = QueryNames(connection, "SELECT name FROM sqlite_master WHERE type = 'table'");
+        var pending = new List<MigrationOperation>();
+
+        foreach (var create in desired.OfType<CreateTableOperation>())
+        {
+            if (!existingTables.Contains(create.Name))
+            {
+                pending.Add(create);
+                continue;
+            }
+
+            var columns = QueryNames(connection, $"SELECT name FROM pragma_table_info('{create.Name}')");
+            foreach (var column in create.Columns.Where(c => !columns.Contains(c.Name)))
+            {
+                pending.Add(new AddColumnOperation
+                {
+                    Table = create.Name,
+                    Name = column.Name,
+                    ClrType = column.ClrType,
+                    ColumnType = column.ColumnType,
+                    IsNullable = column.IsNullable,
+                    DefaultValue = column.IsNullable ? null : (column.DefaultValue ?? DefaultValueFor(column.ClrType))
+                });
+            }
+        }
+
+        Execute(context, generator, model, pending);
+        BackfillSyncColumns(context, model);
+
+        var existingIndexes = QueryNames(connection, "SELECT name FROM sqlite_master WHERE type = 'index'");
+        var missingIndexes = desired.OfType<CreateIndexOperation>()
+            .Where(i => !existingIndexes.Contains(i.Name))
+            .Cast<MigrationOperation>()
+            .ToList();
+        Execute(context, generator, model, missingIndexes);
+
+        context.Database.ExecuteSqlRaw($"PRAGMA user_version = {fingerprint};");
     }
 
     private static void Execute(AppDbContext context, IMigrationsSqlGenerator generator, IModel model, IReadOnlyList<MigrationOperation> operations)

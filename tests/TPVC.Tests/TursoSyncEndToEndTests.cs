@@ -603,6 +603,148 @@ public class TursoSyncEndToEndTests
         Assert.IsFalse(db.SyncTombstones.Any(t => t.EntityType == nameof(ServiceDefaultProduct)), "Editar no deja lápidas");
     }
 
+    // ================================================================== registro de cambios (paso 8.5)
+
+    [TestMethod]
+    public async Task RowStampedBeforeTheLastSync_IsPushedAnyway()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // El reloj de la PC se atrasó después de sincronizar: el expediente nuevo queda marcado antes de esa
+        // sincronización. Con el cursor de reloj (LastPushedLocalUtc) nunca subía
+        var patient = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente Reloj Atrasado", Age = 50 });
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Database.ExecuteSqlRaw("UPDATE \"Patients\" SET \"UpdatedAtUtc\" = {0} WHERE \"Id\" = {1}",
+                TursoSyncService.FormatDate(DateTime.UtcNow.AddHours(-3)), patient.Id);
+        }
+
+        var result = await pc.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM Patients WHERE SyncId = '{TursoSyncService.FormatGuid(patient.SyncId)}'"));
+    }
+
+    [TestMethod]
+    public async Task EditingAPushedRow_GetsASeqAboveTheCursor_AndGoesUp()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        long cursor;
+        using (var db = pc.Factory.CreateDbContext()) cursor = (await SyncChangeLog.ReadPushCursorAsync(db))!.Value;
+
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        product.Price = 321.5m;
+        await pc.Inventory.SaveProductAsync(product);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.IsGreaterThan(cursor, ChangeLogTestSupport.SeqOf(db, nameof(Product), product.SyncId)!.Value);
+        }
+
+        var result = await pc.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.AreEqual("321.5", CloudScalar($"SELECT Price FROM Products WHERE SyncId = '{TursoSyncService.FormatGuid(product.SyncId)}'"));
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.IsGreaterThan(cursor, (await SyncChangeLog.ReadPushCursorAsync(db))!.Value, "El cursor avanzó");
+        }
+    }
+
+    [TestMethod]
+    public async Task DeletingASale_PushesTombstonesForItsItems_StampedAfterEachRow()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var products = (await pc.Inventory.GetProductsAsync()).Where(p => p.CurrentStock > 2).Take(2).ToList();
+        var sale = await pc.Inventory.RegisterSaleAsync(products.Select(p => (p.Id, 1, p.Price)).ToArray(), "Público General", "Efectivo");
+        Assert.IsNotNull(sale);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        List<SaleItem> items;
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            items = db.SaleItems.AsNoTracking().Where(i => i.SaleId == sale.Id).ToList();
+            // La cascada la hace SQLite, sin que EF cargue las partidas: antes sus lápidas nunca existían
+            db.Database.ExecuteSqlRaw("DELETE FROM \"Sales\" WHERE \"Id\" = {0}", sale.Id);
+        }
+        Assert.HasCount(2, items);
+
+        var result = await pc.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM SyncTombstones WHERE EntityType = 'Sale' AND SyncId = '{TursoSyncService.FormatGuid(sale.SyncId)}'"));
+        foreach (var item in items)
+        {
+            var id = TursoSyncService.FormatGuid(item.SyncId);
+            var deletedAt = TursoSyncService.ParseDate(CloudScalar($"SELECT DeletedAtUtc FROM SyncTombstones WHERE EntityType = 'SaleItem' AND SyncId = '{id}'"));
+            Assert.IsGreaterThan(item.UpdatedAtUtc, deletedAt, "La lápida queda después de la marca de la partida");
+            Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM SaleItems WHERE SyncId = '{id}'"), "La partida también se borra en la nube");
+        }
+    }
+
+    [TestMethod]
+    public async Task WhatArrivesFromTheCloud_IsNotLogged_AndDoesNotGoBackUp()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        var tablet = CreateDevice("tablet", seed: false);
+        var pulled = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(pulled.Success, pulled.ErrorMessage);
+        Assert.IsGreaterThan(0, pulled.RowsPulled);
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0L, ChangeLogTestSupport.Count(db, "\"SyncChangeLog\""), "Lo recibido no se anota");
+        }
+
+        _server.ClearRecording();
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        Assert.AreEqual(0, _server.Requests.SelectMany(r => r.Statements).Sum(s => s.RowsWritten), "Nada vuelve a subir");
+    }
+
+    [TestMethod]
+    public async Task UpperCaseLocalSyncIds_GoUpInLowerCase()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            var stored = db.Database.SqlQueryRaw<string>("SELECT \"SyncId\" AS Value FROM \"Products\" WHERE \"Id\" = {0}", product.Id).AsEnumerable().Single();
+            Assert.AreEqual(stored.ToUpperInvariant(), stored, "Así guarda EF Core los Guid en SQLite");
+        }
+
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var id = TursoSyncService.FormatGuid(product.SyncId);
+        Assert.AreEqual(id.ToLowerInvariant(), id);
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM Products WHERE SyncId = '{id}'"));
+        Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM Products WHERE SyncId <> lower(SyncId)"));
+        Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM Products WHERE CategorySyncId <> lower(CategorySyncId)"));
+    }
+
+    [TestMethod]
+    public async Task FirstPushAfterUpdating_SendsEverythingOnce()
+    {
+        // Una base de la versión anterior, con datos y sin registro de cambios ni cursor
+        var pc = CreateDevice("pc", seed: true);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            ChangeLogTestSupport.RemoveChangeLog(db);
+            SyncChangeLog.EnsureInstalled(db, backupBeforeFirstInstall: false);
+            Assert.AreEqual(0L, ChangeLogTestSupport.Count(db, "\"SyncChangeLog\""), "Lo que ya existía no está anotado");
+        }
+
+        var first = await pc.Sync.SyncAsync();
+        Assert.IsTrue(first.Success, first.ErrorMessage);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            foreach (var map in SyncSchema.FromModel(db.Model).Tables)
+            {
+                Assert.AreEqual(ChangeLogTestSupport.Count(db, $"\"{map.Table}\""), CloudScalar($"SELECT COUNT(*) FROM \"{map.Table}\""), map.Table);
+            }
+        }
+
+        var again = await pc.Sync.SyncAsync();
+        Assert.AreEqual(0, again.RowsPushed, "Ya subió todo: solo una vez");
+    }
+
     [TestMethod]
     public async Task ClinicProfile_LastWriteWinsAcrossDevices()
     {

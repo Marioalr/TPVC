@@ -151,12 +151,6 @@ public class TursoSettings
     public DateTime? LastSyncUtc { get; set; }
 
     /// <summary>
-    /// Hora local (UTC) hasta la que ya se subieron cambios de este dispositivo.
-    /// null = nunca se ha subido nada (la siguiente sincronización sube todo).
-    /// </summary>
-    public DateTime? LastPushedLocalUtc { get; set; }
-
-    /// <summary>
     /// Marca del reloj del servidor Turso hasta la que ya se descargaron cambios
     /// (se compara contra la columna SyncedAtUtc que asigna el propio servidor,
     /// inmune a diferencias de reloj entre dispositivos).
