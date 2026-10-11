@@ -22,8 +22,11 @@ public class TursoSettingsService
     /// <summary>Reloj de los contadores del mes y del día (reemplazable en pruebas).</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 
-    public TursoSettingsService(string? customPath = null)
+    /// <param name="clock">Reloj de los contadores. Va en el constructor porque la carga ya reinicia los del día y del
+    /// mes: asignado después, la carga los compararía con la fecha real.</param>
+    public TursoSettingsService(string? customPath = null, TimeProvider? clock = null)
     {
+        Clock = clock ?? TimeProvider.System;
         _configFilePath = !string.IsNullOrEmpty(customPath)
             ? customPath
             : Path.Combine(
