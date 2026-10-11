@@ -118,6 +118,27 @@ public sealed record LinkedDevice(
     public bool CanRemove => !IsThisDevice && !IsPrimary && !IsRevoked && !IsPendingApproval;
 
     /// <summary>
+    /// «Perdí este equipo» (paso 8.15), en los mismos equipos que «Quitar». La PC principal perdida se reemplaza desde la PC
+    /// nueva («Esta PC reemplaza a la principal»).
+    /// </summary>
+    public bool CanReportLost => CanRemove;
+
+    /// <summary>
+    /// Cuándo se anularon los tokens, si este equipo no se ha conectado desde entonces (paso 8.15): necesita el token nuevo.
+    /// null si no.
+    /// </summary>
+    public DateTime? TokensRotatedAtUtc { get; init; }
+
+    public bool NeedsNewToken => TokensRotatedAtUtc != null;
+
+    public string NewTokenText => TokensRotatedAtUtc is { } at
+        ? (Role is DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin
+              ? "Pegue el token nuevo en este equipo o lea con él el QR de esta PC"
+              : "Pegue el token nuevo en esa computadora") +
+          $": no se conecta desde que se anularon los tokens, el {at.ToLocalTime():dd/MM HH:mm}. No pierde sus cambios."
+        : string.Empty;
+
+    /// <summary>
     /// Los últimos 6 caracteres de su DeviceId, en mayúsculas: la tablet los muestra mientras espera, así el médico sabe que
     /// aprueba el equipo que tiene en la mano (paso 8.14).
     /// </summary>

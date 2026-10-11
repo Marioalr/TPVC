@@ -673,6 +673,30 @@ internal sealed class UiSmokeSession
             cloudVm.CloseLinkQr();
             ExecuteCloud("DELETE FROM RegisteredDevices WHERE DeviceId = 'android-tab-3f9a2c';");
             using (var db = factory.CreateDbContext()) DbMeta.Remove(db, DbMeta.ClinicId);
+
+            // Paso 8.15: se marcó un equipo como perdido (los pasos para anular los tokens) y la tablet no se conecta desde
+            // que se anularon
+            tursoSettings.ExpectTokenRotation();
+            ExecuteCloud($"INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('{TursoSyncService.TokensRotatedKey}', strftime('%Y-%m-%d %H:%M:%f','now','-10 minutes')); " +
+                         "UPDATE RegisteredDevices SET LastSeenUtc = strftime('%Y-%m-%d %H:%M:%f','now','-1 hours') WHERE DeviceId = 'device-tablet';");
+            WaitFor(cloudVm.RefreshDevicesAsync());
+            cloudVm.LoadFromSettings();
+            Pump();
+            Layout(host, Width, Height);
+            if (FindNamed(host, "Cortar el acceso") is { } cutCard) cutCard.BringIntoView();
+            Pump();
+            cloudScroller?.ScrollToVerticalOffset(cloudScroller.VerticalOffset + 330); // también la tablet, debajo
+            Pump();
+            Capture(host, $"20k-config-tursosync-equipo-perdido-{suffix}");
+            cloudScroller?.ScrollToVerticalOffset(0);
+            if (string.IsNullOrEmpty(cloudVm.CutAccessGuideText) || !cloudVm.Devices.Any(d => d.NeedsNewToken && d.DeviceId == "device-tablet"))
+            {
+                _failures.Add($"[20k-{suffix}] Faltan los pasos para cortar el acceso o la tablet que necesita el token nuevo");
+            }
+            tursoSettings.ClearTokenRotation();
+            ExecuteCloud($"DELETE FROM _tpvc_meta WHERE Key = '{TursoSyncService.TokensRotatedKey}'; " +
+                         "UPDATE RegisteredDevices SET LastSeenUtc = strftime('%Y-%m-%d %H:%M:%f','now','-20 seconds') WHERE DeviceId = 'device-tablet';");
+            cloudVm.LoadFromSettings();
             WaitFor(cloudVm.RefreshDevicesAsync());
 
             shell.SettingsSearchText = "respaldo";
