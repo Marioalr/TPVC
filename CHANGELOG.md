@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.25.0] - 2026-10-11
+
+### Añadido — laboratorio en la consulta
+* La consulta tiene una sección 6, **Laboratorio**, opcional: los estudios se agregan con un clic (**Frecuentes**: BH, QS 6, EGO, perfil de lípidos, HbA1c…; **Paquetes**: chequeo general, control de diabetes, control prenatal) o buscándolos por nombre o abreviatura, sin importar acentos (↑ ↓ y Enter). Un estudio que no está en la lista se escribe y se agrega; se vuelve a sugerir en las siguientes consultas. También lleva **indicaciones para el paciente** (ayuno, primera orina…).
+* La solicitud tiene **su propia hoja**: el membrete de la receta, paciente, edad, fecha, sexo y diagnóstico, los estudios agrupados por área (en dos columnas si son muchos) y las indicaciones. Sale en media carta, o en carta si no cabe, y se puede imprimir o guardar como documento. La **vista previa** muestra la hoja tal como se imprime.
+* La orden **se guarda con la consulta**: aparece en la tarjeta del historial y, al abrir la consulta, se reimprime con su fecha y diagnóstico. Si TPVC se cierra a mitad de la consulta, la orden se recupera con lo demás. Una consulta sin estudios termina igual.
+* La sincronización lleva la orden a los demás equipos (contrato revisión 4). Los resultados (PDF y fotos) se guardarán en la nube con una copia completa en la laptop, en un paso posterior; la evaluación está en `docs/EVALUACION_RESULTADOS_LABORATORIO.md`.
+* 493 pruebas.
+
 ## [1.24.0] - 2026-10-10
 
 ### Cambiado — la ficha del paciente agrupa por consulta
