@@ -743,7 +743,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo, porque solo mueve código.
 
 #### 8.12 · Membrete en la nube (H9)
-- **Antes:** [T] V18 (la lectura de BLOB ya acepta el base64 con y sin relleno).
+- **Antes:** [T] V18, con `scripts/verify-turso-hrana.ps1 -Only V18` (la lectura de BLOB ya acepta el base64 con y sin relleno).
 - **Cambia:**
   - Tabla `ClinicAssets` (tipo, hash, tipo MIME, contenido, `UpdatedAtUtc`). La PC la escribe solo cuando cambia una imagen.
   - `ClinicProfiles` gana `CrestImageHash` y `HeaderImageHash`.
