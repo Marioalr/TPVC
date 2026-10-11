@@ -251,6 +251,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     private VitalSignsChartViewModel _vitalsChart;
     private CatalogBrowserViewModel _catalogBrowser;
     private PrescriptionPreviewViewModel _preview;
+    private ConsultationDetailViewModel _consultationDetail;
     private AgendaPanelViewModel _agenda;
     private PatientFormViewModel _patientForm;
     private PatientsHomeViewModel _home;
@@ -301,6 +302,9 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     /// <summary>Vista previa de la receta, su impresión y su exportación.</summary>
     public PrescriptionPreviewViewModel Preview => _preview;
 
+    /// <summary>La hoja de una consulta del historial: el detalle por datos y su receta (corregir e imprimir).</summary>
+    public ConsultationDetailViewModel ConsultationDetail => _consultationDetail;
+
     /// <summary>Agenda de la semana (panel lateral).</summary>
     public AgendaPanelViewModel Agenda => _agenda;
 
@@ -331,7 +335,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     /// <summary>Consulta entre equipos: "Enviar a…", solo lectura mientras está en otro equipo, recuperar, liberar y recibir.</summary>
     public ConsultationHandoffViewModel Handoff => _handoff;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_consultationDetail), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
         IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences)
     {
@@ -357,6 +361,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         // Las indicaciones de la receta leen el plan que escribe el médico en la consulta (Consultation se
         // crea después: se lee al momento)
         _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => Consultation.ConsultationTreatmentPlan);
+        _consultationDetail = new ConsultationDetailViewModel(_inventoryService, _session, _active, _catalog, _clinic, _info, _feedback, clinicProfileService, printingService);
         _agenda = new AgendaPanelViewModel(_inventoryService, _session, _info, _feedback, _clinic, _dialogs, _urls, this);
         _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,
             _info, _feedback, this, _dialogs, _ui, _autosaveOptions, this);

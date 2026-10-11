@@ -361,7 +361,8 @@ El coordinador crea a cada hijo una sola vez, al inicio del constructor y sin ef
 | `Agenda` | `AgendaPanelViewModel` | 5 | Panel de agenda: semana, huecos, citas, mover, confirmar, cancelar y recordatorios. |
 | `PatientForm` | `PatientFormViewModel` | 5 | Alta y edición de expediente y su borrador. |
 | `Home` | `PatientsHomeViewModel` | 5 | Inicio: buscador, pacientes recientes y citas de hoy. |
-| `Chart` | `PatientChartViewModel` | 5 | Ficha: antecedentes, historial, lo esencial, última receta y citas del paciente. |
+| `Chart` | `PatientChartViewModel` | 5 | Ficha: antecedentes, historial (desde v1.24.0 una tarjeta por consulta con su resumen, `TimelineEntry.Lines`, y las citas), lo esencial, última receta y citas del paciente. |
+| `ConsultationDetail` | `ConsultationDetailViewModel` | 5 | Hoja de una consulta del historial (v1.24.0): detalle por datos y su receta, que se corrige (`InventoryService.UpdateConsultationPrescriptionAsync`; si es la última consulta, también la receta vigente) e imprime con la fecha y los signos de esa consulta (`IPrescriptionOutput` con `consultation`). |
 | `Supplies`, `ClinicalServices` | `SuppliesSheetViewModel`, `ClinicalServicesSheetViewModel` | 5 | Hojas de insumos y de servicios. |
 | `Prescription` | `PrescriptionSheetViewModel` | 5 | Hoja de receta: alerta de alergia, posología, dosis pediátrica, receta anterior y "Se surte aquí". |
 | `Consultation` | `ConsultationViewModel` | 5 | Nota de la consulta, CIE-10, secciones, "Terminar consulta" y su cobro (`Checkout`). |

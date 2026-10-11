@@ -106,7 +106,8 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 * Encabezado con **alergias** (rojo: cuáles; verde: negadas; ámbar: sin interrogar), enfermedades crónicas y próxima cita. Botones: **Agendar cita**, **Iniciar consulta** (o *Volver a la consulta* si ya está en curso) y el menú **⋯** (editar expediente, ver receta, dar de baja).
 * **Lo esencial**: últimos signos vitales con su tendencia y la última receta.
 * **Antecedentes (NOM-004)** en secciones plegables con un resumen; solo aparecen las que corresponden al sexo y la edad. *Editar esta sección* abre el formulario justo ahí.
-* **Historial**: consultas, signos, recetas y citas en una sola lista, con filtros, búsqueda y la **gráfica de signos** a un clic.
+* **Historial**: una **tarjeta por consulta** con su fecha y el resumen de lo que se registró (motivo, signos, receta y plan), y las citas, con filtros (*Todo*, *Consultas*, *Citas*), búsqueda (también dentro de cada consulta) y la **gráfica de signos** a un clic.
+* Al hacer clic en una consulta se abre su **hoja con el detalle por datos**: signos vitales, motivo, interrogatorio, exploración, diagnóstico, plan, notas y la receta. Ahí la receta se puede **corregir** después de terminar la consulta (cambiar indicaciones, quitar o agregar medicamentos, del catálogo en el orden normado o escritos a mano) e **imprimir** o guardar con la fecha y los signos de esa consulta. Si es la última consulta, la receta corregida queda como la vigente del expediente. Lo que se cobró en esa consulta no cambia. Si hay una consulta en curso del paciente, su receta se corrige dentro de la consulta.
 * **Dar de baja** oculta el expediente de la búsqueda; sus consultas y recetas se conservan.
 
 ### Alta y edición de paciente

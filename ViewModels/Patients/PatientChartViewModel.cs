@@ -111,7 +111,7 @@ public partial class PatientChartViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<VitalSummary> _latestVitals = Array.Empty<VitalSummary>();
 
-    public IReadOnlyList<string> TimelineFilters { get; } = new[] { "Todo", "Consultas", "Signos", "Recetas", "Citas" };
+    public IReadOnlyList<string> TimelineFilters { get; } = new[] { "Todo", "Consultas", "Citas" };
 
     public bool HasTimeline => Timeline.Count > 0;
     public bool HasLatestVitals => LatestVitals.Count > 0;
@@ -188,8 +188,6 @@ public partial class PatientChartViewModel : ObservableObject
         var kind = TimelineFilter switch
         {
             "Consultas" => TimelineKind.Consultation,
-            "Signos" => TimelineKind.Vitals,
-            "Recetas" => TimelineKind.Prescription,
             "Citas" => TimelineKind.Appointment,
             _ => (TimelineKind?)null
         };
@@ -210,12 +208,6 @@ public partial class PatientChartViewModel : ObservableObject
         var open = !section.IsOpen;
         foreach (var s in AntecedentSections) s.IsOpen = false;
         section.IsOpen = open;
-    }
-
-    [RelayCommand]
-    public void ToggleTimelineEntry(TimelineEntry? entry)
-    {
-        if (entry != null) entry.IsExpanded = !entry.IsExpanded;
     }
 
     public static List<AntecedentSection> BuildAntecedentSections(PatientRecord p)
@@ -280,33 +272,36 @@ public partial class PatientChartViewModel : ObservableObject
         return sections;
     }
 
-    /// <summary>Historial único de la ficha, del más reciente al más antiguo.</summary>
+    /// <summary>
+    /// Historial de la ficha, del más reciente al más antiguo: una tarjeta por consulta, con su fecha y el resumen de
+    /// sus datos (motivo, signos, receta y plan), y las citas. El detalle por datos se ve al abrir la consulta.
+    /// </summary>
     public static List<TimelineEntry> BuildTimeline(IEnumerable<PatientConsultation> consultations, IEnumerable<PatientAppointment> appointments)
     {
         var entries = new List<(TimelineEntry Entry, int Order)>();
         foreach (var c in consultations)
         {
             var title = !string.IsNullOrWhiteSpace(c.Diagnosis) ? c.Diagnosis.Trim() : (string.IsNullOrWhiteSpace(c.ChiefComplaint) ? "Consulta" : c.ChiefComplaint.Trim());
-            var detail = string.Join("\n", new[]
-            {
-                string.IsNullOrWhiteSpace(c.ChiefComplaint) ? null : $"Motivo: {c.ChiefComplaint.Trim()}",
-                string.IsNullOrWhiteSpace(c.PhysicalExamination) ? null : $"Exploración: {c.PhysicalExamination.Trim()}",
-                string.IsNullOrWhiteSpace(c.TreatmentPlan) ? null : $"Plan: {c.TreatmentPlan.Trim()}"
-            }.Where(x => x != null));
-            entries.Add((new TimelineEntry(TimelineKind.Consultation, c.Date, title, detail, c.Folio), 0));
-
-            if (!string.IsNullOrWhiteSpace(c.VitalSigns))
-            {
-                entries.Add((new TimelineEntry(TimelineKind.Vitals, c.Date, "Signos vitales", c.VitalSigns.Replace(" | ", " · ")), 1));
-            }
-
             var prescriptions = c.Prescriptions;
-            if (prescriptions.Count > 0)
+            var lines = new List<TimelineLine>();
+            void Add(string label, string? value)
             {
-                entries.Add((new TimelineEntry(TimelineKind.Prescription, c.Date,
-                    string.Join(" · ", prescriptions.Select(r => r.MedicineName)),
-                    string.Join("\n", prescriptions.Select(r => string.IsNullOrWhiteSpace(r.Dosage) ? r.MedicineName : $"{r.MedicineName}: {r.Dosage}"))), 2));
+                if (!string.IsNullOrWhiteSpace(value)) lines.Add(new TimelineLine(label, FirstLine(value)));
             }
+            // Con diagnóstico el título lo dice; el motivo va abajo
+            if (!string.IsNullOrWhiteSpace(c.Diagnosis)) Add("Motivo", c.ChiefComplaint);
+            Add("Signos", c.VitalSigns?.Replace(" | ", " · "));
+            Add("Receta", string.Join(" · ", prescriptions.Select(r => r.MedicineName.Trim()).Where(n => n.Length > 0)));
+            Add("Plan", c.TreatmentPlan);
+
+            // La búsqueda revisa todo lo de la consulta, también lo que no se ve en la tarjeta
+            var searchText = string.Join("\n", new[]
+            {
+                c.ChiefComplaint, c.SystemsReview, c.PhysicalExamination, c.VitalSigns, c.TreatmentPlan, c.Notes,
+                string.Join("\n", prescriptions.Select(r => $"{r.MedicineName} {r.Presentation} {r.Dosage}"))
+            }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            entries.Add((new TimelineEntry(TimelineKind.Consultation, c.Date, title, searchText, c.Folio, c, lines), 0));
         }
 
         foreach (var a in appointments)
@@ -314,7 +309,7 @@ public partial class PatientChartViewModel : ObservableObject
             var when = a.Date.Date + AgendaPanelViewModel.ParseAppointmentTime(a.Time);
             entries.Add((new TimelineEntry(TimelineKind.Appointment, when,
                 string.IsNullOrWhiteSpace(a.Reason) ? "Cita" : a.Reason.Trim(),
-                $"{a.Time} · {a.Status}"), 3));
+                $"{a.Time} · {a.Status}"), 1));
         }
 
         return entries
@@ -323,6 +318,13 @@ public partial class PatientChartViewModel : ObservableObject
             .ThenByDescending(x => x.Entry.Date)
             .Select(x => x.Entry)
             .ToList();
+    }
+
+    /// <summary>El primer renglón de un texto, para la tarjeta (el resto se ve al abrir la consulta).</summary>
+    private static string FirstLine(string text)
+    {
+        var line = text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? string.Empty;
+        return line.Length > 160 ? line[..157].TrimEnd() + "…" : line;
     }
 
     public static IReadOnlyList<VitalSummary> BuildLatestVitals(IEnumerable<VitalSignsEvolutionPoint>? points)

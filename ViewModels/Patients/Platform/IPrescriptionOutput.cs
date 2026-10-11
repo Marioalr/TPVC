@@ -6,18 +6,21 @@ namespace TPVC.ViewModels.Patients;
 /// <summary>Impresión y exportación de la receta (en WPF, el servicio de impresión con sus mismas firmas).</summary>
 public interface IPrescriptionOutput
 {
+    /// <param name="consultation">La consulta de la receta: una anterior sale con su fecha y sus signos (desde v1.24.0).</param>
     bool PrintPrescription(
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
         ClinicProfile profile,
-        string? generalNotes = null);
+        string? generalNotes = null,
+        PatientConsultation? consultation = null);
 
     string? ExportPrescriptionDocument(
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
         ClinicProfile profile,
         string? generalNotes = null,
-        string? targetFilePath = null);
+        string? targetFilePath = null,
+        PatientConsultation? consultation = null);
 
     /// <summary>El papel en que saldrá la receta: carta si no cabe en una media carta (la vista previa lo muestra igual).</summary>
     PrescriptionPaper ChoosePaper(

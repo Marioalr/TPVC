@@ -166,7 +166,7 @@ public class XamlBindingContractTests
             {
                 "PatientsHomeView", "PatientChartView", "PatientFormView", "ConsultationWorkspaceView", "AgendaPanelView",
                 "PrescriptionSheetView", "SuppliesSheetView", "ServicesSheetView", "CatalogBrowserSheetView",
-                "PrescriptionPreviewSheetView", "ConsultationCheckoutView", "AllergyAlertView", "InfoDialogView",
+                "PrescriptionPreviewSheetView", "ConsultationDetailSheetView", "ConsultationCheckoutView", "AllergyAlertView", "InfoDialogView",
                 "SendConsultationSheetView"
             },
             shell.Select(c => c.HostedView).ToList(),

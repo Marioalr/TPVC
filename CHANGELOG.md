@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.24.0] - 2026-10-10
+
+### Cambiado — la ficha del paciente agrupa por consulta
+* El **historial** de la ficha muestra una **tarjeta por consulta**, con su fecha y el resumen de lo registrado (motivo, signos, receta y plan), en lugar de renglones sueltos de consulta, signos y receta. Las citas siguen en la lista y la búsqueda encuentra también lo que está dentro de cada consulta.
+* Al hacer clic en una consulta se abre su **hoja con el detalle por datos**: signos vitales, motivo, interrogatorio, exploración, diagnóstico, plan, notas y receta.
+
+### Añadido — corregir la receta después de la consulta
+* En esa hoja, **Corregir receta** permite cambiar las indicaciones, quitar medicamentos y agregar otros, del catálogo en el orden normado o escritos a mano, después de terminar la consulta. Si es la última consulta, la receta corregida queda como la vigente del expediente. Lo que se cobró no cambia.
+* **Imprimir** y **Guardar documento** sacan la receta de esa consulta con su fecha y sus signos.
+* 477 pruebas.
+
 ## [1.23.0] - 2026-10-10
 
 ### Cambiado — la receta

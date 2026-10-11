@@ -30,7 +30,7 @@ public class PatientsArchitectureTests
         ["PrescriptionTemplateStore"] = 2, ["PatientSession"] = 2, ["ActiveConsultationSession"] = 2,
         ["ConsultationRecordState"] = 3, ["ConsultationAccount"] = 3,
         ["VitalSignsChartViewModel"] = 4, ["CatalogBrowserViewModel"] = 4, ["PrescriptionPreviewViewModel"] = 4,
-        ["AgendaPanelViewModel"] = 5, ["PatientFormViewModel"] = 5, ["PatientsHomeViewModel"] = 5, ["PatientChartViewModel"] = 5,
+        ["AgendaPanelViewModel"] = 5, ["PatientFormViewModel"] = 5, ["PatientsHomeViewModel"] = 5, ["PatientChartViewModel"] = 5, ["ConsultationDetailViewModel"] = 5,
         ["SuppliesSheetViewModel"] = 5, ["ClinicalServicesSheetViewModel"] = 5, ["PrescriptionSheetViewModel"] = 5, ["ConsultationViewModel"] = 5,
         ["ConsultationAutosave"] = 6,
         ["ConsultationHandoffViewModel"] = 7,

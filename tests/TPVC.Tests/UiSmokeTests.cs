@@ -336,10 +336,25 @@ internal sealed class UiSmokeSession
             records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
             Capture(host, $"05-ficha-{suffix}");
             records.Chart.ToggleAntecedent(records.Chart.AntecedentSections.First());
-            if (records.Chart.Timeline.Count > 0) records.Chart.ToggleTimelineEntry(records.Chart.Timeline[0]);
             records.Chart.IsVitalsChartVisible = true;
             Capture(host, $"06-ficha-detalle-{suffix}");
             records.Chart.IsVitalsChartVisible = false;
+
+            // La hoja de una consulta del historial (v1.24.0): detalle por datos y su receta, también corrigiéndola
+            if (records.Chart.Timeline.FirstOrDefault(t => t.Consultation != null)?.Consultation is { } pastConsultation)
+            {
+                records.ConsultationDetail.Open(pastConsultation);
+                Capture(host, $"06b-ficha-consulta-{suffix}");
+                records.ConsultationDetail.StartEditPrescription();
+                records.ConsultationDetail.NewMedicineText = "para";
+                Capture(host, $"06c-ficha-consulta-corregir-receta-{suffix}");
+                records.ConsultationDetail.CancelEditPrescription();
+                records.ConsultationDetail.Close();
+            }
+            else
+            {
+                _failures.Add($"[06b-{suffix}] La ficha de prueba no tiene consultas en el historial");
+            }
 
             WaitFor(records.Agenda.ScheduleForSelectedPatientAsync());
             WaitFor(records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree)));

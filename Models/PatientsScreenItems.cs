@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,52 +30,54 @@ public partial class AntecedentSection : ObservableObject
 public enum TimelineKind
 {
     Consultation,
-    Vitals,
-    Prescription,
     Appointment
 }
 
-/// <summary>Una entrada del historial único de la ficha (consulta, signos, receta o cita).</summary>
+/// <summary>Un renglón del resumen de la tarjeta de una consulta: "Motivo", "Signos", "Receta"…</summary>
+public sealed record TimelineLine(string Label, string Value);
+
+/// <summary>
+/// Una entrada del historial de la ficha. Desde v1.24.0 el historial agrupa por consulta: cada consulta es una tarjeta
+/// con su fecha y el resumen de sus datos (<see cref="Lines"/>), y un clic abre la hoja con el detalle por datos. Las
+/// citas siguen como entradas propias.
+/// </summary>
 public partial class TimelineEntry : ObservableObject
 {
     private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
 
-    public TimelineEntry(TimelineKind kind, DateTime date, string title, string detail, string side = "")
+    public TimelineEntry(TimelineKind kind, DateTime date, string title, string detail, string side = "",
+        PatientConsultation? consultation = null, IReadOnlyList<TimelineLine>? lines = null)
     {
         Kind = kind;
         Date = date;
         Title = title;
         Detail = detail;
         Side = side;
+        Consultation = consultation;
+        Lines = lines ?? Array.Empty<TimelineLine>();
     }
 
     public TimelineKind Kind { get; }
     public DateTime Date { get; }
     public string Title { get; }
+
+    /// <summary>Todo el texto de la entrada: lo que revisa la búsqueda del historial.</summary>
     public string Detail { get; }
     public string Side { get; }
+
+    /// <summary>La consulta de la tarjeta (null en una cita): la abre la hoja del detalle.</summary>
+    public PatientConsultation? Consultation { get; }
+
+    /// <summary>El resumen de la tarjeta de una consulta, un renglón por dato que tenga.</summary>
+    public IReadOnlyList<TimelineLine> Lines { get; }
 
     public string DayText => Date.ToString("d MMM", Mexican).TrimEnd('.');
     public string YearText => Date.ToString("yyyy", Mexican);
 
-    public string KindText => Kind switch
-    {
-        TimelineKind.Consultation => "Consulta",
-        TimelineKind.Vitals => "Signos",
-        TimelineKind.Prescription => "Receta",
-        _ => "Cita"
-    };
-
-    /// <summary>Notas largas: se muestran recortadas con "Ver completa".</summary>
-    public bool IsLongDetail => Detail.Length > 140 || Detail.Count(c => c == '\n') > 1;
+    public string KindText => Kind == TimelineKind.Consultation ? "Consulta" : "Cita";
 
     public bool IsConsultation => Kind == TimelineKind.Consultation;
-    public bool IsVitals => Kind == TimelineKind.Vitals;
-    public bool IsPrescription => Kind == TimelineKind.Prescription;
-
-    /// <summary>Las notas largas se muestran recortadas hasta que se piden completas.</summary>
-    [ObservableProperty]
-    private bool _isExpanded;
+    public bool HasLines => Lines.Count > 0;
 }
 
 /// <summary>Último valor de un signo vital con su tendencia frente a la medición anterior.</summary>
