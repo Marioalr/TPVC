@@ -504,6 +504,13 @@ public class TursoSyncService
         bool fullPull = fullResync || cursors.IsFirstDownload;
         if (fullPull) EnsureFullPullAllowed();
 
+        // Después de «Unirse» o «Reemplazar con la nube» (paso 8.8) se baja todo, también lo que subió este equipo
+        bool downloadPending;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            downloadPending = await DbMeta.GetAsync(db, DbMeta.CloudDownloadPending, ct) == "1";
+        }
+
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
         await EnsureRemoteSchemaAsync(client, ct);
@@ -540,7 +547,13 @@ public class TursoSyncService
         //    de agua se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
         if (fullPull) _settingsService.RecordFullPull(); // se cuenta al empezar a bajar, cuando la red ya respondió
         var (pulled, rowsRead, watermark) = await PullRemoteChangesAsync(client, settings.DeviceId, cursors,
-            skipOwnRows: !fullResync, incremental: !fullPull, cloudChecked, ct);
+            skipOwnRows: !fullResync && !downloadPending, incremental: !fullPull, cloudChecked, ct);
+        if (downloadPending)
+        {
+            using var db = _contextFactory.CreateDbContext();
+            DbMeta.Remove(db, DbMeta.CloudDownloadPending);
+            AppLogger.Info("Turso: terminó la descarga completa de la nube.");
+        }
 
         // Las columnas con que se bajó cada tabla (la primera vez, las de hoy, sin bajar nada)
         await SaveMetaAsync(columns.FirstTime, ct);
@@ -855,9 +868,162 @@ public class TursoSyncService
 
     private static string IdentityConflictMessage(CloudIdentityConflict conflict) => conflict.LocalClinicId == null
         ? "Esta nube ya tiene datos de otra computadora y esta base todavía no está unida a ella: no se sincroniza para no " +
-          "mezclar datos. En Nube y dispositivos: «Esta PC ya usaba esta nube», o use otra base de Turso."
+          "mezclar datos. En Nube y dispositivos: «Unirse a esta nube», «Esta PC ya usaba esta nube» o «Reemplazar con la nube»."
         : "Esta nube pertenece a otra base de datos (otro consultorio o una nube reemplazada): no se sincroniza para no " +
-          "mezclar datos. Revise la URL en Nube y dispositivos.";
+          "mezclar datos. Revise la URL en Nube y dispositivos, o use «Reemplazar con la nube».";
+
+    /// <summary>
+    /// «Unirse a esta nube» (paso 8.8; en una PC nueva o descompuesta es «Recuperar desde la nube»): solo con una base
+    /// intacta, sin más datos que el catálogo que siembra una base nueva. Respalda, borra ese catálogo sin lápidas, une
+    /// la base a la nube para siempre (<see cref="DbMeta.CloudJoined"/>: nunca vuelve a sembrar) y deja lista la descarga
+    /// completa, que hace la sincronización siguiente sin omitir lo que haya subido este equipo.
+    /// </summary>
+    public Task<(bool Ok, string Message)> JoinCloudAsync(CancellationToken ct = default) => PrepareCloudDownloadAsync(replace: false, ct);
+
+    /// <summary>
+    /// «Reemplazar con la nube» (paso 8.8): como <see cref="JoinCloudAsync"/>, pero con cualquier base. Respalda y borra
+    /// todo lo local que sincroniza, también lo que no había subido; la interfaz pide teclear CONFIRMAR antes.
+    /// </summary>
+    public Task<(bool Ok, string Message)> ReplaceWithCloudAsync(CancellationToken ct = default) => PrepareCloudDownloadAsync(replace: true, ct);
+
+    private async Task<(bool Ok, string Message)> PrepareCloudDownloadAsync(bool replace, CancellationToken ct)
+    {
+        var settings = _settingsService.CurrentSettings;
+        if (string.IsNullOrWhiteSpace(settings.DatabaseUrl)) return (false, "URL de Turso no especificada.");
+        if (!await _syncLock.WaitAsync(TimeSpan.FromSeconds(5), ct)) return (false, "Ya hay una sincronización en curso. Intente en un momento.");
+        try
+        {
+            // 1. La identidad de la nube: sin ella no hay a qué unirse
+            using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
+            await EnsureRemoteSchemaAsync(client, ct);
+            var (handshake, _, _) = await ReadHandshakeAsync(client, ct);
+            _settingsService.RecordUsage(HandshakeKeys.Length, 0);
+            if (handshake.MinClientProtocol is { } minimum && minimum > ClientProtocol)
+            {
+                return (false, "Actualice TPVC en esta computadora: la nube ya usa una versión más nueva de la sincronización. No se cambió nada.");
+            }
+            if (handshake.ClinicId is not { } cloudClinicId)
+            {
+                return (false, "Esta nube todavía no tiene identidad. Primero haga la «Sincronización completa» en la computadora " +
+                               "que ya la usa; si la nube está vacía, esta PC puede sincronizar con ella sin unirse. No se cambió nada.");
+            }
+
+            // 2. Unirse exige una base intacta
+            using var db = _contextFactory.CreateDbContext();
+            if (!replace && await DescribeLocalDataAsync(db, ct) is { Count: > 0 } found)
+            {
+                return (false, $"Esta base ya tiene datos ({string.Join(", ", found)}), así que unirse los perdería. Si ya sincronizaba " +
+                               "con esta nube, use «Esta PC ya usaba esta nube»; si no, «Reemplazar con la nube» (se respalda antes). " +
+                               "No se cambió nada.");
+            }
+
+            // 3. Respaldo antes de borrar
+            string backup;
+            try
+            {
+                backup = new BackupService(db.Database.GetDbConnection().DataSource)
+                    .CreateNamedBackup(replace ? "antes-reemplazar-con-la-nube" : "antes-unirse-a-la-nube");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo respaldar la base antes de bajarla de la nube", ex);
+                return (false, $"No se pudo respaldar la base, así que no se borró nada: {ex.Message}");
+            }
+
+            // 4–7. Borra sin lápidas, une la base y deja la bajada desde cero
+            await ClearForCloudDownloadAsync(db, cloudClinicId, replace, ct);
+            settings.LastPulledServerWatermark = null;
+            _settingsService.SaveSettings(settings);
+            IdentityConflict = null;
+            NotifyLocalViews();
+
+            AppLogger.Info(replace
+                ? $"Turso: la base local se vació para reemplazarla con la nube {cloudClinicId}. Respaldo: {backup}"
+                : $"Turso: esta PC se unió a la nube {cloudClinicId}. Respaldo: {backup}");
+            return (true, (replace ? "✓ La base local se vació (con respaldo antes)" : "✓ Esta PC se unió a la nube") +
+                          ": ahora se baja todo lo de la nube. Si se corta, la siguiente sincronización sigue donde iba.");
+        }
+        catch (TursoException ex)
+        {
+            return (false, ex.Message);
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Lo que impide unirse a una nube: cualquier fila de las tablas que sincronizan, salvo las categorías y los servicios
+    /// que siembra una base nueva (por nombre y código: también los de antes del paso 8.8, con SyncId aleatorios).
+    /// </summary>
+    internal async Task<List<string>> DescribeLocalDataAsync(AppDbContext db, CancellationToken ct)
+    {
+        var seededNames = DatabaseInitializer.SeededCategories.Select(c => c.Name).ToList();
+        var seededCodes = DatabaseInitializer.SeededServiceCodes.ToList();
+        var found = new List<string>();
+        foreach (var map in GetTableMaps())
+        {
+            int count = map.ClrType == typeof(Category)
+                ? await db.Categories.CountAsync(c => !seededNames.Contains(c.Name), ct)
+                : map.ClrType == typeof(ClinicalService)
+                    ? await db.ClinicalServices.CountAsync(s => !seededCodes.Contains(s.Code), ct)
+                    : (await db.Database.SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM {Q(map.Table)}").ToListAsync(ct)).First();
+            if (count > 0) found.Add($"{LocalDataLabel(map.ClrType)}: {count:N0}");
+        }
+        return found;
+    }
+
+    private static string LocalDataLabel(Type type) => type.Name switch
+    {
+        nameof(Category) => "categorías propias",
+        nameof(ClinicalService) => "servicios propios",
+        nameof(Product) => "productos",
+        nameof(ProductBatch) => "lotes",
+        nameof(InventoryMovement) => "movimientos de inventario",
+        nameof(ServiceDefaultProduct) => "insumos de servicios",
+        nameof(PatientRecord) => "pacientes",
+        nameof(PatientConsultation) => "consultas",
+        nameof(PatientAppointment) => "citas",
+        nameof(Sale) => "ventas",
+        nameof(SaleItem) => "renglones de venta",
+        nameof(PrescriptionTemplate) => "plantillas de receta",
+        nameof(PediatricDoseRule) => "reglas de dosis",
+        _ => type.Name
+    };
+
+    /// <summary>
+    /// Vacía lo que sincroniza (hijos primero) con los triggers apagados: sin lápidas ni anotaciones para subir. En una
+    /// transacción: une la base (CloudJoined y clinicId), lleva el cursor de subida al Seq actual (lo que llegue de la nube
+    /// nunca vuelve a subir), quita los cursores de bajada y pide la bajada completa sin omitir lo de este equipo.
+    /// </summary>
+    private async Task ClearForCloudDownloadAsync(AppDbContext db, string cloudClinicId, bool replace, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync($"INSERT OR IGNORE INTO {Q(SyncChangeLog.ApplyStateTable)} (\"Applying\") VALUES (1);", ct);
+        foreach (var map in GetTableMaps().Reverse())
+        {
+            await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(map.Table)};", ct);
+        }
+        await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(TombstonesTable)};", ct);
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM \"SyncParkedRows\";", ct);
+        await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(SyncChangeLog.Table)};", ct);
+        await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(SyncChangeLog.ApplyStateTable)};", ct);
+
+        // AUTOINCREMENT: el siguiente Seq siempre queda después de este
+        var lastSeq = (await db.Database.SqlQueryRaw<long>(
+                $"SELECT ifnull((SELECT \"seq\" FROM sqlite_sequence WHERE \"name\" = '{SyncChangeLog.Table}'), 0) AS Value")
+            .ToListAsync(ct)).First();
+        await SyncChangeLog.SavePushCursorAsync(db, lastSeq, ct);
+        await DbMeta.SetAsync(db, DbMeta.CloudJoined, "1", ct);
+        await DbMeta.SetAsync(db, DbMeta.ClinicId, cloudClinicId, ct);
+        await DbMeta.SetAsync(db, DbMeta.CloudDownloadPending, "1", ct);
+        DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
+        DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
+        if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);
+        await tx.CommitAsync(ct);
+        RefreshParkedCount();
+    }
 
     /// <summary>
     /// Toda marca local más de 2 min en el futuro (de un equipo con el reloj adelantado, o de un reloj que cambió sin

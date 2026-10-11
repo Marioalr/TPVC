@@ -27,65 +27,82 @@ public static partial class DatabaseInitializer
         // Migración aditiva automática para bases preexistentes
         EnsureSchema(context);
 
-        // Si ya hay categorías, solo verificar si faltan los servicios clínicos o pacientes de demo
-        if (context.Categories.Any())
-        {
-            SeedClinicalServices(context);
-            if (seedDemoData)
-            {
-                SeedPatients(context);
-            }
-            return;
-        }
+        // Una base unida a una nube (paso 8.8) nunca vuelve a sembrar, ni a media descarga: su catálogo es el de la nube
+        if (IsCloudJoined(context)) return;
 
-        // Categorías iniciales para Médico General
-        var catMedicamentos = new Category
-        {
-            Name = "Medicamentos y Fármacos",
-            Description = "Analgésicos, antibióticos, antipiréticos, antihistamínicos",
-            Icon = "Pill"
-        };
-        var catCuracion = new Category
-        {
-            Name = "Material de Curación",
-            Description = "Gasas, vendas, algodón, apósitos, cinta micropore",
-            Icon = "Bandage"
-        };
-        var catInsumos = new Category
-        {
-            Name = "Insumos Clínicos Descartables",
-            Description = "Jeringas, agujas, guantes, abatelenguas, cubrebocas",
-            Icon = "Syringe"
-        };
-        var catAntisepticos = new Category
-        {
-            Name = "Antisépticos y Soluciones",
-            Description = "Alcohol etílico, solución fisiológica, yodopovidona, jabón quirúrgico",
-            Icon = "Flask"
-        };
-        var catDiagnostico = new Category
-        {
-            Name = "Diagnóstico y Exploración",
-            Description = "Tiras reactivas de glucosa, lancetas, termómetros, abatelenguas estériles",
-            Icon = "Stethoscope"
-        };
-
-        context.Categories.AddRange(catMedicamentos, catCuracion, catInsumos, catAntisepticos, catDiagnostico);
-        context.SaveChanges();
-
-        if (!seedDemoData)
-        {
-            SeedClinicalServices(context);
-            return;
-        }
-
-        SeedDemoProducts(context);
+        // El catálogo de una base nueva (categorías y servicios clínicos) lleva SyncId fijos y marca del año 2000: dos
+        // equipos que siembran no lo duplican al sincronizar, y cualquier edición o borrado real le gana a una siembra
+        // repetida. Los datos demo (productos y pacientes) solo salen del asistente inicial o de las pruebas
+        if (!context.Categories.Any()) SeedCategories(context);
+        if (seedDemoData) SeedDemoProducts(context);
         SeedClinicalServices(context);
-        SeedPatients(context);
+        if (seedDemoData) SeedPatients(context);
+    }
+
+    /// <summary>Marca del catálogo sembrado: anterior a cualquier cambio real.</summary>
+    public static readonly DateTime SeedStampUtc = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>La base se unió a una nube («Unirse», «Recuperar» o «Reemplazar con la nube», paso 8.8).</summary>
+    public static bool IsCloudJoined(AppDbContext context)
+    {
+        try
+        {
+            return DbMeta.Get(context, DbMeta.CloudJoined) == "1";
+        }
+        catch (Exception)
+        {
+            return false; // Sin DbMeta todavía
+        }
+    }
+
+    /// <summary>Las categorías del catálogo que siembra una base nueva: nombre, descripción e icono.</summary>
+    public static readonly (string Name, string Description, string Icon)[] SeededCategories =
+    {
+        ("Medicamentos y Fármacos", "Analgésicos, antibióticos, antipiréticos, antihistamínicos", "Pill"),
+        ("Material de Curación", "Gasas, vendas, algodón, apósitos, cinta micropore", "Bandage"),
+        ("Insumos Clínicos Descartables", "Jeringas, agujas, guantes, abatelenguas, cubrebocas", "Syringe"),
+        ("Antisépticos y Soluciones", "Alcohol etílico, solución fisiológica, yodopovidona, jabón quirúrgico", "Flask"),
+        ("Diagnóstico y Exploración", "Tiras reactivas de glucosa, lancetas, termómetros, abatelenguas estériles", "Stethoscope")
+    };
+
+    /// <summary>Códigos de los servicios clínicos que siembra una base nueva.</summary>
+    public static IReadOnlyList<string> SeededServiceCodes => new[] { "SERV-001", "SERV-002", "SERV-003", "SERV-004", "SERV-005" };
+
+    private static void SeedCategories(AppDbContext context)
+    {
+        foreach (var (name, description, icon) in SeededCategories)
+        {
+            context.Categories.Add(new Category
+            {
+                SyncId = Services.SyncIds.Seeded(nameof(Category), name),
+                UpdatedAtUtc = SeedStampUtc,
+                Name = name,
+                Description = description,
+                Icon = icon
+            });
+        }
+        SaveSeeded(context);
+    }
+
+    /// <summary>Guarda lo sembrado con su marca del año 2000 (sin la marca de ahora). Los triggers lo anotan para subir.</summary>
+    private static void SaveSeeded(AppDbContext context)
+    {
+        context.ApplyingRemoteChanges = true;
+        try
+        {
+            context.SaveChanges();
+        }
+        finally
+        {
+            context.ApplyingRemoteChanges = false;
+        }
     }
 
     public static void SeedDemoData(AppDbContext context)
     {
+        // Unida a una nube, los datos demo subirían a ella (paso 8.8)
+        if (IsCloudJoined(context)) return;
+
         SeedDemoProducts(context);
         SeedClinicalServices(context);
         SeedPatients(context);
@@ -370,32 +387,47 @@ public static partial class DatabaseInitializer
         };
 
         // Asignar insumos por defecto a los servicios correspondientes si existen los productos
+        void AddDefault(ClinicalService service, Product product, int quantity, string instructions) =>
+            service.DefaultProducts.Add(new ServiceDefaultProduct
+            {
+                SyncId = Services.SyncIds.Seeded(nameof(ServiceDefaultProduct), $"{service.Code}|{product.Code}"),
+                UpdatedAtUtc = SeedStampUtc,
+                ProductId = product.Id,
+                Quantity = quantity,
+                Instructions = instructions
+            });
         if (gasa != null)
         {
-            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = gasa.Id, Quantity = 2, Instructions = "Limpieza y cobertura" });
-            services[2].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = gasa.Id, Quantity = 2, Instructions = "Campo y secado" });
+            AddDefault(services[1], gasa, 2, "Limpieza y cobertura");
+            AddDefault(services[2], gasa, 2, "Campo y secado");
         }
         if (solucion != null)
         {
-            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = solucion.Id, Quantity = 1, Instructions = "Lavado de arrastre" });
-            services[2].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = solucion.Id, Quantity = 1, Instructions = "Lavado pre-sutura" });
+            AddDefault(services[1], solucion, 1, "Lavado de arrastre");
+            AddDefault(services[2], solucion, 1, "Lavado pre-sutura");
         }
         if (venda != null)
         {
-            services[1].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = venda.Id, Quantity = 1, Instructions = "Vendaje protector" });
+            AddDefault(services[1], venda, 1, "Vendaje protector");
         }
         if (alcohol != null)
         {
-            services[0].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = alcohol.Id, Quantity = 1, Instructions = "Asepsia" });
-            services[3].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = alcohol.Id, Quantity = 1, Instructions = "Asepsia digital" });
+            AddDefault(services[0], alcohol, 1, "Asepsia");
+            AddDefault(services[3], alcohol, 1, "Asepsia digital");
         }
         if (tiras != null)
         {
-            services[3].DefaultProducts.Add(new ServiceDefaultProduct { ProductId = tiras.Id, Quantity = 1, Instructions = "Medición" });
+            AddDefault(services[3], tiras, 1, "Medición");
         }
 
+        // SyncId fijos y marca del año 2000 (paso 8.8)
+        foreach (var service in services)
+        {
+            service.SyncId = Services.SyncIds.Seeded(nameof(ClinicalService), service.Code);
+            service.UpdatedAtUtc = SeedStampUtc;
+        }
         context.ClinicalServices.AddRange(services);
-        context.SaveChanges();
+        SaveSeeded(context);
     }
 
     public static void SeedPatients(AppDbContext context)

@@ -92,6 +92,23 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private bool _canAdoptCloudIdentity;
 
+    /// <summary>Hay conflicto de identidad: se ofrece «Reemplazar con la nube» (paso 8.8).</summary>
+    [ObservableProperty]
+    private bool _canReplaceWithCloud;
+
+    /// <summary>El panel de «Reemplazar con la nube», que pide teclear CONFIRMAR.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReplaceWithCloud))]
+    private bool _isReplaceWithCloudOpen;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReplaceWithCloud))]
+    private string _replaceConfirmWord = string.Empty;
+
+    public bool CanConfirmReplaceWithCloud => IsReplaceWithCloudOpen && !IsBusy && DataImportService.ValidateConfirmationWord(ReplaceConfirmWord);
+
+    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanConfirmReplaceWithCloud));
+
     /// <summary>El reporte de la última «Sincronización completa» en esta sesión.</summary>
     [ObservableProperty]
     private string _fullSyncReportText = string.Empty;
@@ -231,14 +248,75 @@ public partial class TursoSyncViewModel : ObservableObject
 
         var conflict = _syncService.IdentityConflict;
         CanAdoptCloudIdentity = conflict is { LocalClinicId: null };
+        CanReplaceWithCloud = conflict != null;
+        if (conflict == null) IsReplaceWithCloudOpen = false;
         IdentityNoticeText = conflict == null
             ? string.Empty
             : conflict.LocalClinicId == null
                 ? "Esta nube ya tiene datos de otra computadora y esta base todavía no está unida a ella, así que no se sincroniza " +
-                  "para no mezclar datos. Si esta PC ya sincronizaba con esta nube, pulse «Esta PC ya usaba esta nube». Si no, " +
-                  "use otra base de Turso; unirse a una nube existente llegará en una próxima versión."
+                  "para no mezclar datos. En una PC nueva (o para recuperar una descompuesta), pulse «Unirse a esta nube»: baja todo " +
+                  "lo de la nube. Si esta PC ya sincronizaba con ella, «Esta PC ya usaba esta nube». Si es otra base, revise la URL."
                 : "Esta nube pertenece a otra base de datos (otro consultorio o una nube reemplazada), así que no se sincroniza " +
-                  "para no mezclar datos. Revise la URL y el token.";
+                  "para no mezclar datos. Revise la URL y el token, o use «Reemplazar con la nube» para quedarse con lo de la nube.";
+    }
+
+    /// <summary>
+    /// «Unirse a esta nube» (también «Recuperar desde la nube» en una PC nueva): solo con una base sin datos propios.
+    /// Respalda, borra el catálogo inicial y baja todo lo de la nube.
+    /// </summary>
+    [RelayCommand]
+    public async Task JoinCloudAsync()
+    {
+        bool confirm = DialogService.Confirm(
+            "TPVC guardará un respaldo de esta base, quitará las categorías y los servicios de ejemplo y bajará todo lo de la nube " +
+            "(catálogo, inventario, pacientes, consultas, citas y ventas). Puede tardar varios minutos si la nube tiene muchos datos; " +
+            "si se corta, la siguiente sincronización sigue donde iba.\n\n" +
+            "Solo procede si esta base no tiene datos propios.\n\n¿Desea continuar?",
+            "TPVC - Unirse a esta nube");
+        if (!confirm) return;
+
+        await RunCloudDownloadAsync(_syncService.JoinCloudAsync);
+    }
+
+    [RelayCommand]
+    public void OpenReplaceWithCloud()
+    {
+        ReplaceConfirmWord = string.Empty;
+        IsReplaceWithCloudOpen = true;
+    }
+
+    [RelayCommand]
+    public void CancelReplaceWithCloud()
+    {
+        IsReplaceWithCloudOpen = false;
+        ReplaceConfirmWord = string.Empty;
+    }
+
+    /// <summary>«Reemplazar con la nube»: borra lo local (con respaldo antes) y baja todo lo de la nube. Pide CONFIRMAR.</summary>
+    [RelayCommand]
+    public async Task ReplaceWithCloudAsync()
+    {
+        if (!CanConfirmReplaceWithCloud) return;
+        IsReplaceWithCloudOpen = false;
+        ReplaceConfirmWord = string.Empty;
+        await RunCloudDownloadAsync(_syncService.ReplaceWithCloudAsync);
+    }
+
+    private async Task RunCloudDownloadAsync(Func<System.Threading.CancellationToken, Task<(bool Ok, string Message)>> prepare)
+    {
+        IsBusy = true;
+        try
+        {
+            var (ok, message) = await prepare(default);
+            SaveStatusMessage = ok ? message : $"✕ {message}";
+            RefreshNotices();
+            if (ok) await SyncNowAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+            RefreshNotices();
+        }
     }
 
     /// <summary>«Esta PC ya usaba esta nube»: une esta base a la identidad de la nube si todo lo que subió está en ella.</summary>

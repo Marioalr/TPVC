@@ -7,6 +7,7 @@
   "notes": [
     "UUID versión 5 de RFC 4122 (SHA-1 del espacio de nombres en orden de red + el nombre en UTF-8). 'expected' en minúsculas con guiones.",
     "Espacios de nombres: dns y url de RFC 4122; tpvc = uuid5(url, \"https://github.com/Marioalr/TPVC/sync\"), fijo para siempre.",
+    "Catálogo sembrado por la PC (paso 8.8; Kotlin nunca siembra): 'Category:<nombre>', 'ClinicalService:<código>', 'ServiceDefaultProduct:<código del servicio>|<código del producto>'.",
     "Derivados: nombre = prefix + los syncIds en minúsculas unidos con ':' (un SyncId leído en mayúsculas da lo mismo)."
   ],
   "cases": [
@@ -45,6 +46,24 @@
         "name": "ClinicalService:SERV-001"
       },
       "expected": "1b7a70eb-8209-5cf0-a419-512a7b95a7f2"
+    },
+    {
+      "name": "TPVC · categoría sembrada",
+      "input": {
+        "namespace": "tpvc",
+        "namespaceId": "ff997a05-ea47-5008-a4c1-6d022b9f1a6f",
+        "name": "Category:Material de Curación"
+      },
+      "expected": "c92671a9-3965-595a-83c3-23341b2de912"
+    },
+    {
+      "name": "TPVC · insumo por defecto de un servicio sembrado",
+      "input": {
+        "namespace": "tpvc",
+        "namespaceId": "ff997a05-ea47-5008-a4c1-6d022b9f1a6f",
+        "name": "ServiceDefaultProduct:SERV-002|CUR-001"
+      },
+      "expected": "aea79718-d4f5-5d43-8678-66923b6af612"
     },
     {
       "name": "TPVC · nombre vacío",

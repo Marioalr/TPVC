@@ -31,6 +31,7 @@ public class TursoSyncEndToEndTests
         public required TursoSettingsService Settings { get; init; }
         public required ClinicProfileService Profile { get; init; }
         public required TursoSyncService Sync { get; init; }
+        public required string DbPath { get; init; }
     }
 
     private string TempFile(string ext)
@@ -58,18 +59,31 @@ public class TursoSyncEndToEndTests
                 try { File.Delete(f + suffix); } catch { }
             }
         }
+        foreach (var dir in _dirs)
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
     }
 
-    private Device CreateDevice(string name, bool seed, TimeProvider? clock = null)
+    private readonly List<string> _dirs = new();
+
+    /// <param name="demo">Con <paramref name="seed"/>: los datos demo además del catálogo (como las pruebas de siempre).
+    /// Sin ellos es una instalación nueva tal como arranca el programa (paso 8.8).</param>
+    private Device CreateDevice(string name, bool seed, TimeProvider? clock = null, bool demo = true)
     {
+        // Cada base en su carpeta: sus respaldos (carpeta "backups" junto a ella) no se mezclan con los de otra prueba
+        var dir = Path.Combine(Path.GetTempPath(), $"tpvc_sync_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        _dirs.Add(dir);
+        var dbPath = Path.Combine(dir, "consultorio.db");
         var builder = new DbContextOptionsBuilder<AppDbContext>();
-        AppDbContext.ConfigureSqlite(builder, $"Data Source={TempFile(".db")}");
+        AppDbContext.ConfigureSqlite(builder, $"Data Source={dbPath}");
         var factory = new AppDbContextFactory(builder.Options);
         using (var db = factory.CreateDbContext())
         {
             if (seed)
             {
-                DatabaseInitializer.Initialize(db);
+                DatabaseInitializer.Initialize(db, seedDemoData: demo);
             }
             else
             {
@@ -97,7 +111,7 @@ public class TursoSyncEndToEndTests
         };
         if (clock != null) sync.Clock = clock;
 
-        return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync };
+        return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync, DbPath = dbPath };
     }
 
     [TestMethod]
@@ -1179,5 +1193,300 @@ public class TursoSyncEndToEndTests
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
         Assert.AreEqual("2481592448", pc.Profile.CurrentProfile.Phone, "El cambio más reciente de la tablet llega a la PC");
+    }
+
+    // ================================================================== siembra segura, unirse y recuperar (paso 8.8)
+
+    /// <summary>Filas de cada tabla que sincroniza: aquí y en la nube.</summary>
+    private Dictionary<string, (long Local, long Cloud)> CountsByTable(Device device)
+    {
+        using var db = device.Factory.CreateDbContext();
+        return SyncSchema.FromModel(db.Model).Tables.ToDictionary(m => m.Table,
+            m => (ChangeLogTestSupport.Count(db, $"\"{m.Table}\""), (long)CloudScalar($"SELECT COUNT(*) FROM \"{m.Table}\"")!));
+    }
+
+    private void AssertSameAsTheCloud(Device device)
+    {
+        foreach (var (table, (local, cloud)) in CountsByTable(device)) Assert.AreEqual(cloud, local, table);
+        using var db = device.Factory.CreateDbContext();
+        Assert.AreEqual(0, db.SyncParkedRows.Count(), "Nada quedó apartado");
+    }
+
+    private static string[] Backups(Device device, string label)
+    {
+        var dir = Path.Combine(Path.GetDirectoryName(device.DbPath)!, "backups");
+        return Directory.Exists(dir) ? Directory.GetFiles(dir, $"consultorio-*-{label}.db") : Array.Empty<string>();
+    }
+
+    /// <summary>Una nube con identidad (la «Sincronización completa» de la PC principal, con sus datos demo).</summary>
+    private async Task<Device> CloudWithIdentityAsync()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var upload = await pc.Sync.InitialUploadToTursoAsync();
+        Assert.IsTrue(upload.Success, upload.ErrorMessage);
+        Assert.IsNotNull(CloudMeta("clinicId"));
+        return pc;
+    }
+
+    [TestMethod]
+    public async Task TwoNewInstalls_SeedTheSameCatalog_AndSyncWithoutDuplicates()
+    {
+        var pc = CreateDevice("pc", seed: true, demo: false);
+        var laptop = CreateDevice("laptop", seed: true, demo: false);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        Assert.AreEqual(5L, CloudScalar("SELECT COUNT(*) FROM Categories"));
+        Assert.AreEqual(5L, CloudScalar("SELECT COUNT(*) FROM ClinicalServices"));
+        foreach (var device in new[] { pc, laptop })
+        {
+            using var db = device.Factory.CreateDbContext();
+            Assert.AreEqual(5, db.Categories.Count());
+            Assert.AreEqual(5, db.ClinicalServices.Count());
+            Assert.AreEqual(0, db.Patients.Count(), "Sin datos demo: esos solo salen del asistente");
+            Assert.AreEqual(0, db.Products.Count());
+            var category = db.Categories.AsNoTracking().Single(c => c.Name == "Material de Curación");
+            Assert.AreEqual(SyncIds.Seeded("Category", "Material de Curación"), category.SyncId);
+            Assert.AreEqual(DatabaseInitializer.SeedStampUtc, category.UpdatedAtUtc, "Sembrada con la marca del año 2000");
+            Assert.AreEqual(SyncIds.Seeded("ClinicalService", "SERV-003"), db.ClinicalServices.AsNoTracking().Single(s => s.Code == "SERV-003").SyncId);
+        }
+    }
+
+    [TestMethod]
+    public void TheSeededCatalog_HasFixedIds_AlsoForTheDefaultProductsOfTheDemo()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        using var db = pc.Factory.CreateDbContext();
+        var defaults = db.ServiceDefaultProducts.AsNoTracking().Include(d => d.ClinicalService).Include(d => d.Product).ToList();
+        Assert.IsNotEmpty(defaults);
+        foreach (var d in defaults)
+        {
+            Assert.AreEqual(SyncIds.Seeded("ServiceDefaultProduct", $"{d.ClinicalService!.Code}|{d.Product!.Code}"), d.SyncId);
+            Assert.AreEqual(DatabaseInitializer.SeedStampUtc, d.UpdatedAtUtc);
+        }
+    }
+
+    [TestMethod]
+    public async Task ASeededCategoryThatWasDeleted_StaysDeleted_AfterAThirdInstallSyncs()
+    {
+        var pc = CreateDevice("pc", seed: true, demo: false);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var laptop = CreateDevice("laptop", seed: true, demo: false);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+
+        // La PC borra una categoría sembrada; una tercera instalación la vuelve a sembrar con su marca del año 2000
+        var deletedId = SyncIds.Seeded("Category", "Material de Curación");
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Categories.Remove(db.Categories.Single(c => c.SyncId == deletedId));
+            db.SaveChanges();
+        }
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        var third = CreateDevice("tercera", seed: true, demo: false);
+        Assert.IsTrue((await third.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM Categories WHERE SyncId = '{TursoSyncService.FormatGuid(deletedId)}'"), "La siembra repetida no la revive");
+        Assert.AreEqual(4L, CloudScalar("SELECT COUNT(*) FROM Categories"));
+        foreach (var device in new[] { pc, laptop, third })
+        {
+            using var db = device.Factory.CreateDbContext();
+            Assert.AreEqual(4, db.Categories.Count(), device.Settings.CurrentSettings.DeviceName);
+        }
+    }
+
+    [TestMethod]
+    public void ASecondStartWithoutPatients_SeedsNothing()
+    {
+        var pc = CreateDevice("pc", seed: true, demo: false);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            // El arranque del programa (App.xaml.cs), otra vez
+            DatabaseInitializer.Initialize(db, seedDemoData: false);
+        }
+
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0, db.Patients.Count(), "Antes, un arranque con la tabla vacía sembraba los pacientes demo");
+            Assert.AreEqual(0, db.Products.Count());
+            Assert.AreEqual(5, db.Categories.Count());
+            Assert.AreEqual(5, db.ClinicalServices.Count());
+        }
+    }
+
+    [TestMethod]
+    public async Task JoiningACloud_CreatesNoDuplicates_AndUploadsNoTombstones()
+    {
+        var pc = await CloudWithIdentityAsync();
+        var cloudBefore = CountsByTable(pc).ToDictionary(kv => kv.Key, kv => kv.Value.Cloud);
+        var tombstonesBefore = (long)CloudScalar("SELECT COUNT(*) FROM SyncTombstones")!;
+
+        // Una PC nueva (con su catálogo sembrado) y la URL y el token de esa nube: no sincroniza hasta unirse
+        var tablet = CreateDevice("tablet", seed: true, demo: false);
+        Assert.IsFalse((await tablet.Sync.SyncAsync()).Success);
+        Assert.IsNotNull(tablet.Sync.IdentityConflict);
+
+        var join = await tablet.Sync.JoinCloudAsync();
+        Assert.IsTrue(join.Ok, join.Message);
+        Assert.IsNull(tablet.Sync.IdentityConflict);
+        Assert.HasCount(1, Backups(tablet, "antes-unirse-a-la-nube"), "Respalda antes de borrar");
+
+        var sync = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(sync.Success, sync.ErrorMessage);
+        Assert.AreEqual(0, sync.RowsPushed, "Unirse no sube nada");
+        AssertSameAsTheCloud(tablet);
+        foreach (var (table, (_, cloud)) in CountsByTable(tablet)) Assert.AreEqual(cloudBefore[table], cloud, $"Sin duplicados en {table}");
+        Assert.AreEqual(tombstonesBefore, CloudScalar("SELECT COUNT(*) FROM SyncTombstones"), "Ni lápidas");
+
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.AreEqual("1", DbMeta.Get(db, DbMeta.CloudJoined));
+            Assert.AreEqual(CloudMeta("clinicId"), DbMeta.Get(db, DbMeta.ClinicId));
+            Assert.IsNull(DbMeta.Get(db, DbMeta.CloudDownloadPending), "La descarga terminó");
+            Assert.AreEqual(0, db.SyncTombstones.Count());
+        }
+
+        // Y de ahí en adelante sincroniza normal: lo nuevo sube
+        var patient = await tablet.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente de la tablet", Age = 30 });
+        var after = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(after.Success, after.ErrorMessage);
+        Assert.AreEqual(1, after.RowsPushed);
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM Patients WHERE SyncId = '{TursoSyncService.FormatGuid(patient.SyncId)}'"));
+    }
+
+    [TestMethod]
+    public async Task RecoveringFromTheCloud_GivesTheSameCounts_EvenWithTheSameDeviceId()
+    {
+        await CloudWithIdentityAsync();
+
+        // La PC se descompuso: instalación nueva con la misma configuración (el mismo DeviceId que subió todo)
+        var recovered = CreateDevice("pc", seed: true, demo: false);
+        Assert.IsFalse((await recovered.Sync.SyncAsync()).Success);
+        var join = await recovered.Sync.JoinCloudAsync();
+        Assert.IsTrue(join.Ok, join.Message);
+        var sync = await recovered.Sync.SyncAsync();
+        Assert.IsTrue(sync.Success, sync.ErrorMessage);
+        Assert.IsGreaterThan(0, sync.RowsPulled);
+
+        AssertSameAsTheCloud(recovered);
+        using var db = recovered.Factory.CreateDbContext();
+        Assert.IsGreaterThan(0, db.Patients.Count(), "También lo que había subido este mismo equipo");
+    }
+
+    [TestMethod]
+    public async Task ARestartHalfwayThroughTheDownload_DoesNotSeedAgain()
+    {
+        await CloudWithIdentityAsync();
+        var cloudCategories = (long)CloudScalar("SELECT COUNT(*) FROM Categories")!;
+        var tablet = CreateDevice("tablet", seed: true, demo: false);
+        Assert.IsFalse((await tablet.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await tablet.Sync.JoinCloudAsync()).Ok);
+
+        // Se cae la red al pedir las categorías: la base queda vacía
+        _server.BeforeExecuteAsync = sql => sql.Contains("FROM \"Categories\"", StringComparison.Ordinal)
+            ? throw new HttpRequestException("Se cortó la red (simulado)")
+            : Task.CompletedTask;
+        Assert.IsFalse((await tablet.Sync.SyncAsync()).Success);
+        _server.BeforeExecuteAsync = null;
+
+        // Se cierra TPVC y vuelve a abrir: unida a la nube, ya no siembra nada
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            DatabaseInitializer.Initialize(db, seedDemoData: false);
+            DatabaseInitializer.SeedDemoData(db);
+            Assert.AreEqual(0, db.Categories.Count());
+            Assert.AreEqual(0, db.ClinicalServices.Count());
+            Assert.AreEqual(0, db.Patients.Count(), "Ni los datos demo del asistente");
+            Assert.AreEqual("1", DbMeta.Get(db, DbMeta.CloudDownloadPending), "La descarga sigue pendiente");
+        }
+
+        var resumed = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(resumed.Success, resumed.ErrorMessage);
+        Assert.AreEqual(0, resumed.RowsPushed);
+        AssertSameAsTheCloud(tablet);
+        Assert.AreEqual(cloudCategories, CloudScalar("SELECT COUNT(*) FROM Categories"));
+    }
+
+    [TestMethod]
+    public async Task ADatabaseWithRealData_IsRefusedToJoin()
+    {
+        await CloudWithIdentityAsync();
+        var other = CreateDevice("otra", seed: true, demo: false);
+        var patient = await other.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente de esta PC", Age = 52 });
+        Assert.IsFalse((await other.Sync.SyncAsync()).Success);
+
+        var join = await other.Sync.JoinCloudAsync();
+        Assert.IsFalse(join.Ok);
+        StringAssert.Contains(join.Message, "pacientes: 1");
+        StringAssert.Contains(join.Message, "Reemplazar con la nube");
+        Assert.IsEmpty(Backups(other, "antes-unirse-a-la-nube"));
+        Assert.IsNotNull(other.Sync.IdentityConflict, "Sigue sin sincronizar");
+        using var db = other.Factory.CreateDbContext();
+        Assert.IsTrue(db.Patients.Any(p => p.Id == patient.Id), "No se borró nada");
+        Assert.IsNull(DbMeta.Get(db, DbMeta.CloudJoined));
+    }
+
+    [TestMethod]
+    public async Task ACustomCategory_AlsoKeepsTheDatabaseFromJoining()
+    {
+        await CloudWithIdentityAsync();
+        var other = CreateDevice("otra", seed: true, demo: false);
+        using (var db = other.Factory.CreateDbContext())
+        {
+            db.Categories.Add(new Category { Name = "Vacunas" });
+            db.SaveChanges();
+        }
+        var join = await other.Sync.JoinCloudAsync();
+        Assert.IsFalse(join.Ok);
+        StringAssert.Contains(join.Message, "categorías propias: 1");
+    }
+
+    [TestMethod]
+    public async Task ReplacingWithTheCloud_LeavesWhatTheCloudHas_WithABackupBefore()
+    {
+        await CloudWithIdentityAsync();
+        var tombstonesBefore = (long)CloudScalar("SELECT COUNT(*) FROM SyncTombstones")!;
+
+        // Otra base con sus propios datos (demo y un paciente que nunca subió)
+        var other = CreateDevice("otra", seed: true);
+        var patient = await other.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente que solo estaba aquí", Age = 61 });
+        Assert.IsFalse((await other.Sync.SyncAsync()).Success);
+
+        var replace = await other.Sync.ReplaceWithCloudAsync();
+        Assert.IsTrue(replace.Ok, replace.Message);
+        var sync = await other.Sync.SyncAsync();
+        Assert.IsTrue(sync.Success, sync.ErrorMessage);
+        Assert.AreEqual(0, sync.RowsPushed, "Lo de esta base no sube");
+
+        AssertSameAsTheCloud(other);
+        Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM Patients WHERE SyncId = '{TursoSyncService.FormatGuid(patient.SyncId)}'"));
+        Assert.AreEqual(tombstonesBefore, CloudScalar("SELECT COUNT(*) FROM SyncTombstones"), "Borrar aquí no dejó lápidas");
+
+        // El respaldo de antes conserva lo que había
+        var backup = Backups(other, "antes-reemplazar-con-la-nube").Single();
+        using var connection = new SqliteConnection($"Data Source={backup};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM \"Patients\" WHERE upper(\"SyncId\") = upper($id)";
+        command.Parameters.AddWithValue("$id", patient.SyncId.ToString());
+        Assert.AreEqual(1L, (long)command.ExecuteScalar()!);
+    }
+
+    [TestMethod]
+    public async Task JoiningACloudWithoutIdentity_IsRefused_WithoutChangingAnything()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: true, demo: false);
+
+        var join = await tablet.Sync.JoinCloudAsync();
+        Assert.IsFalse(join.Ok);
+        StringAssert.Contains(join.Message, "todavía no tiene identidad");
+        using var db = tablet.Factory.CreateDbContext();
+        Assert.AreEqual(5, db.Categories.Count());
+        Assert.IsNull(DbMeta.Get(db, DbMeta.CloudJoined));
     }
 }

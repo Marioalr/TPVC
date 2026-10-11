@@ -72,19 +72,39 @@
                             </Grid>
                         </Border>
 
-                        <!-- La nube pertenece a otra base: no se sincroniza (paso 8.7) -->
+                        <!-- La nube pertenece a otra base: no se sincroniza (paso 8.7). Unirse, ya la usaba o reemplazar (paso 8.8) -->
                         <Border Style="{StaticResource NoticeDanger}" Margin="0,14,0,0" Visibility="{Binding IdentityNoticeText, Converter={StaticResource BoolToVis}}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding IdentityNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding AdoptCloudIdentityCommand}" Content="Esta PC ya usaba esta nube"
-                                        Margin="12,0,0,0" VerticalAlignment="Center" Visibility="{Binding CanAdoptCloudIdentity, Converter={StaticResource BoolToVis}}"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                        ToolTip="Revisa que todo lo que esta PC ya subió esté en la nube y, si es así, la une a ella" />
-                            </Grid>
+                            <StackPanel>
+                                <TextBlock Text="{Binding IdentityNoticeText}" TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,10,0,0" Visibility="{Binding IsReplaceWithCloudOpen, Converter={StaticResource InverseBoolToVis}}">
+                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding JoinCloudCommand}" Content="Unirse a esta nube"
+                                            Margin="0,0,8,0" Visibility="{Binding CanAdoptCloudIdentity, Converter={StaticResource BoolToVis}}"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTip="Para una PC nueva o para recuperar una descompuesta: respalda, quita el catálogo de ejemplo y baja todo lo de la nube" />
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding AdoptCloudIdentityCommand}" Content="Esta PC ya usaba esta nube"
+                                            Margin="0,0,8,0" Visibility="{Binding CanAdoptCloudIdentity, Converter={StaticResource BoolToVis}}"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTip="Revisa que todo lo que esta PC ya subió esté en la nube y, si es así, la une a ella" />
+                                    <Button Style="{StaticResource ButtonDangerGhost}" Command="{Binding OpenReplaceWithCloudCommand}" Content="Reemplazar con la nube…"
+                                            Visibility="{Binding CanReplaceWithCloud, Converter={StaticResource BoolToVis}}"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            ToolTip="Borra los datos de esta PC (con respaldo antes) y baja todo lo de la nube" />
+                                </WrapPanel>
+
+                                <!-- «Reemplazar con la nube»: teclear CONFIRMAR -->
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding IsReplaceWithCloudOpen, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                                               Text="Se borran todos los datos de esta computadora que se sincronizan (pacientes, consultas, citas, ventas e inventario), también lo que todavía no subió, y se baja todo lo de la nube. Antes se guarda un respaldo en la carpeta de respaldos. Para continuar escriba CONFIRMAR." />
+                                    <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" CharacterCasing="Upper" Width="280" HorizontalAlignment="Left"
+                                             Text="{Binding ReplaceConfirmWord, UpdateSourceTrigger=PropertyChanged}"
+                                             helpers:Field.Placeholder="CONFIRMAR" AutomationProperties.Name="Escriba CONFIRMAR" Margin="0,10,0,10" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Style="{StaticResource ButtonDanger}" Command="{Binding ReplaceWithCloudCommand}" Content="Reemplazar con la nube"
+                                                IsEnabled="{Binding CanConfirmReplaceWithCloud}" Margin="0,0,8,0" />
+                                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding CancelReplaceWithCloudCommand}" Content="Cancelar" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
                         </Border>
 
                         <!-- La hora de Windows difiere de la de la nube -->
