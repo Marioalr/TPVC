@@ -15,9 +15,12 @@
     cuerpo). No anula nada.
   - V16 (antes del 8.16): el contador de folios en una sola instrucción (INSERT … ON CONFLICT DO UPDATE … RETURNING),
     también con 40 peticiones a la vez: cada una debe recibir un número distinto y sin huecos.
-  - V4 y V3 con una rotación real, solo con -Rotate (antes del 8.15): mide cuánto sigue sirviendo el token viejo después
-    de "turso db tokens invalidate" y cuánto tarda el nuevo. CUIDADO: anula TODOS los tokens del grupo de la base; úsela
-    solo si la base de prueba está en otro grupo que la del consultorio (vea la columna Group de "turso db list").
+  - V4 y V3 con una rotación real, solo con -Rotate: anula los tokens de la base de prueba (lo mismo que "turso db tokens
+    invalidate") con la API de la plataforma de Turso, sin la CLI, mide cuánto sigue sirviendo el token viejo, crea uno
+    nuevo y mide cuánto tarda en servir. Pide un token de la API (app.turso.tech › Settings › API Tokens; de preferencia
+    limitado al grupo de la base de prueba) sin mostrarlo, y se niega si otra base comparte el grupo: anular corta a
+    todas las del grupo. Al final puede copiar el token nuevo al portapapeles para pegarlo en TPVC. Sin token de la API,
+    pide correr "turso db tokens invalidate" a mano con -DbName.
 
   Usa solo tablas que empiezan con "vtest_" y las borra al terminar. Se niega a correr en una base que ya tenga otras
   tablas (por ejemplo, la del consultorio). El token se pide sin mostrarlo y no se guarda.
@@ -35,13 +38,21 @@
   powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3,V16
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3 -Rotate -DbName tpvc-pruebas
+  powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3 -Rotate
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3 -Rotate -Org usuario
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Url,
     [int]$Rows = 20000,
     [string[]]$Only = @('V15', 'V12', 'V14', 'V18', 'V3', 'V16'),
     [switch]$Rotate,
+    # La organización o el usuario de Turso (por omisión, lo que sigue al último guion del nombre en la URL)
+    [string]$Org = '',
+    # Solo para probar el script contra el servidor simulado (docs/FAKE_HRANA_SPEC.md)
+    [string]$ApiBase = 'https://api.turso.tech',
+    # Sin token de la API: el nombre de la base para "turso db tokens invalidate" a mano
     [string]$DbName = '<base-de-prueba>'
 )
 
@@ -63,6 +74,8 @@ if ($base -notlike 'https://*' -and $base -notmatch '^http://(localhost|127\.0\.
 if ($base -like '*/v2/pipeline') { $base = $base.Substring(0, $base.Length - '/v2/pipeline'.Length) }
 $pipeline = "$base/v2/pipeline"
 $hostName = ([Uri]$base).Host
+$ApiBase = $ApiBase.Trim().TrimEnd('/')
+if ($ApiBase -notlike 'https://*' -and $ApiBase -notmatch '^http://(localhost|127\.0\.0\.1)(:\d+)?$') { throw 'La API debe ser https:// (http:// solo en este equipo)' }
 
 $secure = Read-Host -AsSecureString "Token de la base de PRUEBA ($hostName)"
 $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
@@ -118,6 +131,36 @@ function Send([object[]]$requests, [int]$timeoutSec = 120, [switch]$NoParse, [st
     $json = $null
     if (-not $NoParse -and $content.Length -lt 5MB) { try { $json = $content | ConvertFrom-Json } catch { } }
     return [pscustomobject]@{ Status = $status; Bytes = [Text.Encoding]::UTF8.GetByteCount($content); Content = $content; Json = $json }
+}
+
+# Una llamada a la API de la plataforma de Turso (solo la rotación). Devuelve el estado HTTP y el texto.
+function Api([string]$method, [string]$path, [string]$apiToken) {
+    try {
+        $resp = Invoke-WebRequest -Uri "$ApiBase$path" -Method $method -UseBasicParsing -TimeoutSec 60 -Headers @{ Authorization = "Bearer $apiToken" }
+        return [pscustomobject]@{ Status = [int]$resp.StatusCode; Content = [string]$resp.Content }
+    }
+    catch [System.Net.WebException] {
+        $r = $_.Exception.Response
+        if ($null -eq $r) { return [pscustomobject]@{ Status = 0; Content = $_.Exception.Message } }
+        $stream = $r.GetResponseStream()
+        if ($stream.CanSeek) { $stream.Position = 0 }
+        $content = (New-Object IO.StreamReader($stream)).ReadToEnd()
+        if (-not $content -and $_.ErrorDetails) { $content = $_.ErrorDetails.Message }
+        return [pscustomobject]@{ Status = [int]$r.StatusCode; Content = $content }
+    }
+}
+
+function Short([string]$text, [int]$max = 300) { if ($null -eq $text) { return '' } return $text.Substring(0, [Math]::Min($max, $text.Length)) }
+
+# Espera hasta que una petición con el token de ahora cumpla la condición (3 min como máximo); regresa la última respuesta
+function WaitFor([scriptblock]$done, [Diagnostics.Stopwatch]$clock) {
+    $last = $null
+    while ($clock.Elapsed.TotalSeconds -lt 180) {
+        $last = Send @(Exec 'SELECT 1') -timeoutSec 30
+        if (& $done $last) { return $last }
+        Start-Sleep -Seconds 2
+    }
+    return $null
 }
 
 function ResultAt($response, [int]$index) {
@@ -483,46 +526,100 @@ try {
 
     # ============================================================== V3 y V4 · rotación real (solo con -Rotate)
     if ($Rotate) {
-        Say '== V4 (y V3 con un token anulado de verdad): rotar los tokens'
+        Say '== V4 (y V3 con un token anulado de verdad): anular los tokens de la base de prueba'
         Write-Host ''
-        Write-Host 'CUIDADO: "turso db tokens invalidate" anula TODOS los tokens de la base y de su GRUPO.' -ForegroundColor Red
-        Write-Host 'Si la base del consultorio está en el mismo grupo, la PC del consultorio deja de sincronizar hasta pegarle un token nuevo.' -ForegroundColor Red
-        Write-Host 'Revise la columna Group con "turso db list" antes de seguir.' -ForegroundColor Red
-        $confirm = Read-Host 'Escriba ROTAR para seguir (otra cosa lo omite)'
-        if ($confirm -cne 'ROTAR') {
-            Say '    Rotación omitida.'
-        }
-        else {
-            Write-Host "En OTRA terminal corra:  turso db tokens invalidate $DbName -y"
-            Read-Host 'Pulse Enter aquí en cuanto termine' | Out-Null
-            $clock = [Diagnostics.Stopwatch]::StartNew()
-            $rejected = $null
-            while ($clock.Elapsed.TotalSeconds -lt 180) {
-                $r = Send @(Exec 'SELECT 1') -timeoutSec 30
-                if ($r.Status -ne 200) { $rejected = $r; break }
-                Start-Sleep -Seconds 2
-            }
-            if ($rejected) {
-                Say ("    El token viejo dejó de servir a los {0:N0} s: HTTP {1} · {2}" -f $clock.Elapsed.TotalSeconds, $rejected.Status,
-                    $rejected.Content.Substring(0, [Math]::Min(300, $rejected.Content.Length)))
+        Write-Host 'Anular los tokens corta a TODAS las bases del mismo grupo de Turso. Con el token de la API, el script revisa el' -ForegroundColor Yellow
+        Write-Host 'grupo y se niega si otra base lo comparte. Créelo en app.turso.tech › Settings › API Tokens (de preferencia limitado' -ForegroundColor Yellow
+        Write-Host 'al grupo de la base de prueba) y bórrelo al terminar.' -ForegroundColor Yellow
+        $apiSecure = Read-Host -AsSecureString 'Token de la API de Turso (no se muestra; Enter para hacerlo a mano con la CLI)'
+        $apiToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($apiSecure))
+
+        $rotateDb = $null
+        $canRotate = $false
+        if ($apiToken) {
+            # La organización: -Org, o lo que sigue al último guion de "base-organizacion" en la URL
+            $orgSlug = $Org
+            if (-not $orgSlug) { $first = $hostName.Split('.')[0]; $orgSlug = $first.Substring($first.LastIndexOf('-') + 1) }
+            $list = Api 'GET' "/v1/organizations/$orgSlug/databases" $apiToken
+            if ($list.Status -ne 200) {
+                Say ("    No se pudo leer la lista de bases de '{0}' (HTTP {1} · {2}). Revise el token de la API, o pase -Org con su organización." -f $orgSlug, $list.Status, (Short $list.Content))
             }
             else {
-                Say '    El token viejo siguió sirviendo 3 minutos después de anularlo (REVISAR).'
+                $databases = @(($list.Content | ConvertFrom-Json).databases)
+                $rotateDb = $databases | Where-Object { [string]::Equals([string]$_.Hostname, $hostName, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+                if ($null -eq $rotateDb) {
+                    Say "    Ninguna base de '$orgSlug' tiene la dirección $hostName. Rotación omitida."
+                }
+                else {
+                    $peers = @($databases | Where-Object { $_.group -eq $rotateDb.group -and $_.Name -ne $rotateDb.Name } | ForEach-Object { $_.Name })
+                    if ($peers.Count -gt 0) {
+                        Say ("    Rotación omitida: en el grupo '{0}' también está(n) {1}. Anular los tokens las cortaría. Cree la base de prueba en otro grupo (o en otra cuenta de Turso)." -f $rotateDb.group, ($peers -join ', '))
+                    }
+                    else {
+                        Say ("    Base '{0}', sola en el grupo '{1}'." -f $rotateDb.Name, $rotateDb.group)
+                        $canRotate = $true
+                    }
+                }
             }
-
-            Write-Host "Ahora cree uno nuevo:  turso db tokens create $DbName"
-            $secureNew = Read-Host -AsSecureString 'Token NUEVO (no se muestra)'
-            $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureNew))
-            $clock.Restart()
-            $working = $false
-            while ($clock.Elapsed.TotalSeconds -lt 180) {
-                $r = Send @(Exec 'SELECT 1') -timeoutSec 30
-                if ($r.Status -eq 200) { $working = $true; break }
-                Start-Sleep -Seconds 2
-            }
-            Say ("    El token nuevo {0}" -f $(if ($working) { "sirvió a los {0:N0} s de pegarlo" -f $clock.Elapsed.TotalSeconds } else { 'no sirvió en 3 minutos (REVISAR)' }))
-            Say '  Cómo leerlo: la interrupción para los equipos dura lo que tarde el médico en pegar el token nuevo, más lo que tarde Turso en aceptarlo.'
         }
+        else {
+            Write-Host 'CUIDADO: revise la columna Group con "turso db list": si la base del consultorio está en el mismo grupo, deja de sincronizar.' -ForegroundColor Red
+            $canRotate = $true
+        }
+
+        if ($canRotate) {
+            $confirm = Read-Host 'Escriba ROTAR para anular los tokens (otra cosa lo omite)'
+            if ($confirm -cne 'ROTAR') {
+                Say '    Rotación omitida.'
+            }
+            else {
+                $clock = [Diagnostics.Stopwatch]::StartNew()
+                if ($rotateDb) {
+                    $rotated = Api 'POST' "/v1/organizations/$orgSlug/databases/$($rotateDb.Name)/auth/rotate" $apiToken
+                    Say ("    La API anuló los tokens en {0:N1} s (HTTP {1}{2})." -f $clock.Elapsed.TotalSeconds, $rotated.Status, $(if ($rotated.Content) { ' · ' + (Short $rotated.Content) } else { '' }))
+                    if ($rotated.Status -ne 200) { throw "No se pudieron anular los tokens: HTTP $($rotated.Status)." }
+                }
+                else {
+                    Write-Host "En OTRA terminal corra:  turso db tokens invalidate $DbName -y"
+                    Read-Host 'Pulse Enter aquí en cuanto termine' | Out-Null
+                }
+
+                $clock.Restart()
+                $rejected = WaitFor { param($r) $r.Status -ne 200 } $clock
+                if ($rejected) {
+                    Say ("    El token viejo dejó de servir a los {0:N0} s: HTTP {1} · {2}" -f $clock.Elapsed.TotalSeconds, $rejected.Status, (Short $rejected.Content))
+                }
+                else {
+                    Say '    El token viejo siguió sirviendo 3 minutos después de anularlo (REVISAR).'
+                }
+
+                # El token nuevo: lo crea la API (o se pega uno creado a mano)
+                if ($rotateDb) {
+                    $created = Api 'POST' "/v1/organizations/$orgSlug/databases/$($rotateDb.Name)/auth/tokens?expiration=never&authorization=full-access" $apiToken
+                    if ($created.Status -ne 200) { throw "No se pudo crear el token nuevo: HTTP $($created.Status) · $(Short $created.Content)" }
+                    $token = ($created.Content | ConvertFrom-Json).jwt
+                }
+                else {
+                    Write-Host "Ahora cree uno nuevo:  turso db tokens create $DbName"
+                    $secureNew = Read-Host -AsSecureString 'Token NUEVO (no se muestra)'
+                    $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureNew))
+                }
+                $clock.Restart()
+                $working = WaitFor { param($r) $r.Status -eq 200 } $clock
+                Say ("    El token nuevo {0}" -f $(if ($working) { "sirvió a los {0:N0} s de crearlo" -f $clock.Elapsed.TotalSeconds } else { 'no sirvió en 3 minutos (REVISAR)' }))
+                Say '  Cómo leerlo: la interrupción para los equipos dura lo que tarde el médico en pegar el token nuevo, más lo que tarde Turso en aceptarlo.'
+
+                # Para la prueba del paso 8.15 en TPVC (una PC conectada a la base de prueba): el token nuevo, solo si se pide
+                if ($working -and $rotateDb) {
+                    $copy = Read-Host 'Escriba COPIAR para llevar el token nuevo al portapapeles y pegarlo en TPVC (Enter lo omite)'
+                    if ($copy -ceq 'COPIAR') {
+                        Set-Clipboard -Value $token
+                        Write-Host 'Token copiado. Péguelo en TPVC y copie después cualquier otro texto para quitarlo del portapapeles.' -ForegroundColor Green
+                    }
+                }
+            }
+        }
+        $apiToken = $null
         Say ''
     }
 }

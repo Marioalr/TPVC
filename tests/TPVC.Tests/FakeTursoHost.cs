@@ -106,6 +106,10 @@ internal sealed class FakeTursoHost : IDisposable
                     await WriteAsync(response, (int)answer.StatusCode, "application/json", await answer.Content.ReadAsStringAsync());
                 }
             }
+            else if (path.StartsWith("/v1/organizations/", StringComparison.Ordinal) && PlatformApiToken != null)
+            {
+                await HandlePlatformApiAsync(request, response, path);
+            }
             else if (request.HttpMethod == "GET" && path == "/health")
             {
                 await WriteAsync(response, 200, "text/plain", "ok");
@@ -127,6 +131,63 @@ internal sealed class FakeTursoHost : IDisposable
         finally
         {
             try { response.Close(); } catch { }
+        }
+    }
+
+    // ------------------------------------------------------------------ API de la plataforma (solo lo de la rotación)
+
+    /// <summary>
+    /// Paso 8.15: con un valor, el anfitrión también hace de API de la plataforma de Turso para la rotación de
+    /// scripts/verify-turso-hrana.ps1 -Rotate (-ApiBase http://127.0.0.1:puerto): listar las bases, anular los tokens de la
+    /// base y crear uno. Pide este token en Authorization. null = sin API.
+    /// </summary>
+    public string? PlatformApiToken { get; set; }
+
+    /// <summary>Otras bases en el mismo grupo que la de prueba (para ver que el script se niega a rotar).</summary>
+    public string[] GroupPeers { get; set; } = Array.Empty<string>();
+
+    public const string FakeDatabaseName = "prueba-simulada";
+    public const string FakeGroupName = "pruebas";
+
+    private async Task HandlePlatformApiAsync(HttpListenerRequest request, HttpListenerResponse response, string path)
+    {
+        var auth = request.Headers["Authorization"];
+        if (auth != $"Bearer {PlatformApiToken}")
+        {
+            await WriteAsync(response, 401, "application/json", "{\"error\":\"token is invalid\"}");
+            return;
+        }
+
+        // /v1/organizations/{org}/databases[/{name}/auth/{rotate|tokens}]
+        var parts = path.Trim('/').Split('/');
+        if (request.HttpMethod == "GET" && parts.Length == 4 && parts[3] == "databases")
+        {
+            var databases = new[] { FakeDatabaseName }.Concat(GroupPeers)
+                .Select(name => new System.Text.Json.Nodes.JsonObject
+                {
+                    ["Name"] = name,
+                    ["Hostname"] = name == FakeDatabaseName ? BaseUri.Host : $"{name}.fake.turso.io",
+                    ["group"] = FakeGroupName
+                });
+            var json = new System.Text.Json.Nodes.JsonObject { ["databases"] = new System.Text.Json.Nodes.JsonArray(databases.ToArray<System.Text.Json.Nodes.JsonNode?>()) };
+            await WriteAsync(response, 200, "application/json", json.ToJsonString());
+        }
+        else if (request.HttpMethod == "POST" && parts.Length == 7 && parts[4] == FakeDatabaseName && parts[5] == "auth" && parts[6] == "rotate")
+        {
+            // Como turso db tokens invalidate: ningún token anterior sirve
+            Server.AcceptedTokens = new();
+            await WriteAsync(response, 200, "application/json", string.Empty);
+        }
+        else if (request.HttpMethod == "POST" && parts.Length == 7 && parts[4] == FakeDatabaseName && parts[5] == "auth" && parts[6] == "tokens")
+        {
+            var jwt = $"simulado.{Guid.NewGuid():N}.token";
+            // Un conjunto nuevo: el servidor lo lee desde otros hilos
+            Server.AcceptedTokens = new(Server.AcceptedTokens ?? new()) { jwt };
+            await WriteAsync(response, 200, "application/json", $"{{\"jwt\":\"{jwt}\"}}");
+        }
+        else
+        {
+            await WriteAsync(response, 404, "application/json", "{\"error\":\"could not find database\"}");
         }
     }
 

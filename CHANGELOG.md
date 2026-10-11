@@ -10,7 +10,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ### Cambiado
 * Si Turso rechaza el token de esta computadora, la sincronización se detiene y dice qué hacer, en lugar de reintentar sola. No se borra nada: lo que no había subido sube con el token nuevo, y al pegarlo la sincronización sigue.
-* 558 pruebas.
+* 559 pruebas.
 
 ## [1.32.0] - 2026-10-11
 

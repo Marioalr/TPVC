@@ -96,6 +96,37 @@ public class FakeTursoHostTests
     }
 
     /// <summary>
+    /// Paso 8.15: lo que usa verify-turso-hrana.ps1 -Rotate de la API de la plataforma (listar, anular los tokens y crear
+    /// uno), para probar el script sin una cuenta de Turso.
+    /// </summary>
+    [TestMethod]
+    public async Task ThePlatformApiStandIn_InvalidatesTheTokens_AndMintsANewOne()
+    {
+        using var server = new FakeHranaServer(Path.Combine(_folder, "nube.db")) { AcceptedTokens = new() { "token-viejo" } };
+        using var host = new FakeTursoHost(server) { PlatformApiToken = "api-secreto", GroupPeers = new[] { "consultorio" } };
+        using var http = new HttpClient { BaseAddress = host.BaseUri };
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "api-secreto");
+        const string db = $"v1/organizations/simulada/databases/{FakeTursoHost.FakeDatabaseName}/auth/";
+
+        var list = System.Text.Json.Nodes.JsonNode.Parse(await http.GetStringAsync("v1/organizations/simulada/databases"))!["databases"]!.AsArray();
+        Assert.HasCount(2, list);
+        Assert.AreEqual("127.0.0.1", list.Single(d => (string?)d!["Name"] == FakeTursoHost.FakeDatabaseName)!["Hostname"]!.GetValue<string>());
+        Assert.IsTrue(list.All(d => (string?)d!["group"] == FakeTursoHost.FakeGroupName), "El script se niega a rotar con otra base en el grupo");
+
+        using var old = new TursoClient(host.BaseUri.ToString(), "token-viejo");
+        Assert.IsTrue((await old.TestConnectionAsync()).Success);
+        Assert.AreEqual(HttpStatusCode.OK, (await http.PostAsync(db + "rotate", null)).StatusCode);
+        Assert.IsFalse((await old.TestConnectionAsync()).Success, "turso db tokens invalidate: el token viejo ya no sirve");
+
+        var jwt = System.Text.Json.Nodes.JsonNode.Parse(await (await http.PostAsync(db + "tokens", null)).Content.ReadAsStringAsync())!["jwt"]!.GetValue<string>();
+        using var renewed = new TursoClient(host.BaseUri.ToString(), jwt);
+        Assert.IsTrue((await renewed.TestConnectionAsync()).Success);
+
+        using var stranger = new HttpClient { BaseAddress = host.BaseUri };
+        Assert.AreEqual(HttpStatusCode.Unauthorized, (await stranger.GetAsync("v1/organizations/simulada/databases")).StatusCode);
+    }
+
+    /// <summary>
     /// Para la CI de Kotlin: con TPVC_FAKE_TURSO_HOST=1 siembra la nube con los datos de demostración y escucha en
     /// 127.0.0.1:TPVC_FAKE_TURSO_PORT (8787) hasta GET /__stop o TPVC_FAKE_TURSO_MINUTES (30). Escribe la URL en
     /// TPVC_FAKE_TURSO_READY_FILE cuando está lista. Sin la variable no hace nada.
@@ -121,6 +152,9 @@ public class FakeTursoHostTests
         if (!string.IsNullOrEmpty(token)) server.AcceptedTokens = new() { token };
 
         using var host = new FakeTursoHost(server, port);
+        // Paso 8.15: la API de la plataforma para probar la rotación de verify-turso-hrana.ps1 (-ApiBase)
+        if (Environment.GetEnvironmentVariable("TPVC_FAKE_TURSO_API_TOKEN") is { Length: > 0 } apiToken) host.PlatformApiToken = apiToken;
+        if (Environment.GetEnvironmentVariable("TPVC_FAKE_TURSO_GROUP_PEERS") is { Length: > 0 } peers) host.GroupPeers = peers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var url = host.BaseUri.ToString().TrimEnd('/');
         Console.WriteLine($"FakeTurso listo en {url}");
         if (Environment.GetEnvironmentVariable("TPVC_FAKE_TURSO_READY_FILE") is { Length: > 0 } ready) await File.WriteAllTextAsync(ready, url);
