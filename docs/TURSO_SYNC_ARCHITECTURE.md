@@ -267,10 +267,11 @@ Quien tenga ese texto puede leer y escribir toda la base de la nube. v1.20.0 ret
 
 Quien fotografía el QR mientras está en pantalla obtiene acceso completo, igual que quien copia el token del panel: el riesgo es el mismo de tener el token en cada equipo, y se corta rotando (abajo). La red local no lleva nada: cada equipo habla solo con Turso, por HTTPS.
 
-### Plan Fase 8: quitar y equipo perdido (paso 8.15; plan §4.7)
-- **Quitar:** la PC muestra antes los cambios pendientes del equipo (`PendingCount` y `OldestPendingUtc` de su latido). El equipo sube lo pendiente, o lo exporta a un archivo, y luego borra su base, su credencial y sus borradores.
-- **Perdí este equipo:** revocar en `DeviceRegistry` (`RevokedAtUtc`, motivo "perdido"; si el equipo lee su fila revocada, se borra sin subir) y "Cortar acceso ahora", marcado por defecto. Sin token de la API la PC no puede rotar sola, así que guía al médico: rotar los tokens de **todo el grupo** en el panel de Turso o con `turso db tokens invalidate` (Turso no revoca tokens uno por uno), crear un token nuevo, pegarlo en la PC y en los demás equipos (pegado o escaneado del QR de la PC). No hace falta aprobarlos otra vez.
-- **Ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación): un equipo con cambios pendientes se bloquea, muestra "Pegue el token nuevo" y los conserva; uno sin nada pendiente se borra solo tras dos 401 con 10 min de diferencia.
+### Quitar, equipo perdido y token rechazado (paso 8.15, hecho en la PC en v1.33.0; plan §4.7)
+- **Quitar:** la PC muestra antes los cambios pendientes del equipo (`PendingCount` y `OldestPendingUtc` de su latido) y lo revoca con el motivo "quitado". El equipo Android sube lo pendiente, o lo exporta a un archivo, y luego borra su base, su credencial y sus borradores.
+- **Perdí este equipo** (junto a *Quitar*, en los mismos equipos): revoca en `DeviceRegistry` con el motivo "perdido" (`TursoSyncService.ReportLostDeviceAsync`). El equipo Android que lee su fila así se borra sin subir nada; **una PC marcada como perdida no borra nada** (un error dejaría al consultorio sin datos). Revocar no corta el acceso: el equipo perdido tiene el token. Sin token de la API la PC no puede anular tokens sola, así que muestra los pasos en *Equipos vinculados*: anular los tokens en el panel de Turso o con `turso db tokens invalidate` (se anulan todos los de la base y los de su grupo, también el de la PC), crear uno nuevo, pegarlo en *Conexión con Turso* y en los demás equipos (pegado o del QR de la PC). No hay que aprobarlos otra vez. Los pasos se cierran solos cuando la PC sincroniza con el token nuevo, o con «Ya no hace falta».
+- **Ante un 401** (con el nivel C no hay vencimientos), **o un 400 con "JWT"** en el cuerpo (token mal copiado, V3): la PC no borra ni aparta nada. La sincronización automática deja de intentar mientras el token sea el mismo (`TursoSyncPauseReason.TokenRejected`; del token solo se guarda su huella, `TursoSettings.RejectedTokenHash`) y el aviso pide pegar otro; con otro token sigue sola y sube lo pendiente. En Android: un equipo con cambios pendientes los conserva; uno sin nada pendiente se borra solo tras dos 401 con 10 min de diferencia (el 400 no cuenta).
+- **La rotación en la nube.** Si Turso rechaza el token que funcionaba (o se marcó un equipo como perdido), la primera sincronización con otro token escribe `_tpvc_meta.tokensRotatedAtUtc` con la hora de la nube. *Equipos vinculados* muestra "Pegue el token nuevo…" en cada equipo con `LastSeenUtc` anterior. Un token que nunca funcionó (de otra base o mal copiado) no es una rotación. La misma rotación no se anota dos veces: si la nube ya tiene una marca posterior a la última sincronización buena con el token anulado, no se mueve.
 
 ---
 
@@ -281,8 +282,8 @@ Quien fotografía el QR mientras está en pantalla obtiene acceso completo, igua
 **Configuración copiada a otra computadora (desde v1.27.0, paso 8.10).** El `DeviceId` vive en el mismo `turso_config.json`, y la descarga omite las filas de su propio `DeviceId`: dos PC con el mismo nunca verían las filas de la otra. Si el token guardado no se puede descifrar (DPAPI solo funciona en la computadora y el usuario de Windows que lo cifraron; antes quedaba vacío en silencio) o cambió la huella de la computadora (SHA-256 del `MachineGuid` de Windows, en `MachineFingerprint`), TPVC toma un `DeviceId` nuevo y lo avisa en *Nube y dispositivos* («vuelva a pegar el token»). Una computadora clonada completa (con DPAPI funcionando) la detecta el `InstanceNonce` del latido (§4.2).
 
 **Plan Fase 8 (credenciales, plan §4.3): nivel C.** La cuenta de Turso no tiene token de la API de la plataforma (respuesta 4 del médico), así que la PC no puede crear ni rotar tokens.
-- Dos tokens creados a mano en el panel o con la CLI, `full-access` y sin vencimiento: el de la PC (como hoy) y un "token para tablet y celular", que se pega una vez en la PC (cifrado con DPAPI) y que en el equipo queda envuelto con el Android Keystore.
-- La base del consultorio va **sola en su grupo** de Turso: la única forma de cortar un token es rotar las llaves del grupo (`turso db tokens invalidate`), y eso corta a todas las bases del grupo. Después de rotar se crean y pegan los dos tokens nuevos en la PC y se vuelven a vincular los demás equipos (§5).
+- Un token creado a mano en el panel o con la CLI, `full-access` y sin vencimiento: el de la PC, que también va en el QR para la tablet y el celular (paso 8.14) y que en el equipo queda envuelto con el Android Keystore. Uno creado aparte no protege más: Turso no los distingue ni anula uno solo.
+- La base del consultorio va **sola en su grupo** de Turso: la única forma de cortar un token es rotar las llaves del grupo (`turso db tokens invalidate`), y eso corta a todas las bases del grupo. Después de rotar se crea un token nuevo y se pega en la PC y en los demás equipos, sin volver a aprobarlos (§5).
 - **El costo, dicho claro:** cada equipo guarda un token `full-access` sobre todos los expedientes. Los límites por rol los aplica la app (§3), así que quien saque el token de un equipo puede hacer todo hasta la rotación. Por eso la app usa SQLCipher, la credencial envuelta con el Keystore y bloqueo de pantalla obligatorio.
 - Las pruebas de tokens y de rotación se hacen en otro grupo o en otra cuenta, **nunca en el grupo del consultorio**: una rotación ahí corta al médico.
 
@@ -304,10 +305,8 @@ turso db show tpvc-clinica --url
 # 5. Generar token de autenticación
 turso db tokens create tpvc-clinica
 
-# 6. (Plan Fase 8, paso 8.14; todavía no se usa) Segundo token, el "token para tablet y celular", para pegarlo en la PC
-turso db tokens create tpvc-clinica
-
-# Cortar acceso (plan Fase 8, paso 8.15): rota los tokens de todo el grupo; después se crean y pegan los dos nuevos
+# Equipo perdido (desde v1.33.0, paso 8.15): anula todos los tokens de la base y de su grupo; después se crea uno
+# nuevo (paso 5) y se pega en la PC y en los demás equipos
 turso db tokens invalidate tpvc-clinica
 ```
 
@@ -318,7 +317,7 @@ turso db tokens invalidate tpvc-clinica
 4. Copiar la **Database URL** y generar un **Auth Token** desde la pestaña *Settings > Tokens*.
 5. Pegar ambos valores en TPVC Windows en **Configuración > Nube y dispositivos**.
 6. Hacer clic en **"Probar conexión"** y posteriormente en **"Sincronización completa"**.
-7. (Plan Fase 8, paso 8.14; todavía no se usa) En la tablet y el celular se pegan la misma URL y un token (el de la PC o uno creado aparte: Turso no los distingue), o se escanean del QR de la PC, y la PC aprueba cada equipo (§5).
+7. (Desde v1.32.0 en la PC; la app de Android llega después) En la tablet y el celular se pegan la misma URL y el token, o se escanean del QR de la PC, y la PC aprueba cada equipo (§5).
 
 ### Comprobaciones en una base de prueba real (plan §4.2)
 Se hacen antes del paso indicado, siempre en un grupo o una cuenta de prueba. El resultado se anota aquí.

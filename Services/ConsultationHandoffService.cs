@@ -197,7 +197,7 @@ public sealed class ConsultationHandoffService
     /// a v1.27.0) conserva el rol de su latido. Un equipo con fila y sin latido aparece sin conexión.
     /// </summary>
     public static List<LinkedDevice> MergeDevices(IEnumerable<Dictionary<string, object?>> heartbeats, IEnumerable<Dictionary<string, object?>> registry,
-        string? primaryDeviceId, DateTime serverNowUtc, string thisDeviceId)
+        string? primaryDeviceId, DateTime serverNowUtc, string thisDeviceId, DateTime? tokensRotatedAtUtc = null)
     {
         var registryById = registry
             .Where(r => r.GetValueOrDefault("DeviceId")?.ToString() is { Length: > 0 })
@@ -210,7 +210,7 @@ public sealed class ConsultationHandoffService
         {
             var id = row.GetValueOrDefault("DeviceId")?.ToString() ?? string.Empty;
             if (id.Length == 0 || !seen.Add(id)) continue;
-            devices.Add(Describe(ToDevice(row, serverNowUtc, registryById.GetValueOrDefault(id)), id, primaryDeviceId, thisDeviceId));
+            devices.Add(Describe(ToDevice(row, serverNowUtc, registryById.GetValueOrDefault(id)), id, primaryDeviceId, thisDeviceId, tokensRotatedAtUtc));
         }
 
         // Registrados sin latido (se limpió después de 60 días sin verse)
@@ -223,15 +223,24 @@ public sealed class ConsultationHandoffService
                 ["DeviceRole"] = entry.GetValueOrDefault("Role"),
                 ["AppVersion"] = string.Empty
             };
-            devices.Add(Describe(ToDevice(row, serverNowUtc, entry), id, primaryDeviceId, thisDeviceId));
+            devices.Add(Describe(ToDevice(row, serverNowUtc, entry), id, primaryDeviceId, thisDeviceId, tokensRotatedAtUtc));
         }
         return devices;
 
-        static LinkedDevice Describe(LinkedDevice device, string id, string? primaryDeviceId, string thisDeviceId) => device with
+        static LinkedDevice Describe(LinkedDevice device, string id, string? primaryDeviceId, string thisDeviceId, DateTime? rotatedAt)
         {
-            IsPrimary = primaryDeviceId != null && string.Equals(primaryDeviceId, id, StringComparison.OrdinalIgnoreCase),
-            IsThisDevice = string.Equals(thisDeviceId, id, StringComparison.OrdinalIgnoreCase)
-        };
+            bool thisDevice = string.Equals(thisDeviceId, id, StringComparison.OrdinalIgnoreCase);
+            return device with
+            {
+                IsPrimary = primaryDeviceId != null && string.Equals(primaryDeviceId, id, StringComparison.OrdinalIgnoreCase),
+                IsThisDevice = thisDevice,
+                // Paso 8.15: no se ha conectado desde que se anularon los tokens (sin latido, tampoco)
+                TokensRotatedAtUtc = !thisDevice && !device.IsRevoked && !device.IsPendingApproval
+                                     && rotatedAt is { } at && (device.LastSeenUtc == null || device.LastSeenUtc < at)
+                    ? rotatedAt
+                    : null
+            };
+        }
     }
 
     /// <summary>

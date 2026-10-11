@@ -17,8 +17,8 @@ QR, que es solo una facilidad, queda limitado a la red local (el 2026-10-11 el m
 la URL y el token, pegados o escaneados de un QR de la PC, y la PC lo aprueba). Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.8 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
-equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (ya están hechos, del lado de la PC hasta el 8.15; sincronización sin pérdidas, siembra segura, registro de
+equipos, documentos, vinculación con la URL y el token, y equipo perdido; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
 escribe el celular (K4b). Cada paso de la app va detrás del de la PC que necesita.
@@ -83,6 +83,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.33.0 (paso 8.15: quitar, equipo perdido y token rechazado, lado de la PC)
+
+- [ ] *Equipos vinculados* › **Perdí este equipo** en otra computadora o en una tablet de prueba: el equipo sale de la lista y aparecen los pasos para anular los tokens; **Abrir el panel de Turso** abre app.turso.tech.
+- [ ] [T] En `prueba-estres` (solo si está en otro grupo que la base del consultorio): anular los tokens con `turso db tokens invalidate prueba-estres`. La PC conectada a esa base muestra «Sincronización detenida: Turso rechazó el token» y no vuelve a intentar sola. Al pegar un token nuevo y **Sincronizar ahora**, sube lo pendiente y los pasos se cierran solos. Es V4: anotar cuánto tardó el token nuevo en funcionar.
+- [ ] Pegar un token incompleto (cortar el final): el aviso dice que Turso rechazó el token, no un error en inglés.
+- [ ] Para Kotlin (K3): con `RevokedReason = 'quitado'`, subir lo pendiente (o exportarlo) y después borrar la base, la credencial y los borradores; con `'perdido'`, borrarlos sin subir nada. Ante un 401, o un 400 con "JWT" en el cuerpo, no borrar nada y mostrar "Pegue el token nuevo"; sin nada pendiente, borrarse tras dos 401 con 10 minutos de diferencia (el 400 no cuenta). Con el token nuevo no hay que aprobar otra vez: la fila de `DeviceRegistry` sigue.
 
 ### v1.32.0 (paso 8.14: vincular con la URL y el token, lado de la PC)
 

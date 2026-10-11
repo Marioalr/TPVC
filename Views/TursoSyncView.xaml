@@ -291,6 +291,20 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Paso 8.15: cortar el acceso de un equipo perdido (o seguir después de que se anularon los tokens) -->
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,12,0,0" Visibility="{Binding CutAccessGuideText, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.Name="Cortar el acceso">
+                            <StackPanel>
+                                <TextBlock Text="{Binding CutAccessGuideText}" TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,10,0,0">
+                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding OpenTursoDashboardCommand}" Content="Abrir el panel de Turso" Margin="0,0,8,0"
+                                            ToolTip="app.turso.tech, en el navegador" />
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DismissCutAccessGuideCommand}" Content="Ya no hace falta"
+                                            ToolTip="Cierra los pasos; se cierran solos cuando esta computadora sincroniza con el token nuevo" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
                         <ItemsControl ItemsSource="{Binding Devices}" Margin="0,12,0,0" AutomationProperties.Name="Equipos vinculados">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -327,6 +341,9 @@
                                                     <Run Text="{Binding RoleText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding CodeText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding SeenText, Mode=OneWay}" />
                                                 </TextBlock>
                                                 <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding PendingText}" />
+                                                <!-- Paso 8.15: no se conecta desde que se anularon los tokens -->
+                                                <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           Text="{Binding NewTokenText}" Visibility="{Binding NeedsNewToken, Converter={StaticResource BoolToVis}}" />
                                                 <!-- Paso 8.14: un equipo nuevo espera que lo vinculen -->
                                                 <StackPanel Margin="0,8,0,0" Visibility="{Binding IsPendingApproval, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" TextWrapping="Wrap" Text="{Binding ApprovalText}" />
@@ -347,13 +364,23 @@
                                                     </WrapPanel>
                                                 </StackPanel>
                                             </StackPanel>
-                                            <Button Grid.Column="2" Style="{StaticResource ButtonDangerGhost}" Content="Quitar" VerticalAlignment="Center" Margin="12,0,0,0"
-                                                    Command="{Binding DataContext.RemoveDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}"
-                                                    IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
-                                                    AutomationProperties.Name="Quitar equipo"
-                                                    ToolTip="Lo quita de la lista y de la consulta entre equipos; antes muestra sus cambios sin subir" />
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button Style="{StaticResource ButtonDangerGhost}" Content="Quitar" HorizontalAlignment="Stretch"
+                                                        Command="{Binding DataContext.RemoveDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}"
+                                                        IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                                        AutomationProperties.Name="Quitar equipo"
+                                                        ToolTip="Lo quita de la lista y de la consulta entre equipos; antes muestra sus cambios sin subir" />
+                                                <!-- Paso 8.15 -->
+                                                <Button Style="{StaticResource ButtonDangerGhost}" Content="Perdí este equipo" HorizontalAlignment="Stretch" Margin="0,4,0,0"
+                                                        Command="{Binding DataContext.ReportLostDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Visibility="{Binding CanReportLost, Converter={StaticResource BoolToVis}}"
+                                                        IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                                        AutomationProperties.Name="Perdí este equipo"
+                                                        ToolTip="Lo marca como perdido (si se conecta, borra sus datos) y muestra cómo anular los tokens para cortarle el acceso" />
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

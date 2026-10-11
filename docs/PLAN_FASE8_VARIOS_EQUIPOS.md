@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-11 (TPVC v1.32.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0), 8.12b (v1.30.0), 8.13 (v1.31.0) y 8.14 en la PC (v1.32.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-11 (TPVC v1.33.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0), 8.12b (v1.30.0), 8.13 (v1.31.0), 8.14 en la PC (v1.32.0) y 8.15 en la PC (v1.33.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -387,7 +387,7 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 
 **Perdí este equipo** (en *Equipos vinculados*):
 
-1. **Revocar** con motivo "perdido": la PC pone `RevokedAtUtc`. Si el equipo se conecta antes de la rotación y lee su fila, borra su base, su credencial y sus borradores sin subir nada.
+1. **Revocar** con motivo "perdido": la PC pone `RevokedAtUtc`. Si el equipo Android se conecta antes de la rotación y lee su fila, borra su base, su credencial y sus borradores sin subir nada. Una PC marcada como perdida no borra nada (v1.33.0).
 2. **"Cortar acceso ahora"** (marcado por defecto). Sin token de la API la PC no puede rotar sola, así que guía al médico:
    - rotar los tokens en el panel de Turso o con `turso db tokens invalidate` (anula **todos** los de la base y los del grupo, también el de la PC), con una breve interrupción (V4);
    - crear un token nuevo y pegarlo en la PC, que sincroniza en ese momento;
@@ -867,6 +867,11 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.15 · Quitar, equipo perdido y rotación
+- **Hecho en la PC en v1.33.0 (2026-10-11).** Decisiones al programarlo:
+  - **«Perdí este equipo»** va junto a *Quitar*, en los mismos equipos (no en esta PC, ni en la principal, ni en uno que espera la aprobación). Revoca con el motivo `perdido` y muestra los pasos para anular los tokens en *Equipos vinculados*, con *Abrir el panel de Turso*. Sin V4, el texto dice que los equipos "dejan de sincronizar hasta recibir el nuevo", sin dar una duración.
+  - **Una PC marcada como perdida no borra nada.** Borrarse sin subir es para la tablet y el celular; en una PC, una revocación por error dejaría al consultorio sin datos. El corte de verdad es anular los tokens; *Equipos vinculados* de esa PC dice que se marcó como perdida.
+  - **El 401 en la PC** (y el 400 de un token mal copiado, V3): no borra ni aparta nada; la sincronización automática deja de intentar mientras el token sea el mismo (`TursoSyncPauseReason.TokenRejected`) y el aviso pide pegar otro. Al guardar otro token la pausa se quita sola. Del token solo se guarda una huella (SHA-256 truncado, `TursoSettings.RejectedTokenHash`/`WorkingTokenHash`).
+  - **La rotación se anota en la nube**, no en cada PC: `_tpvc_meta.tokensRotatedAtUtc`, con la hora de la nube, lo escribe la primera sincronización con otro token después de que Turso rechazó el que funcionaba (o después de «Perdí este equipo»). Un token que nunca funcionó no cuenta. Para no anotar dos veces la misma rotación, un equipo no mueve una marca posterior a su última sincronización buena con el token anulado. La lista marca "Pegue el token nuevo…" en los equipos con `LastSeenUtc` anterior a la marca. Un equipo que recibió el token nuevo antes que la PC aparece así hasta su siguiente latido.
 - **Antes:** [T] V4. V11 se resolvió el 2026-10-11: sin bitácora en el plan gratuito (§4.7).
 - **Cambia:**
   - *Quitar* con aviso de cambios pendientes; el equipo sube lo pendiente antes de borrarse, o lo exporta.
