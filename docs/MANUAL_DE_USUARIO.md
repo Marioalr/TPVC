@@ -207,7 +207,7 @@ Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y not
   * **Desconectar esta PC de la nube**: esta computadora se queda con el respaldo y deja de sincronizar; la nube y los demás equipos siguen como estaban.
 
 ### Nube y dispositivos
-Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, **Equipos vinculados**, la vinculación de la tablet y el celular (llegará con la app de Android: se pegan la URL y el token en el equipo, o se escanean de un QR que muestra la PC, y la PC aprueba cada equipo; por ahora los botones dicen "Llega con la app de Android"), la cuota gratuita y una guía plegable para crear la base gratis.
+Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, **Equipos vinculados**, la vinculación de la tablet y el celular (ver **Tablet y celular** abajo), la cuota gratuita y una guía plegable para crear la base gratis.
 * La URL debe empezar con `libsql://` o `https://` (la que da Turso): una dirección `http://` sin cifrar no se acepta, porque el token viajaría en claro.
 * **Cuota gratuita**: lo que este equipo lleva del mes (500 millones de lecturas, 10 millones de escrituras y 5 GB) y lo de hoy. Son estimaciones; la cifra real está en el panel de Turso. Desde la 1.30.0 también el espacio que ocupa la nube y lo que usan los resultados de laboratorio, medidos una vez al día por la PC principal.
 * **Resultados de laboratorio en la nube**: tienen un tope de 2 GB para no llenar los 5 GB del plan gratuito. Al llegar a 1.6 GB aparece un aviso. Si se llena y la PC principal tiene respaldo externo (**Respaldos y datos**), borra de la nube lo más viejo que ya tiene en su archivo y en la copia; si no lo tiene, los resultados nuevos se quedan en la computadora donde se agregaron hasta que haya lugar. Lo que se quita de un expediente se borra de la nube a los 30 días.
@@ -231,6 +231,15 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
   * La primera computadora que sincroniza con la nube verificada queda como la **PC principal** (más adelante será la única que regularice los folios hechos sin conexión). En una computadora nueva que recuperó la nube porque la principal se descompuso, pulse **Esta PC reemplaza a la principal**: la anterior se quita de la lista.
   * **Quitar** saca a un equipo de la lista y de **Enviar a…**; antes muestra sus cambios sin subir. Su código no se vuelve a usar. No se puede quitar a esta computadora ni a la principal.
 * **Esta computadora tomó una identidad nueva para la nube**: la configuración de TPVC se copió de otra computadora (o se clonó la computadora completa). Si dice que no se pudo leer el token, vuelva a pegarlo en **Conexión con Turso**. Si la otra computadora seguía sincronizando, esta baja todo de nuevo una vez para recibir lo que la otra subió. **Entendido** quita el aviso.
+
+#### Tablet y celular (desde la 1.32.0; la app de Android llega después)
+La tablet y el celular usan la misma nube que esta computadora. Para vincular uno:
+1. En la PC principal, después de la **Sincronización completa**, pulse **Mostrar QR para la tablet o el celular** en *Vincular tablet y celular*. El código lleva el token de la nube: no lo fotografíe ni lo comparta. Se cierra solo a los 2 minutos o con **Cerrar**.
+2. En la tablet o el celular, abra TPVC y lea el código. También se pueden pegar la URL y el token de Turso a mano (por ejemplo, copiados del panel de Turso en el navegador del celular).
+3. El equipo aparece en **Equipos vinculados** con "Pide entrar como tablet · verifique que la tablet muestre 3F9A2C". Si los 6 caracteres coinciden con los que muestra el equipo, pulse **Vincular como tablet** o **Vincular como celular**. Recibe su código (T1, C1…) y empieza a bajar los datos. Hasta entonces no baja nada.
+4. **Rechazar** lo deja fuera y no baja nada. Si no reconoce ese equipo, alguien más tiene el token: anúlelo en el panel de Turso y pegue el nuevo en esta computadora.
+
+**Si se pierde un equipo** (o lo roban): Turso no deja anular un solo token. En el panel de Turso (o con `turso db tokens invalidate`) se anulan todos, se crea uno nuevo y se pega aquí en **Conexión con Turso** y en el equipo que quede. Mientras no se pegue, la sincronización dice "Turso rechazó el token (HTTP 401)…" y nada de lo de este equipo se pierde.
 
 ### Actualizaciones
 Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.

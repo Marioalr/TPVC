@@ -84,6 +84,14 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.32.0 (paso 8.14: vincular con la URL y el token, lado de la PC)
+
+- [ ] *Nube y dispositivos › Vincular tablet y celular › Mostrar QR para la tablet o el celular*: aparece el código con el aviso de no fotografiarlo, la cuenta regresiva y **Cerrar**; a los 2 minutos se cierra solo.
+- [ ] Leer ese QR con la cámara del celular (cualquier lector): el texto empieza con `tpvc-link:1:`. Se lee bien desde la pantalla de la laptop.
+- [ ] [T] V3 en `prueba-estres`: `scripts\verify-turso-hrana.ps1 -Url … -Only V3,V16` (no anula nada; V16 es para el paso 8.16). Pegar el reporte.
+- [ ] [T] V4, solo si `prueba-estres` está en otro grupo que la base del consultorio (`turso db list`): el mismo script con `-Only V3 -Rotate -DbName prueba-estres`.
+- [ ] Para Kotlin (K3): leer el QR (`contracts/golden/link-qr.json`) o pegar la URL y el token; negarse sin bloqueo de pantalla; guardar la credencial envuelta con el Keystore; escribir el latido con `Platform = 'Android'` y el rol que pide en `DeviceRole`; mostrar los últimos 6 caracteres del `DeviceId` en mayúsculas y esperar la fila de `DeviceRegistry` sin bajar nada. Con código X o `RevokedReason = 'rechazado'`: "La PC rechazó este equipo". Ante un 401: "Pegue el token nuevo", sin borrar lo pendiente.
+
 ### v1.31.0 (paso 8.13: kit de conformidad de lectura)
 
 - [ ] *Nube y dispositivos › Vincular tablet y celular* dice que se vincularán con la URL y el token (pegados o leídos de un QR de esta computadora) y que aquí se aprobará cada equipo; los botones dicen "Llega con la app de Android".

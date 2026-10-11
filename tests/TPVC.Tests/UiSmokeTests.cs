@@ -653,6 +653,28 @@ internal sealed class UiSmokeSession
                 _failures.Add($"[20h-{suffix}] Equipos vinculados no muestra los 3 equipos, la PC principal o los cambios sin subir");
             }
 
+            // Paso 8.14: una tablet que leyó el QR espera que la vinculen, y el QR con la URL y el token (con la nube verificada)
+            ExecuteCloud("INSERT OR REPLACE INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, PendingCount) " +
+                         "VALUES ('android-tab-3f9a2c', 'Galaxy Tab S9', 'AndroidTablet', '1.0.0', strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds'), 'Android', 1, 0);");
+            using (var db = factory.CreateDbContext()) DbMeta.Set(db, DbMeta.ClinicId, "clinica-de-prueba");
+            WaitFor(cloudVm.RefreshDevicesAsync());
+            WaitFor(cloudVm.ShowLinkQrAsync());
+            Pump();
+            Layout(host, Width, Height);
+            cloudScroller?.ScrollToVerticalOffset(600);
+            Capture(host, $"20i-config-tursosync-equipo-nuevo-{suffix}");
+            if (FindNamed(host, "Vincular tablet y celular") is { } linkCard) linkCard.BringIntoView();
+            Capture(host, $"20j-config-tursosync-qr-{suffix}");
+            cloudScroller?.ScrollToVerticalOffset(0);
+            if (!cloudVm.Devices.Any(d => d.IsPendingApproval && d.DeviceIdSuffix == "3F9A2C") || !cloudVm.IsLinkQrVisible || cloudVm.LinkQrImage == null)
+            {
+                _failures.Add($"[20i-{suffix}] Falta el equipo que espera la aprobación o el QR para vincular");
+            }
+            cloudVm.CloseLinkQr();
+            ExecuteCloud("DELETE FROM RegisteredDevices WHERE DeviceId = 'android-tab-3f9a2c';");
+            using (var db = factory.CreateDbContext()) DbMeta.Remove(db, DbMeta.ClinicId);
+            WaitFor(cloudVm.RefreshDevicesAsync());
+
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");
             shell.SettingsSearchText = string.Empty;

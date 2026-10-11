@@ -259,7 +259,7 @@ Hasta v1.19.0, en *Configuración → Nube y dispositivos → Vincular tablet y 
 
 Quien tenga ese texto puede leer y escribir toda la base de la nube. v1.20.0 retiró `GenerateAndroidPairingPayload`, su ventana (`OpenPairingModal`) y `CopyPairingPayload`; los botones dicen "Disponible con la vinculación por QR". Si alguna vez se copió ese código, conviene rotar el token de la PC (§6). Desde v1.20.0 la URL de Turso además solo se acepta con `https://` o `libsql://` (`http://` solo para `localhost`), porque el token viaja en cada petición.
 
-### Plan Fase 8: vincular con la URL y el token (paso 8.14; plan §4.3)
+### Vincular con la URL y el token (paso 8.14, hecho en la PC en v1.32.0; plan §4.3)
 **Decisión del médico (2026-10-11):** la vinculación por QR en la red local (con un servidor temporal en la PC, HMAC y la credencial cifrada) se descartó. Cada equipo recibe la URL y un token como la PC:
 1. **En la tablet o el celular** se pegan la URL y el token (copiados del panel de Turso) o se escanea el QR que muestra la PC en *Equipos vinculados › Mostrar QR para la tablet o el celular*, con la URL y el token. El QR se cierra solo a los 2 minutos y no se debe fotografiar ni compartir. El equipo se niega si no tiene bloqueo de pantalla seguro y guarda la credencial envuelta con el Android Keystore.
 2. **El equipo escribe su latido y espera.** La PC muestra "Equipo nuevo: «Galaxy Tab S9». ¿Vincular como Tablet?", con los últimos 6 caracteres de su `DeviceId` en las dos pantallas, y al aceptar escribe su fila en `DeviceRegistry` (código `T1`, `C1`…). Hasta entonces el equipo no baja datos.

@@ -111,8 +111,22 @@ public sealed record LinkedDevice(
              (OldestPendingUtc is { } oldest ? $" desde {oldest.ToLocalTime():dd/MM HH:mm}" : string.Empty)
     };
 
-    /// <summary>Se puede quitar desde esta PC: no es ella misma ni la principal (para eso, «Esta PC reemplaza a la principal»).</summary>
-    public bool CanRemove => !IsThisDevice && !IsPrimary && !IsRevoked;
+    /// <summary>
+    /// Se puede quitar desde esta PC: no es ella misma ni la principal (para eso, «Esta PC reemplaza a la principal»). Uno que
+    /// espera que lo vinculen se aprueba o se rechaza (paso 8.14).
+    /// </summary>
+    public bool CanRemove => !IsThisDevice && !IsPrimary && !IsRevoked && !IsPendingApproval;
+
+    /// <summary>
+    /// Los últimos 6 caracteres de su DeviceId, en mayúsculas: la tablet los muestra mientras espera, así el médico sabe que
+    /// aprueba el equipo que tiene en la mano (paso 8.14).
+    /// </summary>
+    public string DeviceIdSuffix => DeviceId.Length <= 6 ? DeviceId.ToUpperInvariant() : DeviceId[^6..].ToUpperInvariant();
+
+    /// <summary>"Pide entrar como tablet · 3F9A2C" para un equipo que espera que lo vinculen.</summary>
+    public string ApprovalText => Role == DeviceRole.AndroidMobileAdmin
+        ? $"Pide entrar como celular · verifique que el celular muestre {DeviceIdSuffix}"
+        : $"Pide entrar como tablet · verifique que la tablet muestre {DeviceIdSuffix}";
 }
 
 /// <summary>Este equipo en DeviceRegistry y la PC principal, según la última consulta a la nube (paso 8.10).</summary>

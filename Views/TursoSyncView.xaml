@@ -10,8 +10,8 @@
              d:DesignHeight="900" d:DesignWidth="1000">
 
     <!-- Nube y dispositivos: estado de la sincronización con Turso (con el aviso de pausa y "Reanudar"),  -->
-    <!-- la conexión (URL y token), este equipo, la vinculación de la tablet y el celular (por QR, en un   -->
-    <!-- paso posterior) y la cuota gratuita. Importar y restaurar datos se mudó a "Respaldos y datos".   -->
+    <!-- la conexión (URL y token), este equipo, la vinculación de la tablet y el celular (QR con la URL y -->
+    <!-- el token, paso 8.14) y la cuota gratuita. Importar y restaurar datos se mudó a "Respaldos y datos". -->
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="28,24,28,24" MaxWidth="880" HorizontalAlignment="Left">
@@ -327,6 +327,25 @@
                                                     <Run Text="{Binding RoleText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding CodeText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding SeenText, Mode=OneWay}" />
                                                 </TextBlock>
                                                 <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding PendingText}" />
+                                                <!-- Paso 8.14: un equipo nuevo espera que lo vinculen -->
+                                                <StackPanel Margin="0,8,0,0" Visibility="{Binding IsPendingApproval, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" TextWrapping="Wrap" Text="{Binding ApprovalText}" />
+                                                    <WrapPanel Margin="0,6,0,0">
+                                                        <Button Style="{StaticResource ButtonPrimary}" Content="Vincular como tablet" Margin="0,0,8,4" Padding="12,5" MinHeight="0"
+                                                                Command="{Binding DataContext.ApproveAsTabletCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}" />
+                                                        <Button Style="{StaticResource ButtonSecondary}" Content="Vincular como celular" Margin="0,0,8,4" Padding="12,5" MinHeight="0"
+                                                                Command="{Binding DataContext.ApproveAsPhoneCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}" />
+                                                        <Button Style="{StaticResource ButtonDangerGhost}" Content="Rechazar" Margin="0,0,0,4" Padding="12,5" MinHeight="0"
+                                                                Command="{Binding DataContext.RejectDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                IsEnabled="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                                                AutomationProperties.Name="Rechazar equipo" />
+                                                    </WrapPanel>
+                                                </StackPanel>
                                             </StackPanel>
                                             <Button Grid.Column="2" Style="{StaticResource ButtonDangerGhost}" Content="Quitar" VerticalAlignment="Center" Margin="12,0,0,0"
                                                     Command="{Binding DataContext.RemoveDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -346,36 +365,61 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Vincular tablet y celular -->
-                <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
+                <!-- Vincular tablet y celular (paso 8.14): la URL y el token, pegados o del QR; la aprobación va en Equipos vinculados -->
+                <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16" AutomationProperties.Name="Vincular tablet y celular">
                     <StackPanel>
                         <TextBlock Style="{StaticResource TextSection}" Text="Vincular tablet y celular" />
                         <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,12" TextWrapping="Wrap"
-                                   Text="Se vincularán con la URL y el token de Turso (pegados en el equipo o leídos de un código QR que mostrará esta computadora), y aquí se aprobará cada equipo. Llega con la app de Android." />
-                        <UniformGrid Columns="2">
-                            <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="0,0,6,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <helpers:Icon Data="{StaticResource IcoTablet}" Margin="0,0,8,0" />
-                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Tablet" />
-                                    </StackPanel>
-                                    <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
-                                               Text="Consulta y recepción: expedientes, recetas, citas y cobro, también sin internet." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Llega con la app de Android" />
+                                   Text="En la tablet o el celular, abra TPVC y lea este código QR (o pegue la URL y el token de Turso). El equipo aparece en Equipos vinculados y ahí se aprueba como tablet o como celular; hasta entonces no baja ningún dato." />
+                        <UniformGrid Columns="2" Margin="0,0,0,12">
+                            <StackPanel Margin="0,0,6,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <helpers:Icon Data="{StaticResource IcoTablet}" Margin="0,0,8,0" />
+                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Tablet" />
                                 </StackPanel>
-                            </Border>
-                            <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="6,0,0,0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <helpers:Icon Data="{StaticResource IcoPhone}" Margin="0,0,8,0" />
-                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Celular" />
-                                    </StackPanel>
-                                    <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
-                                               Text="Ve expedientes, agenda citas, revisa existencias y registra entradas de mercancía." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Llega con la app de Android" />
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Text="Consulta y recepción: expedientes, recetas, citas y cobro, también sin internet." />
+                            </StackPanel>
+                            <StackPanel Margin="6,0,0,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <helpers:Icon Data="{StaticResource IcoPhone}" Margin="0,0,8,0" />
+                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Celular" />
                                 </StackPanel>
-                            </Border>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Text="Ve expedientes, agenda citas, revisa existencias y registra entradas de mercancía." />
+                            </StackPanel>
                         </UniformGrid>
+
+                        <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" Command="{Binding ShowLinkQrCommand}"
+                                Visibility="{Binding IsLinkQrVisible, Converter={StaticResource InverseBoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoTablet}" Margin="0,0,8,0" />
+                                <TextBlock Text="Mostrar QR para la tablet o el celular" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding LinkStatusText}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Visibility="{Binding LinkStatusText, Converter={StaticResource BoolToVis}}" />
+
+                        <!-- El QR lleva el token: 2 minutos en pantalla, nunca en el portapapeles -->
+                        <Border Style="{StaticResource CardSubtle}" Padding="16" Visibility="{Binding IsLinkQrVisible, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Background="White" Padding="8" CornerRadius="8" VerticalAlignment="Top">
+                                    <Image Source="{Binding LinkQrImage}" Width="300" Height="300" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                           AutomationProperties.Name="Código QR para vincular" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="Léalo desde la tablet o el celular" TextWrapping="Wrap" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="Este código lleva el token de la nube: quien lo tenga puede leer y escribir todo. No lo fotografíe ni lo comparta." />
+                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding LinkQrCountdownText}" Margin="0,8,0,0" />
+                                    <Button Style="{StaticResource ButtonGhost}" Content="Cerrar" HorizontalAlignment="Left" Margin="0,10,0,0" Command="{Binding CloseLinkQrCommand}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 
