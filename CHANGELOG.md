@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.28.0] - 2026-10-11
+
+### Cambiado — Fase 8, paso 8.11: lo que se imprime, listo para la app de Android
+* La receta, la solicitud de laboratorio y el ticket se arman ahora en piezas independientes de la ventana de Windows, para que la app de Android los genere igual. Se ven y se imprimen como antes: la receta y la solicitud guardadas como documento salen idénticas.
+* El ticket impreso toma sus textos de la misma pieza que arma el ticket en texto (42 columnas) y en HTML; los importes usan siempre el formato de México.
+* Las cuentas del corte de caja, las alertas de inventario, la lista de compras sugerida, el aviso de signos vitales y el IMC, la revisión del alta del paciente y la consulta entre equipos también quedaron en piezas aparte, sin cambiar lo que hacen. En la lista de compras, los nombres con acento se ordenan como en español.
+* La fecha de "hoy" (edad, citas próximas, caducidad de lotes y resumen) sale de un solo reloj.
+* Vectores de referencia para el celular en `contracts/golden/`: corte de caja, alertas, compra sugerida, la hoja de la receta, sus campos en HTML y el ticket en texto.
+* 520 pruebas.
+
 ## [1.27.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.10: registro de equipos y PC principal
