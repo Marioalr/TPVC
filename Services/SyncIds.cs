@@ -47,6 +47,13 @@ public static class SyncIds
     }
 
     /// <summary>
+    /// SyncId del catálogo que siembra una base nueva (paso 8.8): UUIDv5 en el espacio de TPVC de "Category:&lt;nombre&gt;",
+    /// "ClinicalService:&lt;código&gt;" o "ServiceDefaultProduct:&lt;código del servicio&gt;|&lt;código del producto&gt;". Dos equipos
+    /// que siembran dan los mismos SyncId, así que al sincronizar no se duplica nada.
+    /// </summary>
+    public static Guid Seeded(string entityType, string key) => Uuid5(TpvcNamespace, $"{entityType}:{key}");
+
+    /// <summary>
     /// UUIDv5 en el espacio de TPVC de un nombre que incluye SyncId: cada SyncId entra en minúsculas, así un
     /// SyncId leído en mayúsculas de la base local da lo mismo.
     /// </summary>

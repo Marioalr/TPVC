@@ -199,7 +199,13 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
 * **La base de Turso está archivada**: el plan gratuito archiva la base después de 10 días sin uso (por ejemplo, en vacaciones). El mensaje explica cómo reactivarla; después, **Sincronizar ahora**.
 * **Sincronización completa**: sube todo lo de esta computadora, baja todo lo de la nube y al final muestra un reporte. Si dice que la nube y la computadora tienen lo mismo, la nube queda verificada (hágalo una vez en la PC principal). Si encuentra diferencias, las lista.
 * **La hora de esta computadora difiere N min de la nube**: la fecha u hora de Windows está mal. TPVC marca los cambios con la hora de la nube mientras tanto, pero conviene corregirla.
-* **Sincronización detenida: esta nube es de otra base**: la URL y el token son de una nube que ya pertenece a otra base de datos, y la sincronización no sigue para no mezclar datos. Si esta computadora ya sincronizaba con esa nube, pulse **Esta PC ya usaba esta nube**: TPVC revisa que lo que esta PC ya subió esté en la nube y, si es así, sigue normal. Si no, revise la URL.
+* **Sincronización detenida: esta nube es de otra base**: la URL y el token son de una nube que ya pertenece a otra base de datos, y la sincronización no sigue para no mezclar datos. Hay tres salidas:
+  * **Unirse a esta nube**: para una computadora nueva, o para recuperar una que se descompuso. TPVC guarda un respaldo, quita las categorías y los servicios de ejemplo y baja todo lo de la nube (puede tardar unos minutos; si se corta, la siguiente sincronización sigue donde iba). Solo procede si esta computadora no tiene datos propios; si los tiene, dice cuáles.
+  * **Esta PC ya usaba esta nube**: si esta computadora ya sincronizaba con esa nube. TPVC revisa que lo que esta PC ya subió esté en la nube y, si es así, sigue normal.
+  * **Reemplazar con la nube…**: borra los datos de esta computadora (también lo que no había subido) y baja los de la nube. Pide escribir CONFIRMAR y antes guarda un respaldo en **Respaldos y datos**.
+
+  Si la nube no es la del consultorio, revise la URL.
+* Al instalar TPVC, la base trae las categorías y los servicios de ejemplo, pero no pacientes ni productos de ejemplo: esos solo se agregan si se piden en el asistente inicial.
 * **Sincronización detenida: actualice TPVC en esta computadora**: otro equipo ya usa una versión más nueva de la sincronización. Lo que se capture aquí se guarda y sube al actualizar.
 
 ### Actualizaciones

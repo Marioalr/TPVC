@@ -71,15 +71,13 @@ public partial class App : Application
 
         AppLogger.Info($"Inicio de TPVC v{Services.GetRequiredService<AppUpdateService>().CurrentVersion}");
 
-        var profileService = Services.GetRequiredService<ClinicProfileService>();
-        bool isFirstRun = profileService.IsFirstRun;
-
-        // Inicializar, migrar y sembrar base de datos local SQLite si es necesario
+        // Inicializar, migrar y sembrar el catálogo de una base nueva. Los datos demo solo salen del asistente inicial
+        // (antes, cualquier arranque con la tabla de pacientes vacía sembraba los pacientes demo; paso 8.8)
         try
         {
             var factory = Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
             using var db = factory.CreateDbContext();
-            DatabaseInitializer.Initialize(db, seedDemoData: !isFirstRun);
+            DatabaseInitializer.Initialize(db, seedDemoData: false);
         }
         catch (Exception ex)
         {

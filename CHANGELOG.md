@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.6] - 2026-10-10
+
+### Añadido — Fase 8, paso 8.8: unirse a la nube del consultorio sin duplicados
+* **Unirse a esta nube**: una computadora nueva (o una que se descompuso) baja todo lo de la nube del consultorio. Aparece en *Nube y dispositivos* cuando la sincronización se detiene con "esta nube es de otra base". Guarda un respaldo antes, quita el catálogo de ejemplo y no sube nada. Si la descarga se corta, la siguiente sincronización sigue donde iba, y el programa ya no vuelve a sembrar el catálogo de ejemplo en esa base. Solo procede si la computadora no tiene datos propios; si los tiene, dice cuáles.
+* **Reemplazar con la nube…**: para una computadora con datos que no deben quedarse. Pide escribir CONFIRMAR, guarda un respaldo y deja la base igual que la nube.
+
+### Corregido
+* Al arrancar, el programa ya no agrega los pacientes de ejemplo cuando la lista de pacientes está vacía; los datos de ejemplo solo salen del asistente inicial.
+* Dos computadoras instaladas desde cero ya no duplican las categorías ni los servicios de ejemplo al sincronizar: el catálogo inicial lleva la misma identidad en todas y una fecha antigua, así que cualquier cambio o borrado real le gana.
+* 425 pruebas.
+
 ## [1.20.5] - 2026-10-10
 
 ### Añadido — Fase 8, paso 8.7: la hora de la nube y la identidad del consultorio

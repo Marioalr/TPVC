@@ -367,12 +367,19 @@ public class GoldenVectorTests
                      ("el espacio de nombres de TPVC", "url", "https://github.com/Marioalr/TPVC/sync"),
                      ("TPVC · categoría con acentos (UTF-8)", "tpvc", "Category:Analgésicos y antipiréticos"),
                      ("TPVC · servicio por código", "tpvc", "ClinicalService:SERV-001"),
+                     ("TPVC · categoría sembrada", "tpvc", "Category:Material de Curación"),
+                     ("TPVC · insumo por defecto de un servicio sembrado", "tpvc", "ServiceDefaultProduct:SERV-002|CUR-001"),
                      ("TPVC · nombre vacío", "tpvc", ""),
                  })
         {
             cases.Add(Case(name, new JsonObject { ["namespace"] = ns, ["namespaceId"] = SyncIds.Format(namespaces[ns]), ["name"] = value },
                 SyncIds.Format(SyncIds.Uuid5(namespaces[ns], value))));
         }
+
+        // El catálogo que siembra una base nueva (paso 8.8) usa estos mismos nombres
+        Assert.AreEqual(SyncIds.Uuid5(SyncIds.TpvcNamespace, "Category:Material de Curación"), SyncIds.Seeded("Category", "Material de Curación"));
+        Assert.AreEqual(SyncIds.Uuid5(SyncIds.TpvcNamespace, "ServiceDefaultProduct:SERV-002|CUR-001"),
+            SyncIds.Seeded("ServiceDefaultProduct", "SERV-002|CUR-001"));
 
         const string other = "7C9E6679-7425-40DE-944B-E07FC1F90AE7";
         foreach (var (name, prefix, ids) in new (string, string, string[])[]
@@ -392,6 +399,7 @@ public class GoldenVectorTests
         CheckOrWrite("contracts/golden/uuid5.json", VectorFile("uuid5", cases,
             "UUID versión 5 de RFC 4122 (SHA-1 del espacio de nombres en orden de red + el nombre en UTF-8). 'expected' en minúsculas con guiones.",
             "Espacios de nombres: dns y url de RFC 4122; tpvc = uuid5(url, \"https://github.com/Marioalr/TPVC/sync\"), fijo para siempre.",
+            "Catálogo sembrado por la PC (paso 8.8; Kotlin nunca siembra): 'Category:<nombre>', 'ClinicalService:<código>', 'ServiceDefaultProduct:<código del servicio>|<código del producto>'.",
             "Derivados: nombre = prefix + los syncIds en minúsculas unidos con ':' (un SyncId leído en mayúsculas da lo mismo)."));
     }
 

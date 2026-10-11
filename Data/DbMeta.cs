@@ -44,6 +44,18 @@ public static class DbMeta
     /// <summary>La identidad de la nube a la que pertenece esta base (_tpvc_meta.clinicId, paso 8.7).</summary>
     public const string ClinicId = "clinicId";
 
+    /// <summary>
+    /// "1" si la base se unió a una nube («Unirse», «Recuperar» o «Reemplazar con la nube», paso 8.8): ya no siembra
+    /// nada nunca, ni siquiera a media descarga.
+    /// </summary>
+    public const string CloudJoined = "CloudJoined";
+
+    /// <summary>
+    /// "1" desde «Unirse» o «Reemplazar con la nube» hasta que termina la bajada completa (paso 8.8): mientras tanto la
+    /// bajada no omite las filas que subió este mismo equipo, que aquí ya no están. Un corte la deja puesta.
+    /// </summary>
+    public const string CloudDownloadPending = "CloudDownloadPending";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";

@@ -471,10 +471,22 @@ internal sealed class UiSmokeSession
             }.Summary;
             cloudVm.IsFullSyncReportClean = false;
             Show(host, main, "TursoSync", $"20d-config-tursosync-identidad-{suffix}");
-            if (string.IsNullOrEmpty(cloudVm.IdentityNoticeText) || string.IsNullOrEmpty(cloudVm.ClockNoticeText) || !cloudVm.CanAdoptCloudIdentity)
+            if (string.IsNullOrEmpty(cloudVm.IdentityNoticeText) || string.IsNullOrEmpty(cloudVm.ClockNoticeText) || !cloudVm.CanAdoptCloudIdentity
+                || !cloudVm.CanReplaceWithCloud)
             {
                 _failures.Add($"[20d-{suffix}] Faltan los avisos de nube ajena o de hora");
             }
+
+            // Paso 8.8: «Reemplazar con la nube» pide teclear CONFIRMAR
+            cloudVm.OpenReplaceWithCloud();
+            bool lockedWithoutWord = !cloudVm.CanConfirmReplaceWithCloud;
+            cloudVm.ReplaceConfirmWord = "CONFIRMAR";
+            Show(host, main, "TursoSync", $"20e-config-tursosync-reemplazar-{suffix}");
+            if (!lockedWithoutWord || !cloudVm.CanConfirmReplaceWithCloud)
+            {
+                _failures.Add($"[20e-{suffix}] «Reemplazar con la nube» no depende de teclear CONFIRMAR");
+            }
+            cloudVm.CancelReplaceWithCloud();
             ExecuteCloud("DELETE FROM _tpvc_meta WHERE Key = 'clinicId';");
             _cloud.Clock = null;
             WaitFor(tursoSync.SyncAsync());
