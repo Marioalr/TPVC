@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.21.0] - 2026-10-10
+
+### Añadido — costo del producto
+* **Costo por unidad** en la ficha de cada producto, con la casilla **El costo no incluye IVA (se suma 16 %)**, desmarcada por omisión porque los medicamentos van sin IVA; para material de curación e insumos se marca. La ficha muestra la **ganancia** por unidad, o avisa si se vende abajo del costo.
+* **Valor del inventario**: lo que costó lo que hay en existencia. Aparece en el *Panel del consultorio*, donde también dice cuántos productos con existencias no tienen costo todavía, y en el encabezado de *Productos* para lo que se está viendo. La lista muestra el costo bajo el precio.
+* La **lista de compras sugerida** usa el costo capturado. Los productos sin costo se siguen estimando con el 65 % del precio de venta, ahora marcados con **≈** (también en el CSV y en el informe).
+* Los productos de ejemplo del asistente traen costo.
+* Para la nube: el contrato de sincronización pasa a la revisión 2, con dos columnas nuevas en Productos. Una PC con la versión anterior sigue sincronizando y no borra el costo.
+* 440 pruebas.
+
 ## [1.20.7] - 2026-10-10
 
 ### Corregido — una sola ventana
