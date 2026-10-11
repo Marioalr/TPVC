@@ -56,6 +56,28 @@ public static class DbMeta
     /// </summary>
     public const string CloudDownloadPending = "CloudDownloadPending";
 
+    /// <summary>
+    /// La generación de la nube con la que está esta base (_tpvc_meta.generation, paso 8.9): va en la cerca de cada
+    /// escritura. Si la nube cambia de generación (otra PC la reemplazó con un respaldo), esta base guarda lo que no subió,
+    /// espera a que la nube esté completa y la vuelve a bajar.
+    /// </summary>
+    public const string Generation = "generation";
+
+    /// <summary>
+    /// "Reemplazar la nube con este respaldo" en curso (paso 8.9): la generación nueva. Si TPVC se cierra a la mitad, la
+    /// siguiente sincronización lo continúa.
+    /// </summary>
+    public const string ReplacingCloud = "ReplacingCloud";
+
+    /// <summary>Ruta del archivo con lo que la nube tenía y el respaldo no (o "-" si no había nada), del reemplazo en curso.</summary>
+    public const string ReplaceLostFile = "ReplaceLostFile";
+
+    /// <summary>
+    /// "1" desde que se restauró un respaldo con la nube configurada hasta que se elige «Reemplazar la nube con este
+    /// respaldo» o «Desconectar esta PC de la nube» (paso 8.9). Mientras tanto no se sincroniza.
+    /// </summary>
+    public const string RestoredWithCloud = "RestoredWithCloud";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";

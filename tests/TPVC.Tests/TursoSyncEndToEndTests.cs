@@ -18,7 +18,7 @@ namespace TPVC.Tests;
 
 [TestClass]
 [DoNotParallelize]
-public class TursoSyncEndToEndTests
+public partial class TursoSyncEndToEndTests
 {
     private const string Url = "https://tpvc-test.turso.io";
     private readonly List<string> _files = new();
@@ -1033,8 +1033,8 @@ public class TursoSyncEndToEndTests
         var clinicId = CloudMeta("clinicId");
         Assert.IsNotNull(clinicId);
         Assert.AreEqual(clinicId, result.FullSyncReport.ClinicId);
-        Assert.AreEqual("2", CloudMeta("protocol"));
-        Assert.AreEqual("2", CloudMeta("minClientProtocol"));
+        Assert.AreEqual("3", CloudMeta("protocol"), "La PC habla el protocolo 3 (cerca de generación, paso 8.9)");
+        Assert.AreEqual("2", CloudMeta("minClientProtocol"), "Los equipos con el protocolo 2 siguen sincronizando hasta un reemplazo de la nube");
         Assert.IsNotNull(CloudMeta("generation"));
         Assert.AreEqual(CloudMeta("generation"), CloudMeta("generationReady"));
         Assert.IsNotNull(CloudMeta("fullUploadAtUtc"));
@@ -1123,7 +1123,7 @@ public class TursoSyncEndToEndTests
     {
         var pc = CreateDevice("pc", seed: true);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
-        ExecuteCloud("INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('minClientProtocol', '3');");
+        ExecuteCloud("INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('minClientProtocol', '4');");
 
         var product = (await pc.Inventory.GetProductsAsync()).First();
         product.Price = 777.5m;

@@ -104,7 +104,9 @@ public static class SyncContract
         "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
         "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Hasta el paso 8.16, un folio repetido que llega se guarda con sufijo -R1, -R2… solo en el equipo que lo recibe y no se sube.",
         "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl') y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos.",
-        "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar."
+        "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
+        "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
+        "Generaciones (paso 8.9): _tpvc_meta.generation cambia solo cuando una PC reemplaza la nube con un respaldo; entonces escribe generationPrevious (la anterior, o 'none') y sube minClientProtocol a 3, y al terminar de subir escribe generationReady igual a la nueva. Un equipo que ve otra generación guarda lo que no había subido (cada fila con su protocolo y su revisión del contrato), no escribe ni baja nada mientras generationReady no sea la nueva, y después se vacía, baja todo y ofrece «Volver a aplicar N cambios» (cada fila se vuelve a escribir con marca nueva). Un equipo sin generación guardada adopta la de la nube solo si no existe generationPrevious; si existe, hace lo mismo que con otra generación."
     };
 
     /// <summary>schema.json listo para escribir: sangría de 2, saltos de línea \n y un salto al final.</summary>

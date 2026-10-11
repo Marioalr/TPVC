@@ -27,6 +27,12 @@ public class DataImportResult
     public int TemplatesImported { get; set; }
     public int PediatricRulesImported { get; set; }
 
+    /// <summary>
+    /// Se restauró una base con la nube configurada (paso 8.9): no se sincroniza hasta elegir «Reemplazar la nube con este
+    /// respaldo» o «Desconectar esta PC de la nube».
+    /// </summary>
+    public bool CloudDecisionNeeded { get; set; }
+
     /// <summary>Imágenes del membrete (escudo, encabezado) tomadas de la hoja RECETA.</summary>
     public int LetterheadImagesImported { get; set; }
 }
@@ -221,6 +227,7 @@ public class DataImportService
             AppDbContext.ClearConnectionPools();
 
             // 5. Migración aditiva automática para asegurar columnas e índices faltantes
+            bool cloudConfigured = !string.IsNullOrWhiteSpace(_tursoSettingsService?.CurrentSettings.DatabaseUrl);
             using (var ctx = _contextFactory.CreateDbContext())
             {
                 ctx.Database.EnsureCreated();
@@ -229,6 +236,14 @@ public class DataImportService
                 // La base cambió por completo: la siguiente sincronización con Turso debe ser completa (la subida
                 // manda todo una vez; el cursor vive dentro de la base)
                 SyncChangeLog.ResetAfterRestore(ctx);
+
+                // Paso 8.9: con la nube activa, sincronizar mezclaría el respaldo con lo posterior que tiene la nube (y una
+                // sincronización completa lo regresaría): no se sincroniza hasta elegir qué hacer con ella. Un reemplazo a
+                // medias que traiga el respaldo no cuenta
+                DbMeta.Remove(ctx, DbMeta.ReplacingCloud);
+                DbMeta.Remove(ctx, DbMeta.ReplaceLostFile);
+                if (cloudConfigured) DbMeta.Set(ctx, DbMeta.RestoredWithCloud, "1");
+                else DbMeta.Remove(ctx, DbMeta.RestoredWithCloud);
             }
 
             if (_tursoSettingsService != null)
@@ -244,7 +259,10 @@ public class DataImportService
             {
                 Success = true,
                 BackupPath = backupPath,
-                Message = $"Base de datos SQLite importada y verificada correctamente. Respaldo previo guardado en: {Path.GetFileName(backupPath)}"
+                CloudDecisionNeeded = cloudConfigured,
+                Message = $"Base de datos SQLite importada y verificada correctamente. Respaldo previo guardado en: {Path.GetFileName(backupPath)}" +
+                          (cloudConfigured ? "\n\nEsta computadora sincroniza con la nube, que sigue con los datos de antes: elija abajo qué hacer con ella. " +
+                                             "Mientras tanto no se sincroniza." : string.Empty)
             };
         }
         catch (Exception ex)

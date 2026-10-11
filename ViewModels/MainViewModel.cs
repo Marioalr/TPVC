@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.25.0";
+    private string _appVersion = "1.26.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -182,7 +182,7 @@ public partial class MainViewModel : ObservableObject
         // "Temas y ajustes" se dividió en Apariencia, Respaldos y datos (con la importación que
         // estaba en la página de la nube) y Actualizaciones
         AppearanceVM = new AppearanceViewModel(themeService);
-        DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications);
+        DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications, _tursoSyncService);
         UpdatesVM = new UpdatesViewModel(updateService);
         ServicesCatalogVM = new ServicesCatalogViewModel(inventoryService, Notifications);
         TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService);

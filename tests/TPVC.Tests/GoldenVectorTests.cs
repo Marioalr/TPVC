@@ -218,6 +218,28 @@ public class GoldenVectorTests
                 new JsonObject { ["serverUpdatedAtUtcAfter"] = rowAfter, ["serverDeletedAtUtcAfter"] = tombstoneAfter }));
         }
 
+        // Cerca de generación (paso 8.9): con otra generación en la nube, nada de lo que manda el equipo se escribe
+        foreach (var (name, action, row, cloudGeneration, deviceGeneration) in new (string, string, string?, string?, string?)[]
+                 {
+                     ("subir fila · misma generación: se escribe", "upsert", null, "gen-a", "gen-a"),
+                     ("subir fila · la nube sin generación y el equipo tampoco: se escribe", "upsert", null, null, null),
+                     ("subir fila · otra generación: no se escribe", "upsert", null, "gen-nueva", "gen-vieja"),
+                     ("subir fila · el equipo sin generación y la nube con una: no se escribe", "upsert", null, "gen-nueva", null),
+                     ("subir lápida · otra generación: ni lápida ni borrado", "tombstone", T(1), "gen-nueva", "gen-vieja"),
+                 })
+        {
+            var stamp = T(2);
+            var (affected, rowAfter, tombstoneAfter) = await RunInCloudAsync(row, null, action, stamp, cloudGeneration, deviceGeneration);
+            cases.Add(Case($"cerca de generación (nube) · {name}",
+                new JsonObject
+                {
+                    ["check"] = action == "upsert" ? "server-upsert" : "server-tombstone", ["serverUpdatedAtUtc"] = row,
+                    [action == "upsert" ? "incomingUpdatedAtUtc" : "incomingDeletedAtUtc"] = stamp,
+                    ["cloudGeneration"] = cloudGeneration, ["deviceGeneration"] = deviceGeneration
+                },
+                new JsonObject { ["affectedRows"] = affected, ["serverUpdatedAtUtcAfter"] = rowAfter, ["serverDeletedAtUtcAfter"] = tombstoneAfter }));
+        }
+
         foreach (var (name, rowExists, tombstoneExists) in new (string, bool, bool)[]
                  {
                      ("la nube tiene la fila (más nueva o con la misma marca): se aplica aunque empate", true, false),
@@ -248,19 +270,26 @@ public class GoldenVectorTests
             "Marcas en UTC con el formato del protocolo (yyyy-MM-dd HH:mm:ss.fffffff); null = no existe.",
             "pull-row y pull-tombstone: lo que decide el equipo al bajar (SyncRules.RemoteRowWins y RemoteTombstoneDeletes).",
             "server-upsert y server-tombstone: lo que hace la nube con el SQL que manda el equipo (TableMap.UpsertSql, SyncSchema.TombstoneUpsertSql y DeleteTombstonedRowSql), ejecutado de verdad sobre SQLite. 'affectedRows' es lo que Turso regresa en affected_row_count.",
+            "Cerca de generación (paso 8.9): el último argumento de las tres instrucciones es la generación del equipo ('deviceGeneration'; null si la nube todavía no tenía). Sin 'cloudGeneration' la nube no tiene la clave. Si no coincide con _tpvc_meta.generation, la nube no escribe nada (0 filas) y el equipo, al leer la generación al final de la petición, se detiene.",
             "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe.",
             "rejected-upsert-row: con la fila de la nube en mano, se aplica si su marca es igual o más nueva que la local (SyncRules.ServerRowAppliesAfterReject). No se relee en la primera subida completa, donde casi todo afecta 0 filas."));
     }
 
     /// <summary>Estado inicial de la nube para una fila de Categories, y la instrucción real que manda la PC.</summary>
-    private static async Task<(int Affected, string? RowAfter, string? TombstoneAfter)> RunInCloudAsync(string? row, string? tombstone, string action, string stamp)
+    /// <param name="cloudGeneration">_tpvc_meta.generation de la nube (null = no existe).</param>
+    /// <param name="deviceGeneration">La generación que manda el equipo en la cerca (paso 8.9).</param>
+    private static async Task<(int Affected, string? RowAfter, string? TombstoneAfter)> RunInCloudAsync(string? row, string? tombstone, string action, string stamp,
+        string? cloudGeneration = null, string? deviceGeneration = null)
     {
         var schema = SyncSchema.FromModel(Model());
         var map = schema.Tables.Single(t => t.ClrType == typeof(Category));
         using var server = new FakeHranaServer(":memory:");
         using var client = new TursoClient("https://tpvc-golden.turso.io", "token", new HttpClient(server, disposeHandler: false));
 
-        await client.ExecuteBatchAsync(SyncSchema.TableStatements(map).Concat(SyncSchema.TombstoneStatements).Select(s => (s, (object?[]?)null)));
+        await client.ExecuteBatchAsync(new[] { SyncSchema.MetaStatement }.Concat(SyncSchema.TableStatements(map)).Concat(SyncSchema.TombstoneStatements)
+            .Select(s => (s, (object?[]?)null)));
+        if (cloudGeneration != null)
+            await client.ExecuteAsync("INSERT INTO \"_tpvc_meta\" (\"Key\", \"Value\") VALUES ('generation', ?)", new object?[] { cloudGeneration });
         if (row != null)
             await client.ExecuteAsync($"INSERT INTO \"{map.Table}\" (\"SyncId\", \"UpdatedAtUtc\", \"SyncedAtUtc\") VALUES (?, ?, ?)", new object?[] { SampleSyncId, row, row });
         if (tombstone != null)
@@ -272,13 +301,13 @@ public class GoldenVectorTests
         {
             var args = new List<object?> { SampleSyncId, stamp, "device-golden" };
             args.AddRange(map.RemoteColumnNames.Select(_ => (object?)null));
-            args.AddRange(new object?[] { nameof(Category), SampleSyncId, stamp });
+            args.AddRange(new object?[] { nameof(Category), SampleSyncId, stamp, deviceGeneration });
             affected = await client.ExecuteAsync(map.UpsertSql, args.ToArray());
         }
         else
         {
-            affected = await client.ExecuteAsync(SyncSchema.TombstoneUpsertSql, new object?[] { nameof(Category), SampleSyncId, stamp, "device-golden" });
-            await client.ExecuteAsync(SyncSchema.DeleteTombstonedRowSql(map.Table), new object?[] { SampleSyncId, stamp });
+            affected = await client.ExecuteAsync(SyncSchema.TombstoneUpsertSql, new object?[] { nameof(Category), SampleSyncId, stamp, "device-golden", deviceGeneration });
+            await client.ExecuteAsync(SyncSchema.DeleteTombstonedRowSql(map.Table), new object?[] { SampleSyncId, stamp, deviceGeneration });
         }
 
         var rowAfter = (await client.QueryAsync($"SELECT \"UpdatedAtUtc\" FROM \"{map.Table}\" WHERE \"SyncId\" = ?", new object?[] { SampleSyncId }))

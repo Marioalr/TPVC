@@ -35,7 +35,7 @@ namespace TPVC.Services;
 /// * Los borrados físicos viajan en "SyncTombstones".
 /// * Qué subir lo dice el registro de cambios local (<see cref="SyncChangeLog"/>, paso 8.5), no el reloj del equipo.
 /// </summary>
-public class TursoSyncService
+public partial class TursoSyncService
 {
     public const int RemoteSchemaVersion = 2;
 
@@ -50,8 +50,20 @@ public class TursoSyncService
 
     private const string ClinicProfileSql = "SELECT * FROM ClinicProfiles WHERE Id = 1;";
 
-    /// <summary>La versión del protocolo de sincronización que entiende este programa (la nube puede exigir una mínima).</summary>
-    public const int ClientProtocol = 2;
+    /// <summary>
+    /// La versión del protocolo de sincronización que entiende este programa (la nube puede exigir una mínima). 3 (paso
+    /// 8.9) = el 2 con la cerca de generación en cada escritura.
+    /// </summary>
+    public const int ClientProtocol = GenerationProtocol;
+
+    /// <summary>El protocolo con la cerca de generación (paso 8.9). Reemplazar la nube lo exige a todos los equipos.</summary>
+    public const int GenerationProtocol = 3;
+
+    /// <summary>
+    /// Lo mínimo que exige una nube verificada en la vida normal: los equipos con el protocolo 2 siguen sincronizando hasta
+    /// que alguien reemplaza la nube con un respaldo (entonces sube a <see cref="GenerationProtocol"/>).
+    /// </summary>
+    public const int MinCompatibleProtocol = 2;
 
     /// <summary>La nube exige un protocolo más nuevo (_tpvc_meta.minClientProtocol): hay que actualizar TPVC.</summary>
     public const string ClientOutdatedCode = "CLIENT_OUTDATED";
@@ -73,7 +85,7 @@ public class TursoSyncService
 
     /// <summary>Claves de _tpvc_meta que regresa la primera instrucción de cada sincronización (paso 8.7).</summary>
     private static readonly string[] HandshakeKeys =
-        { "clinicId", "generation", "generationReady", "protocol", "minClientProtocol", "fullUploadAtUtc", "stampsRepairedAtUtc" };
+        { "clinicId", "generation", "generationReady", "generationPrevious", "protocol", "minClientProtocol", "fullUploadAtUtc", "stampsRepairedAtUtc" };
 
     /// <summary>La hora del servidor, la marca de agua de la bajada (5 s antes) y las claves de _tpvc_meta, en una instrucción.</summary>
     private static readonly string HandshakeSql =
@@ -454,13 +466,17 @@ public class TursoSyncService
             {
                 SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
             }
-            else if (code is CloudIdentityCode or ClientOutdatedCode)
+            else if (code is CloudIdentityCode or ClientOutdatedCode or GenerationPendingCode or GenerationChangedCode or RestorePendingCode)
             {
-                // Paso 8.7: no es un error de red ni de datos; el detalle va en el aviso de Nube y dispositivos
+                // Pasos 8.7 y 8.9: no es un error de red ni de datos; el detalle va en el aviso de Nube y dispositivos
                 AppLogger.Warn($"Turso: sincronización detenida. {ex.Message}");
-                SetStatus(TursoSyncStatus.Paused, code is CloudIdentityCode
-                    ? "Sincronización detenida: esta nube es de otra base"
-                    : "Sincronización detenida: actualice TPVC en esta computadora");
+                SetStatus(TursoSyncStatus.Paused, code switch
+                {
+                    CloudIdentityCode => "Sincronización detenida: esta nube es de otra base",
+                    ClientOutdatedCode => "Sincronización detenida: actualice TPVC en esta computadora",
+                    RestorePendingCode => "Sincronización detenida: se restauró un respaldo (elija qué hacer con la nube)",
+                    _ => "Sincronización en espera: otra computadora está reemplazando la nube con un respaldo"
+                });
             }
             else
             {
@@ -488,8 +504,6 @@ public class TursoSyncService
 
     private async Task<(int Pushed, int Pulled, TursoFullSyncReport? Report)> SyncCoreAsync(bool fullResync, CancellationToken ct)
     {
-        var settings = _settingsService.CurrentSettings;
-
         if (!_changeLogVerified)
         {
             // La base ya lo trae desde que abre el programa (DatabaseInitializer); esto cubre una que llegue sin él
@@ -497,6 +511,37 @@ public class TursoSyncService
             SyncChangeLog.EnsureInstalled(db, backupBeforeFirstInstall: false);
             _changeLogVerified = true;
         }
+
+        // Paso 8.9: con un respaldo restaurado no se sincroniza hasta elegir qué hacer con la nube; un reemplazo de la
+        // nube que se cortó se termina antes que nada
+        string? replacing;
+        bool restored;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            replacing = await DbMeta.GetAsync(db, DbMeta.ReplacingCloud, ct);
+            restored = await DbMeta.GetAsync(db, DbMeta.RestoredWithCloud, ct) == "1";
+        }
+        if (replacing != null) await ContinueCloudReplacementAsync(replacing, ct);
+        else if (restored) throw new TursoException(RestorePendingMessage, RestorePendingCode);
+
+        try
+        {
+            return await SyncOnceAsync(fullResync, ct);
+        }
+        catch (GenerationReloadException reload)
+        {
+            // Otra PC reemplazó la nube con un respaldo y ya terminó: lo que esta no subió quedó guardado; se vacía y se
+            // vuelve a bajar todo, una sola vez
+            await ReloadNewGenerationAsync(reload.Handshake, ct);
+            return await SyncOnceAsync(fullResync: false, ct);
+        }
+    }
+
+    private async Task<(int Pushed, int Pulled, TursoFullSyncReport? Report)> SyncOnceAsync(bool fullResync, CancellationToken ct)
+    {
+        var settings = _settingsService.CurrentSettings;
+        _syncGeneration = null;
+        _generationChecked = false;
 
         // Una sincronización completa (o la primera, sin ningún cursor de bajada) sube y baja todo: el freno la
         // revisa antes de empezar
@@ -664,6 +709,11 @@ public class TursoSyncService
     internal sealed record CloudHandshake(DateTime ServerNowUtc, string Watermark, IReadOnlyDictionary<string, string?> Meta)
     {
         public string? ClinicId => Meta.GetValueOrDefault("clinicId");
+        public string? Generation => Meta.GetValueOrDefault("generation");
+        public string? GenerationReady => Meta.GetValueOrDefault("generationReady");
+
+        /// <summary>La generación anterior a un reemplazo de la nube (paso 8.9); no existe si nunca se reemplazó.</summary>
+        public string? GenerationPrevious => Meta.GetValueOrDefault("generationPrevious");
         public int? MinClientProtocol => int.TryParse(Meta.GetValueOrDefault("minClientProtocol"), out var p) ? p : null;
         public bool StampsRepaired => !string.IsNullOrEmpty(Meta.GetValueOrDefault("stampsRepairedAtUtc"));
     }
@@ -732,6 +782,9 @@ public class TursoSyncService
         }
         IdentityConflict = null;
 
+        // Paso 8.9: la generación de la nube (si otra PC la reemplazó con un respaldo, aquí no se escribe nada)
+        await CheckGenerationAsync(db, handshake, ct);
+
         await RepairLocalFutureStampsAsync(db, handshake.ServerNowUtc, ct);
         if (!handshake.StampsRepaired) await RepairCloudFutureStampsAsync(client, handshake.ServerNowUtc, ct);
     }
@@ -788,16 +841,20 @@ public class TursoSyncService
         {
             (Once("clinicId"), new object?[] { Guid.NewGuid().ToString() }),
             (AtLeast("protocol"), new object?[] { protocol }),
-            (AtLeast("minClientProtocol"), new object?[] { protocol }),
+            // Los equipos con el protocolo 2 siguen sincronizando; reemplazar la nube sube el mínimo (paso 8.9)
+            (AtLeast("minClientProtocol"), new object?[] { MinCompatibleProtocol.ToString(CultureInfo.InvariantCulture) }),
             (Always("manifest"), new object?[] { SyncContract.BuildSchemaJson(db.Model) }),
             (Once("generation"), new object?[] { Guid.NewGuid().ToString() }),
             ($"INSERT INTO {meta} (\"Key\", \"Value\") SELECT 'generationReady', \"Value\" FROM {meta} WHERE \"Key\" = 'generation' ON CONFLICT(\"Key\") DO NOTHING;", null),
             ($"INSERT INTO {meta} (\"Key\", \"Value\") VALUES ('fullUploadAtUtc', {ServerNowSql}) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\";", null),
-            ($"SELECT \"Value\" FROM {meta} WHERE \"Key\" = 'clinicId';", null)
+            ($"SELECT \"Value\" FROM {meta} WHERE \"Key\" = 'clinicId';", null),
+            (SyncSchema.GenerationSql, null)
         }, ct);
 
-        var clinicId = results[^1].Rows.FirstOrDefault()?["Value"]?.ToString();
+        var clinicId = results[^2].Rows.FirstOrDefault()?["Value"]?.ToString();
         if (!string.IsNullOrEmpty(clinicId)) DbMeta.Set(db, DbMeta.ClinicId, clinicId);
+        // La generación que se acaba de escribir (o la que ya tenía la nube) es la de esta base
+        if (results[^1].Rows.FirstOrDefault()?["generation"]?.ToString() is { Length: > 0 } generation) DbMeta.Set(db, DbMeta.Generation, generation);
         AppLogger.Info($"Turso: nube verificada; identidad {clinicId}.");
         return clinicId;
     }
@@ -852,6 +909,7 @@ public class TursoSyncService
             }
 
             DbMeta.Set(db, DbMeta.ClinicId, cloudClinicId);
+            if (handshake.Generation is { } generation && generation == handshake.GenerationReady) DbMeta.Set(db, DbMeta.Generation, generation);
             IdentityConflict = null;
             AppLogger.Info($"Turso: esta PC se unió a la nube {cloudClinicId} («Esta PC ya usaba esta nube»).");
             return (true, "✓ Esta PC ya usaba esta nube: la sincronización sigue normal.");
@@ -907,6 +965,11 @@ public class TursoSyncService
                 return (false, "Esta nube todavía no tiene identidad. Primero haga la «Sincronización completa» en la computadora " +
                                "que ya la usa; si la nube está vacía, esta PC puede sincronizar con ella sin unirse. No se cambió nada.");
             }
+            if (handshake.Generation != handshake.GenerationReady)
+            {
+                // Paso 8.9: nadie baja una nube a medio reemplazar
+                return (false, "Otra computadora está reemplazando la nube con un respaldo. Intente cuando termine. No se cambió nada.");
+            }
 
             // 2. Unirse exige una base intacta
             using var db = _contextFactory.CreateDbContext();
@@ -931,7 +994,7 @@ public class TursoSyncService
             }
 
             // 4–7. Borra sin lápidas, une la base y deja la bajada desde cero
-            await ClearForCloudDownloadAsync(db, cloudClinicId, replace, ct);
+            await ClearForCloudDownloadAsync(db, cloudClinicId, handshake.Generation, replace, ct);
             settings.LastPulledServerWatermark = null;
             _settingsService.SaveSettings(settings);
             IdentityConflict = null;
@@ -997,7 +1060,8 @@ public class TursoSyncService
     /// transacción: une la base (CloudJoined y clinicId), lleva el cursor de subida al Seq actual (lo que llegue de la nube
     /// nunca vuelve a subir), quita los cursores de bajada y pide la bajada completa sin omitir lo de este equipo.
     /// </summary>
-    private async Task ClearForCloudDownloadAsync(AppDbContext db, string cloudClinicId, bool replace, CancellationToken ct)
+    /// <param name="generation">La generación de la nube que se va a bajar (paso 8.9); queda como la de esta base.</param>
+    private async Task ClearForCloudDownloadAsync(AppDbContext db, string? cloudClinicId, string? generation, bool replace, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync($"INSERT OR IGNORE INTO {Q(SyncChangeLog.ApplyStateTable)} (\"Applying\") VALUES (1);", ct);
@@ -1016,8 +1080,12 @@ public class TursoSyncService
             .ToListAsync(ct)).First();
         await SyncChangeLog.SavePushCursorAsync(db, lastSeq, ct);
         await DbMeta.SetAsync(db, DbMeta.CloudJoined, "1", ct);
-        await DbMeta.SetAsync(db, DbMeta.ClinicId, cloudClinicId, ct);
+        if (cloudClinicId != null) await DbMeta.SetAsync(db, DbMeta.ClinicId, cloudClinicId, ct);
+        if (generation != null) await DbMeta.SetAsync(db, DbMeta.Generation, generation, ct);
+        else DbMeta.Remove(db, DbMeta.Generation);
         await DbMeta.SetAsync(db, DbMeta.CloudDownloadPending, "1", ct);
+        // Lo que había aquí ya no cuenta: tampoco un respaldo restaurado pendiente de decidir
+        DbMeta.Remove(db, DbMeta.RestoredWithCloud);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);
@@ -1245,7 +1313,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         var rejected = new List<(TableMap Map, Guid SyncId)>();
         foreach (var chunk in Chunk(groups, PushChunkSizeOverride ?? PushChunkSize))
         {
-            var results = await client.TransactionAsync(chunk.Select(s => (s.Sql, (object?[]?)s.Args)), ct);
+            // Cada lote termina leyendo la generación (paso 8.9): si otra PC reemplazó la nube, la cerca no dejó escribir
+            // nada y aquí se detiene sin avanzar el cursor
+            var results = await client.TransactionAsync(chunk.Select(s => (s.Sql, (object?[]?)s.Args)).Append((SyncSchema.GenerationSql, null)), ct);
+            EnsureSameGeneration(results[^1].Rows);
             for (int i = 0; i < chunk.Count; i++)
             {
                 applied += results[i].AffectedRows;
@@ -1399,6 +1470,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 args.Add(map.ClrType.Name);
                 args.Add(FormatGuid(entity.SyncId));
                 args.Add(FormatDate(entity.UpdatedAtUtc));
+                args.Add(_syncGeneration); // cerca de generación (paso 8.9)
 
                 if (owner == null)
                 {
@@ -1422,11 +1494,11 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             // La lápida y su DELETE, en el mismo lote
             var group = new List<PushStatement>
             {
-                new(SyncSchema.TombstoneUpsertSql, new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }, null, t.SyncId)
+                new(SyncSchema.TombstoneUpsertSql, new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId, _syncGeneration }, null, t.SyncId)
             };
             if (tablesByType.TryGetValue(t.EntityType, out var table))
             {
-                group.Add(new(SyncSchema.DeleteTombstonedRowSql(table), new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }, null, t.SyncId));
+                group.Add(new(SyncSchema.DeleteTombstonedRowSql(table), new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), _syncGeneration }, null, t.SyncId));
             }
             groups.Add(group);
         }
@@ -1646,6 +1718,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         var watermark = handshake.Watermark;
         if (string.IsNullOrWhiteSpace(watermark)) throw new TursoException("Turso no regresó su hora para la marca de agua.");
         if (!cloudChecked) await CheckCloudAsync(client, handshake, sent, received, ct);
+        else EnsureSameGeneration(handshake.Generation); // otra PC pudo reemplazar la nube entre la subida y la bajada
 
         var upTo = new PullCursor(watermark, string.Empty);
         var idleCursors = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1743,7 +1816,12 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             try
             {
                 var (sql, args) = PageQuery(table, from, deviceId, skipOwnRows, size);
-                return (await client.QueryAsync(sql, args, ct), size);
+                if (!_generationChecked) return (await client.QueryAsync(sql, args, ct), size);
+
+                // Cada página trae la generación (paso 8.9): si otra PC reemplazó la nube a media bajada, no se mezclan
+                var results = await client.QueryBatchAsync(new (string, object?[]?)[] { (sql, args), (SyncSchema.GenerationSql, null) }, ct);
+                EnsureSameGeneration(results[1]);
+                return (results[0], size);
             }
             catch (TursoException ex) when (IsTooLargeOrSlow(ex) && size > MinPullPageSize)
             {
@@ -1953,11 +2031,11 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     /// (<see cref="SyncRules.ServerRowAppliesAfterReject"/>).</param>
     private async Task<int> ApplyPageAsync(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
         ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct, IReadOnlyDictionary<string, string>? cursor = null, bool serverRowAfterReject = false,
-        ISet<string>? newColumns = null)
+        ISet<string>? newColumns = null, bool force = false)
     {
         var method = typeof(TursoSyncService).GetMethod(nameof(ApplyPageGenericAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(map.ClrType);
-        return await (Task<int>)method.Invoke(this, new object?[] { map, rows, syncIdMaps, deadPrincipals, cursor, serverRowAfterReject, newColumns, ct })!;
+        return await (Task<int>)method.Invoke(this, new object?[] { map, rows, syncIdMaps, deadPrincipals, cursor, serverRowAfterReject, newColumns, force, ct })!;
     }
 
     /// <summary>
@@ -1969,7 +2047,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     /// </summary>
     private async Task<int> ApplyPageGenericAsync<T>(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
         ISet<(Type, Guid)>? deadPrincipals, IReadOnlyDictionary<string, string>? cursor, bool serverRowAfterReject, ISet<string>? newColumns,
-        CancellationToken ct)
+        bool force, CancellationToken ct)
         where T : class, ISyncEntity, new()
     {
         using var db = _contextFactory.CreateDbContext();
@@ -1999,9 +2077,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
 
             // Last-Write-Wins: la versión local igual o más nueva se conserva (en el desempate, solo la más nueva), y lo
             // apartado de esta fila ya no hace falta
-            bool remoteWins = serverRowAfterReject
+            // «Volver a aplicar» (paso 8.9, force): la fila guardada se aplica sin importar la marca; después se le pone una nueva
+            bool remoteWins = force || (serverRowAfterReject
                 ? SyncRules.ServerRowAppliesAfterReject(local?.UpdatedAtUtc, remoteUpdated)
-                : SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated);
+                : SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated));
             bool onlyNewColumns = false;
             if (!remoteWins && newColumns != null && local != null)
             {

@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-11 (TPVC v1.25.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-11 (TPVC v1.26.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,15 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.26.0 (paso 8.9: restaurar con la nube activa)
+
+- [ ] En la PC principal, con la tablet sincronizando: guardar un respaldo, registrar una consulta en la tablet y sincronizar. En la PC, *Respaldos y datos → Volver a este* (el respaldo de antes): aparece «La nube sigue con los datos de antes del respaldo» y *Nube y dispositivos* dice que no se sincroniza.
+- [ ] *Revisar qué se perdería…* menciona la consulta de la tablet. *Reemplazar la nube con este respaldo* (CONFIRMAR): la PC termina con el reporte limpio y ofrece *Volver a aplicar*; en la carpeta de respaldos queda `nube-antes-de-reemplazar-….db`.
+- [ ] Con la tablet a medio capturar algo sin sincronizar durante el reemplazo: al sincronizar dice que espera; al terminar la PC, vuelve a bajar todo (con respaldo antes), ofrece *Volver a aplicar 1 cambio* y, al aplicarlo, sube.
+- [ ] Desconectar el internet de la PC a la mitad del reemplazo: la tablet espera y un equipo nuevo no se puede unir; al volver el internet, *Terminar el reemplazo* lo completa.
+- [ ] *Desconectar esta PC de la nube* después de restaurar: la nube y la tablet siguen igual.
+- [ ] Para Kotlin: protocolo 3. Cada upsert, lápida y `DELETE` de la subida lleva la cerca de generación y cada petición termina leyendo `_tpvc_meta.generation` (reglas de `contracts/sync/schema.json` y vectores de `contracts/golden/lww.json`); al ver otra generación: guardar lo pendiente, esperar a `generationReady`, vaciar, bajar todo y ofrecer «Volver a aplicar» (K2 y K5). Una tablet con protocolo 2 se detiene con «actualice TPVC» después de un reemplazo.
 
 ### v1.25.0 (laboratorio: orden de estudios)
 
