@@ -5,8 +5,9 @@
   "now": null,
   "contract": 2,
   "notes": [
-    "encode: el valor (en 'value', como texto invariante; null = nulo) se manda a Turso como el argumento Hrana de 'expected'. Un entero, booleano o enum como número JSON hace que Turso rechace la petición con HTTP 400.",
-    "decode: el valor Hrana de una fila se guarda en una columna de 'clrType' (con '?' acepta nulo); 'expected' es su forma canónica: entero en base 10, booleano true/false, decimal con su escala, fecha yyyy-MM-dd HH:mm:ss.fffffff, GUID en minúsculas, enum por su nombre, null = nulo.",
+    "encode: el valor (en 'value', como texto invariante; un BLOB en hexadecimal; null = nulo) se manda a Turso como el argumento Hrana de 'expected'. Un entero, booleano o enum como número JSON hace que Turso rechace la petición con HTTP 400.",
+    "decode: el valor Hrana de una fila se guarda en una columna de 'clrType' (con '?' acepta nulo); 'expected' es su forma canónica: entero en base 10, booleano true/false, decimal con su escala, fecha yyyy-MM-dd HH:mm:ss.fffffff, GUID en minúsculas, enum por su nombre, BLOB en hexadecimal en minúsculas ('' = BLOB vacío), null = nulo.",
+    "BLOB: {\"type\":\"blob\",\"base64\":…}, sin 'value'. Turso manda el base64 estándar (con + y /) sin el relleno '=' y acepta los argumentos con o sin él (libSQL, libsql-hrana/src/proto.rs). Un decodificador que exige el relleno, como Convert.FromBase64String, rechaza lo que manda Turso.",
     "Los nombres de 'clrType' son los de contracts/sync/schema.json."
   ],
   "cases": [
@@ -227,6 +228,30 @@
       }
     },
     {
+      "name": "codificar · BLOB: sale con relleno '=' (Turso acepta con y sin él)",
+      "input": {
+        "direction": "encode",
+        "clrType": "byte[]",
+        "value": "89504e47"
+      },
+      "expected": {
+        "type": "blob",
+        "base64": "iVBORw=="
+      }
+    },
+    {
+      "name": "codificar · BLOB vacío",
+      "input": {
+        "direction": "encode",
+        "clrType": "byte[]",
+        "value": ""
+      },
+      "expected": {
+        "type": "blob",
+        "base64": ""
+      }
+    },
+    {
       "name": "codificar · texto nulo",
       "input": {
         "direction": "encode",
@@ -417,6 +442,66 @@
       "expected": "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
     },
     {
+      "name": "decodificar · BLOB sin relleno, como lo manda Turso (faltan dos '=')",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "blob",
+          "base64": "iVBORw"
+        }
+      },
+      "expected": "89504e47"
+    },
+    {
+      "name": "decodificar · BLOB sin relleno (falta un '=')",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "blob",
+          "base64": "iVBORw0"
+        }
+      },
+      "expected": "89504e470d"
+    },
+    {
+      "name": "decodificar · BLOB con relleno (lectura tolerante)",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "blob",
+          "base64": "iVBORw=="
+        }
+      },
+      "expected": "89504e47"
+    },
+    {
+      "name": "decodificar · BLOB con + y / (base64 estándar, no el de URL)",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "blob",
+          "base64": "++//"
+        }
+      },
+      "expected": "fbefff"
+    },
+    {
+      "name": "decodificar · BLOB vacío: no es nulo",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "blob",
+          "base64": ""
+        }
+      },
+      "expected": ""
+    },
+    {
       "name": "decodificar · nulo en texto obligatorio",
       "input": {
         "direction": "decode",
@@ -472,6 +557,17 @@
       "expected": "0001-01-01 00:00:00.0000000"
     },
     {
+      "name": "decodificar · nulo en BLOB obligatorio",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]",
+        "hrana": {
+          "type": "null"
+        }
+      },
+      "expected": ""
+    },
+    {
       "name": "decodificar · nulo en texto opcional",
       "input": {
         "direction": "decode",
@@ -487,6 +583,17 @@
       "input": {
         "direction": "decode",
         "clrType": "DateTime?",
+        "hrana": {
+          "type": "null"
+        }
+      },
+      "expected": null
+    },
+    {
+      "name": "decodificar · nulo en BLOB opcional",
+      "input": {
+        "direction": "decode",
+        "clrType": "byte[]?",
         "hrana": {
           "type": "null"
         }

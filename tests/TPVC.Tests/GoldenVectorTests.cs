@@ -87,6 +87,8 @@ public class GoldenVectorTests
         ("GUID en mayúsculas sale en minúsculas", "Guid", "3F2504E0-4F89-11D3-9A0C-0305E82C3301"),
         ("texto con acentos, ñ y símbolos", "string", "Señora María José Peña — 50 % ✓"),
         ("texto vacío", "string", ""),
+        ("BLOB: sale con relleno '=' (Turso acepta con y sin él)", "byte[]", "89504e47"),
+        ("BLOB vacío", "byte[]", ""),
         ("texto nulo", "string?", null),
         ("entero opcional nulo", "int?", null),
     };
@@ -107,13 +109,20 @@ public class GoldenVectorTests
         ("fecha con T y sin fracción", "DateTime", """{"type":"text","value":"2026-10-10T15:04:05"}"""),
         ("fecha sin hora", "DateTime", """{"type":"text","value":"2026-10-10"}"""),
         ("GUID en mayúsculas", "Guid", """{"type":"text","value":"3F2504E0-4F89-11D3-9A0C-0305E82C3301"}"""),
+        ("BLOB sin relleno, como lo manda Turso (faltan dos '=')", "byte[]", """{"type":"blob","base64":"iVBORw"}"""),
+        ("BLOB sin relleno (falta un '=')", "byte[]", """{"type":"blob","base64":"iVBORw0"}"""),
+        ("BLOB con relleno (lectura tolerante)", "byte[]", """{"type":"blob","base64":"iVBORw=="}"""),
+        ("BLOB con + y / (base64 estándar, no el de URL)", "byte[]", """{"type":"blob","base64":"++//"}"""),
+        ("BLOB vacío: no es nulo", "byte[]", """{"type":"blob","base64":""}"""),
         ("nulo en texto obligatorio", "string", """{"type":"null"}"""),
         ("nulo en entero obligatorio", "int", """{"type":"null"}"""),
         ("nulo en booleano obligatorio", "bool", """{"type":"null"}"""),
         ("nulo en decimal obligatorio", "decimal", """{"type":"null"}"""),
         ("nulo en fecha obligatoria", "DateTime", """{"type":"null"}"""),
+        ("nulo en BLOB obligatorio", "byte[]", """{"type":"null"}"""),
         ("nulo en texto opcional", "string?", """{"type":"null"}"""),
         ("nulo en fecha opcional", "DateTime?", """{"type":"null"}"""),
+        ("nulo en BLOB opcional", "byte[]?", """{"type":"null"}"""),
     };
 
     [TestMethod]
@@ -134,8 +143,9 @@ public class GoldenVectorTests
         }
 
         CheckOrWrite("contracts/golden/values.json", VectorFile("hrana-values", cases,
-            "encode: el valor (en 'value', como texto invariante; null = nulo) se manda a Turso como el argumento Hrana de 'expected'. Un entero, booleano o enum como número JSON hace que Turso rechace la petición con HTTP 400.",
-            "decode: el valor Hrana de una fila se guarda en una columna de 'clrType' (con '?' acepta nulo); 'expected' es su forma canónica: entero en base 10, booleano true/false, decimal con su escala, fecha yyyy-MM-dd HH:mm:ss.fffffff, GUID en minúsculas, enum por su nombre, null = nulo.",
+            "encode: el valor (en 'value', como texto invariante; un BLOB en hexadecimal; null = nulo) se manda a Turso como el argumento Hrana de 'expected'. Un entero, booleano o enum como número JSON hace que Turso rechace la petición con HTTP 400.",
+            "decode: el valor Hrana de una fila se guarda en una columna de 'clrType' (con '?' acepta nulo); 'expected' es su forma canónica: entero en base 10, booleano true/false, decimal con su escala, fecha yyyy-MM-dd HH:mm:ss.fffffff, GUID en minúsculas, enum por su nombre, BLOB en hexadecimal en minúsculas ('' = BLOB vacío), null = nulo.",
+            "BLOB: {\"type\":\"blob\",\"base64\":…}, sin 'value'. Turso manda el base64 estándar (con + y /) sin el relleno '=' y acepta los argumentos con o sin él (libSQL, libsql-hrana/src/proto.rs). Un decodificador que exige el relleno, como Convert.FromBase64String, rechaza lo que manda Turso.",
             "Los nombres de 'clrType' son los de contracts/sync/schema.json."));
     }
 
@@ -442,6 +452,7 @@ public class GoldenVectorTests
             "DateTime" => typeof(DateTime),
             "Guid" => typeof(Guid),
             "string" => typeof(string),
+            "byte[]" => typeof(byte[]),
             "enum MovementType" => typeof(MovementType),
             _ => throw new ArgumentException($"Tipo sin resolver: {clrType}")
         };
@@ -463,6 +474,7 @@ public class GoldenVectorTests
             _ when type == typeof(decimal) => decimal.Parse(text, c),
             _ when type == typeof(DateTime) => DateTime.ParseExact(text, TursoSyncFormats.DateTimeFormat, c),
             _ when type == typeof(Guid) => Guid.Parse(text),
+            _ when type == typeof(byte[]) => Convert.FromHexString(text),
             _ when type.IsEnum => Enum.Parse(type, text),
             _ => text
         };
@@ -477,6 +489,7 @@ public class GoldenVectorTests
         decimal m => m.ToString(CultureInfo.InvariantCulture),
         double d => d.ToString("R", CultureInfo.InvariantCulture),
         Guid g => SyncIds.Format(g),
+        byte[] bytes => Convert.ToHexStringLower(bytes),
         Enum e => e.ToString(),
         IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
         _ => value.ToString()

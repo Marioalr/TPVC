@@ -208,6 +208,7 @@ internal sealed class SyncSchema
         var t = Nullable.GetUnderlyingType(clrType) ?? clrType;
         if (t == typeof(bool) || t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte) || t.IsEnum) return "INTEGER";
         if (t == typeof(double) || t == typeof(float)) return "REAL";
+        if (t == typeof(byte[])) return "BLOB";
         return "TEXT"; // string, decimal (exacto), DateTime, Guid
     }
 
