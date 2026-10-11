@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.29.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.12: el membrete en la nube
+* El escudo y la imagen del encabezado de la receta llegan ahora a los demás equipos con la nube: otra computadora (y, más adelante, la tablet) imprime la receta con las mismas imágenes. Antes cada computadora tenía las suyas.
+* Cada imagen sube una sola vez y los demás equipos la bajan solo cuando cambia, así que una sincronización normal no gasta nada de más. Una imagen grande viaja en partes y se revisa al llegar; si llegara dañada, no se usa.
+* Cambiar o quitar una imagen en *Médico y consultorio* también la cambia o la quita en los demás equipos. Una computadora nueva que se une a la nube recibe las imágenes y no se las quita a las demás aunque ella no tenga.
+* Turso ya se comprobó con imágenes (V18): guarda los bytes exactos y la PC lee lo que responde.
+* 524 pruebas.
+
 ## [1.28.0] - 2026-10-11
 
 ### Cambiado — Fase 8, paso 8.11: lo que se imprime, listo para la app de Android
