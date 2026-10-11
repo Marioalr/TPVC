@@ -84,7 +84,7 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
-    public async Task TheLinkQr_NeedsAVerifiedCloud_CarriesTheUrlAndToken_AndClosesAfterTwoMinutes()
+    public async Task TheLinkQr_NeedsAVerifiedCloud_AndCarriesTheUrlAndToken()
     {
         var pc = CreateDevice("pc", seed: true);
         var (none, problem) = await pc.Sync.GetLinkDataAsync();
@@ -97,8 +97,16 @@ public partial class TursoSyncEndToEndTests
         Assert.AreEqual(new DeviceLinkData(Url, "test-token", "Consultorio Médico Peña"), data);
         var png = DeviceLinkCode.QrPng(DeviceLinkCode.Encode(data!));
         CollectionAssert.AreEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png.Take(4).ToArray(), "Un PNG");
+    }
 
-        // La pantalla: el QR se cierra solo a los 2 minutos
+    [TestMethod]
+    [TestCategory("Windows")]
+    public async Task TheLinkQrOnScreen_ClosesItselfAfterTwoMinutes()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success);
+
+        // La pantalla (WPF, hilo STA): el QR se cierra solo a los 2 minutos
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
         Exception? failure = null;
         var thread = new Thread(() =>

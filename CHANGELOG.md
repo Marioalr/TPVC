@@ -9,7 +9,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * Un equipo nuevo que leyó el código aparece en **Equipos vinculados** pidiendo entrar, con 6 caracteres para comprobar que es el que el médico tiene en la mano. **Vincular como tablet** o **Vincular como celular** le da su código (T1, C1…); **Rechazar** lo deja fuera. Hasta que se aprueba no baja ningún dato.
 * Si Turso rechaza el token (porque se anularon), el aviso dice que se pegue uno nuevo y que no se pierde nada.
 * La app de Android que usa todo esto llega después.
-* 552 pruebas.
+* 553 pruebas.
 
 ## [1.31.0] - 2026-10-11
 
