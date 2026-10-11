@@ -83,6 +83,8 @@ public partial class TursoSyncEndToEndTests
         public string Apply(string text)
         {
             if (text == TursoSyncService.AppVersionText) return "<appVersion>";
+            // El modelo con que la PC se registra en DeviceRegistry es la versión del sistema: cambia de computadora en computadora
+            if (text == System.Runtime.InteropServices.RuntimeInformation.OSDescription) return "<osDescription>";
             text = GuidText.Replace(text, m => m.Value.StartsWith("10000000-0000-4000-8000-", StringComparison.OrdinalIgnoreCase)
                 ? m.Value.ToLowerInvariant()
                 : Number(m.Value, "id"));
@@ -197,7 +199,7 @@ public partial class TursoSyncEndToEndTests
             "Un equipo nuevo se une a una nube que ya tiene identidad (clinicId) y baja todo: «Unirse» lee la identidad, luego la primera sincronización revisa el esquema (_tpvc_meta.schema), escribe su latido y baja tabla por tabla, sin omitir sus propias filas, en el orden de schema.json.",
             "La sonda del esquema (CREATE TABLE IF NOT EXISTS _tpvc_meta y la huella) y el registro en DeviceRegistry son de la PC: Kotlin no corre DDL ni se registra solo (lo aprueba la PC, paso 8.14). Kotlin repite la lectura de la identidad, el latido y las páginas.",
             "Cada página: \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT n, con el cursor de la última fila aplicada; una página que no se llena termina la tabla.",
-            "Marcadores: <time> = una hora que cambia en cada corrida, <id:N> = un GUID al azar (clinicId, generación), <nonce:N> = el InstanceNonce, <appVersion> = la versión de TPVC. Los SyncId 10000000-0000-4000-8000-… son de los datos de ejemplo."));
+            "Marcadores: <time> = una hora que cambia en cada corrida, <id:N> = un GUID al azar (clinicId, generación), <nonce:N> = el InstanceNonce, <appVersion> = la versión de TPVC, <osDescription> = el sistema de la computadora que grabó. Los SyncId 10000000-0000-4000-8000-… son de los datos de ejemplo."));
 
         // La PC cambia un teléfono y borra la cita: la tablet lo baja en una sola petición
         using (var db = pc.Factory.CreateDbContext())
