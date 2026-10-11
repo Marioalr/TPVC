@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-11 (TPVC v1.31.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0), 8.12b (v1.30.0) y 8.13 (v1.31.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-11 (TPVC v1.33.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0), 8.12b (v1.30.0), 8.13 (v1.31.0), 8.14 en la PC (v1.32.0) y 8.15 en la PC (v1.33.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -281,7 +281,7 @@ Lo que ve el médico:
 | Revocación | No hay revocación por token. `turso db tokens invalidate` rota las llaves de **todo el grupo**, con una breve interrupción. | La base del consultorio va sola en su grupo. "Cortar acceso ahora" es esta rotación (§4.7). |
 | Token de la API de la plataforma | Dejaría a la PC crear y rotar tokens (nivel A). | La cuenta no lo tiene (§9). |
 | JWKS propio | En beta, solo con Clerk y Auth0. | No se usa: pide un servidor. |
-| Plan gratuito | Sin lista de IP permitidas. | La bitácora de auditoría está por confirmar (V11). |
+| Plan gratuito | Sin lista de IP permitidas. | Sin bitácora de auditoría (V11): existe desde el plan Developer (US$4.99, 3 días) y solo anota acciones de la cuenta, no lecturas. |
 
 **Por comprobar en una base de prueba real de Turso.** Siempre en un grupo o una cuenta de prueba, nunca en el grupo del consultorio: una rotación ahí corta al médico.
 
@@ -387,7 +387,7 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 
 **Perdí este equipo** (en *Equipos vinculados*):
 
-1. **Revocar** con motivo "perdido": la PC pone `RevokedAtUtc`. Si el equipo se conecta antes de la rotación y lee su fila, borra su base, su credencial y sus borradores sin subir nada.
+1. **Revocar** con motivo "perdido": la PC pone `RevokedAtUtc`. Si el equipo Android se conecta antes de la rotación y lee su fila, borra su base, su credencial y sus borradores sin subir nada. Una PC marcada como perdida no borra nada (v1.33.0).
 2. **"Cortar acceso ahora"** (marcado por defecto). Sin token de la API la PC no puede rotar sola, así que guía al médico:
    - rotar los tokens en el panel de Turso o con `turso db tokens invalidate` (anula **todos** los de la base y los del grupo, también el de la PC), con una breve interrupción (V4);
    - crear un token nuevo y pegarlo en la PC, que sincroniza en ese momento;
@@ -395,8 +395,9 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 3. **Reglas ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación):
    - con cambios pendientes, el equipo se bloquea y los conserva hasta volver a vincular;
    - sin nada pendiente (casi siempre el celular), se borra solo tras dos 401 con 10 min de diferencia.
+   - un HTTP 400 con "JWT" en el cuerpo es un token mal copiado o incompleto (V3), no una rotación: pide pegarlo otra vez y no cuenta para borrarse.
 4. **Límites:**
-   - Si el plan gratuito no tiene bitácora de auditoría (V11), hay que suponer que el equipo perdido pudo leer todo hasta la rotación.
+   - El plan gratuito no tiene bitácora de auditoría (V11), y la de los planes de pago solo anota acciones de la cuenta (crear tokens o bases), no quién leyó datos: hay que suponer que el equipo perdido pudo leer todo hasta la rotación. Lo único que queda es su última sincronización en *Equipos vinculados* (su latido).
    - Se recomienda borrarlo también con "Encontrar mi dispositivo".
    - Sin rotar, el equipo perdido conserva el acceso: no hay otro límite.
 5. **Si se pierde la PC:** rotar desde el panel de Turso, instalar la PC nueva con "Recuperar desde la nube" (8.8) y el token nuevo, marcarla como "Esta PC reemplaza a la principal" (8.10) y pegar el token nuevo en la tablet y el celular.
@@ -830,7 +831,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - **Grabaciones de quien lee.** El motor de la PC hace de tablet: una PC sube unos datos de ejemplo con `SyncId` fijos (`10000000-0000-4000-8000-…`) y se graba lo que hace el equipo que lee. Seis escenarios: primera descarga, incremental, empates en la llave, cambio de generación, `BLOCKED` y 401 (`TursoSyncEndToEndTests.Hrana.cs`). La sonda del esquema y el registro en `DeviceRegistry` que aparecen son de la PC; las notas de cada archivo lo dicen.
   - **Marcadores sin número para la hora** (`<time>`): dos marcas pueden coincidir o no según la corrida, y numerarlas haría cambiar el archivo. Los GUID al azar sí llevan número (`<id:N>`), porque nunca coinciden. Cada fila de los datos de ejemplo se guarda con su propia marca, y los `SyncId` crecen en el orden de subida: así el orden de las páginas es el mismo aunque dos filas empaten en `SyncedAtUtc`.
   - **`statements.json` en vez de SQL suelto.** Cada instrucción de lectura con sus argumentos y cuándo se usa, sacada de las constantes de la PC (`HandshakeSql`, `PageQuery`, `HeartbeatSql`, `RegistrationQueries`, `AssetMetaSql`…). La prueba las corre en el simulador, que rechaza un `SCAN` de una tabla sincronizada.
-  - **401 desde ya.** El mapa de tokens del simulador (`AcceptedTokens`) se adelantó de 8.14 para grabar el 401; el cuerpo es del simulador hasta tener V3.
+  - **401 desde ya.** El mapa de tokens del simulador (`AcceptedTokens`) se adelantó de 8.14 para grabar el 401. Desde V3 (2026-10-11) el cuerpo es el de Turso.
   - **El servidor HTTP es `HttpListener`** en `127.0.0.1` (no Kestrel ni ASP.NET), con `GET /health` y `GET /__stop`, y antes de escuchar siembra una nube con los datos de demostración y su «Sincronización completa». Funciona sin permisos de administrador en Windows y en Linux. Las variables están en `docs/FAKE_HRANA_SPEC.md`.
 - **Cambia:**
   - `contracts/hrana/*.jsonl`: intercambios grabados por `FakeHranaServer`, con los valores generados reemplazados por marcadores. Primera sincronización, incremental, descarga completa por tabla, empates en la llave, cambio de generación, `BLOCKED` y 401.
@@ -841,8 +842,15 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** ninguno.
 
 #### 8.14 · Vincular la tablet y el celular con la URL y el token
+- **Hecho en la PC en v1.32.0 (2026-10-11).** Decisiones al programarlo:
+  - **El QR lleva el token de la PC.** Es el mismo `full-access` (Turso no distingue tokens ni anula uno solo); otro token creado aparte no daría más protección. Formato `tpvc-link:1:` + base64url del JSON `{"u","t","n"}` (`Services/Pairing/DeviceLinkCode.cs`, vector `contracts/golden/link-qr.json`). Corrección de errores L y 300 px en pantalla: un token real (~350 caracteres) da ≤ 100 módulos, 3 px cada uno. Se cierra solo a los 2 minutos y la imagen se descarta; nunca va al portapapeles ni al registro.
+  - **Solo con la nube verificada** (`clinicId` en esta base, después de la «Sincronización completa»), como «Quitar» y «Esta PC reemplaza a la principal».
+  - **Aprobar es escribir la fila de `DeviceRegistry`** con el rol que elige el médico (el equipo pide uno en su latido, pero puede quedar del otro) y el siguiente código de esa letra, en una transacción que lee el código asignado. Si otra PC ya lo aprobó, no cambia nada.
+  - **Rechazar deja una fila ya revocada con código X** (`X1`, `X2`…, motivo `rechazado`): los códigos T y C son de los folios, y así un rechazo no los gasta. El equipo lo lee y no baja nada. Rechazar no corta el acceso a la nube: el mensaje pide anular los tokens si no se reconoce el equipo (8.15).
+  - **Un 401 se traduce** a "Turso rechazó el token (HTTP 401): se anuló o no es de esta base…" y no borra nada. **V3 (2026-10-11)** mostró que a un token que no es un JWT (mal copiado o incompleto) Turso responde HTTP 400 `JWT error: InvalidToken`: TPVC lo trata igual que un 401 (mismo `ErrorCode`, "parece incompleto o mal copiado"), y Kotlin debe hacer lo mismo. El cuerpo real del 401 está en el simulador y en `contracts/hrana/unauthorized.jsonl`.
+  - **QRCoder 1.8.0** (MIT): sin dependencias de dibujo en .NET 10; genera el PNG directo.
 - **Decisión del médico (2026-10-11):** en lugar del QR por la red local (§4.4, descartada), cada equipo recibe la URL y un token como la PC. Se cae el servidor temporal en la PC, el Firewall y el protocolo cifrado que habría que mantener igual en C# y en Kotlin. Turso no deja anular un solo token: un equipo perdido se corta rotando todos y pegando el nuevo en los que quedan (8.15).
-- **Antes:** [T] V3 (§4.2).
+- **Antes:** [T] V3 (§4.2), hecha el 2026-10-11.
 - **Cambia:**
   - En la tablet y el celular: pegar la URL y el token (copiados del panel de Turso) o escanear el QR de la PC. Se guardan envueltos con el Android Keystore, y el equipo se niega si no tiene bloqueo de pantalla seguro.
   - En la PC, *Equipos vinculados › Mostrar QR para la tablet o el celular*: la URL y el token de la PC (QRCoder, licencia MIT), con el aviso de no fotografiarlo ni compartirlo. Se cierra solo a los 2 minutos.
@@ -859,7 +867,12 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.15 · Quitar, equipo perdido y rotación
-- **Antes:** [T] V4 y V11.
+- **Hecho en la PC en v1.33.0 (2026-10-11).** Decisiones al programarlo:
+  - **«Perdí este equipo»** va junto a *Quitar*, en los mismos equipos (no en esta PC, ni en la principal, ni en uno que espera la aprobación). Revoca con el motivo `perdido` y muestra los pasos para anular los tokens en *Equipos vinculados*, con *Abrir el panel de Turso*. Sin V4, el texto dice que los equipos "dejan de sincronizar hasta recibir el nuevo", sin dar una duración.
+  - **Una PC marcada como perdida no borra nada.** Borrarse sin subir es para la tablet y el celular; en una PC, una revocación por error dejaría al consultorio sin datos. El corte de verdad es anular los tokens; *Equipos vinculados* de esa PC dice que se marcó como perdida.
+  - **El 401 en la PC** (y el 400 de un token mal copiado, V3): no borra ni aparta nada; la sincronización automática deja de intentar mientras el token sea el mismo (`TursoSyncPauseReason.TokenRejected`) y el aviso pide pegar otro. Al guardar otro token la pausa se quita sola. Del token solo se guarda una huella (SHA-256 truncado, `TursoSettings.RejectedTokenHash`/`WorkingTokenHash`).
+  - **La rotación se anota en la nube**, no en cada PC: `_tpvc_meta.tokensRotatedAtUtc`, con la hora de la nube, lo escribe la primera sincronización con otro token después de que Turso rechazó el que funcionaba (o después de «Perdí este equipo»). Un token que nunca funcionó no cuenta. Para no anotar dos veces la misma rotación, un equipo no mueve una marca posterior a su última sincronización buena con el token anulado. La lista marca "Pegue el token nuevo…" en los equipos con `LastSeenUtc` anterior a la marca. Un equipo que recibió el token nuevo antes que la PC aparece así hasta su siguiente latido.
+- **Antes:** [T] V4. V11 se resolvió el 2026-10-11: sin bitácora en el plan gratuito (§4.7).
 - **Cambia:**
   - *Quitar* con aviso de cambios pendientes; el equipo sube lo pendiente antes de borrarse, o lo exporta.
   - "Perdí este equipo": revocar en `DeviceRegistry` y "Cortar acceso ahora" guiado (§4.7): rotar en el panel de Turso (anula todos los tokens), pegar el nuevo en la PC y en los demás equipos. Estado "Pegue el token nuevo" en la lista.
@@ -877,7 +890,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 ### Etapa 3 · Datos correctos con varios equipos que escriben
 
 #### 8.16 · Folios consecutivos desde Turso, con letra sin conexión (A3)
-- **Antes:** [T] V16.
+- **Antes:** [T] V16, hecha el 2026-10-11: la instrucción atómica sirve (40 peticiones a la vez, 40 números distintos sin huecos).
 - **Cambia:**
   - Tabla `FolioCounters` (§2.3), creada por la PC. La PC siembra cada serie con el mayor número que ya existe al activar la nube y después de cada "Sincronización completa" (`… DO UPDATE SET LastNumber = max(LastNumber, excluded.LastNumber)`). Un número tecleado a mano mayor que el contador lo sube igual.
   - Una `FolioFactory(código, reloj, contador, existentes, último guardado)` pura reemplaza todos los puntos que generan folios: `InventoryService` 626, 1181 y 1334; `ActiveConsultation.cs:39`; `ConsultationViewModel.cs:365` y 462; `DataImportService.cs:817` y 888; `PatientFormViewModel.cs:593`.

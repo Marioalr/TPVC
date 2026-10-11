@@ -62,7 +62,7 @@ internal sealed record FakeRecordedRequest(int Number, IReadOnlyList<FakeRecorde
 /// </list>
 /// Desde el paso 8.13 también graba cada intercambio (<see cref="RecordTranscript"/>, para contracts/hrana) y rechaza
 /// con 401 un token que no está en <see cref="AcceptedTokens"/>. Qué copia de Turso y qué no: docs/FAKE_HRANA_SPEC.md. Lo que
-/// todavía no se comprobó en Turso real (V3, V7) está marcado donde se usa.
+/// todavía no se comprobó en Turso real (V7) está marcado donde se usa.
 /// </summary>
 internal sealed class FakeHranaServer : HttpMessageHandler
 {
@@ -223,16 +223,23 @@ internal sealed class FakeHranaServer : HttpMessageHandler
                && auth.Parameter != null && AcceptedTokens.Contains(auth.Parameter);
     }
 
-    /// <summary>Un token desconocido o anulado. V3: falta ver el cuerpo exacto que manda Turso; el estado es 401.</summary>
+    /// <summary>
+    /// Un token anulado o de otra base: HTTP 401 con el cuerpo que manda Turso (V3, 2026-10-11). A un token que ni siquiera
+    /// es un JWT Turso responde 400 "JWT error: InvalidToken"; eso no se simula (los tokens de las pruebas no son JWT).
+    /// </summary>
     private HttpResponseMessage Unauthorized()
     {
         RequestCount++;
         Record(RequestCount, new List<FakeRecordedStatement>(), HttpStatusCode.Unauthorized);
         return new HttpResponseMessage(HttpStatusCode.Unauthorized)
         {
-            Content = new StringContent("{\"error\":\"Unauthorized: the token is not valid (simulado, V3)\"}", Encoding.UTF8, "application/json")
+            Content = new StringContent(UnauthorizedBody, Encoding.UTF8, "application/json")
         };
     }
+
+    /// <summary>El cuerpo del 401 de Turso, tal cual (V3).</summary>
+    public const string UnauthorizedBody =
+        "{\"error\":\"Unauthorized: `unauthorized access attempt on database: invalid JWT token: can't be decoded with any of the existing keys`\"}";
 
     private HttpResponseMessage Process(string text)
     {

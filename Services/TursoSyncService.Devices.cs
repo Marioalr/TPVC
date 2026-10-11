@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using TPVC.Data;
 using TPVC.Models;
+using TPVC.Services.Pairing;
 
 namespace TPVC.Services;
 
@@ -26,6 +27,34 @@ public partial class TursoSyncService
 
     /// <summary>Motivo de la revocación de la PC principal anterior («Esta PC reemplaza a la principal»).</summary>
     public const string RevokedReplacedReason = "reemplazada";
+
+    /// <summary>
+    /// Motivo de un equipo nuevo que la PC no aprobó (paso 8.14). Su fila lleva un código X (X1, X2…): los códigos T y C son
+    /// para los folios de los equipos vinculados.
+    /// </summary>
+    public const string RevokedRejectedReason = "rechazado";
+
+    public const char RejectedCodeLetter = 'X';
+
+    /// <summary>
+    /// Motivo de «Perdí este equipo» (paso 8.15). El equipo Android que lo lee borra su base, su credencial y sus borradores
+    /// sin subir nada; una PC no se borra. El corte de verdad es anular los tokens.
+    /// </summary>
+    public const string RevokedLostReason = "perdido";
+
+    /// <summary>
+    /// La clave de _tpvc_meta con la hora de la nube en que una PC sincronizó por primera vez con un token nuevo después de
+    /// que se anularon (paso 8.15). Un equipo que no se ha conectado desde entonces necesita el token nuevo.
+    /// </summary>
+    public const string TokensRotatedKey = "tokensRotatedAtUtc";
+
+    /// <summary>
+    /// Anota la rotación, salvo que la nube ya tenga una marca posterior a la última sincronización buena con el token
+    /// anulado (?): esa es la misma rotación, anotada por otro equipo, y moverla haría pedir el token a los que ya lo tienen.
+    /// </summary>
+    internal static readonly string TokensRotatedSql =
+        $"INSERT INTO {Q(MetaTable)} (\"Key\", \"Value\") VALUES ('{TokensRotatedKey}', {ServerNowSql}) " +
+        $"ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\" WHERE {Q(MetaTable)}.\"Value\" < ?;";
 
     /// <summary>La clave de _tpvc_meta con el DeviceId de la PC principal.</summary>
     public const string PrimaryDeviceKey = "primaryDeviceId";
@@ -352,7 +381,22 @@ public partial class TursoSyncService
     /// fila (una PC anterior a v1.27.0) la recibe ya quitada, con el siguiente código de su letra. No se quita a esta PC
     /// ni a la principal.
     /// </summary>
-    public async Task<(bool Ok, string Message)> RemoveDeviceAsync(LinkedDevice device, CancellationToken ct = default)
+    public Task<(bool Ok, string Message)> RemoveDeviceAsync(LinkedDevice device, CancellationToken ct = default) =>
+        RevokeDeviceAsync(device, RevokedRemovedReason, $"✓ Se quitó «{device.DeviceName}» de los equipos vinculados.", ct);
+
+    /// <summary>
+    /// «Perdí este equipo» (paso 8.15): lo revoca con el motivo "perdido" y espera la rotación de los tokens; el primer token
+    /// nuevo que funcione en esta PC se anota en la nube. Revocar no corta el acceso: el equipo perdido tiene el token.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> ReportLostDeviceAsync(LinkedDevice device, CancellationToken ct = default)
+    {
+        var result = await RevokeDeviceAsync(device, RevokedLostReason,
+            $"✓ «{device.DeviceName}» quedó como perdido. Falta anular los tokens para cortarle el acceso (vea los pasos).", ct);
+        if (result.Ok) _settingsService.ExpectTokenRotation();
+        return result;
+    }
+
+    private async Task<(bool Ok, string Message)> RevokeDeviceAsync(LinkedDevice device, string reason, string doneMessage, CancellationToken ct)
     {
         var settings = _settingsService.CurrentSettings;
         if (string.Equals(device.DeviceId, settings.DeviceId, StringComparison.Ordinal)) return (false, "Este equipo no se puede quitar desde sí mismo.");
@@ -367,21 +411,136 @@ public partial class TursoSyncService
                 var letter = DevicePermissions.CodeLetter(role);
                 var affected = await client.ExecuteAsync(
                     $"INSERT INTO {SyncSchema.DeviceRegistryTable} (DeviceId, DeviceCode, Role, DisplayName, Model, PairedAtUtc, RevokedAtUtc, RevokedReason) " +
-                    $"SELECT ?, {NextCodeSql(letter)}, ?, ?, NULL, {ServerNowSql}, {ServerNowSql}, '{RevokedRemovedReason}' " +
+                    $"SELECT ?, {NextCodeSql(letter)}, ?, ?, NULL, {ServerNowSql}, {ServerNowSql}, ? " +
                     $"FROM {SyncSchema.DeviceRegistryTable} WHERE DeviceCode LIKE '{letter}%' " +
                     "ON CONFLICT(DeviceId) DO UPDATE SET RevokedAtUtc = excluded.RevokedAtUtc, RevokedReason = excluded.RevokedReason " +
                     $"WHERE {SyncSchema.DeviceRegistryTable}.RevokedAtUtc IS NULL " +
                     $"AND {SyncSchema.DeviceRegistryTable}.DeviceId <> ifnull((SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{PrimaryDeviceKey}'), '');",
-                    new object?[] { device.DeviceId, role.ToString(), device.DeviceName }, ct);
+                    new object?[] { device.DeviceId, role.ToString(), device.DeviceName, reason }, ct);
                 _settingsService.RecordUsage(2, affected);
-                AppLogger.Info($"Turso: se quitó el equipo {device.DeviceName} ({device.DeviceId}).");
-                return (true, $"✓ Se quitó «{device.DeviceName}» de los equipos vinculados.");
+                AppLogger.Info($"Turso: se revocó el equipo {device.DeviceName} ({device.DeviceId}), motivo '{reason}'.");
+                return (true, doneMessage);
             }
         }
         catch (TursoException ex)
         {
             return (false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Al final de una sincronización: si es el primer token que funciona después de anularlos (un 401 al que funcionaba, o
+    /// «Perdí este equipo»), anota la hora en _tpvc_meta. Con una nube sin verificar se queda para la siguiente.
+    /// </summary>
+    private async Task<int> RecordTokenRotationAsync(TursoClient client, CancellationToken ct)
+    {
+        if (!_settingsService.RecordTokenWorked()) return 0;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            if (await DbMeta.GetAsync(db, DbMeta.ClinicId, ct) == null) return 0;
+        }
+        var after = _settingsService.CurrentSettings.TokenRotationAfterUtc ?? DateTime.UtcNow;
+        var affected = await client.ExecuteAsync(TokensRotatedSql, new object?[] { FormatDate(after) }, ct);
+        _settingsService.ClearTokenRotation();
+        AppLogger.Info("Turso: se anotó en la nube que se anularon los tokens; los equipos que no se conectan desde entonces piden el nuevo.");
+        return affected;
+    }
+
+    // =========================================================================
+    // VINCULAR LA TABLET Y EL CELULAR (paso 8.14)
+    // =========================================================================
+
+    /// <summary>
+    /// Aprueba un equipo Android que pegó la URL y el token (o los leyó del QR) y escribió su latido: su fila de
+    /// DeviceRegistry con el rol que eligió el médico y el siguiente código de esa letra (T1, C1…). Hasta entonces el equipo
+    /// no baja datos. Si ya tenía fila (otra PC lo aprobó), no cambia nada.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> ApproveDeviceAsync(LinkedDevice device, DeviceRole role, CancellationToken ct = default)
+    {
+        if (role is not (DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin)) return (false, "Un equipo Android se vincula como tablet o como celular.");
+        if (!device.IsPendingApproval) return (false, $"«{device.DeviceName}» no está esperando que lo vinculen.");
+        var settings = _settingsService.CurrentSettings;
+        try
+        {
+            var (client, problem) = await OpenVerifiedCloudAsync(settings, ct);
+            if (client == null) return (false, problem!);
+            using (client)
+            {
+                var letter = DevicePermissions.CodeLetter(role);
+                var results = await client.TransactionAsync(new (string, object?[]?)[]
+                {
+                    ($"INSERT INTO {SyncSchema.DeviceRegistryTable} (DeviceId, DeviceCode, Role, DisplayName, Model, PairedAtUtc) " +
+                     $"SELECT ?, {NextCodeSql(letter)}, ?, ?, NULL, {ServerNowSql} FROM {SyncSchema.DeviceRegistryTable} WHERE DeviceCode LIKE '{letter}%' " +
+                     "ON CONFLICT(DeviceId) DO NOTHING;",
+                        new object?[] { device.DeviceId, role.ToString(), device.DeviceName }),
+                    ($"SELECT DeviceCode, Role, RevokedAtUtc FROM {SyncSchema.DeviceRegistryTable} WHERE DeviceId = ?;", new object?[] { device.DeviceId })
+                }, ct);
+                _settingsService.RecordUsage(2, results[0].AffectedRows);
+                var row = results[1].Rows.FirstOrDefault();
+                var code = row?.GetValueOrDefault("DeviceCode")?.ToString();
+                if (results[0].AffectedRows == 0)
+                {
+                    return (false, row?.GetValueOrDefault("RevokedAtUtc") is string { Length: > 0 }
+                        ? $"«{device.DeviceName}» ya estaba quitado o rechazado."
+                        : $"«{device.DeviceName}» ya estaba vinculado ({code}).");
+                }
+                var kind = role == DeviceRole.AndroidTablet ? "tablet" : "celular";
+                AppLogger.Info($"Turso: se vinculó {device.DeviceName} ({device.DeviceId}) como {kind}, código {code}.");
+                return (true, $"✓ «{device.DeviceName}» quedó vinculado como {kind} (código {code}). Empieza a bajar los datos en su siguiente sincronización.");
+            }
+        }
+        catch (TursoException ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Rechaza un equipo nuevo: su fila de DeviceRegistry ya revocada (motivo "rechazado", código X…). El equipo lo lee y
+    /// no baja nada; sale de la lista. Para cortarle el acceso a la nube hay que anular los tokens (paso 8.15).
+    /// </summary>
+    public async Task<(bool Ok, string Message)> RejectDeviceAsync(LinkedDevice device, CancellationToken ct = default)
+    {
+        if (!device.IsPendingApproval) return (false, $"«{device.DeviceName}» no está esperando que lo vinculen.");
+        var settings = _settingsService.CurrentSettings;
+        try
+        {
+            var (client, problem) = await OpenVerifiedCloudAsync(settings, ct);
+            if (client == null) return (false, problem!);
+            using (client)
+            {
+                var affected = await client.ExecuteAsync(
+                    $"INSERT INTO {SyncSchema.DeviceRegistryTable} (DeviceId, DeviceCode, Role, DisplayName, Model, PairedAtUtc, RevokedAtUtc, RevokedReason) " +
+                    $"SELECT ?, {NextCodeSql(RejectedCodeLetter)}, ?, ?, NULL, {ServerNowSql}, {ServerNowSql}, '{RevokedRejectedReason}' " +
+                    $"FROM {SyncSchema.DeviceRegistryTable} WHERE DeviceCode LIKE '{RejectedCodeLetter}%' ON CONFLICT(DeviceId) DO NOTHING;",
+                    new object?[] { device.DeviceId, (device.Role ?? DeviceRole.AndroidTablet).ToString(), device.DeviceName }, ct);
+                _settingsService.RecordUsage(2, affected);
+                if (affected == 0) return (false, $"«{device.DeviceName}» ya tenía su lugar en los equipos vinculados.");
+                AppLogger.Info($"Turso: se rechazó el equipo {device.DeviceName} ({device.DeviceId}).");
+                return (true, $"✓ Se rechazó «{device.DeviceName}»: no bajará ningún dato. Si no reconoce ese equipo, anule los tokens en el panel de Turso.");
+            }
+        }
+        catch (TursoException ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Lo que va en el QR para la tablet o el celular: la URL, el token de esta PC y el nombre del consultorio. null (con el
+    /// motivo) si la nube no está lista: sin sincronización, sin token o sin la «Sincronización completa».
+    /// </summary>
+    public async Task<(DeviceLinkData? Data, string? Problem)> GetLinkDataAsync(CancellationToken ct = default)
+    {
+        var settings = _settingsService.CurrentSettings;
+        if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl) || string.IsNullOrWhiteSpace(settings.AuthToken))
+            return (null, "Primero active la sincronización con la URL y el token de Turso.");
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            if (await DbMeta.GetAsync(db, DbMeta.ClinicId, ct) == null)
+                return (null, "Primero haga la «Sincronización completa»: los equipos se vinculan a una nube verificada.");
+        }
+        return (new DeviceLinkData(settings.DatabaseUrl, settings.AuthToken, _clinicProfileService.CurrentProfile.ClinicName ?? string.Empty), null);
     }
 
     /// <summary>Para las acciones de Equipos vinculados: la nube con el esquema al día y con la identidad de esta base.</summary>
@@ -427,7 +586,8 @@ public partial class TursoSyncService
         ($"SELECT {ServerNowSql} AS ServerNow;", null),
         ("SELECT DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, PendingCount, OldestPendingUtc FROM RegisteredDevices;", null),
         ($"SELECT DeviceId, DeviceCode, Role, DisplayName, RevokedAtUtc, RevokedReason FROM {SyncSchema.DeviceRegistryTable};", null),
-        ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{PrimaryDeviceKey}';", null)
+        ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{PrimaryDeviceKey}';", null),
+        ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{TokensRotatedKey}';", null)
     };
 
     /// <summary>
@@ -445,7 +605,8 @@ public partial class TursoSyncService
         await AfterHeartbeatAsync(client, deviceId, results[0], ct);
 
         var devices = ConsultationHandoffService.MergeDevices(results[3], results[4], results[5].FirstOrDefault()?["Value"]?.ToString(),
-                ParseUtcOrNull(results[2].FirstOrDefault()?["ServerNow"]) ?? DateTime.UtcNow, settings.DeviceId)
+                ParseUtcOrNull(results[2].FirstOrDefault()?["ServerNow"]) ?? DateTime.UtcNow, settings.DeviceId,
+                tokensRotatedAtUtc: ParseUtcOrNull(results[6].FirstOrDefault()?["Value"]))
             .Where(d => !d.IsRevoked)
             .OrderByDescending(d => d.IsThisDevice)
             .ThenByDescending(d => d.IsPrimary)

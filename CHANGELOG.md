@@ -2,6 +2,25 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.33.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.15: equipo perdido y tokens anulados (lado de la PC)
+* En *Equipos vinculados*, junto a **Quitar**, está **Perdí este equipo**. El equipo queda marcado como perdido: si la tablet o el celular se conectan, borran sus datos sin subir nada (una computadora no borra nada). Como Turso no deja anular un solo token, aparecen los pasos para anularlos todos en el panel de Turso (con **Abrir el panel de Turso**) y pegar el nuevo aquí y en los demás equipos.
+* Los equipos que no se han conectado desde que se anularon los tokens dicen «Pegue el token nuevo en este equipo…». No pierden sus cambios ni hay que aprobarlos otra vez.
+
+### Cambiado
+* Si Turso rechaza el token de esta computadora, la sincronización se detiene y dice qué hacer, en lugar de reintentar sola. No se borra nada: lo que no había subido sube con el token nuevo, y al pegarlo la sincronización sigue.
+* 558 pruebas.
+
+## [1.32.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.14: vincular la tablet y el celular (lado de la PC)
+* *Nube y dispositivos › Vincular tablet y celular* tiene **Mostrar QR para la tablet o el celular**: un código con la dirección y el token de la nube para que el equipo no tenga que teclearlos. Avisa que no se fotografíe ni se comparta y se cierra solo a los 2 minutos.
+* Un equipo nuevo que leyó el código aparece en **Equipos vinculados** pidiendo entrar, con 6 caracteres para comprobar que es el que el médico tiene en la mano. **Vincular como tablet** o **Vincular como celular** le da su código (T1, C1…); **Rechazar** lo deja fuera. Hasta que se aprueba no baja ningún dato.
+* Si Turso rechaza el token (porque se anularon), el aviso dice que se pegue uno nuevo y que no se pierde nada. Si el token se pegó incompleto o mal copiado, Turso responde distinto (se comprobó en una base de prueba); ahora la app lo dice así en lugar de mostrar el error en inglés.
+* La app de Android que usa todo esto llega después.
+* 554 pruebas.
+
 ## [1.31.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.13: lo que necesita la app de Android para leer la nube igual que la PC

@@ -157,6 +157,7 @@ public partial class TursoSyncService
         get
         {
             if (_settingsService.CurrentSettings.ConsumptionBrakeTrippedUtc != null) return TursoSyncPauseReason.ConsumptionBrake;
+            if (_settingsService.IsCurrentTokenRejected) return TursoSyncPauseReason.TokenRejected;
             return QuotaRetryAtUtc != null ? TursoSyncPauseReason.QuotaExhausted : TursoSyncPauseReason.None;
         }
     }
@@ -175,6 +176,7 @@ public partial class TursoSyncService
     private string PauseMessage => PauseReason switch
     {
         TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedMessage,
+        TursoSyncPauseReason.TokenRejected => $"{TokenRejectedTitle}. {TokenRejectedDetail}",
         TursoSyncPauseReason.QuotaExhausted => $"{TursoException.QuotaExhaustedMessage} Siguiente intento: {RetryAtLocalText}.",
         _ => string.Empty
     };
@@ -183,9 +185,20 @@ public partial class TursoSyncService
     private string PauseTitle => PauseReason switch
     {
         TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedTitle,
+        TursoSyncPauseReason.TokenRejected => TokenRejectedTitle,
         TursoSyncPauseReason.QuotaExhausted => $"{TursoException.QuotaExhaustedTitle} · siguiente intento a las {RetryAtLocalText}",
         _ => string.Empty
     };
+
+    public const string TokenRejectedTitle = "Sincronización detenida: Turso rechazó el token";
+
+    /// <summary>Paso 8.15: el aviso de Nube y dispositivos cuando Turso rechazó el token de esta computadora.</summary>
+    public string TokenRejectedDetail =>
+        "Turso rechazó el token de esta computadora" +
+        (_settingsService.CurrentSettings.TokenRejectedUtc is { } at ? $" el {at.ToLocalTime():dd/MM/yyyy HH:mm}" : string.Empty) +
+        ": se anularon los tokens, o el que se pegó no es de esta base o está incompleto. Cree uno nuevo en el panel de Turso " +
+        "(o con 'turso db tokens create'), péguelo en «Conexión con Turso» y pulse «Sincronizar ahora». No se borra nada: lo que " +
+        "esta computadora no ha subido sube con el token nuevo.";
 
     private string RetryAtLocalText => (QuotaRetryAtUtc ?? Clock.GetUtcNow().UtcDateTime).ToLocalTime().ToString("HH:mm");
 
@@ -327,8 +340,12 @@ public partial class TursoSyncService
     {
         var reason = PauseReason;
         if (reason == TursoSyncPauseReason.None) return;
-        throw new TursoException(PauseMessage,
-            reason == TursoSyncPauseReason.QuotaExhausted ? TursoException.QuotaExhaustedCode : TursoException.ConsumptionBrakeCode);
+        throw new TursoException(PauseMessage, reason switch
+        {
+            TursoSyncPauseReason.QuotaExhausted => TursoException.QuotaExhaustedCode,
+            TursoSyncPauseReason.TokenRejected => "HTTP_401",
+            _ => TursoException.ConsumptionBrakeCode
+        });
     }
 
     /// <summary>"Reanudar" después del freno de consumo: el día se vuelve a contar desde cero.</summary>
@@ -471,6 +488,14 @@ public partial class TursoSyncService
             else if (code is TursoException.ConsumptionBrakeCode)
             {
                 SetStatus(TursoSyncStatus.Paused, TursoConsumptionBrake.PausedTitle);
+            }
+            else if (code is "HTTP_401")
+            {
+                // Paso 8.15: un token anulado (o pegado de otra base, o mal copiado). Lo automático deja de intentar hasta
+                // que se pegue otro; no se borra ni se aparta nada
+                _settingsService.RecordTokenRejected();
+                AppLogger.Warn($"Turso: rechazó el token de esta computadora; la sincronización automática espera uno nuevo. {ex.Message}");
+                SetStatus(TursoSyncStatus.Paused, TokenRejectedTitle);
             }
             else if (code is CloudIdentityCode or ClientOutdatedCode or GenerationPendingCode or GenerationChangedCode or RestorePendingCode)
             {
@@ -617,6 +642,9 @@ public partial class TursoSyncService
 
         // 4. Paso 8.10: una vez por sesión con la nube verificada, esta PC en DeviceRegistry y la PC principal
         var registryWrites = await EnsureDeviceRegistryAsync(client, settings, ct);
+
+        // 5. Paso 8.15: el primer token que funciona después de anularlos se anota en la nube
+        registryWrites += await RecordTokenRotationAsync(client, ct);
 
         settings.LastPulledServerWatermark = watermark;
         settings.LastSyncUtc = DateTime.UtcNow;

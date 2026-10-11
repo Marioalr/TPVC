@@ -632,9 +632,22 @@ public class TursoClient : IDisposable
             }
 
             var code = (int)resp.StatusCode;
+
+            // V3 (2026-10-11): a un token que no es un JWT (mal copiado o incompleto) Turso responde HTTP 400
+            // {"error":"JWT error: InvalidToken"}, no 401. Para el equipo es lo mismo que un token rechazado
+            if (code == 400 && respContent.Contains("JWT", StringComparison.OrdinalIgnoreCase))
+                throw new TursoException(
+                    "Turso no pudo leer el token (HTTP 400): parece incompleto o mal copiado. Cópielo otra vez completo del panel de Turso " +
+                    "(o de 'turso db tokens create') y péguelo en Configuración › Nube y dispositivos; nada de lo de aquí se pierde.",
+                    "HTTP_401");
+
             string diag = code switch
             {
-                401 => $"Error de autenticación (HTTP 401 Unauthorized): El token no es válido o ha expirado. Verifique que sea un token de base de datos generado con 'turso db tokens create' o en Turso Dashboard -> Connect -> Generate token.",
+                // Paso 8.14: con tokens sin vencimiento, un 401 es un token anulado (se rotaron todos) o de otra base. No se
+                // borra ni se aparta nada; con el token nuevo todo sigue. V3: Turso manda "Unauthorized: ... invalid JWT
+                // token: can't be decoded with any of the existing keys"
+                401 =>"Turso rechazó el token (HTTP 401): se anuló o no es de esta base. Cree uno nuevo con 'turso db tokens create' " +
+                       "(o en el panel de Turso) y péguelo en Configuración › Nube y dispositivos; nada de lo de aquí se pierde.",
                 403 => $"Acceso denegado (HTTP 403 Forbidden): El token no tiene permisos suficientes para esta base de datos.",
                 404 => $"Base de datos o endpoint no encontrado (HTTP 404 Not Found): Verifique que la URL ingresada corresponda a una base de datos existente en Turso.",
                 400 => $"Turso rechazó la solicitud (HTTP 400 Bad Request): {Truncate(respContent, 400)}",
