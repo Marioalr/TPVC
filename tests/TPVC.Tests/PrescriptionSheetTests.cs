@@ -124,6 +124,7 @@ public class PrescriptionSheetTests
         service.SaveProfile(new ClinicProfile { DoctorName = DoctorName });
         var updatedAt = service.CurrentProfile.UpdatedAtUtc;
 
+        System.Threading.Thread.Sleep(5); // la fecha del perfil avanza aunque el reloj sea grueso
         var png = PrescriptionSheet.WhatsAppIconPng;
         service.SaveLetterheadImage(LetterheadImageKind.Crest, png);
         var first = service.CurrentProfile.CrestImagePath;
@@ -131,7 +132,9 @@ public class PrescriptionSheetTests
         Assert.AreEqual(folder, Path.GetDirectoryName(first));
         StringAssert.StartsWith(Path.GetFileName(first), "escudo-");
         CollectionAssert.AreEqual(png, File.ReadAllBytes(first));
-        Assert.AreEqual(updatedAt, service.CurrentProfile.UpdatedAtUtc, "Es de este equipo: no adelanta la fecha que se sincroniza");
+        Assert.IsGreaterThan(updatedAt!.Value, service.CurrentProfile.UpdatedAtUtc!.Value, "Desde el paso 8.12 viaja a la nube con el perfil: adelanta su fecha");
+        Assert.AreEqual(ClinicProfileService.HashImage(png), service.CurrentProfile.CrestImageHash);
+        Assert.IsTrue(service.CurrentProfile.CrestImageEditedHere);
 
         // En el JSON solo va el nombre del archivo; otro arranque lo encuentra
         StringAssert.Contains(File.ReadAllText(profilePath), $"\"CrestImageFile\": \"{Path.GetFileName(first)}\"");

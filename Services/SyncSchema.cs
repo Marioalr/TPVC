@@ -281,9 +281,38 @@ internal sealed class SyncSchema
     public static readonly string MetaStatement =
         $"CREATE TABLE IF NOT EXISTS {Q(MetaTable)} (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
-    public const string ClinicProfilesStatement =
+    /// <summary>
+    /// Columnas del perfil que agregó el paso 8.12: el hash del escudo y el de la imagen del encabezado. NULL = ninguna PC
+    /// con v1.29.0 lo ha escrito (no se sabe); "" = sin imagen. Llegan con ALTER en una nube que ya tenía la tabla.
+    /// </summary>
+    public static readonly (string Name, string Type)[] ClinicProfilesAddedColumns =
+    {
+        ("CrestImageHash", "TEXT"),
+        ("HeaderImageHash", "TEXT")
+    };
+
+    public static readonly string ClinicProfilesStatement =
         "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, " +
-        "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)";
+        "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL, " +
+        string.Join(", ", ClinicProfilesAddedColumns.Select(c => $"{c.Name} {c.Type}")) + ")";
+
+    public const string ClinicAssetsTable = "ClinicAssets";
+    public const string ClinicAssetChunksTable = "ClinicAssetChunks";
+
+    /// <summary>Tamaño de cada trozo de una imagen en la nube (paso 8.12; el mismo de los resultados de laboratorio).</summary>
+    public const int AssetChunkBytes = 512 * 1024;
+
+    /// <summary>
+    /// Paso 8.12: las imágenes del membrete por su SHA-256 (nunca cambian: una imagen nueva es otra fila). Los bytes van en
+    /// trozos de 512 KiB (ClinicAssetChunks) y la fila de ClinicAssets se escribe al final: si existe, la imagen está
+    /// completa. Solo la escribe la PC; los equipos bajan una imagen cuando cambia su hash en ClinicProfiles.
+    /// </summary>
+    public static readonly string[] ClinicAssetStatements =
+    {
+        $"CREATE TABLE IF NOT EXISTS {ClinicAssetsTable} (Hash TEXT PRIMARY KEY NOT NULL, Kind TEXT NOT NULL, MimeType TEXT NOT NULL, " +
+        "ByteCount INTEGER NOT NULL, ChunkCount INTEGER NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
+        $"CREATE TABLE IF NOT EXISTS {ClinicAssetChunksTable} (Hash TEXT NOT NULL, Part INTEGER NOT NULL, Content BLOB NOT NULL, PRIMARY KEY (Hash, Part))"
+    };
 
     /// <summary>
     /// Columnas del latido que agregó el paso 8.10. Todas aceptan nulo: el upsert de una PC v1.17–v1.26 (con sus columnas
@@ -330,6 +359,7 @@ internal sealed class SyncSchema
         }
         foreach (var statement in TombstoneStatements) yield return statement;
         yield return ClinicProfilesStatement;
+        foreach (var statement in ClinicAssetStatements) yield return statement;
         yield return RegisteredDevicesStatement;
         foreach (var statement in DeviceRegistryStatements) yield return statement;
 

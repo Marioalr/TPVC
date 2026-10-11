@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-11 (TPVC v1.28.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-11 (TPVC v1.29.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.29.0 (paso 8.12: membrete en la nube)
+
+- [ ] En la PC principal, con la nube activada: elegir un escudo y una imagen del encabezado en *Médico y consultorio* y sincronizar. En otra computadora unida a la nube, después de sincronizar, la receta sale con las mismas imágenes.
+- [ ] Cambiar el escudo en la principal: la otra computadora lo cambia en su siguiente sincronización. Quitarlo: también se quita allá.
+- [ ] En una computadora nueva que recupera la nube y llena su asistente sin imágenes: después de sincronizar tiene el escudo de la principal, y la principal lo conserva.
+- [ ] Para Kotlin: leer `ClinicProfiles.CrestImageHash` y `HeaderImageHash` en cada descarga; si cambian, leer la fila de `ClinicAssets` y sus trozos de `ClinicAssetChunks`, unirlos, revisar tamaño y SHA-256 y guardar la imagen (regla «Membrete» de `contracts/sync/schema.json`, revisión 6). `NULL` o `''`: la receta sin esa imagen. Kotlin nunca escribe estas tablas.
 
 ### v1.28.0 (paso 8.11: generadores sin WPF y vectores del celular)
 

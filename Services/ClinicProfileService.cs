@@ -104,8 +104,34 @@ public class ClinicProfileService
         finally
         {
             CurrentProfile.LetterheadFolder = LetterheadFolder;
+            RefreshLetterheadHashes(CurrentProfile);
         }
     }
+
+    /// <summary>
+    /// El hash de cada imagen sale de su archivo (paso 8.12): el de un perfil de antes de v1.29.0 se calcula al abrir, y
+    /// una imagen que ya no existe queda sin hash.
+    /// </summary>
+    private void RefreshLetterheadHashes(ClinicProfile profile)
+    {
+        profile.CrestImageHash = HashFile(profile.CrestImagePath);
+        profile.HeaderImageHash = HashFile(profile.HeaderImagePath);
+    }
+
+    private static string HashFile(string? path)
+    {
+        try
+        {
+            return path != null && File.Exists(path) ? HashImage(File.ReadAllBytes(path)) : string.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>SHA-256 de una imagen en hex con minúsculas: su llave en la nube (ClinicAssets).</summary>
+    public static string HashImage(byte[] content) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content));
 
     /// <param name="preserveTimestamp">true al aplicar un perfil descargado de la nube (conserva su UpdatedAtUtc).</param>
     public void SaveProfile(ClinicProfile profile, bool preserveTimestamp = false)
@@ -124,13 +150,23 @@ public class ClinicProfileService
 
         profile.IsInitialSetupCompleted = true;
 
-        // Las imágenes del membrete son de este equipo y solo cambian con SaveLetterheadImage /
-        // ClearLetterheadImage: un perfil nuevo (la edición en Configuración, el asistente inicial o
-        // el que llega de la nube) conserva las actuales si no trae las suyas
+        // Las imágenes del membrete solo cambian con SaveLetterheadImage / ClearLetterheadImage o al bajarlas de la nube
+        // (ApplyLetterheadImageFromCloud): un perfil nuevo (la edición en Configuración, el asistente inicial o los textos
+        // que llegan de la nube) conserva las actuales, con su hash y su marca, si no trae las suyas
         if (!ReferenceEquals(profile, CurrentProfile))
         {
-            if (string.IsNullOrWhiteSpace(profile.CrestImageFile)) profile.CrestImageFile = CurrentProfile.CrestImageFile;
-            if (string.IsNullOrWhiteSpace(profile.HeaderImageFile)) profile.HeaderImageFile = CurrentProfile.HeaderImageFile;
+            if (string.IsNullOrWhiteSpace(profile.CrestImageFile))
+            {
+                profile.CrestImageFile = CurrentProfile.CrestImageFile;
+                profile.CrestImageHash = CurrentProfile.CrestImageHash;
+                profile.CrestImageEditedHere = CurrentProfile.CrestImageEditedHere;
+            }
+            if (string.IsNullOrWhiteSpace(profile.HeaderImageFile))
+            {
+                profile.HeaderImageFile = CurrentProfile.HeaderImageFile;
+                profile.HeaderImageHash = CurrentProfile.HeaderImageHash;
+                profile.HeaderImageEditedHere = CurrentProfile.HeaderImageEditedHere;
+            }
         }
         profile.LetterheadFolder = LetterheadFolder;
 
@@ -193,20 +229,65 @@ public class ClinicProfileService
         File.WriteAllBytes(Path.Combine(LetterheadFolder, fileName), content);
 
         var previous = GetLetterheadFile(kind);
-        SetLetterheadFile(kind, fileName);
-        // Cambio de este equipo (no viaja a la nube): no adelanta la fecha de modificación del perfil
-        SaveProfile(CurrentProfile, preserveTimestamp: true);
+        SetLetterheadFile(kind, fileName, HashImage(content), editedHere: true);
+        // Desde el paso 8.12 la imagen viaja a la nube con el perfil: adelanta su fecha de modificación
+        SaveProfile(CurrentProfile);
         DeleteLetterheadFile(previous);
     }
 
-    /// <summary>Quita la imagen del membrete (la receta sale sin ella).</summary>
+    /// <summary>Quita la imagen del membrete (la receta sale sin ella; también en los demás equipos).</summary>
     public void ClearLetterheadImage(LetterheadImageKind kind)
     {
         var previous = GetLetterheadFile(kind);
         if (string.IsNullOrWhiteSpace(previous)) return;
-        SetLetterheadFile(kind, string.Empty);
+        SetLetterheadFile(kind, string.Empty, string.Empty, editedHere: true);
+        SaveProfile(CurrentProfile);
+        DeleteLetterheadFile(previous);
+    }
+
+    /// <summary>
+    /// La imagen que dice la nube (paso 8.12): la guarda (o la quita, con <paramref name="content"/> null) sin adelantar
+    /// la fecha del perfil ni marcarla como elegida aquí. Devuelve false si no es una imagen PNG o JPG.
+    /// </summary>
+    public bool ApplyLetterheadImageFromCloud(LetterheadImageKind kind, byte[]? content)
+    {
+        var previous = GetLetterheadFile(kind);
+        bool editedHere = kind == LetterheadImageKind.Crest ? CurrentProfile.CrestImageEditedHere : CurrentProfile.HeaderImageEditedHere;
+        if (content == null)
+        {
+            if (string.IsNullOrWhiteSpace(previous) && GetLetterheadHash(kind).Length == 0) return true;
+            SetLetterheadFile(kind, string.Empty, string.Empty, editedHere);
+        }
+        else
+        {
+            var extension = ImageExtension(content);
+            if (extension == null || content.Length > MaxLetterheadImageBytes) return false;
+            Directory.CreateDirectory(LetterheadFolder);
+            var fileName = $"{BaseName(kind)}-{Guid.NewGuid().ToString("N")[..12]}{extension}";
+            File.WriteAllBytes(Path.Combine(LetterheadFolder, fileName), content);
+            SetLetterheadFile(kind, fileName, HashImage(content), editedHere);
+        }
         SaveProfile(CurrentProfile, preserveTimestamp: true);
         DeleteLetterheadFile(previous);
+        return true;
+    }
+
+    /// <summary>El hash de la imagen de este equipo; vacío si no tiene.</summary>
+    public string GetLetterheadHash(LetterheadImageKind kind) =>
+        kind == LetterheadImageKind.Crest ? CurrentProfile.CrestImageHash : CurrentProfile.HeaderImageHash;
+
+    /// <summary>Los bytes de la imagen de este equipo, o null si no tiene (o ya no se puede leer).</summary>
+    public byte[]? ReadLetterheadImage(LetterheadImageKind kind)
+    {
+        var path = kind == LetterheadImageKind.Crest ? CurrentProfile.CrestImagePath : CurrentProfile.HeaderImagePath;
+        try
+        {
+            return path != null ? File.ReadAllBytes(path) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>".png" o ".jpg" según la firma del archivo; null si no es una de esas imágenes.</summary>
@@ -238,10 +319,20 @@ public class ClinicProfileService
     private string GetLetterheadFile(LetterheadImageKind kind) =>
         kind == LetterheadImageKind.Crest ? CurrentProfile.CrestImageFile : CurrentProfile.HeaderImageFile;
 
-    private void SetLetterheadFile(LetterheadImageKind kind, string fileName)
+    private void SetLetterheadFile(LetterheadImageKind kind, string fileName, string hash, bool editedHere)
     {
-        if (kind == LetterheadImageKind.Crest) CurrentProfile.CrestImageFile = fileName;
-        else CurrentProfile.HeaderImageFile = fileName;
+        if (kind == LetterheadImageKind.Crest)
+        {
+            CurrentProfile.CrestImageFile = fileName;
+            CurrentProfile.CrestImageHash = hash;
+            CurrentProfile.CrestImageEditedHere = editedHere;
+        }
+        else
+        {
+            CurrentProfile.HeaderImageFile = fileName;
+            CurrentProfile.HeaderImageHash = hash;
+            CurrentProfile.HeaderImageEditedHere = editedHere;
+        }
     }
 
     private void DeleteLetterheadFile(string? fileName)
