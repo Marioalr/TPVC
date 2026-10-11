@@ -67,10 +67,11 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 
 Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál regla de redondeo usa (decimal al par con `Math.Round`; hacia arriba en el IVA y en el formato F2/N2). Lo que depende de "hoy" se genera en UTC y en America/Mexico_City con un instante en que el día cambia; los desempates por nombre llevan acentos (Collator es-MX).
 
-**BLOB.** Viaja como `{"type":"blob","base64":…}`, sin `value`. Según el código de libSQL, Turso responde el base64
-estándar **sin el relleno `=`** y acepta los argumentos con o sin él (pendiente de ver en Turso real: V18 del plan). El
+**BLOB.** Viaja como `{"type":"blob","base64":…}`, sin `value`. Turso responde el base64 estándar **sin el relleno `=`**
+(también el vacío, `""`) y acepta los argumentos con o sin él (comprobado en Turso real el 2026-10-11, V18 del plan). El
 lector tiene que aceptar las dos formas: `java.util.Base64.getDecoder()` las acepta; `kotlin.io.encoding.Base64.Default`
-exige el relleno salvo con `withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)`. Un BLOB vacío no es nulo. Hoy ninguna
+exige el relleno salvo con `withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)`. Un argumento que no sea base64 válido
+hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Hoy ninguna
 tabla sincronizada tiene BLOB (en `schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); el primero llega con el
 membrete en la nube (paso 8.12).
 
