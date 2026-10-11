@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.21.0";
+    private string _appVersion = "1.22.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -175,7 +175,7 @@ public partial class MainViewModel : ObservableObject
         _ = OpenRecoveredConsultationAsync();
 
         DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
-        InventoryVM = new InventoryViewModel(inventoryService);
+        InventoryVM = new InventoryViewModel(inventoryService, Notifications, localPreferences);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
         ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
