@@ -59,4 +59,12 @@ public static class SyncRules
         serverRowExists ? RejectedUpsertResolution.ApplyServerRow
         : serverTombstoneExists ? RejectedUpsertResolution.ApplyServerTombstone
         : RejectedUpsertResolution.RetryLater;
+
+    /// <summary>
+    /// <see cref="RejectedUpsertResolution.ApplyServerRow"/>: la fila de la nube se aplica aquí si su marca es igual o
+    /// más nueva que la local (con marcas iguales también: así se deshace un empate). Si la local se volvió a editar
+    /// entre la subida y la relectura, se conserva y sube en la siguiente sincronización.
+    /// </summary>
+    public static bool ServerRowAppliesAfterReject(DateTime? localUpdatedAtUtc, DateTime serverUpdatedAtUtc) =>
+        localUpdatedAtUtc == null || serverUpdatedAtUtc >= localUpdatedAtUtc.Value;
 }

@@ -15,12 +15,17 @@ public class FakeHranaServerTests
     private string _dbPath = string.Empty;
     private FakeHranaServer _server = null!;
     private TursoClient _client = null!;
+    private FakeScanPolicy _defaultScanPolicy;
 
     [TestInitialize]
     public void Setup()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"tpvc_fake_{Guid.NewGuid():N}.db");
         _server = new FakeHranaServer(_dbPath);
+
+        // Estas pruebas recorren T completa a propósito: solo avisan (la de fábrica es fallar, ver abajo)
+        _defaultScanPolicy = _server.ScanPolicy;
+        _server.ScanPolicy = FakeScanPolicy.Warn;
         _client = new TursoClient("https://tpvc-test.turso.io", "token", new HttpClient(_server, disposeHandler: false));
 
         // Una tabla "sincronizada" (tiene SyncedAtUtc) con 300 filas, índice en A y sin índice en B ni C
@@ -77,8 +82,10 @@ public class FakeHranaServerTests
     }
 
     [TestMethod]
-    public async Task FullScanOfASyncedTable_WarnsUntilStep86_ThenFailsUnlessExcepted()
+    public async Task FullScanOfASyncedTable_FailsByDefaultSinceStep86_UnlessExcepted_OrWarnsOnRequest()
     {
+        Assert.AreEqual(FakeScanPolicy.Fail, _defaultScanPolicy, "Desde el paso 8.6 un SCAN de una tabla sincronizada falla");
+
         await _client.QueryAsync("SELECT * FROM T WHERE B = 1;");
         Assert.AreEqual(1, _server.ScanWarnings.Count);
         StringAssert.Contains(_server.ScanWarnings[0], "SCAN T");
@@ -93,6 +100,30 @@ public class FakeHranaServerTests
         _server.ScanExceptions.Add(sql => sql.StartsWith("SELECT COUNT(*)", StringComparison.Ordinal));
         var count = await _client.QueryAsync("SELECT COUNT(*) AS N FROM T WHERE B = 1;");
         Assert.AreEqual(43L, count[0]["N"]);
+    }
+
+    [TestMethod]
+    public async Task Batch_WithBeginAndCommit_IsAtomic_AndReturnsEachStatement()
+    {
+        // Paso 8.6 (V14): lo que hace Turso con un batch BEGIN … COMMIT, y ROLLBACK si un paso falla
+        var ok = await _client.TransactionAsync(new (string, object?[]?)[]
+        {
+            ("UPDATE T SET C = 'x' WHERE SyncId = ?;", new object?[] { "id-001" }),
+            ("SELECT C FROM T WHERE SyncId = ?;", new object?[] { "id-001" })
+        });
+        Assert.AreEqual(1, ok[0].AffectedRows);
+        Assert.AreEqual("x", ok[1].Rows.Single()["C"], "Dentro de la transacción se ve lo escrito");
+
+        var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => _client.TransactionAsync(new (string, object?[]?)[]
+        {
+            ("UPDATE T SET C = 'y' WHERE SyncId = ?;", new object?[] { "id-002" }),
+            ("INSERT INTO T (SyncId, SyncedAtUtc) VALUES ('id-001', '2026-01-01');", null)
+        }));
+        StringAssert.Contains(ex.Message, "UNIQUE");
+        Assert.AreEqual("c-298", (await _client.QueryAsync("SELECT C FROM T WHERE SyncId = 'id-002';"))[0]["C"], "El error deshizo lo anterior");
+
+        var steps = _server.Requests[^2].Statements.Select(s => s.Sql.Split(' ')[0]).ToList();
+        CollectionAssert.AreEqual(new[] { "BEGIN", "UPDATE", "INSERT", "ROLLBACK" }, steps, "El COMMIT se salta y corre el ROLLBACK");
     }
 
     [TestMethod]

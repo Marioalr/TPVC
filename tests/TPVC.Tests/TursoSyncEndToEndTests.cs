@@ -293,10 +293,11 @@ public class TursoSyncEndToEndTests
     }
 
     [TestMethod]
-    public async Task IdleSync_Costs16Requests()
+    public async Task IdleSync_IsOneRequest_ReadAsOneSnapshot()
     {
-        // Base para medir los pasos siguientes: marca de agua + una lectura por cada una de las 13 tablas
-        // + lápidas + perfil del consultorio, sin esquema ni registro del equipo (una vez por sesión)
+        // Paso 8.6: marca de agua, la primera página de las 13 tablas y de las lápidas y el perfil del consultorio en
+        // una sola transacción de lectura (hasta v1.20.3 eran 16 peticiones). El esquema y el registro del equipo, una
+        // vez por sesión
         var pc = CreateDevice("pc", seed: true);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
@@ -305,7 +306,10 @@ public class TursoSyncEndToEndTests
         var readsBefore = _server.BilledRowsRead;
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
-        Assert.AreEqual(16, _server.RequestCount - before, "Una sincronización sin cambios = 16 peticiones");
+        Assert.AreEqual(1, _server.RequestCount - before, "Una sincronización sin cambios = 1 petición");
+        var statements = _server.Requests.Single().Statements;
+        Assert.AreEqual("BEGIN", statements[0].Sql);
+        Assert.AreEqual("COMMIT", statements[^1].Sql, "Una sola foto: watermark, páginas y perfil en la misma transacción");
         Assert.AreEqual(0, _server.Requests.SelectMany(r => r.Statements).Sum(s => s.RowsWritten), "Sin cambios no se escribe nada");
         foreach (var request in _server.Requests)
         {
@@ -743,6 +747,188 @@ public class TursoSyncEndToEndTests
 
         var again = await pc.Sync.SyncAsync();
         Assert.AreEqual(0, again.RowsPushed, "Ya subió todo: solo una vez");
+    }
+
+    // ================================================================== descarga eficiente y desempates (paso 8.6)
+
+    /// <summary>Filas que "escribió otro equipo" directo en la nube, con un SyncId válido y su marca de servidor.</summary>
+    private void InsertCloudRows(string table, int count, string syncedAtSql, string extraColumns = "", string extraValues = "")
+    {
+        const string guid = "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-a' || " +
+                            "substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))";
+        ExecuteCloud($"WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {count}) " +
+                     $"INSERT INTO \"{table}\" (SyncId, UpdatedAtUtc, SyncedAtUtc, OriginDeviceId{extraColumns}) " +
+                     $"SELECT {guid}, '2026-10-10 15:00:00.0000000', {syncedAtSql}, 'device-otra'{extraValues} FROM n;");
+    }
+
+    [TestMethod]
+    public async Task ManyRowsWithTheSameSyncedAtUtc_ArePaged_WithoutLosingAny()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        InsertCloudRows("Categories", 1200, "'2026-10-10 15:00:00.000'", ", Name", ", 'Categoría ' || i");
+        var cloudCount = (long)CloudScalar("SELECT COUNT(*) FROM Categories")!;
+
+        var tablet = CreateDevice("tablet", seed: false);
+        tablet.Sync.PullPageSizeOverride = 100;
+        var result = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+
+        using var db = tablet.Factory.CreateDbContext();
+        Assert.AreEqual(cloudCount, ChangeLogTestSupport.Count(db, "\"Categories\""), "Con la misma marca, las páginas siguen por SyncId");
+    }
+
+    [TestMethod]
+    public async Task TwoDevicesSavingWithTheSameStamp_EndUpWithTheSameRow()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // Los dos guardan el mismo producto con la misma marca y distinto precio
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        var stamp = TursoSyncService.FormatDate(DateTime.UtcNow.AddMinutes(1));
+        foreach (var (device, price) in new[] { (pc, "111.5"), (tablet, "222.5") })
+        {
+            using var db = device.Factory.CreateDbContext();
+            db.Database.ExecuteSqlRaw("UPDATE \"Products\" SET \"Price\" = {0}, \"UpdatedAtUtc\" = {1} WHERE \"SyncId\" = {2}",
+                price, stamp, product.SyncId.ToString().ToUpperInvariant());
+        }
+
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success, "La nube se queda con la de la tablet");
+        var result = await pc.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+
+        async Task<decimal> PriceOn(Device device) => (await device.Inventory.GetProductsAsync()).Single(p => p.SyncId == product.SyncId).Price;
+        Assert.AreEqual(222.5m, await PriceOn(pc), "La nube no aceptó la de la PC (empate): la PC aplica la de la nube");
+        Assert.AreEqual(222.5m, await PriceOn(tablet));
+        Assert.AreEqual("222.5", CloudScalar($"SELECT Price FROM Products WHERE SyncId = '{TursoSyncService.FormatGuid(product.SyncId)}'"));
+        Assert.AreEqual(0, (await pc.Sync.SyncAsync()).RowsPushed, "Lo aplicado en el desempate no vuelve a subir");
+    }
+
+    [TestMethod]
+    public async Task FullDownload_WithA1MbResponseCap_HalvesThePage_AndReadsAboutEachRowOnce()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        // 300 expedientes de otro equipo con antecedentes largos (~12 KB): una página de 100 pasa de 1 MB
+        InsertCloudRows("Patients", 300, "strftime('%Y-%m-%d %H:%M:%f', '2026-10-10', '+' || i || ' seconds')",
+            ", RecordNumber, FullName, FamilyHistory", ", 'EXP-OTRO-' || i, 'Paciente ' || i, hex(zeroblob(6000))");
+        long remoteRows = 0;
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            foreach (var map in SyncSchema.FromModel(db.Model).Tables) remoteRows += (long)CloudScalar($"SELECT COUNT(*) FROM \"{map.Table}\"")!;
+        }
+
+        _server.MaxResponseBytes = 1_000_000;
+        var readsBefore = _server.BilledRowsRead;
+        var tablet = CreateDevice("tablet", seed: false);
+        var result = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.AreEqual((long)CloudScalar("SELECT COUNT(*) FROM Patients")!, ChangeLogTestSupport.Count(db, "\"Patients\""));
+        }
+        Assert.IsTrue(_server.Requests.Any(r => r.Statements.Any(s => s.ErrorCode == "RESPONSE_TOO_LARGE")), "La página de 100 no cupo y se redujo");
+        var read = _server.BilledRowsRead - readsBefore;
+        Assert.IsLessThan(remoteRows * 2 + 100, read, $"~N lecturas: {read} para {remoteRows} filas");
+    }
+
+    [TestMethod]
+    public async Task ADownloadCutHalfway_ContinuesWhereItWas()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        InsertCloudRows("Categories", 1000, "strftime('%Y-%m-%d %H:%M:%f', '2026-10-10', '+' || i || ' seconds')", ", Name", ", 'Categoría ' || i");
+        var cloudCount = (long)CloudScalar("SELECT COUNT(*) FROM Categories")!;
+
+        // Se cae la red al pedir la quinta página de categorías
+        var tablet = CreateDevice("tablet", seed: false);
+        tablet.Sync.PullPageSizeOverride = 100;
+        int categoryPages = 0;
+        _server.BeforeExecuteAsync = sql =>
+        {
+            if (sql.Contains("FROM \"Categories\"", StringComparison.Ordinal) && ++categoryPages == 5) throw new HttpRequestException("Se cortó la red (simulado)");
+            return Task.CompletedTask;
+        };
+        Assert.IsFalse((await tablet.Sync.SyncAsync()).Success);
+        long appliedBefore;
+        using (var db = tablet.Factory.CreateDbContext()) appliedBefore = ChangeLogTestSupport.Count(db, "\"Categories\"");
+        Assert.AreEqual(400L, appliedBefore, "Las cuatro páginas que llegaron quedaron aplicadas");
+
+        _server.BeforeExecuteAsync = null;
+        _server.ClearRecording();
+        var resumed = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(resumed.Success, resumed.ErrorMessage);
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(cloudCount, ChangeLogTestSupport.Count(db, "\"Categories\""));
+        }
+        var categoryReads = _server.Requests.SelectMany(r => r.Statements).Where(s => s.Sql.Contains("FROM \"Categories\"", StringComparison.Ordinal)).Sum(s => s.RowsRead);
+        Assert.IsLessThanOrEqualTo(cloudCount - appliedBefore + 100, categoryReads, $"No se vuelve a leer lo ya aplicado ({categoryReads} lecturas)");
+    }
+
+    [TestMethod]
+    public async Task PushIsAtomic_AFailingRowLeavesNothingOfItsTransaction()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var product = (await pc.Inventory.GetProductsAsync()).First(p => p.CurrentStock > 2);
+        var sale = await pc.Inventory.RegisterSaleAsync(new[] { (product.Id, 1, product.Price) }, "Público General", "Efectivo");
+        Assert.IsNotNull(sale);
+        var id = TursoSyncService.FormatGuid(sale.SyncId);
+
+        _server.FailWhen = sql => sql.StartsWith("INSERT INTO \"SaleItems\"", StringComparison.Ordinal);
+        Assert.IsFalse((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(0L, CloudScalar($"SELECT COUNT(*) FROM Sales WHERE SyncId = '{id}'"), "La venta no queda arriba sin sus renglones");
+
+        _server.FailWhen = null;
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM Sales WHERE SyncId = '{id}'"));
+        Assert.AreEqual(1L, CloudScalar($"SELECT COUNT(*) FROM SaleItems WHERE SaleSyncId = '{id}'"));
+    }
+
+    [TestMethod]
+    public async Task ASaleGoesUpWithItsItems_InTheSameTransaction()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var products = (await pc.Inventory.GetProductsAsync()).Where(p => p.CurrentStock > 2).Take(2).ToList();
+        Assert.IsNotNull(await pc.Inventory.RegisterSaleAsync(products.Select(p => (p.Id, 1, p.Price)).ToArray(), "Público General", "Efectivo"));
+
+        pc.Sync.PushChunkSizeOverride = 2;
+        _server.ClearRecording();
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        var request = _server.Requests.Single(r => r.Statements.Any(s => s.Sql.StartsWith("INSERT INTO \"Sales\"", StringComparison.Ordinal)));
+        Assert.AreEqual("BEGIN", request.Statements[0].Sql);
+        Assert.AreEqual(2, request.Statements.Count(s => s.Sql.StartsWith("INSERT INTO \"SaleItems\"", StringComparison.Ordinal)),
+            "Los renglones viajan con su venta aunque el lote sea de 2");
+    }
+
+    [TestMethod]
+    public async Task AfterUpdating_TheWatermarkInTheSettingsAvoidsAFullDownload()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // Como una base de v1.20.3: sin cursores por tabla, con la marca de agua de la configuración
+        using (var db = tablet.Factory.CreateDbContext()) DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
+        var fullPulls = tablet.Settings.GetQuotaSummary().FullPullsToday;
+        _server.ClearRecording();
+        var result = await tablet.Sync.SyncAsync();
+
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.AreEqual(fullPulls, tablet.Settings.GetQuotaSummary().FullPullsToday, "No es otra descarga completa");
+        Assert.AreEqual(1, _server.Requests.Count, "Una petición, como cualquier sincronización sin cambios");
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.HasCount(SyncSchema.FromModel(db.Model).Tables.Count + 1, await DbMeta.GetByPrefixAsync(db, DbMeta.PullCursorPrefix), "Quedan los cursores por tabla");
+        }
     }
 
     [TestMethod]

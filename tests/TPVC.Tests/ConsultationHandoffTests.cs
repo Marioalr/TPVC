@@ -575,12 +575,14 @@ public class ConsultationHandoffTests
         var (pc, tablet) = await TwoDevicesAsync();
         var (_, product, _) = await StartConsultationAsync(pc);
 
-        // En la tablet ese producto está dado de baja: no se adivina otro ni se descuenta de él
+        // En la tablet ese producto está dado de baja: no se adivina otro ni se descuenta de él. Se guarda como algo
+        // que llegó de la nube (sin marca nueva ni anotación para subir): si subiera con la misma marca, el desempate
+        // del paso 8.6 lo regresaría a la versión de la nube
         using (var db = tablet.Device.Factory.CreateDbContext())
         {
             db.ApplyingRemoteChanges = true;
             db.Products.Single(p => p.SyncId == product.SyncId).IsActive = false;
-            db.SaveChanges();
+            await SyncChangeLog.SaveRemoteChangesAsync(db);
         }
 
         await SendToAsync(pc, tablet);

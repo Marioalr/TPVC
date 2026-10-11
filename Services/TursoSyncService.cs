@@ -40,7 +40,25 @@ public class TursoSyncService
     private const string TombstonesTable = SyncSchema.TombstonesTable;
     private const string MetaTable = SyncSchema.MetaTable;
     private const int PushChunkSize = 80;
-    private const int PullPageSize = 500;
+
+    /// <summary>Lo menos a lo que se reduce una página que no se pudo leer por tamaño o tiempo.</summary>
+    private const int MinPullPageSize = 10;
+
+    private const string WatermarkSql = "SELECT strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds') AS wm;";
+    private const string ClinicProfileSql = "SELECT * FROM ClinicProfiles WHERE Id = 1;";
+
+    /// <summary>
+    /// Filas por página al bajar (paso 8.6): 100 en las tablas con columnas grandes (las hojas del paciente y las recetas
+    /// van en JSON), 500 en las demás. Turso no puso tope hasta 64 MB por respuesta (V12); el límite es por memoria y
+    /// tiempo, sobre todo en Android.
+    /// </summary>
+    private static int DefaultPullPageSize(string table) => table is "Patients" or "PatientConsultations" ? 100 : 500;
+
+    /// <summary>Para las pruebas: un mismo tamaño de página en todas las tablas.</summary>
+    internal int? PullPageSizeOverride { get; set; }
+
+    /// <summary>Para las pruebas: cuántas instrucciones van en cada transacción de la subida.</summary>
+    internal int? PushChunkSizeOverride { get; set; }
 
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly TursoSettingsService _settingsService;
@@ -419,10 +437,6 @@ public class TursoSyncService
     {
         var settings = _settingsService.CurrentSettings;
 
-        // Una sincronización completa (o la primera) sube y baja todo: el freno la revisa antes de empezar
-        bool fullPull = fullResync || settings.LastPulledServerWatermark == null;
-        if (fullPull) EnsureFullPullAllowed();
-
         if (!_changeLogVerified)
         {
             // La base ya lo trae desde que abre el programa (DatabaseInitializer); esto cubre una que llegue sin él
@@ -430,6 +444,12 @@ public class TursoSyncService
             SyncChangeLog.EnsureInstalled(db, backupBeforeFirstInstall: false);
             _changeLogVerified = true;
         }
+
+        // Una sincronización completa (o la primera, sin ningún cursor de bajada) sube y baja todo: el freno la
+        // revisa antes de empezar
+        var cursors = fullResync ? PullCursors.FromScratch : await LoadPullCursorsAsync(settings, ct);
+        bool fullPull = fullResync || cursors.IsFirstDownload;
+        if (fullPull) EnsureFullPullAllowed();
 
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
@@ -442,22 +462,17 @@ public class TursoSyncService
         }
 
         // 1. PUSH: lo anotado en el registro de cambios desde la última subida (paso 8.5)
-        int pushed = await PushLocalChangesAsync(client, settings.DeviceId, fullResync, ct);
+        var (pushed, pushReads) = await PushLocalChangesAsync(client, settings.DeviceId, fullResync, ct);
 
-        // 2. PULL: lo que otros dispositivos escribieron en el servidor desde la última descarga
-        //    (la nueva marca se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
-        var lastPulled = fullResync ? null : settings.LastPulledServerWatermark;
+        // 2. PULL y perfil del consultorio: lo que otros equipos escribieron desde el cursor de cada tabla (la marca
+        //    de agua se toma ANTES de leer, con 5 s de traslape; los duplicados se descartan por LWW)
         if (fullPull) _settingsService.RecordFullPull(); // se cuenta al empezar a bajar, cuando la red ya respondió
-        var watermarkRows = await client.QueryAsync($"SELECT strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds') AS wm;", null, ct);
-        var newWatermark = watermarkRows.FirstOrDefault()?["wm"]?.ToString();
-        var (pulled, rowsRead) = await PullRemoteChangesAsync(client, settings.DeviceId, lastPulled, skipOwnRows: !fullResync, ct);
+        var (pulled, rowsRead, watermark) = await PullRemoteChangesAsync(client, settings.DeviceId, cursors,
+            skipOwnRows: !fullResync, incremental: !fullPull, ct);
 
-        // 3. Perfil del consultorio (último en modificarse gana)
-        await SyncClinicProfileAsync(client, ct);
-
-        if (!string.IsNullOrWhiteSpace(newWatermark)) settings.LastPulledServerWatermark = newWatermark;
+        settings.LastPulledServerWatermark = watermark;
         settings.LastSyncUtc = DateTime.UtcNow;
-        _settingsService.RecordUsage(rowsRead + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
+        _settingsService.RecordUsage(rowsRead + pushReads + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
             pushed + 1 + Interlocked.Exchange(ref _externalRowsWritten, 0));
         _settingsService.SaveSettings(settings);
         CheckDailyConsumption();
@@ -607,12 +622,17 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     // PUSH
     // =========================================================================
 
+    /// <summary>Una instrucción de la subida: una fila completa o una lápida (con su DELETE).</summary>
+    private sealed record PushStatement(string Sql, object?[] Args, TableMap? RowMap, Guid SyncId);
+
     /// <summary>
     /// Sube lo anotado en <see cref="SyncChangeLog"/> después del cursor (<see cref="DbMeta.LastPushedSeq"/>), tabla por
     /// tabla en el orden del contrato: cada fila que todavía existe aquí sube completa y la que ya no, como su lápida
-    /// más reciente. El cursor avanza solo si todo subió.
+    /// más reciente. Cada lote va en una transacción (paso 8.6, V14) sin partir una operación: la lápida con su DELETE y
+    /// una fila con las que le pertenecen (una venta con sus renglones). El cursor avanza solo si todo subió.
+    /// Devuelve las filas que la nube cambió y las que se leyeron para el desempate.
     /// </summary>
-    private async Task<int> PushLocalChangesAsync(TursoClient client, string deviceId, bool fullResync, CancellationToken ct)
+    private async Task<(int Applied, int RowsRead)> PushLocalChangesAsync(TursoClient client, string deviceId, bool fullResync, CancellationToken ct)
     {
         using var db = _contextFactory.CreateDbContext();
         var tables = GetTableMaps();
@@ -623,7 +643,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         if (cursor == null) await SyncChangeLog.BackfillAsync(db, tables, ct);
         long fromSeq = cursor ?? 0;
 
-        var statements = new List<(string Sql, object?[]? Args)>();
+        var groups = new List<List<PushStatement>>();
         var parkNow = new Dictionary<(string EntityType, Guid SyncId), string>();
         var included = new HashSet<(string EntityType, Guid SyncId)>();
         List<SyncParkedRow> parkedBefore;
@@ -644,15 +664,22 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 .Where(p => p.Direction == SyncParkedRow.Push)
                 .ToListAsync(ct);
 
-            await BuildPushStatementsAsync(db, tables, deviceId, fromSeq, toSeq, loggedTypes, parkedBefore, statements, parkNow, included, ct);
+            await BuildPushStatementsAsync(db, tables, deviceId, fromSeq, toSeq, loggedTypes, parkedBefore, groups, parkNow, included, ct);
             await db.Database.UseTransactionAsync(null, ct);
         }
 
         // Se cuentan las filas que la nube sí cambió: reenviar algo que ya tenía no cuenta como subido
-        int applied = 0;
-        for (int i = 0; i < statements.Count; i += PushChunkSize)
+        int applied = 0, statementCount = 0;
+        var rejected = new List<(TableMap Map, Guid SyncId)>();
+        foreach (var chunk in Chunk(groups, PushChunkSizeOverride ?? PushChunkSize))
         {
-            applied += await client.ExecuteBatchAsync(statements.Skip(i).Take(PushChunkSize), ct);
+            var results = await client.TransactionAsync(chunk.Select(s => (s.Sql, (object?[]?)s.Args)), ct);
+            for (int i = 0; i < chunk.Count; i++)
+            {
+                applied += results[i].AffectedRows;
+                if (chunk[i].RowMap is { } map && results[i].AffectedRows == 0) rejected.Add((map, chunk[i].SyncId));
+            }
+            statementCount += chunk.Count;
         }
 
         // Ya subió todo: lo que se pudo subir sale de las apartadas y lo que no, se aparta (o suma un intento).
@@ -661,17 +688,87 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         await SyncChangeLog.SavePushCursorAsync(db, toSeq, ct);
         if (cursor == null)
         {
-            AppLogger.Info($"Turso: subida completa con el registro de cambios hasta el Seq {toSeq} ({statements.Count} instrucciones, {applied} filas cambiaron en la nube).");
+            AppLogger.Info($"Turso: subida completa con el registro de cambios hasta el Seq {toSeq} ({statementCount} instrucciones, {applied} filas cambiaron en la nube).");
+            return (applied, 0);
         }
-        return applied;
+
+        // Desempate: lo que la nube no aceptó se vuelve a leer y se aplica aquí. No en la primera subida, en la que casi
+        // todo afecta 0 filas (la nube ya lo tenía) y costaría una lectura por fila
+        int rowsRead = rejected.Count > 0 ? await ApplyRejectedUpsertsAsync(client, rejected, ct) : 0;
+        return (applied, rowsRead);
+    }
+
+    /// <summary>Lotes de la subida sin partir un grupo (uno más grande que el lote va solo).</summary>
+    private static IEnumerable<List<PushStatement>> Chunk(List<List<PushStatement>> groups, int size)
+    {
+        var chunk = new List<PushStatement>();
+        foreach (var group in groups)
+        {
+            if (chunk.Count > 0 && chunk.Count + group.Count > size)
+            {
+                yield return chunk;
+                chunk = new List<PushStatement>();
+            }
+            chunk.AddRange(group);
+        }
+        if (chunk.Count > 0) yield return chunk;
+    }
+
+    /// <summary>
+    /// Desempate (paso 8.6, <see cref="SyncRules.AfterRejectedUpsert"/>): si la nube no aceptó una fila (tenía una igual
+    /// o más nueva, o una lápida), se vuelve a leer de la nube y se aplica aquí aunque las marcas empaten; si ya no la
+    /// tiene, se aplica su lápida. Así dos equipos que guardaron con la misma marca terminan iguales. Una sola petición.
+    /// </summary>
+    private async Task<int> ApplyRejectedUpsertsAsync(TursoClient client, List<(TableMap Map, Guid SyncId)> rejected, CancellationToken ct)
+    {
+        var batches = rejected
+            .GroupBy(r => r.Map)
+            .SelectMany(g => g.Select(r => r.SyncId).Distinct().Chunk(200).Select(ids => (Map: g.Key, Ids: ids)))
+            .ToList();
+
+        var statements = new List<(string Sql, object?[]? Args)>();
+        foreach (var (map, ids) in batches)
+        {
+            var args = ids.Select(id => (object?)FormatGuid(id)).ToArray();
+            var placeholders = string.Join(", ", args.Select(_ => "?"));
+            statements.Add(($"SELECT * FROM {Q(map.Table)} WHERE \"SyncId\" IN ({placeholders});", args));
+            statements.Add(($"SELECT \"EntityType\", \"SyncId\", \"DeletedAtUtc\" FROM {Q(TombstonesTable)} WHERE \"EntityType\" = ? AND \"SyncId\" IN ({placeholders});",
+                new object?[] { map.ClrType.Name }.Concat(args).ToArray()));
+        }
+        var results = await client.QueryBatchAsync(statements, ct);
+
+        int rowsRead = 0;
+        var syncIdMaps = new Dictionary<Type, Dictionary<Guid, int>>();
+        for (int i = 0; i < batches.Count; i++)
+        {
+            var map = batches[i].Map;
+            var rows = results[2 * i];
+            var tombstones = results[2 * i + 1];
+            rowsRead += Math.Max(1, rows.Count) + Math.Max(1, tombstones.Count);
+
+            if (rows.Count > 0)
+            {
+                await ApplyPageAsync(map, rows, syncIdMaps, null, ct, serverRowAfterReject: true);
+                syncIdMaps.Remove(map.ClrType);
+            }
+            var present = rows.Select(r => ParseGuid(r.GetValueOrDefault("SyncId"))).ToHashSet();
+            var deleted = tombstones.Where(t => !present.Contains(ParseGuid(t.GetValueOrDefault("SyncId")))).ToList();
+            if (deleted.Count > 0) await ApplyTombstonesAsync(deleted, ct);
+        }
+        AppLogger.Info($"Turso: {rejected.Count} filas que la nube no aceptó se releyeron y se aplicaron aquí.");
+        return rowsRead;
     }
 
     private async Task BuildPushStatementsAsync(AppDbContext db, IReadOnlyList<TableMap> tables, string deviceId, long fromSeq, long toSeq,
-        HashSet<string> loggedTypes, List<SyncParkedRow> parkedBefore, List<(string Sql, object?[]? Args)> statements,
+        HashSet<string> loggedTypes, List<SyncParkedRow> parkedBefore, List<List<PushStatement>> groups,
         Dictionary<(string EntityType, Guid SyncId), string> parkNow, HashSet<(string EntityType, Guid SyncId)> included, CancellationToken ct)
     {
         var idMaps = new Dictionary<Type, Dictionary<int, Guid>>();
         var found = new HashSet<(string EntityType, Guid SyncId)>();
+
+        // El grupo (la operación) de cada fila que sube: una fila con referencia obligatoria y borrado en cascada a otra
+        // que también sube va en el grupo de esa (la venta con sus renglones, el producto con sus lotes)
+        var groupOf = new Dictionary<(Type, Guid), List<PushStatement>>();
 
         foreach (var map in tables)
         {
@@ -693,6 +790,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 args.AddRange(map.Columns.Select(c => ToRemoteValue(c.Property.GetValue(entity))));
 
                 string? missing = null;
+                List<PushStatement>? owner = null;
                 foreach (var reference in map.References)
                 {
                     var localId = reference.Property.GetValue(entity) as int?;
@@ -712,6 +810,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                         missing = $"le falta {reference.PrincipalType.Name} (Id local {localId})";
                         break;
                     }
+                    if (owner == null && principalSyncId is { } principal && reference.IsRequired && reference.DeleteBehavior == DeleteBehavior.Cascade)
+                    {
+                        groupOf.TryGetValue((reference.PrincipalType, principal), out owner);
+                    }
                     args.Add(principalSyncId.HasValue ? FormatGuid(principalSyncId.Value) : null);
                 }
 
@@ -725,7 +827,14 @@ ON CONFLICT(DeviceId) DO UPDATE SET
                 args.Add(map.ClrType.Name);
                 args.Add(FormatGuid(entity.SyncId));
                 args.Add(FormatDate(entity.UpdatedAtUtc));
-                statements.Add((sql, args.ToArray()));
+
+                if (owner == null)
+                {
+                    owner = new List<PushStatement>();
+                    groups.Add(owner);
+                }
+                owner.Add(new PushStatement(sql, args.ToArray(), map, entity.SyncId));
+                groupOf[(map.ClrType, entity.SyncId)] = owner;
             }
         }
 
@@ -738,14 +847,16 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         var tablesByType = tables.ToDictionary(m => m.ClrType.Name, m => m.Table);
         foreach (var t in tombstones)
         {
-            statements.Add((SyncSchema.TombstoneUpsertSql,
-                new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }));
-
+            // La lápida y su DELETE, en el mismo lote
+            var group = new List<PushStatement>
+            {
+                new(SyncSchema.TombstoneUpsertSql, new object?[] { t.EntityType, FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc), deviceId }, null, t.SyncId)
+            };
             if (tablesByType.TryGetValue(t.EntityType, out var table))
             {
-                statements.Add((SyncSchema.DeleteTombstonedRowSql(table),
-                    new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }));
+                group.Add(new(SyncSchema.DeleteTombstonedRowSql(table), new object?[] { FormatGuid(t.SyncId), FormatDate(t.DeletedAtUtc) }, null, t.SyncId));
             }
+            groups.Add(group);
         }
     }
 
@@ -851,33 +962,242 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     // PULL
     // =========================================================================
 
-    private async Task<(int Applied, int RowsRead)> PullRemoteChangesAsync(
-        TursoClient client, string deviceId, string? fromWatermark, bool skipOwnRows, CancellationToken ct)
+    /// <summary>
+    /// Posición en una tabla remota, por (SyncedAtUtc, SyncId): lo que va antes ya se aplicó aquí. Se compara como texto,
+    /// igual que en SQLite (las marcas tienen el formato del protocolo).
+    /// </summary>
+    internal readonly record struct PullCursor(string SyncedAtUtc, string Key)
     {
-        int applied = 0;
-        int rowsRead = 0;
-        var syncIdMaps = new Dictionary<Type, Dictionary<Guid, int>>();
+        public static readonly PullCursor Start = new(string.Empty, string.Empty);
 
-        foreach (var map in GetTableMaps())
+        public string Serialize() => $"{SyncedAtUtc}|{Key}";
+
+        public static PullCursor? Parse(string? text)
         {
-            await foreach (var page in ReadPagesAsync(client, map.Table, deviceId, fromWatermark, skipOwnRows, ct))
+            int bar = text?.IndexOf('|') ?? -1;
+            return bar < 0 ? null : new PullCursor(text![..bar], text[(bar + 1)..]);
+        }
+
+        public static PullCursor Min(PullCursor a, PullCursor b)
+        {
+            int c = string.CompareOrdinal(a.SyncedAtUtc, b.SyncedAtUtc);
+            if (c == 0) c = string.CompareOrdinal(a.Key, b.Key);
+            return c <= 0 ? a : b;
+        }
+    }
+
+    /// <summary>
+    /// Los cursores de bajada guardados en <see cref="DbMeta"/>. Al actualizar desde v1.20.3 o antes no hay ninguno: la
+    /// marca de agua de la configuración vale para todas las tablas, así nadie vuelve a bajar todo. Una tabla nueva
+    /// (sin cursor, cuando las demás sí tienen) empieza desde el principio.
+    /// </summary>
+    private sealed class PullCursors(Dictionary<string, PullCursor> saved, PullCursor? fromSettings)
+    {
+        public static PullCursors FromScratch => new(new Dictionary<string, PullCursor>(), null);
+
+        public bool IsFirstDownload => saved.Count == 0 && fromSettings == null;
+
+        public PullCursor For(string table) =>
+            saved.TryGetValue(table, out var cursor) ? cursor : saved.Count == 0 ? fromSettings ?? PullCursor.Start : PullCursor.Start;
+    }
+
+    private async Task<PullCursors> LoadPullCursorsAsync(TursoSettings settings, CancellationToken ct)
+    {
+        using var db = _contextFactory.CreateDbContext();
+        var saved = new Dictionary<string, PullCursor>(StringComparer.Ordinal);
+        foreach (var (key, value) in await DbMeta.GetByPrefixAsync(db, DbMeta.PullCursorPrefix, ct))
+        {
+            if (PullCursor.Parse(value) is { } cursor) saved[key[DbMeta.PullCursorPrefix.Length..]] = cursor;
+        }
+        var fromSettings = string.IsNullOrWhiteSpace(settings.LastPulledServerWatermark)
+            ? (PullCursor?)null
+            : new PullCursor(settings.LastPulledServerWatermark, string.Empty);
+        return new PullCursors(saved, fromSettings);
+    }
+
+    /// <summary>
+    /// Baja lo que otros equipos escribieron, tabla por tabla en el orden del contrato y por páginas (paso 8.6).
+    /// La bajada incremental empieza con una sola petición, una transacción de lectura (una sola foto, V14): la marca de
+    /// agua, la primera página de las 13 tablas y de las lápidas y el perfil del consultorio. Solo se piden más páginas
+    /// de las tablas que llenaron la suya. La descarga completa va una tabla por petición. El cursor de cada tabla se
+    /// guarda con cada página aplicada, sin pasar de la marca de agua: un corte a media descarga sigue donde iba.
+    /// </summary>
+    private async Task<(int Applied, int RowsRead, string Watermark)> PullRemoteChangesAsync(
+        TursoClient client, string deviceId, PullCursors cursors, bool skipOwnRows, bool incremental, CancellationToken ct)
+    {
+        var tables = GetTableMaps();
+        var pageSizes = new Dictionary<string, int>(StringComparer.Ordinal);
+        int applied = 0, rowsRead = 0;
+        string? watermark = null;
+        Dictionary<string, object?>? profileRow = null;
+        Dictionary<string, List<Dictionary<string, object?>>>? firstPages = null;
+
+        if (incremental)
+        {
+            var statements = new List<(string Sql, object?[]? Args)> { (WatermarkSql, null) };
+            foreach (var table in tables.Select(m => m.Table).Append(TombstonesTable))
             {
-                rowsRead += page.Count;
-                applied += await ApplyPageAsync(map, page, syncIdMaps, deadPrincipals: null, ct);
+                statements.Add(PageQuery(table, cursors.For(table), deviceId, skipOwnRows, PageSize(pageSizes, table)));
             }
+            statements.Add((ClinicProfileSql, null));
+            try
+            {
+                var results = await client.TransactionAsync(statements, ct);
+                watermark = results[0].Rows.FirstOrDefault()?["wm"]?.ToString();
+                firstPages = new Dictionary<string, List<Dictionary<string, object?>>>(StringComparer.Ordinal);
+                int i = 1;
+                foreach (var table in tables.Select(m => m.Table).Append(TombstonesTable)) firstPages[table] = results[i++].Rows;
+                profileRow = results[^1].Rows.FirstOrDefault();
+            }
+            catch (TursoException ex) when (IsTooLargeOrSlow(ex))
+            {
+                // Demasiado para una sola respuesta: como la descarga completa, una tabla por petición
+                AppLogger.Warn($"Turso: la bajada en una sola petición no se pudo leer ({ex.Message}); se baja tabla por tabla.");
+                watermark = null;
+                firstPages = null;
+            }
+        }
+
+        if (watermark == null)
+        {
+            var results = await client.QueryBatchAsync(new (string, object?[]?)[] { (WatermarkSql, null), (ClinicProfileSql, null) }, ct);
+            watermark = results[0].FirstOrDefault()?["wm"]?.ToString();
+            profileRow = results[1].FirstOrDefault();
+        }
+        if (string.IsNullOrWhiteSpace(watermark)) throw new TursoException("Turso no regresó su hora para la marca de agua.");
+
+        var upTo = new PullCursor(watermark, string.Empty);
+        var idleCursors = new Dictionary<string, string>(StringComparer.Ordinal);
+        var syncIdMaps = new Dictionary<Type, Dictionary<Guid, int>>();
+        foreach (var map in tables)
+        {
+            var (a, r) = await PullTableAsync(client, map.Table, cursors.For(map.Table), firstPages?[map.Table], upTo, deviceId, skipOwnRows,
+                pageSizes, idleCursors, (page, cursor) => ApplyPageAsync(map, page, syncIdMaps, deadPrincipals: null, ct, cursor), ct);
+            applied += a;
+            rowsRead += r;
             // Esta tabla pudo recibir filas nuevas: refrescar su mapa para las tablas dependientes
             syncIdMaps.Remove(map.ClrType);
         }
 
-        await foreach (var page in ReadPagesAsync(client, TombstonesTable, deviceId, fromWatermark, skipOwnRows, ct, keyColumn: "SyncId"))
-        {
-            rowsRead += page.Count;
-            applied += await ApplyTombstonesAsync(page, ct);
-        }
+        var (tombstonesApplied, tombstonesRead) = await PullTableAsync(client, TombstonesTable, cursors.For(TombstonesTable), firstPages?[TombstonesTable],
+            upTo, deviceId, skipOwnRows, pageSizes, idleCursors, async (page, cursor) =>
+            {
+                int n = await ApplyTombstonesAsync(page, ct);
+                await SavePullCursorsAsync(cursor, ct);
+                return n;
+            }, ct);
+        applied += tombstonesApplied;
+        rowsRead += tombstonesRead;
+
+        // Las tablas sin nada nuevo avanzan hasta la marca de agua, todas en una escritura
+        await SavePullCursorsAsync(idleCursors, ct);
 
         // Lo apartado en esta y en otras sincronizaciones se vuelve a intentar con lo que ya llegó
         var (retried, retryReads) = await RetryParkedPullAsync(client, ct);
-        return (applied + retried, rowsRead + retryReads);
+
+        // Perfil del consultorio (último en modificarse gana)
+        await SyncClinicProfileAsync(client, profileRow, ct);
+
+        return (applied + retried, rowsRead + retryReads, watermark);
+    }
+
+    /// <summary>
+    /// Las páginas de una tabla desde <paramref name="from"/>: la primera puede venir ya leída (la foto de la bajada
+    /// incremental) y se piden más mientras llegue llena. Cada página se aplica junto con su cursor.
+    /// </summary>
+    private async Task<(int Applied, int RowsRead)> PullTableAsync(TursoClient client, string table, PullCursor from,
+        List<Dictionary<string, object?>>? firstPage, PullCursor upTo, string deviceId, bool skipOwnRows, Dictionary<string, int> pageSizes,
+        Dictionary<string, string> idleCursors, Func<List<Dictionary<string, object?>>, IReadOnlyDictionary<string, string>, Task<int>> apply,
+        CancellationToken ct)
+    {
+        int applied = 0, rowsRead = 0;
+        var position = from;
+        var page = firstPage;
+        int size = PageSize(pageSizes, table);
+        var key = DbMeta.PullCursorPrefix + table;
+
+        while (true)
+        {
+            if (page == null) (page, size) = await ReadPageAsync(client, table, position, deviceId, skipOwnRows, pageSizes, ct);
+            rowsRead += page.Count;
+            bool full = page.Count >= size;
+            if (page.Count > 0)
+            {
+                var last = page[^1];
+                position = new PullCursor(last.GetValueOrDefault("SyncedAtUtc")?.ToString() ?? string.Empty, last.GetValueOrDefault("SyncId")?.ToString() ?? string.Empty);
+            }
+
+            // Lo aplicado, sin pasar de la marca de agua: algo escrito justo antes de ella puede llegar todavía. Al acabar
+            // la tabla, la marca de agua
+            var cursor = full ? PullCursor.Min(position, upTo) : upTo;
+            var meta = new Dictionary<string, string>(StringComparer.Ordinal) { [key] = cursor.Serialize() };
+            if (page.Count > 0)
+            {
+                applied += await apply(page, meta);
+                idleCursors.Remove(key);
+            }
+            else
+            {
+                idleCursors[key] = cursor.Serialize();
+            }
+
+            if (!full) return (applied, rowsRead);
+            page = null;
+        }
+    }
+
+    private int PageSize(Dictionary<string, int> pageSizes, string table) =>
+        pageSizes.TryGetValue(table, out var size) ? size : PullPageSizeOverride ?? DefaultPullPageSize(table);
+
+    /// <summary>
+    /// Una página desde la posición dada. Si la respuesta es demasiado grande o tarda demasiado, la página de esa tabla
+    /// se reduce a la mitad (hasta <see cref="MinPullPageSize"/>) y se vuelve a pedir.
+    /// </summary>
+    private async Task<(List<Dictionary<string, object?>> Rows, int Size)> ReadPageAsync(TursoClient client, string table, PullCursor from,
+        string deviceId, bool skipOwnRows, Dictionary<string, int> pageSizes, CancellationToken ct)
+    {
+        while (true)
+        {
+            int size = PageSize(pageSizes, table);
+            try
+            {
+                var (sql, args) = PageQuery(table, from, deviceId, skipOwnRows, size);
+                return (await client.QueryAsync(sql, args, ct), size);
+            }
+            catch (TursoException ex) when (IsTooLargeOrSlow(ex) && size > MinPullPageSize)
+            {
+                pageSizes[table] = Math.Max(MinPullPageSize, size / 2);
+                AppLogger.Warn($"Turso: la página de {table} con {size} filas no se pudo leer ({ex.Message}); se pide con {pageSizes[table]}.");
+            }
+        }
+    }
+
+    private static bool IsTooLargeOrSlow(TursoException ex) =>
+        ex.ErrorCode is "TIMEOUT" or "RESPONSE_TOO_LARGE" or "HTTP_413"
+        || ex.Message.Contains("too large", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Consulta de una página. "SyncedAtUtc" >= ? va adelante para que SQLite recorra el índice en orden desde el
+    /// cursor (comprobado en Turso, V15): sin él usaba "MULTI-INDEX OR" y ordenaba todo lo que queda de la tabla en
+    /// cada página (la primera de 20k filas leía 26,666; ahora ~2,000).
+    /// </summary>
+    internal static (string Sql, object?[] Args) PageQuery(string table, PullCursor from, string deviceId, bool skipOwnRows, int size)
+    {
+        var origin = skipOwnRows ? " AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?)" : string.Empty;
+        var sql = $"SELECT * FROM {Q(table)} WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)){origin} " +
+                  $"ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT {size};";
+        var args = new List<object?> { from.SyncedAtUtc, from.SyncedAtUtc, from.SyncedAtUtc, from.Key };
+        if (skipOwnRows) args.Add(deviceId);
+        return (sql, args.ToArray());
+    }
+
+    private async Task SavePullCursorsAsync(IReadOnlyDictionary<string, string> cursors, CancellationToken ct)
+    {
+        if (cursors.Count == 0) return;
+        using var db = _contextFactory.CreateDbContext();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        foreach (var (key, value) in cursors) await DbMeta.SetAsync(db, key, value, ct);
+        await tx.CommitAsync(ct);
     }
 
     // =========================================================================
@@ -1047,39 +1367,15 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         else db.SyncParkedRows.Remove(row);
     }
 
-    private static async IAsyncEnumerable<List<Dictionary<string, object?>>> ReadPagesAsync(
-        TursoClient client, string table, string deviceId, string? fromWatermark, bool skipOwnRows,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct, string keyColumn = "SyncId")
-    {
-        string lastSynced = fromWatermark ?? string.Empty;
-        string lastKey = string.Empty;
-        var originFilter = skipOwnRows ? " AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?)" : string.Empty;
-
-        while (true)
-        {
-            var sql = $"SELECT * FROM {Q(table)} WHERE (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND {Q(keyColumn)} > ?)){originFilter} " +
-                      $"ORDER BY \"SyncedAtUtc\", {Q(keyColumn)} LIMIT {PullPageSize};";
-            var args = skipOwnRows
-                ? new object?[] { lastSynced, lastSynced, lastKey, deviceId }
-                : new object?[] { lastSynced, lastSynced, lastKey };
-
-            var rows = await client.QueryAsync(sql, args, ct);
-            if (rows.Count == 0) yield break;
-            yield return rows;
-            if (rows.Count < PullPageSize) yield break;
-
-            var last = rows[^1];
-            lastSynced = last["SyncedAtUtc"]?.ToString() ?? lastSynced;
-            lastKey = last[keyColumn]?.ToString() ?? string.Empty;
-        }
-    }
-
+    /// <param name="cursor">El cursor de bajada que se guarda junto con la página (en la misma transacción).</param>
+    /// <param name="serverRowAfterReject">Desempate: la fila de la nube se aplica también con la misma marca
+    /// (<see cref="SyncRules.ServerRowAppliesAfterReject"/>).</param>
     private async Task<int> ApplyPageAsync(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
-        ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct)
+        ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct, IReadOnlyDictionary<string, string>? cursor = null, bool serverRowAfterReject = false)
     {
         var method = typeof(TursoSyncService).GetMethod(nameof(ApplyPageGenericAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(map.ClrType);
-        return await (Task<int>)method.Invoke(this, new object?[] { map, rows, syncIdMaps, deadPrincipals, ct })!;
+        return await (Task<int>)method.Invoke(this, new object?[] { map, rows, syncIdMaps, deadPrincipals, cursor, serverRowAfterReject, ct })!;
     }
 
     /// <summary>
@@ -1088,7 +1384,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     /// <paramref name="deadPrincipals"/> son los principales que se sabe que se borraron.
     /// </summary>
     private async Task<int> ApplyPageGenericAsync<T>(TableMap map, List<Dictionary<string, object?>> rows, Dictionary<Type, Dictionary<Guid, int>> syncIdMaps,
-        ISet<(Type, Guid)>? deadPrincipals, CancellationToken ct)
+        ISet<(Type, Guid)>? deadPrincipals, IReadOnlyDictionary<string, string>? cursor, bool serverRowAfterReject, CancellationToken ct)
         where T : class, ISyncEntity, new()
     {
         using var db = _contextFactory.CreateDbContext();
@@ -1116,8 +1412,9 @@ ON CONFLICT(DeviceId) DO UPDATE SET
             var remoteUpdated = ParseDate(row.GetValueOrDefault("UpdatedAtUtc"));
             locals.TryGetValue(syncId, out var local);
 
-            // Last-Write-Wins: la versión local igual o más nueva se conserva (y lo apartado de esta fila ya no hace falta)
-            if (!SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated))
+            // Last-Write-Wins: la versión local igual o más nueva se conserva (en el desempate, solo la más nueva), y lo
+            // apartado de esta fila ya no hace falta
+            if (serverRowAfterReject ? !SyncRules.ServerRowAppliesAfterReject(local?.UpdatedAtUtc, remoteUpdated) : !SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated))
             {
                 Unpark(db, parked, entityType, syncId);
                 continue;
@@ -1201,7 +1498,7 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         }
 
         await ResolveUniqueConflictsAsync(db, map, ct);
-        await SyncChangeLog.SaveRemoteChangesAsync(db, ct);
+        await SyncChangeLog.SaveRemoteChangesAsync(db, ct, cursor);
         return applied;
     }
 
@@ -1327,11 +1624,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
     // PERFIL DEL CONSULTORIO
     // =========================================================================
 
-    private async Task SyncClinicProfileAsync(TursoClient client, CancellationToken ct)
+    /// <param name="remote">La fila del perfil en la nube, ya leída con la bajada (null si no existe).</param>
+    private async Task SyncClinicProfileAsync(TursoClient client, Dictionary<string, object?>? remote, CancellationToken ct)
     {
         var localProfile = _clinicProfileService.CurrentProfile;
-        var rows = await client.QueryAsync("SELECT * FROM ClinicProfiles WHERE Id = 1;", null, ct);
-        var remote = rows.FirstOrDefault();
         DateTime? remoteUpdated = remote != null ? ParseDate(remote.GetValueOrDefault("UpdatedAtUtc")) : null;
 
         bool remoteHasData = remote != null && (!string.IsNullOrWhiteSpace(remote.GetValueOrDefault("DoctorName")?.ToString())

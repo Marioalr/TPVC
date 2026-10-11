@@ -19,6 +19,9 @@ public static class TursoSyncFormats
     public const string DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fffffff";
 }
 
+/// <summary>Resultado de una instrucción dentro de una transacción (<see cref="TursoClient.TransactionAsync"/>).</summary>
+public sealed record TursoStatementResult(int AffectedRows, List<Dictionary<string, object?>> Rows);
+
 public class TursoException : Exception
 {
     /// <summary>Se acabó la cuota mensual del plan: Turso rechaza toda instrucción con el código BLOCKED.</summary>
@@ -329,32 +332,89 @@ public class TursoClient : IDisposable
         return totalAffected;
     }
 
+    /// <summary>
+    /// Ejecuta las instrucciones en una sola transacción, con una petición "batch" de Hrana: BEGIN, cada instrucción
+    /// solo si la anterior salió bien, COMMIT, y ROLLBACK si algo falló. En Turso es atómica (V14, comprobado el
+    /// 2026-10-10): o se aplica todo o nada, y las lecturas ven una sola foto. Si una instrucción falla, lanza su error.
+    /// </summary>
+    public async Task<List<TursoStatementResult>> TransactionAsync(IEnumerable<(string Sql, object?[]? Args)> statements, CancellationToken ct = default)
+    {
+        var list = statements.ToList();
+        var steps = new JsonArray { new JsonObject { ["stmt"] = new JsonObject { ["sql"] = "BEGIN" } } };
+        for (int i = 0; i < list.Count; i++)
+        {
+            steps.Add(new JsonObject
+            {
+                ["condition"] = OkCondition(i),
+                ["stmt"] = CreateStatement(list[i].Sql, list[i].Args)
+            });
+        }
+        int commitStep = list.Count + 1;
+        steps.Add(new JsonObject { ["condition"] = OkCondition(list.Count), ["stmt"] = new JsonObject { ["sql"] = "COMMIT" } });
+        steps.Add(new JsonObject
+        {
+            ["condition"] = new JsonObject { ["type"] = "not", ["cond"] = OkCondition(commitStep) },
+            ["stmt"] = new JsonObject { ["sql"] = "ROLLBACK" }
+        });
+
+        var requestObj = new JsonObject
+        {
+            ["requests"] = new JsonArray
+            {
+                new JsonObject { ["type"] = "batch", ["batch"] = new JsonObject { ["steps"] = steps } },
+                new JsonObject { ["type"] = "close" }
+            }
+        };
+        var root = await SendPipelineAsync(requestObj, ct);
+        var batch = root["results"]?.AsArray().FirstOrDefault();
+        CheckResultError(batch);
+
+        var stepResults = batch?["response"]?["result"]?["step_results"]?.AsArray();
+        var stepErrors = batch?["response"]?["result"]?["step_errors"]?.AsArray();
+
+        // El primer error manda (los pasos que siguen se saltan y la transacción se deshace)
+        if (stepErrors != null)
+        {
+            foreach (var error in stepErrors)
+            {
+                if (error != null) CheckResultError(new JsonObject { ["type"] = "error", ["error"] = error.DeepClone() });
+            }
+        }
+
+        var results = new List<TursoStatementResult>(list.Count);
+        for (int i = 1; i <= list.Count; i++)
+        {
+            var step = stepResults != null && i < stepResults.Count ? stepResults[i] : null;
+            var affected = step?["affected_row_count"];
+            results.Add(new TursoStatementResult(affected == null ? 0 : (int)ParseLongSafe(affected), ParseRows(step)));
+        }
+        return results;
+    }
+
+    private static JsonObject OkCondition(int step) => new() { ["type"] = "ok", ["step"] = step };
+
+    private static JsonObject CreateStatement(string sql, object?[]? args)
+    {
+        var stmtObj = new JsonObject { ["sql"] = sql };
+        if (args != null && args.Length > 0)
+        {
+            var argsArray = new JsonArray();
+            foreach (var arg in args) argsArray.Add(FormatArg(arg));
+            stmtObj["args"] = argsArray;
+        }
+        return stmtObj;
+    }
+
     private static JsonObject CreatePipelineRequest(IEnumerable<(string Sql, object?[]? Args)> statements)
     {
         var requestsArray = new JsonArray();
         foreach (var (sql, args) in statements)
         {
-            var stmtObj = new JsonObject
-            {
-                ["sql"] = sql
-            };
-
-            if (args != null && args.Length > 0)
-            {
-                var argsArray = new JsonArray();
-                foreach (var arg in args)
-                {
-                    argsArray.Add(FormatArg(arg));
-                }
-                stmtObj["args"] = argsArray;
-            }
-
-            var req = new JsonObject
+            requestsArray.Add(new JsonObject
             {
                 ["type"] = "execute",
-                ["stmt"] = stmtObj
-            };
-            requestsArray.Add(req);
+                ["stmt"] = CreateStatement(sql, args)
+            });
         }
 
         requestsArray.Add(new JsonObject { ["type"] = "close" });
