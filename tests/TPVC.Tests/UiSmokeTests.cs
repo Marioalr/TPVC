@@ -653,6 +653,52 @@ internal sealed class UiSmokeSession
                 _failures.Add($"[20h-{suffix}] Equipos vinculados no muestra los 3 equipos, la PC principal o los cambios sin subir");
             }
 
+            // Paso 8.14: una tablet que leyó el QR espera que la vinculen, y el QR con la URL y el token (con la nube verificada)
+            ExecuteCloud("INSERT OR REPLACE INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, PendingCount) " +
+                         "VALUES ('android-tab-3f9a2c', 'Galaxy Tab S9', 'AndroidTablet', '1.0.0', strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds'), 'Android', 1, 0);");
+            using (var db = factory.CreateDbContext()) DbMeta.Set(db, DbMeta.ClinicId, "clinica-de-prueba");
+            WaitFor(cloudVm.RefreshDevicesAsync());
+            WaitFor(cloudVm.ShowLinkQrAsync());
+            Pump();
+            Layout(host, Width, Height);
+            cloudScroller?.ScrollToVerticalOffset(600);
+            Capture(host, $"20i-config-tursosync-equipo-nuevo-{suffix}");
+            if (FindNamed(host, "Vincular tablet y celular") is { } linkCard) linkCard.BringIntoView();
+            Capture(host, $"20j-config-tursosync-qr-{suffix}");
+            cloudScroller?.ScrollToVerticalOffset(0);
+            if (!cloudVm.Devices.Any(d => d.IsPendingApproval && d.DeviceIdSuffix == "3F9A2C") || !cloudVm.IsLinkQrVisible || cloudVm.LinkQrImage == null)
+            {
+                _failures.Add($"[20i-{suffix}] Falta el equipo que espera la aprobación o el QR para vincular");
+            }
+            cloudVm.CloseLinkQr();
+            ExecuteCloud("DELETE FROM RegisteredDevices WHERE DeviceId = 'android-tab-3f9a2c';");
+            using (var db = factory.CreateDbContext()) DbMeta.Remove(db, DbMeta.ClinicId);
+
+            // Paso 8.15: se marcó un equipo como perdido (los pasos para anular los tokens) y la tablet no se conecta desde
+            // que se anularon
+            tursoSettings.ExpectTokenRotation();
+            ExecuteCloud($"INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('{TursoSyncService.TokensRotatedKey}', strftime('%Y-%m-%d %H:%M:%f','now','-10 minutes')); " +
+                         "UPDATE RegisteredDevices SET LastSeenUtc = strftime('%Y-%m-%d %H:%M:%f','now','-1 hours') WHERE DeviceId = 'device-tablet';");
+            WaitFor(cloudVm.RefreshDevicesAsync());
+            cloudVm.LoadFromSettings();
+            Pump();
+            Layout(host, Width, Height);
+            if (FindNamed(host, "Cortar el acceso") is { } cutCard) cutCard.BringIntoView();
+            Pump();
+            cloudScroller?.ScrollToVerticalOffset(cloudScroller.VerticalOffset + 330); // también la tablet, debajo
+            Pump();
+            Capture(host, $"20k-config-tursosync-equipo-perdido-{suffix}");
+            cloudScroller?.ScrollToVerticalOffset(0);
+            if (string.IsNullOrEmpty(cloudVm.CutAccessGuideText) || !cloudVm.Devices.Any(d => d.NeedsNewToken && d.DeviceId == "device-tablet"))
+            {
+                _failures.Add($"[20k-{suffix}] Faltan los pasos para cortar el acceso o la tablet que necesita el token nuevo");
+            }
+            tursoSettings.ClearTokenRotation();
+            ExecuteCloud($"DELETE FROM _tpvc_meta WHERE Key = '{TursoSyncService.TokensRotatedKey}'; " +
+                         "UPDATE RegisteredDevices SET LastSeenUtc = strftime('%Y-%m-%d %H:%M:%f','now','-20 seconds') WHERE DeviceId = 'device-tablet';");
+            cloudVm.LoadFromSettings();
+            WaitFor(cloudVm.RefreshDevicesAsync());
+
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");
             shell.SettingsSearchText = string.Empty;

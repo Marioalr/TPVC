@@ -13,11 +13,12 @@ se comparan con los archivos de `contracts/`. Un borrador del mismo día (la PC 
 preguntas del plan (§9): un solo consecutivo de folios, con la letra del equipo solo sin conexión y una
 regularización diaria en la PC; la tablet cobra sin internet; el celular agenda y registra entradas de
 mercancía; y la cuenta de Turso no tiene token de la API, así que se usan tokens creados a mano (nivel C); el
-QR, que es solo una facilidad, queda limitado a la red local. Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
+QR, que es solo una facilidad, queda limitado a la red local (el 2026-10-11 el médico lo cambió: cada equipo recibe
+la URL y el token, pegados o escaneados de un QR de la PC, y la PC lo aprueba). Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.8 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
-equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (ya están hechos, del lado de la PC hasta el 8.15; sincronización sin pérdidas, siembra segura, registro de
+equipos, documentos, vinculación con la URL y el token, y equipo perdido; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
 escribe el celular (K4b). Cada paso de la app va detrás del de la PC que necesita.
@@ -55,7 +56,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 
 | # | Pendiente | Detalle |
 |---|---|---|
-| C1 | **Enlace por QR** | Pedido del médico (2026-10-09): vincular la tablet leyendo un QR. Hasta v1.19.0 *Nube y dispositivos* generaba un paquete JSON en claro con el token completo de Turso, sin vencimiento y sin QR (`GenerateAndroidPairingPayload`), que nada leía; se retiró en v1.20.0 (paso 8.2) y los botones dicen "Disponible con la vinculación por QR". Plan Fase 8, paso 8.14: el QR es solo una facilidad y queda **limitado a la red del consultorio** (respuesta 4 del médico). El médico pega una vez en la PC un "token para tablet y celular" creado a mano en el panel de Turso. Al vincular, la PC escucha 10 min solo en sus direcciones privadas; el QR lleva sus direcciones y puerto y un secreto de 128 bits, **sin ningún token**. El equipo prueba que tiene el secreto, los dos muestran el mismo código de confirmación de 6 dígitos y, con *Sí*, la PC le manda la credencial cifrada con AES-256-GCM. El secreto nunca viaja por la red. Si la red local falla (aislamiento de clientes del Wi-Fi, Firewall de Windows), la URL y el token se teclean a mano. *Quitar* y "Perdí este equipo" (rotar los tokens del grupo en el panel de Turso y volver a vincular los demás) en el paso 8.15. En la app: K3. Detalle en el plan, §4.3–§4.7. |
+| C1 | **Enlace por QR** | Pedido del médico (2026-10-09): vincular la tablet leyendo un QR. Hasta v1.19.0 *Nube y dispositivos* generaba un paquete JSON en claro con el token completo de Turso, sin vencimiento y sin QR (`GenerateAndroidPairingPayload`), que nada leía; se retiró en v1.20.0 (paso 8.2) y los botones dicen "Disponible con la vinculación por QR". Plan Fase 8, paso 8.14 (**decisión del médico del 2026-10-11**, reemplaza el QR por la red local): la tablet y el celular reciben la URL y un token como la PC, pegados (copiados del panel de Turso) o escaneados de un QR que muestra la PC por 2 minutos, y la PC aprueba cada equipo nuevo («¿Vincular «Galaxy Tab S9» como Tablet?», con los últimos 6 caracteres de su `DeviceId`) antes de que baje datos. Turso no deja anular un solo token: *Quitar* y «Perdí este equipo» (anular todos los tokens en el panel de Turso y pegar el nuevo en los equipos que quedan) en el paso 8.15. En la app: K3. Detalle en el plan, §4.3 y §4.7. |
 | C2 | **Impresión** | La impresión actual usa `FlowDocument` (solo Windows). Plan Fase 8: la receta para compartir se dibuja en el propio equipo con `PdfDocument` desde el modelo `PrescriptionSheet` (vectores del paso 8.11), en media carta horizontal y con el membrete de `ClinicAssets` (paso 8.12); para imprimir, la plantilla portada de `PrescriptionHtmlBuilder` (que se separa de `PrintingService.BuildPrescriptionHtml` en 8.11) en un WebView con la impresión del sistema. El ticket sale del texto de 42 columnas de `TicketText` (8.11). La impresora térmica Bluetooth (ESC/POS, con el ticket en texto) queda para más adelante (K10). |
 | C3a | **Consulta entre equipos** | La PC ya envía y recibe (v1.17, probado PC ↔ PC con un servidor Turso simulado). La tablet debe implementar el mismo contrato de `ConsultationHandoffs` (`docs/TURSO_SYNC_ARCHITECTURE.md` §4.5): revisar la tabla cada pocos segundos en Pacientes, tomarla con ficha (`AcceptToken`) y preguntar si la respuesta se pierde, borrar la copia de la nube solo tras guardarla, recuperar con la instrucción inserta-o-cancela, marca de solo lectura persistente, y traducir `PatientSyncId`/`CatalogSyncId` a sus Id locales (o cargo libre). Su `DeviceRole` es `AndroidTablet`. La referencia de comportamiento es `ConsultationHandoffViewModel` (`ViewModels/Patients`, sin WPF desde v1.19.0). Plan Fase 8: "Enviar a…" contará como compatible un equipo con `RegisteredDevices.HandoffProtocol` ≥ 1 (paso 8.10; si la columna está vacía sigue la regla de hoy, `AppVersion` ≥ 1.17.0), así la app puede numerar sus versiones desde 1.0.0; la revisión y el latido siguen la cadencia del paso 8.24; y la copia lleva las marcas por campo del paciente y de la nota, que quien acepta exige tener (8.22). En la app: K8. |
 | C3 | **Modo sin conexión** | La tablet trabaja sobre su base local (Room + SQLCipher) y sincroniza por Turso al volver la red, igual que la PC. Indicador visible «N cambios sin sincronizar» (en la PC desde v1.20.2, paso 8.4). La tablet **cobra también sin conexión** (respuesta 2 del médico: no debe notarse diferencia entre la PC y la app): venta, movimientos por lote, nota y cita "Atendida", con el folio con letra (8.16); una existencia puede quedar en negativo con el aviso "revisar inventario" y se corrige con un conteo (8.20). En la app: K7. El celular consulta lo último que bajó, y lo que agenda o registra sin red sube al volver (K4b). |
@@ -72,7 +73,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] Paso 8.7 · Con la hora de la PC movida unos minutos, TPVC avisa "La hora de esta computadora difiere N min de la nube" (desde v1.20.5; ver abajo).
 - [ ] Paso 8.8 · "Unirse a una nube existente" en una PC nueva: el catálogo queda sin duplicados (5 categorías y 5 servicios) y no aparecen pacientes demo (desde v1.20.6; ver abajo).
 - [ ] Paso 8.9 · Restaurar un respaldo con la nube activa: la lista de lo que se perdería coincide con lo que había en la tablet, y "Volver a aplicar" lo regresa.
-- [ ] Paso 8.14 (K3) · Vincular la tablet con el QR en la red del consultorio: los dos equipos muestran el mismo código de confirmación; la primera vez, el Firewall de Windows pide permitir TPVC en redes privadas. Con la red local bloqueada, el respaldo "Teclear a mano" (URL y token) funciona.
+- [ ] Paso 8.14 (K3) · Vincular la tablet escaneando el QR de la PC (y el celular pegando la URL y el token): la PC pregunta «¿Vincular … como Tablet?» con los mismos 6 caracteres que la tablet, y la tablet no baja nada hasta aceptar.
 - [ ] Paso 8.15 (K3) · "Quitar" un equipo con cambios pendientes: los sube antes de borrarse. "Perdí este equipo" con "Cortar acceso ahora": rotar los tokens en el panel de Turso y pegar los nuevos en la PC; los demás piden "Vuelva a vincular" sin perder lo pendiente.
 - [ ] Pasos 8.16 y 8.17 (K7) · Un paciente y un ticket creados en la tablet sin internet salen con letra (`EXP-2026-T1-001`); al día siguiente, con la laptop abierta y libre, tienen su número consecutivo, y buscar por cualquiera de los dos folios los encuentra. La reimpresión dice "Folio sin conexión: …".
 - [ ] Paso 8.20 · Al convertir las existencias a libro de movimientos no cambia ninguna, y el Kardex muestra "Saldo inicial".
@@ -82,6 +83,28 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.33.0 (paso 8.15: quitar, equipo perdido y token rechazado, lado de la PC)
+
+- [ ] *Equipos vinculados* › **Perdí este equipo** en otra computadora o en una tablet de prueba: el equipo sale de la lista y aparecen los pasos para anular los tokens; **Abrir el panel de Turso** abre app.turso.tech.
+- [ ] [T] En `prueba-estres` (solo si está en otro grupo que la base del consultorio): anular los tokens con `turso db tokens invalidate prueba-estres`. La PC conectada a esa base muestra «Sincronización detenida: Turso rechazó el token» y no vuelve a intentar sola. Al pegar un token nuevo y **Sincronizar ahora**, sube lo pendiente y los pasos se cierran solos. Es V4: anotar cuánto tardó el token nuevo en funcionar.
+- [ ] Pegar un token incompleto (cortar el final): el aviso dice que Turso rechazó el token, no un error en inglés.
+- [ ] Para Kotlin (K3): con `RevokedReason = 'quitado'`, subir lo pendiente (o exportarlo) y después borrar la base, la credencial y los borradores; con `'perdido'`, borrarlos sin subir nada. Ante un 401, o un 400 con "JWT" en el cuerpo, no borrar nada y mostrar "Pegue el token nuevo"; sin nada pendiente, borrarse tras dos 401 con 10 minutos de diferencia (el 400 no cuenta). Con el token nuevo no hay que aprobar otra vez: la fila de `DeviceRegistry` sigue.
+
+### v1.32.0 (paso 8.14: vincular con la URL y el token, lado de la PC)
+
+- [ ] *Nube y dispositivos › Vincular tablet y celular › Mostrar QR para la tablet o el celular*: aparece el código con el aviso de no fotografiarlo, la cuenta regresiva y **Cerrar**; a los 2 minutos se cierra solo.
+- [ ] Leer ese QR con la cámara del celular (cualquier lector): el texto empieza con `tpvc-link:1:`. Se lee bien desde la pantalla de la laptop.
+- [x] [T] V3 y V16 en `prueba-estres` (2026-10-11): un token mal copiado da HTTP 400 `JWT error: InvalidToken` y uno anulado da 401 (los dos se tratan igual); el contador de folios dio 40 números distintos sin huecos con 40 peticiones a la vez. Detalle en `TURSO_SYNC_ARCHITECTURE.md` §6.
+- [ ] [T] V4, solo si `prueba-estres` está en otro grupo que la base del consultorio (`turso db list`): el mismo script con `-Only V3 -Rotate -DbName prueba-estres`.
+- [ ] Para Kotlin (K3): leer el QR (`contracts/golden/link-qr.json`) o pegar la URL y el token; negarse sin bloqueo de pantalla; guardar la credencial envuelta con el Keystore; escribir el latido con `Platform = 'Android'` y el rol que pide en `DeviceRole`; mostrar los últimos 6 caracteres del `DeviceId` en mayúsculas y esperar la fila de `DeviceRegistry` sin bajar nada. Con código X o `RevokedReason = 'rechazado'`: "La PC rechazó este equipo". Ante un 401, o un 400 cuyo cuerpo trae "JWT" (token mal copiado, V3): "Pegue el token nuevo", sin borrar lo pendiente.
+
+### v1.31.0 (paso 8.13: kit de conformidad de lectura)
+
+- [ ] *Nube y dispositivos › Vincular tablet y celular* dice que se vincularán con la URL y el token (pegados o leídos de un QR de esta computadora) y que aquí se aprobará cada equipo; los botones dicen "Llega con la app de Android".
+- [ ] Para Kotlin (K2): el cliente Hrana y el motor de lectura reproducen `contracts/hrana/*.jsonl` (mismas instrucciones, en el mismo orden, con los argumentos de `statements.json`), salvo la sonda del esquema y el registro en `DeviceRegistry`, que son de la PC. Lo que traen las respuestas de Turso y no el simulador (`rows_read`, `rows_written`, `decltype`…) se ignora. Ver `docs/FAKE_HRANA_SPEC.md`.
+- [ ] Para Kotlin (CI): el job levanta el simulador con `TPVC_FAKE_TURSO_HOST=1` (`--filter TestCategory=FakeTursoHost`), espera el archivo de `TPVC_FAKE_TURSO_READY_FILE` y corre las pruebas de `:sync` contra `http://127.0.0.1:8787`; una consulta que recorra una tabla sincronizada recibe `SCAN_FORBIDDEN`.
+- [ ] Decisión del médico (2026-10-11): la vinculación es pegar la URL y el token (o escanear el QR de la PC) y esperar la aprobación de la PC; no hay QR por la red local (plan §4.3 y paso 8.14).
 
 ### v1.30.0 (paso 8.12b: resultados de laboratorio)
 
@@ -207,7 +230,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
 ### v1.20.0 (Fase 8, paso 8.2: la cuota de Turso protegida)
 
-- [ ] *Configuración › Nube y dispositivos*: la cuota dice 500 millones de lecturas, 10 millones de escrituras y 5 GB, y el consumo de hoy; ya no aparece "Uso" en *Este equipo* ni "Generar código" (los botones dicen "Disponible con la vinculación por QR").
+- [ ] *Configuración › Nube y dispositivos*: la cuota dice 500 millones de lecturas, 10 millones de escrituras y 5 GB, y el consumo de hoy; ya no aparece "Uso" en *Este equipo* ni "Generar código" (los botones dicen "Disponible con la vinculación por QR" (desde v1.31.0: "Llega con la app de Android")).
 - [ ] Pegar una URL `http://192.168.…` y *Probar conexión*: se rechaza por no estar cifrada. Con la URL de siempre (`libsql://…`) sincroniza igual que antes.
 - [ ] Con la nube activa, un día normal de consulta: al final del día *Nube y dispositivos* no muestra la pausa y el consumo de hoy queda muy por debajo de los topes del freno.
 - [ ] [T] En una base de prueba de Turso (otra cuenta o grupo, nunca la del consultorio), anotar en `docs/TURSO_SYNC_ARCHITECTURE.md` §6: V7 (texto y estado HTTP de `BLOCKED`) y V9 (qué error da una base archivada). V10 ya está: las entradas de índice sí cuentan como escrituras (V19, 2026-10-11).

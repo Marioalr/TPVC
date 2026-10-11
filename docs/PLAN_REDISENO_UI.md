@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-11 (TPVC v1.30.0).
+Estado al 2026-10-11 (TPVC v1.32.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -313,8 +313,8 @@ la división todavía va a mover se hacen justo después del grupo que la mueve,
 
 Notas para la app de la tablet (detalle en `docs/PENDIENTES_ANDROID.md`, sección C): compartir la receta y el
 ticket desde cualquier lugar donde se vean, y vincular la tablet leyendo un código QR. Con el plan de la
-Fase 8, el QR funciona solo en la red del consultorio y no lleva ningún token: la PC entrega la credencial
-cifrada con un secreto del QR, y si la red local falla se teclea a mano (paso 8.14). El PDF lo arma el propio
+Fase 8 (decisión del médico del 2026-10-11), la tablet y el celular reciben la URL y el token pegados o
+escaneados de un QR que muestra la PC, y la PC aprueba cada equipo (paso 8.14). El PDF lo arma el propio
 equipo desde el modelo de la receta, con el membrete sincronizado (pasos 8.11 y 8.12).
 
 ### Fase 8 · Datos listos para tres equipos con Turso (plan)
@@ -335,8 +335,8 @@ cuatro temas):
 
 | Pantalla o aviso | Qué muestra | Paso |
 |---|---|---|
-| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (revocar y "Cortar acceso ahora", guiado: rotar los tokens en el panel de Turso y pegar los dos nuevos); "Vuelva a vincular" en los demás; "Esta PC reemplaza a la principal". La lista, *Quitar* y "Esta PC reemplaza a la principal" están desde v1.27.0. | 8.10 ✅, 8.15 |
-| **Vincular tablet o celular** | El campo para pegar una vez el "token para tablet y celular". Elegir el rol; el QR durante 10 min, solo en la red del consultorio; la confirmación "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913" con *Sí* y *No*, con el mismo código en las dos pantallas; el respaldo "Teclear a mano" con la aprobación del equipo nuevo. La primera vez, el Firewall de Windows puede pedir permitir TPVC en redes privadas. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación en claro, que se retiró en 8.2 (v1.20.0). | 8.14 |
+| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (lo marca como perdido y muestra los pasos para anular los tokens en el panel de Turso y pegar el nuevo, con *Abrir el panel de Turso*); "Pegue el token nuevo en este equipo…" en los que no se conectan desde que se anularon; "Esta PC reemplaza a la principal". La lista, *Quitar* y "Esta PC reemplaza a la principal" están desde v1.27.0; lo de 8.15, desde v1.33.0 (captura `20k-config-tursosync-equipo-perdido`). | 8.10 ✅, 8.15 ✅ v1.33.0 |
+| **Vincular tablet o celular** | *Mostrar QR para la tablet o el celular*: la URL y el token, 2 minutos en pantalla, con el aviso de no fotografiarlo ni compartirlo (también se pueden pegar a mano en el equipo). La aprobación "Equipo nuevo: «Galaxy Tab S9». ¿Vincular como Tablet?" con *Sí* y *No* y los últimos 6 caracteres de su `DeviceId` en las dos pantallas. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación en claro, que se retiró en 8.2 (v1.20.0), y el QR por la red local que se descartó el 2026-10-11. | 8.14 ✅ v1.32.0 |
 | **Unirse a una nube existente**, **Recuperar desde la nube** y **Esta PC ya usaba esta nube** | Si la nube ya tiene su `clinicId` y la base local no (pegar URL y token, como hoy), la sincronización no arranca y ofrece unirse, "Reemplazar con la nube" (teclear CONFIRMAR, respaldo antes) o "Esta PC ya usaba esta nube". "Recuperar desde la nube" baja todo a una PC nueva o descompuesta. Desde v1.20.5: el bloqueo, el aviso en *Nube y dispositivos* y "Esta PC ya usaba esta nube" (revisa por SyncId que lo que la PC ya subió esté en la nube). Desde v1.20.6, en el mismo aviso: «Unirse a esta nube» (botón principal; también recupera una PC nueva), «Esta PC ya usaba esta nube» y «Reemplazar con la nube…», que abre ahí mismo el texto de lo que se borra, el campo CONFIRMAR y el botón rojo, desactivado hasta teclearlo (captura `20e-config-tursosync-reemplazar`). | 8.7 ✅ v1.20.5, 8.8 ✅ v1.20.6 |
 | Pregunta al **restaurar** con la nube activa | "Reemplazar la nube con este respaldo" o "Desconectar esta PC de la nube", con la lista por tabla de lo que se perdería ("se perderán 12 notas y 30 ventas de la tablet"); después, "Volver a aplicar N cambios". | 8.9 |
 | **"N cambios sin sincronizar"** | Filas apartadas que se reintentan en cada sincronización; vuelve a cero solo. En el estado y en *Nube y dispositivos* (captura `20c-config-tursosync-apartados`). | 8.4 ✅ v1.20.2 |

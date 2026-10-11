@@ -312,9 +312,11 @@ public partial class TursoSyncViewModel : ObservableObject
         PauseNoticeText = reason switch
         {
             TursoSyncPauseReason.ConsumptionBrake => TursoConsumptionBrake.PausedDetail,
+            TursoSyncPauseReason.TokenRejected => _syncService.TokenRejectedDetail,
             TursoSyncPauseReason.QuotaExhausted => TursoException.QuotaExhaustedDetail,
             _ => string.Empty
         };
+        RefreshCutAccessGuide();
 
         ClockNoticeText = _syncService.ClockWarningText is { } clock
             ? $"{clock}. Mientras tanto TPVC marca los cambios con la hora de la nube; conviene corregir la fecha y hora de Windows."
@@ -763,8 +765,10 @@ public partial class TursoSyncViewModel : ObservableObject
 
         if (registration is { IsRevoked: true })
         {
-            PrimaryText = $"Esta computadora se quitó de los equipos vinculados el {registration.RevokedAtUtc!.Value.ToLocalTime():dd/MM/yyyy HH:mm}" +
-                          (registration.RevokedReason == TursoSyncService.RevokedReplacedReason ? ", porque otra quedó como la PC principal." : ".") +
+            PrimaryText = (registration.RevokedReason == TursoSyncService.RevokedLostReason
+                              ? $"Esta computadora se marcó como perdida el {registration.RevokedAtUtc!.Value.ToLocalTime():dd/MM/yyyy HH:mm}. No se borra nada de aquí."
+                              : $"Esta computadora se quitó de los equipos vinculados el {registration.RevokedAtUtc!.Value.ToLocalTime():dd/MM/yyyy HH:mm}" +
+                                (registration.RevokedReason == TursoSyncService.RevokedReplacedReason ? ", porque otra quedó como la PC principal." : ".")) +
                           " Si va a seguir siendo la del consultorio, pulse «Esta PC reemplaza a la principal».";
             CanMakeThisThePrimary = true;
         }

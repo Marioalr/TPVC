@@ -207,13 +207,14 @@ Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y not
   * **Desconectar esta PC de la nube**: esta computadora se queda con el respaldo y deja de sincronizar; la nube y los demás equipos siguen como estaban.
 
 ### Nube y dispositivos
-Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, **Equipos vinculados**, la vinculación de la tablet y el celular (llegará por QR en la red del consultorio; por ahora los botones dicen "Disponible con la vinculación por QR"), la cuota gratuita y una guía plegable para crear la base gratis.
+Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, **Equipos vinculados**, la vinculación de la tablet y el celular (ver **Tablet y celular** abajo), la cuota gratuita y una guía plegable para crear la base gratis.
 * La URL debe empezar con `libsql://` o `https://` (la que da Turso): una dirección `http://` sin cifrar no se acepta, porque el token viajaría en claro.
 * **Cuota gratuita**: lo que este equipo lleva del mes (500 millones de lecturas, 10 millones de escrituras y 5 GB) y lo de hoy. Son estimaciones; la cifra real está en el panel de Turso. Desde la 1.30.0 también el espacio que ocupa la nube y lo que usan los resultados de laboratorio, medidos una vez al día por la PC principal.
 * **Resultados de laboratorio en la nube**: tienen un tope de 2 GB para no llenar los 5 GB del plan gratuito. Al llegar a 1.6 GB aparece un aviso. Si se llena y la PC principal tiene respaldo externo (**Respaldos y datos**), borra de la nube lo más viejo que ya tiene en su archivo y en la copia; si no lo tiene, los resultados nuevos se quedan en la computadora donde se agregaron hasta que haya lugar. Lo que se quita de un expediente se borra de la nube a los 30 días.
 * **Sincronización pausada: consumo anormal**: si en un día se usa mucho más de lo normal, la sincronización automática se detiene para no agotar la cuota del mes. Revise que todo esté en orden y pulse **Reanudar**. Mientras tanto el programa trabaja con sus datos y **Sincronizar ahora** sigue funcionando.
 * **N cambios sin sincronizar**: registros que todavía no se pueden subir o aplicar (por ejemplo, una consulta que llegó antes que su expediente). Se reintentan solos en cada sincronización y el aviso desaparece cuando quedan al día.
 * **Se agotó la cuota mensual de Turso**: la nube no acepta cambios hasta el siguiente mes (o hasta cambiar de plan). El programa sigue trabajando con sus datos y vuelve a intentar cada hora.
+* **Sincronización detenida: Turso rechazó el token** (desde la 1.33.0): se anularon los tokens, o el que se pegó es de otra base o quedó incompleto. Cree uno nuevo en el panel de Turso, péguelo en **Conexión con Turso** y pulse **Sincronizar ahora**. Mientras tanto el programa no vuelve a intentar solo y no se borra nada: lo que esta computadora no había subido sube con el token nuevo.
 * **La base de Turso está archivada**: el plan gratuito archiva la base después de 10 días sin uso (por ejemplo, en vacaciones). El mensaje explica cómo reactivarla; después, **Sincronizar ahora**.
 * **Sincronización completa**: sube todo lo de esta computadora, baja todo lo de la nube y al final muestra un reporte. Si dice que la nube y la computadora tienen lo mismo, la nube queda verificada (hágalo una vez en la PC principal). Si encuentra diferencias, las lista.
 * **La hora de esta computadora difiere N min de la nube**: la fecha u hora de Windows está mal. TPVC marca los cambios con la hora de la nube mientras tanto, pero conviene corregirla.
@@ -230,7 +231,26 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
 * **Equipos vinculados**: las computadoras (y, más adelante, la tablet y el celular) que usan esta nube, cada una con su código (P1, P2…), si está en línea o cuándo se vio por última vez y sus cambios sin subir ("12 cambios sin subir desde las 10:42"). Se lee al abrir la sección y con **Actualizar**.
   * La primera computadora que sincroniza con la nube verificada queda como la **PC principal** (más adelante será la única que regularice los folios hechos sin conexión). En una computadora nueva que recuperó la nube porque la principal se descompuso, pulse **Esta PC reemplaza a la principal**: la anterior se quita de la lista.
   * **Quitar** saca a un equipo de la lista y de **Enviar a…**; antes muestra sus cambios sin subir. Su código no se vuelve a usar. No se puede quitar a esta computadora ni a la principal.
+  * **Perdí este equipo** (desde la 1.33.0): para uno que se perdió o se robaron. Ver **Si se pierde un equipo**, abajo.
+  * "**Pegue el token nuevo en este equipo…**": ese equipo no se conecta desde que se anularon los tokens. Pegue ahí el token nuevo (la tablet y el celular también pueden leer el QR de esta computadora). No pierde sus cambios ni hay que aprobarlo otra vez.
 * **Esta computadora tomó una identidad nueva para la nube**: la configuración de TPVC se copió de otra computadora (o se clonó la computadora completa). Si dice que no se pudo leer el token, vuelva a pegarlo en **Conexión con Turso**. Si la otra computadora seguía sincronizando, esta baja todo de nuevo una vez para recibir lo que la otra subió. **Entendido** quita el aviso.
+
+#### Tablet y celular (desde la 1.32.0; la app de Android llega después)
+La tablet y el celular usan la misma nube que esta computadora. Para vincular uno:
+1. En la PC principal, después de la **Sincronización completa**, pulse **Mostrar QR para la tablet o el celular** en *Vincular tablet y celular*. El código lleva el token de la nube: no lo fotografíe ni lo comparta. Se cierra solo a los 2 minutos o con **Cerrar**.
+2. En la tablet o el celular, abra TPVC y lea el código. También se pueden pegar la URL y el token de Turso a mano (por ejemplo, copiados del panel de Turso en el navegador del celular).
+3. El equipo aparece en **Equipos vinculados** con "Pide entrar como tablet · verifique que la tablet muestre 3F9A2C". Si los 6 caracteres coinciden con los que muestra el equipo, pulse **Vincular como tablet** o **Vincular como celular**. Recibe su código (T1, C1…) y empieza a bajar los datos. Hasta entonces no baja nada.
+4. **Rechazar** lo deja fuera y no baja nada. Si no reconoce ese equipo, alguien más tiene el token: anúlelo en el panel de Turso y pegue el nuevo en esta computadora.
+
+#### Si se pierde un equipo (desde la 1.33.0)
+Si se pierde o se roban la tablet, el celular u otra computadora:
+1. En **Equipos vinculados**, pulse **Perdí este equipo** junto a él. Queda marcado como perdido: si la tablet o el celular se conectan antes del paso 2, borran sus datos sin subir nada. Lo que no había subido se pierde. Una computadora marcada como perdida no borra nada.
+2. Marcarlo no le quita el acceso a la nube, porque tiene el token. Para cortarlo, siga los pasos que aparecen en **Equipos vinculados**. En el panel de Turso (**Abrir el panel de Turso**) o con `turso db tokens invalidate`, anule los tokens. Turso no deja anular uno solo: se anulan todos, también el de esta computadora.
+3. Cree un token nuevo, péguelo en **Conexión con Turso** y pulse **Sincronizar ahora**. Los pasos se cierran solos.
+4. En los demás equipos, pegue el token nuevo (la tablet y el celular también pueden leer el QR). La lista dice cuáles faltan. No pierden sus cambios ni hay que aprobarlos otra vez.
+5. Si es una tablet o un celular, bórrelo también con «Encontrar mi dispositivo» de Google.
+
+Turso no guarda en el plan gratuito quién leyó datos: hay que suponer que el equipo perdido pudo ver todo hasta que se anularon los tokens. Si se pierde la PC principal, anule los tokens desde el panel de Turso, recupere la nube en la computadora nueva (**Unirse a esta nube**) con el token nuevo, pulse **Esta PC reemplaza a la principal** y pegue el token en la tablet y el celular.
 
 ### Actualizaciones
 Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.

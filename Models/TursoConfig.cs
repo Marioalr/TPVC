@@ -113,7 +113,13 @@ public enum TursoSyncPauseReason
     QuotaExhausted,
 
     /// <summary>El freno de consumo vio un uso anormal: sigue detenida hasta "Reanudar".</summary>
-    ConsumptionBrake
+    ConsumptionBrake,
+
+    /// <summary>
+    /// Turso rechazó el token (HTTP 401, o 400 de un token mal copiado; paso 8.15): sigue detenida hasta pegar otro. No se
+    /// borra ni se aparta nada.
+    /// </summary>
+    TokenRejected
 }
 
 /// <summary>
@@ -250,6 +256,29 @@ public class TursoSettings
 
     /// <summary>Lo que había en la nube de laboratorio la última vez que se midió (paso 8.12b); null si nunca.</summary>
     public LabCloudSummary? LabCloud { get; set; }
+
+    // Paso 8.15. Del token solo se guarda su huella (TursoSettingsService.TokenHash), nunca el token
+
+    /// <summary>La huella del último token con el que se sincronizó bien.</summary>
+    public string? WorkingTokenHash { get; set; }
+
+    /// <summary>La huella del token que Turso rechazó; mientras sea el de ahora, la sincronización automática no intenta.</summary>
+    public string? RejectedTokenHash { get; set; }
+
+    /// <summary>Cuándo rechazó Turso ese token.</summary>
+    public DateTime? TokenRejectedUtc { get; set; }
+
+    /// <summary>
+    /// La huella del token que se está reemplazando porque se anularon los tokens (un 401 a uno que funcionaba, o «Perdí este
+    /// equipo»). La primera sincronización con otro token lo anota en la nube (_tpvc_meta.tokensRotatedAtUtc) y lo borra.
+    /// </summary>
+    public string? TokenToRotateHash { get; set; }
+
+    /// <summary>
+    /// Desde cuándo se espera esa rotación: la última sincronización buena con el token anulado (o cuándo se marcó el equipo
+    /// perdido). Una marca de la nube más nueva es la misma rotación, anotada por otro equipo: no se mueve.
+    /// </summary>
+    public DateTime? TokenRotationAfterUtc { get; set; }
 }
 
 /// <summary>

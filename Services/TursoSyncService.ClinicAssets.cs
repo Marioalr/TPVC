@@ -23,6 +23,11 @@ public partial class TursoSyncService
 
     private static readonly LetterheadImageKind[] LetterheadKinds = { LetterheadImageKind.Crest, LetterheadImageKind.Header };
 
+    /// <summary>Bajar una imagen (literal en contracts/hrana/statements.json): su fila y cada trozo por (Hash, Part).</summary>
+    internal static readonly string AssetMetaSql = $"SELECT ByteCount, ChunkCount FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;";
+
+    internal static readonly string AssetChunkSql = $"SELECT Content FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash = ? AND Part = ?;";
+
     /// <summary>Imágenes que no se pudieron bajar completas en esta sesión: no se reintentan hasta reiniciar (cada intento costaría todos sus trozos).</summary>
     private readonly HashSet<string> _failedAssetHashes = new(StringComparer.Ordinal);
 
@@ -142,7 +147,7 @@ public partial class TursoSyncService
     private async Task<byte[]?> DownloadAssetAsync(TursoClient client, string hash, CancellationToken ct)
     {
         if (_failedAssetHashes.Contains(hash)) return null;
-        var meta = (await client.QueryAsync($"SELECT ByteCount, ChunkCount FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;", new object?[] { hash }, ct))
+        var meta = (await client.QueryAsync(AssetMetaSql, new object?[] { hash }, ct))
             .FirstOrDefault();
         AddExternalUsage(1, 0);
         if (meta == null)
@@ -157,7 +162,7 @@ public partial class TursoSyncService
         for (int first = 0; first < chunkCount; first += 4)
         {
             var statements = Enumerable.Range(first, Math.Min(4, chunkCount - first))
-                .Select(part => ($"SELECT Content FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash = ? AND Part = ?;", (object?[]?)new object?[] { hash, part }))
+                .Select(part => (AssetChunkSql, (object?[]?)new object?[] { hash, part }))
                 .ToList();
             var results = await client.QueryBatchAsync(statements, ct);
             AddExternalUsage(statements.Count, 0);

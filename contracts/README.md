@@ -66,6 +66,7 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 | `prescription-sheet.json` | Lo que dice la receta a partir del paciente, los medicamentos y el perfil: edad, fecha, alergias, signos con unidades y medidas generales, en las dos zonas (`Models/PrescriptionSheet.cs`). |
 | `prescription-html-fields.json` | Los valores de la receta en HTML (`data-field`), el papel y lo que se dibuja en cada lugar (`Services/Documents/PrescriptionHtmlBuilder.cs`): de aquí sale el PDF del celular. |
 | `ticket-text.json` | El ticket en 42 columnas, renglón por renglón (`Services/Documents/TicketText.cs`); la PC imprime los mismos textos. |
+| `link-qr.json` | Desde v1.32.0 (paso 8.14): el texto del QR con que la tablet y el celular reciben la URL y el token (`tpvc-link:1:` + base64url de `{"u","t","n"}`), con los textos que no se deben leer (otro prefijo, otra versión, dañado, sin token). Después el equipo espera su fila de `DeviceRegistry` (regla «Equipos» de `schema.json`). |
 | `lab-files.json` | Desde v1.30.0 (paso 8.12b): cómo se parte un archivo de laboratorio en trozos (con el SHA-256 de cada uno, para un contenido que Kotlin genera igual), el SQL literal de registrar, subir un trozo, cerrar, bajar, medir, archivar, desalojar y limpiar huérfanos (`TursoSyncService.LabFiles.cs`) y los topes: 2 GB en la nube, aviso en 1.6, desalojo hasta 1.8, 10 MB por archivo, fotos de 2000 px en JPEG de calidad 80 y el freno de bytes de Android (300 MB de bajada y 150 de subida al día). |
 
 Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál regla de redondeo usa (decimal al par con `Math.Round`; hacia arriba en el IVA y en el formato F2/N2). Lo que depende de "hoy" se genera en UTC y en America/Mexico_City con un instante en que el día cambia; los desempates por nombre llevan acentos (Collator es-MX).
@@ -79,8 +80,17 @@ hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Ningu
 en la nube (desde v1.29.0, paso 8.12), y en `LabBlobChunks.Data`, de los resultados de laboratorio (desde v1.30.0, paso
 8.12b). Turso no comprime las respuestas (V21): bajar un trozo cuesta el +33% del base64.
 
+## `hrana/`
+
+Desde v1.31.0 (paso 8.13, kit de conformidad de lectura): los intercambios de un equipo que **lee** la nube, grabados
+por el servidor simulado (`FakeHranaServer`) en JSON Lines, y `statements.json` con cada instrucción de lectura literal
+(la identidad, la generación, el perfil, la página de cada tabla, el latido, el registro y el membrete). Qué hay en cada
+archivo, los marcadores (`<time>`, `<id:N>`, `<nonce:N>`, `<appVersion>`) y cómo levantar el simulador por HTTP para la CI
+de Kotlin: `docs/FAKE_HRANA_SPEC.md`. Se regeneran con `TPVC_WRITE_GOLDEN=1`, igual que `golden/`; la huella del esquema
+aparece literal, así que cambian con cada revisión del contrato.
+
 ## Lo que viene
 
 - `golden/` de las reglas del negocio que faltan (8.26).
-- `hrana/`: intercambios grabados por el servidor simulado, con el SQL literal de cada instrucción (8.13 y 8.25).
+- `hrana/` de escritura: los intercambios de la subida (8.25).
 - `scenarios/`: escenarios de varios equipos (8.25).

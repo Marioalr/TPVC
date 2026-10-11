@@ -24,7 +24,7 @@ namespace TPVC.Tests;
 [TestClass]
 public partial class GoldenVectorTests
 {
-    private static bool WriteGolden => Environment.GetEnvironmentVariable("TPVC_WRITE_GOLDEN") == "1";
+    internal static bool WriteGolden => Environment.GetEnvironmentVariable("TPVC_WRITE_GOLDEN") == "1";
 
     private const string SampleSyncId = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -527,7 +527,7 @@ public partial class GoldenVectorTests
 
     private static DateTime? ParseDate(string? text) => text == null ? null : TursoSyncService.ParseDate(text);
 
-    private static string RepoPath(string relative)
+    internal static string RepoPath(string relative)
     {
         var dir = AppContext.BaseDirectory;
         while (dir != null && !File.Exists(Path.Combine(dir, "TPVC.sln"))) dir = Path.GetDirectoryName(dir);
@@ -535,7 +535,7 @@ public partial class GoldenVectorTests
         return Path.Combine(dir, relative.Replace('/', Path.DirectorySeparatorChar));
     }
 
-    private static void CheckOrWrite(string relative, string generated)
+    internal static void CheckOrWrite(string relative, string generated)
     {
         var path = RepoPath(relative);
         if (WriteGolden)

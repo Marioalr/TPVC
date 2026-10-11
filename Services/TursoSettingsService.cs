@@ -286,6 +286,94 @@ public class TursoSettingsService
         }
     }
 
+    // ================================================================== token rechazado y rotación (paso 8.15)
+
+    /// <summary>La huella de un token: lo que se guarda para compararlo, nunca el token.</summary>
+    public static string TokenHash(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("TPVC-token|" + token.Trim())))[..16];
+
+    private string? CurrentTokenHash => string.IsNullOrWhiteSpace(CurrentSettings.AuthToken) ? null : TokenHash(CurrentSettings.AuthToken);
+
+    /// <summary>Turso rechazó el token de ahora (hasta que se pegue otro).</summary>
+    public bool IsCurrentTokenRejected
+    {
+        get
+        {
+            var rejected = CurrentSettings.RejectedTokenHash;
+            return rejected != null && rejected == CurrentTokenHash;
+        }
+    }
+
+    /// <summary>Se espera un token nuevo porque se anularon los tokens (o se marcó un equipo como perdido).</summary>
+    public bool IsTokenRotationExpected => CurrentSettings.TokenToRotateHash != null;
+
+    /// <summary>
+    /// Turso rechazó el token de ahora. Si era el que funcionaba, se anularon los tokens: la siguiente sincronización con otro
+    /// lo anota en la nube. Uno que nunca funcionó (pegado de otra base o mal copiado) no es una rotación.
+    /// </summary>
+    public void RecordTokenRejected()
+    {
+        lock (_usageLock)
+        {
+            var hash = CurrentTokenHash;
+            if (hash == null) return;
+            if (CurrentSettings.RejectedTokenHash != hash) CurrentSettings.TokenRejectedUtc = Clock.GetUtcNow().UtcDateTime;
+            CurrentSettings.RejectedTokenHash = hash;
+            if (hash == CurrentSettings.WorkingTokenHash && CurrentSettings.TokenToRotateHash == null)
+            {
+                CurrentSettings.TokenToRotateHash = hash;
+                CurrentSettings.TokenRotationAfterUtc = CurrentSettings.LastSyncUtc ?? Clock.GetUtcNow().UtcDateTime;
+            }
+            TryWriteToDisk();
+        }
+    }
+
+    /// <summary>
+    /// Se sincronizó bien con el token de ahora. Regresa true si es el token nuevo después de una rotación: falta anotarla
+    /// en la nube (<see cref="ClearTokenRotation"/> después).
+    /// </summary>
+    public bool RecordTokenWorked()
+    {
+        lock (_usageLock)
+        {
+            var hash = CurrentTokenHash;
+            if (hash == null) return false;
+            bool changed = CurrentSettings.WorkingTokenHash != hash || CurrentSettings.RejectedTokenHash != null;
+            CurrentSettings.WorkingTokenHash = hash;
+            CurrentSettings.RejectedTokenHash = null;
+            CurrentSettings.TokenRejectedUtc = null;
+            if (changed) TryWriteToDisk();
+            return CurrentSettings.TokenToRotateHash is { } old && old != hash;
+        }
+    }
+
+    /// <summary>«Perdí este equipo»: el token de ahora se va a anular, y el siguiente que funcione se anota como rotación.</summary>
+    public void ExpectTokenRotation()
+    {
+        lock (_usageLock)
+        {
+            var hash = CurrentTokenHash;
+            if (hash == null || CurrentSettings.TokenToRotateHash != null) return;
+            CurrentSettings.TokenToRotateHash = hash;
+            CurrentSettings.TokenRotationAfterUtc = Clock.GetUtcNow().UtcDateTime;
+            TryWriteToDisk();
+        }
+        SettingsChanged?.Invoke();
+    }
+
+    /// <summary>La rotación ya se anotó en la nube, o el médico cerró la guía sin rotar.</summary>
+    public void ClearTokenRotation()
+    {
+        lock (_usageLock)
+        {
+            if (CurrentSettings.TokenToRotateHash == null) return;
+            CurrentSettings.TokenToRotateHash = null;
+            CurrentSettings.TokenRotationAfterUtc = null;
+            TryWriteToDisk();
+        }
+        SettingsChanged?.Invoke();
+    }
+
     public TursoQuotaSummary GetQuotaSummary()
     {
         lock (_usageLock)

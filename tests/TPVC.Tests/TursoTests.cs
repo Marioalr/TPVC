@@ -456,7 +456,7 @@ public class TursoTests
     [TestMethod]
     public async Task TursoClient_TestConnectionAsync_ReturnsInformativeErrorOn401()
     {
-        var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "{\"error\":\"JWT validation failed\"}");
+        var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, FakeHranaServer.UnauthorizedBody);
         using var httpClient = new HttpClient(handler);
         using var client = new TursoClient("https://dummy.turso.io", "expired-token", httpClient);
 
@@ -464,6 +464,25 @@ public class TursoTests
         Assert.IsFalse(success);
         Assert.IsNotNull(error);
         Assert.IsTrue(error.Contains("HTTP 401") || error.Contains("autenticación"), "El error debe ser informativo sobre el token.");
+    }
+
+    [TestMethod]
+    public async Task TursoClient_AMiscopiedToken_IsTreatedLikeARejectedOne()
+    {
+        // V3 (2026-10-11): a un token que no es un JWT, Turso responde 400 y no 401
+        using var client = new TursoClient("https://dummy.turso.io", "eyJhbGciOiJFZERTQSJ9.incompl",
+            new HttpClient(new MockHttpMessageHandler(HttpStatusCode.BadRequest, "{\"error\":\"JWT error: InvalidToken\"}")));
+        var ex = await Assert.ThrowsExactlyAsync<TursoException>(() => client.QueryAsync("SELECT 1;"));
+        Assert.AreEqual("HTTP_401", ex.ErrorCode, "Las reglas del token rechazado aplican igual");
+        StringAssert.Contains(ex.Message, "mal copiado");
+        StringAssert.Contains(ex.Message, "nada de lo de aquí se pierde");
+
+        // Otro 400 (una instrucción mal formada) sigue mostrando lo que dijo Turso
+        using var other = new TursoClient("https://dummy.turso.io", "token",
+            new HttpClient(new MockHttpMessageHandler(HttpStatusCode.BadRequest, "{\"error\":\"invalid type: integer\"}")));
+        var bad = await Assert.ThrowsExactlyAsync<TursoException>(() => other.QueryAsync("SELECT 1;"));
+        Assert.AreEqual("HTTP_400", bad.ErrorCode);
+        StringAssert.Contains(bad.Message, "invalid type");
     }
 
     private class MockHttpMessageHandler : HttpMessageHandler
