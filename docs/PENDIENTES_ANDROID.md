@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.23.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.24.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,14 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.24.0 (ficha por consulta y corregir la receta después)
+
+- [ ] En la ficha de un paciente con varias consultas: el historial muestra una tarjeta por consulta con su fecha y el resumen (motivo, signos, receta, plan); las citas siguen en la lista. La búsqueda encuentra una consulta por algo que solo está en su detalle (p. ej. una palabra de la exploración).
+- [ ] Clic en una consulta: la hoja muestra los signos, motivo, interrogatorio, exploración, diagnóstico, plan, notas y receta. Esc cierra.
+- [ ] *Corregir receta* en la última consulta: cambiar una indicación, quitar un medicamento y agregar otro del catálogo; al guardar, la tarjeta y la "Última receta" de la ficha cambian, y la cuenta de esa consulta no.
+- [ ] Corregir la receta de una consulta anterior: la "Última receta" de la ficha no cambia. *Imprimir* sale con la fecha y los signos de esa consulta.
+- [ ] Para Kotlin: la ficha agrupa por consulta (C4); la receta corregida viaja como cualquier cambio de `PatientConsultations.PrescriptionsJson` (y de `Patients.ActivePrescriptionJson` si es la última).
 
 ### v1.23.0 (receta: orden normado, carta y letras)
 

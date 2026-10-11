@@ -88,7 +88,8 @@ public partial class PrintingService
         PatientRecord patient,
         IEnumerable<PatientPrescriptionItem> items,
         ClinicProfile profile,
-        string? generalNotes = null)
+        string? generalNotes = null,
+        PatientConsultation? consultation = null)
     {
         if (patient == null) return false;
 
@@ -97,7 +98,7 @@ public partial class PrintingService
             try
             {
                 // Primero la hoja: si no cabe en una media carta se imprime en carta vertical
-                var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes);
+                var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes, consultation);
                 var dialog = new PrintDialog();
                 var presetPrinter = TryUsePaper(dialog, sheet.Paper);
                 if (dialog.ShowDialog() != true) return false;
@@ -140,9 +141,12 @@ public partial class PrintingService
     public PrescriptionFonts PrescriptionFonts => _preferences?.Current.PrescriptionFonts ?? PrescriptionFonts.Default;
 
     /// <summary>La hoja con las letras de este equipo y el papel medido: carta si no cabe en una media carta.</summary>
-    public PrescriptionSheet CreatePrescriptionSheet(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes)
+    /// <param name="consultation">La consulta de la receta (una anterior se reimprime con su fecha y sus signos); null = hoy.</param>
+    public PrescriptionSheet CreatePrescriptionSheet(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes,
+        PatientConsultation? consultation = null)
     {
-        var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes, DateTime.Now, PrescriptionFonts);
+        var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes, consultation?.Date ?? DateTime.Now, PrescriptionFonts,
+            string.IsNullOrWhiteSpace(consultation?.VitalSigns) ? null : consultation.VitalSigns);
         sheet.Paper = MeasurePaper(sheet);
         return sheet;
     }
@@ -613,13 +617,14 @@ public partial class PrintingService
         IEnumerable<PatientPrescriptionItem> items,
         ClinicProfile profile,
         string? generalNotes = null,
-        string? targetFilePath = null)
+        string? targetFilePath = null,
+        PatientConsultation? consultation = null)
     {
         if (patient == null) return null;
 
         try
         {
-            var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes);
+            var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes, consultation);
             string dest = targetFilePath ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 $"Receta_{patient.RecordNumber}_{DateTime.Now:yyyyMMdd_HHmmss}.html");

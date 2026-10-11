@@ -42,7 +42,8 @@ public class PatientsWorkspaceReuseTests
         public void ShowError(string message) => Errors.Add(message);
     }
 
-    private sealed record PrintedPrescription(PatientRecord Patient, List<PatientPrescriptionItem> Items, ClinicProfile Profile, string? GeneralNotes);
+    private sealed record PrintedPrescription(PatientRecord Patient, List<PatientPrescriptionItem> Items, ClinicProfile Profile, string? GeneralNotes,
+        PatientConsultation? Consultation = null);
 
     /// <summary>Impresora de receta que solo anota lo que recibe.</summary>
     private sealed class RecordingPrescriptionOutput : IPrescriptionOutput
@@ -50,16 +51,17 @@ public class PatientsWorkspaceReuseTests
         public List<PrintedPrescription> Printed { get; } = new();
         public List<PrintedPrescription> Exported { get; } = new();
 
-        public bool PrintPrescription(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes = null)
+        public bool PrintPrescription(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes = null,
+            PatientConsultation? consultation = null)
         {
-            Printed.Add(new PrintedPrescription(patient, items.ToList(), profile, generalNotes));
+            Printed.Add(new PrintedPrescription(patient, items.ToList(), profile, generalNotes, consultation));
             return true;
         }
 
         public string? ExportPrescriptionDocument(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile,
-            string? generalNotes = null, string? targetFilePath = null)
+            string? generalNotes = null, string? targetFilePath = null, PatientConsultation? consultation = null)
         {
-            Exported.Add(new PrintedPrescription(patient, items.ToList(), profile, generalNotes));
+            Exported.Add(new PrintedPrescription(patient, items.ToList(), profile, generalNotes, consultation));
             return targetFilePath ?? "receta-prueba.pdf";
         }
     }

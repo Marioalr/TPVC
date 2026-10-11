@@ -1190,6 +1190,43 @@ public partial class InventoryService
             .ToListAsync();
     }
 
+    /// <summary>
+    /// Corrige la receta de una consulta ya terminada (desde v1.24.0). Si es la última consulta del paciente y no hay
+    /// otra en curso, la receta vigente del expediente cambia igual (es la que se reimprime desde la ficha). Lo que se
+    /// cobró no cambia: la cuenta de esa consulta ya se cerró.
+    /// </summary>
+    /// <param name="updateActivePrescription">También la receta vigente del expediente (la consulta es la última).</param>
+    public async Task UpdateConsultationPrescriptionAsync(int consultationId, IReadOnlyList<PatientPrescriptionItem> items, bool updateActivePrescription)
+    {
+        await using var db = CreateContext();
+        var consultation = await db.PatientConsultations.FirstOrDefaultAsync(c => c.Id == consultationId)
+            ?? throw new InvalidOperationException("La consulta ya no existe.");
+        // Copias sin "Se surte aquí": la receta corregida no vuelve a cobrar nada
+        var saved = items.Select(i => new PatientPrescriptionItem
+        {
+            MedicineName = i.MedicineName.Trim(),
+            Dosage = i.Dosage.Trim(),
+            RecommendedQuantity = Math.Max(1, i.RecommendedQuantity),
+            Presentation = string.IsNullOrWhiteSpace(i.Presentation) ? null : i.Presentation.Trim()
+        }).Where(i => i.MedicineName.Length > 0).ToList();
+        consultation.Prescriptions = saved;
+
+        if (updateActivePrescription)
+        {
+            var patient = await db.Patients.FirstOrDefaultAsync(p => p.Id == consultation.PatientRecordId);
+            if (patient != null)
+            {
+                patient.ActivePrescription = saved.Select(i => new PatientPrescriptionItem
+                {
+                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
+                }).ToList();
+            }
+        }
+
+        await db.SaveChangesAsync();
+        NotifyPatientsChanged();
+    }
+
     public async Task<PatientRecord?> GetPatientByIdAsync(int id)
     {
         await using var db = CreateContext();

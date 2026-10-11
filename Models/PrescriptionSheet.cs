@@ -110,11 +110,13 @@ public sealed class PrescriptionSheet
         ClinicProfile? profile,
         string? generalNotes,
         DateTime date,
-        PrescriptionFonts? fonts = null)
+        PrescriptionFonts? fonts = null,
+        string? vitalSigns = null)
     {
         profile ??= new ClinicProfile();
         fonts ??= PrescriptionFonts.Default;
-        var vitals = Vitals.From(patient.VitalSigns);
+        // La receta de una consulta anterior lleva los signos de esa consulta (desde v1.24.0)
+        var vitals = Vitals.From(vitalSigns ?? patient.VitalSigns);
         var license = (profile.ProfessionalLicense ?? string.Empty).Trim();
 
         return new PrescriptionSheet

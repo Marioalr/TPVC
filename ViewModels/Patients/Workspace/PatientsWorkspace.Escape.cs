@@ -9,7 +9,7 @@ public partial class PatientsWorkspace
     /// <summary>Hay una hoja, diálogo o aviso abierto encima de la pantalla.</summary>
     public bool IsAnySheetOpen =>
         Info.IsInfoModalVisible || Prescription.IsAllergyAlertOpen || CatalogBrowser.IsCatalogBrowserModalOpen
-        || Preview.IsPrescriptionPdfModalOpen || Consultation.IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
+        || Preview.IsPrescriptionPdfModalOpen || ConsultationDetail.IsOpen || Consultation.IsFinishConsultationOpen || Prescription.IsPrescriptionModalOpen || Supplies.IsSuppliesModalOpen
         || ClinicalServices.IsServicesModalOpen || Handoff.IsSendConsultationSheetOpen;
 
     /// <summary>En el inicio o la ficha, sin agenda ni hojas encima, lo que se teclea va al buscador.</summary>
@@ -28,6 +28,9 @@ public partial class PatientsWorkspace
         else if (Prescription.IsAllergyAlertOpen) Prescription.CancelAllergyPrescription();
         else if (CatalogBrowser.IsCatalogBrowserModalOpen) CatalogBrowser.CloseCatalogBrowser();
         else if (Preview.IsPrescriptionPdfModalOpen) Preview.ClosePrescriptionPdfPreview();
+        // Corrigiendo la receta, Esc cancela la corrección; si no, cierra la hoja de la consulta
+        else if (ConsultationDetail.IsEditingPrescription) ConsultationDetail.CancelEditPrescription();
+        else if (ConsultationDetail.IsOpen) ConsultationDetail.Close();
         // Mientras se envía no se cierra (la consulta quedaría en solo lectura sin explicación)
         else if (Handoff.IsSendConsultationSheetOpen) Handoff.CloseSendConsultationSheet();
         else if (Consultation.IsCie10DropdownOpen) Consultation.IsCie10DropdownOpen = false;

@@ -416,16 +416,22 @@ public class PacientesTests
 
         var timeline = PatientChartViewModel.BuildTimeline(new[] { older, newer }, new[] { appointment });
 
+        // Una tarjeta por consulta (con su resumen dentro) y las citas: ya no van signos ni receta sueltos (v1.24.0)
+        Assert.HasCount(3, timeline);
         Assert.AreEqual(TimelineKind.Appointment, timeline[0].Kind, "La cita futura arriba");
         Assert.AreEqual("Seguimiento", timeline[0].Title);
+        Assert.IsNull(timeline[0].Consultation);
+
         Assert.AreEqual(TimelineKind.Consultation, timeline[1].Kind);
         Assert.AreEqual("Control", timeline[1].Title, "Sin diagnóstico, el título es el motivo");
-        Assert.AreEqual(TimelineKind.Prescription, timeline[2].Kind);
-        StringAssert.Contains(timeline[2].Detail, "Paracetamol: 1 cada 8 h");
-        Assert.AreEqual("J00 Rinofaringitis", timeline[3].Title, "Con diagnóstico, el título es el diagnóstico");
-        Assert.AreEqual(TimelineKind.Vitals, timeline[4].Kind);
-        Assert.AreEqual("T/A: 120/80 · Peso: 70 kg", timeline[4].Detail);
-        Assert.HasCount(5, timeline);
+        Assert.AreSame(newer, timeline[1].Consultation, "La tarjeta abre su consulta");
+        CollectionAssert.AreEqual(new[] { new TimelineLine("Receta", "Paracetamol") }, timeline[1].Lines.ToArray(),
+            "Sin diagnóstico el motivo ya es el título; sin signos ni plan no hay renglones de ellos");
+        StringAssert.Contains(timeline[1].Detail, "1 cada 8 h", "La búsqueda revisa también la posología");
+
+        Assert.AreEqual("J00 Rinofaringitis", timeline[2].Title, "Con diagnóstico, el título es el diagnóstico");
+        CollectionAssert.AreEqual(new[] { new TimelineLine("Motivo", "Tos"), new TimelineLine("Signos", "T/A: 120/80 · Peso: 70 kg") },
+            timeline[2].Lines.ToArray());
     }
 
     [TestMethod]

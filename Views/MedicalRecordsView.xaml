@@ -27,6 +27,7 @@
         <DataTemplate x:Key="ServicesSheet"><views:ServicesSheetView /></DataTemplate>
         <DataTemplate x:Key="CatalogSheet"><views:CatalogBrowserSheetView /></DataTemplate>
         <DataTemplate x:Key="PreviewSheet"><views:PrescriptionPreviewSheetView /></DataTemplate>
+        <DataTemplate x:Key="ConsultationDetailSheet"><views:ConsultationDetailSheetView /></DataTemplate>
         <DataTemplate x:Key="CheckoutSheet"><views:ConsultationCheckoutView /></DataTemplate>
         <DataTemplate x:Key="AllergyDialog"><views:AllergyAlertView /></DataTemplate>
         <DataTemplate x:Key="InfoDialog"><views:InfoDialogView /></DataTemplate>
@@ -172,6 +173,9 @@
                         Visibility="{Binding Consultation.IsFinishConsultationOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="310" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource CatalogSheet}"
                         Visibility="{Binding CatalogBrowser.IsCatalogBrowserModalOpen, Converter={StaticResource BoolToVis}}" />
+        <!-- Una consulta del historial: detalle por datos y su receta (desde v1.24.0) -->
+        <ContentControl Grid.RowSpan="3" Panel.ZIndex="315" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource ConsultationDetailSheet}"
+                        Visibility="{Binding ConsultationDetail.IsOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PreviewSheet}"
                         Visibility="{Binding Preview.IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding Handoff}" ContentTemplate="{StaticResource SendConsultationSheet}"
