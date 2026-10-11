@@ -197,6 +197,10 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
 * **N cambios sin sincronizar**: registros que todavía no se pueden subir o aplicar (por ejemplo, una consulta que llegó antes que su expediente). Se reintentan solos en cada sincronización y el aviso desaparece cuando quedan al día.
 * **Se agotó la cuota mensual de Turso**: la nube no acepta cambios hasta el siguiente mes (o hasta cambiar de plan). El programa sigue trabajando con sus datos y vuelve a intentar cada hora.
 * **La base de Turso está archivada**: el plan gratuito archiva la base después de 10 días sin uso (por ejemplo, en vacaciones). El mensaje explica cómo reactivarla; después, **Sincronizar ahora**.
+* **Sincronización completa**: sube todo lo de esta computadora, baja todo lo de la nube y al final muestra un reporte. Si dice que la nube y la computadora tienen lo mismo, la nube queda verificada (hágalo una vez en la PC principal). Si encuentra diferencias, las lista.
+* **La hora de esta computadora difiere N min de la nube**: la fecha u hora de Windows está mal. TPVC marca los cambios con la hora de la nube mientras tanto, pero conviene corregirla.
+* **Sincronización detenida: esta nube es de otra base**: la URL y el token son de una nube que ya pertenece a otra base de datos, y la sincronización no sigue para no mezclar datos. Si esta computadora ya sincronizaba con esa nube, pulse **Esta PC ya usaba esta nube**: TPVC revisa que lo que esta PC ya subió esté en la nube y, si es así, sigue normal. Si no, revise la URL.
+* **Sincronización detenida: actualice TPVC en esta computadora**: otro equipo ya usa una versión más nueva de la sincronización. Lo que se capture aquí se guarda y sube al actualizar.
 
 ### Actualizaciones
 Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.

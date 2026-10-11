@@ -299,6 +299,18 @@ public static class SyncChangeLog
         "SELECT * FROM \"SyncTombstones\" AS t WHERE upper(t.\"SyncId\") IN " +
         "(SELECT \"SyncId\" FROM \"SyncChangeLog\" AS c WHERE c.\"EntityType\" = t.\"EntityType\" AND c.\"Seq\" > {0} AND c.\"Seq\" <= {1})";
 
+    /// <summary>¿Hay algo anotado después de <paramref name="afterSeq"/>?</summary>
+    public static async Task<bool> HasEntriesAfterAsync(AppDbContext db, long afterSeq, CancellationToken ct = default) =>
+        (await db.Database.SqlQueryRaw<long>(
+                $"SELECT EXISTS (SELECT 1 FROM {Q(Table)} WHERE \"Seq\" > {{0}}) AS Value", afterSeq)
+            .ToListAsync(ct)).FirstOrDefault() != 0;
+
+    /// <summary>Los SyncId (en mayúsculas) anotados después de <paramref name="afterSeq"/>: lo que todavía no sube.</summary>
+    internal static async Task<HashSet<string>> PendingSyncIdsAsync(AppDbContext db, string entityType, long afterSeq, CancellationToken ct) =>
+        (await db.Database.SqlQueryRaw<string>(
+                $"SELECT \"SyncId\" AS Value FROM {Q(Table)} WHERE \"EntityType\" = {{0}} AND \"Seq\" > {{1}}", entityType, afterSeq)
+            .ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>El cursor de subida; null si esta base nunca ha subido con el registro (la siguiente subida manda todo).</summary>
     public static async Task<long?> ReadPushCursorAsync(AppDbContext db, CancellationToken ct = default) =>
         long.TryParse(await DbMeta.GetAsync(db, DbMeta.LastPushedSeq, ct), NumberStyles.None, CultureInfo.InvariantCulture, out var seq)
@@ -338,6 +350,7 @@ public static class SyncChangeLog
     {
         DbMeta.Remove(db, DbMeta.LastPushedSeq);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
+        DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         DbMeta.Set(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString());
     }
 }

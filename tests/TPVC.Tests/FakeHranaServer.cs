@@ -570,6 +570,9 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     /// </summary>
     private string? ReviewQueryPlan(string sql, JsonArray args)
     {
+        // Recorridos completos a propósito (el reporte de la sincronización completa, la reparación única de marcas):
+        // no se revisan, se cobran
+        if (sql.StartsWith(TPVC.Services.TursoSyncService.FullScanMarker, StringComparison.Ordinal)) return null;
         if (DdlStatement.IsMatch(sql))
         {
             _syncedTables.Clear();

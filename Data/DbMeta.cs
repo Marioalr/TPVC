@@ -35,6 +35,15 @@ public static class DbMeta
     /// </summary>
     public const string PullCursorPrefix = "PullCursor:";
 
+    /// <summary>
+    /// Columnas que tenía cada tabla la última vez que se bajó (paso 8.7): "PullColumns:Patients" → nombres remotos
+    /// separados por comas. Si el modelo conoce una columna que no está aquí, la tabla se baja completa antes de subir.
+    /// </summary>
+    public const string PullColumnsPrefix = "PullColumns:";
+
+    /// <summary>La identidad de la nube a la que pertenece esta base (_tpvc_meta.clinicId, paso 8.7).</summary>
+    public const string ClinicId = "clinicId";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";

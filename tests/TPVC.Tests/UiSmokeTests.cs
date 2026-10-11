@@ -458,6 +458,29 @@ internal sealed class UiSmokeSession
             }
             shell.TursoSyncVM.LoadFromSettings();
 
+            // Paso 8.7: nube de otra base con el reloj 12 min adelantado, y reporte de la sincronización completa con diferencias
+            var cloudVm = shell.TursoSyncVM;
+            ExecuteCloud("INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('clinicId', 'otra-nube');");
+            _cloud!.Clock = () => DateTime.UtcNow.AddMinutes(12);
+            WaitFor(tursoSync.SyncAsync());
+            cloudVm.FullSyncReportText = new TursoFullSyncReport
+            {
+                ParkedRows = 1,
+                Tables = new[] { new TursoTableCount("Patients", 120, 121), new TursoTableCount("Sales", 300, 300) },
+                LegacyTables = new[] { "legacy_v1_Products" }
+            }.Summary;
+            cloudVm.IsFullSyncReportClean = false;
+            Show(host, main, "TursoSync", $"20d-config-tursosync-identidad-{suffix}");
+            if (string.IsNullOrEmpty(cloudVm.IdentityNoticeText) || string.IsNullOrEmpty(cloudVm.ClockNoticeText) || !cloudVm.CanAdoptCloudIdentity)
+            {
+                _failures.Add($"[20d-{suffix}] Faltan los avisos de nube ajena o de hora");
+            }
+            ExecuteCloud("DELETE FROM _tpvc_meta WHERE Key = 'clinicId';");
+            _cloud.Clock = null;
+            WaitFor(tursoSync.SyncAsync());
+            cloudVm.LoadFromSettings();
+            cloudVm.FullSyncReportText = string.Empty;
+
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");
             shell.SettingsSearchText = string.Empty;

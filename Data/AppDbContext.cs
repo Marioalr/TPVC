@@ -99,39 +99,40 @@ public class AppDbContext : DbContext
     /// </summary>
     public bool ApplyingRemoteChanges { get; set; }
 
+    /// <summary>La hora de las marcas: la de este equipo más su desfase con la nube (paso 8.7).</summary>
+    public ISyncClock SyncClock { get; set; } = Services.SyncClock.Default;
+
     /// <summary>
-    /// Asigna SyncId y UpdatedAtUtc. Desde el paso 8.5 la lápida de un borrado la ponen los triggers del registro
-    /// de cambios (<see cref="SyncChangeLog"/>), también la de cada fila borrada en cascada.
+    /// Asigna SyncId y UpdatedAtUtc con <see cref="SyncRules.NextLocalStamp"/>: la hora de este equipo corregida por su
+    /// desfase con la nube, pero siempre después de la marca que ya tenía el registro (si la última versión vino de un
+    /// equipo con el reloj adelantado, una edición hecha aquí "después" tendría una marca anterior y la nube la
+    /// descartaría). Desde el paso 8.5 la lápida de un borrado la ponen los triggers del registro de cambios
+    /// (<see cref="SyncChangeLog"/>), también la de cada fila borrada en cascada.
     /// </summary>
     private void StampSyncMetadata()
     {
         if (ApplyingRemoteChanges) return;
 
-        var now = DateTime.UtcNow;
-        foreach (var entry in ChangeTracker.Entries<ISyncEntity>().ToList())
+        var entries = ChangeTracker.Entries<ISyncEntity>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .ToList();
+        if (entries.Count == 0) return;
+
+        var now = SyncClock.UtcNow;
+        var offset = SyncClock.OffsetFor(this);
+        foreach (var entry in entries)
         {
-            switch (entry.State)
+            if (entry.State == EntityState.Added)
             {
-                case EntityState.Added:
-                    if (entry.Entity.SyncId == Guid.Empty) entry.Entity.SyncId = Guid.NewGuid();
-                    entry.Entity.UpdatedAtUtc = now;
-                    break;
-                case EntityState.Modified:
-                    entry.Entity.UpdatedAtUtc = AfterStoredStamp(entry, now);
-                    break;
+                if (entry.Entity.SyncId == Guid.Empty) entry.Entity.SyncId = Guid.NewGuid();
+                entry.Entity.UpdatedAtUtc = SyncRules.NextLocalStamp(now, null, offset);
+            }
+            else
+            {
+                var stored = (DateTime)entry.Property(nameof(ISyncEntity.UpdatedAtUtc)).OriginalValue!;
+                entry.Entity.UpdatedAtUtc = SyncRules.NextLocalStamp(now, stored, offset);
             }
         }
-    }
-
-    /// <summary>
-    /// La marca de un cambio siempre queda después de la que ya tenía el registro. Si la última
-    /// versión vino de un equipo con el reloj adelantado (p. ej. la tablet que mandó la consulta),
-    /// una edición hecha aquí "después" tendría una marca anterior y la nube la descartaría.
-    /// </summary>
-    private static DateTime AfterStoredStamp(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<ISyncEntity> entry, DateTime now)
-    {
-        var stored = (DateTime)entry.Property(nameof(ISyncEntity.UpdatedAtUtc)).OriginalValue!;
-        return SyncRules.NextLocalStamp(now, stored, TimeSpan.Zero);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
