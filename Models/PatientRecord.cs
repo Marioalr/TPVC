@@ -285,6 +285,17 @@ public class PatientConsultation : ISyncEntity
             PrescriptionsJson = JsonSerializer.Serialize(_prescriptions);
         }
     }
+
+    /// <summary>Orden de laboratorio de la consulta en JSON (<see cref="Models.LabOrder"/>); "" si no se pidieron estudios. Desde v1.25.0.</summary>
+    public string LabOrderJson { get; set; } = string.Empty;
+
+    /// <summary>La orden de laboratorio leída de <see cref="LabOrderJson"/> (una copia: para cambiarla se asigna otra).</summary>
+    [NotMapped]
+    public LabOrder LabOrder
+    {
+        get => Models.LabOrder.FromJson(LabOrderJson);
+        set => LabOrderJson = (value ?? new Models.LabOrder()).ToJson();
+    }
 }
 
 public class PatientRecord : ISyncEntity

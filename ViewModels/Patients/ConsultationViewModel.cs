@@ -35,6 +35,7 @@ public partial class ConsultationViewModel : ObservableObject
     private readonly IUiThread _ui;
     private readonly IPatientsWorkflow _workflow;
     private readonly LocalPreferencesStore? _preferences;
+    private readonly ConsultationLabOrder _labOrder;
 
     public ConsultationViewModel(
         InventoryService? inventoryService,
@@ -52,7 +53,8 @@ public partial class ConsultationViewModel : ObservableObject
         IUserDialogs dialogs,
         IUiThread ui,
         IPatientsWorkflow workflow,
-        LocalPreferencesStore? preferences = null)
+        LocalPreferencesStore? preferences = null,
+        ConsultationLabOrder? labOrder = null)
     {
         _inventoryService = inventoryService;
         _consultationService = consultationService;
@@ -70,6 +72,7 @@ public partial class ConsultationViewModel : ObservableObject
         _ui = ui;
         _workflow = workflow;
         _preferences = preferences;
+        _labOrder = labOrder ?? new ConsultationLabOrder();
         _isConsultationTimerVisible = preferences?.Current.HideConsultationTimer != true;
 
         Checkout = new CheckoutViewModel(inventoryService, () =>
@@ -383,7 +386,9 @@ public partial class ConsultationViewModel : ObservableObject
             Diagnosis = diagnosis,
             TreatmentPlan = treatmentPlan,
             Notes = ConsultationNotes?.Trim() ?? string.Empty,
-            Prescriptions = prescriptions
+            Prescriptions = prescriptions,
+            // La orden de laboratorio es opcional: sin estudios se guarda vacía
+            LabOrder = _labOrder.Snapshot()
         };
 
         consultation.EnsureNumericVitalSigns();
@@ -531,9 +536,9 @@ public partial class ConsultationViewModel : ObservableObject
             : ConsultationTreatmentPlan.TrimEnd() + " " + text;
     }
 
-    public const int ConsultationSectionCount = 5;
+    public const int ConsultationSectionCount = 6;
 
-    /// <summary>1 Motivo · 2 Signos vitales · 3 Exploración · 4 Diagnóstico · 5 Tratamiento.</summary>
+    /// <summary>1 Motivo · 2 Signos vitales · 3 Exploración · 4 Diagnóstico · 5 Tratamiento · 6 Laboratorio (opcional, desde v1.25.0).</summary>
     [ObservableProperty]
     private int _consultationSection = 1;
 
@@ -711,6 +716,7 @@ public partial class ConsultationViewModel : ObservableObject
         ConsultationSpO2 = string.Empty;
         ConsultationIMC = "Valores no disponibles";
         ConsultationSection = 1;
+        _labOrder.Clear();
     }
 
     [ObservableProperty]

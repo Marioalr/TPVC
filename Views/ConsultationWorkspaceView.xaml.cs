@@ -104,6 +104,50 @@ public partial class ConsultationWorkspaceView : UserControl
         }
     }
 
+    /// <summary>Laboratorio: ↑ ↓ cambian la sugerencia, Enter agrega (la marcada o lo escrito), Esc borra la búsqueda.</summary>
+    private void LabStudySearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm || Keyboard.Modifiers != ModifierKeys.None) return;
+        var labs = vm.Labs;
+        switch (e.Key)
+        {
+            case Key.Down when labs.HasSuggestions:
+                labs.NextSuggestion();
+                break;
+            case Key.Up when labs.HasSuggestions:
+                labs.PreviousSuggestion();
+                break;
+            case Key.Enter when !string.IsNullOrWhiteSpace(labs.StudySearchText):
+                labs.AcceptStudy();
+                break;
+            case Key.Escape when !string.IsNullOrEmpty(labs.StudySearchText):
+                labs.StudySearchText = string.Empty;
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+        if (labs.SelectedSuggestionIndex >= 0 && labs.SelectedSuggestionIndex < LabSuggestionsListBox.Items.Count)
+        {
+            LabSuggestionsListBox.ScrollIntoView(LabSuggestionsListBox.Items[labs.SelectedSuggestionIndex]);
+        }
+    }
+
+    private void LabSuggestionsListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var dep = e.OriginalSource as DependencyObject;
+        while (dep != null && dep is not ListBoxItem && dep != sender)
+        {
+            dep = VisualTreeHelper.GetParent(dep);
+        }
+        if (dep is ListBoxItem { DataContext: TPVC.Services.LabCatalogStudy study } && DataContext is MedicalRecordsViewModel vm)
+        {
+            vm.Labs.AddSuggestion(study);
+            LabStudySearchTextBox?.Focus();
+            e.Handled = true;
+        }
+    }
+
     private void Cie10SuggestionsListBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (DataContext is not MedicalRecordsViewModel vm) return;

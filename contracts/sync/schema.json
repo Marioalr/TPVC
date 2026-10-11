@@ -1,7 +1,7 @@
 {
-  "contract": 3,
+  "contract": 4,
   "protocol": 2,
-  "fingerprint": "C68230638BF728B8",
+  "fingerprint": "E1459D4C38397979",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -1177,6 +1177,19 @@
           "derived": false
         },
         {
+          "name": "LabOrderJson",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          },
+          "note": "Orden de laboratorio (desde la revisión 4): JSON {\"Studies\":[{\"Name\",\"Area\"}],\"Indications\"}, con acentos sin escapar; \"\" si la consulta no pidió estudios. Los nombres de las propiedades se leen sin distinguir mayúsculas."
+        },
+        {
           "name": "Notes",
           "role": "data",
           "remoteType": "TEXT",
@@ -1309,7 +1322,7 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"LabOrderJson\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_PatientConsultations_SyncedAtUtc\" ON \"PatientConsultations\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2598,7 +2611,7 @@
     "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"Appointments\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CreatedAt\" TEXT, \"Date\" TEXT, \"DurationMinutes\" INTEGER, \"Notes\" TEXT, \"PatientName\" TEXT, \"PatientPhone\" TEXT, \"PatientRecordNumber\" TEXT, \"Reason\" TEXT, \"Status\" TEXT, \"Time\" TEXT, \"PatientRecordSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Appointments_SyncedAtUtc\" ON \"Appointments\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"LabOrderJson\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_PatientConsultations_SyncedAtUtc\" ON \"PatientConsultations\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"PediatricDoseRules\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"DoseText\" TEXT, \"DropsPerMl\" INTEGER, \"IsActive\" INTEGER, \"Medication\" TEXT, \"MlPerKg\" REAL, \"SortOrder\" INTEGER)",
     "CREATE INDEX IF NOT EXISTS \"IX_PediatricDoseRules_SyncedAtUtc\" ON \"PediatricDoseRules\" (\"SyncedAtUtc\")",

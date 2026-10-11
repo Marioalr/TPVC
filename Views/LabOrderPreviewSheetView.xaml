@@ -1,0 +1,70 @@
+<UserControl x:Class="TPVC.Views.LabOrderPreviewSheetView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: VISTA PREVIA DE LA SOLICITUD DE LABORATORIO (desde v1.25.0)          -->
+    <!-- Las páginas son las del mismo documento que se imprime                      -->
+    <!-- (PrintingService.BuildLabOrderDocument): papel blanco con cualquier tema.   -->
+    <!-- ========================================================================= -->
+    <Border Style="{StaticResource SheetScrim}">
+        <Border Style="{StaticResource SheetCard}" Width="900" MaxHeight="720" Padding="24,18">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la solicitud de laboratorio" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Labs.PaperDescription}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding Labs.ClosePreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" VerticalAlignment="Top">
+                        <StackPanel x:Name="Pages" />
+                    </Viewbox>
+                </ScrollViewer>
+
+                <Grid Grid.Row="2" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Command="{Binding Labs.ClosePreviewCommand}" Content="Cerrar" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Labs.ExportCommand}" Margin="0,0,8,0"
+                                ToolTip="Guardar la solicitud como documento (HTML/PDF)">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
+                                <TextBlock Text="Guardar documento" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Labs.PrintCommand}" ToolTip="Imprimir la solicitud de laboratorio">
+                            <StackPanel Orientation="Horizontal">
+                                <helpers:Icon Data="{StaticResource IcoPrint}" Margin="0,0,8,0" />
+                                <TextBlock Text="Imprimir" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

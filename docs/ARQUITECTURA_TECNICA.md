@@ -179,6 +179,7 @@ TPVC/
 │   └── scenarios/               # Escenarios de varios equipos: filas esperadas en la nube y en cada equipo (paso 8.25)
 ├── docs/
 │   ├── MANUAL_DE_USUARIO.md     # Guía detallada para el personal médico
+│   ├── EVALUACION_RESULTADOS_LABORATORIO.md # Dónde guardar los resultados de laboratorio (Turso + copia en la laptop; paso 8.12b)
 │   ├── PLAN_FASE8_VARIOS_EQUIPOS.md # Plan de la Fase 8: datos listos para tres equipos con Turso
 │   ├── FAKE_HRANA_SPEC.md       # (plan Fase 8, paso 8.13) Qué copia de Turso el servidor simulado
 │   └── ARQUITECTURA_TECNICA.md  # Este documento de ingeniería
@@ -192,7 +193,9 @@ TPVC/
 │   ├── Product.cs               # Entidad insumo / fármaco (con Price; desde v1.21.0 UnitCost y CostExcludesVat; desde v1.22.0 SupplierCode)
 │   ├── ProductBatch.cs          # Entidad lote y control de vencimiento
 │   ├── InventoryMovement.cs     # Entidad movimiento de Kardex (con SalidaVenta)
-│   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente
+│   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente (la consulta con LabOrderJson desde v1.25.0)
+│   ├── LabOrder.cs              # Orden de laboratorio de la consulta: estudios e indicaciones, en JSON (v1.25.0)
+│   ├── LabOrderSheet.cs         # La solicitud de laboratorio impresa: membrete de la receta y estudios por área (v1.25.0)
 │   └── ThemeSettings.cs         # Modelo de configuración visual
 ├── Services/
 │   ├── Documents/               # (plan Fase 8, paso 8.11) Generadores puros sin WPF: receta en HTML, ticket en texto y HTML
@@ -201,6 +204,8 @@ TPVC/
 │   ├── InventoryService.SupplierOrders.cs # «Ingresar pedido» (v1.22.0): emparejar renglones con el catálogo y recibir todo en una transacción
 │   ├── SupplierOrderParser.cs   # Lee el pedido del correo del proveedor pegado como texto (formato de LUIN)
 │   ├── PrescriptionNaming.cs    # El medicamento de la receta en el orden normado (RIS arts. 30–31): genérico, concentración, forma, (marca); v1.23.0
+│   ├── LabCatalog.cs            # Estudios de laboratorio por área, frecuentes, paquetes e indicaciones; búsqueda sin acentos (v1.25.0)
+│   ├── PrintingService.LabOrder.cs # Solicitud de laboratorio: FlowDocument, papel (media carta o carta) y HTML/PDF; comparte el membrete con la receta
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
 │   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2)
 │   ├── ConsultationHandoffService.cs # Consulta entre equipos (tabla ConsultationHandoffs)
@@ -362,9 +367,10 @@ El coordinador crea a cada hijo una sola vez, al inicio del constructor y sin ef
 | `PatientForm` | `PatientFormViewModel` | 5 | Alta y edición de expediente y su borrador. |
 | `Home` | `PatientsHomeViewModel` | 5 | Inicio: buscador, pacientes recientes y citas de hoy. |
 | `Chart` | `PatientChartViewModel` | 5 | Ficha: antecedentes, historial (desde v1.24.0 una tarjeta por consulta con su resumen, `TimelineEntry.Lines`, y las citas), lo esencial, última receta y citas del paciente. |
-| `ConsultationDetail` | `ConsultationDetailViewModel` | 5 | Hoja de una consulta del historial (v1.24.0): detalle por datos y su receta, que se corrige (`InventoryService.UpdateConsultationPrescriptionAsync`; si es la última consulta, también la receta vigente) e imprime con la fecha y los signos de esa consulta (`IPrescriptionOutput` con `consultation`). |
+| `ConsultationDetail` | `ConsultationDetailViewModel` | 5 | Hoja de una consulta del historial (v1.24.0): detalle por datos y su receta, que se corrige (`InventoryService.UpdateConsultationPrescriptionAsync`; si es la última consulta, también la receta vigente) e imprime con la fecha y los signos de esa consulta (`IPrescriptionOutput` con `consultation`). Desde v1.25.0 también su orden de laboratorio, que se reimprime con la fecha y el diagnóstico de la consulta. |
 | `Supplies`, `ClinicalServices` | `SuppliesSheetViewModel`, `ClinicalServicesSheetViewModel` | 5 | Hojas de insumos y de servicios. |
 | `Prescription` | `PrescriptionSheetViewModel` | 5 | Hoja de receta: alerta de alergia, posología, dosis pediátrica, receta anterior y "Se surte aquí". |
+| `Labs` | `LabOrderViewModel` | 5 | Sección 6 de la consulta, Laboratorio (v1.25.0): busca y agrega estudios (`LabCatalog`, frecuentes, paquetes y los que el consultorio ya pidió, `InventoryService.GetCustomLabStudiesAsync`), indicaciones, vista previa e impresión (`IPrescriptionOutput.PrintLabOrder`). La orden vive en `ConsultationLabOrder` (nivel 2), que `ConsultationViewModel` guarda en `PatientConsultation.LabOrderJson` y `ConsultationAutosave` lleva en `ConsultationDraft.LabOrder`. |
 | `Consultation` | `ConsultationViewModel` | 5 | Nota de la consulta, CIE-10, secciones, "Terminar consulta" y su cobro (`Checkout`). |
 | `Autosave` | `ConsultationAutosave` | 6 | Borrador local de la consulta (contrato `ConsultationDraft`), indicador y consulta recuperada. |
 | `Handoff` | `ConsultationHandoffViewModel` | 7 | Consulta entre equipos: enviar, solo lectura, recuperar, liberar y recibir. |

@@ -107,8 +107,15 @@ public partial class ConsultationDetailViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<PatientPrescriptionItem> _prescription = Array.Empty<PatientPrescriptionItem>();
 
+    /// <summary>La orden de laboratorio de la consulta (desde v1.25.0); vacía si no se pidieron estudios.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLabOrder), nameof(HasLabIndications))]
+    private LabOrder _labOrder = new();
+
     public bool HasVitals => Vitals.Count > 0;
     public bool HasPrescription => Prescription.Count > 0;
+    public bool HasLabOrder => !LabOrder.IsEmpty;
+    public bool HasLabIndications => HasLabOrder && !string.IsNullOrWhiteSpace(LabOrder.Indications);
 
     // ================================================================== abrir
 
@@ -126,6 +133,7 @@ public partial class ConsultationDetailViewModel : ObservableObject
         Sections = BuildSections(consultation);
         Vitals = BuildVitals(consultation);
         Prescription = consultation.Prescriptions.ToList();
+        LabOrder = consultation.LabOrder;
         IsEditingPrescription = false;
         OnPropertyChanged(nameof(HasVitals));
         OnPropertyChanged(nameof(HasPrescription));
@@ -350,6 +358,26 @@ public partial class ConsultationDetailViewModel : ObservableObject
         if (_printing?.ExportPrescriptionDocument(patient, Prescription, CurrentProfile(), Indications(c), null, c) is { } path)
         {
             _info.InfoModalMessage = $"Receta guardada en:\n{path}";
+            _info.IsInfoModalVisible = true;
+        }
+    }
+
+    /// <summary>Imprime la solicitud de laboratorio de esta consulta, con su fecha y su diagnóstico.</summary>
+    [RelayCommand]
+    public void PrintLabOrder()
+    {
+        if (Consultation is not { } c || _session.SelectedPatient is not { } patient || !HasLabOrder || _printing == null) return;
+        if (_printing.PrintLabOrder(patient, LabOrder, CurrentProfile(), c.Diagnosis, c)) _feedback.ShowSuccess("Solicitud de laboratorio enviada a la impresora");
+    }
+
+    /// <summary>Guarda la solicitud de laboratorio de esta consulta como documento (para PDF).</summary>
+    [RelayCommand]
+    public void ExportLabOrder()
+    {
+        if (Consultation is not { } c || _session.SelectedPatient is not { } patient || !HasLabOrder) return;
+        if (_printing?.ExportLabOrderDocument(patient, LabOrder, CurrentProfile(), c.Diagnosis, null, c) is { } path)
+        {
+            _info.InfoModalMessage = $"Solicitud de laboratorio guardada en:\n{path}";
             _info.IsInfoModalVisible = true;
         }
     }

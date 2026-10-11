@@ -1227,6 +1227,28 @@ public partial class InventoryService
         NotifyPatientsChanged();
     }
 
+    /// <summary>
+    /// Los estudios de laboratorio que el consultorio ya pidió y no están en el catálogo, los más pedidos primero (desde
+    /// v1.25.0): vuelven a sugerirse en las consultas siguientes.
+    /// </summary>
+    public async Task<IReadOnlyList<LabOrderStudy>> GetCustomLabStudiesAsync()
+    {
+        await using var db = CreateContext();
+        var orders = await db.PatientConsultations
+            .AsNoTracking()
+            .Where(c => c.LabOrderJson != "")
+            .Select(c => c.LabOrderJson)
+            .ToListAsync();
+        return orders
+            .SelectMany(json => LabOrder.FromJson(json).Studies)
+            .Where(s => LabCatalog.Find(s.Name) == null)
+            .GroupBy(s => TextSearch.Normalize(s.Name))
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.First().Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+    }
+
     public async Task<PatientRecord?> GetPatientByIdAsync(int id)
     {
         await using var db = CreateContext();
@@ -1465,6 +1487,7 @@ public partial class InventoryService
             existing.TreatmentPlan = consultation.TreatmentPlan;
             existing.Notes = consultation.Notes;
             existing.PrescriptionsJson = consultation.PrescriptionsJson;
+            existing.LabOrderJson = consultation.LabOrderJson;
             existing.UpdatedAtUtc = DateTime.UtcNow;
             consultation.Id = existing.Id;
         }

@@ -199,6 +199,45 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+
+                        <!-- Laboratorio (desde v1.25.0): solo si la consulta pidió estudios -->
+                        <Border Style="{StaticResource CardSubtle}" Padding="16,14" Margin="0,12,0,0"
+                                Visibility="{Binding HasLabOrder, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource TextSection}" Text="Laboratorio" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ExportLabOrderCommand}" Margin="0,0,8,0"
+                                                Content="Guardar documento" ToolTip="Guardar la solicitud de laboratorio para PDF, con la fecha de esta consulta" />
+                                        <Button Style="{StaticResource ButtonPrimary}" Command="{Binding PrintLabOrderCommand}"
+                                                ToolTip="Imprimir la solicitud de laboratorio con la fecha y el diagnóstico de esta consulta">
+                                            <StackPanel Orientation="Horizontal">
+                                                <helpers:Icon Data="{StaticResource IcoPrint}" Width="14" Height="14" Margin="0,0,6,0" />
+                                                <TextBlock Text="Imprimir" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding LabOrder.Studies}" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:LabOrderStudy}">
+                                            <StackPanel Margin="0,0,0,8">
+                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Area}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Visibility="{Binding HasLabIndications, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
+                                    <TextBlock Style="{StaticResource TextLabel}" Text="Indicaciones para el paciente" Margin="0,0,0,4" />
+                                    <TextBlock Style="{StaticResource TextBody}" Text="{Binding LabOrder.Indications}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
 

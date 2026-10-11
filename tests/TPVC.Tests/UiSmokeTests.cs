@@ -383,6 +383,22 @@ internal sealed class UiSmokeSession
             records.Consultation.ConsultationSection = 5;
             Capture(host, $"09-consulta-tratamiento-{suffix}");
 
+            // Laboratorio (v1.25.0): la sección 6 con estudios y una búsqueda abierta, y la vista previa de la solicitud
+            records.Consultation.ConsultationSection = 6;
+            records.Labs.AddPanel(LabCatalog.Panels[0]);
+            records.Labs.AppendIndication(LabCatalog.IndicationPresets[0]);
+            records.Labs.StudySearchText = "orina";
+            Capture(host, $"09b-consulta-laboratorio-{suffix}");
+            records.Labs.StudySearchText = string.Empty;
+            records.Labs.OpenPreview();
+            if (!records.Labs.IsPreviewOpen || records.Labs.PreviewSheet?.StudyCount != 4)
+            {
+                _failures.Add($"[09c-{suffix}] La vista previa de laboratorio no abrió con los 4 estudios del chequeo general");
+            }
+            Capture(host, $"09c-vista-previa-laboratorio-{suffix}");
+            records.Labs.ClosePreview();
+            records.Consultation.ConsultationSection = 5;
+
             records.ShowChartFromConsultation();
             Capture(host, $"10-ficha-con-consulta-{suffix}");
             records.ShowConsultation();

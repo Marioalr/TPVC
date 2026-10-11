@@ -754,6 +754,15 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - Una PC que se une recibe las imágenes.
 - **Riesgo:** bajo.
 
+#### 8.12b · Resultados de laboratorio en la nube (agregado el 2026-10-11)
+- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 en `scripts/verify-turso-blobs.ps1`; **V20 es crítica** (si borrar no libera cuota, el tope cambia).
+- **Cambia:** lo de `docs/EVALUACION_RESULTADOS_LABORATORIO.md` §6, elegido por el médico el 2026-10-10 («Turso + copia en la laptop»):
+  - Tabla sincronizada `LabResults` (solo metadatos) y tablas solo de la nube `LabBlobs`/`LabBlobChunks`, en trozos de 512 KiB.
+  - La laptop guarda una copia completa en `%LocalAppData%\TPVC\laboratorio\`, fuera de `consultorio.db` y de sus respaldos diarios.
+  - Tope de 2 GB en la nube, compresión de las fotos al capturar (JPEG ~2000 px) y freno de bytes por día.
+- **Prueba:** subir, cortar y continuar; bajar al abrir con su SHA-256; la laptop archiva todo; el tope deja de subir sin respaldo externo.
+- **Riesgo:** medio (el almacenamiento de Turso, 5 GB en el plan gratuito, bloquea toda la base al pasarse).
+
 #### 8.13 · Kit de conformidad de lectura
 - **Cambia:**
   - `contracts/hrana/*.jsonl`: intercambios grabados por `FakeHranaServer`, con los valores generados reemplazados por marcadores. Primera sincronización, incremental, descarga completa por tabla, empates en la llave, cambio de generación, `BLOCKED` y 401.

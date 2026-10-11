@@ -259,6 +259,8 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     private SuppliesSheetViewModel _supplies;
     private ClinicalServicesSheetViewModel _clinicalServices;
     private PrescriptionSheetViewModel _prescription;
+    private ConsultationLabOrder _labOrder;
+    private LabOrderViewModel _labs;
     private ConsultationViewModel _consultation;
     private ConsultationAutosave _autosave;
     private ConsultationHandoffViewModel _handoff;
@@ -326,6 +328,9 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     /// <summary>Hoja de receta (posología, dosis pediátrica, alerta de alergia, receta anterior y "Se surte aquí").</summary>
     public PrescriptionSheetViewModel Prescription => _prescription;
 
+    /// <summary>Laboratorio de la consulta en curso (sección 6): estudios, indicaciones y su solicitud impresa.</summary>
+    public LabOrderViewModel Labs => _labs;
+
     /// <summary>Consulta en curso: la nota, sus secciones, el CIE-10 y "Terminar consulta" con su cobro (Checkout).</summary>
     public ConsultationViewModel Consultation => _consultation;
 
@@ -335,7 +340,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     /// <summary>Consulta entre equipos: "Enviar a…", solo lectura mientras está en otro equipo, recuperar, liberar y recibir.</summary>
     public ConsultationHandoffViewModel Handoff => _handoff;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_consultationDetail), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_consultationDetail), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_labOrder), nameof(_labs), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
         IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences)
     {
@@ -372,12 +377,17 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso (se lee al momento)
         _prescription = new PrescriptionSheetViewModel(_inventoryService, _catalog, _templates, _session, _active, _record, _account, _info, _feedback,
             _catalogBrowser, this, this, _ui, () => Consultation.ConsultationWeight);
+        // La orden de laboratorio se guarda con la nota y viaja en el borrador; la hoja lleva el diagnóstico que se
+        // escribe en la consulta (se lee al momento)
+        _labOrder = new ConsultationLabOrder();
+        _labs = new LabOrderViewModel(_inventoryService, _labOrder, _session, _clinic, _info, _feedback, clinicProfileService, printingService,
+            () => Consultation.ConsultationDiagnosis);
         // Al final: el cobro (Checkout) se arma con la consulta, como antes justo después de los hijos y
         // antes de cualquier suscripción
         _consultation = new ConsultationViewModel(_inventoryService, _consultationService, clinicProfileService, _session, _active, _record, _account,
-            _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this, localPreferences);
+            _catalog, _navigation, _info, _feedback, this, _dialogs, _ui, this, localPreferences, _labOrder);
         _autosave = new ConsultationAutosave(_consultationService, consultationDraftStore, _consultation, _session, _active, _record, _account, _catalog,
-            _navigation, _ui, _autosaveOptions, this, this);
+            _navigation, _ui, _autosaveOptions, this, this, _labOrder);
         // Al final: el envío entre equipos usa la consulta y su borrador
         _handoff = new ConsultationHandoffViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _active, _navigation,
             _feedback, _record, _account, _consultation, _autosave, _dialogs, _ui, this);

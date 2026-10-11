@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.24.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-11 (TPVC v1.25.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,14 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.25.0 (laboratorio: orden de estudios)
+
+- [ ] En una consulta, sección 6 *Laboratorio*: agregar *BH* de los frecuentes, el paquete *Chequeo general* (no repite la BH) y buscar "hba1c" + Enter. Escribir un estudio que no está en la lista + Enter: queda en *Otros*. Agregar la indicación *Ayuno*.
+- [ ] *Vista previa*: la solicitud lleva el membrete de la receta, paciente, edad, fecha, sexo y diagnóstico, los estudios por área y las indicaciones, en media carta. Con muchos estudios (los tres paquetes) sale en dos columnas o en carta. *Imprimir* y *Guardar documento* salen igual.
+- [ ] Cerrar TPVC a mitad de la consulta y volver a abrirlo: la orden sigue ahí. *Terminar consulta*: la tarjeta del historial dice "Laboratorio: …", y al abrirla se reimprime con la fecha de esa consulta. Una consulta sin estudios termina igual y su tarjeta no tiene esa línea.
+- [ ] En la siguiente consulta, buscar el estudio escrito a mano: aparece en las sugerencias.
+- [ ] Para Kotlin: la orden viaja en `PatientConsultations.LabOrderJson` (contrato revisión 4, ver `contracts/README.md`); la tablet la muestra en la consulta y en el historial, y la imprime o comparte con el mismo formato (C2/C4). Los resultados (PDF y fotos) llegan después, en el paso 8.12b (`docs/EVALUACION_RESULTADOS_LABORATORIO.md`).
 
 ### v1.24.0 (ficha por consulta y corregir la receta después)
 

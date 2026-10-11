@@ -32,6 +32,7 @@ public partial class ConsultationAutosave : ObservableObject
     private readonly AutosaveOptions _autosaveOptions;
     private readonly IDraftHandoffParticipant _handoff;
     private readonly IPatientsWorkflow _workflow;
+    private readonly ConsultationLabOrder _labOrder;
 
     public ConsultationAutosave(
         ConsultationService? consultationService,
@@ -46,7 +47,8 @@ public partial class ConsultationAutosave : ObservableObject
         IUiThread ui,
         AutosaveOptions autosaveOptions,
         IDraftHandoffParticipant handoff,
-        IPatientsWorkflow workflow)
+        IPatientsWorkflow workflow,
+        ConsultationLabOrder? labOrder = null)
     {
         _consultationService = consultationService;
         _draftStore = draftStore;
@@ -61,6 +63,7 @@ public partial class ConsultationAutosave : ObservableObject
         _autosaveOptions = autosaveOptions;
         _handoff = handoff;
         _workflow = workflow;
+        _labOrder = labOrder ?? new ConsultationLabOrder();
     }
 
     private static readonly TimeSpan AutosaveMaxWait = TimeSpan.FromSeconds(10);
@@ -116,7 +119,10 @@ public partial class ConsultationAutosave : ObservableObject
     /// </summary>
     public void Attach()
     {
-        if (_draftStore != null) _consultation.PropertyChanged += OnPropertyChangedForAutosave;
+        if (_draftStore == null) return;
+        _consultation.PropertyChanged += OnPropertyChangedForAutosave;
+        // La orden de laboratorio (sección 6) también va en la copia
+        _labOrder.Changed += ScheduleAutosave;
     }
 
     private void OnPropertyChangedForAutosave(object? sender, PropertyChangedEventArgs e)
@@ -235,6 +241,7 @@ public partial class ConsultationAutosave : ObservableObject
             Prescriptions = ((_record.Patient ?? _session.SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
                 .Select(ConsultationRecordState.ClonePrescription).ToList(),
             PreviousPrescriptions = _record.PreviousPrescriptionKnown ? _record.PreviousPrescription.Select(ConsultationRecordState.ClonePrescription).ToList() : null,
+            LabOrder = _labOrder.IsBlank ? null : _labOrder.Snapshot(),
             PatientBefore = _record.SummaryBeforeConsultation,
             AttendingAppointmentId = _consultation.AttendingAppointmentId,
             FeeServiceSyncId = _account.FeeServiceOverrideId is int feeId ? _catalog.Services.FirstOrDefault(s => s.Id == feeId)?.SyncId : null,
@@ -391,6 +398,7 @@ public partial class ConsultationAutosave : ObservableObject
             _consultation.ConsultationSpO2 = draft.SpO2;
             _consultation.ConsultationGlucose = draft.Glucose;
 
+            _labOrder.Load(draft.LabOrder);
             _record.ResumeConsultationOnRecord(patient, draft);
 
             _consultation.ConsultationSection = Math.Clamp(draft.Section, 1, ConsultationViewModel.ConsultationSectionCount);

@@ -5,6 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:services="clr-namespace:TPVC.Services"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
@@ -705,6 +707,234 @@
                             </Border>
                             <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Agenda.ScheduleForSelectedPatientCommand}" Padding="12,6" HorizontalAlignment="Left" Margin="0,0,0,4" Content="Agendar próxima cita" ToolTip="Abre la agenda en el día de mañana con el paciente ya puesto" />
                             <Button Style="{StaticResource ButtonPrimary}" Command="{Binding Consultation.FinalizeConsultationCommand}" Padding="16,7" HorizontalAlignment="Right" Margin="0,4,0,0" Content="Terminar consulta" ToolTip="Ctrl + Enter" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <!-- 6 · Laboratorio (desde v1.25.0): opcional; se guarda con la nota y sale en su propia hoja -->
+                <Border CornerRadius="12" BorderThickness="1" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource ThemeSurface}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=6}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeFocus}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Style="{DynamicResource SectionHeaderButton}" Command="{Binding Consultation.SetConsultationSectionCommand}" CommandParameter="6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=6}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ThemeAccentStrong}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="6" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextSecondary}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToBool}, ConverterParameter=6}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentText}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="Laboratorio" FontWeight="SemiBold" FontSize="14.5" Foreground="{DynamicResource ThemeText}" />
+                                    <Grid Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource InverseComparisonToVis}, ConverterParameter=6}">
+                                        <TextBlock Text="{Binding Labs.Order.Summary}" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <StackPanel Margin="54,0,16,14" IsEnabled="{Binding Handoff.IsConsultationEditable}" Visibility="{Binding Consultation.ConsultationSection, Converter={StaticResource ComparisonToVis}, ConverterParameter=6}">
+                            <TextBlock Text="Opcional. Los estudios se guardan con la consulta y se imprimen en su propia hoja, con el membrete de la receta." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" TextWrapping="Wrap" Margin="0,2,0,8" />
+
+                            <TextBlock Text="Frecuentes" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding Labs.FrequentStudies}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type services:LabCatalogStudy}">
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" FontSize="11.5"
+                                                Command="{Binding DataContext.Labs.AddFrequentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}">
+                                            <TextBlock>
+                                                <Run Text="+ " /><Run Text="{Binding ChipText, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Paquetes" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,4,0,6" />
+                            <ItemsControl ItemsSource="{Binding Labs.Panels}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type services:LabPanel}">
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" FontSize="11.5"
+                                                Command="{Binding DataContext.Labs.AddPanelCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                ToolTip="{Binding Summary}" AutomationProperties.Name="{Binding Name}">
+                                            <TextBlock>
+                                                <Run Text="+ " /><Run Text="{Binding Name, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBox x:Name="LabStudySearchTextBox"
+                                     Text="{Binding Labs.StudySearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldTextBox}"
+                                     PreviewKeyDown="LabStudySearchTextBox_PreviewKeyDown"
+                                     helpers:Field.Placeholder="Buscar un estudio (BH, química, orina…) o escribir otro"
+                                     AutomationProperties.Name="Buscar estudio de laboratorio"
+                                     FontSize="13.5" Padding="10,7" Margin="0,4,0,4"
+                                     ToolTip="↑ ↓ para elegir y Enter para agregar; si no está en la lista, Enter lo agrega tal como lo escribió" />
+                            <Border Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeFocus}" BorderThickness="1.5" CornerRadius="8"
+                                    Margin="0,0,0,8" MaxHeight="240" SnapsToDevicePixels="True"
+                                    Visibility="{Binding Labs.HasSuggestions, Converter={StaticResource BoolToVis}}">
+                                <ListBox x:Name="LabSuggestionsListBox"
+                                         ItemsSource="{Binding Labs.Suggestions}"
+                                         SelectedIndex="{Binding Labs.SelectedSuggestionIndex, Mode=TwoWay}"
+                                         BorderThickness="0" Background="Transparent" Focusable="False"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PreviewMouseLeftButtonUp="LabSuggestionsListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="Margin" Value="1" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Grid>
+                                                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="10,6,8,6" SnapsToDevicePixels="True">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <Border x:Name="Mark" Width="3" CornerRadius="2" Margin="2,6" HorizontalAlignment="Left"
+                                                                    Background="{DynamicResource ThemeFocus}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSurfaceSubtle}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                                                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type services:LabCatalogStudy}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Display}" FontSize="12.5" Foreground="{DynamicResource ThemeText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Area}" FontSize="10.5" Foreground="{DynamicResource ThemeTextSecondary}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+
+                            <Border Background="{DynamicResource ThemeSurfaceSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Labs.Order.Studies}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type models:LabOrderStudy}">
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource ThemeText}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Area}" FontSize="11.5" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                            ToolTip="Quitar de la orden" AutomationProperties.Name="Quitar de la orden"
+                                                            Command="{Binding DataContext.Labs.RemoveStudyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                                        <helpers:Icon Data="{StaticResource IcoTrash}" />
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="Sin estudios: la consulta puede terminar sin laboratorio." FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}"
+                                               Visibility="{Binding Labs.Order.HasStudies, Converter={StaticResource InverseBoolToVis}}" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Indicaciones para el paciente" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,2,0,6" />
+                            <ItemsControl ItemsSource="{Binding Labs.IndicationPresets}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type services:LabIndicationPreset}">
+                                        <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="10,4" Margin="0,0,6,6" FontSize="11.5"
+                                                Command="{Binding DataContext.Labs.AppendIndicationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                ToolTip="{Binding Text}" AutomationProperties.Name="{Binding Label}">
+                                            <TextBlock>
+                                                <Run Text="+ " /><Run Text="{Binding Label, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBox Text="{Binding Labs.Order.Indications, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource FieldTextBox}" AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="56" Padding="10,8" FontSize="13.5" Margin="0,0,0,8"
+                                     helpers:Field.Placeholder="Ayuno, toma de muestra… (opcional)" AutomationProperties.Name="Indicaciones de laboratorio" />
+
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" IsEnabled="{Binding Labs.Order.HasStudies}">
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Labs.OpenPreviewCommand}" Padding="12,6" Margin="0,0,6,0" Content="Vista previa"
+                                            ToolTip="Ver la solicitud tal como se imprime" />
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding Labs.PrintCommand}" Padding="12,6" ToolTip="Imprimir la solicitud de laboratorio">
+                                        <StackPanel Orientation="Horizontal">
+                                            <helpers:Icon Data="{StaticResource IcoPrint}" Width="14" Height="14" Margin="0,0,6,0" />
+                                            <TextBlock Text="Imprimir" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                                <Button Grid.Column="2" Style="{StaticResource ButtonPrimary}" Command="{Binding Consultation.FinalizeConsultationCommand}" Padding="16,7" Content="Terminar consulta" ToolTip="Ctrl + Enter" />
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </Border>

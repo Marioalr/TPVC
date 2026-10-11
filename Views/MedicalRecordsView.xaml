@@ -28,6 +28,7 @@
         <DataTemplate x:Key="CatalogSheet"><views:CatalogBrowserSheetView /></DataTemplate>
         <DataTemplate x:Key="PreviewSheet"><views:PrescriptionPreviewSheetView /></DataTemplate>
         <DataTemplate x:Key="ConsultationDetailSheet"><views:ConsultationDetailSheetView /></DataTemplate>
+        <DataTemplate x:Key="LabOrderPreviewSheet"><views:LabOrderPreviewSheetView /></DataTemplate>
         <DataTemplate x:Key="CheckoutSheet"><views:ConsultationCheckoutView /></DataTemplate>
         <DataTemplate x:Key="AllergyDialog"><views:AllergyAlertView /></DataTemplate>
         <DataTemplate x:Key="InfoDialog"><views:InfoDialogView /></DataTemplate>
@@ -178,6 +179,9 @@
                         Visibility="{Binding ConsultationDetail.IsOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource PreviewSheet}"
                         Visibility="{Binding Preview.IsPrescriptionPdfModalOpen, Converter={StaticResource BoolToVis}}" />
+        <!-- Solicitud de laboratorio de la consulta en curso (desde v1.25.0) -->
+        <ContentControl Grid.RowSpan="3" Panel.ZIndex="320" Focusable="False" Content="{Binding}" ContentTemplate="{StaticResource LabOrderPreviewSheet}"
+                        Visibility="{Binding Labs.IsPreviewOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="370" Focusable="False" Content="{Binding Handoff}" ContentTemplate="{StaticResource SendConsultationSheet}"
                         Visibility="{Binding Handoff.IsSendConsultationSheetOpen, Converter={StaticResource BoolToVis}}" />
         <ContentControl Grid.RowSpan="3" Panel.ZIndex="450" Focusable="False" Content="{Binding Prescription}" ContentTemplate="{StaticResource AllergyDialog}"
