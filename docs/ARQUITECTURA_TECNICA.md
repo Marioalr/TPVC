@@ -189,7 +189,7 @@ TPVC/
 │   └── DatabaseInitializer.cs   # Migración preventiva y sembrado clínico
 ├── Models/
 │   ├── Category.cs              # Entidad categoría médica
-│   ├── Product.cs               # Entidad insumo / fármaco (con Price, y desde v1.21.0 UnitCost y CostExcludesVat)
+│   ├── Product.cs               # Entidad insumo / fármaco (con Price; desde v1.21.0 UnitCost y CostExcludesVat; desde v1.22.0 SupplierCode)
 │   ├── ProductBatch.cs          # Entidad lote y control de vencimiento
 │   ├── InventoryMovement.cs     # Entidad movimiento de Kardex (con SalidaVenta)
 │   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente
@@ -198,6 +198,8 @@ TPVC/
 │   ├── Documents/               # (plan Fase 8, paso 8.11) Generadores puros sin WPF: receta en HTML, ticket en texto y HTML
 │   ├── Pairing/                 # (plan Fase 8, paso 8.14) Vinculación por QR en la red local (LanPairingHost: TcpListener solo en direcciones privadas, 10 min)
 │   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync
+│   ├── InventoryService.SupplierOrders.cs # «Ingresar pedido» (v1.22.0): emparejar renglones con el catálogo y recibir todo en una transacción
+│   ├── SupplierOrderParser.cs   # Lee el pedido del correo del proveedor pegado como texto (formato de LUIN)
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
 │   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2)
 │   ├── ConsultationHandoffService.cs # Consulta entre equipos (tabla ConsultationHandoffs)

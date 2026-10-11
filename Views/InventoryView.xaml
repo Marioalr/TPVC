@@ -29,12 +29,21 @@
                     <TextBlock Style="{StaticResource TextTitle}" Text="Productos" />
                     <TextBlock Style="{StaticResource TextDetail}" Text="{Binding ResultsSummary}" Margin="0,4,0,0" />
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource ButtonPrimary}" Command="{Binding NewProductCommand}" VerticalAlignment="Top">
-                    <StackPanel Orientation="Horizontal">
-                        <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
-                        <TextBlock Text="Nuevo producto" />
-                    </StackPanel>
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding OpenOrderEntryCommand}" Margin="0,0,8,0"
+                            ToolTip="Pegar el correo del pedido del proveedor e ingresar todos sus productos juntos">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoClipboard}" Margin="0,0,8,0" />
+                            <TextBlock Text="Ingresar pedido" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding NewProductCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,8,0" />
+                            <TextBlock Text="Nuevo producto" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="0,0,0,12">
@@ -240,8 +249,23 @@
                             <TextBlock Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,6,0,0" Text="{Binding ProfitText}"
                                        Visibility="{Binding ProfitText, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Ubicación" />
-                        <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Ej. Estante A1" Margin="0,0,0,12" />
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Ubicación" />
+                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Ej. Estante A1" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Clave del proveedor" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding SupplierCode, UpdateSourceTrigger=PropertyChanged}"
+                                         helpers:Field.Placeholder="Ej. WAN014" AutomationProperties.Name="Clave del proveedor"
+                                         ToolTip="El SKU con que llega en el pedido del proveedor. «Ingresar pedido» la guarda sola." />
+                            </StackPanel>
+                        </Grid>
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -338,5 +362,191 @@
                 </Border>
             </Grid>
         </Border>
+
+        <!-- ======================= HOJA: INGRESAR PEDIDO DEL PROVEEDOR ======================= -->
+        <Grid Panel.ZIndex="60" Visibility="{Binding IsOrderEntryOpen, Converter={StaticResource BoolToVis}}">
+            <Border Style="{StaticResource SheetScrim}" />
+            <Border Style="{StaticResource SheetCard}" MaxWidth="1120" HorizontalAlignment="Stretch" MaxHeight="760" Padding="0" DataContext="{Binding OrderEntry}"
+                    AutomationProperties.Name="Ingresar pedido">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="24,20,16,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextHeading}" Text="{Binding Title}" />
+                            <TextBlock Style="{StaticResource TextDetail}" Text="{Binding SummaryText}" Margin="0,2,0,0"
+                                       Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding CloseCommand}" ToolTip="Cerrar" AutomationProperties.Name="Cerrar"
+                                VerticalAlignment="Top" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+                            <helpers:Icon Data="{StaticResource IcoClose}" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Paso 1: pegar el correo -->
+                    <StackPanel Grid.Row="1" Margin="24,0,24,16" Visibility="{Binding IsPasting, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource TextBody}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   Text="Copie del correo del proveedor la parte «Detalles de la Compra», con la tabla de productos (Producto, SKU, Cantidad y Total) y el resumen, y péguela aquí. Por ahora se lee el formato de los correos de LUIN." />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Proveedor" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Width="280" HorizontalAlignment="Left" Margin="0,0,0,12"
+                                 Text="{Binding Supplier, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Proveedor" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Correo del pedido" />
+                        <TextBox Style="{StaticResource FieldMultiline}" Height="300" AcceptsTab="True" FontFamily="{StaticResource FontFamilyMono}" FontSize="12"
+                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"
+                                 Text="{Binding PastedText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Correo del pedido"
+                                 helpers:Field.Placeholder="Pegue aquí el correo (Ctrl+V)" />
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,12,0,0" Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Paso 2: revisar los renglones -->
+                    <Grid Grid.Row="1" Margin="24,0,24,12" Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVis}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel>
+                            <Border Margin="0,0,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource NoticeWarning}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsTotalCheckOk}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding TotalCheckText}" TextWrapping="Wrap" />
+                            </Border>
+                            <Border Style="{StaticResource NoticeWarning}" Margin="0,0,0,8" Visibility="{Binding DuplicateWarning, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding DuplicateWarning}" TextWrapping="Wrap" />
+                            </Border>
+                            <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,8" Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10" Visibility="{Binding HasNewProducts, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource TextBody}" Text="Categoría de los productos nuevos:" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="280" ItemsSource="{Binding Categories}" SelectedItem="{Binding CategoryForNew}"
+                                          DisplayMemberPath="Name" AutomationProperties.Name="Categoría de los productos nuevos" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Encabezados de la tabla -->
+                        <Grid Grid.Row="1" Margin="8,0,8,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2.2*" />
+                                <ColumnDefinition Width="2.4*" />
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="96" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="116" />
+                                <ColumnDefinition Width="96" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource TextCaption}" Text="En el correo" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource TextCaption}" Text="Producto en TPVC" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="2" Style="{StaticResource TextCaption}" Text="Cant." Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="3" Style="{StaticResource TextCaption}" Text="Costo u." Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="4" Style="{StaticResource TextCaption}" Text="Lote (opcional)" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="5" Style="{StaticResource TextCaption}" Text="Caducidad" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="6" Style="{StaticResource TextCaption}" Text="Total" TextAlignment="Right" />
+                        </Grid>
+
+                        <Border Grid.Row="2" Style="{StaticResource CardSubtle}" Padding="0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Lines}" Margin="8,4" AutomationProperties.Name="Renglones del pedido">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:SupplierOrderLineViewModel}">
+                                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1" Padding="0,8">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="2.2*" />
+                                                            <ColumnDefinition Width="2.4*" />
+                                                            <ColumnDefinition Width="64" />
+                                                            <ColumnDefinition Width="96" />
+                                                            <ColumnDefinition Width="120" />
+                                                            <ColumnDefinition Width="116" />
+                                                            <ColumnDefinition Width="96" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel VerticalAlignment="Center">
+                                                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Description}" TextWrapping="Wrap" />
+                                                            <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Sku}" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                            <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding DataContext.ProductChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                      SelectedItem="{Binding SelectedProduct}" DisplayMemberPath="Label" TextSearch.TextPath="Label"
+                                                                      AutomationProperties.Name="Producto en TPVC">
+                                                                <ComboBox.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <VirtualizingStackPanel />
+                                                                    </ItemsPanelTemplate>
+                                                                </ComboBox.ItemsPanel>
+                                                            </ComboBox>
+                                                            <TextBlock Text="{Binding MatchText}" Margin="2,3,0,0">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding NeedsReview}" Value="True">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource ThemeWarningText}" />
+                                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                        <TextBox Grid.Column="2" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" HorizontalContentAlignment="Center"
+                                                                 Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cantidad" />
+                                                        <TextBox Grid.Column="3" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" FontFamily="{StaticResource FontFamilyMono}"
+                                                                 Text="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Costo por unidad"
+                                                                 ToolTip="Total del renglón entre la cantidad; se puede corregir" />
+                                                        <TextBox Grid.Column="4" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                                 Text="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Lote" helpers:Field.Placeholder="Sin lote" />
+                                                        <TextBox Grid.Column="5" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                                 Text="{Binding ExpirationText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Caducidad" helpers:Field.Placeholder="mm/aaaa" />
+                                                        <TextBlock Grid.Column="6" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Top" Margin="0,10,0,0"
+                                                                   Text="{Binding LineTotalText}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding Error}" Margin="0,4,0,0" Foreground="{DynamicResource ThemeDangerText}" FontSize="12" TextWrapping="Wrap"
+                                                               Visibility="{Binding Error, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,14">
+                        <Grid>
+                            <TextBlock Style="{StaticResource TextBody}" VerticalAlignment="Center" FontWeight="SemiBold"
+                                       Text="{Binding LinesTotalText, StringFormat='Total del pedido: {0}'}"
+                                       Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVis}}" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Style="{StaticResource ButtonGhost}" Command="{Binding BackToPasteCommand}" Content="Volver a pegar" Margin="0,0,8,0"
+                                        Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                <Button Style="{StaticResource ButtonSecondary}" Command="{Binding PasteFromClipboardCommand}" Content="Pegar del portapapeles" Margin="0,0,8,0"
+                                        Visibility="{Binding IsPasting, Converter={StaticResource BoolToVis}}" />
+                                <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ReadOrderCommand}" Content="Leer pedido"
+                                        Visibility="{Binding IsPasting, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ConfirmCommand}" Content="Ingresar pedido"
+                                        Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding CanConfirm}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

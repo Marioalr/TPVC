@@ -175,7 +175,7 @@ public partial class MainViewModel : ObservableObject
         _ = OpenRecoveredConsultationAsync();
 
         DashboardVM = new DashboardViewModel(inventoryService, NavigateTo);
-        InventoryVM = new InventoryViewModel(inventoryService);
+        InventoryVM = new InventoryViewModel(inventoryService, Notifications, localPreferences);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
         ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);

@@ -62,4 +62,7 @@ public sealed class LocalPreferences
 {
     /// <summary>El médico ocultó el cronómetro de la consulta con un clic (Fase 7.2).</summary>
     public bool HideConsultationTimer { get; set; }
+
+    /// <summary>El proveedor del último pedido ingresado («Ingresar pedido» lo propone la siguiente vez).</summary>
+    public string? LastSupplierName { get; set; }
 }

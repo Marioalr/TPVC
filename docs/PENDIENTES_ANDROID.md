@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.21.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.22.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.22.0 (ingresar pedido del proveedor)
+
+- [ ] Con un correo real de LUIN: copiar desde «Detalles de la Compra» hasta el total (en Gmail de la PC, y si se puede también reenviado o copiado del celular), *Productos → Ingresar pedido*, pegar y **Leer pedido**: salen todos los renglones y el aviso verde de que suman lo mismo que el correo.
+- [ ] Revisar los renglones «Parecido: revise» y cambiar alguno a mano; capturar lote y caducidad en uno (mm/aaaa) y dejar otro sin lote. **Ingresar pedido**: las existencias suben, el kardex dice «Pedido LUIN #…», el lote aparece en *Lotes y caducidades* y los productos nuevos están en *Productos* sin precio de venta.
+- [ ] Volver a pegar el mismo correo: avisa que ese pedido ya se ingresó. El siguiente pedido empareja solo los productos que ya llegaron antes.
+- [ ] Para Kotlin: el contrato pasa a la revisión 3 (`Products.SupplierCode`).
 
 ### v1.21.0 (costo del producto)
 

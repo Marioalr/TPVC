@@ -33,6 +33,12 @@ public class Product : ISyncEntity
     /// medicamentos van sin IVA.
     /// </summary>
     public bool CostExcludesVat { get; set; }
+
+    /// <summary>
+    /// Clave del producto en el pedido del proveedor (su SKU, ej. WAN014). La guarda «Ingresar pedido» y empareja solo el
+    /// siguiente pedido. Vacía si nunca llegó en un pedido.
+    /// </summary>
+    public string? SupplierCode { get; set; }
     public int CurrentStock { get; set; }
     public int MinStock { get; set; } = 5;
     public int OptimalStock { get; set; } = 20;

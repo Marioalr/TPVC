@@ -1,7 +1,7 @@
 {
-  "contract": 2,
+  "contract": 3,
   "protocol": 2,
-  "fingerprint": "5ECE0B6B977111A3",
+  "fingerprint": "C68230638BF728B8",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -1713,6 +1713,14 @@
           }
         },
         {
+          "name": "SupplierCode",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
           "name": "Unit",
           "role": "data",
           "remoteType": "TEXT",
@@ -1769,7 +1777,7 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CostExcludesVat\" INTEGER, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"Unit\" TEXT, \"UnitCost\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CostExcludesVat\" INTEGER, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"SupplierCode\" TEXT, \"Unit\" TEXT, \"UnitCost\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Products_SyncedAtUtc\" ON \"Products\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2596,7 +2604,7 @@
     "CREATE INDEX IF NOT EXISTS \"IX_PediatricDoseRules_SyncedAtUtc\" ON \"PediatricDoseRules\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"PrescriptionTemplates\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"IsActive\" INTEGER, \"Kind\" TEXT, \"SortOrder\" INTEGER, \"Text\" TEXT, \"Title\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_PrescriptionTemplates_SyncedAtUtc\" ON \"PrescriptionTemplates\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CostExcludesVat\" INTEGER, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"Unit\" TEXT, \"UnitCost\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CostExcludesVat\" INTEGER, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"SupplierCode\" TEXT, \"Unit\" TEXT, \"UnitCost\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Products_SyncedAtUtc\" ON \"Products\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",

@@ -61,6 +61,10 @@ public partial class ProductDialogViewModel : ObservableObject
     [ObservableProperty]
     private string _location = string.Empty;
 
+    /// <summary>SKU del proveedor: «Ingresar pedido» lo guarda y con él empareja el siguiente pedido.</summary>
+    [ObservableProperty]
+    private string _supplierCode = string.Empty;
+
     [ObservableProperty]
     private bool _requiresRefrigeration;
 
@@ -152,6 +156,7 @@ public partial class ProductDialogViewModel : ObservableObject
             MinStock = existing.MinStock;
             OptimalStock = existing.OptimalStock;
             Location = existing.Location ?? string.Empty;
+            SupplierCode = existing.SupplierCode ?? string.Empty;
             RequiresRefrigeration = existing.RequiresRefrigeration;
             Notes = existing.Notes ?? string.Empty;
             SelectedCategory = Categories.FirstOrDefault(c => c.Id == existing.CategoryId);
@@ -173,6 +178,7 @@ public partial class ProductDialogViewModel : ObservableObject
         MinStock = 5;
         OptimalStock = 20;
         Location = string.Empty;
+        SupplierCode = string.Empty;
         RequiresRefrigeration = false;
         Notes = string.Empty;
     }
@@ -237,6 +243,7 @@ public partial class ProductDialogViewModel : ObservableObject
                 MinStock = MinStock,
                 OptimalStock = OptimalStock,
                 Location = string.IsNullOrWhiteSpace(Location) ? null : Location.Trim(),
+                SupplierCode = string.IsNullOrWhiteSpace(SupplierCode) ? null : SupplierCode.Trim(),
                 RequiresRefrigeration = RequiresRefrigeration,
                 Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()
             };

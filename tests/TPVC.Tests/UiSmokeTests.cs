@@ -503,6 +503,22 @@ internal sealed class UiSmokeSession
             Capture(host, $"22-config-producto-nuevo-{suffix}");
             shell.InventoryVM.CloseEditor();
 
+            // «Ingresar pedido» (v1.22.0): el correo pegado y la revisión de sus renglones
+            shell.InventoryVM.OpenOrderEntry();
+            var order = shell.InventoryVM.OrderEntry!;
+            order.PastedText = "Detalles de la Compra\nNúmero de Orden: #5175\nProducto\tSKU\tCantidad\tTotal\n" +
+                               "PARACETAMOL 500MG C/20 TABS\tPAR500\t4\t$108.00\nVALCLAN 875/125MG C/14 TABS\tWAN014\t2\t$145.02\n" +
+                               "VOYDOL S 30MG C/4 TABS\tRAM013\t3\t$30.78\nProducto Sujeto a Existencia\nSubtotal\t$283.80\nIVA\t$0.00\nTotal + IVA\t$283.80";
+            Capture(host, $"22b-config-pedido-pegar-{suffix}");
+            WaitFor(order.ReadOrderAsync());
+            order.Lines[1].BatchNumber = "L2401";
+            Capture(host, $"22c-config-pedido-revisar-{suffix}");
+            if (order.Lines.Count != 3 || !order.IsTotalCheckOk || order.Lines[1].Error.Length == 0)
+            {
+                _failures.Add($"[22c-{suffix}] La hoja del pedido no leyó los 3 renglones o no avisa del lote sin caducidad");
+            }
+            order.Close();
+
             main.NavigateTo("Batches");
             shell.BatchesVM.OpenNewBatchModal();
             shell.BatchesVM.NewBatchExpirationText = "12/2027";

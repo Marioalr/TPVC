@@ -68,6 +68,31 @@ public partial class InventoryViewModel : ObservableObject
         IsEditorOpen = false;
     }
 
+    // ================================================================== ingresar pedido del proveedor
+
+    /// <summary>«Ingresar pedido»: la hoja con el correo pegado y sus renglones.</summary>
+    [ObservableProperty]
+    private SupplierOrderViewModel? _orderEntry;
+
+    [ObservableProperty]
+    private bool _isOrderEntryOpen;
+
+    [RelayCommand]
+    public void OpenOrderEntry()
+    {
+        IsEditorOpen = false;
+        IsQuickActionOpen = false;
+        var entry = new SupplierOrderViewModel(_inventoryService, _preferences);
+        entry.Closed += () => IsOrderEntryOpen = false;
+        entry.Received += message =>
+        {
+            _notifications?.Success(message);
+            _ = FilterProductsAsync();
+        };
+        OrderEntry = entry;
+        IsOrderEntryOpen = true;
+    }
+
     /// <summary>Lo que costó lo que hay en existencia de los productos de la lista (con su filtro), al costo.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ResultsSummary))]
@@ -95,9 +120,14 @@ public partial class InventoryViewModel : ObservableObject
     [ObservableProperty]
     private string _quickActionNotes = string.Empty;
 
-    public InventoryViewModel(InventoryService inventoryService)
+    private readonly NotificationService? _notifications;
+    private readonly LocalPreferencesStore? _preferences;
+
+    public InventoryViewModel(InventoryService inventoryService, NotificationService? notifications = null, LocalPreferencesStore? preferences = null)
     {
         _inventoryService = inventoryService;
+        _notifications = notifications;
+        _preferences = preferences;
 
         _inventoryService.OnInventoryChanged += () =>
         {

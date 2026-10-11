@@ -59,7 +59,7 @@ public class SystemAlertsSummary
 /// started on this context", la memoria no crece con el uso y los cambios hechos por
 /// otro proceso (p.ej. una futura sincronización con servidor) se ven en la siguiente lectura.
 /// </summary>
-public class InventoryService
+public partial class InventoryService
 {
     public const int ExpirationWarningDays = 60;
 
@@ -261,6 +261,7 @@ public class InventoryService
             existing.Price = product.Price;
             existing.UnitCost = product.UnitCost;
             existing.CostExcludesVat = product.CostExcludesVat;
+            existing.SupplierCode = product.SupplierCode;
             existing.CurrentStock = product.CurrentStock;
             existing.MinStock = product.MinStock;
             existing.OptimalStock = product.OptimalStock;

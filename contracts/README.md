@@ -41,6 +41,7 @@ Los cambios del esquema solo pueden agregar (tablas, columnas o valores de un en
 |---|---|---|
 | 1 | v1.20.1 | El contrato inicial (protocolo v2). |
 | 2 | v1.21.0 | `Products.UnitCost` (costo por unidad, decimal en texto, `"0"` si falta) y `Products.CostExcludesVat` (entero 0/1: el costo no incluye IVA y se le suma 16 %). |
+| 3 | v1.22.0 | `Products.SupplierCode` (texto, nulo si falta): la clave del producto en el pedido del proveedor; la escribe «Ingresar pedido» en la PC. |
 
 ## `golden/`
 
