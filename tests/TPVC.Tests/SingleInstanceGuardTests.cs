@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TPVC.Helpers;
 
@@ -9,19 +8,24 @@ namespace TPVC.Tests;
 
 /// <summary>
 /// Una sola ventana de TPVC: la segunda apertura trae al frente la primera y termina. El mutex pertenece a un hilo,
-/// así que la primera instancia de cada prueba vive en su propio hilo, como el hilo de la interfaz de la app.
-/// Mutex y semáforos con nombre son de Windows.
+/// así que la primera instancia de cada prueba vive en su propio hilo, como el hilo de la interfaz de la app, y cada
+/// segunda apertura también (no en el pool: la respuesta corre en un hilo del pool y con las pruebas en paralelo podía
+/// tardar más que la espera). Mutex y semáforos con nombre son de Windows.
 /// </summary>
 [TestClass]
 [TestCategory("Windows")]
+[DoNotParallelize]
 public class SingleInstanceGuardTests
 {
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(15);
+
     /// <summary>La primera instancia, en su hilo: toma el mutex, escucha si se pide y lo suelta al detenerse.</summary>
     private sealed class FirstInstance : IDisposable
     {
         private readonly ManualResetEventSlim _ready = new();
         private readonly ManualResetEventSlim _stop = new();
         private readonly Thread _thread;
+        private SingleInstanceGuard? _lateListener;
         private int _activations;
 
         public bool Acquired { get; private set; }
@@ -40,19 +44,40 @@ public class SingleInstanceGuardTests
                 if (disposeOnStop) guard.Dispose();
             }) { IsBackground = true };
             _thread.Start();
-            Assert.IsTrue(_ready.Wait(TimeSpan.FromSeconds(10)));
+            Assert.IsTrue(_ready.Wait(Wait));
         }
 
+        /// <summary>Para la prueba del aviso que llega antes: otra guardia con la misma clave solo escucha.</summary>
         public void StartListening(string key)
         {
-            // Para la prueba del aviso que llega antes: otra guardia con la misma clave solo escucha
-            new SingleInstanceGuard(key).ListenForActivation(() => Interlocked.Increment(ref _activations));
+            _lateListener = new SingleInstanceGuard(key);
+            _lateListener.ListenForActivation(() => Interlocked.Increment(ref _activations));
         }
 
         public void Dispose()
         {
             _stop.Set();
-            Assert.IsTrue(_thread.Join(TimeSpan.FromSeconds(10)));
+            Assert.IsTrue(_thread.Join(Wait));
+            _lateListener?.Dispose();
+        }
+    }
+
+    /// <summary>Una segunda apertura en su propio hilo: avisa y espera la respuesta.</summary>
+    private sealed class SecondOpening
+    {
+        private readonly Thread _thread;
+        private bool _answered;
+
+        public SecondOpening(string key, TimeSpan timeout)
+        {
+            _thread = new Thread(() => _answered = new SingleInstanceGuard(key).SignalExistingInstance(timeout)) { IsBackground = true };
+            _thread.Start();
+        }
+
+        public bool Answered()
+        {
+            Assert.IsTrue(_thread.Join(Wait + Wait));
+            return _answered;
         }
     }
 
@@ -81,7 +106,7 @@ public class SingleInstanceGuardTests
 
         using var second = new SingleInstanceGuard(key);
         Assert.IsFalse(second.TryAcquire(), "La segunda apertura no abre otra ventana");
-        Assert.IsTrue(second.SignalExistingInstance(TimeSpan.FromSeconds(5)), "La primera respondió");
+        Assert.IsTrue(second.SignalExistingInstance(Wait), "La primera respondió");
         Assert.AreEqual(1, first.Activations);
     }
 
@@ -91,12 +116,9 @@ public class SingleInstanceGuardTests
         var key = NewKey();
         using var first = new FirstInstance(key);
 
-        var answers = Enumerable.Range(0, 2)
-            .Select(_ => Task.Run(() => new SingleInstanceGuard(key).SignalExistingInstance(TimeSpan.FromSeconds(5))))
-            .ToArray();
-        Task.WaitAll(answers);
+        var openings = Enumerable.Range(0, 2).Select(_ => new SecondOpening(key, Wait)).ToArray();
 
-        Assert.IsTrue(answers.All(a => a.Result), "Ningún aviso se pierde ni se junta con el otro");
+        Assert.IsTrue(openings.All(o => o.Answered()), "Ningún aviso se pierde ni se junta con el otro");
         Assert.AreEqual(2, first.Activations);
     }
 
@@ -106,7 +128,7 @@ public class SingleInstanceGuardTests
         var key = NewKey();
         using var first = new FirstInstance(key, listen: false);
 
-        var second = new SingleInstanceGuard(key);
+        using var second = new SingleInstanceGuard(key);
         Assert.IsFalse(second.TryAcquire());
         Assert.IsFalse(second.SignalExistingInstance(TimeSpan.FromMilliseconds(300)));
     }
@@ -118,12 +140,11 @@ public class SingleInstanceGuardTests
         using var first = new FirstInstance(key, listen: false);
 
         // La primera todavía arranca: el aviso queda guardado hasta que escucha
-        var answer = Task.Run(() => new SingleInstanceGuard(key).SignalExistingInstance(TimeSpan.FromSeconds(5)));
+        var opening = new SecondOpening(key, Wait);
         Thread.Sleep(200);
         first.StartListening(key);
 
-        Assert.IsTrue(answer.Wait(TimeSpan.FromSeconds(10)));
-        Assert.IsTrue(answer.Result);
+        Assert.IsTrue(opening.Answered());
         Assert.AreEqual(1, first.Activations);
     }
 
