@@ -34,16 +34,19 @@ public partial class DataManagementViewModel : ObservableObject
     private readonly DataImportService? _importService;
     private readonly NotificationService? _notifications;
     private readonly TursoSyncService? _syncService;
+    private readonly LabResultService? _labResults;
 
     public DataManagementViewModel(BackupService backupService, DataImportService? importService = null, NotificationService? notifications = null,
-        TursoSyncService? syncService = null)
+        TursoSyncService? syncService = null, LabResultService? labResults = null)
     {
         _backupService = backupService;
         _importService = importService;
         _notifications = notifications;
         _syncService = syncService;
+        _labResults = labResults;
         RefreshBackups();
         RefreshCloudDecision();
+        RefreshLabFiles();
     }
 
     // ================================================================== la nube después de restaurar (paso 8.9)

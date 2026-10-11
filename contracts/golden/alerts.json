@@ -3,7 +3,7 @@
   "culture": "es-MX",
   "today": null,
   "now": "2026-10-12T05:30:00Z",
-  "contract": 6,
+  "contract": 7,
   "notes": [
     "Services/Rules/StockAlertRules.cs y ProductBatch.StatusTextOn.",
     "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",

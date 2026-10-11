@@ -20,6 +20,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Margin="0,0,0,16">
@@ -164,8 +165,47 @@
                     </Grid>
                 </Border>
 
+                <!-- Resultados de laboratorio (paso 8.12b): el archivo de esta PC y su respaldo externo -->
+                <Border Grid.Row="3" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16" AutomationProperties.Name="Respaldo de laboratorio"
+                        Visibility="{Binding IsLabAvailable, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource ThemeInfoSubtle}" Margin="0,0,14,0" VerticalAlignment="Top">
+                            <helpers:Icon Data="{StaticResource IcoClipboard}" Foreground="{DynamicResource ThemeInfoText}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource TextSection}" Text="Resultados de laboratorio" />
+                            <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,2,0,0" Text="{Binding LabLocalText}" />
+                            <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,2,0,0">
+                                <Run Text="Respaldo externo: " FontWeight="SemiBold" /><Run Text="{Binding LabBackupFolderText, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="Los PDF y fotos de los resultados no van en los respaldos de la base. Elija una USB o una carpeta de OneDrive: se copian ahí y, con eso, la PC principal puede liberar la nube cuando se llena (lo más viejo sigue en esta PC y en la copia)." />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Button Style="{StaticResource ButtonPrimary}" Command="{Binding BackUpLabFilesCommand}" Margin="0,0,0,8"
+                                    IsEnabled="{Binding HasLabBackupFolder}" Visibility="{Binding HasLabBackupFolder, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <helpers:Icon Data="{StaticResource IcoSave}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Respaldar ahora" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource ButtonSecondary}" Command="{Binding ChooseLabBackupFolderCommand}" Margin="0,0,0,8"
+                                    Content="{Binding LabFolderButtonText}" />
+                            <Button Style="{StaticResource ButtonGhost}" Command="{Binding RestoreLabFilesCommand}" Margin="0,0,0,8" Content="Traer del respaldo"
+                                    ToolTip="En una PC nueva: copia aquí los archivos que faltan"
+                                    Visibility="{Binding HasLabBackupFolder, Converter={StaticResource BoolToVis}}" />
+                            <Button Style="{StaticResource ButtonGhost}" Command="{Binding OpenLabArchiveFolderCommand}" Content="Abrir carpeta" ToolTip="{Binding LabArchiveDirectory}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
                 <!-- Importar / restaurar -->
-                <UniformGrid Grid.Row="3" Columns="2">
+                <UniformGrid Grid.Row="4" Columns="2">
                     <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,8,0">
                         <StackPanel>
                             <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource ThemeInfoSubtle}" HorizontalAlignment="Left" Margin="0,0,0,12">

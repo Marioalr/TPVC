@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-11 (TPVC v1.29.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0) y 8.12 (v1.29.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-11 (TPVC v1.30.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0) y 8.12b (v1.30.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -58,7 +58,8 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
             ▼                           ▼                           ▼
  ┌──────────────────────────────────────────────────────────────────────────────┐
  │ Turso · base del consultorio, sola en su grupo (libSQL, Hrana v2 por HTTPS): │
- │ 13 tablas sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,       │
+ │ 14 tablas sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,       │
+ │ LabBlobs y LabBlobChunks (archivos de laboratorio),                          │
  │ RegisteredDevices, DeviceRegistry, ConsultationHandoffs, FolioCounters,      │
  │ _tpvc_meta                                                                   │
  └──────────────────────────────────────────────────────────────────────────────┘
@@ -796,6 +797,15 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.12b · Resultados de laboratorio en la nube (agregado el 2026-10-11)
+- **Hecho en v1.30.0 (2026-10-11).** Decisiones al programarlo:
+  - **Sin `LabOrders`.** La orden ya vive en `PatientConsultations.LabOrderJson` (v1.25.0); `LabResults` se liga a la consulta con `PatientConsultationSyncId` opcional, que queda en nulo si se borra la consulta. Tampoco `ThumbSha256`: la lista no muestra miniaturas, y una columna se agrega después sin romper nada.
+  - **Una fila, un archivo.** Varias fotos de un mismo resultado se juntan en un PDF con una página por foto (`JpegPdfWriter`, .NET puro: cada JPEG va tal cual con `/DCTDecode`), así Android solo abre PDF o JPEG. Las fotos se vuelven a guardar a 2000 px y calidad 80, derechas según el EXIF y sin metadatos (también sin la ubicación del GPS); el PDF va tal cual hasta 10 MB.
+  - **Cada PC archiva todo**, no solo la principal (2 GB caben en cualquier disco), y el archivo es inmutable: quitar un resultado no borra su archivo. La PC sabe qué subir sin preguntarle a la nube (`LabFileStates.UploadedTo`), así que una sincronización sin resultados nuevos no toca `LabBlobs`.
+  - **Fuera del candado de la sincronización.** La vuelta de los archivos corre después de cada sincronización buena, en segundo plano y con su propio candado: archivar 2 GB al unirse no detiene la sincronización.
+  - **El tope sigue sobre lo que hay** (V20). Nadie sube lo que no cabe; la PC principal desaloja una vez al día si pasa de 1.8 GB, o al subir algo que no cabe, pero nunca algo más nuevo que lo que sube (si lo que sube es lo más viejo, se queda fuera). Solo desaloja lo que tiene verificado en su archivo **y** en el respaldo externo que se ve en ese momento (una USB desconectada no cuenta). El orden es por la fecha del resultado, con el índice `IX_LabResults_ContentSha256` de la nube. Lo que la nube desalojó a propósito no se vuelve a subir.
+  - **Huérfanos en dos tiempos:** `OrphanSinceUtc` cuando ningún resultado lo nombra y se borra 30 días después (con la fecha de la creación se borraría de inmediato lo que un «Reemplazar la nube» deja sin nombrar).
+  - **Freno de bytes distinto por plataforma:** en la PC, 2.5 GB de bajada y 500 MB de subida al día (alcanza para archivar los 2 GB el día que se une); en Android, 300 y 150 MB. Cuenta lo que viaja (el base64). Abrir un resultado a pedido no se frena.
+  - **El espacio de toda la base** se mide con `(page_count − freelist_count) × page_size`, que en V20 dio lo mismo que `dbstat` sin recorrer tablas. Arriba de 4 GB no se sube ningún archivo.
 - **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 con `scripts/verify-turso-blobs.ps1`. **Hechas el 2026-10-11** (`TURSO_SYNC_ARCHITECTURE.md` §6):
   - No hay tope de petición hasta 32 MB, y cada trozo escribe 2 filas.
   - **Borrar sí libera cuota (V20):** `dbstat` baja en cuanto se borra y las páginas libres se reúsan. El tope de 2 GB queda como estaba.

@@ -72,6 +72,12 @@ public sealed class LocalPreferences
     /// <summary>Letra del nombre del médico en la receta; null = la de siempre (manuscrita).</summary>
     public string? PrescriptionDoctorFont { get; set; }
 
+    /// <summary>
+    /// La carpeta del respaldo externo de los resultados de laboratorio (una USB o una carpeta de OneDrive; paso 8.12b).
+    /// Sin ella la nube no desaloja nada al llegar a su tope.
+    /// </summary>
+    public string? LabBackupFolder { get; set; }
+
     [System.Text.Json.Serialization.JsonIgnore]
     public TPVC.Models.PrescriptionFonts PrescriptionFonts => TPVC.Models.PrescriptionFonts.From(PrescriptionBodyFont, PrescriptionDoctorFont);
 }

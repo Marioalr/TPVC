@@ -196,6 +196,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
             case SectionData:
                 CurrentSubView = DataVM;
                 DataVM.RefreshBackups();
+                DataVM.RefreshLabFiles();
                 break;
             case SectionCloud:
                 CurrentSubView = TursoSyncVM;

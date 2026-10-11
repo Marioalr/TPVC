@@ -196,12 +196,14 @@ public partial class TursoSyncService
         IDbContextFactory<AppDbContext> contextFactory,
         TursoSettingsService settingsService,
         ClinicProfileService clinicProfileService,
-        InventoryService? inventoryService = null)
+        InventoryService? inventoryService = null,
+        LabResultService? labResults = null)
     {
         _contextFactory = contextFactory;
         _settingsService = settingsService;
         _clinicProfileService = clinicProfileService;
         _inventoryService = inventoryService;
+        AttachLabResults(labResults);
 
         UpdateInitialStatus();
 
@@ -449,7 +451,11 @@ public partial class TursoSyncService
             if (pulled > 0)
             {
                 NotifyLocalViews();
+                _labResults?.NotifyChanged();
             }
+
+            // Paso 8.12b: los archivos de laboratorio, fuera del candado de la sincronización
+            ScheduleLabTransfers();
 
             return result;
         }
@@ -1058,6 +1064,7 @@ public partial class TursoSyncService
         nameof(SaleItem) => "renglones de venta",
         nameof(PrescriptionTemplate) => "plantillas de receta",
         nameof(PediatricDoseRule) => "reglas de dosis",
+        nameof(LabResult) => "resultados de laboratorio",
         _ => type.Name
     };
 

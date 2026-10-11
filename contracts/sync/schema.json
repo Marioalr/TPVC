@@ -1,7 +1,7 @@
 {
-  "contract": 6,
+  "contract": 7,
   "protocol": 2,
-  "fingerprint": "FD1EE16B05D62C74",
+  "fingerprint": "87F02D03D8953AE4",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -20,7 +20,8 @@
     "Generaciones (paso 8.9): _tpvc_meta.generation cambia solo cuando una PC reemplaza la nube con un respaldo; entonces escribe generationPrevious (la anterior, o 'none') y sube minClientProtocol a 3, y al terminar de subir escribe generationReady igual a la nueva. Un equipo que ve otra generación guarda lo que no había subido (cada fila con su protocolo y su revisión del contrato), no escribe ni baja nada mientras generationReady no sea la nueva, y después se vacía, baja todo y ofrece «Volver a aplicar N cambios» (cada fila se vuelve a escribir con marca nueva). Un equipo sin generación guardada adopta la de la nube solo si no existe generationPrevious; si existe, hace lo mismo que con otra generación.",
     "Equipos (paso 8.10): DeviceRegistry dice el rol, el código y la revocación de cada equipo; solo la escribe la PC y sus filas nunca se borran. El rol de un equipo Android sale de su fila de DeviceRegistry: sin fila (aún no aprobado) o con RevokedAtUtc, no baja datos ni recibe consultas. Una PC sin fila usa el DeviceRole de RegisteredDevices. _tpvc_meta.primaryDeviceId es la PC principal.",
     "Latido (paso 8.10): cada equipo escribe su fila de RegisteredDevices con un upsert de columnas explícitas (LastSeenUtc con la hora de la nube) y Platform ('Windows' o 'Android'), SyncProtocol, HandoffProtocol, ContractRevision, PendingCount y OldestPendingUtc (cambios sin subir) e InstanceNonce (aleatorio en cada arranque). Al final de cada subida escribe además LastPushUtc con la hora de la nube, en la misma instrucción. Un equipo recibe consultas si HandoffProtocol >= 1; si está vacío (PC v1.17–v1.26), si su AppVersion >= 1.17.0. Si el latido lee en su fila un InstanceNonce ajeno después de haber escrito el suyo, otra instalación usa su DeviceId: toma uno nuevo y vuelve a bajar todo.",
-    "Membrete (paso 8.12): ClinicProfiles.CrestImageHash y HeaderImageHash son el SHA-256 (hex en minúsculas) del escudo y de la imagen del encabezado; '' = sin imagen; NULL = ninguna PC con v1.29.0 lo ha escrito (se usa la receta sin imagen). Los bytes viven en ClinicAssetChunks (trozos de 512 KiB, Part desde 0) y la fila de ClinicAssets (ByteCount, ChunkCount, MimeType) se escribe al final: sin ella, la imagen no está completa y se reintenta después. Un equipo baja una imagen solo cuando su hash cambia: lee la fila de ClinicAssets, luego los trozos por (Hash, Part), los une y revisa el tamaño y el SHA-256 antes de usarla. Solo la PC escribe estas tablas y borra las imágenes que el perfil ya no nombra."
+    "Membrete (paso 8.12): ClinicProfiles.CrestImageHash y HeaderImageHash son el SHA-256 (hex en minúsculas) del escudo y de la imagen del encabezado; '' = sin imagen; NULL = ninguna PC con v1.29.0 lo ha escrito (se usa la receta sin imagen). Los bytes viven en ClinicAssetChunks (trozos de 512 KiB, Part desde 0) y la fila de ClinicAssets (ByteCount, ChunkCount, MimeType) se escribe al final: sin ella, la imagen no está completa y se reintenta después. Un equipo baja una imagen solo cuando su hash cambia: lee la fila de ClinicAssets, luego los trozos por (Hash, Part), los une y revisa el tamaño y el SHA-256 antes de usarla. Solo la PC escribe estas tablas y borra las imágenes que el perfil ya no nombra.",
+    "Resultados de laboratorio (paso 8.12b): LabResults es una tabla sincronizada más y solo lleva los datos. El archivo vive en LabBlobs (una fila por ContentSha256) y LabBlobChunks (trozos de 512 KiB, ChunkIndex desde 0). Subir (PC y tablet; el celular no): registrar la fila con ON CONFLICT DO NOTHING, preguntar qué trozos ya existen, subir los que faltan uno por petición, y el último en la misma transacción (batch con BEGIN/COMMIT) que el cierre, que pone CompletedAtUtc solo si ya están todos. Antes de subir se suma SizeBytes de LabBlobs sin EvictedAtUtc: si con el archivo pasa de 2,000,000,000 bytes, no se sube y queda en el equipo. Bajar: la fila de LabBlobs (sin CompletedAtUtc se sigue subiendo; con EvictedAtUtc ya no está en la nube, solo en la PC principal) y los trozos de 4 en 4 en orden; se revisan el tamaño y el SHA-256 antes de usarlo. Solo la PC principal escribe ArchivedAtUtc, EvictedAtUtc y OrphanSinceUtc y borra trozos o filas de LabBlobs. El SQL literal está en contracts/golden/lab-files.json."
   ],
   "tables": [
     {
@@ -1333,6 +1334,206 @@
     },
     {
       "order": 6,
+      "table": "LabResults",
+      "entityType": "LabResult",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "ContentSha256",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          },
+          "note": "SHA-256 del archivo en hex con minúsculas (desde la revisión 7): su llave en LabBlobs. El archivo nunca cambia; otro archivo es otro resultado."
+        },
+        {
+          "name": "CreatedAt",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "FileName",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "Laboratory",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "MimeType",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          },
+          "note": "\"application/pdf\" o \"image/jpeg\" (varias fotos se guardan como un PDF con una página por foto)."
+        },
+        {
+          "name": "Notes",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PageCount",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Páginas del PDF o fotos que lo forman; 0 si no se sabe."
+        },
+        {
+          "name": "ResultDate",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "dateOnly",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "SizeBytes",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "long",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Bytes del archivo; igual a LabBlobs.SizeBytes."
+        },
+        {
+          "name": "Title",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "string",
+          "derived": false,
+          "nullValue": {
+            "type": "text",
+            "value": ""
+          }
+        },
+        {
+          "name": "PatientConsultationSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        },
+        {
+          "name": "PatientRecordSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "PatientConsultationSyncId",
+          "localProperty": "PatientConsultationId",
+          "principal": "PatientConsultation",
+          "required": false,
+          "kind": "foreignKey",
+          "onDelete": "setNull"
+        },
+        {
+          "column": "PatientRecordSyncId",
+          "localProperty": "PatientRecordId",
+          "principal": "PatientRecord",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"LabResults\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"ContentSha256\" TEXT, \"CreatedAt\" TEXT, \"FileName\" TEXT, \"Laboratory\" TEXT, \"MimeType\" TEXT, \"Notes\" TEXT, \"PageCount\" INTEGER, \"ResultDate\" TEXT, \"SizeBytes\" INTEGER, \"Title\" TEXT, \"PatientConsultationSyncId\" TEXT, \"PatientRecordSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_LabResults_SyncedAtUtc\" ON \"LabResults\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 7,
       "table": "PediatricDoseRules",
       "entityType": "PediatricDoseRule",
       "columns": [
@@ -1439,7 +1640,7 @@
       ]
     },
     {
-      "order": 7,
+      "order": 8,
       "table": "PrescriptionTemplates",
       "entityType": "PrescriptionTemplate",
       "columns": [
@@ -1542,7 +1743,7 @@
       ]
     },
     {
-      "order": 8,
+      "order": 9,
       "table": "Products",
       "entityType": "Product",
       "columns": [
@@ -1800,7 +2001,7 @@
       ]
     },
     {
-      "order": 9,
+      "order": 10,
       "table": "ProductBatches",
       "entityType": "ProductBatch",
       "columns": [
@@ -1929,7 +2130,7 @@
       ]
     },
     {
-      "order": 10,
+      "order": 11,
       "table": "InventoryMovements",
       "entityType": "InventoryMovement",
       "columns": [
@@ -2091,7 +2292,7 @@
       ]
     },
     {
-      "order": 11,
+      "order": 12,
       "table": "Sales",
       "entityType": "Sale",
       "columns": [
@@ -2253,7 +2454,7 @@
       ]
     },
     {
-      "order": 12,
+      "order": 13,
       "table": "SaleItems",
       "entityType": "SaleItem",
       "columns": [
@@ -2427,7 +2628,7 @@
       ]
     },
     {
-      "order": 13,
+      "order": 14,
       "table": "ServiceDefaultProducts",
       "entityType": "ServiceDefaultProduct",
       "columns": [
@@ -2605,6 +2806,23 @@
       ]
     },
     {
+      "table": "LabBlobs",
+      "replicated": false,
+      "purpose": "El archivo de cada resultado de laboratorio por su SHA-256 (paso 8.12b): tamaño, trozos, tipo y su estado (completo, archivado en la PC principal, desalojado de la nube o huérfano). Lo registran la PC y la tablet; el estado lo cambia solo la PC principal. Incluye el índice de LabResults.ContentSha256.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS LabBlobs (Sha256 TEXT PRIMARY KEY NOT NULL, SizeBytes INTEGER NOT NULL, ChunkSize INTEGER NOT NULL, ChunkCount INTEGER NOT NULL, MimeType TEXT NOT NULL, CreatedAtUtc TEXT NOT NULL, OriginDeviceId TEXT, CompletedAtUtc TEXT, ArchivedAtUtc TEXT, EvictedAtUtc TEXT, OrphanSinceUtc TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_LabResults_ContentSha256\" ON \"LabResults\" (\"ContentSha256\")"
+      ]
+    },
+    {
+      "table": "LabBlobChunks",
+      "replicated": false,
+      "purpose": "Los bytes de cada resultado de laboratorio en trozos de 512 KiB (paso 8.12b). Los suben la PC y la tablet; solo la PC principal los borra.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, Data BLOB NOT NULL, PRIMARY KEY (Sha256, ChunkIndex))"
+      ]
+    },
+    {
       "table": "RegisteredDevices",
       "replicated": false,
       "purpose": "Latido de cada equipo (LastSeenUtc y LastPushUtc con la hora de la nube). Desde el paso 8.10 también la plataforma, los protocolos, la revisión del contrato, los cambios sin subir y el InstanceNonce. No se replica; la PC borra cada 6 h los revocados y los que no se ven hace 60 días.",
@@ -2643,6 +2861,8 @@
     "CREATE INDEX IF NOT EXISTS \"IX_Appointments_SyncedAtUtc\" ON \"Appointments\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"PatientConsultations\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BMI\" TEXT, \"BloodPressureDiastolic\" TEXT, \"BloodPressureSystolic\" TEXT, \"ChiefComplaint\" TEXT, \"Date\" TEXT, \"Diagnosis\" TEXT, \"EndedAt\" TEXT, \"Folio\" TEXT, \"Glucose\" TEXT, \"HeartRate\" TEXT, \"Height\" TEXT, \"LabOrderJson\" TEXT, \"Notes\" TEXT, \"OxygenSaturation\" TEXT, \"PhysicalExamination\" TEXT, \"PrescriptionsJson\" TEXT, \"RespiratoryRate\" TEXT, \"StartedAt\" TEXT, \"SystemsReview\" TEXT, \"Temperature\" TEXT, \"TreatmentPlan\" TEXT, \"VitalSigns\" TEXT, \"Weight\" TEXT, \"PatientRecordSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_PatientConsultations_SyncedAtUtc\" ON \"PatientConsultations\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"LabResults\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"ContentSha256\" TEXT, \"CreatedAt\" TEXT, \"FileName\" TEXT, \"Laboratory\" TEXT, \"MimeType\" TEXT, \"Notes\" TEXT, \"PageCount\" INTEGER, \"ResultDate\" TEXT, \"SizeBytes\" INTEGER, \"Title\" TEXT, \"PatientConsultationSyncId\" TEXT, \"PatientRecordSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_LabResults_SyncedAtUtc\" ON \"LabResults\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"PediatricDoseRules\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"DoseText\" TEXT, \"DropsPerMl\" INTEGER, \"IsActive\" INTEGER, \"Medication\" TEXT, \"MlPerKg\" REAL, \"SortOrder\" INTEGER)",
     "CREATE INDEX IF NOT EXISTS \"IX_PediatricDoseRules_SyncedAtUtc\" ON \"PediatricDoseRules\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"PrescriptionTemplates\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"IsActive\" INTEGER, \"Kind\" TEXT, \"SortOrder\" INTEGER, \"Text\" TEXT, \"Title\" TEXT)",
@@ -2664,6 +2884,9 @@
     "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL, CrestImageHash TEXT, HeaderImageHash TEXT)",
     "CREATE TABLE IF NOT EXISTS ClinicAssets (Hash TEXT PRIMARY KEY NOT NULL, Kind TEXT NOT NULL, MimeType TEXT NOT NULL, ByteCount INTEGER NOT NULL, ChunkCount INTEGER NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS ClinicAssetChunks (Hash TEXT NOT NULL, Part INTEGER NOT NULL, Content BLOB NOT NULL, PRIMARY KEY (Hash, Part))",
+    "CREATE TABLE IF NOT EXISTS LabBlobs (Sha256 TEXT PRIMARY KEY NOT NULL, SizeBytes INTEGER NOT NULL, ChunkSize INTEGER NOT NULL, ChunkCount INTEGER NOT NULL, MimeType TEXT NOT NULL, CreatedAtUtc TEXT NOT NULL, OriginDeviceId TEXT, CompletedAtUtc TEXT, ArchivedAtUtc TEXT, EvictedAtUtc TEXT, OrphanSinceUtc TEXT)",
+    "CREATE TABLE IF NOT EXISTS LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, Data BLOB NOT NULL, PRIMARY KEY (Sha256, ChunkIndex))",
+    "CREATE INDEX IF NOT EXISTS \"IX_LabResults_ContentSha256\" ON \"LabResults\" (\"ContentSha256\")",
     "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL, Platform TEXT, SyncProtocol INTEGER, HandoffProtocol INTEGER, ContractRevision INTEGER, LastPushUtc TEXT, PendingCount INTEGER, OldestPendingUtc TEXT, InstanceNonce TEXT)",
     "CREATE TABLE IF NOT EXISTS DeviceRegistry (DeviceId TEXT PRIMARY KEY NOT NULL, DeviceCode TEXT NOT NULL, Role TEXT NOT NULL, DisplayName TEXT NOT NULL, Model TEXT, PairedAtUtc TEXT NOT NULL, RevokedAtUtc TEXT, RevokedReason TEXT)",
     "CREATE UNIQUE INDEX IF NOT EXISTS UX_DeviceRegistry_DeviceCode ON DeviceRegistry (DeviceCode)",

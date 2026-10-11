@@ -29,6 +29,8 @@ public class AppDbContext : DbContext
     public DbSet<SyncParkedRow> SyncParkedRows => Set<SyncParkedRow>();
     public DbSet<PrescriptionTemplate> PrescriptionTemplates => Set<PrescriptionTemplate>();
     public DbSet<PediatricDoseRule> PediatricDoseRules => Set<PediatricDoseRule>();
+    public DbSet<LabResult> LabResults => Set<LabResult>();
+    public DbSet<LabFileState> LabFileStates => Set<LabFileState>();
 
     private static readonly SqlitePoolOpenGuard PoolOpenGuard = new();
     private static readonly SqlitePragmaInterceptor PragmaInterceptor = new();
@@ -270,6 +272,26 @@ public class AppDbContext : DbContext
         // Plantillas de receta importadas del Excel del consultorio
         modelBuilder.Entity<PrescriptionTemplate>()
             .HasIndex(t => new { t.Kind, t.SortOrder });
+
+        // Resultados de laboratorio (paso 8.12b): se van con el expediente; si se borra la consulta, el resultado se queda
+        modelBuilder.Entity<LabResult>()
+            .HasOne(r => r.PatientRecord)
+            .WithMany()
+            .HasForeignKey(r => r.PatientRecordId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabResult>()
+            .HasOne(r => r.PatientConsultation)
+            .WithMany()
+            .HasForeignKey(r => r.PatientConsultationId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<LabResult>()
+            .HasIndex(r => r.ContentSha256);
+
+        modelBuilder.Entity<LabResult>()
+            .Ignore(r => r.IsPdf)
+            .Ignore(r => r.Extension);
     }
 }
 

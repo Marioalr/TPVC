@@ -11,5 +11,5 @@ namespace TPVC.Helpers.WpfPlatform;
 public static class WpfPatientsPlatform
 {
     public static PatientsPlatform Create(PrintingService? printingService) =>
-        new(new WpfUiThread(), new WpfUserDialogs(), new ShellUrlLauncher(), printingService);
+        new(new WpfUiThread(), new WpfUserDialogs(), new ShellUrlLauncher(), printingService, new WpfLabFilePicker());
 }

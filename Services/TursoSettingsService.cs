@@ -212,6 +212,41 @@ public class TursoSettingsService
         }
     }
 
+    /// <summary>Suma los bytes de laboratorio de hoy (lo que viajó, en base64) para su freno.</summary>
+    public void RecordLabBytes(long up, long down)
+    {
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            CurrentSettings.DailyLabBytesUp += up;
+            CurrentSettings.DailyLabBytesDown += down;
+            TryWriteToDisk();
+        }
+    }
+
+    /// <summary>Los bytes de laboratorio de hoy (subidos, bajados).</summary>
+    public (long Up, long Down) GetLabBytesToday()
+    {
+        lock (_usageLock)
+        {
+            EnsureMonthlyMetricsPeriod();
+            return (CurrentSettings.DailyLabBytesUp, CurrentSettings.DailyLabBytesDown);
+        }
+    }
+
+    /// <summary>Guarda lo que se midió en la nube de laboratorio.</summary>
+    public void SaveLabCloud(LabCloudSummary summary)
+    {
+        lock (_usageLock)
+        {
+            CurrentSettings.LabCloud = summary;
+            TryWriteToDisk();
+        }
+    }
+
+    /// <summary>El día del consultorio (yyyy-MM-dd) según el reloj de este servicio.</summary>
+    public string Today => Clock.GetLocalNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>Cuenta una descarga completa de hoy (para el freno de consumo).</summary>
     public void RecordFullPull()
     {
@@ -301,6 +336,8 @@ public class TursoSettingsService
             CurrentSettings.DailyRowsRead = 0;
             CurrentSettings.DailyRowsWritten = 0;
             CurrentSettings.DailyFullPulls = 0;
+            CurrentSettings.DailyLabBytesUp = 0;
+            CurrentSettings.DailyLabBytesDown = 0;
         }
     }
 

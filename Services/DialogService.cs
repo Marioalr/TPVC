@@ -23,6 +23,26 @@ public static class DialogService
         return dlg.ShowDialog() == true ? dlg.FileName : null;
     };
 
+    /// <summary>Elegir varios archivos (resultados de laboratorio); null si se canceló.</summary>
+    public static Func<string, string, string[]?> OpenFilesPickerHandler { get; set; } = (filter, title) =>
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = filter,
+            Title = title,
+            Multiselect = true
+        };
+        return dlg.ShowDialog() == true ? dlg.FileNames : null;
+    };
+
+    /// <summary>Elegir una carpeta (el respaldo externo de laboratorio); null si se canceló.</summary>
+    public static Func<string, string?, string?> OpenFolderPickerHandler { get; set; } = (title, initial) =>
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = title };
+        if (!string.IsNullOrWhiteSpace(initial) && System.IO.Directory.Exists(initial)) dlg.InitialDirectory = initial;
+        return dlg.ShowDialog() == true ? dlg.FolderName : null;
+    };
+
     public static bool Confirm(string message, string title = "Confirmar acción") => ConfirmHandler(message, title);
 
     public static void ShowError(string message, string title = "TPVC") => ErrorHandler(message, title);

@@ -52,14 +52,16 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         ConsultationDraftStore? consultationDraftStore = null,
         NotificationService? notificationService = null,
         ConsultationHandoffService? consultationHandoffService = null,
-        LocalPreferencesStore? localPreferences = null)
+        LocalPreferencesStore? localPreferences = null,
+        LabResultService? labResults = null)
     {
         _ui = platform.Ui;
         _dialogs = platform.Dialogs;
         _urls = platform.Urls;
         _inventoryService = inventoryService;
         _consultationService = consultationService;
-        CreateChildren(notificationService, clinicProfileService, consultationDraftStore, platform.Printer, localPreferences);
+        CreateChildren(notificationService, clinicProfileService, consultationDraftStore, platform.Printer, localPreferences, labResults, platform.LabFiles);
+        LabResults.Attach();
         Autosave.Attach();
         PatientForm.AttachPropertyRules();
         InitializePacientes();
@@ -142,6 +144,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         Active.StopConsultationTimer();
         DisposePacientes();
         Handoff.DisposeHandoff();
+        LabResults.Detach();
         FlushConsultationDraft();
         Autosave.DisposeTimer();
         PatientForm.DisposeFormDraftTimer();
@@ -264,6 +267,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     private ConsultationViewModel _consultation;
     private ConsultationAutosave _autosave;
     private ConsultationHandoffViewModel _handoff;
+    private LabResultsViewModel _labResults;
 
     /// <summary>Ventana de aviso ("Notificación clínica").</summary>
     public InfoDialogState Info => _info;
@@ -337,12 +341,15 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     /// <summary>Guardado automático de la consulta en curso (borrador local, indicador y consulta recuperada).</summary>
     public ConsultationAutosave Autosave => _autosave;
 
+    /// <summary>Resultados de laboratorio del expediente (paso 8.12b): la lista de la ficha, agregar, abrir y quitar.</summary>
+    public LabResultsViewModel LabResults => _labResults;
+
     /// <summary>Consulta entre equipos: "Enviar a…", solo lectura mientras está en otro equipo, recuperar, liberar y recibir.</summary>
     public ConsultationHandoffViewModel Handoff => _handoff;
 
-    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_consultationDetail), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_labOrder), nameof(_labs), nameof(_consultation), nameof(_autosave), nameof(_handoff))]
+    [MemberNotNull(nameof(_info), nameof(_feedback), nameof(_navigation), nameof(_clinic), nameof(_catalog), nameof(_templates), nameof(_session), nameof(_active), nameof(_record), nameof(_account), nameof(_vitalsChart), nameof(_catalogBrowser), nameof(_preview), nameof(_consultationDetail), nameof(_agenda), nameof(_patientForm), nameof(_home), nameof(_chart), nameof(_supplies), nameof(_clinicalServices), nameof(_prescription), nameof(_labOrder), nameof(_labs), nameof(_consultation), nameof(_autosave), nameof(_handoff), nameof(_labResults))]
     private void CreateChildren(NotificationService? notificationService, ClinicProfileService? clinicProfileService, ConsultationDraftStore? consultationDraftStore,
-        IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences)
+        IPrescriptionOutput? printingService, LocalPreferencesStore? localPreferences, LabResultService? labResults, ILabFilePicker? labFiles)
     {
         _info = new InfoDialogState(_ui);
         _feedback = new PatientsFeedback(notificationService, _info);
@@ -391,5 +398,6 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         // Al final: el envío entre equipos usa la consulta y su borrador
         _handoff = new ConsultationHandoffViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _active, _navigation,
             _feedback, _record, _account, _consultation, _autosave, _dialogs, _ui, this);
+        _labResults = new LabResultsViewModel(labResults, _session, _info, _feedback, _dialogs, _urls, labFiles, _ui);
     }
 }

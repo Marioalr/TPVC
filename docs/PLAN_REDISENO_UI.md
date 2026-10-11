@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-11 (TPVC v1.29.0).
+Estado al 2026-10-11 (TPVC v1.30.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -84,7 +84,9 @@ Detalle visual en la propuesta enlazada arriba. Resumen:
 - **Ficha en dos columnas**: lo esencial (alergias, crónicos, receta activa, últimos signos con
   tendencia) y antecedentes NOM-004 en secciones plegables con resumen y "Editar" por sección; a la
   derecha un **historial único** (consultas, signos, citas, recetas) con filtros y la gráfica de signos
-  a un clic. Sustituye las pestañas Resumen / Historial / Evolución / Citas.
+  a un clic. Sustituye las pestañas Resumen / Historial / Evolución / Citas. Desde v1.30.0 la columna
+  izquierda lleva también los **resultados de laboratorio** (PDF o fotos), entre lo esencial y los
+  antecedentes, con *Agregar*, *Abrir* y *Quitar*.
 - **Receta, insumos y servicios solo dentro de la consulta.** En la ficha, la receta activa se ve (y se
   puede repetir en la siguiente consulta), no se edita suelta.
 - **Alta y edición de paciente** en pantalla (no ventana de 4 pasos): solo identificación obligatoria,

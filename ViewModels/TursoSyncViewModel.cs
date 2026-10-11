@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.LabFiles;
 
 namespace TPVC.ViewModels;
 
@@ -189,7 +190,31 @@ public partial class TursoSyncViewModel : ObservableObject
             });
         };
 
+        // Paso 8.12b: la vuelta de los archivos de laboratorio (tope, freno, respaldo externo)
+        _syncService.LabTransfersCompleted += report =>
+        {
+            RunOnUIThread(() =>
+            {
+                RefreshQuotaDisplay();
+                RefreshLabNotice(report);
+            });
+        };
+
         LoadFromSettings();
+    }
+
+    /// <summary>Lo que detuvo la última vuelta de los archivos de laboratorio, o el aviso de que la nube se llena.</summary>
+    [ObservableProperty]
+    private string _labNoticeText = string.Empty;
+
+    private void RefreshLabNotice(LabTransferReport? report)
+    {
+        var lab = _syncService.LabCloud;
+        LabNoticeText = report?.Notice
+                        ?? (lab != null && lab.Bytes >= _syncService.LabCloudWarn
+                            ? $"La nube de laboratorio va en {LabFileImporter.Megabytes(lab.Bytes)} de {LabFileImporter.Megabytes(_syncService.LabCloudCap)}. " +
+                              "Con un respaldo externo (Respaldos y datos), la PC principal libera lo más viejo."
+                            : string.Empty);
     }
 
     /// <summary>
@@ -240,6 +265,7 @@ public partial class TursoSyncViewModel : ObservableObject
         RefreshLastSyncText();
         RefreshQuotaDisplay();
         RefreshNotices();
+        RefreshLabNotice(_syncService.LastLabTransfer);
     }
 
     private void RefreshLastSyncText()
@@ -254,10 +280,17 @@ public partial class TursoSyncViewModel : ObservableObject
     {
         var quota = _settingsService.GetQuotaSummary();
         QuotaSummaryText = quota.FreeTierStatusDescription;
+        var lab = _syncService.LabCloud;
+        var space = lab?.CloudSpaceBytes is { } measured
+            ? $"• Espacio en la nube: {LabFileImporter.Megabytes(measured)} de 5 GB (medido el {lab.MeasuredUtc.ToLocalTime():dd/MM/yyyy HH:mm})\n"
+            : $"• Espacio estimado: ~{quota.EstimatedStorageMegabytes:0.##} MB de 5 GB\n";
+        var labLine = lab == null
+            ? string.Empty
+            : $"• Resultados de laboratorio en la nube: {lab.Files:N0} archivos, {LabFileImporter.Megabytes(lab.Bytes)} de {LabFileImporter.Megabytes(_syncService.LabCloudCap)}\n";
         QuotaDetailedText =
             $"• Lecturas este mes: {quota.RowsReadThisMonth:N0} de {TursoQuotaSummary.FreeTierMonthlyRowsReadLimit:N0} ({quota.PercentageReadsUsed:0.###}%)\n" +
             $"• Escrituras este mes: {quota.RowsWrittenThisMonth:N0} de {TursoQuotaSummary.FreeTierMonthlyRowsWriteLimit:N0} ({quota.PercentageWritesUsed:0.###}%)\n" +
-            $"• Espacio estimado: ~{quota.EstimatedStorageMegabytes:0.##} MB de 5 GB\n" +
+            space + labLine +
             $"• Hoy: {quota.RowsReadToday:N0} lecturas, {quota.RowsWrittenToday:N0} escrituras y {quota.FullPullsToday} descargas completas. " +
             $"El freno de consumo detiene la sincronización automática si pasa de {TursoConsumptionBrake.MaxRowsReadPerDay:N0} lecturas, " +
             $"{TursoConsumptionBrake.MaxRowsWrittenPerDay:N0} escrituras o {TursoConsumptionBrake.MaxFullPullsPerDay} descargas completas en el día.\n" +

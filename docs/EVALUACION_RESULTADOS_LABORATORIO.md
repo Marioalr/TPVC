@@ -2,7 +2,7 @@
 
 Evaluación del 2026-10-10 sobre TPVC v1.20.6 (rama `fase-8/paso-8.8`), hecha por un agente a pedido del médico. Fuentes de Turso consultadas el 2026-10-10: <https://turso.tech/pricing>, <https://docs.turso.tech/help/usage-and-billing>, <https://docs.turso.tech/features/point-in-time-recovery> y el código de libSQL (`libsql-hrana/src/proto.rs`, `libsql-server/src/main.rs`).
 
-**Estado al 2026-10-11:** el médico eligió la recomendación («Turso + copia en la laptop»). La orden de estudios ya está en v1.25.0 (`PatientConsultations.LabOrderJson`); los resultados quedan para el paso 8.12b de `PLAN_FASE8_VARIOS_EQUIPOS.md`. Los dos errores de §2 se corrigieron en v1.20.7 (#12) y V18 ya está en `scripts/verify-turso-hrana.ps1 -Only V18`. V17 y V19–V23 se corrieron en Turso real el mismo día (resultados en §7): borrar sí libera cuota, así que el diseño de §6 no cambia.
+**Estado al 2026-10-11:** el médico eligió la recomendación («Turso + copia en la laptop»). La orden de estudios ya está en v1.25.0 (`PatientConsultations.LabOrderJson`); los resultados se hicieron en v1.30.0 (paso 8.12b de `PLAN_FASE8_VARIOS_EQUIPOS.md`, con las decisiones al programarlo). Los dos errores de §2 se corrigieron en v1.20.7 (#12) y V18 ya está en `scripts/verify-turso-hrana.ps1 -Only V18`. V17 y V19–V23 se corrieron en Turso real el mismo día (resultados en §7): borrar sí libera cuota, así que el diseño de §6 no cambia.
 
 ## Recomendación
 

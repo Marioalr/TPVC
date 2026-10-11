@@ -24,9 +24,10 @@ public sealed class MedicalRecordsViewModel : PatientsWorkspace
         ConsultationDraftStore? consultationDraftStore = null,
         NotificationService? notificationService = null,
         ConsultationHandoffService? consultationHandoffService = null,
-        LocalPreferencesStore? localPreferences = null)
+        LocalPreferencesStore? localPreferences = null,
+        LabResultService? labResultService = null)
         : base(WpfPatientsPlatform.Create(printingService), inventoryService, consultationService, clinicProfileService,
-            consultationDraftStore, notificationService, consultationHandoffService, localPreferences)
+            consultationDraftStore, notificationService, consultationHandoffService, localPreferences, labResultService)
     {
     }
 }
