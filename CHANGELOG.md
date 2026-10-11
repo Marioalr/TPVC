@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.26.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.9: restaurar un respaldo con la nube activa
+* Al restaurar un respaldo en una computadora que sincroniza, **Respaldos y datos** muestra «La nube sigue con los datos de antes del respaldo» y la sincronización se detiene hasta elegir. Antes, la siguiente sincronización mezclaba el respaldo con lo posterior de la nube, y lo de otros equipos regresaba.
+* **Reemplazar la nube con este respaldo**: *Revisar qué se perdería…* lee la nube y dice qué tiene que el respaldo no (por tabla: pacientes, consultas, ventas…, y borrados que se deshacen). Con CONFIRMAR, la nube queda igual a esta computadora en todos los equipos. Lo que se perdería se guarda en un archivo de la carpeta de respaldos y queda para *Volver a aplicar*. Si se corta el internet a la mitad, *Terminar el reemplazo* (o la siguiente sincronización) lo termina.
+* **Desconectar esta PC de la nube**: se queda con el respaldo y deja de sincronizar; la nube y los demás equipos siguen como estaban.
+* **Los demás equipos** no escriben en la nube mientras se reemplaza (cada escritura lleva la "cerca de generación") y guardan lo que no habían subido. Cuando termina, guardan un respaldo, vuelven a bajar todo una sola vez y ofrecen **Volver a aplicar N cambios** en *Nube y dispositivos*. Nadie baja ni se une a una nube a medio reemplazar.
+* **Volver a aplicar un archivo…** agrega lo que guardó la PC que reemplazó la nube.
+* La sincronización pasa al protocolo 3. Las PC con versiones anteriores siguen sincronizando, salvo después de reemplazar la nube: entonces piden actualizar.
+* 499 pruebas.
+
 ## [1.25.0] - 2026-10-11
 
 ### Añadido — laboratorio en la consulta
