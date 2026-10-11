@@ -1180,6 +1180,16 @@ public partial class TursoSyncService
 
     private readonly SemaphoreSlim _schemaLock = new(1, 1);
 
+    /// <summary>
+    /// Tablas que no salen del modelo de EF y ganaron columnas (con nulo): en una nube que ya las tenía llegan con ALTER,
+    /// revisado con pragma_table_info.
+    /// </summary>
+    private static readonly Dictionary<string, (string Name, string Type)[]> OtherTablesWithAddedColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["RegisteredDevices"] = SyncSchema.RegisteredDevicesAddedColumns, // paso 8.10
+        ["ClinicProfiles"] = SyncSchema.ClinicProfilesAddedColumns        // paso 8.12
+    };
+
     private async Task MigrateRemoteSchemaAsync(TursoClient client, CancellationToken ct)
     {
         var schema = GetSchema();
@@ -1198,14 +1208,14 @@ public partial class TursoSyncService
             return;
         }
 
-        // Estructura actual de las tablas sincronizadas y del latido (paso 8.10: sus columnas nuevas no salen del modelo)
-        const string heartbeatTable = "RegisteredDevices";
+        // Estructura actual de las tablas sincronizadas y de las que no salen del modelo pero ganaron columnas (el latido en
+        // el paso 8.10, el perfil en el 8.12)
         var syncTables = GetTableMaps().Select(m => m.Table).Append(TombstonesTable).ToList();
         var existingTables = (await client.QueryAsync("SELECT name FROM sqlite_master WHERE type = 'table';", null, ct))
             .Select(r => r["name"]?.ToString() ?? string.Empty)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var tablesToInspect = syncTables.Append(heartbeatTable).Where(existingTables.Contains).ToList();
+        var tablesToInspect = syncTables.Concat(OtherTablesWithAddedColumns.Keys).Where(existingTables.Contains).ToList();
         var columnsByTable = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         if (tablesToInspect.Count > 0)
         {
@@ -1218,7 +1228,11 @@ public partial class TursoSyncService
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
         }
-        columnsByTable.Remove(heartbeatTable, out var heartbeatColumns);
+        var otherColumns = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var table in OtherTablesWithAddedColumns.Keys)
+        {
+            if (columnsByTable.Remove(table, out var found)) otherColumns[table] = found;
+        }
 
         var ddl = new List<(string Sql, object?[]? Args)>();
         foreach (var (table, columns) in columnsByTable)
@@ -1248,12 +1262,13 @@ public partial class TursoSyncService
             }
         }
 
-        // Paso 8.10: las columnas nuevas del latido, todas con nulo (el upsert de una PC más vieja sigue igual)
-        if (heartbeatColumns != null)
+        // Las columnas nuevas fuera del modelo, todas con nulo (el upsert de una PC más vieja, con sus columnas explícitas,
+        // sigue igual)
+        foreach (var (table, cols) in otherColumns)
         {
-            foreach (var (name, type) in SyncSchema.RegisteredDevicesAddedColumns.Where(c => !heartbeatColumns.Contains(c.Name)))
+            foreach (var (name, type) in OtherTablesWithAddedColumns[table].Where(c => !cols.Contains(c.Name)))
             {
-                ddl.Add(($"ALTER TABLE {Q(heartbeatTable)} ADD COLUMN {Q(name)} {type};", null));
+                ddl.Add(($"ALTER TABLE {Q(table)} ADD COLUMN {Q(name)} {type};", null));
             }
         }
 
@@ -2349,26 +2364,42 @@ public partial class TursoSyncService
             };
             // ProfileChanged actualiza vistas: se aplica en el hilo de la interfaz
             RunOnUiThread(() => _clinicProfileService.SaveProfile(updated, preserveTimestamp: true));
+            // Paso 8.12: las imágenes que dice la nube (se bajan solo si cambió su hash)
+            await ReconcileLetterheadAsync(client, RemoteLetterheadHashes(remote), ct);
             return;
         }
 
         if (localProfile.IsConfigured && (remote == null || localProfile.UpdatedAtUtc > remoteUpdated))
         {
+            // Paso 8.12: primero las imágenes (completas en la nube), luego el perfil que las nombra
+            var remoteHashes = RemoteLetterheadHashes(remote);
+            var hashes = await PrepareLetterheadForPushAsync(client, remoteHashes, ct);
+
             const string sql = @"
-INSERT INTO ClinicProfiles (Id, DoctorName, ProfessionalLicense, Specialty, University, ClinicName, Address, Phone, Email, TaxId, AdditionalNotes, UpdatedAtUtc)
-VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO ClinicProfiles (Id, DoctorName, ProfessionalLicense, Specialty, University, ClinicName, Address, Phone, Email, TaxId, AdditionalNotes, UpdatedAtUtc, CrestImageHash, HeaderImageHash)
+VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(Id) DO UPDATE SET
     DoctorName = excluded.DoctorName, ProfessionalLicense = excluded.ProfessionalLicense, Specialty = excluded.Specialty,
     University = excluded.University, ClinicName = excluded.ClinicName, Address = excluded.Address, Phone = excluded.Phone,
-    Email = excluded.Email, TaxId = excluded.TaxId, AdditionalNotes = excluded.AdditionalNotes, UpdatedAtUtc = excluded.UpdatedAtUtc;";
+    Email = excluded.Email, TaxId = excluded.TaxId, AdditionalNotes = excluded.AdditionalNotes, UpdatedAtUtc = excluded.UpdatedAtUtc,
+    CrestImageHash = excluded.CrestImageHash, HeaderImageHash = excluded.HeaderImageHash;";
 
             await client.ExecuteAsync(sql, new object?[]
             {
                 localProfile.DoctorName, localProfile.ProfessionalLicense, localProfile.Specialty, localProfile.University,
                 localProfile.ClinicName, localProfile.Address, localProfile.Phone, localProfile.Email, localProfile.TaxId,
-                localProfile.AdditionalNotes, FormatDate(localProfile.UpdatedAtUtc ?? DateTime.UtcNow)
+                localProfile.AdditionalNotes, FormatDate(localProfile.UpdatedAtUtc ?? DateTime.UtcNow), hashes.Crest, hashes.Header
             }, ct);
+            AddExternalUsage(0, 1);
+
+            if (hashes != remoteHashes) await DeleteUnusedClinicAssetsAsync(client, ct);
+            // Una imagen que esta PC no tiene y la nube sí (no se eligió ni se quitó aquí) se baja
+            await ReconcileLetterheadAsync(client, hashes, ct);
+            return;
         }
+
+        // Mismo perfil: solo las imágenes, si esta PC no tiene la que dice la nube (o la nube todavía no sabe de la suya)
+        await ReconcileLetterheadAsync(client, RemoteLetterheadHashes(remote), ct);
     }
 
     // =========================================================================

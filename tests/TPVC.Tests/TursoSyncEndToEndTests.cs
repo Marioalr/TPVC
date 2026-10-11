@@ -107,7 +107,8 @@ public partial class TursoSyncEndToEndTests
         s.DeviceName = name;
         settings.SaveSettings(s);
 
-        var profile = new ClinicProfileService(TempFile(".profile.json"));
+        // Su perfil y su carpeta del membrete junto a su base (paso 8.12: cada equipo con sus imágenes)
+        var profile = new ClinicProfileService(Path.Combine(dir, "clinic_profile.json"));
         var inventory = new InventoryService(factory);
         var sync = new TursoSyncService(factory, settings, profile, inventory)
         {

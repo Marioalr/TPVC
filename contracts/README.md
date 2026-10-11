@@ -46,6 +46,7 @@ Los cambios del esquema solo pueden agregar (tablas, columnas o valores de un en
 | 3 | v1.22.0 | `Products.SupplierCode` (texto, nulo si falta): la clave del producto en el pedido del proveedor; la escribe «Ingresar pedido» en la PC. |
 | 4 | v1.25.0 | `PatientConsultations.LabOrderJson` (texto, `""` si falta): la orden de laboratorio de la consulta, `{"Studies":[{"Name","Area"}],"Indications"}` con acentos sin escapar; `""` si no se pidieron estudios. |
 | 5 | v1.27.0 | Paso 8.10, en `otherTables` (no se replican): la tabla `DeviceRegistry` (rol, código y revocación de cada equipo; solo la escribe la PC) y las columnas nuevas del latido en `RegisteredDevices` (`Platform`, `SyncProtocol`, `HandoffProtocol`, `ContractRevision`, `LastPushUtc`, `PendingCount`, `OldestPendingUtc`, `InstanceNonce`, todas con nulo). Las reglas «Equipos» y «Latido» dicen qué escribe Kotlin. Ninguna tabla sincronizada cambia. |
+| 6 | v1.29.0 | Paso 8.12, en `otherTables`: `ClinicProfiles.CrestImageHash` y `HeaderImageHash` (SHA-256 en hex con minúsculas; `''` sin imagen, `NULL` si ninguna PC lo escribió), y las tablas `ClinicAssets` (una fila por imagen completa) y `ClinicAssetChunks` (sus bytes en trozos de 512 KiB, `Content BLOB`). La regla «Membrete» dice cómo bajar una imagen. Ninguna tabla sincronizada cambia. |
 
 ## `golden/`
 
@@ -71,9 +72,9 @@ Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál 
 (también el vacío, `""`) y acepta los argumentos con o sin él (comprobado en Turso real el 2026-10-11, V18 del plan). El
 lector tiene que aceptar las dos formas: `java.util.Base64.getDecoder()` las acepta; `kotlin.io.encoding.Base64.Default`
 exige el relleno salvo con `withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)`. Un argumento que no sea base64 válido
-hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Hoy ninguna
-tabla sincronizada tiene BLOB (en `schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); el primero llega con el
-membrete en la nube (paso 8.12).
+hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Ninguna tabla sincronizada tiene BLOB (en
+`schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); el primero es `ClinicAssetChunks.Content`, del membrete en
+la nube (desde v1.29.0, paso 8.12).
 
 ## Lo que viene
 

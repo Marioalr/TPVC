@@ -24,8 +24,9 @@ public static class SyncContract
     /// 3 (v1.22.0): <c>Products.SupplierCode</c>.
     /// 4 (v1.25.0): <c>PatientConsultations.LabOrderJson</c>.
     /// 5 (v1.27.0): la tabla <c>DeviceRegistry</c> y las columnas nuevas del latido en <c>RegisteredDevices</c>.
+    /// 6 (v1.29.0): el membrete en la nube: <c>ClinicProfiles.CrestImageHash</c> y <c>HeaderImageHash</c>, <c>ClinicAssets</c> y <c>ClinicAssetChunks</c>.
     /// </summary>
-    public const int Revision = 5;
+    public const int Revision = 6;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -109,7 +110,8 @@ public static class SyncContract
         "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
         "Generaciones (paso 8.9): _tpvc_meta.generation cambia solo cuando una PC reemplaza la nube con un respaldo; entonces escribe generationPrevious (la anterior, o 'none') y sube minClientProtocol a 3, y al terminar de subir escribe generationReady igual a la nueva. Un equipo que ve otra generación guarda lo que no había subido (cada fila con su protocolo y su revisión del contrato), no escribe ni baja nada mientras generationReady no sea la nueva, y después se vacía, baja todo y ofrece «Volver a aplicar N cambios» (cada fila se vuelve a escribir con marca nueva). Un equipo sin generación guardada adopta la de la nube solo si no existe generationPrevious; si existe, hace lo mismo que con otra generación.",
         "Equipos (paso 8.10): DeviceRegistry dice el rol, el código y la revocación de cada equipo; solo la escribe la PC y sus filas nunca se borran. El rol de un equipo Android sale de su fila de DeviceRegistry: sin fila (aún no aprobado) o con RevokedAtUtc, no baja datos ni recibe consultas. Una PC sin fila usa el DeviceRole de RegisteredDevices. _tpvc_meta.primaryDeviceId es la PC principal.",
-        "Latido (paso 8.10): cada equipo escribe su fila de RegisteredDevices con un upsert de columnas explícitas (LastSeenUtc con la hora de la nube) y Platform ('Windows' o 'Android'), SyncProtocol, HandoffProtocol, ContractRevision, PendingCount y OldestPendingUtc (cambios sin subir) e InstanceNonce (aleatorio en cada arranque). Al final de cada subida escribe además LastPushUtc con la hora de la nube, en la misma instrucción. Un equipo recibe consultas si HandoffProtocol >= 1; si está vacío (PC v1.17–v1.26), si su AppVersion >= 1.17.0. Si el latido lee en su fila un InstanceNonce ajeno después de haber escrito el suyo, otra instalación usa su DeviceId: toma uno nuevo y vuelve a bajar todo."
+        "Latido (paso 8.10): cada equipo escribe su fila de RegisteredDevices con un upsert de columnas explícitas (LastSeenUtc con la hora de la nube) y Platform ('Windows' o 'Android'), SyncProtocol, HandoffProtocol, ContractRevision, PendingCount y OldestPendingUtc (cambios sin subir) e InstanceNonce (aleatorio en cada arranque). Al final de cada subida escribe además LastPushUtc con la hora de la nube, en la misma instrucción. Un equipo recibe consultas si HandoffProtocol >= 1; si está vacío (PC v1.17–v1.26), si su AppVersion >= 1.17.0. Si el latido lee en su fila un InstanceNonce ajeno después de haber escrito el suyo, otra instalación usa su DeviceId: toma uno nuevo y vuelve a bajar todo.",
+        "Membrete (paso 8.12): ClinicProfiles.CrestImageHash y HeaderImageHash son el SHA-256 (hex en minúsculas) del escudo y de la imagen del encabezado; '' = sin imagen; NULL = ninguna PC con v1.29.0 lo ha escrito (se usa la receta sin imagen). Los bytes viven en ClinicAssetChunks (trozos de 512 KiB, Part desde 0) y la fila de ClinicAssets (ByteCount, ChunkCount, MimeType) se escribe al final: sin ella, la imagen no está completa y se reintenta después. Un equipo baja una imagen solo cuando su hash cambia: lee la fila de ClinicAssets, luego los trozos por (Hash, Part), los une y revisa el tamaño y el SHA-256 antes de usarla. Solo la PC escribe estas tablas y borra las imágenes que el perfil ya no nombra."
     };
 
     /// <summary>schema.json listo para escribir: sangría de 2, saltos de línea \n y un salto al final.</summary>
@@ -153,7 +155,9 @@ public static class SyncContract
             },
             ["otherTables"] = new JsonArray(
                 OtherTable(SyncSchema.MetaTable, "Claves de la nube que escribe solo la PC: 'schema' (la huella), 'contract' (la revisión), la identidad y las generaciones (pasos 8.7 y 8.9) y 'primaryDeviceId' (la PC principal, paso 8.10).", SyncSchema.MetaStatement),
-                OtherTable("ClinicProfiles", "Perfil del consultorio, una sola fila (Id = 1). Gana el UpdatedAtUtc más nuevo; hoy solo lo edita la PC.", SyncSchema.ClinicProfilesStatement),
+                OtherTable("ClinicProfiles", "Perfil del consultorio, una sola fila (Id = 1). Gana el UpdatedAtUtc más nuevo; solo lo edita la PC. Desde el paso 8.12 lleva el hash del escudo y de la imagen del encabezado.", SyncSchema.ClinicProfilesStatement),
+                OtherTable(SyncSchema.ClinicAssetsTable, "Las imágenes del membrete por su SHA-256 (paso 8.12): una fila por imagen completa (nunca cambia). Solo la escribe la PC.", SyncSchema.ClinicAssetStatements[0]),
+                OtherTable(SyncSchema.ClinicAssetChunksTable, "Los bytes de cada imagen en trozos de 512 KiB (paso 8.12). Solo los escribe la PC.", SyncSchema.ClinicAssetStatements[1]),
                 OtherTable("RegisteredDevices", "Latido de cada equipo (LastSeenUtc y LastPushUtc con la hora de la nube). Desde el paso 8.10 también la plataforma, los protocolos, la revisión del contrato, los cambios sin subir y el InstanceNonce. No se replica; la PC borra cada 6 h los revocados y los que no se ven hace 60 días.", SyncSchema.RegisteredDevicesStatement),
                 OtherTable(SyncSchema.DeviceRegistryTable, "Rol, código (P1, T1, C1…) y revocación de cada equipo (paso 8.10). Solo la escribe la PC; sus filas nunca se borran y un código nunca se reutiliza.",
                     SyncSchema.DeviceRegistryStatements),

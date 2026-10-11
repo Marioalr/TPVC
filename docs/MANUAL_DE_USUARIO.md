@@ -185,6 +185,7 @@ Lo que se cobra además de los productos (consulta, curación, inyección, certi
 
 ### Médico y consultorio
 Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y notas al pie. A la derecha se ve **cómo sale en la receta**. Se edita con **Editar** y se guarda con **Guardar**. En **Letras de la receta** se eligen, entre las instaladas en la computadora, la letra del texto y la del nombre del médico; se guardan al elegirlas, en ese equipo.
+* Con la nube activada, el perfil y las imágenes del membrete (el escudo y la del encabezado) llegan a los demás equipos: cada imagen sube una sola vez y los demás la bajan solo cuando cambia. Quitar una imagen también se quita en los demás. Una computadora nueva que se une a la nube recibe las imágenes de la principal y no se las quita aunque ella no tenga.
 
 ### Apariencia
 * **Modo** claro u oscuro, con una muestra de cada uno.

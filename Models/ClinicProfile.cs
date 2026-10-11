@@ -26,12 +26,27 @@ public class ClinicProfile
     public DateTime? UpdatedAtUtc { get; set; }
 
     // Membrete de la receta (como la hoja RECETA del Excel del médico): solo el nombre del archivo; la
-    // imagen vive en la carpeta "membrete" junto a este perfil. Son de este equipo: no viajan a la nube.
+    // imagen vive en la carpeta "membrete" junto a este perfil. Desde v1.29.0 (paso 8.12) viajan a la nube por su hash.
     /// <summary>Escudo o logotipo, arriba a la izquierda de la receta.</summary>
     public string CrestImageFile { get; set; } = string.Empty;
 
     /// <summary>Imagen del encabezado (el trazo de signos vitales), arriba a la derecha de la receta.</summary>
     public string HeaderImageFile { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 (hex en minúsculas) del escudo; vacío sin escudo. Lo calcula ClinicProfileService del archivo.</summary>
+    public string CrestImageHash { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 (hex en minúsculas) de la imagen del encabezado; vacío sin imagen.</summary>
+    public string HeaderImageHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// El escudo se eligió o se quitó en este equipo (paso 8.12). Solo entonces su hash, aunque esté vacío, puede
+    /// reemplazar al de la nube: una PC recién instalada sin escudo no le quita el suyo a las demás.
+    /// </summary>
+    public bool CrestImageEditedHere { get; set; }
+
+    /// <summary>Lo mismo para la imagen del encabezado.</summary>
+    public bool HeaderImageEditedHere { get; set; }
 
     /// <summary>Carpeta de las imágenes del membrete; la pone ClinicProfileService al cargar o guardar.</summary>
     [JsonIgnore] public string? LetterheadFolder { get; set; }

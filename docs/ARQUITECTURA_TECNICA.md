@@ -212,6 +212,7 @@ TPVC/
 │   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2; desde v1.26.0 el 3, con la cerca de generación)
 │   ├── TursoSyncService.Generations.cs # Paso 8.9: generación de la nube, reemplazarla con un respaldo, desconectar, guardar y «Volver a aplicar»
 │   ├── TursoSyncService.Devices.cs # Paso 8.10: latido, DeviceRegistry, PC principal, «Quitar» y DeviceId repetido
+│   ├── TursoSyncService.ClinicAssets.cs # Paso 8.12: el membrete en la nube (ClinicAssets por hash, en trozos)
 │   ├── ConsultationHandoffService.cs # Consulta entre equipos (tabla ConsultationHandoffs)
 │   └── AppUpdateService.cs      # Cliente de actualización vía GitHub Releases
 ├── ViewModels/
@@ -437,7 +438,7 @@ Cada flujo que cruza dueños es **un solo método** del coordinador (`PatientsWo
 | Generación con cerca | 8.9 ✅ v1.26.0 | "Reemplazar la nube con este respaldo" o "Desconectar"; los demás equipos vuelven a bajar todo una vez y ofrecen "Volver a aplicar". |
 | `DeviceRegistry` y PC principal | 8.10 ✅ v1.27.0 | Rol, código de folios y revocación de cada equipo; `primaryDeviceId` y «Esta PC reemplaza a la principal»; compatibilidad por `HandoffProtocol`; latido con lo pendiente y `InstanceNonce`; `DeviceId` nuevo si la configuración se copió; lista «Equipos vinculados» con *Quitar* (`TursoSyncService.Devices.cs`). |
 | `Services/Documents/` y `Services/Rules/` | 8.11 ✅ v1.28.0 | `PrescriptionHtmlBuilder`, `LabOrderHtmlBuilder`, `TicketText` y `TicketHtml` sin WPF (de ahí sale el PDF que arma Android); las reglas del corte, las alertas, la compra sugerida, los signos, el formulario del paciente y la copia de la consulta entre equipos; `ClinicClock`; vectores del celular. |
-| `ClinicAssets` | 8.12 | El membrete en la nube; se baja solo cuando cambia su hash. |
+| `ClinicAssets` | 8.12 ✅ v1.29.0 | El membrete en la nube por su hash, en trozos de 512 KiB (`TursoSyncService.ClinicAssets.cs`); se sube una vez y se baja solo cuando cambia su hash. |
 | Vinculación por QR en la red local (`Services/Pairing/`) | 8.14 | Nivel C: el "token para tablet y celular" se pega una vez en la PC. `LanPairingHost` escucha 10 min solo en las direcciones privadas de la PC; QR sin token con un secreto de 128 bits, HMAC del equipo, código de confirmación en las dos pantallas y credencial con AES-256-GCM; respaldo a mano (`docs/TURSO_SYNC_ARCHITECTURE.md` §5 y §6). |
 | *Quitar*, equipo perdido y rotación | 8.15 | Revocar en `DeviceRegistry` y "Cortar acceso ahora" guiado: rotar los tokens del grupo en el panel de Turso, pegar los dos nuevos en la PC y volver a vincular los demás; reglas ante un 401. |
 | `FolioFactory` y `FolioCounters` | 8.16 | Con conexión, EXP y TKT toman el siguiente número de `FolioCounters` en Turso con una sola instrucción atómica; sin conexión, el folio lleva el código del equipo (`EXP-2026-T1-001`; la PC, `P1`). Índice normal sin `-R` y último número de las series con letra fuera de la base. |
