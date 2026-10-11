@@ -230,3 +230,6 @@ Dentro de la consulta, marque **Se surte aquí** en los medicamentos que entrega
 
 ### ¿Puedo modificar el precio de un medicamento?
 Sí. En **Configuración → Productos** haga doble clic en el producto (o "Editar"), cambie el **Precio** en el panel lateral y pulse **Guardar**.
+
+### ¿Qué pasa si abro TPVC cuando ya está abierto?
+No se abre otra ventana: al dar doble clic en el ícono del escritorio o abrirlo desde el menú de inicio, TPVC trae al frente la ventana que ya estaba abierta (y la restaura si estaba minimizada). Así nunca hay dos ventanas trabajando sobre los mismos datos.

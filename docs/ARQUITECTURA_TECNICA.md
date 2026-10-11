@@ -182,6 +182,8 @@ TPVC/
 │   ├── PLAN_FASE8_VARIOS_EQUIPOS.md # Plan de la Fase 8: datos listos para tres equipos con Turso
 │   ├── FAKE_HRANA_SPEC.md       # (plan Fase 8, paso 8.13) Qué copia de Turso el servidor simulado
 │   └── ARQUITECTURA_TECNICA.md  # Este documento de ingeniería
+├── Helpers/
+│   └── SingleInstanceGuard.cs   # Una sola ventana por base: la segunda apertura trae al frente la primera (desde v1.20.7)
 ├── Data/
 │   ├── AppDbContext.cs          # Contexto EF Core SQLite
 │   └── DatabaseInitializer.cs   # Migración preventiva y sembrado clínico
@@ -288,6 +290,7 @@ La CI (`ci.yml`) corre en `windows-latest` todas las pruebas, una vez en UTC y o
 * `journal_mode=WAL` (persistente) y por conexión `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON` (`SqlitePragmaInterceptor`).
 * **Migración aditiva automática** (`DatabaseInitializer.EnsureSchema`): compara el modelo de EF con `sqlite_master`/`pragma_table_info` y crea tablas, columnas e índices faltantes. Una huella del modelo en `PRAGMA user_version` evita repetir la comparación en cada arranque.
 * **Respaldos** con la API de backup en línea de SQLite (`BackupService`): uno diario automático + manual, se conservan 14.
+* **Una sola ventana por base** (desde v1.20.7, `Helpers/SingleInstanceGuard.cs`): al arrancar, antes de tocar la base, `App.OnStartup` toma un mutex con nombre (`Local\TPVC-<hash de la ruta de la base>-instancia`, por sesión de Windows). Si ya lo tiene otra instancia (doble clic en el escritorio o el menú de inicio con TPVC abierto), le avisa con un semáforo con nombre, cede el primer plano (`AllowSetForegroundWindow`) y termina; la primera restaura y activa su ventana y responde con otro semáforo. Semáforos y no eventos: dos aperturas seguidas son dos avisos con su respuesta cada uno. Si la primera no responde en 5 s (colgada), la segunda lo dice en un mensaje. Un cierre a la fuerza deja el mutex abandonado y la siguiente apertura lo toma. El instalador ya cerraba las instancias abiertas antes de instalar y abre la nueva al final, así que la actualización no cambia.
 
 ### Metadatos de sincronización
 Todas las entidades de negocio implementan `ISyncEntity`:

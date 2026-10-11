@@ -44,7 +44,48 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         FlushConsultationDraft();
+        _singleInstance?.Dispose();
         base.OnExit(e);
+    }
+
+    private SingleInstanceGuard? _singleInstance;
+
+    /// <summary>
+    /// Si TPVC ya está abierto con esta base (doble clic en el escritorio, menú de inicio), trae esa ventana al frente y
+    /// regresa false: esta instancia termina sin abrir otra ventana.
+    /// </summary>
+    private bool TakeSingleInstance()
+    {
+        _singleInstance = new SingleInstanceGuard(SingleInstanceGuard.KeyFor(AppDbContext.DbPath));
+        if (_singleInstance.TryAcquire())
+        {
+            _singleInstance.ListenForActivation(() => Dispatcher.BeginInvoke(BringMainWindowToFront));
+            return true;
+        }
+
+        AppLogger.Info("TPVC ya estaba abierto: se trae al frente su ventana en lugar de abrir otra.");
+        if (!_singleInstance.SignalExistingInstance(TimeSpan.FromSeconds(5)))
+        {
+            AppLogger.Warn("La ventana de TPVC que ya estaba abierta no respondió.");
+            MessageBox.Show(
+                "TPVC ya está abierto en esta computadora, pero no responde.\n\nEspere un momento; si sigue así, ciérrelo desde el Administrador de tareas y vuelva a abrirlo.",
+                "TPVC", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        return false;
+    }
+
+    /// <summary>La ventana principal al frente: restaurada si estaba minimizada (o maximizada, si así estaba) y activa.</summary>
+    private void BringMainWindowToFront()
+    {
+        // Mientras arranca todavía no hay ventana: se mostrará sola
+        if (MainWindow is not { IsLoaded: true } window) return;
+        if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window);
+        if (!window.IsVisible) window.Show();
+        window.Activate();
+        // Activate no siempre gana el primer plano: un momento al frente de todo lo asegura
+        window.Topmost = true;
+        window.Topmost = false;
+        window.Focus();
     }
 
     private void FlushConsultationDraft()
@@ -62,6 +103,13 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Una sola ventana por base: antes de tocar la base o la configuración
+        if (!TakeSingleInstance())
+        {
+            Shutdown(0);
+            return;
+        }
 
         RegisterGlobalErrorHandlers();
         // Confirmaciones y errores con la ventana de la app, que sigue el tema ("No" por defecto, como

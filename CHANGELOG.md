@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.7] - 2026-10-10
+
+### Corregido — una sola ventana
+* Con TPVC abierto, dar doble clic en el ícono del escritorio o abrirlo desde el menú de inicio ya no abre otra ventana: trae al frente la que estaba abierta (y la restaura si estaba minimizada). Antes quedaban dos ventanas sobre los mismos datos, lo que confundía.
+* Si la ventana abierta no responde, TPVC lo avisa en lugar de abrir otra.
+
+### Corregido — sincronización
+* Los datos binarios (BLOB) que regresa Turso se leen como bytes, con o sin el relleno `=` del base64. Antes se leían vacíos. Hoy ninguna tabla sincronizada los usa; los usarán el membrete en la nube y los resultados de laboratorio.
+* `scripts/verify-turso-hrana.ps1` agrega la comprobación V18 (cómo regresa y acepta Turso los BLOB) y `-Only` para correr una sola comprobación.
+* 435 pruebas.
+
 ## [1.20.6] - 2026-10-10
 
 ### Añadido — Fase 8, paso 8.8: unirse a la nube del consultorio sin duplicados
