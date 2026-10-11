@@ -88,9 +88,9 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
 - [ ] *Nube y dispositivos › Vincular tablet y celular › Mostrar QR para la tablet o el celular*: aparece el código con el aviso de no fotografiarlo, la cuenta regresiva y **Cerrar**; a los 2 minutos se cierra solo.
 - [ ] Leer ese QR con la cámara del celular (cualquier lector): el texto empieza con `tpvc-link:1:`. Se lee bien desde la pantalla de la laptop.
-- [ ] [T] V3 en `prueba-estres`: `scripts\verify-turso-hrana.ps1 -Url … -Only V3,V16` (no anula nada; V16 es para el paso 8.16). Pegar el reporte.
+- [x] [T] V3 y V16 en `prueba-estres` (2026-10-11): un token mal copiado da HTTP 400 `JWT error: InvalidToken` y uno anulado da 401 (los dos se tratan igual); el contador de folios dio 40 números distintos sin huecos con 40 peticiones a la vez. Detalle en `TURSO_SYNC_ARCHITECTURE.md` §6.
 - [ ] [T] V4, solo si `prueba-estres` está en otro grupo que la base del consultorio (`turso db list`): el mismo script con `-Only V3 -Rotate -DbName prueba-estres`.
-- [ ] Para Kotlin (K3): leer el QR (`contracts/golden/link-qr.json`) o pegar la URL y el token; negarse sin bloqueo de pantalla; guardar la credencial envuelta con el Keystore; escribir el latido con `Platform = 'Android'` y el rol que pide en `DeviceRole`; mostrar los últimos 6 caracteres del `DeviceId` en mayúsculas y esperar la fila de `DeviceRegistry` sin bajar nada. Con código X o `RevokedReason = 'rechazado'`: "La PC rechazó este equipo". Ante un 401: "Pegue el token nuevo", sin borrar lo pendiente.
+- [ ] Para Kotlin (K3): leer el QR (`contracts/golden/link-qr.json`) o pegar la URL y el token; negarse sin bloqueo de pantalla; guardar la credencial envuelta con el Keystore; escribir el latido con `Platform = 'Android'` y el rol que pide en `DeviceRole`; mostrar los últimos 6 caracteres del `DeviceId` en mayúsculas y esperar la fila de `DeviceRegistry` sin bajar nada. Con código X o `RevokedReason = 'rechazado'`: "La PC rechazó este equipo". Ante un 401, o un 400 cuyo cuerpo trae "JWT" (token mal copiado, V3): "Pegue el token nuevo", sin borrar lo pendiente.
 
 ### v1.31.0 (paso 8.13: kit de conformidad de lectura)
 

@@ -300,7 +300,8 @@ public partial class TursoSyncEndToEndTests
         StringAssert.Contains(rejected.ErrorMessage, "401");
         using (var db = fresh.Factory.CreateDbContext()) Assert.AreEqual(1, db.Patients.Count(), "Un 401 no borra nada");
         GoldenVectorTests.CheckOrWrite("contracts/hrana/unauthorized.jsonl", Transcript("unauthorized",
-            "Un token desconocido o anulado (turso db tokens invalidate anula todos los de la base): HTTP 401 a la primera petición, sin ejecutar nada. El cuerpo es el del servidor simulado (V3: falta ver el de Turso real).",
+            "Un token anulado o de otra base (turso db tokens invalidate anula todos los de la base y su grupo): HTTP 401 a la primera petición, sin ejecutar nada, con el cuerpo que manda Turso (V3, 2026-10-11).",
+            "A un token que no es un JWT (mal copiado o incompleto) Turso responde HTTP 400 {\"error\":\"JWT error: InvalidToken\"}; el equipo lo trata igual que el 401.",
             "El equipo no borra ni aparta nada; pide pegar el token nuevo (pasos 8.14 y 8.15)."));
     }
 }

@@ -34,7 +34,10 @@ y, desde v1.31.0, también por HTTP en `127.0.0.1` (`FakeTursoHost`). Vive en el
 - **Cuota agotada** (`Blocked`): HTTP 200 con cada instrucción en error `BLOCKED`, o la petición entera con un estado de
   error y `BLOCKED` en el cuerpo (V7: falta ver la forma real).
 - **Token** (`AcceptedTokens`, desde v1.31.0): con la lista puesta, un token que no está en ella recibe HTTP 401 sin
-  ejecutar nada. El cuerpo es del simulador (V3: falta el de Turso). En Turso, `turso db tokens invalidate` anula todos los
+  ejecutar nada, con el cuerpo de Turso (V3, 2026-10-11): ``{"error":"Unauthorized: `unauthorized access attempt on
+  database: invalid JWT token: can't be decoded with any of the existing keys`"}``. Un token que ni siquiera es un JWT
+  recibe en Turso HTTP 400 `{"error":"JWT error: InvalidToken"}`; el simulador no lo copia (los tokens de las pruebas no
+  son JWT), y el equipo lo trata igual que el 401. En Turso, `turso db tokens invalidate` anula todos los
   tokens de la base y del grupo.
 
 ## Lo que no copia

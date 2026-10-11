@@ -7,9 +7,9 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 ### Añadido — Fase 8, paso 8.14: vincular la tablet y el celular (lado de la PC)
 * *Nube y dispositivos › Vincular tablet y celular* tiene **Mostrar QR para la tablet o el celular**: un código con la dirección y el token de la nube para que el equipo no tenga que teclearlos. Avisa que no se fotografíe ni se comparta y se cierra solo a los 2 minutos.
 * Un equipo nuevo que leyó el código aparece en **Equipos vinculados** pidiendo entrar, con 6 caracteres para comprobar que es el que el médico tiene en la mano. **Vincular como tablet** o **Vincular como celular** le da su código (T1, C1…); **Rechazar** lo deja fuera. Hasta que se aprueba no baja ningún dato.
-* Si Turso rechaza el token (porque se anularon), el aviso dice que se pegue uno nuevo y que no se pierde nada.
+* Si Turso rechaza el token (porque se anularon), el aviso dice que se pegue uno nuevo y que no se pierde nada. Si el token se pegó incompleto o mal copiado, Turso responde distinto (se comprobó en una base de prueba); ahora la app lo dice así en lugar de mostrar el error en inglés.
 * La app de Android que usa todo esto llega después.
-* 553 pruebas.
+* 554 pruebas.
 
 ## [1.31.0] - 2026-10-11
 
