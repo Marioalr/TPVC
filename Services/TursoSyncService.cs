@@ -2357,7 +2357,9 @@ ON CONFLICT(Id) DO UPDATE SET
 
     /// <summary>
     /// Valor leído de Turso → valor del modelo (contracts/golden/values.json, "decode"). Un nulo en una
-    /// columna obligatoria se vuelve "", 0, false o 0001-01-01.
+    /// columna obligatoria se vuelve "", 0, false, 0001-01-01 o un BLOB vacío. Un BLOB llega como byte[]
+    /// (<see cref="TursoClient.ExtractValue"/>); leído como texto, o un texto en una columna byte[], se
+    /// convierte en UTF-8, como CAST en SQLite.
     /// </summary>
     public static object? FromRemoteValue(object? raw, Type targetType, bool isNullable)
     {
@@ -2368,11 +2370,18 @@ ON CONFLICT(Id) DO UPDATE SET
             if (isNullable) return null;
             if (t == typeof(string)) return string.Empty;
             if (t == typeof(DateTime)) return DateTime.MinValue;
+            if (t == typeof(byte[])) return Array.Empty<byte>();
             return Activator.CreateInstance(t);
         }
 
-        var text = raw as string ?? Convert.ToString(raw, CultureInfo.InvariantCulture) ?? string.Empty;
+        var text = raw switch
+        {
+            string s => s,
+            byte[] b => Encoding.UTF8.GetString(b),
+            _ => Convert.ToString(raw, CultureInfo.InvariantCulture) ?? string.Empty
+        };
 
+        if (t == typeof(byte[])) return raw as byte[] ?? Encoding.UTF8.GetBytes(text);
         if (t == typeof(string)) return text;
         if (t == typeof(bool)) return raw is long l ? l != 0 : text == "1" || text.Equals("true", StringComparison.OrdinalIgnoreCase);
         if (t == typeof(int)) return raw is long li ? (int)li : (int)ParseDouble(text);

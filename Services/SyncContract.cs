@@ -287,6 +287,7 @@ public static class SyncContract
         _ when type == typeof(long) => "long",
         _ when type == typeof(short) => "short",
         _ when type == typeof(byte) => "byte",
+        _ when type == typeof(byte[]) => "byte[]",
         _ when type == typeof(bool) => "bool",
         _ when type == typeof(decimal) => "decimal",
         _ when type == typeof(double) => "double",

@@ -478,6 +478,7 @@ public class TursoClient : IDisposable
             return new JsonObject { ["type"] = "text", ["value"] = dec.ToString("G", CultureInfo.InvariantCulture) };
         }
 
+        // Con relleno '=': Turso lo quita antes de decodificar, así que acepta las dos formas (libSQL, proto.rs)
         if (value is byte[] bytes)
         {
             return new JsonObject { ["type"] = "blob", ["base64"] = Convert.ToBase64String(bytes) };
@@ -486,7 +487,11 @@ public class TursoClient : IDisposable
         return new JsonObject { ["type"] = "text", ["value"] = value.ToString() };
     }
 
-    /// <summary>Valor de una fila de Hrana ({"type","value"}) → valor de .NET: long, double, string o null.</summary>
+    /// <summary>
+    /// Valor de una fila de Hrana ({"type","value"}) → valor de .NET: long, double, string, byte[] o null.
+    /// Un BLOB ({"type":"blob","base64":"…"}, sin "value") regresa sus bytes, y uno vacío un arreglo vacío (en
+    /// SQLite X'' no es NULL). Turso manda el base64 sin relleno '='; ver <see cref="DecodeBase64"/>.
+    /// </summary>
     public static object? ExtractValue(JsonNode? node)
     {
         if (node == null) return null;
@@ -497,6 +502,13 @@ public class TursoClient : IDisposable
             var type = obj["type"]?.GetValue<string>();
             if (string.Equals(type, "null", StringComparison.OrdinalIgnoreCase)) return null;
 
+            // Un BLOB no trae "value": sus bytes van en "base64"
+            if (string.Equals(type, "blob", StringComparison.OrdinalIgnoreCase))
+            {
+                var base64 = obj["base64"]?.GetValue<string>();
+                return base64 == null ? null : DecodeBase64(base64);
+            }
+
             var valNode = obj["value"];
             if (valNode == null) return null;
 
@@ -505,7 +517,6 @@ public class TursoClient : IDisposable
                 "integer" => ParseLongSafe(valNode),
                 "float" => ParseDoubleSafe(valNode),
                 "text" => valNode.ToString(),
-                "blob" => obj["base64"]?.GetValue<string>(),
                 _ => valNode.ToString()
             };
         }
@@ -520,6 +531,20 @@ public class TursoClient : IDisposable
         }
 
         return node.ToString();
+    }
+
+    /// <summary>
+    /// Base64 de un BLOB de Hrana → bytes, con o sin el relleno '='. Turso lo manda sin relleno (libSQL codifica con
+    /// STANDARD_NO_PAD) y Convert solo acepta la forma con relleno: como hace libSQL al recibir, se quitan los '='
+    /// del final, y después se completan los que pide Convert. Un texto que no es base64 lanza TursoException.
+    /// </summary>
+    public static byte[] DecodeBase64(string text)
+    {
+        var digits = text.TrimEnd('=');
+        var padded = digits + new string('=', (4 - digits.Length % 4) % 4);
+        var bytes = new byte[padded.Length / 4 * 3];
+        if (Convert.TryFromBase64String(padded, bytes, out var written)) return bytes[..written];
+        throw new TursoException($"Turso mandó un BLOB que no es base64: «{Truncate(text, 40)}».");
     }
 
     private static long ParseLongSafe(JsonNode node)
