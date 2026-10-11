@@ -107,8 +107,12 @@
                                         </TextBlock>
                                         </StackPanel>
                                     </Border>
-                                    <TextBlock Grid.Column="3" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
-                                               Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                    <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right"
+                                                   Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                        <TextBlock Style="{StaticResource TextCaption}" TextAlignment="Right" Visibility="{Binding HasCost, Converter={StaticResource BoolToVis}}"
+                                                   Text="{Binding EffectiveUnitCost, StringFormat='costo {0:C2}', ConverterCulture=es-MX}" ToolTip="Costo por unidad (con IVA si no lo incluía)" />
+                                    </StackPanel>
                                     <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
                                         <Button Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Content="Entrada" ToolTip="Registrar una entrada (compra o reposición)"
                                                 Command="{Binding DataContext.OpenQuickEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -225,10 +229,19 @@
                                 <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding Price, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Column="2">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Ubicación" />
-                                <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Ej. Estante A1" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Costo por unidad ($)" />
+                                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="Costo por unidad" ToolTip="Lo que se le paga al proveedor por unidad" />
                             </StackPanel>
                         </Grid>
+                        <StackPanel Margin="0,0,0,14">
+                            <CheckBox Style="{StaticResource FieldCheckBox}" IsChecked="{Binding CostExcludesVat}" Content="El costo no incluye IVA (se suma 16 %)"
+                                      ToolTip="Para material de curación e insumos con IVA. Los medicamentos van sin IVA: déjela desmarcada." />
+                            <TextBlock Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,6,0,0" Text="{Binding ProfitText}"
+                                       Visibility="{Binding ProfitText, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Ubicación" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding Location, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Ej. Estante A1" Margin="0,0,0,12" />
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

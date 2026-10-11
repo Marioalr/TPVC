@@ -1489,4 +1489,53 @@ public class TursoSyncEndToEndTests
         Assert.AreEqual(5, db.Categories.Count());
         Assert.IsNull(DbMeta.Get(db, DbMeta.CloudJoined));
     }
+
+    // ================================================================== costo del producto (v1.21.0, contrato 2)
+
+    [TestMethod]
+    public async Task TheProductCost_TravelsBothWays()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var product = (await pc.Inventory.GetProductsAsync()).First(p => p.CostExcludesVat);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var id = TursoSyncService.FormatGuid(product.SyncId);
+        Assert.AreEqual(product.UnitCost.ToString(System.Globalization.CultureInfo.InvariantCulture), CloudScalar($"SELECT UnitCost FROM Products WHERE SyncId = '{id}'"));
+        Assert.AreEqual(1L, CloudScalar($"SELECT CostExcludesVat FROM Products WHERE SyncId = '{id}'"));
+
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        var received = (await tablet.Inventory.GetProductsAsync()).Single(p => p.SyncId == product.SyncId);
+        Assert.AreEqual(product.UnitCost, received.UnitCost);
+        Assert.IsTrue(received.CostExcludesVat);
+
+        received.UnitCost = 21.75m;
+        received.CostExcludesVat = false;
+        await tablet.Inventory.SaveProductAsync(received);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var back = (await pc.Inventory.GetProductsAsync()).Single(p => p.SyncId == product.SyncId);
+        Assert.AreEqual(21.75m, back.UnitCost);
+        Assert.IsFalse(back.CostExcludesVat);
+    }
+
+    [TestMethod]
+    public async Task ACloudFromBeforeTheCost_GetsItsColumns_AndItsRowsArriveWithoutCost()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // Como la dejó v1.20.x: sin las columnas del costo (las filas, sin costo) y con la huella de antes
+        ExecuteCloud("ALTER TABLE Products DROP COLUMN UnitCost; ALTER TABLE Products DROP COLUMN CostExcludesVat; " +
+                     "UPDATE _tpvc_meta SET Value = 'huella-v1.20' WHERE Key = 'schema'; UPDATE _tpvc_meta SET Value = '1' WHERE Key = 'contract';");
+
+        var tablet = CreateDevice("tablet", seed: false);
+        var result = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+
+        Assert.AreEqual(2L, CloudScalar("SELECT COUNT(*) FROM pragma_table_info('Products') WHERE name IN ('UnitCost', 'CostExcludesVat')"), "La PC agrega las columnas");
+        Assert.AreEqual(SyncContract.Revision.ToString(), CloudScalar("SELECT Value FROM _tpvc_meta WHERE Key = 'contract'"));
+        var products = await tablet.Inventory.GetProductsAsync();
+        Assert.IsNotEmpty(products);
+        Assert.IsTrue(products.All(p => p.UnitCost == 0m && !p.CostExcludesVat), "Las filas de antes llegan sin costo");
+    }
 }

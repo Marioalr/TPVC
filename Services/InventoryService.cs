@@ -21,6 +21,17 @@ public class DashboardMetrics
     public int ConsumedInConsultationToday { get; set; }
     public int SalesTodayCount { get; set; }
     public decimal SalesTodayTotal { get; set; }
+
+    /// <summary>Lo que costó lo que hay en existencia (productos activos con costo; IVA sumado donde no lo incluía).</summary>
+    public decimal InventoryValue { get; set; }
+
+    /// <summary>Productos activos con existencias y sin costo: no entran en <see cref="InventoryValue"/>.</summary>
+    public int StockedProductsWithoutCost { get; set; }
+
+    /// <summary>Para la tarjeta: "al costo", o cuántos productos con existencias no tienen costo todavía.</summary>
+    public string InventoryValueDetail => StockedProductsWithoutCost == 0
+        ? "al costo"
+        : $"{StockedProductsWithoutCost} sin costo";
 }
 
 public class SystemAlertsSummary
@@ -248,6 +259,8 @@ public class InventoryService
             existing.CategoryId = product.CategoryId;
             existing.Unit = product.Unit;
             existing.Price = product.Price;
+            existing.UnitCost = product.UnitCost;
+            existing.CostExcludesVat = product.CostExcludesVat;
             existing.CurrentStock = product.CurrentStock;
             existing.MinStock = product.MinStock;
             existing.OptimalStock = product.OptimalStock;
@@ -995,8 +1008,15 @@ public class InventoryService
         var todayMovements = db.InventoryMovements.Where(m => m.Date >= today);
         var todaySales = db.Sales.Where(s => s.Date >= today && s.Date < tomorrow);
 
+        // SQLite guarda los decimales como texto: el valor del inventario se suma en memoria (solo lo que tiene existencias)
+        var stocked = await activeProducts.Where(p => p.CurrentStock > 0)
+            .Select(p => new Product { CurrentStock = p.CurrentStock, UnitCost = p.UnitCost, CostExcludesVat = p.CostExcludesVat })
+            .ToListAsync();
+
         return new DashboardMetrics
         {
+            InventoryValue = stocked.Sum(p => p.InventoryValue),
+            StockedProductsWithoutCost = stocked.Count(p => !p.HasCost),
             TotalProducts = await activeProducts.CountAsync(),
             LowStockCount = await activeProducts.CountAsync(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock),
             ExpiringSoonCount = await activeBatches.CountAsync(b => b.ExpirationDate >= today && b.ExpirationDate < expiringLimit),
@@ -1615,6 +1635,9 @@ public class InventoryService
         return summary;
     }
 
+    /// <summary>Sin costo capturado, la lista de compras estima el costo como esta parte del precio de venta.</summary>
+    public const decimal EstimatedCostShareOfPrice = 0.65m;
+
     public async Task<List<SuggestedPurchaseItem>> GetSuggestedPurchaseListAsync()
     {
         await using var db = CreateContext();
@@ -1634,7 +1657,9 @@ public class InventoryService
                 int qtyToBuy = Math.Max(target - p.CurrentStock, min);
                 if (qtyToBuy <= 0) qtyToBuy = 5;
 
-                decimal estimatedCost = p.Price > 0 ? Math.Round(p.Price * 0.65m, 2) : 25.00m;
+                // El costo capturado (con IVA si no lo incluía); sin costo, una estimación con el precio de venta
+                bool estimated = !p.HasCost;
+                decimal estimatedCost = !estimated ? p.EffectiveUnitCost : p.Price > 0 ? Math.Round(p.Price * EstimatedCostShareOfPrice, 2) : 25.00m;
 
                 string reason = p.CurrentStock == 0 ? "Agotado en consultorio" : $"Stock bajo ({p.CurrentStock} de {min} mín.)";
 
@@ -1649,6 +1674,7 @@ public class InventoryService
                     MinStock = min,
                     SuggestedQuantity = qtyToBuy,
                     EstimatedUnitCost = estimatedCost,
+                    IsCostEstimated = estimated,
                     Reason = reason
                 });
             }

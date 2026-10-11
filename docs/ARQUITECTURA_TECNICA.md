@@ -189,7 +189,7 @@ TPVC/
 │   └── DatabaseInitializer.cs   # Migración preventiva y sembrado clínico
 ├── Models/
 │   ├── Category.cs              # Entidad categoría médica
-│   ├── Product.cs               # Entidad insumo / fármaco (con Price)
+│   ├── Product.cs               # Entidad insumo / fármaco (con Price, y desde v1.21.0 UnitCost y CostExcludesVat)
 │   ├── ProductBatch.cs          # Entidad lote y control de vencimiento
 │   ├── InventoryMovement.cs     # Entidad movimiento de Kardex (con SalidaVenta)
 │   ├── PatientRecord.cs         # Modelo de expediente clínico del paciente

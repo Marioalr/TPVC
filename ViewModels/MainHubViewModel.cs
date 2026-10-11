@@ -57,6 +57,12 @@ public partial class MainHubViewModel : ObservableObject
     [ObservableProperty]
     private string? _suggestedPurchasesStatusMessage;
 
+    /// <summary>"≈ 3 sin costo: se estiman con el 65 % del precio de venta" (vacío si todos tienen costo).</summary>
+    [ObservableProperty]
+    private string _estimatedCostNote = string.Empty;
+
+    private static readonly System.Globalization.CultureInfo Mexican = System.Globalization.CultureInfo.GetCultureInfo("es-MX");
+
     public MainHubViewModel(
         Action<string> navigate, 
         InventoryService? inventoryService = null)
@@ -152,6 +158,10 @@ public partial class MainHubViewModel : ObservableObject
             SuggestedPurchases = new ObservableCollection<SuggestedPurchaseItem>(items);
             TotalSuggestedCost = items.Sum(i => i.EstimatedTotalCost);
             TotalSuggestedQuantity = items.Sum(i => i.SuggestedQuantity);
+            int estimated = items.Count(i => i.IsCostEstimated);
+            EstimatedCostNote = estimated == 0
+                ? string.Empty
+                : $"≈ {estimated} sin costo capturado: se estiman con el {InventoryService.EstimatedCostShareOfPrice.ToString("P0", Mexican)} del precio de venta.";
             SuggestedPurchasesStatusMessage = null;
             IsSuggestedPurchasesOpen = true;
         }
@@ -189,11 +199,11 @@ public partial class MainHubViewModel : ObservableObject
             string filePath = Path.Combine(desktop, filename);
 
             var sb = new StringBuilder();
-            sb.AppendLine("Código,Producto,Genérico,Presentación,Categoría,Stock Actual,Stock Mínimo,Cantidad Sugerida,Costo Unitario Est.,Total Estimado,Motivo");
+            sb.AppendLine("Código,Producto,Genérico,Presentación,Categoría,Stock Actual,Stock Mínimo,Cantidad Sugerida,Costo Unitario,Total,Costo Estimado,Motivo");
 
             foreach (var item in SuggestedPurchases)
             {
-                sb.AppendLine($"\"{item.ProductCode}\",\"{item.ProductName}\",\"{item.GenericName}\",\"{item.Presentation}\",\"{item.CategoryName}\",{item.CurrentStock},{item.MinStock},{item.SuggestedQuantity},{item.EstimatedUnitCost:F2},{item.EstimatedTotalCost:F2},\"{item.Reason}\"");
+                sb.AppendLine($"\"{item.ProductCode}\",\"{item.ProductName}\",\"{item.GenericName}\",\"{item.Presentation}\",\"{item.CategoryName}\",{item.CurrentStock},{item.MinStock},{item.SuggestedQuantity},{item.EstimatedUnitCost:F2},{item.EstimatedTotalCost:F2},{(item.IsCostEstimated ? "Sí" : "No")},\"{item.Reason}\"");
             }
 
             await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
@@ -219,18 +229,19 @@ public partial class MainHubViewModel : ObservableObject
             sb.AppendLine("                   LISTA SUGERIDA DE COMPRAS Y RESURTIDO                  ");
             sb.AppendLine("==========================================================================");
             sb.AppendLine($"Fecha: {DateTime.Now:dd/MM/yyyy HH:mm} | Total Productos a Comprar: {SuggestedPurchases.Count}");
-            sb.AppendLine($"Inversión Estimada: ${TotalSuggestedCost:N2} MXN | Unidades Totales: {TotalSuggestedQuantity}");
+            sb.AppendLine($"Inversión (al costo): ${TotalSuggestedCost:N2} MXN | Unidades Totales: {TotalSuggestedQuantity}");
             sb.AppendLine("--------------------------------------------------------------------------");
-            sb.AppendLine(string.Format("{0,-12} {1,-26} {2,8} {3,8} {4,10} {5,12}", "Código", "Producto", "Actual", "Sugerido", "Costo U.", "Total Est."));
+            sb.AppendLine(string.Format("{0,-12} {1,-26} {2,8} {3,8} {4,10} {5,12}", "Código", "Producto", "Actual", "Sugerido", "Costo U.", "Total"));
             sb.AppendLine("--------------------------------------------------------------------------");
 
             foreach (var p in SuggestedPurchases)
             {
                 string name = p.ProductName.Length > 25 ? p.ProductName.Substring(0, 25) : p.ProductName;
-                sb.AppendLine(string.Format("{0,-12} {1,-26} {2,8} {3,8} {4,10:C2} {5,12:C2}",
-                    p.ProductCode, name, p.CurrentStock, p.SuggestedQuantity, p.EstimatedUnitCost, p.EstimatedTotalCost));
+                sb.AppendLine(string.Format("{0,-12} {1,-26} {2,8} {3,8} {4,10} {5,12}",
+                    p.ProductCode, name, p.CurrentStock, p.SuggestedQuantity, p.UnitCostText, p.EstimatedTotalCost.ToString("C2", Mexican)));
             }
 
+            if (!string.IsNullOrEmpty(EstimatedCostNote)) sb.AppendLine(EstimatedCostNote);
             sb.AppendLine("==========================================================================");
             File.WriteAllText(tempFile, sb.ToString(), Encoding.UTF8);
 
