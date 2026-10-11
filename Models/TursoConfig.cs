@@ -220,4 +220,50 @@ public class TursoSyncResult
 
     /// <summary>Filas apartadas al terminar (se reintentan en cada sincronización).</summary>
     public int ParkedRows { get; set; }
+
+    /// <summary>El reporte de la «Sincronización completa» (null en las demás).</summary>
+    public TursoFullSyncReport? FullSyncReport { get; set; }
+}
+
+/// <summary>Filas de una tabla aquí y en la nube.</summary>
+public sealed record TursoTableCount(string Table, long Local, long Remote);
+
+/// <summary>
+/// Reporte de la «Sincronización completa» (paso 8.7, A6): filas apartadas, conteo local contra remoto por tabla y
+/// tablas heredadas de v1.8 (legacy_v1_*). Solo si sale limpio se escribe la identidad de la nube (clinicId,
+/// fullUploadAtUtc…); sin eso no se podrá vincular la tablet ni el celular.
+/// </summary>
+public sealed class TursoFullSyncReport
+{
+    public int ParkedRows { get; init; }
+    public IReadOnlyList<TursoTableCount> Tables { get; init; } = Array.Empty<TursoTableCount>();
+    public IReadOnlyList<string> LegacyTables { get; init; } = Array.Empty<string>();
+
+    /// <summary>La identidad de la nube que quedó escrita (null si el reporte no salió limpio).</summary>
+    public string? ClinicId { get; set; }
+
+    /// <summary>Lecturas que costó el reporte (los conteos recorren cada tabla una vez).</summary>
+    public long RowsRead { get; init; }
+
+    public IEnumerable<TursoTableCount> Mismatches => Tables.Where(t => t.Local != t.Remote);
+
+    /// <summary>Limpio: nada apartado y las mismas filas aquí y en la nube. Las tablas heredadas solo se avisan.</summary>
+    public bool IsClean => ParkedRows == 0 && !Mismatches.Any();
+
+    public string Summary
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                IsClean
+                    ? $"✓ La nube y esta computadora tienen lo mismo ({Tables.Sum(t => t.Local):N0} registros en {Tables.Count} tablas)."
+                    : "La sincronización completa terminó con diferencias; la nube todavía no queda verificada:"
+            };
+            if (ParkedRows > 0) lines.Add($"• {ParkedRows} registros apartados (no se pudieron subir o aplicar).");
+            foreach (var t in Mismatches) lines.Add($"• {t.Table}: {t.Local:N0} aquí y {t.Remote:N0} en la nube.");
+            if (LegacyTables.Count > 0) lines.Add($"• Tablas de la versión 1.8 que siguen en la nube: {string.Join(", ", LegacyTables)}.");
+            return string.Join("\n", lines);
+        }
+    }
 }

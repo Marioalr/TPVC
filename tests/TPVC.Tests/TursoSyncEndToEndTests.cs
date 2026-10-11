@@ -931,6 +931,232 @@ public class TursoSyncEndToEndTests
         }
     }
 
+    // ================================================================== hora e identidad de la nube (paso 8.7)
+
+    private string? CloudMeta(string key) => CloudScalar($"SELECT Value FROM _tpvc_meta WHERE Key = '{key}'") as string;
+
+    [TestMethod]
+    [DataRow(10)]
+    [DataRow(-10)]
+    public async Task WithTheServerClockOff_LocalStampsFollowTheServer(int minutes)
+    {
+        _server.Clock = () => DateTime.UtcNow.AddMinutes(minutes);
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(minutes, (int)Math.Round(pc.Sync.ClockOffset!.Value.TotalMinutes));
+        StringAssert.Contains(pc.Sync.ClockWarningText, $"difiere {Math.Abs(minutes)} min de la nube");
+
+        // Una edición y un borrado aquí quedan marcados con la hora del servidor
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        product.Price += 1;
+        await pc.Inventory.SaveProductAsync(product);
+        var expected = DateTime.UtcNow.AddMinutes(minutes);
+        var stamp = (await pc.Inventory.GetProductsAsync()).Single(p => p.Id == product.Id).UpdatedAtUtc;
+        Assert.IsLessThan(TimeSpan.FromMinutes(1), (stamp - expected).Duration(), $"Marca {stamp:HH:mm:ss}, servidor {expected:HH:mm:ss}");
+
+        using var db = pc.Factory.CreateDbContext();
+        var category = new Category { Name = "Para borrar" };
+        db.Categories.Add(category);
+        db.SaveChanges();
+        db.Database.ExecuteSqlRaw("DELETE FROM \"Categories\" WHERE \"Id\" = {0}", category.Id);
+        var deletedAt = db.SyncTombstones.AsNoTracking().Single(t => t.SyncId == category.SyncId).DeletedAtUtc;
+        Assert.IsLessThan(TimeSpan.FromMinutes(1), (deletedAt - expected).Duration(), "La lápida del trigger usa el mismo desfase");
+    }
+
+    [TestMethod]
+    public async Task ARowStampedThreeHoursInTheFuture_IsRepairedBeforeGoingUp()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // Un cambio guardado con el reloj adelantado 3 h: sin reparar ganaría todos los conflictos
+        var patient = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente Reloj Adelantado", Age = 40 });
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Database.ExecuteSqlRaw("UPDATE \"Patients\" SET \"UpdatedAtUtc\" = {0} WHERE \"Id\" = {1}",
+                TursoSyncService.FormatDate(DateTime.UtcNow.AddHours(3)), patient.Id);
+        }
+
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var limit = DateTime.UtcNow.AddMinutes(5);
+        var cloudStamp = TursoSyncService.ParseDate(CloudScalar($"SELECT UpdatedAtUtc FROM Patients WHERE SyncId = '{TursoSyncService.FormatGuid(patient.SyncId)}'"));
+        Assert.IsLessThan(limit, cloudStamp, "Subió con la hora del servidor");
+        Assert.IsLessThan(limit, (await pc.Inventory.GetPatientsAsync()).Single(p => p.Id == patient.Id).UpdatedAtUtc, "Y aquí también quedó reparada");
+    }
+
+    [TestMethod]
+    public async Task FutureStampsInTheCloud_AreRepairedOnce()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsNotNull(CloudMeta("stampsRepairedAtUtc"), "La primera sincronización ya revisó la nube");
+
+        // Una nube con marcas en el futuro (de v1.19 o de un reloj adelantado) que todavía no se revisaba
+        ExecuteCloud("DELETE FROM _tpvc_meta WHERE Key = 'stampsRepairedAtUtc'; " +
+                     "UPDATE Products SET UpdatedAtUtc = '2099-01-01 00:00:00.0000000' WHERE rowid IN (SELECT rowid FROM Products LIMIT 3);");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(0L, CloudScalar("SELECT COUNT(*) FROM Products WHERE UpdatedAtUtc > '2090'"));
+        Assert.IsNotNull(CloudMeta("stampsRepairedAtUtc"));
+
+        _server.ClearRecording();
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        product.Price += 1;
+        await pc.Inventory.SaveProductAsync(product);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsFalse(_server.Requests.SelectMany(r => r.Statements).Any(s => s.Sql.StartsWith(TursoSyncService.FullScanMarker + "UPDATE", StringComparison.Ordinal)),
+            "Solo una vez por nube");
+    }
+
+    [TestMethod]
+    public async Task TheFullSync_WritesTheCloudIdentity_AndItsManifestIsTheContract()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var result = await pc.Sync.InitialUploadToTursoAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.IsNotNull(result.FullSyncReport);
+        Assert.IsTrue(result.FullSyncReport.IsClean, result.FullSyncReport.Summary);
+
+        var clinicId = CloudMeta("clinicId");
+        Assert.IsNotNull(clinicId);
+        Assert.AreEqual(clinicId, result.FullSyncReport.ClinicId);
+        Assert.AreEqual("2", CloudMeta("protocol"));
+        Assert.AreEqual("2", CloudMeta("minClientProtocol"));
+        Assert.IsNotNull(CloudMeta("generation"));
+        Assert.AreEqual(CloudMeta("generation"), CloudMeta("generationReady"));
+        Assert.IsNotNull(CloudMeta("fullUploadAtUtc"));
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(clinicId, DbMeta.Get(db, DbMeta.ClinicId), "La identidad queda también en la base");
+            Assert.AreEqual(SyncContract.BuildSchemaJson(db.Model), CloudMeta("manifest"), "manifest = contracts/sync/schema.json");
+        }
+
+        // Una segunda sincronización completa no cambia la identidad
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success);
+        Assert.AreEqual(clinicId, CloudMeta("clinicId"));
+    }
+
+    [TestMethod]
+    public async Task ARowWithoutItsPrincipal_KeepsTheFullSyncFromVerifyingTheCloud()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            db.Database.OpenConnection();
+            db.Database.ExecuteSqlRaw("PRAGMA foreign_keys = OFF;");
+            db.ProductBatches.Add(new ProductBatch { ProductId = 999_999, BatchNumber = "HUERFANO", ExpirationDate = DateTime.Today.AddYears(1), Quantity = 3 });
+            db.SaveChanges();
+        }
+
+        var result = await pc.Sync.InitialUploadToTursoAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+        Assert.IsFalse(result.FullSyncReport!.IsClean);
+        Assert.AreEqual(1, result.FullSyncReport.ParkedRows);
+        Assert.IsNull(CloudMeta("fullUploadAtUtc"), "Sin reporte limpio la nube no queda verificada");
+        Assert.IsNull(CloudMeta("clinicId"));
+        StringAssert.Contains(pc.Sync.StatusMessage, "con diferencias");
+    }
+
+    [TestMethod]
+    public async Task ADatabaseWithItsOwnData_DoesNotSyncWithAnotherClinicsCloud()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success);
+        var cloudProducts = (long)CloudScalar("SELECT COUNT(*) FROM Products")!;
+
+        // Otra instalación con sus propios datos y la URL y el token de esta nube
+        var other = CreateDevice("otra", seed: true);
+        var result = await other.Sync.SyncAsync();
+        Assert.IsFalse(result.Success);
+        Assert.IsNotNull(other.Sync.IdentityConflict);
+        StringAssert.Contains(result.ErrorMessage, "no se sincroniza para no mezclar datos");
+        Assert.AreEqual(cloudProducts, (long)CloudScalar("SELECT COUNT(*) FROM Products")!, "No subió nada");
+
+        // Lo automático ya no lo vuelve a intentar
+        _server.ClearRecording();
+        Assert.IsFalse((await other.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        Assert.IsEmpty(_server.Requests);
+
+        // Y «Esta PC ya usaba esta nube» se niega: tiene registros que nunca llegaron a ella
+        var adopt = await other.Sync.AdoptCloudIdentityAsync();
+        Assert.IsFalse(adopt.Ok);
+        StringAssert.Contains(adopt.Message, "no parece la misma");
+        using var db = other.Factory.CreateDbContext();
+        Assert.IsNull(DbMeta.Get(db, DbMeta.ClinicId));
+    }
+
+    [TestMethod]
+    public async Task APcThatAlreadyUsedTheCloud_JoinsItsIdentity()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // La PC verifica la nube después: la tablet no conoce todavía su identidad
+        Assert.IsTrue((await pc.Sync.InitialUploadToTursoAsync()).Success);
+        Assert.IsFalse((await tablet.Sync.SyncAsync()).Success);
+
+        var adopt = await tablet.Sync.AdoptCloudIdentityAsync();
+        Assert.IsTrue(adopt.Ok, adopt.Message);
+        Assert.IsNull(tablet.Sync.IdentityConflict);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        using var db = tablet.Factory.CreateDbContext();
+        Assert.AreEqual(CloudMeta("clinicId"), DbMeta.Get(db, DbMeta.ClinicId));
+    }
+
+    [TestMethod]
+    public async Task ACloudThatRequiresANewerProtocol_StopsTheSync()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        ExecuteCloud("INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('minClientProtocol', '3');");
+
+        var product = (await pc.Inventory.GetProductsAsync()).First();
+        product.Price = 777.5m;
+        await pc.Inventory.SaveProductAsync(product);
+        var result = await pc.Sync.SyncAsync();
+
+        Assert.IsFalse(result.Success);
+        StringAssert.Contains(result.ErrorMessage, "Actualice TPVC en esta computadora");
+        Assert.AreNotEqual("777.5", CloudScalar($"SELECT Price FROM Products WHERE SyncId = '{TursoSyncService.FormatGuid(product.SyncId)}'"), "No subió nada");
+    }
+
+    [TestMethod]
+    public async Task ANewColumn_DownloadsItsTable_AndDoesNotOverwriteTheCloudValue()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // Un equipo más nuevo llenó en la nube una columna que esta versión de la tablet "no conocía"
+        ExecuteCloud("UPDATE Patients SET Occupation = 'Docente';");
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            // Como la dejó EnsureSchema al agregarla: con su valor por omisión, sin anotar nada para subir
+            db.Database.ExecuteSqlRaw("INSERT INTO \"SyncApplyState\" (\"Applying\") VALUES (1); UPDATE \"Patients\" SET \"Occupation\" = ''; DELETE FROM \"SyncApplyState\";");
+            var known = DbMeta.Get(db, DbMeta.PullColumnsPrefix + "Patients")!.Split(',').Where(c => c != "Occupation");
+            DbMeta.Set(db, DbMeta.PullColumnsPrefix + "Patients", string.Join(",", known));
+        }
+
+        // Y aquí se edita un expediente (más nuevo aquí que en la nube)
+        var patient = (await tablet.Inventory.GetPatientsAsync()).First();
+        patient.Phone = "2221112233";
+        await tablet.Inventory.SavePatientAsync(patient);
+
+        var result = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(result.Success, result.ErrorMessage);
+
+        using (var db = tablet.Factory.CreateDbContext())
+        {
+            Assert.IsTrue(db.Patients.AsNoTracking().All(p => p.Occupation == "Docente"), "La tabla se bajó completa con la columna nueva");
+            StringAssert.Contains(DbMeta.Get(db, DbMeta.PullColumnsPrefix + "Patients"), "Occupation");
+        }
+        var id = TursoSyncService.FormatGuid(patient.SyncId);
+        Assert.AreEqual("2221112233", CloudScalar($"SELECT Phone FROM Patients WHERE SyncId = '{id}'"), "La edición subió");
+        Assert.AreEqual("Docente", CloudScalar($"SELECT Occupation FROM Patients WHERE SyncId = '{id}'"), "Sin pisar el valor de la nube");
+    }
+
     [TestMethod]
     public async Task ClinicProfile_LastWriteWinsAcrossDevices()
     {

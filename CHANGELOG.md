@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.5] - 2026-10-10
+
+### Añadido — Fase 8, paso 8.7: la hora de la nube y la identidad del consultorio
+* Los cambios se marcan con la hora de la nube aunque el reloj de Windows esté adelantado o atrasado. Si difiere más de 2 minutos, *Nube y dispositivos* y el estado avisan "La hora de esta computadora difiere N min de la nube".
+* Una marca adelantada (de un reloj que cambió, o de versiones anteriores) se repara con la hora de la nube, aquí y una vez en la nube: ya no gana todos los conflictos.
+* **Sincronización completa con reporte**: al terminar dice si la nube y la computadora tienen lo mismo (registros apartados, conteo por tabla y tablas de la versión 1.8). Si sale limpio, la nube queda verificada con la identidad del consultorio.
+* Una computadora con otra base de datos ya no se mezcla con esa nube. La sincronización se detiene ("esta nube es de otra base"). Si la PC ya sincronizaba con ella, **Esta PC ya usaba esta nube** revisa que lo que subió esté en la nube y la une.
+* Si otro equipo ya usa una versión más nueva de la sincronización, esta PC se detiene y pide actualizar en lugar de escribir.
+* Al actualizar a una versión que agrega columnas, la tabla se baja completa antes de subir, sin pisar lo que otro equipo ya llenó.
+* 414 pruebas.
+
 ## [1.20.4] - 2026-10-10
 
 ### Cambiado — Fase 8, paso 8.6: la sincronización lee menos y dos equipos terminan iguales

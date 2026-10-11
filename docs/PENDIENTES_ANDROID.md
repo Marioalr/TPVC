@@ -1,10 +1,10 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.20.4). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.20.5). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
-**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 a 8.6, en v1.20.0 a v1.20.4):** se conserva la arquitectura original.
+**Decidido el 2026-10-09 (plan de la Fase 8; hechos los pasos 8.2 a 8.7, en v1.20.0 a v1.20.5):** se conserva la arquitectura original.
 La PC, la tablet y el celular tienen cada uno su propia base SQLite y se sincronizan por Turso (plan gratuito)
 con el protocolo v2, como ya lo hace la PC; el celular escribe solo citas y entradas de mercancía. La app es
 Kotlin nativo: implementa por su cuenta el motor v2 y el contrato de `ConsultationHandoffs`, y los dos lados
@@ -16,7 +16,7 @@ mercancía; y la cuenta de Turso no tiene token de la API, así que se usan toke
 QR, que es solo una facilidad, queda limitado a la red local. Arquitectura, uso de Turso con tres equipos, vinculación y pasos en
 `docs/PLAN_FASE8_VARIOS_EQUIPOS.md`.
 
-Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.6 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
+Orden sugerido: primero los pasos de la PC 8.2–8.15 (del 8.2 al 8.7 ya están hechos; sincronización sin pérdidas, siembra segura, registro de
 equipos, documentos y vinculación por QR; las etapas 0 y 1 valen aunque nunca exista la app); luego el celular
 (K0–K4, plan §7.5), que en su primera versión solo baja; después los pasos 8.16–8.26 (folios, hojas,
 existencias, pacientes y cadencia), que la tablet necesita para escribir; al final la tablet (K5–K10) y lo que
@@ -38,7 +38,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 | A3 | **Folios por dispositivo** | `EXP-` y `TKT-` son consecutivos por equipo: dos equipos generan el mismo folio. Desde v1.9 la sincronización no se bloquea: el equipo que **recibe** el registro le agrega `-R1`, así que el folio queda distinto entre equipos. `CNS-` usa la hora (`ActiveConsultation`: `CNS-yyyyMMdd-HHmmss`); su columna no es única y el `-R1` nunca le aplica. | Plan Fase 8, pasos 8.16 y 8.17 (respuesta 1 del médico): **un solo consecutivo por serie**. Con conexión, cualquier equipo toma el siguiente EXP o TKT del contador `FolioCounters` en Turso con una sola instrucción atómica. Sin conexión, el folio lleva el **código del equipo** de `DeviceRegistry` (`EXP-2026-T1-001`, `TKT-20261009-T1-0001`; la PC, `P1`) y sube así. La PC principal (una laptop) lo regulariza en segundo plano, como máximo una vez al día y sin consulta ni venta en curso: le da el siguiente número y deja el folio con letra en `OriginalFolio`, así que buscar cualquiera de los dos encuentra el registro. CNS sigue saliendo de la hora; sin conexión lleva la letra (`CNS-20261009-T1-103015`) y nunca se regulariza. Los folios que ya existen no cambian. El último número de cada serie con letra se guarda fuera de la base, así que restaurar un respaldo no repite un folio impreso. Índice normal en lugar de único y sin `-R` en adelante; un folio repetido aparece en un aviso. |
 | A4 | **Referencias dentro de JSON** | `PatientRecord.ActiveServicesJson` guarda el `Id` local del servicio clínico; en otro equipo apunta a otro servicio. Desde v1.18.7, `ActiveSuppliesJson` guarda en cada insumo el folio de la consulta que lo cargó y el `Id` local del producto (o del cargo libre) con que se cargó (`ChargedConsultationFolio`, `ChargedUnits`, `ChargedLineId`). Desde v1.18.8, `ActiveServicesJson` guarda en cada servicio el folio de la consulta que lo cargó y cuántas unidades (`ChargedConsultationFolio`, `ChargedUnits`). **Error latente hoy entre dos PC:** tras recibir una consulta, + / − o quitar en las hojas de insumos y servicios busca el renglón de la cuenta con el `Id` del otro equipo (`ChargedLineId`, `ServiceId`; `SuppliesSheetViewModel` y `ConsultationAccount`). | Plan Fase 8, paso 8.18, que también corrige el caso entre dos PC: `ChargedLineKind`, `ChargedLineSyncId` y `ServiceSyncId` en cada renglón junto a los campos actuales, y un `RowId` por renglón para combinar las hojas (8.22). Los lectores buscan primero por `SyncId`, luego el cargo libre, y el `Id` viejo solo si el nombre coincide. **Los JSON existentes no se rellenan**: las filas recibidas de otra PC traen los `Id` del otro equipo, así que cada hoja se completa en su siguiente guardado. La recepción de una consulta traduce también las hojas, y `[JsonExtensionData]` conserva los campos que agregue un equipo más nuevo. La tablet escribe el formato nuevo y conserva lo que no conoce. |
 | A5 | **Sincronización periódica** | La PC solo sincroniza al iniciar o al guardar algo; no verá lo que capture la tablet hasta su siguiente cambio local. | Plan Fase 8, paso 8.24: `SyncScheduler` en la PC. Cada subida deja `RegisteredDevices.LastPushUtc` y la revisión de los demás equipos la lee para bajar en ese momento, más una descarga de seguridad cada 10 min. Lo de la tablet llegaría a la PC en ≤ 8 s si está en Pacientes, o en ≤ 35 s en otra pantalla. |
-| A6 | **Primera sincronización real con Turso** | Las versiones 1.8.x nunca subieron datos (HTTP 400). | **Sigue vigente.** En la PC: *Configuración → Nube y dispositivos → Sincronización completa* (hace sincronización completa y renombra las tablas viejas a `legacy_v1_*`). Revisar en el panel de Turso que existan filas en todas las tablas. Plan Fase 8, paso 8.7: la sincronización completa dará un reporte (filas apartadas, conteo local contra remoto por tabla y tablas `legacy_v1_*`), y vincular la tablet o el celular queda bloqueado hasta que salga limpio. La primera subida por `Seq` (paso 8.5, desde v1.20.3) reescribe todo una vez (unas 20k filas, 0.2% del mes). |
+| A6 | **Primera sincronización real con Turso** | Las versiones 1.8.x nunca subieron datos (HTTP 400). | **Sigue vigente.** En la PC: *Configuración → Nube y dispositivos → Sincronización completa* (hace sincronización completa y renombra las tablas viejas a `legacy_v1_*`). Desde v1.20.5 (paso 8.7) la sincronización completa da un reporte (filas apartadas, conteo local contra remoto por tabla y tablas `legacy_v1_*`) y, solo si sale limpio, deja la nube verificada (`clinicId`, `fullUploadAtUtc`); vincular la tablet o el celular quedará bloqueado hasta entonces (8.14). La primera subida por `Seq` (paso 8.5, desde v1.20.3) reescribe todo una vez (unas 20k filas, 0.2% del mes). |
 
 ## B. Preparación del código en la PC
 
@@ -65,11 +65,11 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 
 ## D. Verificación pendiente en Windows
 
-### Fase 8 (plan: se revisa al publicar cada paso; hechos del 8.2 al 8.6, abajo)
+### Fase 8 (plan: se revisa al publicar cada paso; hechos del 8.2 al 8.7, abajo)
 
 En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
-- [ ] Paso 8.7 · Con la hora de la PC movida unos minutos, TPVC avisa "La hora de esta computadora difiere N min de la nube".
+- [ ] Paso 8.7 · Con la hora de la PC movida unos minutos, TPVC avisa "La hora de esta computadora difiere N min de la nube" (desde v1.20.5; ver abajo).
 - [ ] Paso 8.8 · "Unirse a una nube existente" en una PC nueva: el catálogo queda sin duplicados (5 categorías y 5 servicios) y no aparecen pacientes demo.
 - [ ] Paso 8.9 · Restaurar un respaldo con la nube activa: la lista de lo que se perdería coincide con lo que había en la tablet, y "Volver a aplicar" lo regresa.
 - [ ] Paso 8.14 (K3) · Vincular la tablet con el QR en la red del consultorio: los dos equipos muestran el mismo código de confirmación; la primera vez, el Firewall de Windows pide permitir TPVC en redes privadas. Con la red local bloqueada, el respaldo "Teclear a mano" (URL y token) funciona.
@@ -82,6 +82,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.20.5 (Fase 8, paso 8.7: hora del servidor e identidad de la nube)
+
+- [ ] En la PC principal: *Nube y dispositivos → Sincronización completa*. El reporte dice "La nube y esta computadora tienen lo mismo"; si no, revisar lo que lista.
+- [ ] En la segunda PC, después de lo anterior: la sincronización se detiene con "esta nube es de otra base"; «Esta PC ya usaba esta nube» la une y vuelve a sincronizar.
+- [ ] Atrasar o adelantar 5 minutos el reloj de Windows y sincronizar: aparece "La hora de esta computadora difiere 5 min de la nube" y lo que se capture llega bien a la otra PC.
+- [ ] Una PC con datos propios (de pruebas) y la URL de la nube del consultorio no sube nada.
 
 ### v1.20.4 (Fase 8, paso 8.6: descarga eficiente y desempates)
 

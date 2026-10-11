@@ -71,6 +71,41 @@
                                         ToolTip="Quita la pausa y vuelve a contar el consumo de hoy desde cero" />
                             </Grid>
                         </Border>
+
+                        <!-- La nube pertenece a otra base: no se sincroniza (paso 8.7) -->
+                        <Border Style="{StaticResource NoticeDanger}" Margin="0,14,0,0" Visibility="{Binding IdentityNoticeText, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding IdentityNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Command="{Binding AdoptCloudIdentityCommand}" Content="Esta PC ya usaba esta nube"
+                                        Margin="12,0,0,0" VerticalAlignment="Center" Visibility="{Binding CanAdoptCloudIdentity, Converter={StaticResource BoolToVis}}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        ToolTip="Revisa que todo lo que esta PC ya subió esté en la nube y, si es así, la une a ella" />
+                            </Grid>
+                        </Border>
+
+                        <!-- La hora de Windows difiere de la de la nube -->
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,14,0,0" Visibility="{Binding ClockNoticeText, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding ClockNoticeText}" TextWrapping="Wrap" />
+                        </Border>
+
+                        <!-- Reporte de la última «Sincronización completa» -->
+                        <Border Margin="0,14,0,0" Visibility="{Binding FullSyncReportText, Converter={StaticResource BoolToVis}}">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource NoticeWarning}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFullSyncReportClean}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource ThemeSuccessSubtle}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeSuccessText}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding FullSyncReportText}" TextWrapping="Wrap" />
+                        </Border>
                     </StackPanel>
                 </Border>
 

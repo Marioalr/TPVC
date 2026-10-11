@@ -80,6 +80,25 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _parkedNoticeText = string.Empty;
 
+    /// <summary>"La hora de esta computadora difiere N min de la nube…" (paso 8.7); vacío si no pasa de 2 min.</summary>
+    [ObservableProperty]
+    private string _clockNoticeText = string.Empty;
+
+    /// <summary>La nube pertenece a otra base y no se sincroniza (paso 8.7); vacío si no.</summary>
+    [ObservableProperty]
+    private string _identityNoticeText = string.Empty;
+
+    /// <summary>Esta base todavía no tiene identidad: puede unirse a la de la nube si ya la usaba.</summary>
+    [ObservableProperty]
+    private bool _canAdoptCloudIdentity;
+
+    /// <summary>El reporte de la última «Sincronización completa» en esta sesión.</summary>
+    [ObservableProperty]
+    private string _fullSyncReportText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isFullSyncReportClean;
+
     [ObservableProperty]
     private bool _isHelpGuideOpen;
 
@@ -205,6 +224,46 @@ public partial class TursoSyncViewModel : ObservableObject
             TursoSyncPauseReason.QuotaExhausted => TursoException.QuotaExhaustedDetail,
             _ => string.Empty
         };
+
+        ClockNoticeText = _syncService.ClockWarningText is { } clock
+            ? $"{clock}. Mientras tanto TPVC marca los cambios con la hora de la nube; conviene corregir la fecha y hora de Windows."
+            : string.Empty;
+
+        var conflict = _syncService.IdentityConflict;
+        CanAdoptCloudIdentity = conflict is { LocalClinicId: null };
+        IdentityNoticeText = conflict == null
+            ? string.Empty
+            : conflict.LocalClinicId == null
+                ? "Esta nube ya tiene datos de otra computadora y esta base todavía no está unida a ella, así que no se sincroniza " +
+                  "para no mezclar datos. Si esta PC ya sincronizaba con esta nube, pulse «Esta PC ya usaba esta nube». Si no, " +
+                  "use otra base de Turso; unirse a una nube existente llegará en una próxima versión."
+                : "Esta nube pertenece a otra base de datos (otro consultorio o una nube reemplazada), así que no se sincroniza " +
+                  "para no mezclar datos. Revise la URL y el token.";
+    }
+
+    /// <summary>«Esta PC ya usaba esta nube»: une esta base a la identidad de la nube si todo lo que subió está en ella.</summary>
+    [RelayCommand]
+    public async Task AdoptCloudIdentityAsync()
+    {
+        bool confirm = DialogService.Confirm(
+            "TPVC revisará que todo lo que esta computadora ya subió esté en la nube (lee la lista de registros de la nube una vez). " +
+            "Si es así, la une a ella y la sincronización sigue normal; si falta algo, no cambia nada.\n\n¿Desea continuar?",
+            "TPVC - Esta PC ya usaba esta nube");
+        if (!confirm) return;
+
+        IsBusy = true;
+        try
+        {
+            var (ok, message) = await _syncService.AdoptCloudIdentityAsync();
+            SaveStatusMessage = ok ? message : $"✕ {message}";
+            RefreshNotices();
+            if (ok) await SyncNowAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+            RefreshNotices();
+        }
     }
 
     [RelayCommand]
@@ -403,7 +462,9 @@ public partial class TursoSyncViewModel : ObservableObject
                 IsSyncEnabled = true;
                 _settingsService.CurrentSettings.IsSyncEnabled = true;
                 _settingsService.SaveSettings(_settingsService.CurrentSettings);
-                SaveStatusMessage = $"✓ Base de datos subida a Turso exitosamente ({res.RowsPushed} registros subidos).";
+                SaveStatusMessage = $"✓ Sincronización completa terminada ({res.RowsPushed} registros subidos, {res.RowsPulled} recibidos).";
+                FullSyncReportText = res.FullSyncReport?.Summary ?? string.Empty;
+                IsFullSyncReportClean = res.FullSyncReport?.IsClean == true;
             }
             else
             {
