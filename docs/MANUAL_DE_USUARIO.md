@@ -140,7 +140,7 @@ Con la nube activada (Configuración › Nube y dispositivos), la consulta puede
 ## 6. Módulo 4: Panel del consultorio
 
 Primera sección de Configuración, con lo de hoy y lo que conviene atender:
-* **Ventas de hoy**, **usado en consulta hoy** (piezas), **productos** en el catálogo, **con stock bajo** y **lotes por vencer**.
+* **Ventas de hoy**, **usado en consulta hoy** (piezas), **valor del inventario** (lo que costó lo que hay en existencia, con el IVA sumado donde no lo incluía; abajo, cuántos productos hay y cuántos con existencias todavía no tienen costo), **con stock bajo** y **lotes por vencer**.
 * Listas de **stock bajo** y **lotes por vencer (60 días)** con acceso directo a Productos y a Lotes, y los **movimientos recientes**.
 
 ---
@@ -149,8 +149,10 @@ Primera sección de Configuración, con lo de hoy y lo que conviene atender:
 
 Catálogo de medicamentos e insumos con precios y existencias:
 * **Buscar** por nombre, genérico o código y filtrar con los chips de **categoría** y **"Stock bajo"** / **"Por caducar"**. La lista solo dibuja las filas visibles, así que se mueve igual de rápido con miles de productos.
-* **Nuevo producto** o **doble clic** en una fila abre el **panel lateral** de edición (código, nombre, genérico, presentación, categoría, unidad, precio, existencias, mínimo, ubicación y refrigeración) sin salir de la lista. Al dar de alta, el panel se queda abierto y limpio para registrar el siguiente.
+* **Nuevo producto** o **doble clic** en una fila abre el **panel lateral** de edición (código, nombre, genérico, presentación, categoría, unidad, precio, costo, existencias, mínimo, ubicación y refrigeración) sin salir de la lista. Al dar de alta, el panel se queda abierto y limpio para registrar el siguiente.
 * **Entrada** y **Consumo** rápidos en el mismo panel lateral.
+* **Costo por unidad**: lo que se le paga al proveedor. Si no incluye IVA (material de curación, insumos), marque **El costo no incluye IVA (se suma 16 %)**; los medicamentos van sin IVA, así que normalmente se deja desmarcada. Abajo se ve la **ganancia** por unidad. La lista muestra el costo bajo el precio y, arriba, cuánto vale al costo lo que hay en existencia de los productos que se ven.
+* La **lista de compras sugerida** (en la Vista Principal) usa ese costo. Los productos sin costo se estiman con el 65 % del precio de venta y aparecen con **≈**.
 
 ---
 

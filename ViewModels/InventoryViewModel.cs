@@ -68,7 +68,17 @@ public partial class InventoryViewModel : ObservableObject
         IsEditorOpen = false;
     }
 
-    public string ResultsSummary => TotalResultsCount == 1 ? "1 producto" : $"{TotalResultsCount} productos";
+    /// <summary>Lo que costó lo que hay en existencia de los productos de la lista (con su filtro), al costo.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResultsSummary))]
+    private decimal _listInventoryValue;
+
+    private static readonly System.Globalization.CultureInfo Mexican = System.Globalization.CultureInfo.GetCultureInfo("es-MX");
+
+    /// <summary>"72 productos · $18,430 al costo en existencia" (sin la parte del valor si nada tiene costo).</summary>
+    public string ResultsSummary =>
+        (TotalResultsCount == 1 ? "1 producto" : $"{TotalResultsCount} productos") +
+        (ListInventoryValue > 0 ? $" · {ListInventoryValue.ToString("C0", Mexican)} al costo en existencia" : string.Empty);
 
     partial void OnTotalResultsCountChanged(int value) => OnPropertyChanged(nameof(ResultsSummary));
 
@@ -133,6 +143,7 @@ public partial class InventoryViewModel : ObservableObject
         );
 
         Products = new ObservableCollection<Product>(list);
+        ListInventoryValue = list.Sum(p => p.InventoryValue);
         TotalResultsCount = Products.Count;
     }
 

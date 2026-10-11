@@ -37,6 +37,11 @@ escritas (`rules`) y la huella (`fingerprint`), que la PC guarda en `_tpvc_meta.
 Los cambios del esquema solo pueden agregar (tablas, columnas o valores de un enum) y obligan a subir la revisión;
 `GoldenVectorTests` lo exige al regenerar. Desde el paso 8.23 el archivo queda congelado como base de la tablet.
 
+| Revisión | Versión | Qué agregó |
+|---|---|---|
+| 1 | v1.20.1 | El contrato inicial (protocolo v2). |
+| 2 | v1.21.0 | `Products.UnitCost` (costo por unidad, decimal en texto, `"0"` si falta) y `Products.CostExcludesVat` (entero 0/1: el costo no incluye IVA y se le suma 16 %). |
+
 ## `golden/`
 
 Vectores con la forma `{rule, culture, today, now, contract, notes, cases: [{name, input, expected}]}`. Las fechas

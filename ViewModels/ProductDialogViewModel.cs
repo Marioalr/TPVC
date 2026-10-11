@@ -36,7 +36,18 @@ public partial class ProductDialogViewModel : ObservableObject
     private string _unit = "Piezas";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfitText))]
     private decimal _price = 0.0m;
+
+    /// <summary>Costo por unidad (lo que se paga al proveedor).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfitText))]
+    private decimal _unitCost;
+
+    /// <summary>El costo no incluye IVA: se le suma 16 %. Desmarcada por omisión (los medicamentos van sin IVA).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfitText))]
+    private bool _costExcludesVat;
 
     [ObservableProperty]
     private int _currentStock = 0;
@@ -67,6 +78,26 @@ public partial class ProductDialogViewModel : ObservableObject
 
     [ObservableProperty]
     private string _successMessage = string.Empty;
+
+    private static readonly System.Globalization.CultureInfo Mexican = System.Globalization.CultureInfo.GetCultureInfo("es-MX");
+
+    /// <summary>
+    /// "Ganancia: $5.50 por unidad (46 % del precio)" con el costo real (IVA sumado si no lo incluía). Vacío sin costo;
+    /// un aviso si el costo es mayor que el precio.
+    /// </summary>
+    public string ProfitText
+    {
+        get
+        {
+            if (UnitCost <= 0) return string.Empty;
+            var cost = Product.CostWithVat(UnitCost, CostExcludesVat);
+            var costText = CostExcludesVat ? $"Costo con IVA: {cost.ToString("C2", Mexican)} · " : string.Empty;
+            if (Price <= 0) return costText + "Sin precio de venta todavía.";
+            var profit = Price - cost;
+            if (profit < 0) return costText + $"Se vende {(-profit).ToString("C2", Mexican)} abajo del costo.";
+            return costText + $"Ganancia: {profit.ToString("C2", Mexican)} por unidad ({Math.Round(profit / Price * 100):0} % del precio).";
+        }
+    }
 
     public event Action? RequestClose;
 
@@ -115,6 +146,8 @@ public partial class ProductDialogViewModel : ObservableObject
             Presentation = existing.Presentation ?? string.Empty;
             Unit = existing.Unit;
             Price = existing.Price;
+            UnitCost = existing.UnitCost;
+            CostExcludesVat = existing.CostExcludesVat;
             CurrentStock = existing.CurrentStock;
             MinStock = existing.MinStock;
             OptimalStock = existing.OptimalStock;
@@ -134,6 +167,8 @@ public partial class ProductDialogViewModel : ObservableObject
         Presentation = string.Empty;
         Unit = "Piezas";
         Price = 0.0m;
+        UnitCost = 0m;
+        CostExcludesVat = false;
         CurrentStock = 0;
         MinStock = 5;
         OptimalStock = 20;
@@ -166,6 +201,12 @@ public partial class ProductDialogViewModel : ObservableObject
             return;
         }
 
+        if (UnitCost < 0)
+        {
+            ErrorMessage = "El costo no puede ser negativo.";
+            return;
+        }
+
         string trimmedCode = Code.Trim();
 
         // 1. Validar que no se repita el código en el inventario
@@ -190,6 +231,8 @@ public partial class ProductDialogViewModel : ObservableObject
                 CategoryId = SelectedCategory.Id,
                 Unit = Unit,
                 Price = Price,
+                UnitCost = UnitCost,
+                CostExcludesVat = CostExcludesVat,
                 CurrentStock = CurrentStock,
                 MinStock = MinStock,
                 OptimalStock = OptimalStock,

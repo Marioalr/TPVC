@@ -20,8 +20,9 @@ public static class SyncContract
     /// <summary>
     /// Revisión del contrato. Sube con cada cambio del esquema, que solo puede ser aditivo (columnas o tablas
     /// nuevas). La PC la escribe en <c>_tpvc_meta.contract</c> y entra a la huella del esquema.
+    /// 2 (v1.21.0): <c>Products.UnitCost</c> y <c>Products.CostExcludesVat</c>.
     /// </summary>
-    public const int Revision = 1;
+    public const int Revision = 2;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind

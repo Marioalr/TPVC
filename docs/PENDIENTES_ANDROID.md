@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.20.7). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.21.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,14 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.21.0 (costo del producto)
+
+- [ ] En *Configuración → Productos*: capturar el costo de un medicamento (casilla de IVA desmarcada) y de una gasa (marcada); la ficha muestra la ganancia, la lista el costo bajo el precio y el encabezado el valor al costo de lo que hay en existencia.
+- [ ] El *Panel del consultorio* muestra el **Valor del inventario** y cuántos productos con existencias no tienen costo.
+- [ ] La lista de compras sugerida usa el costo capturado; los productos sin costo salen con **≈**. Exportar a CSV y abrirlo en Excel.
+- [ ] Con dos PC sincronizando: el costo capturado en una aparece en la otra después de sincronizar las dos. Si la otra todavía tiene v1.20.x, sigue sincronizando normal y no borra el costo.
+- [ ] Para Kotlin: el contrato pasa a la revisión 2 (`Products.UnitCost`, `Products.CostExcludesVat`; ver `contracts/README.md`).
 
 ### v1.20.7 (una sola ventana)
 

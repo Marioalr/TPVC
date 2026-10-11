@@ -561,8 +561,10 @@
                             <Border Grid.Column="3" Width="1" Background="{DynamicResource ThemeBorder}" Margin="12,0" />
 
                             <StackPanel Grid.Column="4" HorizontalAlignment="Center">
-                                <TextBlock Text="Inversión Estimada (Costo)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
+                                <TextBlock Text="Inversión (al costo)" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" />
                                 <TextBlock Text="{Binding TotalSuggestedCost, StringFormat='${0:N2} MXN'}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource ThemeSuccessText}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                <TextBlock Text="{Binding EstimatedCostNote}" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center" TextAlignment="Center"
+                                           TextWrapping="Wrap" MaxWidth="240" Visibility="{Binding EstimatedCostNote, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -618,8 +620,8 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Costo U. Est." Binding="{Binding EstimatedUnitCost, StringFormat='${0:N2}'}" Width="100" ElementStyle="{StaticResource RightAlignedDataGridText}" />
-                            <DataGridTextColumn Header="Total Est." Binding="{Binding EstimatedTotalCost, StringFormat='${0:N2}'}" Width="110" ElementStyle="{StaticResource RightBoldDataGridText}" />
+                            <DataGridTextColumn Header="Costo U." Binding="{Binding UnitCostText}" Width="100" ElementStyle="{StaticResource RightAlignedDataGridText}" />
+                            <DataGridTextColumn Header="Total" Binding="{Binding EstimatedTotalCost, StringFormat='${0:N2}'}" Width="110" ElementStyle="{StaticResource RightBoldDataGridText}" />
                             <DataGridTextColumn Header="Motivo" Binding="{Binding Reason}" Width="1.5*" />
                         </DataGrid.Columns>
                     </DataGrid>
