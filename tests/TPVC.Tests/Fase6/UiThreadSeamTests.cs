@@ -315,7 +315,7 @@ public class UiThreadSeamTests
 
             StringAssert.StartsWith(withoutContext.Autosave.AutosaveStatus, "Guardado ");
             Assert.AreEqual(string.Empty, withContext.Autosave.AutosaveStatus, "El indicador espera al contexto del ViewModel");
-            Assert.IsTrue(context.Pending > 0);
+            Assert.AreEqual(1, context.Pending, "Solo el indicador de «Guardar ya»");
 
             context.RunPending();
             StringAssert.StartsWith(withContext.Autosave.AutosaveStatus, "Guardado ");
@@ -329,12 +329,29 @@ public class UiThreadSeamTests
         }
     }
 
+    /// <summary>Reloj del guardado automático cuyo temporizador nunca se dispara solo.</summary>
+    private sealed class NeverFiringClock : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new IdleTimer();
+
+        private sealed class IdleTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
     private static MedicalRecordsViewModel OpenWithDraftStore(string draftPath)
     {
         var consultations = new ConsultationService(seedDemoPatients: false);
         var records = new MedicalRecordsViewModel(null, consultations, consultationDraftStore: new ConsultationDraftStore(draftPath))
         {
-            AutosaveDelay = TimeSpan.FromHours(1)
+            AutosaveDelay = TimeSpan.FromHours(1),
+            // La primera copia se programa sin pausa (todavía no hay escrituras): con un temporizador real, su
+            // hilo podía llevarse la copia de "Guardar ya" y publicar el indicador justo después de que la
+            // prueba revisara el contexto
+            AutosaveClock = new NeverFiringClock()
         };
         records.SelectPatient(records.Patients.Single(p => p.Id == 2));
         records.StartActiveConsultation();
