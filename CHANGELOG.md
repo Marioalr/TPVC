@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.31.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.13: lo que necesita la app de Android para leer la nube igual que la PC
+* Grabaciones de cómo un equipo lee la nube (la primera descarga, la de todos los días, filas empatadas, una nube reemplazada con un respaldo, la cuota agotada y un token anulado), con cada instrucción tal como la manda la PC, en `contracts/hrana/`. La app de Android las repite y se compara contra ellas.
+* El servidor de Turso simulado de las pruebas se puede levantar como servidor web en la misma computadora (solo en 127.0.0.1), con datos de ejemplo, para que las pruebas de Android sincronicen contra él. `docs/FAKE_HRANA_SPEC.md` dice qué copia de Turso y qué no.
+
+### Cambiado
+* La tablet y el celular se vincularán pegando la URL y el token de Turso, o leyéndolos de un código QR que mostrará la PC, y la PC aprobará cada equipo (decisión del médico). Ya no habrá un QR por la red del consultorio. *Nube y dispositivos* lo dice así.
+* 548 pruebas.
+
 ## [1.30.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.12b: resultados de laboratorio
