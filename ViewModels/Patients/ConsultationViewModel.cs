@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -275,27 +276,7 @@ public partial class ConsultationViewModel : ObservableObject
     partial void OnConsultationWeightChanged(string value) => RecalculateIMC();
     partial void OnConsultationHeightChanged(string value) => RecalculateIMC();
 
-    public void RecalculateIMC()
-    {
-        if (decimal.TryParse(ConsultationWeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var weight) &&
-            decimal.TryParse(ConsultationHeight.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var height) &&
-            height > 0)
-        {
-            var imc = weight / (height * height);
-            string category;
-            if (imc < 18.5m) category = "Bajo peso";
-            else if (imc < 25.0m) category = "Peso normal";
-            else if (imc < 30.0m) category = "Sobrepeso";
-            else if (imc < 35.0m) category = "Obesidad Grado I";
-            else category = "Obesidad Grado II+";
-
-            ConsultationIMC = $"{imc:F1} kg/m² ({category})";
-        }
-        else
-        {
-            ConsultationIMC = "Valores no disponibles";
-        }
-    }
+    public void RecalculateIMC() => ConsultationIMC = VitalSignsRules.BmiText(ConsultationWeight, ConsultationHeight);
 
     /// <summary>La nota de la consulta en curso ya está guardada en el expediente (con lo último capturado).</summary>
     public bool IsCurrentConsultationSaved { get; set; }
@@ -599,51 +580,9 @@ public partial class ConsultationViewModel : ObservableObject
 
     public bool HasVitalSignsWarning => !string.IsNullOrEmpty(VitalSignsWarning);
 
-    /// <summary>Valores fuera de rango para adulto/niño en una sola línea (vacío si todo es normal).</summary>
-    public string VitalSignsWarning
-    {
-        get
-        {
-            var warnings = new System.Collections.Generic.List<string>();
-            if (TryParse(ConsultationTemp, out var temp))
-            {
-                if (temp >= 38) warnings.Add($"Temp {temp:0.#} °C: fiebre");
-                else if (temp < 35.5 && temp > 0) warnings.Add($"Temp {temp:0.#} °C: hipotermia");
-            }
-
-            var ta = (ConsultationTA ?? string.Empty).Split('/');
-            if (ta.Length == 2 && TryParse(ta[0], out var sys) && TryParse(ta[1], out var dia))
-            {
-                if (sys >= 140 || dia >= 90) warnings.Add($"T/A {sys:0}/{dia:0}: elevada");
-                else if (sys > 0 && sys < 90) warnings.Add($"T/A {sys:0}/{dia:0}: baja");
-            }
-
-            if (TryParse(ConsultationSpO2, out var sat) && sat > 0)
-            {
-                if (sat <= 1) sat *= 100;
-                if (sat < 92) warnings.Add($"SpO₂ {sat:0} %: baja");
-            }
-
-            if (TryParse(ConsultationGlucose, out var glu) && glu > 0)
-            {
-                if (glu >= 200) warnings.Add($"Glucosa {glu:0} mg/dL: elevada");
-                else if (glu < 70) warnings.Add($"Glucosa {glu:0} mg/dL: hipoglucemia");
-            }
-
-            if (TryParse(ConsultationFC, out var fc) && fc > 0)
-            {
-                bool child = _session.SelectedPatient is { Age: < 12 };
-                if (!child && fc > 100) warnings.Add($"FC {fc:0}: taquicardia");
-                else if (child && fc > 140) warnings.Add($"FC {fc:0}: alta para la edad");
-                else if (fc < 50) warnings.Add($"FC {fc:0}: bradicardia");
-            }
-
-            return string.Join(" · ", warnings);
-        }
-    }
-
-    private static bool TryParse(string? text, out double value) =>
-        double.TryParse((text ?? string.Empty).Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+    /// <summary>Valores fuera de rango para adulto/niño en una sola línea (vacío si todo es normal; reglas en VitalSignsRules).</summary>
+    public string VitalSignsWarning => VitalSignsRules.Warning(ConsultationTemp, ConsultationTA, ConsultationSpO2, ConsultationGlucose, ConsultationFC,
+        _session.SelectedPatient?.Age);
 
     /// <summary>Última consulta anterior (sin contar el avance guardado de la consulta en curso).</summary>
     public PatientConsultation? PreviousConsultation =>

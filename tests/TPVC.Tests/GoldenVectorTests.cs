@@ -22,7 +22,7 @@ namespace TPVC.Tests;
 /// <c>TPVC_WRITE_GOLDEN=1 dotnet test --filter GoldenVectorTests</c> (y revisar la diferencia antes de subirla).
 /// </summary>
 [TestClass]
-public class GoldenVectorTests
+public partial class GoldenVectorTests
 {
     private static bool WriteGolden => Environment.GetEnvironmentVariable("TPVC_WRITE_GOLDEN") == "1";
 

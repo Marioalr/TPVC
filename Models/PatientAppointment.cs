@@ -27,7 +27,10 @@ public class PatientAppointment : ISyncEntity
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     [NotMapped]
-    public bool IsUpcoming => Date.Date >= DateTime.Today && Status != "Cancelada" && Status != "Atendida";
+    public bool IsUpcoming => IsUpcomingOn(ClinicClock.Today);
+
+    /// <summary>Pendiente el día <paramref name="today"/> o después (ni cancelada ni atendida).</summary>
+    public bool IsUpcomingOn(DateTime today) => Date.Date >= today.Date && Status != "Cancelada" && Status != "Atendida";
 
     [NotMapped]
     public bool IsAttended => Status == "Atendida";

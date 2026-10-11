@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Documents;
 using TPVC.ViewModels;
 
 namespace TPVC.Tests;
@@ -75,7 +76,7 @@ public class PrescriptionNormTests
             new DateTime(2026, 10, 10), PrescriptionFonts.From("Georgia", "Lucida Handwriting"));
         sheet.Paper = PrescriptionPaper.Letter;
 
-        var html = PrintingService.BuildPrescriptionHtml(sheet);
+        var html = PrescriptionHtmlBuilder.Build(sheet);
         StringAssert.Contains(html, "@page { size: 8.5in 11in;");
         StringAssert.Contains(html, "min-height: 11in;");
         StringAssert.Contains(html, "font-family: 'Georgia', 'Segoe UI', 'Arial', sans-serif;");
@@ -83,7 +84,7 @@ public class PrescriptionNormTests
         StringAssert.Contains(html, "<div class=\"med-name\">Paracetamol 500 mg tabletas<span class=\"med-detail\"> &#183; Caja con 20 tabletas</span></div>", "El punto medio va codificado");
 
         sheet.Paper = PrescriptionPaper.HalfLetter;
-        StringAssert.Contains(PrintingService.BuildPrescriptionHtml(sheet), "@page { size: 8.5in 5.5in;");
+        StringAssert.Contains(PrescriptionHtmlBuilder.Build(sheet), "@page { size: 8.5in 5.5in;");
     }
 
     [TestMethod]

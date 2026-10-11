@@ -106,7 +106,7 @@ public sealed partial class AgendaDayItem : ObservableObject
     }
     public string DayNumber => Date.Day.ToString(CultureInfo.InvariantCulture);
     public string CountText => Count == 0 ? "libre" : Count == 1 ? "1 cita" : $"{Count} citas";
-    public bool IsToday => Date == DateTime.Today;
+    public bool IsToday => Date == ClinicClock.Today;
 
     [ObservableProperty]
     private bool _isSelected;

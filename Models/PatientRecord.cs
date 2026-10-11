@@ -317,7 +317,7 @@ public class PatientRecord : ISyncEntity
     private int _storedAge;
     public int Age
     {
-        get => BirthDate is { } birth ? CalculateAge(birth, DateTime.Today) : _storedAge;
+        get => BirthDate is { } birth ? CalculateAge(birth, ClinicClock.Today) : _storedAge;
         set => _storedAge = value;
     }
 
@@ -409,7 +409,7 @@ public class PatientRecord : ISyncEntity
 
     /// <summary>"34 años", "2 años 6 meses", "8 meses" o "12 días".</summary>
     [NotMapped]
-    public string AgeDisplay => FormatAge(BirthDate, Age, DateTime.Today);
+    public string AgeDisplay => FormatAge(BirthDate, Age, ClinicClock.Today);
 
     public static int CalculateAge(DateTime birthDate, DateTime today) => TotalMonths(birthDate, today) / 12;
 

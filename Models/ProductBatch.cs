@@ -30,22 +30,28 @@ public class ProductBatch : ISyncEntity
     public bool IsDepleted { get; set; }
 
     // Helpers
-    public int DaysRemaining => (ExpirationDate.Date - DateTime.Today).Days;
+    public int DaysRemaining => DaysRemainingOn(ClinicClock.Today);
 
-    public ExpirationStatus Status
+    /// <summary>Días que le quedan al lote el día <paramref name="today"/> (negativos si ya venció).</summary>
+    public int DaysRemainingOn(DateTime today) => (ExpirationDate.Date - today.Date).Days;
+
+    public ExpirationStatus Status => StatusOn(ClinicClock.Today);
+
+    public string StatusText => StatusTextOn(ClinicClock.Today);
+
+    /// <summary>Vencido, próximo a vencer (60 días o menos) o vigente, el día <paramref name="today"/>.</summary>
+    public ExpirationStatus StatusOn(DateTime today)
     {
-        get
-        {
-            if (DaysRemaining < 0) return ExpirationStatus.Vencido;
-            if (DaysRemaining <= 60) return ExpirationStatus.ProximoAVencer;
-            return ExpirationStatus.Vigente;
-        }
+        var days = DaysRemainingOn(today);
+        if (days < 0) return ExpirationStatus.Vencido;
+        if (days <= 60) return ExpirationStatus.ProximoAVencer;
+        return ExpirationStatus.Vigente;
     }
 
-    public string StatusText => Status switch
+    public string StatusTextOn(DateTime today) => StatusOn(today) switch
     {
         ExpirationStatus.Vencido => "Vencido",
-        ExpirationStatus.ProximoAVencer => $"Vence en {DaysRemaining} días",
+        ExpirationStatus.ProximoAVencer => $"Vence en {DaysRemainingOn(today)} días",
         _ => "Vigente"
     };
 }

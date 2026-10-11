@@ -67,12 +67,7 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>Id negativo estable para un cargo libre (servicio o insumo fuera de catálogo): se acumula si se repite.</summary>
-    internal static int FreeChargeId(string name)
-    {
-        int hash = 17;
-        foreach (var c in TextSearch.Normalize(name)) hash = unchecked(hash * 31 + c);
-        return -(1_000_000 + (int)((uint)hash % 1_000_000));
-    }
+    internal static int FreeChargeId(string name) => TPVC.Services.Rules.HandoffPayloadCodec.FreeChargeId(name);
 
     private bool ChargeProduct(Product product, int quantity, string? displayName = null)
     {

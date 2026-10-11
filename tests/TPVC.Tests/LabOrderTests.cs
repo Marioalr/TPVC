@@ -10,6 +10,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Documents;
 using TPVC.ViewModels;
 using TPVC.ViewModels.Patients;
 
@@ -144,10 +145,10 @@ public class LabOrderTests
     public void Sheet_ManyLines_GoInTwoColumns_WithoutSplittingAnArea()
     {
         var few = LabOrderSheet.Create(Patient(), Order("", "BH", "EGO"), null, "J02.9", DateTime.Today);
-        Assert.AreEqual(1, PrintingService.SplitInColumns(few.Groups).Count);
+        Assert.AreEqual(1, LabOrderHtmlBuilder.SplitInColumns(few.Groups).Count);
 
         var many = LabOrderSheet.Create(Patient(), Order("", LabCatalog.Panels.SelectMany(p => p.Studies).Distinct().ToArray()), null, "E11", DateTime.Today);
-        var columns = PrintingService.SplitInColumns(many.Groups);
+        var columns = LabOrderHtmlBuilder.SplitInColumns(many.Groups);
         Assert.AreEqual(2, columns.Count);
         CollectionAssert.AreEqual(many.Groups.ToList(), columns.SelectMany(c => c).ToList(), "Todas las áreas, en orden y enteras");
     }
@@ -157,7 +158,7 @@ public class LabOrderTests
     {
         var order = Order("Ayuno de 8 a 12 horas.\nTraer resultados.", "BH", "EGO", "Estudio <especial> & raro");
         var sheet = LabOrderSheet.Create(Patient(), order, new ClinicProfile { DoctorName = "Dra. Prueba", ProfessionalLicense = "1234567" }, "J02.9 Faringitis aguda", new DateTime(2026, 10, 11));
-        var html = PrintingService.BuildLabOrderHtml(sheet);
+        var html = LabOrderHtmlBuilder.Build(sheet);
         var doc = XDocument.Parse(html.Replace("<!DOCTYPE html>", string.Empty));
 
         string Field(string name) => doc.Descendants().Single(e => (string?)e.Attribute("data-field") == name).Value;
@@ -183,7 +184,7 @@ public class LabOrderTests
     {
         var sheet = PrescriptionSheet.Create(Patient(), new[] { new PatientPrescriptionItem { MedicineName = "Paracetamol 500 mg tabletas", Dosage = "1 cada 8 horas" } },
             new ClinicProfile(), "Reposo", DateTime.Today);
-        var html = PrintingService.BuildPrescriptionHtml(sheet);
+        var html = PrescriptionHtmlBuilder.Build(sheet);
         var doc = XDocument.Parse(html.Replace("<!DOCTYPE html>", string.Empty));
         var sheetDiv = doc.Descendants().Single(e => (string?)e.Attribute("class") == "sheet");
         CollectionAssert.AreEqual(new[] { "header", "row patient", "row vitals", "body", "footer" }, sheetDiv.Elements().Select(e => (string?)e.Attribute("class")).ToArray());

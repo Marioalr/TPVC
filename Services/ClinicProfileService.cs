@@ -210,13 +210,7 @@ public class ClinicProfileService
     }
 
     /// <summary>".png" o ".jpg" según la firma del archivo; null si no es una de esas imágenes.</summary>
-    public static string? ImageExtension(byte[]? content)
-    {
-        if (content == null || content.Length < 8) return null;
-        if (content[0] == 0x89 && content[1] == 0x50 && content[2] == 0x4E && content[3] == 0x47) return ".png";
-        if (content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF) return ".jpg";
-        return null;
-    }
+    public static string? ImageExtension(byte[]? content) => Documents.LetterheadHtml.ImageExtension(content);
 
     /// <summary>Indica si el archivo es una imagen PNG o JPG que se puede usar en el membrete.</summary>
     public static bool IsSupportedImageFile(string? path)

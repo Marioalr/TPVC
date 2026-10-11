@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -361,7 +362,7 @@ public partial class PatientsWorkspace
         // Si se escribió un nombre (no un folio o teléfono), el alta empieza con él
         if (typed.Length > 0 && !typed.Any(char.IsDigit))
         {
-            PatientFormViewModel.ParseFullName(typed, out var first, out var last, out var maternal);
+            PatientFormRules.ParseFullName(typed, out var first, out var last, out var maternal);
             PatientForm.FormFirstName = ToTitle(first);
             PatientForm.FormLastName = ToTitle(last);
             PatientForm.FormMaternalLastName = ToTitle(maternal);

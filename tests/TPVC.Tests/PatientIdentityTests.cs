@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 using TPVC.ViewModels;
 using TPVC.ViewModels.Patients;
 
@@ -149,13 +150,13 @@ public class PatientIdentityTests
     public void BirthDate_ParsesCommonFormatsAndRejectsImpossibleDates()
     {
         var today = new DateTime(2026, 10, 7);
-        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("14/03/1992", today));
-        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("14-3-1992", today));
-        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormViewModel.TryParseBirthDate("1992-03-14", today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("31/02/2020", today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/10/2026", today), "Futura");
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("01/01/1850", today), "Más de 130 años");
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormRules.TryParseBirthDate("14/03/1992", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormRules.TryParseBirthDate("14-3-1992", today));
+        Assert.AreEqual(new DateTime(1992, 3, 14), PatientFormRules.TryParseBirthDate("1992-03-14", today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("31/02/2020", today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("08/10/2026", today), "Futura");
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("01/01/1850", today), "Más de 130 años");
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("", today));
     }
 
     [TestMethod]

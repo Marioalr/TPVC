@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -73,10 +74,6 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     }
 
     private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
-
-    private const string LineProduct = "producto";
-    private const string LineService = "servicio";
-    private const string LineFree = "libre";
 
     private ConsultationHandoffService? _handoff;
 
@@ -753,38 +750,13 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         if (patient == null || patient.SyncId == Guid.Empty) return null;
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
-        draft.Handoff = null;
-        draft.ReceivedHandoffId = null;
-        draft.ReceivedHandoffToken = null;
-        draft.PatientId = 0;
-        draft.AttendingAppointmentId = null;
-        draft.SavedAt = DateTime.Now;
-        draft.PatientSyncId = patient.SyncId;
-        draft.PatientUpdatedAtUtc = await _inventoryService.GetPatientUpdatedAtAsync(patient.Id);
-        draft.ProgressNoteSyncId = await _inventoryService.FindConsultationNoteSyncIdAsync(patient.Id, draft.Folio);
-        draft.AttendingAppointmentSyncId = _consultation.AttendingAppointmentId is int appointmentId
+        var patientUpdatedAt = await _inventoryService.GetPatientUpdatedAtAsync(patient.Id);
+        var noteSyncId = await _inventoryService.FindConsultationNoteSyncIdAsync(patient.Id, draft.Folio);
+        var appointmentSyncId = _consultation.AttendingAppointmentId is int appointmentId
             ? await _inventoryService.GetAppointmentSyncIdAsync(appointmentId)
             : null;
-        var fee = _account.ConsultationFeeService;
-        draft.FeeServiceSyncId = fee != null && fee.Id > 0 ? refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Service && r.Id == fee.Id)?.SyncId : null;
-
-        foreach (var item in draft.Items)
-        {
-            CatalogRef? match = item.ProductId switch
-            {
-                > 0 => refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Product && r.Id == item.ProductId),
-                < 0 and > -1_000_000 => refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Service && r.Id == -item.ProductId),
-                _ => null
-            };
-            item.LineKind = match?.Kind switch
-            {
-                CatalogRefKind.Product => LineProduct,
-                CatalogRefKind.Service => LineService,
-                _ => LineFree
-            };
-            item.CatalogSyncId = match?.SyncId;
-            item.ProductId = 0;
-        }
+        HandoffPayloadCodec.PrepareForSending(draft, refs, patient.SyncId, patientUpdatedAt, noteSyncId, appointmentSyncId,
+            _account.ConsultationFeeService?.Id, DateTime.Now);
         return draft;
     }
 
@@ -1063,7 +1035,7 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     {
         Interlocked.Increment(ref _handoffEpoch);
         var payload = ConsultationDraftStore.Deserialize(row.Payload);
-        if (payload == null || row.PayloadVersion > ConsultationHandoffService.ProtocolVersion || payload.Version > ConsultationDraft.CurrentVersion)
+        if (!HandoffPayloadCodec.CanRead(row.PayloadVersion, payload))
         {
             _feedback.ShowWarning("Esta consulta viene de una versión más nueva de TPVC. Actualice este equipo para recibirla.");
             return;
@@ -1206,26 +1178,7 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         }
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
-        var freeLines = new List<string>();
-        foreach (var item in payload.Items)
-        {
-            var kind = item.LineKind switch
-            {
-                LineProduct => (CatalogRefKind?)CatalogRefKind.Product,
-                LineService => CatalogRefKind.Service,
-                _ => null
-            };
-            var match = kind == null ? null : FindCatalogRef(refs, kind.Value, item);
-            if (match == null)
-            {
-                if (kind != null) freeLines.Add(item.Name);
-                item.ProductId = ConsultationAccount.FreeChargeId(item.Name);
-            }
-            else
-            {
-                item.ProductId = match.Kind == CatalogRefKind.Product ? match.Id : -match.Id;
-            }
-        }
+        var freeLines = HandoffPayloadCodec.MapReceivedItems(payload, refs);
 
         int? appointmentId = payload.AttendingAppointmentSyncId is Guid appointmentSyncId
             ? await _inventoryService.FindAppointmentIdAsync(appointmentSyncId)
@@ -1234,20 +1187,6 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         payload.AttendingAppointmentId = appointmentId;
         payload.Handoff = null;
         return (new MappedHandoff(patient, payload, freeLines), null);
-    }
-
-    /// <summary>Por identificador; si no llegó, el mismo código Y nombre (activo).</summary>
-    private static CatalogRef? FindCatalogRef(List<CatalogRef> refs, CatalogRefKind kind, ConsultationProductItem item)
-    {
-        if (item.CatalogSyncId is Guid syncId)
-        {
-            var bySync = refs.FirstOrDefault(r => r.Kind == kind && r.SyncId == syncId && r.IsActive);
-            if (bySync != null) return bySync;
-        }
-        var name = TextSearch.Normalize(item.Name);
-        return refs.FirstOrDefault(r => r.Kind == kind && r.IsActive
-                                        && string.Equals(r.Code, item.Code, StringComparison.OrdinalIgnoreCase)
-                                        && TextSearch.Normalize(r.Name) == name);
     }
 
     private void ApplyReceivedConsultation(HandoffRow row, MappedHandoff mapped, string token)

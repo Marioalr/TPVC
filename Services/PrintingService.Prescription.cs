@@ -10,6 +10,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using TPVC.Helpers;
 using TPVC.Models;
+using TPVC.Services.Documents;
 
 namespace TPVC.Services;
 
@@ -30,28 +31,26 @@ public partial class PrintingService
 
     // ------------------------------------------------------------------ medidas del formato (px de 1/96")
 
-    // Filas del Excel: 1-3 encabezado (36 + 15 + 15 pt), 4, 6 y 8 separaciones, 5 y 7 los renglones de
-    // paciente y signos (15 pt), 9-26 medicamentos y medidas generales (12 pt cada una), 27-28 el pie
-    private const double HeaderHeight = 92;
-    private const double CrestSize = 76;
-    private const double HeaderImageWidth = 131;
-    private const double HeaderImageHeight = 44;
-    private const double InfoRowHeight = 20;
-    private const double PatientRowGap = 13;
-    private const double VitalsRowGap = 13;
-    private const double BodyGap = 14;
-    private const double LineHeight = 16;
-    private const double FooterGap = 6;
-    private const double FooterHeight = 27;
-    private const double LabelColumnWidth = 70;
-    // Ancho mínimo de los campos que miden lo que su valor (vacíos se ven como las celdas del Excel)
-    private const double AgeMinWidth = 90;
-    private const double DateMinWidth = 90;
-    private const double BloodPressureMinWidth = 76;
-    private const double TemperatureMinWidth = 60;
-    private const double WeightMinWidth = 52;
-    private const double HeightMinWidth = 56;
-    private const double OxygenMinWidth = 48;
+    // Las mismas del HTML (Services/Documents/LetterheadLayout, desde el paso 8.11)
+    private const double HeaderHeight = LetterheadLayout.HeaderHeight;
+    private const double CrestSize = LetterheadLayout.CrestSize;
+    private const double HeaderImageWidth = LetterheadLayout.HeaderImageWidth;
+    private const double HeaderImageHeight = LetterheadLayout.HeaderImageHeight;
+    private const double InfoRowHeight = LetterheadLayout.InfoRowHeight;
+    private const double PatientRowGap = LetterheadLayout.PatientRowGap;
+    private const double VitalsRowGap = LetterheadLayout.VitalsRowGap;
+    private const double BodyGap = LetterheadLayout.BodyGap;
+    private const double LineHeight = LetterheadLayout.LineHeight;
+    private const double FooterGap = LetterheadLayout.FooterGap;
+    private const double FooterHeight = LetterheadLayout.FooterHeight;
+    private const double LabelColumnWidth = LetterheadLayout.LabelColumnWidth;
+    private const double AgeMinWidth = LetterheadLayout.AgeMinWidth;
+    private const double DateMinWidth = LetterheadLayout.DateMinWidth;
+    private const double BloodPressureMinWidth = LetterheadLayout.BloodPressureMinWidth;
+    private const double TemperatureMinWidth = LetterheadLayout.TemperatureMinWidth;
+    private const double WeightMinWidth = LetterheadLayout.WeightMinWidth;
+    private const double HeightMinWidth = LetterheadLayout.HeightMinWidth;
+    private const double OxygenMinWidth = LetterheadLayout.OxygenMinWidth;
     /// <summary>Holgura para que el pie nunca pase a otra hoja por redondeos del acomodo del texto.</summary>
     private const double PageSafety = 12;
 
@@ -635,7 +634,7 @@ public partial class PrintingService
                 Directory.CreateDirectory(dir);
             }
 
-            File.WriteAllText(dest, BuildPrescriptionHtml(sheet), Encoding.UTF8);
+            File.WriteAllText(dest, PrescriptionHtmlBuilder.Build(sheet), Encoding.UTF8);
             return dest;
         }
         catch (Exception ex)
@@ -644,208 +643,5 @@ public partial class PrintingService
             DialogService.ShowError($"Error al exportar la receta: {ex.Message}");
             return null;
         }
-    }
-
-    /// <summary>Texto seguro para HTML (un "&lt;" en una dosis o un nombre ya no rompe el documento).</summary>
-    private static string H(string? text) => System.Net.WebUtility.HtmlEncode(text ?? string.Empty);
-
-    /// <summary>"Neue Haas Grotesk Text Pro, Segoe UI, Arial" → "'Neue Haas Grotesk Text Pro', 'Segoe UI', 'Arial', sans-serif".</summary>
-    private static string CssFonts(string families, string generic) =>
-        string.Join(", ", families.Split(',')
-            .Select(f => f.Trim().Replace("'", string.Empty).Replace("<", string.Empty).Replace(";", string.Empty))
-            .Where(f => f.Length > 0)
-            .Select(f => $"'{f}'")
-            .Append(generic));
-
-    /// <summary>Regla de CSS con números en formato invariable (0.197in, nunca 0,197in).</summary>
-    private static string Css(FormattableString rule) => FormattableString.Invariant(rule);
-
-    /// <summary>
-    /// HTML de la receta (también XML bien formado, para revisarlo en las pruebas). Cada valor lleva
-    /// data-field con su nombre: paciente, edad, fecha, alergias, ta, temp, peso, talla, spo2, telefono, domicilio.
-    /// </summary>
-    public static string BuildPrescriptionHtml(PrescriptionSheet sheet)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("<!DOCTYPE html>");
-        sb.AppendLine("<html lang=\"es\">");
-        sb.AppendLine("<head>");
-        sb.AppendLine("<meta charset=\"utf-8\" />");
-        sb.AppendLine($"<title>Receta médica - {H(sheet.PatientName)}</title>");
-        sb.AppendLine("<style>");
-        AppendLetterheadCss(sb, sheet);
-        sb.AppendLine(Css($".body {{ flex: 1 0 auto; display: grid; grid-template-columns: 7fr 3fr; column-gap: 10px; margin-top: {BodyGap}px; }}"));
-        sb.AppendLine(".meds, .measures { background: #F0F0F0; padding: 6px 8px; }");
-        sb.AppendLine(Css($".med {{ break-inside: avoid; margin-bottom: {LineHeight}px; }}"));
-        sb.AppendLine(".med:last-child { margin-bottom: 0; }");
-        sb.AppendLine(".med-name { font-weight: 700; }");
-        sb.AppendLine(".med-detail { font-weight: 400; }");
-        sb.AppendLine(".measures-title { font-weight: 700; text-align: center; font-size: 9pt; margin-bottom: 4px; }");
-        sb.AppendLine(".measures-text { white-space: pre-line; }");
-        AppendLetterheadPrintCss(sb, sheet);
-        sb.AppendLine("</style>");
-        sb.AppendLine("</head>");
-        sb.AppendLine("<body>");
-        sb.AppendLine("<div class=\"sheet\">");
-
-        AppendLetterheadHeaderHtml(sb, sheet);
-
-        // Paciente · Edad · Fecha
-        sb.AppendLine("  <div class=\"row patient\">");
-        sb.AppendLine(Field("Paciente:", "paciente", "f-patient", sheet.PatientName, first: true));
-        sb.AppendLine(Field("Edad:", "edad", "f-age fit", sheet.Age));
-        sb.AppendLine(Field("Fecha:", "fecha", "f-date fit", sheet.Date));
-        sb.AppendLine("  </div>");
-
-        // Alergias · T/A · Temp · Peso · Talla · SpO2
-        sb.AppendLine("  <div class=\"row vitals\">");
-        sb.AppendLine(Field("Alergias:", "alergias", "f-allergies", sheet.Allergies, first: true, alert: sheet.HasAllergies));
-        sb.AppendLine(Field("T/A:", "ta", "f-ta fit", sheet.BloodPressure));
-        sb.AppendLine(Field("Temp:", "temp", "f-temp fit", sheet.Temperature));
-        sb.AppendLine(Field("Peso:", "peso", "f-weight fit", sheet.Weight));
-        sb.AppendLine(Field("Talla:", "talla", "f-height fit", sheet.Height));
-        sb.AppendLine(Field("SpO2%:", "spo2", "f-spo2 fit", sheet.OxygenSaturation));
-        sb.AppendLine("  </div>");
-
-        // Medicamentos (izquierda) y medidas generales (derecha)
-        sb.AppendLine("  <div class=\"body\">");
-        sb.AppendLine("    <div class=\"meds\">");
-        foreach (var line in sheet.Medicines)
-        {
-            sb.AppendLine("      <div class=\"med\">");
-            var detail = line.Detail.Length > 0 ? $"<span class=\"med-detail\">{H(line.Detail)}</span>" : string.Empty;
-            sb.AppendLine($"        <div class=\"med-name\">{H(line.Medicine)}{detail}</div>");
-            sb.AppendLine($"        <div class=\"med-posology\">{H(line.Posology)}</div>");
-            sb.AppendLine("      </div>");
-        }
-        sb.AppendLine("    </div>");
-        sb.AppendLine("    <div class=\"measures\">");
-        sb.AppendLine("      <div class=\"measures-title\">Medidas generales:</div>");
-        sb.AppendLine($"      <div class=\"measures-text\">{H(sheet.GeneralMeasures.Replace("\r\n", "\n"))}</div>");
-        sb.AppendLine("    </div>");
-        sb.AppendLine("  </div>");
-
-        AppendLetterheadFooterHtml(sb, sheet);
-
-        sb.AppendLine("</div>");
-        sb.AppendLine("</body>");
-        sb.AppendLine("</html>");
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Estilos del membrete que comparten la receta y la solicitud de laboratorio: página, hoja, encabezado y los
-    /// renglones de etiquetas con campos sombreados.
-    /// </summary>
-    private static void AppendLetterheadCss(StringBuilder sb, PrescriptionSheet sheet)
-    {
-        sb.AppendLine(Css($"@page {{ size: {PrescriptionSheet.PageWidthInches}in {sheet.PaperHeightInches}in; margin: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; }}"));
-        sb.AppendLine("* { box-sizing: border-box; }");
-        sb.AppendLine("html { background: #e5e7eb; }");
-        sb.AppendLine("body { margin: 0; padding: 24px 0; font-family: " + CssFonts(sheet.BodyFont, "sans-serif") + "; font-size: 10pt; line-height: 16px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }");
-        sb.AppendLine(Css($".sheet {{ width: {PrescriptionSheet.PageWidthInches}in; min-height: {sheet.PaperHeightInches}in; margin: 0 auto; padding: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; }}"));
-        sb.AppendLine(Css($".header {{ position: relative; height: {HeaderHeight}px; }}"));
-        sb.AppendLine(Css($".crest {{ position: absolute; left: 0; top: 4px; width: {CrestSize}px; height: {CrestSize}px; object-fit: contain; }}"));
-        sb.AppendLine(Css($".titles {{ margin-left: {CrestSize + 16}px; text-align: center; }}"));
-        sb.AppendLine(Css($".doctor {{ height: 48px; line-height: 48px; font-family: {CssFonts(sheet.DoctorFont, "cursive")}; font-size: {DoctorFontPx(sheet.DoctorName)}px; color: #0369A1; white-space: nowrap; }}"));
-        sb.AppendLine(Css($".university, .license {{ height: {InfoRowHeight}px; line-height: {InfoRowHeight}px; margin: 0 {HeaderImageWidth + 8}px; white-space: nowrap; }}"));
-        sb.AppendLine(Css($".trace {{ position: absolute; right: 0; bottom: 0; width: {HeaderImageWidth}px; height: {HeaderImageHeight}px; object-fit: contain; }}"));
-        sb.AppendLine(Css($".row {{ display: flex; align-items: stretch; min-height: {InfoRowHeight}px; }}"));
-        sb.AppendLine(Css($".patient {{ margin-top: {PatientRowGap}px; }}"));
-        sb.AppendLine(Css($".vitals {{ margin-top: {VitalsRowGap}px; }}"));
-        sb.AppendLine(".label { color: #5A687D; padding: 0 6px 0 10px; white-space: nowrap; align-self: center; text-align: right; }");
-        sb.AppendLine(Css($".label.first {{ width: {LabelColumnWidth}px; padding-left: 0; flex: none; }}"));
-        sb.AppendLine(".value { background: #F0F0F0; font-weight: 700; padding: 1px 6px; display: flex; align-items: center; min-width: 0; }");
-        sb.AppendLine(".alert, .label.alert { color: #991B1B; }");
-        // Nombre y alergias toman lo que sobra; los demás miden lo que su valor, con el mínimo de la celda del Excel
-        sb.AppendLine(".f-patient, .f-allergies { flex: 1 1 0; }");
-        sb.AppendLine(".fit { flex: 0 0 auto; white-space: nowrap; }");
-        sb.AppendLine(Css($".f-age {{ min-width: {AgeMinWidth}px; }} .f-date {{ min-width: {DateMinWidth}px; }} .f-ta {{ min-width: {BloodPressureMinWidth}px; }} .f-temp {{ min-width: {TemperatureMinWidth}px; }}"));
-        sb.AppendLine(Css($".f-weight {{ min-width: {WeightMinWidth}px; }} .f-height {{ min-width: {HeightMinWidth}px; }} .f-spo2 {{ min-width: {OxygenMinWidth}px; }}"));
-    }
-
-    /// <summary>Estilos del pie (teléfono y domicilio) y de la impresión, comunes a la receta y a la solicitud de laboratorio.</summary>
-    private static void AppendLetterheadPrintCss(StringBuilder sb, PrescriptionSheet sheet)
-    {
-        sb.AppendLine(Css($".footer {{ display: grid; grid-template-columns: 4fr 6fr; column-gap: 10px; margin-top: {FooterGap}px; font-size: 9pt; break-inside: avoid; }}"));
-        sb.AppendLine(Css($".footer > div {{ background: #F0F0F0; min-height: {FooterHeight}px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; text-align: center; }}"));
-        sb.AppendLine(".footer img { width: 16px; height: 16px; margin-right: 6px; flex: none; }");
-        sb.AppendLine(Css($"@media print {{ html {{ background: #fff; }} body {{ padding: 0; }} .sheet {{ width: auto; min-height: calc({sheet.PaperHeightInches}in - {2 * PrescriptionSheet.MarginTopBottomInches + 0.03:0.###}in); padding: 0; margin: 0; box-shadow: none; }} }}"));
-    }
-
-    /// <summary>Encabezado: escudo, nombre del médico, universidad, cédula y el trazo de la derecha.</summary>
-    private static void AppendLetterheadHeaderHtml(StringBuilder sb, PrescriptionSheet sheet)
-    {
-        sb.AppendLine("  <div class=\"header\">");
-        if (ImageDataUri(sheet.CrestImagePath) is { } crest)
-        {
-            sb.AppendLine($"    <img class=\"crest\" src=\"{crest}\" alt=\"Escudo\" />");
-        }
-        sb.AppendLine("    <div class=\"titles\">");
-        sb.AppendLine($"      <div class=\"doctor\">{H(sheet.DoctorName)}</div>");
-        sb.AppendLine($"      <div class=\"university\">{H(sheet.University)}</div>");
-        sb.AppendLine($"      <div class=\"license\">{H(sheet.LicenseLine)}</div>");
-        sb.AppendLine("    </div>");
-        if (ImageDataUri(sheet.HeaderImagePath) is { } trace)
-        {
-            sb.AppendLine($"    <img class=\"trace\" src=\"{trace}\" alt=\"\" />");
-        }
-        sb.AppendLine("  </div>");
-    }
-
-    /// <summary>Pie: teléfono (WhatsApp) y domicilio (ubicación).</summary>
-    private static void AppendLetterheadFooterHtml(StringBuilder sb, PrescriptionSheet sheet)
-    {
-        sb.AppendLine("  <div class=\"footer\">");
-        sb.AppendLine(FooterField("phone", "telefono", "icon-whatsapp", PrescriptionSheet.WhatsAppIconPng, sheet.Phone));
-        sb.AppendLine(FooterField("address", "domicilio", "icon-location", PrescriptionSheet.LocationIconPng, sheet.Address));
-        sb.AppendLine("  </div>");
-    }
-
-    private static string Field(string label, string field, string widthClass, string value, bool first = false, bool alert = false)
-    {
-        var labelClass = "label" + (first ? " first" : string.Empty) + (alert ? " alert" : string.Empty);
-        var valueClass = $"value {widthClass}" + (alert ? " alert" : string.Empty);
-        return $"    <span class=\"{labelClass}\">{H(label)}</span><span class=\"{valueClass}\" data-field=\"{field}\">{H(value)}</span>";
-    }
-
-    private static string FooterField(string boxClass, string field, string iconClass, byte[] icon, string value)
-    {
-        var iconTag = !string.IsNullOrWhiteSpace(value) && icon.Length > 0
-            ? $"<img class=\"{iconClass}\" src=\"data:image/png;base64,{Convert.ToBase64String(icon)}\" alt=\"\" />"
-            : string.Empty;
-        return $"    <div class=\"{boxClass}\">{iconTag}<span data-field=\"{field}\">{H(value)}</span></div>";
-    }
-
-    /// <summary>La imagen dentro del HTML (data:), para que el archivo se pueda enviar o mover sin perderla.</summary>
-    private static string? ImageDataUri(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
-        try
-        {
-            var bytes = File.ReadAllBytes(path);
-            var mime = ClinicProfileService.ImageExtension(bytes) switch
-            {
-                ".png" => "image/png",
-                ".jpg" => "image/jpeg",
-                _ => null
-            };
-            return mime == null ? null : $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Tamaño del nombre del médico en el HTML: grande como en el Excel y más chico si es muy largo, para que
-    /// quepa en un renglón (en la impresión lo ajusta un Viewbox).
-    /// </summary>
-    private static int DoctorFontPx(string name)
-    {
-        const double available = 600; // ancho del renglón sin el escudo, en px
-        int length = Math.Max(1, name.Trim().Length);
-        return (int)Math.Clamp(Math.Floor(available / (length * 0.55)), 16, 30);
     }
 }
