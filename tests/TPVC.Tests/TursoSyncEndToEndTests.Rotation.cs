@@ -134,6 +134,7 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
+    [TestCategory("Windows")] // el ViewModel pasa los avisos por el despachador de WPF
     public async Task TheCutAccessSteps_StayUntilTheNewTokenSyncs()
     {
         var pc = await CloudWithIdentityAsync();
