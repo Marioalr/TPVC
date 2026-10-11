@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using TPVC.Services;
@@ -149,5 +151,53 @@ public class FakeHranaServerTests
         _server.Blocked = FakeBlockedMode.None;
         var rows = await _client.QueryAsync("SELECT COUNT(*) AS N FROM T;");
         Assert.AreEqual(300L, rows[0]["N"], "Con la cuota agotada no se aplicó nada");
+    }
+
+    [TestMethod]
+    public async Task Blob_RoundTrip_ComesBackAsBytes_AndTravelsWithoutBase64PaddingLikeTurso()
+    {
+        // Para el membrete en la nube (8.12) y los resultados de laboratorio. V18: falta verlo en Turso real
+        await _client.ExecuteAsync("CREATE TABLE Assets (Id INTEGER PRIMARY KEY, Content BLOB);");
+        var signature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }; // firma PNG: su base64 lleva un '='
+        var four = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // dos '='
+        await _client.ExecuteBatchAsync(new (string, object?[]?)[]
+        {
+            ("INSERT INTO Assets (Id, Content) VALUES (?, ?);", new object?[] { 1, signature }),
+            ("INSERT INTO Assets (Id, Content) VALUES (?, ?);", new object?[] { 2, four }),
+            ("INSERT INTO Assets (Id, Content) VALUES (?, ?);", new object?[] { 3, Array.Empty<byte>() }),
+            ("INSERT INTO Assets (Id, Content) VALUES (?, ?);", new object?[] { 4, null })
+        });
+
+        var read = await _client.QueryAsync("SELECT Id, Content, typeof(Content) AS Kind FROM Assets ORDER BY Id;");
+        CollectionAssert.AreEqual(signature, (byte[])read[0]["Content"]!);
+        CollectionAssert.AreEqual(four, (byte[])read[1]["Content"]!);
+        Assert.IsEmpty((byte[])read[2]["Content"]!);
+        Assert.AreEqual("blob", read[2]["Kind"], "Un BLOB vacío no se guarda como NULL");
+        Assert.IsNull(read[3]["Content"]);
+
+        // En la respuesta el base64 va sin relleno, como lo manda Turso (libSQL usa STANDARD_NO_PAD)
+        var (_, body) = await PostRawAsync("SELECT Content FROM Assets WHERE Id IN (1, 2, 3) ORDER BY Id;");
+        var sent = JsonNode.Parse(body)!["results"]![0]!["response"]!["result"]!["rows"]!.AsArray()
+            .Select(r => r![0]!["base64"]!.GetValue<string>()).ToList();
+        CollectionAssert.AreEqual(new[] { "iVBORw0KGgo", "iVBORw", "" }, sent);
+
+        // Al recibir acepta las dos formas (libSQL quita los '=' antes de decodificar); un base64 inválido es HTTP 400
+        Assert.AreEqual(HttpStatusCode.OK, (await PostRawAsync("INSERT INTO Assets (Id, Content) VALUES (5, ?);", Blob("iVBORw"))).Status);
+        Assert.AreEqual(HttpStatusCode.OK, (await PostRawAsync("INSERT INTO Assets (Id, Content) VALUES (6, ?);", Blob("iVBORw=="))).Status);
+        Assert.AreEqual(HttpStatusCode.BadRequest, (await PostRawAsync("INSERT INTO Assets (Id, Content) VALUES (7, ?);", Blob("iVBOR"))).Status);
+        var same = await _client.QueryAsync("SELECT group_concat(Id) AS Ids FROM Assets WHERE Content = ?;", new object?[] { four });
+        Assert.AreEqual("2,5,6", same[0]["Ids"]);
+    }
+
+    private static JsonObject Blob(string base64) => new() { ["type"] = "blob", ["base64"] = base64 };
+
+    /// <summary>Una instrucción tal cual, sin pasar por TursoClient: para ver y mandar el JSON exacto.</summary>
+    private async Task<(HttpStatusCode Status, string Body)> PostRawAsync(string sql, params JsonObject[] args)
+    {
+        var stmt = new JsonObject { ["sql"] = sql, ["args"] = new JsonArray(args) };
+        var request = new JsonObject { ["requests"] = new JsonArray(new JsonObject { ["type"] = "execute", ["stmt"] = stmt }, new JsonObject { ["type"] = "close" }) };
+        using var http = new HttpClient(_server, disposeHandler: false);
+        using var response = await http.PostAsync("https://tpvc-test.turso.io/v2/pipeline", new StringContent(request.ToJsonString()));
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 }
