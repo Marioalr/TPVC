@@ -79,8 +79,17 @@ hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Ningu
 en la nube (desde v1.29.0, paso 8.12), y en `LabBlobChunks.Data`, de los resultados de laboratorio (desde v1.30.0, paso
 8.12b). Turso no comprime las respuestas (V21): bajar un trozo cuesta el +33% del base64.
 
+## `hrana/`
+
+Desde v1.31.0 (paso 8.13, kit de conformidad de lectura): los intercambios de un equipo que **lee** la nube, grabados
+por el servidor simulado (`FakeHranaServer`) en JSON Lines, y `statements.json` con cada instrucción de lectura literal
+(la identidad, la generación, el perfil, la página de cada tabla, el latido, el registro y el membrete). Qué hay en cada
+archivo, los marcadores (`<time>`, `<id:N>`, `<nonce:N>`, `<appVersion>`) y cómo levantar el simulador por HTTP para la CI
+de Kotlin: `docs/FAKE_HRANA_SPEC.md`. Se regeneran con `TPVC_WRITE_GOLDEN=1`, igual que `golden/`; la huella del esquema
+aparece literal, así que cambian con cada revisión del contrato.
+
 ## Lo que viene
 
 - `golden/` de las reglas del negocio que faltan (8.26).
-- `hrana/`: intercambios grabados por el servidor simulado, con el SQL literal de cada instrucción (8.13 y 8.25).
+- `hrana/` de escritura: los intercambios de la subida (8.25).
 - `scenarios/`: escenarios de varios equipos (8.25).

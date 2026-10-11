@@ -48,7 +48,7 @@ public partial class TursoSyncService
     /// <summary>Lo menos a lo que se reduce una página que no se pudo leer por tamaño o tiempo.</summary>
     private const int MinPullPageSize = 10;
 
-    private const string ClinicProfileSql = "SELECT * FROM ClinicProfiles WHERE Id = 1;";
+    internal const string ClinicProfileSql = "SELECT * FROM ClinicProfiles WHERE Id = 1;";
 
     /// <summary>
     /// La versión del protocolo de sincronización que entiende este programa (la nube puede exigir una mínima). 3 (paso
@@ -88,7 +88,7 @@ public partial class TursoSyncService
         { "clinicId", "generation", "generationReady", "generationPrevious", "protocol", "minClientProtocol", "fullUploadAtUtc", "stampsRepairedAtUtc" };
 
     /// <summary>La hora del servidor, la marca de agua de la bajada (5 s antes) y las claves de _tpvc_meta, en una instrucción.</summary>
-    private static readonly string HandshakeSql =
+    internal static readonly string HandshakeSql =
         "SELECT strftime('%Y-%m-%d %H:%M:%f','now') AS now, strftime('%Y-%m-%d %H:%M:%f','now','-5 seconds') AS wm" +
         string.Concat(HandshakeKeys.Select(k => $", (SELECT \"Value\" FROM {SyncSchema.Q(SyncSchema.MetaTable)} WHERE \"Key\" = '{k}') AS \"{k}\"")) + ";";
 
@@ -97,7 +97,7 @@ public partial class TursoSyncService
     /// van en JSON), 500 en las demás. Turso no puso tope hasta 64 MB por respuesta (V12); el límite es por memoria y
     /// tiempo, sobre todo en Android.
     /// </summary>
-    private static int DefaultPullPageSize(string table) => table is "Patients" or "PatientConsultations" ? 100 : 500;
+    internal static int DefaultPullPageSize(string table) => table is "Patients" or "PatientConsultations" ? 100 : 500;
 
     /// <summary>Para las pruebas: un mismo tamaño de página en todas las tablas.</summary>
     internal int? PullPageSizeOverride { get; set; }

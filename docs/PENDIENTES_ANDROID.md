@@ -84,6 +84,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.31.0 (paso 8.13: kit de conformidad de lectura)
+
+- [ ] *Nube y dispositivos › Vincular tablet y celular* dice que se vincularán con la URL y el token (pegados o leídos de un QR de esta computadora) y que aquí se aprobará cada equipo; los botones dicen "Llega con la app de Android".
+- [ ] Para Kotlin (K2): el cliente Hrana y el motor de lectura reproducen `contracts/hrana/*.jsonl` (mismas instrucciones, en el mismo orden, con los argumentos de `statements.json`), salvo la sonda del esquema y el registro en `DeviceRegistry`, que son de la PC. Lo que traen las respuestas de Turso y no el simulador (`rows_read`, `rows_written`, `decltype`…) se ignora. Ver `docs/FAKE_HRANA_SPEC.md`.
+- [ ] Para Kotlin (CI): el job levanta el simulador con `TPVC_FAKE_TURSO_HOST=1` (`--filter TestCategory=FakeTursoHost`), espera el archivo de `TPVC_FAKE_TURSO_READY_FILE` y corre las pruebas de `:sync` contra `http://127.0.0.1:8787`; una consulta que recorra una tabla sincronizada recibe `SCAN_FORBIDDEN`.
+- [ ] Decisión del médico (2026-10-11): la vinculación es pegar la URL y el token (o escanear el QR de la PC) y esperar la aprobación de la PC; no hay QR por la red local (plan §4.3 y paso 8.14).
+
 ### v1.30.0 (paso 8.12b: resultados de laboratorio)
 
 - [ ] En la ficha de un paciente, *Resultados de laboratorio › Agregar*: un PDF del laboratorio, y luego dos o tres fotos de un resultado tomadas con el celular. Las fotos quedan derechas y en un solo PDF; *Abrir* los muestra con el visor de Windows y la letra chica se lee bien (si no, decirlo: se sube la calidad).

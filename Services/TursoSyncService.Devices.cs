@@ -236,7 +236,7 @@ public partial class TursoSyncService
          $"WHERE {SyncSchema.DeviceRegistryTable}.RevokedAtUtc IS NULL;",
          new object?[] { settings.DeviceId, DeviceNameOf(settings), RuntimeInformation.OSDescription });
 
-    private static (string Sql, object?[]? Args)[] RegistrationQueries(string deviceId) => new (string, object?[]?)[]
+    internal static (string Sql, object?[]? Args)[] RegistrationQueries(string deviceId) => new (string, object?[]?)[]
     {
         ($"SELECT DeviceCode, RevokedAtUtc, RevokedReason FROM {SyncSchema.DeviceRegistryTable} WHERE DeviceId = ?;", new object?[] { deviceId }),
         ($"SELECT p.\"Value\" AS PrimaryDeviceId, g.DisplayName AS PrimaryName, d.DeviceName AS PrimaryHeartbeatName, d.LastSeenUtc AS PrimaryLastSeenUtc " +

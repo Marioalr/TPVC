@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-11 (TPVC v1.30.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0) y 8.12b (v1.30.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-11 (TPVC v1.31.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0), 8.12b (v1.30.0) y 8.13 (v1.31.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -826,6 +826,12 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** medio (el almacenamiento de Turso, 5 GB en el plan gratuito, bloquea toda la base al pasarse).
 
 #### 8.13 · Kit de conformidad de lectura
+- **Hecho en v1.31.0 (2026-10-11).** Decisiones al programarlo:
+  - **Grabaciones de quien lee.** El motor de la PC hace de tablet: una PC sube unos datos de ejemplo con `SyncId` fijos (`10000000-0000-4000-8000-…`) y se graba lo que hace el equipo que lee. Seis escenarios: primera descarga, incremental, empates en la llave, cambio de generación, `BLOCKED` y 401 (`TursoSyncEndToEndTests.Hrana.cs`). La sonda del esquema y el registro en `DeviceRegistry` que aparecen son de la PC; las notas de cada archivo lo dicen.
+  - **Marcadores sin número para la hora** (`<time>`): dos marcas pueden coincidir o no según la corrida, y numerarlas haría cambiar el archivo. Los GUID al azar sí llevan número (`<id:N>`), porque nunca coinciden. Cada fila de los datos de ejemplo se guarda con su propia marca, y los `SyncId` crecen en el orden de subida: así el orden de las páginas es el mismo aunque dos filas empaten en `SyncedAtUtc`.
+  - **`statements.json` en vez de SQL suelto.** Cada instrucción de lectura con sus argumentos y cuándo se usa, sacada de las constantes de la PC (`HandshakeSql`, `PageQuery`, `HeartbeatSql`, `RegistrationQueries`, `AssetMetaSql`…). La prueba las corre en el simulador, que rechaza un `SCAN` de una tabla sincronizada.
+  - **401 desde ya.** El mapa de tokens del simulador (`AcceptedTokens`) se adelantó de 8.14 para grabar el 401; el cuerpo es del simulador hasta tener V3.
+  - **El servidor HTTP es `HttpListener`** en `127.0.0.1` (no Kestrel ni ASP.NET), con `GET /health` y `GET /__stop`, y antes de escuchar siembra una nube con los datos de demostración y su «Sincronización completa». Funciona sin permisos de administrador en Windows y en Linux. Las variables están en `docs/FAKE_HRANA_SPEC.md`.
 - **Cambia:**
   - `contracts/hrana/*.jsonl`: intercambios grabados por `FakeHranaServer`, con los valores generados reemplazados por marcadores. Primera sincronización, incremental, descarga completa por tabla, empates en la llave, cambio de generación, `BLOCKED` y 401.
   - El SQL de cada instrucción que Kotlin tiene que repetir va **literal** en `contracts/hrana/` (la revisión de consultas se agrega en 8.24). SQLite usa un índice parcial solo si el `WHERE` repite su condición, así que una consulta escrita de otra forma recorrería la tabla.
@@ -842,7 +848,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - En la PC, *Equipos vinculados › Mostrar QR para la tablet o el celular*: la URL y el token de la PC (QRCoder, licencia MIT), con el aviso de no fotografiarlo ni compartirlo. Se cierra solo a los 2 minutos.
   - **Aprobar en la PC:** el equipo nuevo escribe su latido y espera. La PC muestra "Equipo nuevo: «Galaxy Tab S9». ¿Vincular como Tablet?", con los últimos 6 caracteres de su `DeviceId` en las dos pantallas. Al aceptar escribe su fila en `DeviceRegistry` (código `T1`, `C1`…). Hasta entonces el equipo no baja datos. Rechazar lo deja fuera de la lista.
   - Otra PC con Windows se une como hoy (URL, token y «Unirse a esta nube») y recibe su código (`P2`…).
-  - `FakeHranaServer` con un mapa de tokens: uno desconocido o anulado recibe 401. `TursoClient` lo traduce a "Turso rechazó el token: pegue el token nuevo".
+  - `TursoClient` traduce el 401 a "Turso rechazó el token: pegue el token nuevo" (el simulador ya lo responde desde 8.13, con `AcceptedTokens`).
   - Vector `link-qr`: el texto del QR (prefijo y versión, URL, token y nombre del consultorio) para que Kotlin lo lea igual.
   - Capítulo "Tablet y celular" en el manual.
 - **Prueba:**

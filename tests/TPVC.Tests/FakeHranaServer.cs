@@ -39,6 +39,9 @@ internal enum FakeScanPolicy
 /// <summary>Una instrucción tal como llegó, con lo que Turso le habría cobrado (estimado).</summary>
 internal sealed record FakeRecordedStatement(string Sql, JsonArray Args, long RowsRead, long RowsWritten, string? ErrorCode);
 
+/// <summary>Un intercambio completo: el cuerpo de la petición, el estado HTTP y el cuerpo de la respuesta, sin tocar.</summary>
+internal sealed record FakeExchange(string Request, int Status, string Response);
+
 /// <summary>Una petición /v2/pipeline: sus instrucciones en orden y el estado HTTP con que se respondió.</summary>
 internal sealed record FakeRecordedRequest(int Number, IReadOnlyList<FakeRecordedStatement> Statements, HttpStatusCode Status);
 
@@ -57,7 +60,9 @@ internal sealed record FakeRecordedRequest(int Number, IReadOnlyList<FakeRecorde
 /// <item>Grabadora de peticiones (<see cref="Requests"/>), revisión de planes de consulta (<see cref="ScanPolicy"/>),
 /// tope de tamaño de respuesta (<see cref="MaxResponseBytes"/>) y BLOCKED a pedido (<see cref="Blocked"/>).</item>
 /// </list>
-/// Lo que todavía no se comprobó en Turso real (V7, V10, V12, V15) está marcado donde se usa.
+/// Desde el paso 8.13 también graba cada intercambio (<see cref="RecordTranscript"/>, para contracts/hrana) y rechaza
+/// con 401 un token que no está en <see cref="AcceptedTokens"/>. Qué copia de Turso y qué no: docs/FAKE_HRANA_SPEC.md. Lo que
+/// todavía no se comprobó en Turso real (V3, V7) está marcado donde se usa.
 /// </summary>
 internal sealed class FakeHranaServer : HttpMessageHandler
 {
@@ -76,7 +81,7 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     /// <summary>Filas leídas que Turso habría cobrado (estimado; ver <see cref="EstimateRowsRead"/>).</summary>
     public long BilledRowsRead { get; private set; }
 
-    /// <summary>Filas escritas que Turso habría cobrado (V10: falta saber si también cuenta las entradas de índice).</summary>
+    /// <summary>Filas escritas que Turso habría cobrado, sin las entradas de índice (Turso sí las cuenta: V10, comprobado con V19).</summary>
     public long BilledRowsWritten { get; private set; }
 
     /// <summary>Sin red: la petición falla antes de llegar.</summary>
@@ -128,7 +133,27 @@ internal sealed class FakeHranaServer : HttpMessageHandler
     {
         lock (_requests) _requests.Clear();
         lock (_scanWarnings) _scanWarnings.Clear();
+        lock (_transcript) _transcript.Clear();
     }
+
+    /// <summary>
+    /// Paso 8.13: guardar cada intercambio tal como viajó (el JSON de la petición, el estado y el JSON de la respuesta), para
+    /// los archivos de contracts/hrana.
+    /// </summary>
+    public bool RecordTranscript { get; set; }
+
+    private readonly List<FakeExchange> _transcript = new();
+
+    public IReadOnlyList<FakeExchange> Transcript
+    {
+        get { lock (_transcript) return _transcript.ToList(); }
+    }
+
+    /// <summary>
+    /// Los tokens que acepta (paso 8.13; en 8.14 y 8.15, los anulados). null = cualquiera. Con otro token responde HTTP 401
+    /// sin tocar nada.
+    /// </summary>
+    public HashSet<string>? AcceptedTokens { get; set; }
 
     public FakeHranaServer(string dbPath)
     {
@@ -174,7 +199,12 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         try
         {
             if (_disposed) throw new HttpRequestException("Servidor simulado cerrado");
-            response = Process(text);
+            response = IsAuthorized(request) ? Process(text) : Unauthorized();
+            if (RecordTranscript)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                lock (_transcript) _transcript.Add(new FakeExchange(text, (int)response.StatusCode, body));
+            }
         }
         finally
         {
@@ -183,6 +213,25 @@ internal sealed class FakeHranaServer : HttpMessageHandler
 
         if (DropResponseAfterExecute?.Invoke(sql) == true) throw new HttpRequestException("Se perdió la respuesta (simulada)");
         return response;
+    }
+
+    private bool IsAuthorized(HttpRequestMessage request)
+    {
+        if (AcceptedTokens == null) return true;
+        var auth = request.Headers.Authorization;
+        return auth != null && string.Equals(auth.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+               && auth.Parameter != null && AcceptedTokens.Contains(auth.Parameter);
+    }
+
+    /// <summary>Un token desconocido o anulado. V3: falta ver el cuerpo exacto que manda Turso; el estado es 401.</summary>
+    private HttpResponseMessage Unauthorized()
+    {
+        RequestCount++;
+        Record(RequestCount, new List<FakeRecordedStatement>(), HttpStatusCode.Unauthorized);
+        return new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StringContent("{\"error\":\"Unauthorized: the token is not valid (simulado, V3)\"}", Encoding.UTF8, "application/json")
+        };
     }
 
     private HttpResponseMessage Process(string text)
