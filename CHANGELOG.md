@@ -2,6 +2,13 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.20.7] - 2026-10-10
+
+### Corregido — una sola ventana
+* Con TPVC abierto, dar doble clic en el ícono del escritorio o abrirlo desde el menú de inicio ya no abre otra ventana: trae al frente la que estaba abierta (y la restaura si estaba minimizada). Antes quedaban dos ventanas sobre los mismos datos, lo que confundía.
+* Si la ventana abierta no responde, TPVC lo avisa en lugar de abrir otra.
+* 432 pruebas.
+
 ## [1.20.6] - 2026-10-10
 
 ### Añadido — Fase 8, paso 8.8: unirse a la nube del consultorio sin duplicados
