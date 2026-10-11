@@ -1,6 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 using TPVC.Helpers;
+using TPVC.Services.Rules;
 using TPVC.ViewModels.Patients;
 
 namespace TPVC.Tests;
@@ -8,7 +9,7 @@ namespace TPVC.Tests;
 /// <summary>
 /// Fase 7 (7.1): fecha de nacimiento con las diagonales solas. Las reglas de la máscara (sin WPF):
 /// escribir, borrar y pegar sobre el texto y el cursor del cuadro. La validación sigue siendo la de
-/// PatientFormViewModel.TryParseBirthDate, que no cambia.
+/// PatientFormRules.TryParseBirthDate, que no cambia.
 /// </summary>
 [TestClass]
 public class DateMaskTests
@@ -46,7 +47,7 @@ public class DateMaskTests
             Assert.AreEqual(new DateMaskText.Edit(text, caret), state, $"Tras teclear '{key}'");
         }
 
-        Assert.AreEqual(new DateTime(2008, 8, 8), PatientFormViewModel.TryParseBirthDate(state.Text, Today), "El ViewModel lo lee como siempre");
+        Assert.AreEqual(new DateTime(2008, 8, 8), PatientFormRules.TryParseBirthDate(state.Text, Today), "El ViewModel lo lee como siempre");
         Assert.IsNull(DateMaskText.Insert(state.Text, state.Caret, 0, "1"), "Lleno (dd/mm/aaaa): un dígito más no entra");
     }
 
@@ -153,7 +154,7 @@ public class DateMaskTests
         {
             var edit = DateMaskText.Paste(string.Empty, 0, 0, pasted);
             Assert.AreEqual(new DateMaskText.Edit(expected, expected.Length), edit, $"Pegar \"{pasted}\"");
-            Assert.AreEqual(PatientFormViewModel.TryParseBirthDate(pasted, Today), PatientFormViewModel.TryParseBirthDate(edit!.Value.Text, Today),
+            Assert.AreEqual(PatientFormRules.TryParseBirthDate(pasted, Today), PatientFormRules.TryParseBirthDate(edit!.Value.Text, Today),
                 $"\"{pasted}\" se lee igual que antes");
         }
 
@@ -169,14 +170,14 @@ public class DateMaskTests
     {
         // Lo que se ve al ir tecleando 08082008: incompleto no es fecha; con año de dos dígitos sí
         // (dd/MM/yy, como si se hubiera tecleado así antes)
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/", Today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/08/", Today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/08/2", Today));
-        Assert.AreEqual(new DateTime(2020, 8, 8), PatientFormViewModel.TryParseBirthDate("08/08/20", Today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate("08/08/200", Today));
-        Assert.AreEqual(new DateTime(2008, 8, 8), PatientFormViewModel.TryParseBirthDate("08/08/2008", Today));
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate(TypeKeys("31022008").Text, Today), "31/02/2008 sigue sin ser fecha");
-        Assert.IsNull(PatientFormViewModel.TryParseBirthDate(TypeKeys("01012030").Text, Today), "Futura: sigue sin valer");
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("08/", Today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("08/08/", Today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("08/08/2", Today));
+        Assert.AreEqual(new DateTime(2020, 8, 8), PatientFormRules.TryParseBirthDate("08/08/20", Today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate("08/08/200", Today));
+        Assert.AreEqual(new DateTime(2008, 8, 8), PatientFormRules.TryParseBirthDate("08/08/2008", Today));
+        Assert.IsNull(PatientFormRules.TryParseBirthDate(TypeKeys("31022008").Text, Today), "31/02/2008 sigue sin ser fecha");
+        Assert.IsNull(PatientFormRules.TryParseBirthDate(TypeKeys("01012030").Text, Today), "Futura: sigue sin valer");
     }
 
     // ------------------------------------------------------------------ nunca se sale del formato

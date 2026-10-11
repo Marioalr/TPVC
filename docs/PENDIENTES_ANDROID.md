@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-11 (TPVC v1.27.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-11 (TPVC v1.28.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -45,7 +45,7 @@ mercancía. Todo es plan (pasos indicados, detalle en el plan §5).
 | # | Pendiente | Detalle |
 |---|---|---|
 | B1 | **Tecnología** | ✅ Decidido (2026-10-09): **Kotlin nativo**, no .NET MAUI. En Android no se reutiliza código C#: el código de la PC es la referencia. La app tiene su propia base (Room + SQLCipher), implementa por su cuenta el motor v2 y la consulta entre equipos, y la conformidad se comprueba con `contracts/`: contrato exportado, vectores, intercambios grabados y escenarios (plan Fase 8, pasos 8.3, 8.11, 8.13, 8.25 y 8.26). Pila y módulos propuestos en el plan, §7 (Compose, OkHttp, Room + SQLCipher, WorkManager). |
-| B2 | ~~**Extraer `TPVC.Core` (sin WPF)**~~ | Se retira (2026-10-09): con Kotlin ya no hay `TPVC.Core`. Lo reemplazan, en la PC, los generadores puros del paso 8.11 (`Services/Documents/PrescriptionHtmlBuilder`, `TicketText` y `TicketHtml`, `VitalSignsRules`, `PatientFormRules`, `HandoffPayloadCodec` y `TimeProvider` donde hoy se lee la fecha directamente) y el contrato de sincronización exportado (`contracts/sync/schema.json`, paso 8.3). Todo es plan. |
+| B2 | ~~**Extraer `TPVC.Core` (sin WPF)**~~ | Se retira (2026-10-09): con Kotlin ya no hay `TPVC.Core`. Lo reemplazan, en la PC, los generadores puros del paso 8.11 (`Services/Documents/PrescriptionHtmlBuilder`, `TicketText` y `TicketHtml`, `VitalSignsRules`, `PatientFormRules`, `HandoffPayloadCodec` y `TimeProvider` donde hoy se lee la fecha directamente) y el contrato de sincronización exportado (`contracts/sync/schema.json`, paso 8.3). ✅ v1.28.0 (paso 8.11): `Services/Documents` y `Services/Rules`, sin WPF, con sus vectores en `contracts/golden/`. |
 | B3 | **Dividir los ViewModels gigantes** | ✅ v1.19.0 (Fase 6): `MedicalRecordsViewModel` quedó dividido en `ViewModels/Patients/` (sin WPF; lo vigila `PatientsArchitectureTests`), coordinado por `PatientsWorkspace`; `MedicalRecordsViewModel` solo arma la `PatientsPlatform` de WPF. Con Kotlin estos ViewModels no corren en Android: son solo la **referencia de comportamiento** de las pantallas de la app. Referencia por pantalla: **inicio** → `PatientsHomeViewModel`; **ficha** → `PatientChartViewModel` y `VitalSignsChartViewModel`; **alta y edición** → `PatientFormViewModel`; **agenda** → `AgendaPanelViewModel`; **consulta** → `ConsultationViewModel` y `ConsultationAutosave`; **hojas de la consulta** → `PrescriptionSheetViewModel`, `SuppliesSheetViewModel`, `ClinicalServicesSheetViewModel` y `CatalogBrowserViewModel`; **vista previa de la receta** → `PrescriptionPreviewViewModel`; **terminar y cobrar** → `CheckoutViewModel`; **consulta entre equipos** → `ConsultationHandoffViewModel`. Detalle en `docs/ARQUITECTURA_TECNICA.md` §9. |
 | B4 | **Reglas de permisos por rol** | `DevicePermissions` define la matriz (PC / tablet / celular); la PC solo la usa para la consulta entre equipos y la letra de los códigos. ✅ v1.27.0 (paso 8.10): existe `DeviceRegistry`, que solo escribe la PC, y la matriz ganó `CanViewClinicalRecords`, `CanShareDocuments`, `CanScheduleAppointments`, `CanRegisterStockEntries` y `CanTakeConsultations`. Falta el paso 8.14: la fila de la tablet y del celular al vincularlos. La cuenta de Turso no tiene token de la API (respuesta 4 del médico), así que se usa el nivel C: todos los tokens son `full-access` y **los límites por rol los aplica la app**. El celular ve expedientes, agenda citas, revisa inventario y registra entradas de mercancía, sin notas, recetas ni ventas (respuesta 3). Matriz en el plan, §4.6. |
 | B5 | **Pruebas en Windows de la interfaz** | ✅ Desde v1.13 la CI de Windows recorre las pantallas (bindings rotos, recursos inexistentes, colores) y guarda capturas en claro y oscuro (artefacto `capturas-interfaz`). La lista de la sección D cubre lo que necesita interacción real. |
@@ -82,6 +82,12 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.28.0 (paso 8.11: generadores sin WPF y vectores del celular)
+
+- [ ] En la PC: imprimir un ticket de venta y uno de consulta; deben verse como antes (cabecera, datos, partidas, totales y pie). Lo mismo con la receta y la solicitud de laboratorio, impresas y guardadas como documento.
+- [ ] Guardar la receta como documento y abrirla en el navegador: igual que en v1.27.0.
+- [ ] Para Kotlin: las pruebas JUnit leen `contracts/golden/cash-cut.json`, `alerts.json`, `suggested-purchase.json`, `prescription-sheet.json`, `prescription-html-fields.json` y `ticket-text.json`. Redondeo: `HALF_EVEN` donde la PC usa `Math.Round` y `HALF_UP` en el IVA y en el formato de importes (lo dice cada archivo en `notes`); "hoy" en la zona del consultorio; desempates con `Collator` es-MX. El PDF del celular pone los valores de `prescription-html-fields` en los mismos lugares.
 
 ### v1.27.0 (paso 8.10: registro de equipos y PC principal)
 

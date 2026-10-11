@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using TPVC.Data;
 using TPVC.Models;
+using TPVC.Services.Rules;
 
 namespace TPVC.Services;
 
@@ -810,61 +811,8 @@ public partial class InventoryService
             .OrderByDescending(s => s.Date)
             .ToListAsync();
 
-        var cut = new DailyCashCut
-        {
-            Date = day,
-            Sales = sales,
-            TotalTicketsCount = sales.Count,
-            ActiveTicketsCount = sales.Count(s => !s.IsCancelled),
-            CancelledTicketsCount = sales.Count(s => s.IsCancelled),
-            TotalSalesAmount = sales.Where(s => !s.IsCancelled).Sum(s => s.Total),
-            TotalCancelledAmount = sales.Where(s => s.IsCancelled).Sum(s => s.Total)
-        };
-
-        var activeSales = sales.Where(s => !s.IsCancelled).ToList();
-
-        // Ingresos por método de pago
-        foreach (var sale in activeSales)
-        {
-            var method = (sale.PaymentMethod ?? "").Trim().ToLowerInvariant();
-            if (method.Contains("efectivo"))
-            {
-                cut.TotalCash += sale.Total;
-            }
-            else if (method.Contains("débito") || method.Contains("debito"))
-            {
-                cut.TotalDebitCard += sale.Total;
-            }
-            else if (method.Contains("crédito") || method.Contains("credito"))
-            {
-                cut.TotalCreditCard += sale.Total;
-            }
-            else if (method.Contains("transfer"))
-            {
-                cut.TotalTransfer += sale.Total;
-            }
-            else
-            {
-                cut.TotalOtherPaymentMethods += sale.Total;
-            }
-        }
-
-        // Desglose Servicios vs Productos
-        foreach (var item in activeSales.SelectMany(s => s.Items))
-        {
-            if (item.IsService)
-            {
-                cut.TotalServicesAmount += item.Subtotal;
-                cut.TotalServicesCount += item.Quantity;
-            }
-            else
-            {
-                cut.TotalProductsAmount += item.Subtotal;
-                cut.TotalProductsUnitsSold += item.Quantity;
-            }
-        }
-
-        return cut;
+        // Paso 8.11: las cuentas viven en CashCutRules (sin base ni WPF), la referencia del corte del celular
+        return CashCutRules.Compute(sales, day);
     }
 
     /// <summary>
@@ -996,7 +944,7 @@ public partial class InventoryService
 
     public async Task<DashboardMetrics> GetDashboardMetricsAsync()
     {
-        var today = DateTime.Today;
+        var today = ClinicClock.Today;
         var tomorrow = today.AddDays(1);
         var expiringLimit = today.AddDays(ExpirationWarningDays + 1);
 
@@ -1652,9 +1600,9 @@ public partial class InventoryService
     public async Task<SystemAlertsSummary> GetSystemAlertsSummaryAsync()
     {
         var summary = new SystemAlertsSummary();
-        var today = DateTime.Today;
+        var today = ClinicClock.Today;
         var tomorrow = today.AddDays(1);
-        var in30Days = today.AddDays(30);
+        var in30Days = today.AddDays(StockAlertRules.NearExpiryDays);
 
         await using var db = CreateContext();
 
@@ -1685,19 +1633,16 @@ public partial class InventoryService
             .OrderBy(b => b.ExpirationDate)
             .ToListAsync();
 
-        summary.ExpiredBatches = batches.Where(b => b.ExpirationDate.Date < today).ToList();
+        // Paso 8.11: la división vive en StockAlertRules (sin base ni WPF), la referencia de las alertas del celular
+        (summary.ExpiredBatches, summary.NearExpiryBatches) = StockAlertRules.SplitByExpiration(batches, today);
         summary.ExpiredBatchesCount = summary.ExpiredBatches.Count;
-
-        summary.NearExpiryBatches = batches
-            .Where(b => b.ExpirationDate.Date >= today && b.ExpirationDate.Date <= in30Days)
-            .ToList();
         summary.NearExpiryBatchesCount = summary.NearExpiryBatches.Count;
 
         return summary;
     }
 
     /// <summary>Sin costo capturado, la lista de compras estima el costo como esta parte del precio de venta.</summary>
-    public const decimal EstimatedCostShareOfPrice = 0.65m;
+    public const decimal EstimatedCostShareOfPrice = SuggestedPurchaseRules.EstimatedCostShareOfPrice;
 
     public async Task<List<SuggestedPurchaseItem>> GetSuggestedPurchaseListAsync()
     {
@@ -1708,40 +1653,8 @@ public partial class InventoryService
             .Where(p => p.IsActive && p.MinStock > 0 && p.CurrentStock <= p.MinStock)
             .ToListAsync();
 
-        var suggestedList = new List<SuggestedPurchaseItem>();
-
-        foreach (var p in products)
-        {
-            int min = p.MinStock;
-            {
-                int target = min * 2;
-                int qtyToBuy = Math.Max(target - p.CurrentStock, min);
-                if (qtyToBuy <= 0) qtyToBuy = 5;
-
-                // El costo capturado (con IVA si no lo incluía); sin costo, una estimación con el precio de venta
-                bool estimated = !p.HasCost;
-                decimal estimatedCost = !estimated ? p.EffectiveUnitCost : p.Price > 0 ? Math.Round(p.Price * EstimatedCostShareOfPrice, 2) : 25.00m;
-
-                string reason = p.CurrentStock == 0 ? "Agotado en consultorio" : $"Stock bajo ({p.CurrentStock} de {min} mín.)";
-
-                suggestedList.Add(new SuggestedPurchaseItem
-                {
-                    ProductCode = p.Code,
-                    ProductName = p.Name,
-                    GenericName = p.GenericName ?? string.Empty,
-                    Presentation = p.Presentation ?? string.Empty,
-                    CategoryName = p.Category?.Name ?? "General",
-                    CurrentStock = p.CurrentStock,
-                    MinStock = min,
-                    SuggestedQuantity = qtyToBuy,
-                    EstimatedUnitCost = estimatedCost,
-                    IsCostEstimated = estimated,
-                    Reason = reason
-                });
-            }
-        }
-
-        return suggestedList.OrderBy(s => s.CurrentStock).ThenBy(s => s.ProductName).ToList();
+        // Paso 8.11: la lista sale de SuggestedPurchaseRules (sin base ni WPF), la referencia de la compra sugerida del celular
+        return SuggestedPurchaseRules.Build(products);
     }
 
     // =========================================================================

@@ -11,6 +11,7 @@ using TPVC.Converters;
 using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 using TPVC.ViewModels;
 using TPVC.ViewModels.Patients;
 
@@ -1238,17 +1239,17 @@ public class InventoryTests
     public async Task MedicalRecordsViewModel_EmailValidation_AllowsEmptyAndValidatesFormat()
     {
         // Validación estática de formato
-        Assert.IsTrue(PatientFormViewModel.IsValidEmail(null));
-        Assert.IsTrue(PatientFormViewModel.IsValidEmail(""));
-        Assert.IsTrue(PatientFormViewModel.IsValidEmail("   "));
-        Assert.IsTrue(PatientFormViewModel.IsValidEmail("paciente@clinica.com"));
-        Assert.IsTrue(PatientFormViewModel.IsValidEmail("dr.morales@hospital-general.org.mx"));
+        Assert.IsTrue(PatientFormRules.IsValidEmail(null));
+        Assert.IsTrue(PatientFormRules.IsValidEmail(""));
+        Assert.IsTrue(PatientFormRules.IsValidEmail("   "));
+        Assert.IsTrue(PatientFormRules.IsValidEmail("paciente@clinica.com"));
+        Assert.IsTrue(PatientFormRules.IsValidEmail("dr.morales@hospital-general.org.mx"));
 
-        Assert.IsFalse(PatientFormViewModel.IsValidEmail("correo-invalido"));
-        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@"));
-        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@dominio"));
-        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario@dominio."));
-        Assert.IsFalse(PatientFormViewModel.IsValidEmail("usuario @dominio.com"));
+        Assert.IsFalse(PatientFormRules.IsValidEmail("correo-invalido"));
+        Assert.IsFalse(PatientFormRules.IsValidEmail("usuario@"));
+        Assert.IsFalse(PatientFormRules.IsValidEmail("usuario@dominio"));
+        Assert.IsFalse(PatientFormRules.IsValidEmail("usuario@dominio."));
+        Assert.IsFalse(PatientFormRules.IsValidEmail("usuario @dominio.com"));
 
         // Validación en el modal de guardado
         var recordsVm = new MedicalRecordsViewModel();

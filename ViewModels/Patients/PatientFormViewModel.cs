@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -99,7 +100,7 @@ public partial class PatientFormViewModel : ObservableObject
         }
         else if (string.IsNullOrWhiteSpace(FormFirstName) && string.IsNullOrWhiteSpace(FormLastName))
         {
-            ParseFullName(value, out var f, out var l, out var m);
+            PatientFormRules.ParseFullName(value, out var f, out var l, out var m);
             FormFirstName = f;
             FormLastName = l;
             FormMaternalLastName = m;
@@ -265,81 +266,6 @@ public partial class PatientFormViewModel : ObservableObject
 
     public static string FormatPhoneNumber(string? phone) => PatientRecord.FormatPhoneNumber(phone);
 
-    public static bool IsValidEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return true; // Permite vacío
-        var trimmed = email.Trim();
-        try
-        {
-            return Regex.IsMatch(
-                trimmed, 
-                @"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$", 
-                RegexOptions.IgnoreCase, 
-                TimeSpan.FromMilliseconds(250));
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    internal static void ParseFullName(string? fullName, out string firstName, out string lastName, out string maternalLastName)
-    {
-        firstName = string.Empty;
-        lastName = string.Empty;
-        maternalLastName = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(fullName))
-            return;
-
-        var trimmed = fullName.Trim();
-
-        // Formato con coma: "Apellidos, Nombre(s)"
-        if (trimmed.Contains(','))
-        {
-            var commaParts = trimmed.Split(new[] { ',' }, 2, StringSplitOptions.RemoveEmptyEntries);
-            if (commaParts.Length == 2)
-            {
-                firstName = commaParts[1].Trim();
-                var surnameTokens = commaParts[0].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (surnameTokens.Length == 1)
-                {
-                    lastName = surnameTokens[0];
-                }
-                else if (surnameTokens.Length >= 2)
-                {
-                    lastName = surnameTokens[0];
-                    maternalLastName = string.Join(" ", surnameTokens.Skip(1));
-                }
-                return;
-            }
-        }
-
-        // Formato regular: "Nombre(s) Paterno Materno"
-        var tokens = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length == 1)
-        {
-            firstName = tokens[0];
-        }
-        else if (tokens.Length == 2)
-        {
-            firstName = tokens[0];
-            lastName = tokens[1];
-        }
-        else if (tokens.Length == 3)
-        {
-            firstName = tokens[0];
-            lastName = tokens[1];
-            maternalLastName = tokens[2];
-        }
-        else
-        {
-            lastName = tokens[^2];
-            maternalLastName = tokens[^1];
-            firstName = string.Join(" ", tokens.Take(tokens.Length - 2));
-        }
-    }
-
     [ObservableProperty]
     private string _formClinicalNotes = string.Empty;
 
@@ -352,14 +278,6 @@ public partial class PatientFormViewModel : ObservableObject
     public List<string> BloodTypeOptions { get; } = new() { BloodTypeUnknown, "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-" };
     public List<string> PeriodHeavyOptions { get; } = new() { "Normal", "Abundante", "Escaso" };
 
-    private static readonly string[] BirthDateFormats =
-    {
-        "d/M/yyyy", "dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy", "d.M.yyyy", "dd.MM.yyyy",
-        "yyyy-MM-dd", "d/M/yy", "dd/MM/yy", "ddMMyyyy"
-    };
-
-    private static readonly CultureInfo MexicanCulture = CultureInfo.GetCultureInfo("es-MX");
-
     private bool _syncingBirthDateText;
 
     /// <summary>Fecha de nacimiento como se escribe (día/mes/año).</summary>
@@ -369,32 +287,22 @@ public partial class PatientFormViewModel : ObservableObject
     partial void OnFormBirthDateTextChanged(string value)
     {
         if (_syncingBirthDateText) return;
-        FormBirthDate = TryParseBirthDate(value, DateTime.Today);
+        FormBirthDate = PatientFormRules.TryParseBirthDate(value, ClinicClock.Today);
     }
 
     partial void OnFormBirthDateChanged(DateTime? value)
     {
         if (value is { } birth)
         {
-            FormAge = PatientRecord.CalculateAge(birth, DateTime.Today);
-            if (TryParseBirthDate(FormBirthDateText, DateTime.Today) != birth.Date)
+            FormAge = PatientRecord.CalculateAge(birth, ClinicClock.Today);
+            if (PatientFormRules.TryParseBirthDate(FormBirthDateText, ClinicClock.Today) != birth.Date)
             {
                 _syncingBirthDateText = true;
-                FormBirthDateText = birth.ToString("dd/MM/yyyy", MexicanCulture);
+                FormBirthDateText = birth.ToString("dd/MM/yyyy", PatientFormRules.MexicanCulture);
                 _syncingBirthDateText = false;
             }
         }
         RecomputeFormProfile();
-    }
-
-    /// <summary>Fecha válida (no futura, máximo 130 años) o null.</summary>
-    public static DateTime? TryParseBirthDate(string? text, DateTime today)
-    {
-        var clean = text?.Trim();
-        if (string.IsNullOrEmpty(clean)) return null;
-        if (!DateTime.TryParseExact(clean, BirthDateFormats, MexicanCulture, DateTimeStyles.None, out var date)) return null;
-        if (date.Date > today.Date || date.Year < today.Year - 130) return null;
-        return date.Date;
     }
 
     public bool FormHasBirthDate => FormBirthDate.HasValue;
@@ -403,8 +311,8 @@ public partial class PatientFormViewModel : ObservableObject
 
     /// <summary>"34 años", "2 años 6 meses", "8 meses"... junto a la fecha.</summary>
     public string FormAgeDisplay => FormBirthDate is { } birth
-        ? PatientRecord.FormatAge(birth, 0, DateTime.Today)
-        : FormHasAge ? PatientRecord.FormatAge(null, FormAge, DateTime.Today) : string.Empty;
+        ? PatientRecord.FormatAge(birth, 0, ClinicClock.Today)
+        : FormHasAge ? PatientRecord.FormatAge(null, FormAge, ClinicClock.Today) : string.Empty;
 
     /// <summary>Antecedentes gineco-obstétricos: mujeres de 10 años o más.</summary>
     public bool FormShowsGyneco => FormIsFemale && FormHasAge && FormAge >= PatientRecord.GynecoObstetricMinAge;
@@ -659,7 +567,7 @@ public partial class PatientFormViewModel : ObservableObject
         FormRecordNumber = _session.SelectedPatient.RecordNumber;
         FormFullName = _session.SelectedPatient.FullName;
 
-        ParseFullName(_session.SelectedPatient.FullName, out var first, out var last, out var maternal);
+        PatientFormRules.ParseFullName(_session.SelectedPatient.FullName, out var first, out var last, out var maternal);
         FormFirstName = first;
         FormLastName = last;
         FormMaternalLastName = maternal;
@@ -721,68 +629,22 @@ public partial class PatientFormViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
         {
-            ParseFullName(FormFullName, out var f, out var l, out var m);
+            PatientFormRules.ParseFullName(FormFullName, out var f, out var l, out var m);
             FormFirstName = f;
             FormLastName = l;
             FormMaternalLastName = m;
         }
 
-        if (string.IsNullOrWhiteSpace(FormFirstName))
+        // Paso 8.11: las reglas viven en PatientFormRules (sin WPF), la referencia del formulario de Android
+        var problem = PatientFormRules.Validate(new PatientFormInput(FormFirstName, FormLastName, FormMaternalLastName, FormRecordNumber,
+            FormBirthDateText, FormBirthDate, FormAgeText, FormGender, FormAllergies, FormEmail), ClinicClock.Today, out var parsedAge);
+        if (problem != null)
         {
-            FormErrorMessage = "El nombre(s) del paciente es obligatorio.";
+            FormErrorMessage = problem;
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(FormLastName))
-        {
-            FormErrorMessage = "El apellido paterno del paciente es obligatorio.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormRecordNumber))
-        {
-            FormErrorMessage = "El folio del expediente es obligatorio.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(FormBirthDateText) && FormBirthDate == null)
-        {
-            FormErrorMessage = "La fecha de nacimiento no es válida: use día/mes/año (por ejemplo 14/03/1992) y que no sea futura.";
-            return;
-        }
-
-        int parsedAge;
-        if (FormBirthDate is { } birthDate)
-        {
-            parsedAge = PatientRecord.CalculateAge(birthDate, DateTime.Today);
-        }
-        else if (!int.TryParse(FormAgeText, out parsedAge) || parsedAge < 0 || parsedAge > 130)
-        {
-            FormErrorMessage = "Capture la fecha de nacimiento (o la edad en años si no se conoce).";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormGender))
-        {
-            FormErrorMessage = "Seleccione el sexo del paciente.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(FormAllergies))
-        {
-            FormErrorMessage = "Indique las alergias del paciente o escriba \"Negadas\" (no es lo mismo que no haber preguntado).";
-            return;
-        }
-
-        if (!IsValidEmail(FormEmail))
-        {
-            FormErrorMessage = "El correo electrónico no tiene un formato válido (ejemplo: usuario@correo.com).";
-            return;
-        }
-
-        FormFullName = string.IsNullOrWhiteSpace(FormMaternalLastName)
-            ? $"{FormFirstName.Trim()} {FormLastName.Trim()}"
-            : $"{FormFirstName.Trim()} {FormLastName.Trim()} {FormMaternalLastName.Trim()}";
+        FormFullName = PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName);
 
         var normalizedFolio = FormRecordNumber.Trim();
         if (_inventoryService != null)

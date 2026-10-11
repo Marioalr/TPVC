@@ -5,6 +5,7 @@ using System.Linq;
 using System.Xml.Linq;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Documents;
 using TPVC.ViewModels;
 using TPVC.ViewModels.Patients;
 
@@ -378,7 +379,7 @@ public class PrescriptionSheetTests
         var patient = new PatientRecord { FullName = "Paciente <Sin> Datos", Age = 30, Allergies = "Penicilina", VitalSigns = string.Empty };
         var items = new[] { new PatientPrescriptionItem { MedicineName = "Amoxicilina & clavulanato", Dosage = string.Empty } };
 
-        var html = PrintingService.BuildPrescriptionHtml(PrescriptionSheet.Create(patient, items, service.CurrentProfile, null, new DateTime(2026, 10, 9)));
+        var html = PrescriptionHtmlBuilder.Build(PrescriptionSheet.Create(patient, items, service.CurrentProfile, null, new DateTime(2026, 10, 9)));
         var doc = ParseHtml(html);
 
         Assert.AreEqual(PrescriptionSheet.DefaultDoctorName, ByClass(doc, "doctor").Value, "El mismo nombre que la vista previa");
@@ -411,7 +412,7 @@ public class PrescriptionSheetTests
         var items = Enumerable.Range(1, 30)
             .Select(i => new PatientPrescriptionItem { MedicineName = $"Medicamento {i}", Dosage = $"Posología {i}" })
             .ToList();
-        var html = PrintingService.BuildPrescriptionHtml(PrescriptionSheet.Create(SamplePatient(), items, new ClinicProfile(), null, DateTime.Today));
+        var html = PrescriptionHtmlBuilder.Build(PrescriptionSheet.Create(SamplePatient(), items, new ClinicProfile(), null, DateTime.Today));
         var doc = ParseHtml(html);
 
         var names = doc.Descendants().Where(e => HasClass(e, "med-name")).Select(e => e.Value).ToList();

@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using TPVC.Models;
+using TPVC.Services.Documents;
 using TPVC.ViewModels.Patients;
 
 namespace TPVC.Services;
@@ -96,33 +97,22 @@ public partial class PrintingService : IPrescriptionOutput
             Background = Brushes.White
         };
 
-        string clinicName = !string.IsNullOrWhiteSpace(profile.ClinicName) ? profile.ClinicName : "CONSULTORIO MÉDICO TPVC";
-        string doctorName = !string.IsNullOrWhiteSpace(profile.DoctorName) ? profile.DoctorName : "Dr. Titular";
-        string license = !string.IsNullOrWhiteSpace(profile.ProfessionalLicense) ? profile.ProfessionalLicense : string.Empty;
-        string address = !string.IsNullOrWhiteSpace(profile.Address) ? profile.Address : string.Empty;
-        string phone = !string.IsNullOrWhiteSpace(profile.Phone) ? profile.Phone : string.Empty;
+        // Los textos salen de TicketText (paso 8.11): el ticket en texto y el del celular dicen lo mismo
+        var header = TicketText.HeaderLines(profile);
 
         // Cabecera
         var headerPara = new Paragraph { TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
-        headerPara.Inlines.Add(new Bold(new Run(clinicName.ToUpperInvariant() + "\n")));
-        if (!string.IsNullOrWhiteSpace(doctorName))
-        {
-            string docLine = string.IsNullOrWhiteSpace(license) ? doctorName : $"{doctorName} • Céd. {license}";
-            headerPara.Inlines.Add(new Run(docLine + "\n"));
-        }
-        if (!string.IsNullOrWhiteSpace(address)) headerPara.Inlines.Add(new Run(address + "\n"));
-        if (!string.IsNullOrWhiteSpace(phone)) headerPara.Inlines.Add(new Run($"Tel: {phone}\n"));
-        headerPara.Inlines.Add(new Run("------------------------------------------"));
+        headerPara.Inlines.Add(new Bold(new Run(header[0] + "\n")));
+        foreach (var line in header.Skip(1)) headerPara.Inlines.Add(new Run(line + "\n"));
+        headerPara.Inlines.Add(new Run(TicketText.ThinRule));
         doc.Blocks.Add(headerPara);
 
-        // Metadatos
+        // Metadatos (el folio en negritas)
+        var meta = TicketText.MetaLines(receipt);
         var metaPara = new Paragraph { Margin = new Thickness(0, 0, 0, 8) };
-        metaPara.Inlines.Add(new Bold(new Run($"FOLIO:    {receipt.Folio}\n")));
-        metaPara.Inlines.Add(new Run($"FECHA:    {receipt.Date:dd/MM/yyyy HH:mm}\n"));
-        metaPara.Inlines.Add(new Run($"PACIENTE: {receipt.PatientName}\n"));
-        metaPara.Inlines.Add(new Run($"PAGO:     {receipt.PaymentMethod}\n"));
-        metaPara.Inlines.Add(new Run($"ATENDIÓ:  {receipt.Cashier}\n"));
-        metaPara.Inlines.Add(new Run("=========================================="));
+        metaPara.Inlines.Add(new Bold(new Run(meta[0] + "\n")));
+        foreach (var line in meta.Skip(1)) metaPara.Inlines.Add(new Run(line + "\n"));
+        metaPara.Inlines.Add(new Run(TicketText.ThickRule));
         doc.Blocks.Add(metaPara);
 
         // Ítems
@@ -133,10 +123,7 @@ public partial class PrintingService : IPrescriptionOutput
         itemsTable.Columns.Add(new TableColumn { Width = new GridLength(55) });
 
         var headerRow = new TableRow();
-        headerRow.Cells.Add(new TableCell(new Paragraph(new Bold(new Run("Cant")))));
-        headerRow.Cells.Add(new TableCell(new Paragraph(new Bold(new Run("Descripción")))));
-        headerRow.Cells.Add(new TableCell(new Paragraph(new Bold(new Run("P.U.")))));
-        headerRow.Cells.Add(new TableCell(new Paragraph(new Bold(new Run("Total")))));
+        foreach (var title in TicketText.ItemHeaders) headerRow.Cells.Add(new TableCell(new Paragraph(new Bold(new Run(title)))));
         var rowGroup = new TableRowGroup();
         rowGroup.Rows.Add(headerRow);
 
@@ -145,25 +132,25 @@ public partial class PrintingService : IPrescriptionOutput
             var row = new TableRow();
             row.Cells.Add(new TableCell(new Paragraph(new Run(item.Quantity.ToString()))));
             row.Cells.Add(new TableCell(new Paragraph(new Run(item.Name))));
-            row.Cells.Add(new TableCell(new Paragraph(new Run($"${item.UnitPrice:F2}"))));
-            row.Cells.Add(new TableCell(new Paragraph(new Run($"${item.Subtotal:F2}"))));
+            row.Cells.Add(new TableCell(new Paragraph(new Run(TicketText.Money(item.UnitPrice)))));
+            row.Cells.Add(new TableCell(new Paragraph(new Run(TicketText.Money(item.Subtotal)))));
             rowGroup.Rows.Add(row);
         }
         itemsTable.RowGroups.Add(rowGroup);
         doc.Blocks.Add(itemsTable);
 
-        // Totales
+        // Totales (el total pagado en negritas)
+        var totals = TicketText.TotalLines(receipt);
         var totalsPara = new Paragraph { Margin = new Thickness(0, 0, 0, 8) };
-        totalsPara.Inlines.Add(new Run("------------------------------------------\n"));
-        totalsPara.Inlines.Add(new Run($"TOTAL DE ARTÍCULOS: {receipt.TotalItems}\n"));
-        totalsPara.Inlines.Add(new Bold(new Run($"TOTAL PAGADO:       ${receipt.TotalAmount:N2} MXN\n")));
-        totalsPara.Inlines.Add(new Run("=========================================="));
+        totalsPara.Inlines.Add(new Run(TicketText.ThinRule + "\n"));
+        totalsPara.Inlines.Add(new Run(totals[0] + "\n"));
+        totalsPara.Inlines.Add(new Bold(new Run(totals[1] + "\n")));
+        totalsPara.Inlines.Add(new Run(TicketText.ThickRule));
         doc.Blocks.Add(totalsPara);
 
         // Pie
         var footerPara = new Paragraph { TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
-        footerPara.Inlines.Add(new Run("¡Gracias por su visita y confianza!\n"));
-        footerPara.Inlines.Add(new Run("Comprobante de atención médica y farmacia\n"));
+        foreach (var line in TicketText.FooterLines) footerPara.Inlines.Add(new Run(line + "\n"));
         doc.Blocks.Add(footerPara);
 
         return doc;

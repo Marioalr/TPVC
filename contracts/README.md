@@ -58,6 +58,14 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 | `lww.json` | Qué versión gana: al bajar una fila o una lápida, lo que hace la nube con la subida (el SQL real de la PC, ejecutado en SQLite), qué hacer si la nube rechaza una subida (desde el paso 8.6) y la cerca de generación: con otra generación en la nube no se escribe nada (desde el paso 8.9). |
 | `stamping.json` | La marca `UpdatedAtUtc` de un cambio local: `max(hora + desfase, marca guardada + 1 ms)`. |
 | `uuid5.json` | UUIDv5 de RFC 4122, el espacio de nombres de TPVC, los SyncId del catálogo que siembra la PC (desde v1.20.6; Kotlin nunca siembra) y los SyncId derivados (un SyncId en mayúsculas da lo mismo). |
+| `cash-cut.json` | Desde v1.28.0 (paso 8.11): el corte de caja de un día a partir de sus ventas (`Services/Rules/CashCutRules.cs`): formas de pago, canceladas y servicios contra productos. |
+| `alerts.json` | Stock bajo y lotes vencidos o por vencer (30 días), más el estado del lote en Inventario (60 días), en UTC y en America/Mexico_City (`StockAlertRules`). |
+| `suggested-purchase.json` | La compra sugerida: cantidad, costo (capturado, con IVA o estimado con el precio), motivo y orden con desempate es-MX (`SuggestedPurchaseRules`). |
+| `prescription-sheet.json` | Lo que dice la receta a partir del paciente, los medicamentos y el perfil: edad, fecha, alergias, signos con unidades y medidas generales, en las dos zonas (`Models/PrescriptionSheet.cs`). |
+| `prescription-html-fields.json` | Los valores de la receta en HTML (`data-field`), el papel y lo que se dibuja en cada lugar (`Services/Documents/PrescriptionHtmlBuilder.cs`): de aquí sale el PDF del celular. |
+| `ticket-text.json` | El ticket en 42 columnas, renglón por renglón (`Services/Documents/TicketText.cs`); la PC imprime los mismos textos. |
+
+Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál regla de redondeo usa (decimal al par con `Math.Round`; hacia arriba en el IVA y en el formato F2/N2). Lo que depende de "hoy" se genera en UTC y en America/Mexico_City con un instante en que el día cambia; los desempates por nombre llevan acentos (Collator es-MX).
 
 **BLOB.** Viaja como `{"type":"blob","base64":…}`, sin `value`. Según el código de libSQL, Turso responde el base64
 estándar **sin el relleno `=`** y acepta los argumentos con o sin él (pendiente de ver en Turso real: V18 del plan). El
@@ -68,6 +76,6 @@ membrete en la nube (paso 8.12).
 
 ## Lo que viene
 
-- `golden/` de los reportes, la receta y el ticket (paso 8.11) y de las reglas del negocio (8.26).
+- `golden/` de las reglas del negocio que faltan (8.26).
 - `hrana/`: intercambios grabados por el servidor simulado, con el SQL literal de cada instrucción (8.13 y 8.25).
 - `scenarios/`: escenarios de varios equipos (8.25).
