@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -382,6 +383,52 @@ public class TursoTests
         Assert.AreEqual(1, rows.Count);
         Assert.AreEqual(42L, rows[0]["Count"]);
         Assert.AreEqual(99.95, rows[0]["Rate"]);
+    }
+
+    [TestMethod]
+    public void TursoClient_ExtractValue_ReadsBlobsAsBytes_WithOrWithoutBase64Padding()
+    {
+        static object? Read(string json) => TursoClient.ExtractValue(JsonNode.Parse(json));
+        var four = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        var five = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D };
+
+        // Turso manda el base64 sin relleno (libSQL usa STANDARD_NO_PAD): antes se leía null, porque un BLOB no trae "value"
+        CollectionAssert.AreEqual(four, (byte[])Read("""{"type":"blob","base64":"iVBORw"}""")!);
+        CollectionAssert.AreEqual(five, (byte[])Read("""{"type":"blob","base64":"iVBORw0"}""")!);
+        CollectionAssert.AreEqual(four, (byte[])Read("""{"type":"blob","base64":"iVBORw=="}""")!);
+        CollectionAssert.AreEqual(five, (byte[])Read("""{"type":"blob","base64":"iVBORw0="}""")!);
+        CollectionAssert.AreEqual(new byte[] { 0xFB, 0xEF, 0xFF }, (byte[])Read("""{"type":"blob","base64":"++//"}""")!);
+
+        // Vacío no es nulo: en SQLite X'' IS NOT NULL
+        var empty = Read("""{"type":"blob","base64":""}""") as byte[];
+        Assert.IsNotNull(empty);
+        Assert.IsEmpty(empty);
+        Assert.IsNull(Read("""{"type":"null"}"""));
+        Assert.IsNull(Read("""{"type":"blob","base64":null}"""));
+        Assert.IsNull(TursoClient.ExtractValue(null));
+
+        // Lo que manda la PC sale con relleno y se lee igual (así se guardan y se reintentan las filas apartadas)
+        Assert.AreEqual("iVBORw==", TursoClient.FormatArg(four)["base64"]!.GetValue<string>());
+        CollectionAssert.AreEqual(four, (byte[])TursoClient.ExtractValue(TursoClient.FormatArg(four))!);
+        CollectionAssert.AreEqual(Array.Empty<byte>(), (byte[])TursoClient.ExtractValue(TursoClient.FormatArg(Array.Empty<byte>()))!);
+
+        var ex = Assert.ThrowsExactly<TursoException>(() => Read("""{"type":"blob","base64":"iVBOR"}"""));
+        StringAssert.Contains(ex.Message, "base64");
+        Assert.ThrowsExactly<TursoException>(() => Read("""{"type":"blob","base64":"no es base64!"}"""));
+    }
+
+    [TestMethod]
+    public void FromRemoteValue_KeepsBlobBytes_AndAnEmptyBlobForARequiredNull()
+    {
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        CollectionAssert.AreEqual(png, (byte[])TursoSyncService.FromRemoteValue(png, typeof(byte[]), isNullable: true)!);
+        Assert.IsNull(TursoSyncService.FromRemoteValue(null, typeof(byte[]), isNullable: true));
+        Assert.IsEmpty((byte[])TursoSyncService.FromRemoteValue(null, typeof(byte[]), isNullable: false)!);
+
+        // Entre BLOB y texto, UTF-8, como CAST en SQLite
+        Assert.AreEqual("ñ", TursoSyncService.FromRemoteValue(new byte[] { 0xC3, 0xB1 }, typeof(string), isNullable: false));
+        CollectionAssert.AreEqual(new byte[] { 0xC3, 0xB1 }, (byte[])TursoSyncService.FromRemoteValue("ñ", typeof(byte[]), isNullable: false)!);
+        Assert.AreEqual("BLOB", SyncSchema.RemoteTypeFor(typeof(byte[])));
     }
 
     [TestMethod]

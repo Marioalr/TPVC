@@ -296,6 +296,7 @@ Lo que ve el médico:
 | V14 | Si una petición `batch` de Hrana con BEGIN/COMMIT es atómica en Turso | Opción de 8.6 | 8.6 |
 | V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 y 8.24 | 8.6 |
 | V16 | Que `INSERT … ON CONFLICT DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber` corra en Turso por Hrana como una sola instrucción atómica y regrese el número en su resultado, también con dos equipos a la vez | El contador de folios. Si no: leer el número n y `UPDATE … SET LastNumber = n + 1 WHERE Series = ? AND LastNumber = n`, que se reintenta si afecta 0 filas | 8.16 |
+| V18 | BLOB con y sin relleno de base64, y la forma en que regresa | Que la PC lea lo que manda Turso: según el código de libSQL responde `{"type":"blob","base64":…}` sin el relleno `=` y acepta los argumentos con o sin él. La PC ya lee las dos formas y manda con relleno; si Turso rechazara el relleno, la PC lo quitaría al mandar | 8.12 |
 
 V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de vinculación. El resultado se anota en `docs/TURSO_SYNC_ARCHITECTURE.md` §6.
 
@@ -742,6 +743,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo, porque solo mueve código.
 
 #### 8.12 · Membrete en la nube (H9)
+- **Antes:** [T] V18 (la lectura de BLOB ya acepta el base64 con y sin relleno).
 - **Cambia:**
   - Tabla `ClinicAssets` (tipo, hash, tipo MIME, contenido, `UpdatedAtUtc`). La PC la escribe solo cuando cambia una imagen.
   - `ClinicProfiles` gana `CrestImageHash` y `HeaderImageHash`.
