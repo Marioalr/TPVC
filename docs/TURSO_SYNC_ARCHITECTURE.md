@@ -329,27 +329,27 @@ V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de v
 
 ## 7. Respaldo y recuperación
 
-**Hoy (v1.19.0).** Al restaurar un respaldo local se borran los cursores (`LastPulledServerWatermark` y el de subida: `LastPushedLocalUtc` hasta v1.20.2, `DbMeta.LastPushedSeq` de la base restaurada desde v1.20.3; `DataImportService`): la siguiente sincronización sube todo, pero la nube conserva las filas más nuevas que el respaldo (gana el `UpdatedAtUtc` mayor) y la descarga omite las que escribió esta misma PC. Con una sola PC, la base local queda como el respaldo y la nube conserva lo posterior: las dos copias quedan distintas, y una «Sincronización completa» regresaría esas filas y desharía la restauración. Lo que escribió otra PC sí regresa en la siguiente descarga (riesgo H6 del plan).
+**Hasta v1.25.0.** Al restaurar un respaldo local se borraban los cursores (`LastPulledServerWatermark` y `DbMeta.LastPushedSeq` de la base restaurada; `DataImportService`): la siguiente sincronización subía todo, pero la nube conservaba las filas más nuevas que el respaldo (gana el `UpdatedAtUtc` mayor) y lo escrito por otra PC regresaba en la siguiente descarga (riesgo H6 del plan). **Desde v1.26.0 (paso 8.9)** la restauración con la nube configurada detiene la sincronización hasta elegir qué hacer con ella.
 
 La copia de Turso no es un historial: el plan gratuito solo restaura a un punto de hasta 1 día atrás. El historial son los respaldos locales diarios (`BackupService`, se conservan 14).
 
-Lo que sigue es el plan Fase 8 y **todavía no está implementado**, salvo lo marcado como hecho.
-
-### Generación de la nube (pasos 8.7 y 8.9)
-- `_tpvc_meta` guarda `clinicId` (se escribe una sola vez), `generation` (cambia al reemplazar la nube con un respaldo) y `generationReady` (la generación cuya subida completa ya terminó). Cada equipo guarda los suyos en `DbMeta`.
-- **Cerca de generación:** cada upsert, lápida y `DELETE` de la subida lleva `AND (SELECT "Value" FROM _tpvc_meta WHERE "Key"='generation') = ?`, y cada petición termina leyendo la generación. Si cambió, el equipo se detiene. Sin esto, los trozos de 80 instrucciones que otro equipo seguía subiendo caerían en la nube restaurada.
+### Generación de la nube (pasos 8.7 y 8.9, hechos en v1.20.5 y v1.26.0)
+- `_tpvc_meta` guarda `clinicId` (se escribe una sola vez), `generation` (cambia solo al reemplazar la nube con un respaldo), `generationReady` (la generación cuya subida completa ya terminó) y, después del primer reemplazo, `generationPrevious`. Cada base guarda la suya en `DbMeta.generation`.
+- **Cerca de generación (protocolo 3):** cada upsert, lápida y `DELETE` de la subida lleva `AND (SELECT "Value" FROM _tpvc_meta WHERE "Key"='generation') IS ?` con la generación del equipo, y cada lote de la subida y cada página de la bajada termina leyendo la generación. Si cambió, el equipo se detiene sin avanzar sus cursores. Sin esto, los lotes de 80 instrucciones que otro equipo seguía subiendo caerían en la nube restaurada.
+- Una base sin generación guardada adopta la de la nube si esta nunca se reemplazó (no hay `generationPrevious`); si ya se reemplazó, la trata como otra generación.
 - Una base con datos propios no sincroniza con una nube de otro `clinicId`: solo ofrece "Unirse", "Reemplazar con la nube" o "Esta PC ya usaba esta nube" (paso 8.7).
 
-### Restaurar con la nube activa (paso 8.9)
-La restauración (`DataImportService`) pregunta:
-- **"Reemplazar la nube con este respaldo":**
-  1. Antes de borrar, baja de la nube las filas que no están en el respaldo o son más nuevas, muestra los conteos por tabla ("se perderán 12 notas y 30 ventas de la tablet") y las guarda en un archivo `.db`.
-  2. Guarda "reemplazo en curso" en `DbMeta`; si TPVC se cierra, lo continúa al abrir.
-  3. Escribe la generación nueva, borra las tablas sincronizadas y las lápidas de la nube (no `FolioCounters`), y sube todo (~0.2% del mes) con el reporte del paso 8.7.
-  4. Al final escribe `generationReady` con la generación nueva y un `fullUploadAtUtc` nuevo.
-- **"Desconectar esta PC de la nube".**
+### Restaurar con la nube activa (paso 8.9, hecho en v1.26.0)
+Al restaurar con la nube configurada, `DataImportService` pone `DbMeta.RestoredWithCloud` y no se sincroniza hasta elegir en *Respaldos y datos*:
+- **"Reemplazar la nube con este respaldo"** (antes «Revisar qué se perdería» y teclear CONFIRMAR):
+  1. Guarda "reemplazo en curso" en `DbMeta.ReplacingCloud`; si TPVC se cierra o se corta el internet, la siguiente sincronización lo termina.
+  2. Escribe la generación nueva (con `generationPrevious` y `minClientProtocol = 3`): desde aquí la cerca detiene a los demás equipos.
+  3. Lee la nube y guarda lo que el respaldo no tiene (filas que aquí no están o son más nuevas, y borrados que se deshacen) en `backups/nube-antes-de-reemplazar-<fecha>.db` y en la tabla local `SyncSavedChanges`, para «Volver a aplicar».
+  4. Borra las tablas sincronizadas y las lápidas de la nube, con la cerca (no `FolioCounters`, cuando exista), y sube todo (~0.2% del mes).
+  5. Escribe `generationReady` con la generación nueva y un `fullUploadAtUtc` nuevo, deja los cursores de bajada en la marca de agua (no baja lo que acaba de subir) y hace el reporte del paso 8.7.
+- **"Desconectar esta PC de la nube"**: se queda con el respaldo y olvida la nube (URL, token, `clinicId` y generación). No se permite a medio reemplazo.
 
-**Los demás equipos**, al ver otra generación, dejan de subir y guardan lo que no habían subido. Solo cuando `generationReady` es igual a la generación nueva borran y vuelven a bajar todo, una sola vez, y nadie baja una nube a medio reemplazar. Después ofrecen "Volver a aplicar N cambios", que inserta esas filas con marca nueva. El archivo del paso 1 se puede volver a aplicar igual.
+**Los demás equipos**, al ver otra generación, no escriben nada y guardan lo que no habían subido en `SyncSavedChanges` (cada fila completa en el formato de la nube, con su protocolo y su revisión del contrato). Mientras `generationReady` no sea la nueva esperan ("otra computadora está reemplazando la nube"); nadie baja una nube a medio reemplazar ni se une a ella. Después respaldan (`…-antes-de-bajar-la-nube-reemplazada.db`), se vacían y bajan todo, una sola vez, y *Nube y dispositivos* ofrece "Volver a aplicar N cambios": cada fila se escribe de nuevo con marca nueva (gana y sube) y cada borrado se rehace. El archivo de la PC que reemplazó la nube se puede agregar con «Volver a aplicar un archivo…».
 
 ### Unirse y recuperar desde la nube (paso 8.8, hecho en v1.20.6; detalle en §4.3a)
 - **"Unirse a una nube existente"**, para un equipo con la base intacta (sin pacientes, consultas, citas, ventas, movimientos, lotes, productos, plantillas ni reglas de dosis, y sin más catálogo del que siembra): respalda, borra el catálogo local sin lápidas, pone `CloudJoined` y el `clinicId` en `DbMeta`, baja todo sin omitir sus propias filas y lleva el cursor al `Seq` actual. `CloudJoined` apaga toda siembra para siempre. Si la base no está intacta, ofrece "Reemplazar con la nube" (teclear CONFIRMAR, con respaldo antes).

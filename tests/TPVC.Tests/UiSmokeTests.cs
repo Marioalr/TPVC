@@ -524,6 +524,44 @@ internal sealed class UiSmokeSession
             cloudVm.LoadFromSettings();
             cloudVm.FullSyncReportText = string.Empty;
 
+            // Paso 8.9: un respaldo restaurado con la nube activa (Respaldos y datos, con lo que se perdería) y cambios
+            // guardados para «Volver a aplicar» (Nube y dispositivos)
+            using (var db = factory.CreateDbContext())
+            {
+                DbMeta.Set(db, DbMeta.RestoredWithCloud, "1");
+                WaitFor(SyncSavedChanges.SaveAsync(db, new[]
+                {
+                    new SavedChange
+                    {
+                        Source = SyncSavedChanges.SourceThisDevice, EntityType = nameof(PatientRecord), SyncId = Guid.NewGuid().ToString(),
+                        Kind = SyncSavedChanges.KindRow, Payload = "{}", Protocol = TursoSyncService.ClientProtocol, Contract = SyncContract.Revision,
+                        SavedAtUtc = TursoSyncService.FormatDate(DateTime.UtcNow)
+                    }
+                }));
+            }
+            tursoSync.RefreshSavedChangesCount();
+            main.DataVM.RefreshCloudDecision();
+            main.DataVM.CloudPreviewText = new CloudReplacementPreview
+            {
+                Lines = new[] { new CloudLossLine("Pacientes", 3, 0), new CloudLossLine("Ventas", 12, 1) }
+            }.Summary;
+            Show(host, main, "Data", $"20f-config-data-nube-restaurada-{suffix}");
+            if (!main.DataVM.IsCloudDecisionPending) _failures.Add($"[20f-{suffix}] No aparece la decisión sobre la nube después de restaurar");
+            cloudVm.LoadFromSettings();
+            Show(host, main, "TursoSync", $"20g-config-tursosync-volver-a-aplicar-{suffix}");
+            if (string.IsNullOrEmpty(cloudVm.GenerationNoticeText) || string.IsNullOrEmpty(cloudVm.SavedChangesNoticeText))
+            {
+                _failures.Add($"[20g-{suffix}] Faltan los avisos del respaldo restaurado o de «Volver a aplicar»");
+            }
+            using (var db = factory.CreateDbContext())
+            {
+                DbMeta.Remove(db, DbMeta.RestoredWithCloud);
+                WaitFor(SyncSavedChanges.DeleteAllAsync(db));
+            }
+            tursoSync.RefreshSavedChangesCount();
+            main.DataVM.RefreshCloudDecision();
+            cloudVm.LoadFromSettings();
+
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");
             shell.SettingsSearchText = string.Empty;

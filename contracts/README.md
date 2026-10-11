@@ -1,6 +1,8 @@
 # Contrato de sincronización (PC ↔ app de Kotlin)
 
-Lo que la app de Android tiene que cumplir para hablar el protocolo v2 con la nube de Turso igual que la PC.
+Lo que la app de Android tiene que cumplir para hablar con la nube de Turso igual que la PC: el protocolo v2 y, desde
+v1.26.0 (paso 8.9), el **protocolo 3**, que agrega la cerca de generación a cada escritura (reglas en `sync/schema.json`,
+vectores en `golden/lww.json`). Una nube que se reemplazó con un respaldo exige el 3 (`minClientProtocol`).
 Plan: `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (paso 8.3 y §7.3); protocolo: `docs/TURSO_SYNC_ARCHITECTURE.md` §4.
 
 **No se editan a mano.** Los genera `tests/TPVC.Tests/GoldenVectorTests.cs` desde el mismo código que usa la PC
@@ -52,7 +54,7 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 | Archivo | Regla |
 |---|---|
 | `values.json` | Codificación Hrana de cada tipo (`encode`) y lectura de una fila (`decode`), con el nulo de una columna obligatoria. Un BLOB (`byte[]`) va en hexadecimal en `value` y `expected`; ver abajo. |
-| `lww.json` | Qué versión gana: al bajar una fila o una lápida, lo que hace la nube con la subida (el SQL real de la PC, ejecutado en SQLite) y qué hacer si la nube rechaza una subida (desde el paso 8.6). |
+| `lww.json` | Qué versión gana: al bajar una fila o una lápida, lo que hace la nube con la subida (el SQL real de la PC, ejecutado en SQLite), qué hacer si la nube rechaza una subida (desde el paso 8.6) y la cerca de generación: con otra generación en la nube no se escribe nada (desde el paso 8.9). |
 | `stamping.json` | La marca `UpdatedAtUtc` de un cambio local: `max(hora + desfase, marca guardada + 1 ms)`. |
 | `uuid5.json` | UUIDv5 de RFC 4122, el espacio de nombres de TPVC, los SyncId del catálogo que siembra la PC (desde v1.20.6; Kotlin nunca siembra) y los SyncId derivados (un SyncId en mayúsculas da lo mismo). |
 

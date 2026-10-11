@@ -72,6 +72,24 @@
                             </Grid>
                         </Border>
 
+                        <!-- Paso 8.9: respaldo restaurado sin decidir, reemplazo a medias o espera por otra PC -->
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,14,0,0" Visibility="{Binding GenerationNoticeText, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding GenerationNoticeText}" TextWrapping="Wrap" />
+                        </Border>
+
+                        <!-- Paso 8.9: cambios guardados para «Volver a aplicar» -->
+                        <Border Style="{StaticResource Notice}" Margin="0,14,0,0" Visibility="{Binding SavedChangesNoticeText, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding SavedChangesNoticeText}" TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,10,0,0">
+                                    <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ReapplySavedChangesCommand}" Content="Volver a aplicar" Margin="0,0,8,0"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                    <Button Style="{StaticResource ButtonSecondary}" Command="{Binding DiscardSavedChangesCommand}" Content="Descartar"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- La nube pertenece a otra base: no se sincroniza (paso 8.7). Unirse, ya la usaba o reemplazar (paso 8.8) -->
                         <Border Style="{StaticResource NoticeDanger}" Margin="0,14,0,0" Visibility="{Binding IdentityNoticeText, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
@@ -184,6 +202,9 @@
                             <Button Style="{StaticResource ButtonGhost}" Command="{Binding InitialUploadCommand}" Margin="0,0,8,8" Content="Sincronización completa"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                     ToolTip="Sube todo lo de este equipo y baja todo lo de la nube (la primera vez o si algo quedó desfasado)" />
+                            <Button Style="{StaticResource ButtonGhost}" Command="{Binding ImportSavedChangesFileCommand}" Margin="0,0,8,8" Content="Volver a aplicar un archivo…"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    ToolTip="Agrega a «Volver a aplicar» lo que se guardó al reemplazar la nube con un respaldo (archivo nube-antes-de-reemplazar-….db)" />
                         </WrapPanel>
 
                         <Border Margin="0,6,0,0" Visibility="{Binding TestConnectionResult, Converter={StaticResource BoolToVis}}">

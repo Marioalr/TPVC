@@ -48,7 +48,9 @@ public static class SyncChangeLog
         $"CREATE TABLE IF NOT EXISTS {Q(Table)} (\"Seq\" INTEGER PRIMARY KEY AUTOINCREMENT, \"EntityType\" TEXT NOT NULL, " +
         "\"SyncId\" TEXT NOT NULL, \"Deleted\" INTEGER NOT NULL DEFAULT 0, UNIQUE (\"EntityType\", \"SyncId\"))",
         $"CREATE TABLE IF NOT EXISTS {Q(ApplyStateTable)} (\"Applying\" INTEGER PRIMARY KEY NOT NULL)",
-        DbMeta.CreateTableSql
+        DbMeta.CreateTableSql,
+        // Cambios guardados para «Volver a aplicar» (paso 8.9)
+        SyncSavedChanges.CreateTableSql
     };
 
     private static string Q(string identifier) => SyncSchema.Q(identifier);
@@ -159,7 +161,7 @@ public static class SyncChangeLog
             bool firstInstall = !existingTables.Contains(Table);
 
             if (!firstInstall && existingTables.Contains(ApplyStateTable) && existingTables.Contains(DbMeta.Table)
-                && existingTriggers.SetEquals(wantedNames) && DbMeta.Get(db, DbMeta.DbInstanceId) != null)
+                && existingTables.Contains(SyncSavedChanges.Table) && existingTriggers.SetEquals(wantedNames) && DbMeta.Get(db, DbMeta.DbInstanceId) != null)
             {
                 // Nunca debería quedar una (la bajada la pone y la quita en la misma transacción), pero con ella los
                 // triggers no anotarían nada

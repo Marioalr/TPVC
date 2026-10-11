@@ -33,13 +33,143 @@ public partial class DataManagementViewModel : ObservableObject
     private readonly BackupService _backupService;
     private readonly DataImportService? _importService;
     private readonly NotificationService? _notifications;
+    private readonly TursoSyncService? _syncService;
 
-    public DataManagementViewModel(BackupService backupService, DataImportService? importService = null, NotificationService? notifications = null)
+    public DataManagementViewModel(BackupService backupService, DataImportService? importService = null, NotificationService? notifications = null,
+        TursoSyncService? syncService = null)
     {
         _backupService = backupService;
         _importService = importService;
         _notifications = notifications;
+        _syncService = syncService;
         RefreshBackups();
+        RefreshCloudDecision();
+    }
+
+    // ================================================================== la nube después de restaurar (paso 8.9)
+
+    /// <summary>Se restauró un respaldo con la nube activa y falta elegir qué hacer con ella (mientras, no se sincroniza).</summary>
+    [ObservableProperty]
+    private bool _isCloudDecisionPending;
+
+    /// <summary>Un «Reemplazar la nube» quedó a medias: se termina al sincronizar.</summary>
+    [ObservableProperty]
+    private bool _isCloudReplacementPending;
+
+    [ObservableProperty]
+    private bool _isCloudBusy;
+
+    /// <summary>Lo que se perdería al reemplazar la nube (después de «Revisar qué se perdería»).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCloudPreview), nameof(CanConfirmCloudReplace))]
+    private string _cloudPreviewText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmCloudReplace))]
+    private string _cloudReplaceConfirmWord = string.Empty;
+
+    [ObservableProperty]
+    private string _cloudDecisionMessage = string.Empty;
+
+    public bool HasCloudPreview => CloudPreviewText.Length > 0;
+
+    public bool CanConfirmCloudReplace => HasCloudPreview && !IsCloudBusy && DataImportService.ValidateConfirmationWord(CloudReplaceConfirmWord);
+
+    partial void OnIsCloudBusyChanged(bool value) => OnPropertyChanged(nameof(CanConfirmCloudReplace));
+
+    public void RefreshCloudDecision()
+    {
+        IsCloudReplacementPending = _syncService?.IsCloudReplacementPending == true;
+        IsCloudDecisionPending = IsCloudReplacementPending || _syncService?.IsRestoreDecisionPending == true;
+        if (!IsCloudDecisionPending)
+        {
+            CloudPreviewText = string.Empty;
+            CloudReplaceConfirmWord = string.Empty;
+        }
+    }
+
+    /// <summary>«Revisar qué se perdería»: lee la nube una vez y dice qué tiene que este respaldo no.</summary>
+    [RelayCommand]
+    public async Task ReviewCloudReplacementAsync()
+    {
+        if (_syncService == null || IsCloudBusy) return;
+        IsCloudBusy = true;
+        CloudDecisionMessage = string.Empty;
+        try
+        {
+            var (ok, message, _) = await _syncService.PreviewCloudReplacementAsync();
+            if (ok) CloudPreviewText = message;
+            else CloudDecisionMessage = $"✕ {message}";
+        }
+        finally
+        {
+            IsCloudBusy = false;
+        }
+    }
+
+    /// <summary>«Reemplazar la nube con este respaldo» (pide CONFIRMAR).</summary>
+    [RelayCommand]
+    public async Task ReplaceCloudAsync()
+    {
+        if (_syncService == null || !CanConfirmCloudReplace) return;
+        IsCloudBusy = true;
+        CloudDecisionMessage = string.Empty;
+        try
+        {
+            var result = await _syncService.ReplaceCloudWithLocalAsync();
+            CloudDecisionMessage = result.Ok ? result.Message : $"✕ {result.Message}";
+            Notify(result.Ok ? "La nube quedó igual a este respaldo" : "El reemplazo de la nube no terminó", result.Ok);
+        }
+        finally
+        {
+            IsCloudBusy = false;
+            CloudReplaceConfirmWord = string.Empty;
+            RefreshCloudDecision();
+            RefreshBackups();
+        }
+    }
+
+    /// <summary>Termina un reemplazo de la nube que se cortó (sincroniza).</summary>
+    [RelayCommand]
+    public async Task ContinueCloudReplacementAsync()
+    {
+        if (_syncService == null || IsCloudBusy) return;
+        IsCloudBusy = true;
+        try
+        {
+            var result = await _syncService.SyncAsync();
+            CloudDecisionMessage = result.Success ? "✓ Se terminó de reemplazar la nube con este respaldo." : $"✕ {result.ErrorMessage}";
+        }
+        finally
+        {
+            IsCloudBusy = false;
+            RefreshCloudDecision();
+        }
+    }
+
+    /// <summary>«Desconectar esta PC de la nube»: se queda con el respaldo y deja de sincronizar.</summary>
+    [RelayCommand]
+    public async Task DisconnectCloudAsync()
+    {
+        if (_syncService == null || IsCloudBusy) return;
+        bool confirm = DialogService.Confirm(
+            "Esta computadora dejará de sincronizar y se quedará con el respaldo restaurado. La nube y los demás equipos siguen como " +
+            "estaban; para volver a conectarla hay que configurar la nube otra vez.\n\n¿Desea continuar?",
+            "TPVC - Desconectar esta PC de la nube");
+        if (!confirm) return;
+
+        IsCloudBusy = true;
+        try
+        {
+            var (ok, message) = await _syncService.DisconnectFromCloudAsync();
+            CloudDecisionMessage = ok ? message : $"✕ {message}";
+            if (ok) Notify("Esta PC se desconectó de la nube", ok: true);
+        }
+        finally
+        {
+            IsCloudBusy = false;
+            RefreshCloudDecision();
+        }
     }
 
     public string BackupDirectory => _backupService.BackupDirectory;
@@ -296,6 +426,7 @@ public partial class DataManagementViewModel : ObservableObject
             IsImporting = false;
             ImportConfirmWord = string.Empty;
             RefreshBackups();
+            RefreshCloudDecision();
         }
     }
 

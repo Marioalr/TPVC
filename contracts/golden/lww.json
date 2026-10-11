@@ -8,6 +8,7 @@
     "Marcas en UTC con el formato del protocolo (yyyy-MM-dd HH:mm:ss.fffffff); null = no existe.",
     "pull-row y pull-tombstone: lo que decide el equipo al bajar (SyncRules.RemoteRowWins y RemoteTombstoneDeletes).",
     "server-upsert y server-tombstone: lo que hace la nube con el SQL que manda el equipo (TableMap.UpsertSql, SyncSchema.TombstoneUpsertSql y DeleteTombstonedRowSql), ejecutado de verdad sobre SQLite. 'affectedRows' es lo que Turso regresa en affected_row_count.",
+    "Cerca de generación (paso 8.9): el último argumento de las tres instrucciones es la generación del equipo ('deviceGeneration'; null si la nube todavía no tenía). Sin 'cloudGeneration' la nube no tiene la clave. Si no coincide con _tpvc_meta.generation, la nube no escribe nada (0 filas) y el equipo, al leer la generación al final de la petición, se detiene.",
     "rejected-upsert: si un upsert afecta 0 filas, el equipo vuelve a leer la fila y la lápida de la nube (SyncRules.AfterRejectedUpsert). La PC lo hace desde el paso 8.6; la app de Kotlin desde su primera versión que escribe.",
     "rejected-upsert-row: con la fila de la nube en mano, se aplica si su marca es igual o más nueva que la local (SyncRules.ServerRowAppliesAfterReject). No se relee en la primera subida completa, donde casi todo afecta 0 filas."
   ],
@@ -252,6 +253,81 @@
       "expected": {
         "serverUpdatedAtUtcAfter": null,
         "serverDeletedAtUtcAfter": "2026-10-10 15:00:03.0000000"
+      }
+    },
+    {
+      "name": "cerca de generación (nube) · subir fila · misma generación: se escribe",
+      "input": {
+        "check": "server-upsert",
+        "serverUpdatedAtUtc": null,
+        "incomingUpdatedAtUtc": "2026-10-10 15:00:02.0000000",
+        "cloudGeneration": "gen-a",
+        "deviceGeneration": "gen-a"
+      },
+      "expected": {
+        "affectedRows": 1,
+        "serverUpdatedAtUtcAfter": "2026-10-10 15:00:02.0000000",
+        "serverDeletedAtUtcAfter": null
+      }
+    },
+    {
+      "name": "cerca de generación (nube) · subir fila · la nube sin generación y el equipo tampoco: se escribe",
+      "input": {
+        "check": "server-upsert",
+        "serverUpdatedAtUtc": null,
+        "incomingUpdatedAtUtc": "2026-10-10 15:00:02.0000000",
+        "cloudGeneration": null,
+        "deviceGeneration": null
+      },
+      "expected": {
+        "affectedRows": 1,
+        "serverUpdatedAtUtcAfter": "2026-10-10 15:00:02.0000000",
+        "serverDeletedAtUtcAfter": null
+      }
+    },
+    {
+      "name": "cerca de generación (nube) · subir fila · otra generación: no se escribe",
+      "input": {
+        "check": "server-upsert",
+        "serverUpdatedAtUtc": null,
+        "incomingUpdatedAtUtc": "2026-10-10 15:00:02.0000000",
+        "cloudGeneration": "gen-nueva",
+        "deviceGeneration": "gen-vieja"
+      },
+      "expected": {
+        "affectedRows": 0,
+        "serverUpdatedAtUtcAfter": null,
+        "serverDeletedAtUtcAfter": null
+      }
+    },
+    {
+      "name": "cerca de generación (nube) · subir fila · el equipo sin generación y la nube con una: no se escribe",
+      "input": {
+        "check": "server-upsert",
+        "serverUpdatedAtUtc": null,
+        "incomingUpdatedAtUtc": "2026-10-10 15:00:02.0000000",
+        "cloudGeneration": "gen-nueva",
+        "deviceGeneration": null
+      },
+      "expected": {
+        "affectedRows": 0,
+        "serverUpdatedAtUtcAfter": null,
+        "serverDeletedAtUtcAfter": null
+      }
+    },
+    {
+      "name": "cerca de generación (nube) · subir lápida · otra generación: ni lápida ni borrado",
+      "input": {
+        "check": "server-tombstone",
+        "serverUpdatedAtUtc": "2026-10-10 15:00:01.0000000",
+        "incomingDeletedAtUtc": "2026-10-10 15:00:02.0000000",
+        "cloudGeneration": "gen-nueva",
+        "deviceGeneration": "gen-vieja"
+      },
+      "expected": {
+        "affectedRows": 0,
+        "serverUpdatedAtUtcAfter": "2026-10-10 15:00:01.0000000",
+        "serverDeletedAtUtcAfter": null
       }
     },
     {

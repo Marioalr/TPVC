@@ -64,9 +64,11 @@ internal sealed class TableMap
             var updates = string.Join(", ", new[] { "UpdatedAtUtc", "SyncedAtUtc", "OriginDeviceId" }.Concat(cols)
                 .Select(c => $"{q(c)} = excluded.{q(c)}"));
             // Un registro que otro equipo ya borró (y su borrado es igual o más nuevo) no se vuelve
-            // a crear: la subida reenvía filas con marca adelantada que pudieron borrarse en la nube
+            // a crear: la subida reenvía filas con marca adelantada que pudieron borrarse en la nube. El último
+            // argumento es la generación del equipo (cerca de generación, paso 8.9)
             return $"INSERT INTO {q(Table)} ({insertCols}) SELECT {values} " +
                    $"WHERE NOT EXISTS (SELECT 1 FROM {q(SyncSchema.TombstonesTable)} WHERE \"EntityType\" = ? AND \"SyncId\" = ? AND \"DeletedAtUtc\" >= ?) " +
+                   $"AND {SyncSchema.GenerationFenceSql} " +
                    $"ON CONFLICT(\"SyncId\") DO UPDATE SET {updates} " +
                    $"WHERE excluded.\"UpdatedAtUtc\" > {q(Table)}.\"UpdatedAtUtc\";";
         }
@@ -250,18 +252,31 @@ internal sealed class SyncSchema
     };
 
     /// <summary>
-    /// Subida de una lápida (args: EntityType, SyncId, DeletedAtUtc, OriginDeviceId): la nube se queda con el
+    /// La cerca de generación (paso 8.9): la escritura solo procede si la nube sigue en la generación del equipo (último
+    /// argumento; null si la nube todavía no tiene). Si otro equipo reemplazó la nube con un respaldo, lo que este venía
+    /// subiendo no cae en la nube restaurada.
+    /// </summary>
+    public static readonly string GenerationFenceSql = $"(SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = 'generation') IS ?";
+
+    /// <summary>La generación de la nube; la última instrucción de cada petición de la subida y de cada página de la bajada.</summary>
+    public static readonly string GenerationSql = $"SELECT \"Value\" AS \"generation\" FROM {Q(MetaTable)} WHERE \"Key\" = 'generation';";
+
+    /// <summary>
+    /// Subida de una lápida (args: EntityType, SyncId, DeletedAtUtc, OriginDeviceId, generación): la nube se queda con el
     /// borrado más nuevo.
     /// </summary>
     public static readonly string TombstoneUpsertSql =
         $"INSERT INTO {Q(TombstonesTable)} (\"EntityType\", \"SyncId\", \"DeletedAtUtc\", \"SyncedAtUtc\", \"OriginDeviceId\") " +
-        $"VALUES (?, ?, ?, {TursoSyncService.ServerNowSql}, ?) ON CONFLICT(\"EntityType\", \"SyncId\") DO UPDATE SET " +
+        $"SELECT ?, ?, ?, {TursoSyncService.ServerNowSql}, ? WHERE {GenerationFenceSql} ON CONFLICT(\"EntityType\", \"SyncId\") DO UPDATE SET " +
         "\"DeletedAtUtc\" = excluded.\"DeletedAtUtc\", \"SyncedAtUtc\" = excluded.\"SyncedAtUtc\", \"OriginDeviceId\" = excluded.\"OriginDeviceId\" " +
         $"WHERE excluded.\"DeletedAtUtc\" > {Q(TombstonesTable)}.\"DeletedAtUtc\";";
 
-    /// <summary>Después de subir una lápida (args: SyncId, DeletedAtUtc): borra la fila si no es más nueva que el borrado.</summary>
+    /// <summary>Después de subir una lápida (args: SyncId, DeletedAtUtc, generación): borra la fila si no es más nueva que el borrado.</summary>
     public static string DeleteTombstonedRowSql(string table) =>
-        $"DELETE FROM {Q(table)} WHERE \"SyncId\" = ? AND \"UpdatedAtUtc\" <= ?;";
+        $"DELETE FROM {Q(table)} WHERE \"SyncId\" = ? AND \"UpdatedAtUtc\" <= ? AND {GenerationFenceSql};";
+
+    /// <summary>«Reemplazar la nube con este respaldo» (paso 8.9; arg: la generación nueva): vacía una tabla de la nube.</summary>
+    public static string DeleteAllFencedSql(string table) => $"DELETE FROM {Q(table)} WHERE {GenerationFenceSql};";
 
     public static readonly string MetaStatement =
         $"CREATE TABLE IF NOT EXISTS {Q(MetaTable)} (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";

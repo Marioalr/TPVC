@@ -88,6 +88,17 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _identityNoticeText = string.Empty;
 
+    /// <summary>
+    /// Paso 8.9: un respaldo restaurado esperando decisión, un reemplazo de la nube a medias o la espera porque otra PC la
+    /// reemplaza; vacío si no.
+    /// </summary>
+    [ObservableProperty]
+    private string _generationNoticeText = string.Empty;
+
+    /// <summary>"N cambios guardados para «Volver a aplicar»…" (paso 8.9); vacío si no hay.</summary>
+    [ObservableProperty]
+    private string _savedChangesNoticeText = string.Empty;
+
     /// <summary>Esta base todavía no tiene identidad: puede unirse a la de la nube si ya la usaba.</summary>
     [ObservableProperty]
     private bool _canAdoptCloudIdentity;
@@ -196,6 +207,7 @@ public partial class TursoSyncViewModel : ObservableObject
         StatusMessage = _syncService.StatusMessage;
 
         _syncService.RefreshParkedCount();
+        _syncService.RefreshSavedChangesCount();
         RefreshLastSyncText();
         RefreshQuotaDisplay();
         RefreshNotices();
@@ -244,6 +256,23 @@ public partial class TursoSyncViewModel : ObservableObject
 
         ClockNoticeText = _syncService.ClockWarningText is { } clock
             ? $"{clock}. Mientras tanto TPVC marca los cambios con la hora de la nube; conviene corregir la fecha y hora de Windows."
+            : string.Empty;
+
+        GenerationNoticeText = _syncService.IsCloudReplacementPending
+            ? "El reemplazo de la nube con el respaldo de esta computadora quedó a medias. «Sincronizar ahora» lo termina; mientras " +
+              "tanto los demás equipos esperan sin bajar una nube incompleta."
+            : _syncService.IsRestoreDecisionPending
+                ? TursoSyncService.RestorePendingMessage
+                : _syncService.IsWaitingForCloudReplacement
+                    ? "Otra computadora está reemplazando la nube con un respaldo. La sincronización sigue sola cuando termine: esta " +
+                      "computadora guarda lo que no había subido, vuelve a bajar todo y ofrece «Volver a aplicar»."
+                    : string.Empty;
+
+        var saved = _syncService.SavedChangesCount;
+        SavedChangesNoticeText = saved > 0
+            ? (saved == 1 ? "1 cambio guardado" : $"{saved:N0} cambios guardados") + " para «Volver a aplicar»: lo que esta computadora no alcanzó a subir antes de que la nube " +
+              "se reemplazara con un respaldo, o lo que la nube tenía y el respaldo no. «Volver a aplicar» los escribe aquí de nuevo y " +
+              "suben en la siguiente sincronización."
             : string.Empty;
 
         var conflict = _syncService.IdentityConflict;
@@ -317,6 +346,58 @@ public partial class TursoSyncViewModel : ObservableObject
             IsBusy = false;
             RefreshNotices();
         }
+    }
+
+    /// <summary>«Volver a aplicar N cambios» (paso 8.9).</summary>
+    [RelayCommand]
+    public async Task ReapplySavedChangesAsync()
+    {
+        var summary = await _syncService.GetSavedChangesSummaryAsync();
+        bool confirm = DialogService.Confirm(
+            $"Se volverán a escribir en esta computadora {summary.Total:N0} cambios guardados (con hora nueva, así ganan y suben en la " +
+            $"siguiente sincronización):\n• {string.Join("\n• ", summary.Lines)}\n\n¿Desea continuar?",
+            "TPVC - Volver a aplicar");
+        if (!confirm) return;
+
+        IsBusy = true;
+        try
+        {
+            var (ok, message) = await _syncService.ReapplySavedChangesAsync();
+            SaveStatusMessage = ok ? message : $"✕ {message}";
+            if (ok) await SyncNowAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+            RefreshNotices();
+        }
+    }
+
+    /// <summary>Descarta los cambios guardados (el archivo del reemplazo sigue en la carpeta de respaldos).</summary>
+    [RelayCommand]
+    public async Task DiscardSavedChangesAsync()
+    {
+        bool confirm = DialogService.Confirm(
+            "Se descartarán los cambios guardados para «Volver a aplicar». Si vinieron de un reemplazo de la nube, su archivo sigue en la " +
+            "carpeta de respaldos y se puede volver a agregar.\n\n¿Desea continuar?",
+            "TPVC - Descartar cambios guardados");
+        if (!confirm) return;
+        await _syncService.DiscardSavedChangesAsync();
+        SaveStatusMessage = "Se descartaron los cambios guardados.";
+        RefreshNotices();
+    }
+
+    /// <summary>Agrega a «Volver a aplicar» un archivo guardado al reemplazar la nube (de esta u otra computadora).</summary>
+    [RelayCommand]
+    public async Task ImportSavedChangesFileAsync()
+    {
+        var path = DialogService.ShowOpenFileDialog(
+            "Cambios guardados al reemplazar la nube (nube-antes-de-reemplazar-*.db)|*.db|Todos los archivos (*.*)|*.*",
+            "Elegir el archivo de cambios guardados");
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var (ok, message) = await _syncService.ImportSavedChangesFileAsync(path);
+        SaveStatusMessage = ok ? message : $"✕ {message}";
+        RefreshNotices();
     }
 
     /// <summary>«Esta PC ya usaba esta nube»: une esta base a la identidad de la nube si todo lo que subió está en ella.</summary>

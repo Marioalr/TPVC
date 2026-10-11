@@ -19,6 +19,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Margin="0,0,0,16">
@@ -26,8 +27,80 @@
                     <TextBlock Style="{StaticResource TextDetail}" Text="Copias de seguridad, importar el catálogo y restaurar información" Margin="0,4,0,0" />
                 </StackPanel>
 
+                <!-- Paso 8.9: se restauró un respaldo con la nube activa; hasta elegir, no se sincroniza -->
+                <Border Grid.Row="1" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16"
+                        Visibility="{Binding IsCloudDecisionPending, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource ThemeWarningSubtle}" Margin="0,0,14,0" VerticalAlignment="Top">
+                                <helpers:Icon Data="{StaticResource IcoCloud}" Foreground="{DynamicResource ThemeWarningText}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource TextSection}" Text="La nube sigue con los datos de antes del respaldo" />
+                                <TextBlock Style="{StaticResource TextDetail}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Text="Se restauró un respaldo y esta computadora sincroniza con la nube. Para no mezclar el respaldo con lo posterior de la nube no se sincroniza hasta que elija qué hacer." />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Un reemplazo a medias -->
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,0,0,12" Visibility="{Binding IsCloudReplacementPending, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                                           Text="El reemplazo de la nube quedó a medias (por ejemplo, se cortó el internet). Los demás equipos esperan sin bajar una nube incompleta." />
+                                <Button Grid.Column="1" Style="{StaticResource ButtonPrimary}" Margin="12,0,0,0" Command="{Binding ContinueCloudReplacementCommand}"
+                                        IsEnabled="{Binding IsCloudBusy, Converter={StaticResource InverseBool}}" Content="Terminar el reemplazo" />
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Visibility="{Binding IsCloudReplacementPending, Converter={StaticResource InverseBoolToVis}}">
+                            <TextBlock Style="{StaticResource TextBody}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Text="«Reemplazar la nube con este respaldo» la deja igual a esta computadora; antes guarda lo que la nube tenía y el respaldo no, para «Volver a aplicar». Los demás equipos guardan lo que no habían subido y vuelven a bajar todo. «Desconectar esta PC» la deja con el respaldo, sin sincronizar." />
+                            <WrapPanel Margin="0,0,0,4">
+                                <Button Style="{StaticResource ButtonSecondary}" Margin="0,0,8,8" Command="{Binding ReviewCloudReplacementCommand}"
+                                        IsEnabled="{Binding IsCloudBusy, Converter={StaticResource InverseBool}}" Content="Revisar qué se perdería…"
+                                        ToolTip="Lee la nube una vez y compara con este respaldo" />
+                                <Button Style="{StaticResource ButtonGhost}" Margin="0,0,8,8" Command="{Binding DisconnectCloudCommand}"
+                                        IsEnabled="{Binding IsCloudBusy, Converter={StaticResource InverseBool}}" Content="Desconectar esta PC de la nube" />
+                            </WrapPanel>
+
+                            <StackPanel Visibility="{Binding HasCloudPreview, Converter={StaticResource BoolToVis}}">
+                                <Border Style="{StaticResource CardSubtle}" Padding="14,10" Margin="0,4,0,12">
+                                    <TextBlock Style="{StaticResource TextBody}" Text="{Binding CloudPreviewText}" TextWrapping="Wrap" />
+                                </Border>
+                                <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,12">
+                                    <TextBlock TextWrapping="Wrap"
+                                               Text="La nube quedará igual a este respaldo en todos los equipos. Para continuar escriba CONFIRMAR." />
+                                </Border>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}" CharacterCasing="Upper"
+                                             Text="{Binding CloudReplaceConfirmWord, UpdateSourceTrigger=PropertyChanged}"
+                                             helpers:Field.Placeholder="CONFIRMAR" AutomationProperties.Name="Escriba CONFIRMAR para reemplazar la nube" />
+                                    <Button Grid.Column="1" Style="{StaticResource ButtonPrimary}" Margin="8,0,0,0" Command="{Binding ReplaceCloudCommand}"
+                                            IsEnabled="{Binding CanConfirmCloudReplace}" Content="Reemplazar la nube con este respaldo" />
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <ProgressBar IsIndeterminate="True" Height="4" Margin="0,12,0,0" Visibility="{Binding IsCloudBusy, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Style="{StaticResource TextBody}" TextWrapping="Wrap" Margin="0,10,0,0" Text="{Binding CloudDecisionMessage}"
+                                   Visibility="{Binding CloudDecisionMessage, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Respaldo -->
-                <Border Grid.Row="1" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
+                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -92,7 +165,7 @@
                 </Border>
 
                 <!-- Importar / restaurar -->
-                <UniformGrid Grid.Row="2" Columns="2">
+                <UniformGrid Grid.Row="3" Columns="2">
                     <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,8,0">
                         <StackPanel>
                             <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource ThemeInfoSubtle}" HorizontalAlignment="Left" Margin="0,0,0,12">

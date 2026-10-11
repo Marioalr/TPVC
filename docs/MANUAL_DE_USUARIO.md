@@ -195,6 +195,9 @@ Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y not
 * **Respaldar ahora** y la lista de **respaldos guardados** (se respalda solo al abrir el programa, antes de importar o restaurar y antes de las actualizaciones que cambian la base, como «antes-registro-de-cambios» en la 1.20.3; se guardan los últimos 14). **Volver a este** regresa la información al momento de ese respaldo.
 * **Importar catálogo de Excel** (.xlsx o .csv): medicamentos, plantillas de receta, dosis pediátricas y datos del médico. Se explican los pasos y basta con **Importar**: antes se crea un respaldo y no se borra nada.
 * **Restaurar base de datos** (.db): reemplaza toda la información por la del archivo. Por ser irreversible pide escribir **CONFIRMAR** (también al volver a un respaldo).
+* **Si la computadora sincroniza con la nube**, después de restaurar aparece **«La nube sigue con los datos de antes del respaldo»** y no se sincroniza hasta elegir:
+  * **Revisar qué se perdería…** y luego **Reemplazar la nube con este respaldo** (pide CONFIRMAR): la nube queda igual a esta computadora en todos los equipos. Antes, lo que la nube tenía y el respaldo no (por ejemplo, las consultas de la tablet de esta mañana) se guarda en un archivo de la carpeta de respaldos y queda para **Volver a aplicar** en *Nube y dispositivos*. Los demás equipos guardan lo que no habían subido, vuelven a bajar todo y también ofrecen **Volver a aplicar**. Si se corta el internet a la mitad, **Terminar el reemplazo** (o la siguiente sincronización) lo termina; mientras tanto los demás equipos esperan.
+  * **Desconectar esta PC de la nube**: esta computadora se queda con el respaldo y deja de sincronizar; la nube y los demás equipos siguen como estaban.
 
 ### Nube y dispositivos
 Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (con **Pegar** y **Probar conexión**), el nombre de este equipo, la vinculación de la tablet y el celular (llegará por QR en la red del consultorio; por ahora los botones dicen "Disponible con la vinculación por QR"), la cuota gratuita y una guía plegable para crear la base gratis.
@@ -213,7 +216,9 @@ Sincronización con Turso: estado y **Sincronizar ahora**, la URL y el token (co
 
   Si la nube no es la del consultorio, revise la URL.
 * Al instalar TPVC, la base trae las categorías y los servicios de ejemplo, pero no pacientes ni productos de ejemplo: esos solo se agregan si se piden en el asistente inicial.
-* **Sincronización detenida: actualice TPVC en esta computadora**: otro equipo ya usa una versión más nueva de la sincronización. Lo que se capture aquí se guarda y sube al actualizar.
+* **Sincronización detenida: actualice TPVC en esta computadora**: otro equipo ya usa una versión más nueva de la sincronización (también pasa después de que una PC reemplaza la nube con un respaldo). Lo que se capture aquí se guarda y sube al actualizar.
+* **Sincronización en espera: otra computadora está reemplazando la nube con un respaldo**: esta computadora no escribe en la nube mientras tanto y guarda lo que no había subido. Cuando la otra termina, vuelve a bajar todo sola (antes guarda un respaldo).
+* **N cambios guardados para «Volver a aplicar»**: lo que esta computadora no alcanzó a subir antes de que la nube se reemplazara con un respaldo, o lo que la nube tenía y el respaldo no. **Volver a aplicar** los escribe de nuevo aquí y suben en la siguiente sincronización; **Descartar** los quita. **Volver a aplicar un archivo…** agrega el archivo que guardó la PC que reemplazó la nube (`nube-antes-de-reemplazar-….db`).
 
 ### Actualizaciones
 Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalador se verifica con SHA-256 antes de ejecutarse), las novedades de la versión nueva, la carpeta de registros y, plegado, el token para repositorios privados.
