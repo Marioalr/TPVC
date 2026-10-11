@@ -23,10 +23,15 @@ public enum DeviceRole
 }
 
 /// <summary>
-/// Matriz de permisos según el rol del dispositivo.
+/// Matriz de permisos según el rol del dispositivo (plan de la Fase 8, §4.6). Con un solo token para tablet y celular,
+/// Turso no distingue roles: estos límites los hace cumplir la app de cada equipo, con el rol que la PC le asignó en
+/// DeviceRegistry.
 /// </summary>
 public static class DevicePermissions
 {
+    /// <summary>Ver expedientes (paso 8.10): todos los equipos.</summary>
+    public static bool CanViewClinicalRecords(DeviceRole role) => true;
+
     public static bool CanManageClinicalRecords(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
 
@@ -36,24 +41,49 @@ public static class DevicePermissions
     public static bool CanProcessSales(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
 
+    /// <summary>Editar inventario y catálogo: productos, precios, conteos y cerrar lotes. La tablet y el celular solo lo ven.</summary>
     public static bool CanManageInventory(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop;
 
+    /// <summary>Registrar entradas de mercancía, un lote con su movimiento de entrada (paso 8.10): la PC y el celular.</summary>
+    public static bool CanRegisterStockEntries(DeviceRole role) =>
+        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidMobileAdmin;
+
+    /// <summary>Agendar citas (paso 8.10): todos los equipos.</summary>
+    public static bool CanScheduleAppointments(DeviceRole role) => true;
+
+    /// <summary>Compartir la receta y el ticket (paso 8.10): todos los equipos.</summary>
+    public static bool CanShareDocuments(DeviceRole role) => true;
+
     public static bool CanViewDashboard(DeviceRole role) => true;
 
+    /// <summary>Corte de caja: oculto en la tablet.</summary>
     public static bool CanViewCashCut(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop or DeviceRole.AndroidMobileAdmin;
 
     public static bool CanViewStockAlerts(DeviceRole role) => true;
 
+    /// <summary>Configuración, Excel, respaldos, la nube, vincular equipos, perfil y membrete: solo la PC.</summary>
     public static bool CanConfigureSystem(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop;
 
+    /// <summary>Recibe y envía la consulta en curso a otro equipo: el celular no.</summary>
+    public static bool CanTakeConsultations(DeviceRole role) =>
+        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
+
+    /// <summary>La letra del código de cada equipo (P1, T1, C1…; paso 8.10).</summary>
+    public static char CodeLetter(DeviceRole role) => role switch
+    {
+        DeviceRole.AndroidTablet => 'T',
+        DeviceRole.AndroidMobileAdmin => 'C',
+        _ => 'P'
+    };
+
     public static string GetRoleDescription(DeviceRole role) => role switch
     {
-        DeviceRole.WindowsDesktop => "Control total: Consultas NOM-004, Recetas, Cobro POS, Inventario, Lotes, Kardex y Nube.",
-        DeviceRole.AndroidTablet => "Uso clínico y operativo: Expedientes, Notas médicas, Recetas, Citas y Cobro.",
-        DeviceRole.AndroidMobileAdmin => "Administración ejecutiva: Métricas del día, Cortes de caja, Consulta de existencias y Alertas.",
+        DeviceRole.WindowsDesktop => "Acceso completo: consultas, recetas, cobro, inventario, configuración y la nube.",
+        DeviceRole.AndroidTablet => "Consulta y recepción: expedientes, notas, recetas, citas y cobro. Ve el inventario sin editarlo.",
+        DeviceRole.AndroidMobileAdmin => "Ve expedientes, agenda citas, revisa existencias, registra entradas de mercancía y ve el corte de caja.",
         _ => ""
     };
 }
@@ -129,8 +159,27 @@ public class TursoSettings
     /// <summary>Token cifrado para almacenamiento seguro en disco.</summary>
     public string? ProtectedAuthToken { get; set; }
 
-    /// <summary>Identificador único persistente de este dispositivo.</summary>
+    /// <summary>
+    /// Identificador único persistente de este dispositivo. La descarga omite las filas que subió este DeviceId, así que
+    /// dos instalaciones con el mismo nunca verían las filas de la otra: se cambia por uno nuevo si la configuración se
+    /// copió a otra computadora (paso 8.10).
+    /// </summary>
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Huella de la computadora donde se creó este <see cref="DeviceId"/> (SHA-256 del MachineGuid de Windows; null antes
+    /// de v1.27.0). Si cambia, la carpeta de TPVC se copió a otra máquina y se genera un DeviceId nuevo.
+    /// </summary>
+    public string? MachineFingerprint { get; set; }
+
+    /// <summary>
+    /// Por qué este equipo tomó un DeviceId nuevo (configuración copiada de otra computadora u otra instalación con el
+    /// mismo); se muestra en Nube y dispositivos hasta pulsar «Entendido». null si no hay aviso.
+    /// </summary>
+    public string? DeviceIdNotice { get; set; }
+
+    /// <summary>El código de este equipo en DeviceRegistry (P1, P2…; paso 8.10), según la última sincronización.</summary>
+    public string? DeviceCode { get; set; }
 
     /// <summary>Nombre asignado al dispositivo.</summary>
     public string DeviceName { get; set; } = Environment.MachineName;

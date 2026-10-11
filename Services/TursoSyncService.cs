@@ -543,6 +543,9 @@ public partial class TursoSyncService
         _syncGeneration = null;
         _generationChecked = false;
 
+        // Paso 8.10: si este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo, se baja todo una vez
+        await ApplyRedownloadRequestAsync(settings, ct);
+
         // Una sincronización completa (o la primera, sin ningún cursor de bajada) sube y baja todo: el freno la
         // revisa antes de empezar
         var cursors = fullResync ? PullCursors.FromScratch : await LoadPullCursorsAsync(settings, ct);
@@ -606,10 +609,13 @@ public partial class TursoSyncService
         // 3. «Sincronización completa»: reporte y, si sale limpio, la identidad de la nube (A6)
         var report = fullResync ? await BuildFullSyncReportAsync(client, ct) : null;
 
+        // 4. Paso 8.10: una vez por sesión con la nube verificada, esta PC en DeviceRegistry y la PC principal
+        var registryWrites = await EnsureDeviceRegistryAsync(client, settings, ct);
+
         settings.LastPulledServerWatermark = watermark;
         settings.LastSyncUtc = DateTime.UtcNow;
         _settingsService.RecordUsage(rowsRead + pushReads + checkReads + (report?.RowsRead ?? 0) + 3 + Interlocked.Exchange(ref _externalRowsRead, 0),
-            pushed + 1 + Interlocked.Exchange(ref _externalRowsWritten, 0));
+            pushed + 1 + registryWrites + Interlocked.Exchange(ref _externalRowsWritten, 0));
         _settingsService.SaveSettings(settings);
         CheckDailyConsumption();
 
@@ -1159,6 +1165,23 @@ public partial class TursoSyncService
     {
         if (_verifiedSchemaUrl == client.DatabaseUrl) return;
 
+        // La sincronización y la revisión de consultas pueden llegar aquí a la vez: un ALTER repetido fallaría
+        await _schemaLock.WaitAsync(ct);
+        try
+        {
+            if (_verifiedSchemaUrl == client.DatabaseUrl) return;
+            await MigrateRemoteSchemaAsync(client, ct);
+        }
+        finally
+        {
+            _schemaLock.Release();
+        }
+    }
+
+    private readonly SemaphoreSlim _schemaLock = new(1, 1);
+
+    private async Task MigrateRemoteSchemaAsync(TursoClient client, CancellationToken ct)
+    {
         var schema = GetSchema();
         var statements = schema.Statements;
         var fingerprint = schema.Fingerprint;
@@ -1175,13 +1198,14 @@ public partial class TursoSyncService
             return;
         }
 
-        // Estructura actual de las tablas sincronizadas
+        // Estructura actual de las tablas sincronizadas y del latido (paso 8.10: sus columnas nuevas no salen del modelo)
+        const string heartbeatTable = "RegisteredDevices";
         var syncTables = GetTableMaps().Select(m => m.Table).Append(TombstonesTable).ToList();
         var existingTables = (await client.QueryAsync("SELECT name FROM sqlite_master WHERE type = 'table';", null, ct))
             .Select(r => r["name"]?.ToString() ?? string.Empty)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var tablesToInspect = syncTables.Where(existingTables.Contains).ToList();
+        var tablesToInspect = syncTables.Append(heartbeatTable).Where(existingTables.Contains).ToList();
         var columnsByTable = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         if (tablesToInspect.Count > 0)
         {
@@ -1194,6 +1218,7 @@ public partial class TursoSyncService
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
         }
+        columnsByTable.Remove(heartbeatTable, out var heartbeatColumns);
 
         var ddl = new List<(string Sql, object?[]? Args)>();
         foreach (var (table, columns) in columnsByTable)
@@ -1223,6 +1248,15 @@ public partial class TursoSyncService
             }
         }
 
+        // Paso 8.10: las columnas nuevas del latido, todas con nulo (el upsert de una PC más vieja sigue igual)
+        if (heartbeatColumns != null)
+        {
+            foreach (var (name, type) in SyncSchema.RegisteredDevicesAddedColumns.Where(c => !heartbeatColumns.Contains(c.Name)))
+            {
+                ddl.Add(($"ALTER TABLE {Q(heartbeatTable)} ADD COLUMN {Q(name)} {type};", null));
+            }
+        }
+
         // La revisión del contrato (contracts/sync/schema.json) va antes que la huella: si la petición se
         // corta a la mitad, la siguiente sincronización vuelve a escribir las dos
         ddl.Add(($"INSERT INTO {Q(MetaTable)} (\"Key\", \"Value\") VALUES ('contract', ?) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\";",
@@ -1236,27 +1270,6 @@ public partial class TursoSyncService
 
     /// <summary>Versión del programa (x.y.z) que se registra para cada equipo.</summary>
     public static string AppVersionText => typeof(TursoSyncService).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
-
-    private static async Task RegisterDeviceAsync(TursoClient client, TursoSettings settings, CancellationToken ct)
-    {
-        const string sql = @"
-INSERT INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(DeviceId) DO UPDATE SET
-    DeviceName = excluded.DeviceName,
-    DeviceRole = excluded.DeviceRole,
-    AppVersion = excluded.AppVersion,
-    LastSeenUtc = excluded.LastSeenUtc;";
-
-        // Hora del servidor: "última conexión" no depende del reloj de cada equipo
-        await client.ExecuteAsync(sql.Replace("VALUES (?, ?, ?, ?, ?)", $"VALUES (?, ?, ?, ?, {ServerNowSql})"), new object?[]
-        {
-            settings.DeviceId,
-            settings.DeviceName,
-            settings.DeviceRole.ToString(),
-            AppVersionText
-        }, ct);
-    }
 
     // =========================================================================
     // PUSH
@@ -1329,6 +1342,10 @@ ON CONFLICT(DeviceId) DO UPDATE SET
         // Una apartada cuya fila ya no existe aquí (se borró) también sale: su lápida sube por su lado.
         await UpdateParkedPushAsync(db, parkedBefore, parkNow, included, ct);
         await SyncChangeLog.SavePushCursorAsync(db, toSeq, ct);
+
+        // Paso 8.10: la subida termina con LastPushUtc y lo que quedó pendiente en el latido (los demás equipos y «Quitar»)
+        if (statementCount > 0) await HeartbeatAfterPushAsync(client, ct);
+
         if (cursor == null)
         {
             AppLogger.Info($"Turso: subida completa con el registro de cambios hasta el Seq {toSeq} ({statementCount} instrucciones, {applied} filas cambiaron en la nube).");

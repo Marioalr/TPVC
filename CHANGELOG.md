@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.27.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.10: registro de equipos y PC principal
+* **Equipos vinculados**, en *Nube y dispositivos*: cada computadora que usa la nube con su código (P1, P2…), si está en línea o cuándo se vio por última vez y sus cambios sin subir («12 cambios sin subir desde las 10:42»). Se lee al abrir la sección y con *Actualizar*.
+* **PC principal**: la primera computadora que sincroniza con la nube verificada queda como la principal (más adelante será la única que regularice los folios hechos sin conexión). En una computadora nueva que recuperó la nube, **Esta PC reemplaza a la principal** toma su lugar y quita a la anterior.
+* **Quitar** saca a un equipo de la lista y de *Enviar a…*; antes muestra sus cambios sin subir. Su código no se vuelve a usar.
+* **Configuración copiada a otra computadora**: si el token guardado no se puede leer, o la carpeta de TPVC viene de otra computadora, esta toma una identidad nueva para la nube y lo avisa (antes el token quedaba vacío sin decir nada, y las dos computadoras dejaban de recibir lo que subía la otra). Si dos computadoras con la misma identidad sincronizan a la vez, una lo nota, toma otra y baja todo una vez.
+* La consulta entre equipos decide quién puede recibir por el protocolo que informa cada equipo (así la app de Android podrá numerar sus versiones desde 1.0); los equipos quitados ya no aparecen.
+* La nube gana la tabla de equipos y más datos en el latido de cada uno (contrato revisión 5). Las PC con versiones anteriores siguen sincronizando y enviando consultas.
+* 508 pruebas.
+
 ## [1.26.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.9: restaurar un respaldo con la nube activa

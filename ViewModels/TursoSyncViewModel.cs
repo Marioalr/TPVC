@@ -1,4 +1,6 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -126,6 +128,33 @@ public partial class TursoSyncViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isFullSyncReportClean;
+
+    /// <summary>
+    /// Este equipo tomó un DeviceId nuevo (configuración copiada de otra computadora u otra instalación con el mismo; paso
+    /// 8.10); vacío si no hay aviso.
+    /// </summary>
+    [ObservableProperty]
+    private string _deviceIdNoticeText = string.Empty;
+
+    /// <summary>Equipos vinculados (paso 8.10): los que usan esta nube, menos los quitados.</summary>
+    public ObservableCollection<LinkedDevice> Devices { get; } = new();
+
+    /// <summary>Leer la lista al abrir la sección (las pruebas de pantalla la apagan y la leen a mano).</summary>
+    public bool RefreshDevicesOnOpen { get; set; } = true;
+
+    [ObservableProperty]
+    private bool _isLoadingDevices;
+
+    /// <summary>"Por ahora solo esta computadora…", o por qué no se pudo leer la lista.</summary>
+    [ObservableProperty]
+    private string _devicesStatusText = string.Empty;
+
+    /// <summary>Quién es la PC principal, o si esta computadora está quitada.</summary>
+    [ObservableProperty]
+    private string _primaryText = string.Empty;
+
+    [ObservableProperty]
+    private bool _canMakeThisThePrimary;
 
     [ObservableProperty]
     private bool _isHelpGuideOpen;
@@ -274,6 +303,8 @@ public partial class TursoSyncViewModel : ObservableObject
               "se reemplazara con un respaldo, o lo que la nube tenía y el respaldo no. «Volver a aplicar» los escribe aquí de nuevo y " +
               "suben en la siguiente sincronización."
             : string.Empty;
+
+        DeviceIdNoticeText = _settingsService.CurrentSettings.DeviceIdNotice ?? string.Empty;
 
         var conflict = _syncService.IdentityConflict;
         CanAdoptCloudIdentity = conflict is { LocalClinicId: null };
@@ -647,5 +678,149 @@ public partial class TursoSyncViewModel : ObservableObject
     public void ToggleHelpGuide()
     {
         IsHelpGuideOpen = !IsHelpGuideOpen;
+    }
+
+    // ================================================================== equipos vinculados (paso 8.10)
+
+    /// <summary>Lee la lista de la nube (escribe antes el latido de esta PC). Al abrir la sección y con «Actualizar».</summary>
+    [RelayCommand]
+    public async Task RefreshDevicesAsync()
+    {
+        var settings = _settingsService.CurrentSettings;
+        if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl) || string.IsNullOrWhiteSpace(settings.AuthToken))
+        {
+            Devices.Clear();
+            DevicesStatusText = "Active la sincronización para ver los equipos que usan esta nube.";
+            RefreshPrimary();
+            return;
+        }
+        if (IsLoadingDevices) return;
+
+        IsLoadingDevices = true;
+        try
+        {
+            var devices = await _syncService.GetDevicesAsync();
+            Devices.Clear();
+            foreach (var device in devices) Devices.Add(device);
+            DevicesStatusText = devices.Count(d => !d.IsThisDevice) == 0
+                ? "Por ahora solo esta computadora usa la nube. La tablet y el celular aparecerán aquí al vincularlos."
+                : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"No se pudo leer la lista de equipos: {ex.Message}");
+            DevicesStatusText = $"No se pudo leer la lista de equipos: {ConsultationHandoffService.Describe(ex)}.";
+        }
+        finally
+        {
+            IsLoadingDevices = false;
+            RefreshPrimary();
+            RefreshNotices();
+        }
+    }
+
+    /// <summary>La PC principal según la lista (o el último registro) y si esta puede tomar su lugar.</summary>
+    private void RefreshPrimary()
+    {
+        var registration = _syncService.Registration;
+        var thisDevice = Devices.FirstOrDefault(d => d.IsThisDevice);
+        var primary = Devices.FirstOrDefault(d => d.IsPrimary);
+        bool thisIsPrimary = thisDevice?.IsPrimary ?? registration?.IsPrimary ?? false;
+        var code = thisDevice?.DeviceCode ?? registration?.DeviceCode;
+
+        if (registration is { IsRevoked: true })
+        {
+            PrimaryText = $"Esta computadora se quitó de los equipos vinculados el {registration.RevokedAtUtc!.Value.ToLocalTime():dd/MM/yyyy HH:mm}" +
+                          (registration.RevokedReason == TursoSyncService.RevokedReplacedReason ? ", porque otra quedó como la PC principal." : ".") +
+                          " Si va a seguir siendo la del consultorio, pulse «Esta PC reemplaza a la principal».";
+            CanMakeThisThePrimary = true;
+        }
+        else if (thisIsPrimary)
+        {
+            PrimaryText = $"Esta computadora es la PC principal{(code != null ? $" (código {code})" : string.Empty)}: la única que regularizará los folios " +
+                          "hechos sin conexión y creará los saldos iniciales del inventario.";
+            CanMakeThisThePrimary = false;
+        }
+        else if (primary != null || registration?.PrimaryDeviceId != null)
+        {
+            var name = primary?.DeviceName ?? registration?.PrimaryName ?? "otra computadora";
+            var seen = primary?.SeenText.ToLowerInvariant() ?? (registration?.PrimaryLastSeenUtc is { } last
+                ? $"visto {ConsultationHandoffService.DescribeLongAgo(DateTime.UtcNow - last)}"
+                : "sin latido reciente");
+            PrimaryText = $"La PC principal es «{name}» ({seen}). Si esta computadora la reemplaza, por ejemplo porque la anterior se " +
+                          "descompuso, pulse «Esta PC reemplaza a la principal»." +
+                          (code != null ? $" El código de esta es {code}." : string.Empty);
+            CanMakeThisThePrimary = true;
+        }
+        else
+        {
+            PrimaryText = Devices.Count > 0 || registration != null
+                ? "La PC principal se asigna en la siguiente sincronización con la nube verificada."
+                : string.Empty;
+            CanMakeThisThePrimary = false;
+        }
+    }
+
+    /// <summary>«Esta PC reemplaza a la principal»: toma la clave de la nube y quita a la anterior.</summary>
+    [RelayCommand]
+    public async Task MakeThisThePrimaryAsync()
+    {
+        var previous = Devices.FirstOrDefault(d => d.IsPrimary && !d.IsThisDevice);
+        var detail = previous == null
+            ? string.Empty
+            : $" en lugar de «{previous.DeviceName}» ({previous.SeenText.ToLowerInvariant()})" +
+              (previous.IsOnline ? ". ¡Atención: esa computadora está en línea ahora mismo!" : string.Empty);
+        bool confirm = DialogService.Confirm(
+            $"Esta computadora quedará como la PC principal{detail}. La anterior se quita de los equipos vinculados.\n\n" +
+            "Úselo cuando la PC principal se descompuso o se cambió por esta.\n\n¿Desea continuar?",
+            "TPVC - Esta PC reemplaza a la principal");
+        if (!confirm) return;
+
+        IsBusy = true;
+        try
+        {
+            var (ok, message) = await _syncService.MakeThisThePrimaryAsync();
+            SaveStatusMessage = ok ? message : $"✕ {message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        await RefreshDevicesAsync();
+    }
+
+    /// <summary>«Quitar» un equipo: muestra antes sus cambios sin subir.</summary>
+    [RelayCommand]
+    public async Task RemoveDeviceAsync(LinkedDevice? device)
+    {
+        if (device == null || !device.CanRemove) return;
+        var pending = device.PendingCount is > 0
+            ? $"\n\n{device.PendingText}: todavía no están en la nube y se perderían si ese equipo ya no se vuelve a conectar."
+            : $"\n\n{device.PendingText}.";
+        bool confirm = DialogService.Confirm(
+            $"¿Quitar «{device.DeviceName}» ({device.RoleText.ToLowerInvariant()}, {device.SeenText.ToLowerInvariant()}) de los equipos vinculados?" +
+            pending + "\n\nDeja de aparecer aquí y de recibir consultas de otros equipos. Su código no se vuelve a usar.",
+            "TPVC - Quitar equipo");
+        if (!confirm) return;
+
+        IsBusy = true;
+        try
+        {
+            var (ok, message) = await _syncService.RemoveDeviceAsync(device);
+            SaveStatusMessage = ok ? message : $"✕ {message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        await RefreshDevicesAsync();
+    }
+
+    /// <summary>«Entendido» en el aviso de la identidad nueva de este equipo.</summary>
+    [RelayCommand]
+    public void DismissDeviceIdNotice()
+    {
+        _settingsService.DismissDeviceIdNotice();
+        RefreshNotices();
     }
 }

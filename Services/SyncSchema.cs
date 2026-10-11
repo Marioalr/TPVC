@@ -285,9 +285,41 @@ internal sealed class SyncSchema
         "CREATE TABLE IF NOT EXISTS ClinicProfiles (Id INTEGER PRIMARY KEY, DoctorName TEXT, ProfessionalLicense TEXT, Specialty TEXT, " +
         "University TEXT, ClinicName TEXT, Address TEXT, Phone TEXT, Email TEXT, TaxId TEXT, AdditionalNotes TEXT, UpdatedAtUtc TEXT NOT NULL)";
 
-    public const string RegisteredDevicesStatement =
+    /// <summary>
+    /// Columnas del latido que agregó el paso 8.10. Todas aceptan nulo: el upsert de una PC v1.17–v1.26 (con sus columnas
+    /// explícitas) sigue igual. En una nube que ya tenía la tabla llegan con <c>ALTER TABLE</c>, revisado con
+    /// <c>pragma_table_info</c>, porque el ciclo de columnas nuevas solo cubre las tablas del modelo de EF.
+    /// </summary>
+    public static readonly (string Name, string Type)[] RegisteredDevicesAddedColumns =
+    {
+        ("Platform", "TEXT"),
+        ("SyncProtocol", "INTEGER"),
+        ("HandoffProtocol", "INTEGER"),
+        ("ContractRevision", "INTEGER"),
+        ("LastPushUtc", "TEXT"),
+        ("PendingCount", "INTEGER"),
+        ("OldestPendingUtc", "TEXT"),
+        ("InstanceNonce", "TEXT")
+    };
+
+    public static readonly string RegisteredDevicesStatement =
         "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, " +
-        "AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL)";
+        "AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL, " +
+        string.Join(", ", RegisteredDevicesAddedColumns.Select(c => $"{c.Name} {c.Type}")) + ")";
+
+    public const string DeviceRegistryTable = "DeviceRegistry";
+
+    /// <summary>
+    /// Paso 8.10: la autoridad sobre el rol, el código (P1, T1, C1…) y la revocación de cada equipo. Solo la escribe la PC
+    /// y sus filas nunca se borran: quitar un equipo pone RevokedAtUtc y RevokedReason, y el siguiente código de cada
+    /// letra es el mayor registrado + 1, así que nunca se reutiliza.
+    /// </summary>
+    public static readonly string[] DeviceRegistryStatements =
+    {
+        $"CREATE TABLE IF NOT EXISTS {DeviceRegistryTable} (DeviceId TEXT PRIMARY KEY NOT NULL, DeviceCode TEXT NOT NULL, Role TEXT NOT NULL, " +
+        "DisplayName TEXT NOT NULL, Model TEXT, PairedAtUtc TEXT NOT NULL, RevokedAtUtc TEXT, RevokedReason TEXT)",
+        $"CREATE UNIQUE INDEX IF NOT EXISTS UX_{DeviceRegistryTable}_DeviceCode ON {DeviceRegistryTable} (DeviceCode)"
+    };
 
     private static IEnumerable<string> BuildStatements(IReadOnlyList<TableMap> tables)
     {
@@ -299,6 +331,7 @@ internal sealed class SyncSchema
         foreach (var statement in TombstoneStatements) yield return statement;
         yield return ClinicProfilesStatement;
         yield return RegisteredDevicesStatement;
+        foreach (var statement in DeviceRegistryStatements) yield return statement;
 
         // Consultas enviadas entre equipos (no se replica: cada equipo la consulta directamente)
         foreach (var ddl in ConsultationHandoffService.HandoffTableDdl) yield return ddl;

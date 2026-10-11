@@ -179,6 +179,17 @@ internal sealed class UiSmokeSession
         return null;
     }
 
+    private static T? FindDescendant<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject
+    {
+        if (root is T match) return match;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var found = FindDescendant<T>(System.Windows.Media.VisualTreeHelper.GetChild(root, i));
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     // ------------------------------------------------------------------ pantallas
 
     private void RunScreens()
@@ -252,6 +263,8 @@ internal sealed class UiSmokeSession
             notificationService: notifications,
             consultationHandoffService: handoff);
         main.IsFirstRunWizardOpen = false;
+        // Equipos vinculados (paso 8.10) se lee a mano antes de su captura, no al abrir la sección
+        main.TursoSyncVM.RefreshDevicesOnOpen = false;
 
         // El contenido de la ventana real, sin mostrarla: sigue siendo hijo lógico de la ventana
         // (le llegan los cambios de tema y hereda su color de texto) y se mide y dibuja aparte,
@@ -561,6 +574,30 @@ internal sealed class UiSmokeSession
             tursoSync.RefreshSavedChangesCount();
             main.DataVM.RefreshCloudDecision();
             cloudVm.LoadFromSettings();
+
+            // Paso 8.10: Equipos vinculados, con esta PC como la principal, la tablet con cambios sin subir y la PC de
+            // recepción (v1.15, sin código)
+            ExecuteCloud("INSERT OR REPLACE INTO _tpvc_meta (Key, Value) VALUES ('primaryDeviceId', 'device-pc'); " +
+                         "INSERT OR IGNORE INTO DeviceRegistry (DeviceId, DeviceCode, Role, DisplayName, Model, PairedAtUtc) VALUES " +
+                         "('device-pc', 'P1', 'WindowsDesktop', 'PC del consultorio', 'Windows', strftime('%Y-%m-%d %H:%M:%f','now')), " +
+                         "('device-tablet', 'T1', 'AndroidTablet', 'Tablet del consultorio', 'SM-X710', strftime('%Y-%m-%d %H:%M:%f','now')); " +
+                         "UPDATE RegisteredDevices SET Platform = 'Android', HandoffProtocol = 1, PendingCount = 12, " +
+                         "OldestPendingUtc = strftime('%Y-%m-%d %H:%M:%f','now','-2 hours'), LastSeenUtc = strftime('%Y-%m-%d %H:%M:%f','now','-20 seconds') " +
+                         "WHERE DeviceId = 'device-tablet';");
+            WaitFor(cloudVm.RefreshDevicesAsync());
+            main.NavigateTo("TursoSync");
+            Pump();
+            Layout(host, Width, Height);
+            // La tarjeta queda debajo de «Este equipo»: se desplaza hasta ella para la captura
+            var cloudScroller = FindDescendant<System.Windows.Controls.ScrollViewer>(FindDescendant<TPVC.Views.TursoSyncView>(host)!);
+            cloudScroller?.ScrollToVerticalOffset(600);
+            Capture(host, $"20h-config-tursosync-equipos-{suffix}");
+            cloudScroller?.ScrollToVerticalOffset(0);
+            if (cloudVm.Devices.Count != 3 || !cloudVm.Devices[0].IsPrimary || !cloudVm.Devices.Any(d => d.PendingCount == 12)
+                || string.IsNullOrEmpty(cloudVm.PrimaryText) || cloudVm.CanMakeThisThePrimary)
+            {
+                _failures.Add($"[20h-{suffix}] Equipos vinculados no muestra los 3 equipos, la PC principal o los cambios sin subir");
+            }
 
             shell.SettingsSearchText = "respaldo";
             Capture(host, $"21-config-buscar-{suffix}");

@@ -22,11 +22,17 @@ public class TursoSettingsService
     /// <summary>Reloj de los contadores del mes y del día (reemplazable en pruebas).</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 
+    /// <summary>Huella de esta computadora (paso 8.10); null si no se puede leer, y entonces no se compara.</summary>
+    private readonly Func<string?> _machineFingerprint;
+
     /// <param name="clock">Reloj de los contadores. Va en el constructor porque la carga ya reinicia los del día y del
     /// mes: asignado después, la carga los compararía con la fecha real.</param>
-    public TursoSettingsService(string? customPath = null, TimeProvider? clock = null)
+    /// <param name="machineFingerprint">Huella de la computadora (reemplazable en pruebas); por omisión
+    /// <see cref="ReadMachineFingerprint"/>.</param>
+    public TursoSettingsService(string? customPath = null, TimeProvider? clock = null, Func<string?>? machineFingerprint = null)
     {
         Clock = clock ?? TimeProvider.System;
+        _machineFingerprint = machineFingerprint ?? ReadMachineFingerprint;
         _configFilePath = !string.IsNullOrEmpty(customPath)
             ? customPath
             : Path.Combine(
@@ -49,19 +55,22 @@ public class TursoSettingsService
                 if (loaded != null)
                 {
                     CurrentSettings = loaded;
+                    bool tokenUnreadable = false;
                     if (!string.IsNullOrEmpty(CurrentSettings.ProtectedAuthToken))
                     {
                         CurrentSettings.AuthToken = UnprotectToken(CurrentSettings.ProtectedAuthToken);
+                        tokenUnreadable = CurrentSettings.AuthToken.Length == 0;
                     }
 
                     // La PC siempre es WindowsDesktop: antes había un selector y alguien pudo elegir otro rol
                     CurrentSettings.DeviceRole = DeviceRole.WindowsDesktop;
                     EnsureMonthlyMetricsPeriod();
+                    EnsureDeviceIdentity(tokenUnreadable);
                     return;
                 }
             }
 
-            CurrentSettings = new TursoSettings();
+            CurrentSettings = new TursoSettings { MachineFingerprint = _machineFingerprint() };
             EnsureMonthlyMetricsPeriod();
         }
         catch (Exception ex)
@@ -103,6 +112,92 @@ public class TursoSettingsService
             throw;
         }
     }
+
+    /// <summary>
+    /// Paso 8.10: la carpeta de TPVC copiada a otra computadora traería el mismo DeviceId, y cada una omitiría al bajar
+    /// las filas de la otra. Si el token guardado no se puede descifrar (DPAPI solo funciona en la computadora y el
+    /// usuario de Windows que lo cifraron; antes quedaba vacío en silencio) o cambió la huella de la máquina, este equipo
+    /// toma un DeviceId nuevo y lo avisa.
+    /// </summary>
+    private void EnsureDeviceIdentity(bool tokenUnreadable)
+    {
+        var settings = CurrentSettings;
+        var machine = _machineFingerprint();
+        string? reason = null;
+        if (tokenUnreadable)
+        {
+            reason = "No se pudo leer el token guardado: la configuración de TPVC se copió de otra computadora o de otro usuario " +
+                     "de Windows. Esta computadora tomó una identidad nueva para la nube; vuelva a pegar el token en «Conexión con Turso».";
+            // Sin esto, cada arranque volvería a fallar y a cambiar de identidad
+            settings.ProtectedAuthToken = null;
+        }
+        else if (machine != null && settings.MachineFingerprint != null && settings.MachineFingerprint != machine)
+        {
+            reason = "La configuración de TPVC se copió de otra computadora. Esta tomó una identidad nueva para la nube, así que " +
+                     "las dos sincronizan sin estorbarse.";
+        }
+
+        bool changed = false;
+        if (reason != null)
+        {
+            AppLogger.Warn($"Turso: este equipo toma un DeviceId nuevo ({(tokenUnreadable ? "no se pudo descifrar el token" : "cambió la computadora")}).");
+            settings.DeviceId = Guid.NewGuid().ToString("N");
+            settings.DeviceCode = null;
+            settings.DeviceIdNotice = reason;
+            changed = true;
+        }
+        if (machine != null && settings.MachineFingerprint != machine)
+        {
+            settings.MachineFingerprint = machine;
+            changed = true;
+        }
+        if (changed) TryWriteToDisk();
+    }
+
+    /// <summary>
+    /// Otra instalación usa el mismo DeviceId (paso 8.10: el latido encontró su InstanceNonce): este equipo toma uno nuevo,
+    /// lo guarda y lo avisa.
+    /// </summary>
+    public void RegenerateDeviceId(string notice)
+    {
+        var settings = CurrentSettings;
+        AppLogger.Warn($"Turso: otra instalación usa el DeviceId {settings.DeviceId}; este equipo toma uno nuevo.");
+        settings.DeviceId = Guid.NewGuid().ToString("N");
+        settings.DeviceCode = null;
+        settings.DeviceIdNotice = notice;
+        SaveSettings(settings);
+    }
+
+    /// <summary>«Entendido» en el aviso de la identidad nueva.</summary>
+    public void DismissDeviceIdNotice()
+    {
+        if (CurrentSettings.DeviceIdNotice == null) return;
+        CurrentSettings.DeviceIdNotice = null;
+        SaveSettings(CurrentSettings);
+    }
+
+    /// <summary>
+    /// SHA-256 del MachineGuid de Windows (lo crea la instalación de Windows y no cambia al renombrar la computadora);
+    /// null fuera de Windows o si no se puede leer.
+    /// </summary>
+    public static string? ReadMachineFingerprint()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            using var key = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64)
+                .OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+            return key?.GetValue("MachineGuid") is string guid && guid.Length > 0 ? HashMachineId(guid) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>La huella que se guarda: no se guarda el MachineGuid tal cual.</summary>
+    public static string HashMachineId(string machineId) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("TPVC|" + machineId.Trim().ToLowerInvariant())))[..16];
 
     public void RecordUsage(long rowsRead, long rowsWritten)
     {
@@ -237,8 +332,14 @@ public class TursoSettingsService
 
         if (cipherText.StartsWith("B64:"))
         {
-            var raw = Convert.FromBase64String(cipherText.Substring(4));
-            return Encoding.UTF8.GetString(raw);
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(cipherText.Substring(4)));
+            }
+            catch (FormatException)
+            {
+                return string.Empty;
+            }
         }
 
         try

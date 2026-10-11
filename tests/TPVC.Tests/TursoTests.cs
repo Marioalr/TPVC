@@ -268,6 +268,28 @@ public class TursoTests
     }
 
     [TestMethod]
+    public void DevicePermissions_TheFourNewOnes_FollowThePlanMatrix()
+    {
+        // Paso 8.10, plan §4.6: ver expedientes, agendar y compartir, todos; registrar entradas de mercancía, la PC y el celular
+        foreach (var role in Enum.GetValues<DeviceRole>())
+        {
+            Assert.IsTrue(DevicePermissions.CanViewClinicalRecords(role), role.ToString());
+            Assert.IsTrue(DevicePermissions.CanScheduleAppointments(role), role.ToString());
+            Assert.IsTrue(DevicePermissions.CanShareDocuments(role), role.ToString());
+        }
+        Assert.IsTrue(DevicePermissions.CanRegisterStockEntries(DeviceRole.WindowsDesktop));
+        Assert.IsFalse(DevicePermissions.CanRegisterStockEntries(DeviceRole.AndroidTablet));
+        Assert.IsTrue(DevicePermissions.CanRegisterStockEntries(DeviceRole.AndroidMobileAdmin));
+
+        // El celular no lleva la consulta entre equipos; cada rol tiene su letra de código
+        Assert.IsTrue(DevicePermissions.CanTakeConsultations(DeviceRole.AndroidTablet));
+        Assert.IsFalse(DevicePermissions.CanTakeConsultations(DeviceRole.AndroidMobileAdmin));
+        Assert.AreEqual('P', DevicePermissions.CodeLetter(DeviceRole.WindowsDesktop));
+        Assert.AreEqual('T', DevicePermissions.CodeLetter(DeviceRole.AndroidTablet));
+        Assert.AreEqual('C', DevicePermissions.CodeLetter(DeviceRole.AndroidMobileAdmin));
+    }
+
+    [TestMethod]
     public async Task TursoClient_QueryAsync_ParsesHranaResultsProperly()
     {
         var mockResponse = @"{

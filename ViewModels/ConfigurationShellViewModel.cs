@@ -77,7 +77,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         TursoSyncVM = tursoSyncVM;
         ServicesVM = servicesVM;
         DesignSystemVM = designSystemVM ?? new DesignSystemViewModel();
-        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.26.0" : appVersion;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.27.0" : appVersion;
 
         Sections = new ObservableCollection<ConfigSectionItem>(new[]
         {
@@ -146,7 +146,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = SectionDashboard;
 
     [ObservableProperty]
-    private string _appVersion = "v1.26.0";
+    private string _appVersion = "v1.27.0";
 
     /// <summary>Nombres anteriores (paleta de comandos, accesos del inicio) → sección actual.</summary>
     public static string NormalizeSection(string? viewName) => viewName switch
@@ -200,6 +200,8 @@ public partial class ConfigurationShellViewModel : ObservableObject
             case SectionCloud:
                 CurrentSubView = TursoSyncVM;
                 TursoSyncVM.LoadFromSettings();
+                // Equipos vinculados (paso 8.10): una consulta pequeña a la nube, solo al abrir la sección
+                if (TursoSyncVM.RefreshDevicesOnOpen) _ = TursoSyncVM.RefreshDevicesAsync();
                 break;
             case SectionUpdates:
                 CurrentSubView = UpdatesVM;

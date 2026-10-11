@@ -32,6 +32,9 @@ public partial class TursoSyncEndToEndTests
         public required ClinicProfileService Profile { get; init; }
         public required TursoSyncService Sync { get; init; }
         public required string DbPath { get; init; }
+
+        /// <summary>Su turso_config.json (para volver a abrirlo con otro servicio, como al reiniciar TPVC).</summary>
+        public string SettingsPath { get; init; } = string.Empty;
     }
 
     private string TempFile(string ext)
@@ -92,7 +95,8 @@ public partial class TursoSyncEndToEndTests
             }
         }
 
-        var settings = new TursoSettingsService(TempFile(".json"));
+        var settingsPath = TempFile(".json");
+        var settings = new TursoSettingsService(settingsPath);
         if (clock != null) settings.Clock = clock;
         var s = settings.CurrentSettings;
         s.IsSyncEnabled = true;
@@ -111,7 +115,7 @@ public partial class TursoSyncEndToEndTests
         };
         if (clock != null) sync.Clock = clock;
 
-        return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync, DbPath = dbPath };
+        return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync, DbPath = dbPath, SettingsPath = settingsPath };
     }
 
     [TestMethod]

@@ -45,6 +45,7 @@ Los cambios del esquema solo pueden agregar (tablas, columnas o valores de un en
 | 2 | v1.21.0 | `Products.UnitCost` (costo por unidad, decimal en texto, `"0"` si falta) y `Products.CostExcludesVat` (entero 0/1: el costo no incluye IVA y se le suma 16 %). |
 | 3 | v1.22.0 | `Products.SupplierCode` (texto, nulo si falta): la clave del producto en el pedido del proveedor; la escribe «Ingresar pedido» en la PC. |
 | 4 | v1.25.0 | `PatientConsultations.LabOrderJson` (texto, `""` si falta): la orden de laboratorio de la consulta, `{"Studies":[{"Name","Area"}],"Indications"}` con acentos sin escapar; `""` si no se pidieron estudios. |
+| 5 | v1.27.0 | Paso 8.10, en `otherTables` (no se replican): la tabla `DeviceRegistry` (rol, código y revocación de cada equipo; solo la escribe la PC) y las columnas nuevas del latido en `RegisteredDevices` (`Platform`, `SyncProtocol`, `HandoffProtocol`, `ContractRevision`, `LastPushUtc`, `PendingCount`, `OldestPendingUtc`, `InstanceNonce`, todas con nulo). Las reglas «Equipos» y «Latido» dicen qué escribe Kotlin. Ninguna tabla sincronizada cambia. |
 
 ## `golden/`
 
