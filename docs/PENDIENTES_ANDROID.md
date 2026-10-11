@@ -199,7 +199,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] *Configuración › Nube y dispositivos*: la cuota dice 500 millones de lecturas, 10 millones de escrituras y 5 GB, y el consumo de hoy; ya no aparece "Uso" en *Este equipo* ni "Generar código" (los botones dicen "Disponible con la vinculación por QR").
 - [ ] Pegar una URL `http://192.168.…` y *Probar conexión*: se rechaza por no estar cifrada. Con la URL de siempre (`libsql://…`) sincroniza igual que antes.
 - [ ] Con la nube activa, un día normal de consulta: al final del día *Nube y dispositivos* no muestra la pausa y el consumo de hoy queda muy por debajo de los topes del freno.
-- [ ] [T] En una base de prueba de Turso (otra cuenta o grupo, nunca la del consultorio), anotar en `docs/TURSO_SYNC_ARCHITECTURE.md` §6: V7 (texto y estado HTTP de `BLOCKED`), V9 (qué error da una base archivada) y V10 (si las entradas de índice cuentan como escrituras).
+- [ ] [T] En una base de prueba de Turso (otra cuenta o grupo, nunca la del consultorio), anotar en `docs/TURSO_SYNC_ARCHITECTURE.md` §6: V7 (texto y estado HTTP de `BLOCKED`) y V9 (qué error da una base archivada). V10 ya está: las entradas de índice sí cuentan como escrituras (V19, 2026-10-11).
 
 ### v1.19.0 (Fin de la Fase 6: el módulo de Pacientes sin WPF)
 

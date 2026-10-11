@@ -2,7 +2,7 @@
 
 Evaluación del 2026-10-10 sobre TPVC v1.20.6 (rama `fase-8/paso-8.8`), hecha por un agente a pedido del médico. Fuentes de Turso consultadas el 2026-10-10: <https://turso.tech/pricing>, <https://docs.turso.tech/help/usage-and-billing>, <https://docs.turso.tech/features/point-in-time-recovery> y el código de libSQL (`libsql-hrana/src/proto.rs`, `libsql-server/src/main.rs`).
 
-**Estado al 2026-10-11:** el médico eligió la recomendación («Turso + copia en la laptop»). La orden de estudios ya está en v1.25.0 (`PatientConsultations.LabOrderJson`); los resultados quedan para el paso 8.12b de `PLAN_FASE8_VARIOS_EQUIPOS.md`. Los dos errores de §2 se corrigieron en v1.20.7 (#12) y V18 ya está en `scripts/verify-turso-hrana.ps1 -Only V18`.
+**Estado al 2026-10-11:** el médico eligió la recomendación («Turso + copia en la laptop»). La orden de estudios ya está en v1.25.0 (`PatientConsultations.LabOrderJson`); los resultados quedan para el paso 8.12b de `PLAN_FASE8_VARIOS_EQUIPOS.md`. Los dos errores de §2 se corrigieron en v1.20.7 (#12) y V18 ya está en `scripts/verify-turso-hrana.ps1 -Only V18`. V17 y V19–V23 se corrieron en Turso real el mismo día (resultados en §7): borrar sí libera cuota, así que el diseño de §6 no cambia.
 
 ## Recomendación
 
@@ -16,13 +16,13 @@ Evaluación del 2026-10-10 sobre TPVC v1.20.6 (rama `fase-8/paso-8.8`), hecha po
 
 - **Plan gratuito:** 5 GB, 500M filas leídas y 10M escritas al mes, restauración a un punto en el tiempo de 1 día, sin bitácora de auditoría. La página de precios no lista ningún tráfico de red para las consultas; la métrica "syncs" solo aplica a las réplicas embebidas, que TPVC no usa.
 - **Filas:** se cuentan las filas que se tocan, no los bytes. Un BLOB de 3 MB en una fila es 1 fila escrita, más 1 por cada índice. La página de precios ya dice que cada índice suma escrituras, así que **V10 queda contestada: sí cuentan**.
-- **Almacenamiento:** se mide en páginas de 4 KB con `dbstat` (tablas e índices). El BLOB se guarda en binario, con ~1% de sobrecarga por páginas de desbordamiento; el base64 solo existe al viajar. `VACUUM` está deshabilitado en Turso: falta comprobar si borrar libera cuota (V20).
+- **Almacenamiento:** se mide en páginas de 4 KB con `dbstat` (tablas e índices). El BLOB se guarda en binario, con ~1% de sobrecarga por páginas de desbordamiento; el base64 solo existe al viajar. `VACUUM` está deshabilitado en Turso, pero borrar sí libera cuota (V20): `dbstat` no cuenta las páginas libres, y SQLite las reúsa antes de que el archivo crezca.
 - **Restaurar a un punto en el tiempo** crea una base **nueva**, con otra URL y otro token (hay que volver a vincular todos los equipos), y esa base también cuenta para el almacenamiento. Mientras convivan las dos, el contenido L debe cumplir 2 × (L + 0.1 GB) ≤ 5 GB, o sea **L ≤ 2.4 GB**. De ahí sale el tope de 2 GB.
-- **Tamaño de fila:** no hay un tope documentado. SQLite admite valores de hasta 1,000,000,000 bytes. El servidor libre de libSQL trae por defecto un tope de respuesta de 10 MB, pero en Turso real V12 devolvió 64 MB sin error. El tope de la **petición** no se ha medido.
+- **Tamaño de fila:** no hay un tope documentado. SQLite admite valores de hasta 1,000,000,000 bytes. El servidor libre de libSQL trae por defecto un tope de respuesta de 10 MB, pero en Turso real V12 devolvió 64 MB sin error. Tampoco hay tope de **petición** hasta 32 MB de BLOB, ~43 MB de JSON (V17).
 
 ## 2. Transporte por Hrana
 
-- Un BLOB viaja como `{"type":"blob","base64":…}`, con **+33%**. La petición sale sin comprimir (`StringContent`, `TursoClient.cs:580-581`). En la respuesta, el +33% se recupera solo si Turso la comprime con gzip; el cliente lo pide (`AutomaticDecompression`, :89). Falta comprobarlo (V21). Comprimir el contenido no sirve: JPEG y PDF ya vienen comprimidos (gzip gana menos de 10%).
+- Un BLOB viaja como `{"type":"blob","base64":…}`, con **+33%**. La petición sale sin comprimir (`StringContent`, `TursoClient.cs:580-581`). En la respuesta, el +33% se recupera solo si Turso la comprime con gzip; el cliente lo pide (`AutomaticDecompression`, :89). Turso no la comprime (V21), así que la bajada también cuesta el +33%. Comprimir el contenido no sirve: JPEG y PDF ya vienen comprimidos (gzip gana menos de 10%).
 - **Trozos de 512 KiB, unos 700 KB de JSON cada uno.** Un archivo de 3 MB en una sola petición pesa ~4 MB. Con 1 Mbps de subida tarda ~32 s, más que los 30 s de espera de `SharedHttpClient` (:92). Un trozo tarda ~5.6 s a 1 Mbps y ~1.1 s a 5 Mbps, y una subida cortada sigue desde el último trozo. Para bajar se piden 4 trozos por petición (~2.8 MB), muy debajo de los 64 MB de V12.
 - **Compresión al capturar** (supuestos que hay que medir con 10 resultados reales del laboratorio que usa el médico):
   - Una foto de 12 MP pesa 3–5 MB. Re-codificada a 2000 px por el lado largo en JPEG con calidad ~80 queda en 0.2–0.6 MB por página, unos 180 dpi en hoja carta.
@@ -158,3 +158,11 @@ CREATE TABLE LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, D
 | V21 | `Content-Encoding` de la respuesta al pedir gzip y bytes reales de una lectura de 2 MB | Si la bajada cuesta +0% o +33% |
 | V22 | Tiempos de 512 KB y 2 MB por el Wi-Fi del consultorio y por LTE | El tamaño de trozo y los tiempos de espera |
 | V23 | Un `batch` con `BEGIN`/`COMMIT` que lleva un BLOB de 1 MB (V14 con BLOB) | Si el cierre puede ir en la misma transacción que el último trozo |
+
+**Resultados en Turso real** (2026-10-11, base de prueba, Wi-Fi de casa; el detalle está en `TURSO_SYNC_ARCHITECTURE.md` §6):
+- **V17:** de 0.5 a 32 MB pasaron todos, sin error; 32 MB tardaron 22 s. El trozo se queda en 512 KiB por la espera de 30 s, no por Turso.
+- **V19:** registrar un archivo escribe 2 filas y cada trozo otras 2 (la fila y su llave, lo que también contesta V10); un trozo repetido escribe 0. Bajar 4 trozos lee 4 filas, cerrar lee 5 y escribe 1, y la suma de 50 archivos lee 50. Los números de §3 se quedan.
+- **V20:** `dbstat` bajó de 102.1 a 52.1 MB al borrar la mitad, y a 0 al borrar las tablas. `page_count` no baja, pero las páginas libres se reúsan antes de que el archivo crezca, y Turso cuenta con `dbstat`. **Desalojar libera cuota:** el tope de 2 GB se queda sobre lo que hay en la nube. La PC lo mide con `(page_count − freelist_count) × page_size`, que dio lo mismo que `dbstat`.
+- **V21:** sin gzip; la bajada cuesta el +33% del archivo, y el freno de bytes cuenta lo que viaja.
+- **V22:** un trozo de 512 KiB sube en 0.6 s y baja en 0.4 s; uno de 2 MiB, 1.7 s y 0.9 s. Faltan el Wi-Fi del consultorio y LTE.
+- **V23:** atómico. El último trozo y el cierre van en la misma transacción, y el desalojo también.

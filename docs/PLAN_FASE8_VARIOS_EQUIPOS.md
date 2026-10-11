@@ -204,7 +204,7 @@ Supuestos:
 |---|---|---|---|---|
 | Peticiones al día | ~8,700 | ~23,000 | ~12,800 (PC ~7.9k, tablet ~4.9k, celular ~40) | El plan no limita peticiones |
 | Filas leídas al mes | 0.4M–4.2M | hasta ~12M | 2M–4.5M: cada revisión lee 4–11 filas (con el índice parcial) y hay ~600 bajadas al día de ~25 filas | 0.4–0.9% de 500M |
-| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, ~975 latidos (960 de la PC y la tablet, cada 60 s, y ~15 del celular), ~400 filas de datos y ~300 `LastPushUtc` | ~0.5% de 10M; hasta ~1.5% si Turso cuenta las entradas de índice (V10) |
+| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, ~975 latidos (960 de la PC y la tablet, cada 60 s, y ~15 del celular), ~400 filas de datos y ~300 `LastPushUtc` | ~1.5% de 10M: Turso cuenta también cada entrada de índice (V10); sin ellas sería ~0.5% |
 | Peor caso: PC y tablet abiertas 24 h en Pacientes | — | — | ~45k peticiones al día; ~7M lecturas y ~120k escrituras al mes | 1.4% y 1.2% |
 | Almacenamiento | Decenas de MB al año | Igual | Igual, más ~1 MB del membrete (`ClinicAssets`) | < 1% de 5 GB |
 | Bases | 1 | 1 | 1, sola en su grupo (§4.2) | 1 de 100 |
@@ -297,6 +297,12 @@ Lo que ve el médico:
 | V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 y 8.24 | 8.6 |
 | V16 | Que `INSERT … ON CONFLICT DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber` corra en Turso por Hrana como una sola instrucción atómica y regrese el número en su resultado, también con dos equipos a la vez | El contador de folios. Si no: leer el número n y `UPDATE … SET LastNumber = n + 1 WHERE Series = ? AND LastNumber = n`, que se reintenta si afecta 0 filas | 8.16 |
 | V18 | BLOB con y sin relleno de base64, y la forma en que regresa | Que la PC lea lo que manda Turso: según el código de libSQL responde `{"type":"blob","base64":…}` sin el relleno `=` y acepta los argumentos con o sin él. La PC ya lee las dos formas y manda con relleno; si Turso rechazara el relleno, la PC lo quitaría al mandar | 8.12 |
+| V17 | El tope de la petición con un BLOB de 0.5 a 32 MB | El tamaño del trozo y el manejo del error | 8.12b |
+| V19 | Filas escritas y leídas con `LabBlobs` y `LabBlobChunks` | El presupuesto de `EVALUACION_RESULTADOS_LABORATORIO.md` §3 | 8.12b |
+| V20 | Si borrar un BLOB libera el espacio que cuenta Turso, sin `VACUUM` | Si el tope de 2 GB es sobre lo que hay o sobre lo acumulado | 8.12b |
+| V21 | Si la respuesta viene con gzip | Si la bajada cuesta +0% o +33% | 8.12b |
+| V22 | Tiempos de 512 KiB y de 2 MiB en cada red | El tamaño del trozo y los tiempos de espera | 8.12b |
+| V23 | Un `batch` con `BEGIN`/`COMMIT` que lleva un BLOB de 1 MB | Si el cierre va en la misma transacción que el último trozo | 8.12b |
 
 V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de vinculación. El resultado se anota en `docs/TURSO_SYNC_ARCHITECTURE.md` §6.
 
@@ -790,7 +796,13 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.12b · Resultados de laboratorio en la nube (agregado el 2026-10-11)
-- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 con `scripts/verify-turso-blobs.ps1` (escrito el 2026-10-11 y probado contra el servidor simulado; falta correrlo en Turso real); **V20 es crítica** (si borrar no libera cuota, el tope cambia).
+- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 con `scripts/verify-turso-blobs.ps1`. **Hechas el 2026-10-11** (`TURSO_SYNC_ARCHITECTURE.md` §6):
+  - No hay tope de petición hasta 32 MB, y cada trozo escribe 2 filas.
+  - **Borrar sí libera cuota (V20):** `dbstat` baja en cuanto se borra y las páginas libres se reúsan. El tope de 2 GB queda como estaba.
+  - Turso no comprime la bajada (+33%).
+  - Un trozo de 512 KiB tarda menos de 1 s por el Wi-Fi de casa.
+  - El `batch` con un BLOB es atómico.
+  - Falta medir V22 en el Wi-Fi del consultorio y por LTE; no detiene nada.
 - **Cambia:** lo de `docs/EVALUACION_RESULTADOS_LABORATORIO.md` §6, elegido por el médico el 2026-10-10 («Turso + copia en la laptop»):
   - Tabla sincronizada `LabResults` (solo metadatos) y tablas solo de la nube `LabBlobs`/`LabBlobChunks`, en trozos de 512 KiB.
   - La laptop guarda una copia completa en `%LocalAppData%\TPVC\laboratorio\`, fuera de `consultorio.db` y de sus respaldos diarios.
