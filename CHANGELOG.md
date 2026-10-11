@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.33.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.15: equipo perdido y tokens anulados (lado de la PC)
+* En *Equipos vinculados*, junto a **Quitar**, está **Perdí este equipo**. El equipo queda marcado como perdido: si la tablet o el celular se conectan, borran sus datos sin subir nada (una computadora no borra nada). Como Turso no deja anular un solo token, aparecen los pasos para anularlos todos en el panel de Turso (con **Abrir el panel de Turso**) y pegar el nuevo aquí y en los demás equipos.
+* Los equipos que no se han conectado desde que se anularon los tokens dicen «Pegue el token nuevo en este equipo…». No pierden sus cambios ni hay que aprobarlos otra vez.
+
+### Cambiado
+* Si Turso rechaza el token de esta computadora, la sincronización se detiene y dice qué hacer, en lugar de reintentar sola. No se borra nada: lo que no había subido sube con el token nuevo, y al pegarlo la sincronización sigue.
+* 558 pruebas.
+
 ## [1.32.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.14: vincular la tablet y el celular (lado de la PC)
