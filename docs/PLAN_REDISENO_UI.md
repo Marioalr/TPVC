@@ -1,6 +1,6 @@
 # Plan de rediseño de la interfaz
 
-Estado al 2026-10-11 (TPVC v1.26.0).
+Estado al 2026-10-11 (TPVC v1.27.0).
 
 **Meta:** que toda la aplicación sea **consistente, intuitiva, con una experiencia UX/UI correcta y
 eficiente con los recursos**. No es obligatorio reutilizar las pantallas actuales: se conserva la
@@ -333,7 +333,7 @@ cuatro temas):
 
 | Pantalla o aviso | Qué muestra | Paso |
 |---|---|---|
-| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (revocar y "Cortar acceso ahora", guiado: rotar los tokens en el panel de Turso y pegar los dos nuevos); "Vuelva a vincular" en los demás; "Esta PC reemplaza a la principal". | 8.10, 8.15 |
+| **Equipos vinculados** | En *Nube y dispositivos*: cada equipo con nombre, rol, código, "En línea" o "Visto hace…", sus cambios pendientes ("La tablet tiene 12 cambios sin subir desde las 10:42") y *Quitar*; "Perdí este equipo" (revocar y "Cortar acceso ahora", guiado: rotar los tokens en el panel de Turso y pegar los dos nuevos); "Vuelva a vincular" en los demás; "Esta PC reemplaza a la principal". La lista, *Quitar* y "Esta PC reemplaza a la principal" están desde v1.27.0. | 8.10 ✅, 8.15 |
 | **Vincular tablet o celular** | El campo para pegar una vez el "token para tablet y celular". Elegir el rol; el QR durante 10 min, solo en la red del consultorio; la confirmación "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913" con *Sí* y *No*, con el mismo código en las dos pantallas; el respaldo "Teclear a mano" con la aprobación del equipo nuevo. La primera vez, el Firewall de Windows puede pedir permitir TPVC en redes privadas. Solo se ofrece con la sincronización sana. Reemplaza el paquete de vinculación en claro, que se retiró en 8.2 (v1.20.0). | 8.14 |
 | **Unirse a una nube existente**, **Recuperar desde la nube** y **Esta PC ya usaba esta nube** | Si la nube ya tiene su `clinicId` y la base local no (pegar URL y token, como hoy), la sincronización no arranca y ofrece unirse, "Reemplazar con la nube" (teclear CONFIRMAR, respaldo antes) o "Esta PC ya usaba esta nube". "Recuperar desde la nube" baja todo a una PC nueva o descompuesta. Desde v1.20.5: el bloqueo, el aviso en *Nube y dispositivos* y "Esta PC ya usaba esta nube" (revisa por SyncId que lo que la PC ya subió esté en la nube). Desde v1.20.6, en el mismo aviso: «Unirse a esta nube» (botón principal; también recupera una PC nueva), «Esta PC ya usaba esta nube» y «Reemplazar con la nube…», que abre ahí mismo el texto de lo que se borra, el campo CONFIRMAR y el botón rojo, desactivado hasta teclearlo (captura `20e-config-tursosync-reemplazar`). | 8.7 ✅ v1.20.5, 8.8 ✅ v1.20.6 |
 | Pregunta al **restaurar** con la nube activa | "Reemplazar la nube con este respaldo" o "Desconectar esta PC de la nube", con la lista por tabla de lo que se perdería ("se perderán 12 notas y 30 ventas de la tablet"); después, "Volver a aplicar N cambios". | 8.9 |

@@ -200,6 +200,8 @@ public partial class ConfigurationShellViewModel : ObservableObject
             case SectionCloud:
                 CurrentSubView = TursoSyncVM;
                 TursoSyncVM.LoadFromSettings();
+                // Equipos vinculados (paso 8.10): una consulta pequeña a la nube, solo al abrir la sección
+                if (TursoSyncVM.RefreshDevicesOnOpen) _ = TursoSyncVM.RefreshDevicesAsync();
                 break;
             case SectionUpdates:
                 CurrentSubView = UpdatesVM;

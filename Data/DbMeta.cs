@@ -78,6 +78,13 @@ public static class DbMeta
     /// </summary>
     public const string RestoredWithCloud = "RestoredWithCloud";
 
+    /// <summary>
+    /// "1" cuando este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo (paso 8.10): la siguiente
+    /// sincronización quita los cursores de bajada y baja todo una vez, porque mientras compartían el DeviceId cada una
+    /// omitía las filas de la otra.
+    /// </summary>
+    public const string RedownloadAll = "RedownloadAll";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";
