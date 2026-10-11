@@ -351,7 +351,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource TextSection}" Text="Vincular tablet y celular" />
                         <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,12" TextWrapping="Wrap"
-                                   Text="Se vincularán leyendo un código QR en la red del consultorio, sin que el token salga de esta computadora. Llega con la app de Android." />
+                                   Text="Se vincularán con la URL y el token de Turso (pegados en el equipo o leídos de un código QR que mostrará esta computadora), y aquí se aprobará cada equipo. Llega con la app de Android." />
                         <UniformGrid Columns="2">
                             <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="0,0,6,0">
                                 <StackPanel>
@@ -361,7 +361,7 @@
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
                                                Text="Consulta y recepción: expedientes, recetas, citas y cobro, también sin internet." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Disponible con la vinculación por QR" />
+                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Llega con la app de Android" />
                                 </StackPanel>
                             </Border>
                             <Border Style="{StaticResource CardSubtle}" Padding="16" Margin="6,0,0,0">
@@ -372,7 +372,7 @@
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,12"
                                                Text="Ve expedientes, agenda citas, revisa existencias y registra entradas de mercancía." />
-                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Disponible con la vinculación por QR" />
+                                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Left" IsEnabled="False" Content="Llega con la app de Android" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>

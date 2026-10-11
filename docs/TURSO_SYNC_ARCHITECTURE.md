@@ -79,7 +79,7 @@ Tres equipos: la PC con Windows, una tablet Android y un celular Android. El 99%
  │ RegisteredDevices, DeviceRegistry, ConsultationHandoffs, FolioCounters,      │
  │ _tpvc_meta                                                                   │
  └──────────────────────────────────────────────────────────────────────────────┘
-  Solo al vincular, una vez: la PC entrega la credencial por la red local (§5).
+  Cada equipo recibe la URL y un token como la PC (pegados o del QR de la PC); la PC lo aprueba (§5).
 ```
 
 Papel de cada equipo (plan §2.2):
@@ -258,29 +258,24 @@ Hasta v1.19.0, en *Configuración → Nube y dispositivos → Vincular tablet y 
 
 Quien tenga ese texto puede leer y escribir toda la base de la nube. v1.20.0 retiró `GenerateAndroidPairingPayload`, su ventana (`OpenPairingModal`) y `CopyPairingPayload`; los botones dicen "Disponible con la vinculación por QR". Si alguna vez se copió ese código, conviene rotar el token de la PC (§6). Desde v1.20.0 la URL de Turso además solo se acepta con `https://` o `libsql://` (`http://` solo para `localhost`), porque el token viaja en cada petición.
 
-### Plan Fase 8: QR en la red local (paso 8.14; detalle en el plan §4.4 y §4.5)
-El QR es solo una facilidad y queda limitado a la red del consultorio (respuesta 4 del médico). No hay base de vinculación en Turso ni token en el QR. La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.fullUploadAtUtc` (paso 8.7), ya se pegó el "token para tablet y celular" (§6) y hay menos de 3 equipos activos. La PC y el equipo deben estar en el mismo Wi-Fi.
-1. **El médico la inicia** en *Nube y dispositivos → Equipos vinculados → Vincular tablet o celular* y elige el rol. La PC crea un `PairingId` de 16 bytes y un secreto de 128 bits, reserva un código de equipo (`T1`, `C1`…: el mayor de `DeviceRegistry` + 1) y abre un `TcpListener` (`System.Net.Sockets`) en un puerto al azar, **solo en sus direcciones privadas** (RFC 1918 y de enlace local) y solo mientras dura la ventana, 10 min como máximo. No pide administrador ni `urlacl`, ni usa Kestrel. La primera vez, el Firewall de Windows puede preguntar si permite a TPVC en redes privadas.
-2. **El QR** es `tpvc-pair:1:` + base64url(JSON) con las direcciones y el puerto de la PC, el `PairingId`, el secreto, el rol, el código de equipo, el nombre del consultorio y el vencimiento. **Ningún token.** El mismo texto pegado sirve para que otra PC con Windows se una ("Unirse con código", código `P2`…).
-3. **El equipo se presenta** (se niega si no tiene bloqueo de pantalla seguro): genera su propio `DeviceId`, se conecta a la PC y manda el `PairingId`, su `DeviceId`, nombre, modelo y un nonce con un HMAC-SHA256 que prueba que tiene el secreto. El secreto nunca viaja. La PC atiende un solo equipo por ventana; tres HMAC inválidos la cierran. Los dos muestran un código de confirmación de 6 dígitos sacado del secreto y del mensaje del equipo. Las llaves salen de HKDF-SHA256(secreto, sal = `PairingId`).
-4. **El médico confirma en la PC**, que pregunta "¿Vincular «Galaxy Tab S9» como Tablet? Código 482 913". Con *No*, la PC cierra la ventana sin mandar nada.
-5. **Con *Sí*, la PC** inserta la fila en `DeviceRegistry`, manda AES-256-GCM de {URL de la base del consultorio, token para tablet y celular, rol, código y `clinicId`} y cierra el `TcpListener`.
-6. **El equipo termina:** descifra la credencial, la guarda envuelta con el Android Keystore y empieza su primera descarga.
+### Plan Fase 8: vincular con la URL y el token (paso 8.14; plan §4.3)
+**Decisión del médico (2026-10-11):** la vinculación por QR en la red local (con un servidor temporal en la PC, HMAC y la credencial cifrada) se descartó. Cada equipo recibe la URL y un token como la PC:
+1. **En la tablet o el celular** se pegan la URL y el token (copiados del panel de Turso) o se escanea el QR que muestra la PC en *Equipos vinculados › Mostrar QR para la tablet o el celular*, con la URL y el token. El QR se cierra solo a los 2 minutos y no se debe fotografiar ni compartir. El equipo se niega si no tiene bloqueo de pantalla seguro y guarda la credencial envuelta con el Android Keystore.
+2. **El equipo escribe su latido y espera.** La PC muestra "Equipo nuevo: «Galaxy Tab S9». ¿Vincular como Tablet?", con los últimos 6 caracteres de su `DeviceId` en las dos pantallas, y al aceptar escribe su fila en `DeviceRegistry` (código `T1`, `C1`…). Hasta entonces el equipo no baja datos.
+3. **Otra PC con Windows** se une como hoy: URL, token y «Unirse a esta nube» (paso 8.8), y recibe su código `P2`.
 
-**Respaldo** si falla la red local (aislamiento de clientes del Wi-Fi, Firewall): en el equipo se teclean la URL y el token para tablet y celular; el equipo escribe su latido y la PC pregunta si lo vincula, con los últimos 6 caracteres de su `DeviceId` en las dos pantallas.
-
-Quien fotografía el QR no obtiene nada fuera de la red local o después de los 10 min. Dentro de la ventana, a lo más compite por la vinculación, y el médico vería un nombre o un código de confirmación que no coincide. Quien escucha el Wi-Fi sin el QR solo ve el HMAC y la credencial cifrada.
+Quien fotografía el QR mientras está en pantalla obtiene acceso completo, igual que quien copia el token del panel: el riesgo es el mismo de tener el token en cada equipo, y se corta rotando (abajo). La red local no lleva nada: cada equipo habla solo con Turso, por HTTPS.
 
 ### Plan Fase 8: quitar y equipo perdido (paso 8.15; plan §4.7)
 - **Quitar:** la PC muestra antes los cambios pendientes del equipo (`PendingCount` y `OldestPendingUtc` de su latido). El equipo sube lo pendiente, o lo exporta a un archivo, y luego borra su base, su credencial y sus borradores.
-- **Perdí este equipo:** revocar en `DeviceRegistry` (`RevokedAtUtc`, motivo "perdido"; si el equipo lee su fila revocada, se borra sin subir) y "Cortar acceso ahora", marcado por defecto. Sin token de la API la PC no puede rotar sola, así que guía al médico: rotar los tokens de **todo el grupo** en el panel de Turso o con `turso db tokens invalidate` (Turso no revoca tokens uno por uno), crear el token nuevo de la PC y el de tablet y celular, pegarlos en la PC y volver a vincular los demás equipos con un QR nuevo.
-- **Ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación): un equipo con cambios pendientes se bloquea, muestra "Vuelva a vincular" y los conserva; uno sin nada pendiente se borra solo tras dos 401 con 10 min de diferencia.
+- **Perdí este equipo:** revocar en `DeviceRegistry` (`RevokedAtUtc`, motivo "perdido"; si el equipo lee su fila revocada, se borra sin subir) y "Cortar acceso ahora", marcado por defecto. Sin token de la API la PC no puede rotar sola, así que guía al médico: rotar los tokens de **todo el grupo** en el panel de Turso o con `turso db tokens invalidate` (Turso no revoca tokens uno por uno), crear un token nuevo, pegarlo en la PC y en los demás equipos (pegado o escaneado del QR de la PC). No hace falta aprobarlos otra vez.
+- **Ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación): un equipo con cambios pendientes se bloquea, muestra "Pegue el token nuevo" y los conserva; uno sin nada pendiente se borra solo tras dos 401 con 10 min de diferencia.
 
 ---
 
 ## 6. Guía Rápida de Configuración en Turso
 
-> **El token de la PC no sale de la PC.** Se pega solo en TPVC de Windows, que lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json`. No lo copie a la tablet ni al celular (el paquete de vinculación que lo llevaba en claro se retiró en v1.20.0, ver §5). Con la Fase 8 la tablet y el celular usarán otro token, el "token para tablet y celular", que la PC les entrega cifrado al vincularlos en la red local (§5), nunca en el QR.
+> **El token se pega en cada equipo, nunca por chat ni por correo.** TPVC de Windows lo guarda cifrado con DPAPI en `%LocalAppData%\TPVC\turso_config.json` (el paquete de vinculación que lo llevaba en claro se retiró en v1.20.0, ver §5). Con la Fase 8 (paso 8.14) la tablet y el celular reciben la URL y un token pegados (copiados del panel de Turso) o escaneados del QR de la PC, y la PC aprueba cada equipo. Turso no deja anular un token solo: si se pierde un equipo, se anulan todos y se pega el nuevo en los demás (§5).
 
 **Configuración copiada a otra computadora (desde v1.27.0, paso 8.10).** El `DeviceId` vive en el mismo `turso_config.json`, y la descarga omite las filas de su propio `DeviceId`: dos PC con el mismo nunca verían las filas de la otra. Si el token guardado no se puede descifrar (DPAPI solo funciona en la computadora y el usuario de Windows que lo cifraron; antes quedaba vacío en silencio) o cambió la huella de la computadora (SHA-256 del `MachineGuid` de Windows, en `MachineFingerprint`), TPVC toma un `DeviceId` nuevo y lo avisa en *Nube y dispositivos* («vuelva a pegar el token»). Una computadora clonada completa (con DPAPI funcionando) la detecta el `InstanceNonce` del latido (§4.2).
 
@@ -322,7 +317,7 @@ turso db tokens invalidate tpvc-clinica
 4. Copiar la **Database URL** y generar un **Auth Token** desde la pestaña *Settings > Tokens*.
 5. Pegar ambos valores en TPVC Windows en **Configuración > Nube y dispositivos**.
 6. Hacer clic en **"Probar conexión"** y posteriormente en **"Sincronización completa"**.
-7. (Plan Fase 8, paso 8.14; todavía no se usa) Generar un segundo token, el "token para tablet y celular", y pegarlo en TPVC Windows. Nunca se pega directo en la tablet ni en el celular, salvo en el respaldo a mano cuando la vinculación por la red local no funciona (§5).
+7. (Plan Fase 8, paso 8.14; todavía no se usa) En la tablet y el celular se pegan la misma URL y un token (el de la PC o uno creado aparte: Turso no los distingue), o se escanean del QR de la PC, y la PC aprueba cada equipo (§5).
 
 ### Comprobaciones en una base de prueba real (plan §4.2)
 Se hacen antes del paso indicado, siempre en un grupo o una cuenta de prueba. El resultado se anota aquí.

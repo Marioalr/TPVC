@@ -25,7 +25,7 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
 | 9 | **La cuenta de Turso no tiene token de la API de la plataforma.** El QR es solo una facilidad y queda limitado a la red local. | Nivel C: tokens creados a mano en el panel, sin vencimiento, que solo se cortan rotando el grupo. Sin base de vinculación: la PC entrega la credencial por la red local, cifrada con un secreto del QR (§4.3–§4.5). |
 
 **Pedidos del médico que cubre este plan:**
-- Vincular la tablet leyendo un código QR, en la red del consultorio (paso 8.14).
+- Vincular la tablet leyendo un código QR, en la red del consultorio (paso 8.14). El 2026-10-11 el médico lo simplificó: la URL y el token, pegados o leídos de un QR de la PC, y la PC aprueba cada equipo (§4.3).
 - No notar diferencia entre la PC y la app, también sin internet (8.16, 8.17, K7).
 - Agendar y registrar entradas de mercancía desde el celular (K4b).
 - Compartir la receta y el ticket en PDF desde donde se vean (pasos 8.11 y 8.12; app K4 en el celular y K7 en la tablet).
@@ -259,7 +259,7 @@ Lo que ve el médico:
 
 ---
 
-## 4. Vinculación por QR, credenciales, roles y equipo perdido
+## 4. Vinculación, credenciales, roles y equipo perdido
 
 ### 4.1 Cómo está hoy (v1.19.0)
 
@@ -311,15 +311,18 @@ V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de v
 
 | Quién lo tiene | Token | Dónde vive |
 |---|---|---|
-| PC | Su propio token `full-access`, pegado a mano como hoy. **Es la única que cambia el esquema.** | Cifrado con DPAPI. Nunca sale de la PC. |
-| Tablet y celular | Un solo "token para tablet y celular", `full-access`, creado a mano en el panel y pegado una vez en la PC. | En la PC, con DPAPI. Viaja cifrado solo al vincular (§4.4). En el equipo, envuelto con el Keystore. |
-| Otra PC con Windows ("Unirse con código") | El token para tablet y celular, por la misma vinculación en la red local. | Con DPAPI. Se vuelve a vincular después de una rotación. |
-| QR de vinculación | Ninguno: direcciones, puerto, `PairingId`, secreto y vencimiento. | En la pantalla de la PC, 10 min. |
+| PC | Su propio token `full-access`, pegado a mano como hoy. **Es la única que cambia el esquema.** | Cifrado con DPAPI. |
+| Tablet y celular | Un token `full-access` de la base, pegado en el equipo (copiado del panel de Turso) o escaneado del QR que muestra la PC (8.14). Puede ser el mismo de la PC o uno creado aparte: Turso no los distingue y no deja anular uno solo. | En el equipo, envuelto con el Keystore. |
+| Otra PC con Windows | Su token, pegado como hoy, y «Unirse a esta nube» (8.8). | Con DPAPI. Se vuelve a pegar después de una rotación. |
+| QR de la PC (8.14) | La URL y el token. | En la pantalla de la PC, solo mientras está abierto (2 min). |
 
-- Los dos tokens no vencen y los dos mueren con una rotación del grupo (§4.7). Un vencimiento sin renovación automática solo dejaría a la tablet con cambios atorados.
-- Turso no distingue roles: los dos tokens pueden todo, y los límites por rol los aplica la app (§4.6).
+- **Decisión del médico (2026-10-11):** en lugar de la vinculación por QR en la red local (§4.4, descartada), cada equipo recibe la URL y el token como la PC. Lo que se ahorra (el servidor temporal en la PC, el Firewall, el protocolo cifrado igual en C# y en Kotlin) vale más que lo que protegía: el token igual vive en cada equipo y un equipo perdido igual se corta rotando.
+- Los tokens no vencen y **todos** mueren con una rotación (`turso db tokens invalidate` anula todos los de la base y los del grupo; no hay forma de anular uno solo, §4.7). Un vencimiento sin renovación automática solo dejaría a la tablet con cambios atorados.
+- Turso no distingue roles: los tokens pueden todo, y los límites por rol los aplica la app (§4.6).
 
-### 4.4 Vinculación por QR en la red local
+### 4.4 Vinculación por QR en la red local (descartada el 2026-10-11)
+
+> **Descartada por decisión del médico** (ver §4.3 y el paso 8.14): la tablet y el celular reciben la URL y el token pegados o escaneados de un QR de la PC, y la PC aprueba cada equipo nuevo, como en el «Respaldo si falla la red local» de abajo. Lo que sigue se conserva solo como referencia.
 
 La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.fullUploadAtUtc`, ya se pegó el token para tablet y celular y hay menos de 3 equipos activos. La PC y el equipo deben estar en la misma red (el Wi-Fi del consultorio).
 
@@ -347,6 +350,8 @@ La PC solo ofrece vincular si su sincronización está sana, existe `_tpvc_meta.
 Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base del equipo (si no se borró por la regla 3 de §4.7) y sube lo pendiente. Un `clinicId` distinto empieza de cero, después de subir o exportar lo pendiente (§4.7).
 
 ### 4.5 Qué obtiene quien fotografía el QR o escucha la red
+
+> **Con la decisión del 2026-10-11 cambia:** el QR de la PC lleva el token, así que quien lo fotografía mientras está en pantalla obtiene acceso completo, igual que quien copia el token del panel. Por eso se muestra solo a pedido y se cierra solo a los 2 minutos. La red no lleva nada: el equipo habla solo con Turso, por HTTPS. Lo de abajo describe el QR descartado.
 
 - **Fuera de la red local o después de los 10 min:** nada. El QR no lleva token y la PC ya no escucha.
 - **En la red local, durante la ventana y con la foto:** puede intentar vincularse antes que la tablet. La PC pregunta al médico con el nombre y el código de confirmación; el de un equipo ajeno no coincide con el de la tablet, y la tablet recibe "Ya hay un equipo vinculándose", así que el médico rechaza y empieza otra vez.
@@ -384,9 +389,9 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 
 1. **Revocar** con motivo "perdido": la PC pone `RevokedAtUtc`. Si el equipo se conecta antes de la rotación y lee su fila, borra su base, su credencial y sus borradores sin subir nada.
 2. **"Cortar acceso ahora"** (marcado por defecto). Sin token de la API la PC no puede rotar sola, así que guía al médico:
-   - rotar los tokens del grupo en el panel de Turso o con `turso db tokens invalidate`, con una breve interrupción (V4);
-   - crear dos tokens nuevos, el de la PC y el de tablet y celular, y pegarlos en la PC, que sincroniza en ese momento;
-   - los demás equipos reciben 401 y muestran "Vuelva a vincular" sin perder sus cambios pendientes. Se vinculan otra vez con un QR nuevo en la red local: el que tenía cambios pendientes conserva su base y los sube; el que no tenía nada pendiente ya se borró (regla 3) y vuelve a bajar todo (~20–30k lecturas).
+   - rotar los tokens en el panel de Turso o con `turso db tokens invalidate` (anula **todos** los de la base y los del grupo, también el de la PC), con una breve interrupción (V4);
+   - crear un token nuevo y pegarlo en la PC, que sincroniza en ese momento;
+   - los demás equipos reciben 401 y muestran "Pegue el token nuevo" sin perder sus cambios pendientes. Se pega (o se escanea del QR de la PC) y siguen: el que tenía cambios pendientes conserva su base y los sube; el que no tenía nada pendiente ya se borró (regla 3) y vuelve a bajar todo (~20–30k lecturas). No hace falta aprobarlos otra vez: su fila de `DeviceRegistry` sigue.
 3. **Reglas ante un 401** (con el nivel C no hay vencimientos: un 401 es una rotación):
    - con cambios pendientes, el equipo se bloquea y los conserva hasta volver a vincular;
    - sin nada pendiente (casi siempre el celular), se borra solo tras dos 401 con 10 min de diferencia.
@@ -394,7 +399,7 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
    - Si el plan gratuito no tiene bitácora de auditoría (V11), hay que suponer que el equipo perdido pudo leer todo hasta la rotación.
    - Se recomienda borrarlo también con "Encontrar mi dispositivo".
    - Sin rotar, el equipo perdido conserva el acceso: no hay otro límite.
-5. **Si se pierde la PC:** rotar desde el panel de Turso, instalar la PC nueva con "Recuperar desde la nube" (8.8) y los tokens nuevos, marcarla como "Esta PC reemplaza a la principal" (8.10) y volver a vincular la tablet y el celular.
+5. **Si se pierde la PC:** rotar desde el panel de Turso, instalar la PC nueva con "Recuperar desde la nube" (8.8) y el token nuevo, marcarla como "Esta PC reemplaza a la principal" (8.10) y pegar el token nuevo en la tablet y el celular.
 
 ### 4.8 Seguridad local en Android
 
@@ -829,34 +834,29 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Prueba:** todo corre en la CI de C# en Linux; los planes de las consultas literales no tienen SCAN.
 - **Riesgo:** ninguno.
 
-#### 8.14 · Vincular por QR en la red local
+#### 8.14 · Vincular la tablet y el celular con la URL y el token
+- **Decisión del médico (2026-10-11):** en lugar del QR por la red local (§4.4, descartada), cada equipo recibe la URL y un token como la PC. Se cae el servidor temporal en la PC, el Firewall y el protocolo cifrado que habría que mantener igual en C# y en Kotlin. Turso no deja anular un solo token: un equipo perdido se corta rotando todos y pegando el nuevo en los que quedan (8.15).
 - **Antes:** [T] V3 (§4.2).
 - **Cambia:**
-  - Campo para pegar una vez el "token para tablet y celular" (§4.3), creado a mano en el panel, guardado con DPAPI.
-  - `FakeHranaServer` con un mapa de tokens: uno desconocido o rotado recibe 401. `TursoClient` lo traduce a "Turso rechazó la credencial: vuelva a vincular o pegue un token nuevo".
-  - `Services/Pairing/LanPairingHost`, sin WPF y con `TimeProvider`: `TcpListener` en un puerto al azar, solo en las direcciones privadas de la PC y solo mientras dura la ventana de 10 min (§4.4). Un equipo por ventana; tres HMAC inválidos la cierran.
-  - QR con QRCoder (licencia MIT) y el flujo de §4.4: secreto de 128 bits, HMAC del equipo, código de confirmación y credencial con AES-256-GCM.
-  - Respaldo "Teclear a mano" (URL y token), con la aprobación del equipo nuevo en la PC.
-  - "Unirse con código" para otra PC, que recibe su código (`P2`…).
-  - `PairingReferenceClient` en C# dentro de las pruebas, como especificación ejecutable para Kotlin.
-  - Vectores `pairing-qr`, `pairing-hmac`, `pairing-credential` y `confirmation-code`.
-  - Capítulo "Tablet y celular" en el manual, con el aviso del Firewall de Windows (permitir TPVC en redes privadas) y la red del consultorio marcada como privada.
+  - En la tablet y el celular: pegar la URL y el token (copiados del panel de Turso) o escanear el QR de la PC. Se guardan envueltos con el Android Keystore, y el equipo se niega si no tiene bloqueo de pantalla seguro.
+  - En la PC, *Equipos vinculados › Mostrar QR para la tablet o el celular*: la URL y el token de la PC (QRCoder, licencia MIT), con el aviso de no fotografiarlo ni compartirlo. Se cierra solo a los 2 minutos.
+  - **Aprobar en la PC:** el equipo nuevo escribe su latido y espera. La PC muestra "Equipo nuevo: «Galaxy Tab S9». ¿Vincular como Tablet?", con los últimos 6 caracteres de su `DeviceId` en las dos pantallas. Al aceptar escribe su fila en `DeviceRegistry` (código `T1`, `C1`…). Hasta entonces el equipo no baja datos. Rechazar lo deja fuera de la lista.
+  - Otra PC con Windows se une como hoy (URL, token y «Unirse a esta nube») y recibe su código (`P2`…).
+  - `FakeHranaServer` con un mapa de tokens: uno desconocido o anulado recibe 401. `TursoClient` lo traduce a "Turso rechazó el token: pegue el token nuevo".
+  - Vector `link-qr`: el texto del QR (prefijo y versión, URL, token y nombre del consultorio) para que Kotlin lo lea igual.
+  - Capítulo "Tablet y celular" en el manual.
 - **Prueba:**
-  - El flujo completo, con la lista de direcciones inyectada (en las pruebas, 127.0.0.1).
-  - Un HMAC inválido no recibe nada, y tres cierran la ventana.
-  - Rechazar no manda la credencial.
-  - Una ventana vencida ya no escucha; un cifrado alterado se rechaza.
-  - Ni el QR ni lo que pasa por el socket llevan el token en claro.
-  - Nunca escucha en una dirección pública ni en `0.0.0.0`.
+  - La aprobación con un equipo simulado (su latido en el servidor simulado): sin aprobar no baja nada; rechazar no escribe `DeviceRegistry`.
   - Un 401 se traduce y no borra nada.
+  - El QR se cierra solo y no queda en el portapapeles ni en el registro.
   - [W] Capturas en los 4 temas.
-- **Riesgo:** medio (criptografía, red local y experiencia de uso). Lo mitigan los vectores y el respaldo a mano.
+- **Riesgo:** bajo.
 
 #### 8.15 · Quitar, equipo perdido y rotación
 - **Antes:** [T] V4 y V11.
 - **Cambia:**
   - *Quitar* con aviso de cambios pendientes; el equipo sube lo pendiente antes de borrarse, o lo exporta.
-  - "Perdí este equipo": revocar en `DeviceRegistry` y "Cortar acceso ahora" guiado (§4.7): rotar en el panel de Turso, pegar los dos tokens nuevos en la PC y volver a vincular los demás. Estado "Vuelva a vincular" en la lista.
+  - "Perdí este equipo": revocar en `DeviceRegistry` y "Cortar acceso ahora" guiado (§4.7): rotar en el panel de Turso (anula todos los tokens), pegar el nuevo en la PC y en los demás equipos. Estado "Pegue el token nuevo" en la lista.
   - Reglas ante un 401 (§4.7).
 - **Prueba:**
   - Después de rotar en el simulador, los tokens viejos reciben 401; con los nuevos pegados, la PC sigue sincronizando.
@@ -866,7 +866,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - Un equipo que lee su fila revocada con motivo "perdido" se borra sin subir.
 - **Riesgo:** medio-bajo.
 
-**Corte: primera versión del celular.** Con 8.2–8.15 puede salir el celular (K0–K4, §7.5): solo baja datos (escribe su latido), se vincula con QR en la red local, y comparte la receta y el ticket. Prueba en equipos reales Hrana, la vinculación y el PDF antes de escribir la tablet. Lo que escribe el celular (agendar y entradas de mercancía, K4b) llega después de 8.23. Cuando 8.20 suba `protocol` a 3, el celular se actualiza por la prueba interna de Play.
+**Corte: primera versión del celular.** Con 8.2–8.15 puede salir el celular (K0–K4, §7.5): solo baja datos (escribe su latido), se vincula pegando la URL y el token (o escaneando el QR de la PC) y comparte la receta y el ticket. Prueba en equipos reales Hrana, la vinculación y el PDF antes de escribir la tablet. Lo que escribe el celular (agendar y entradas de mercancía, K4b) llega después de 8.23. Cuando 8.20 suba `protocol` a 3, el celular se actualiza por la prueba interna de Play.
 
 ### Etapa 3 · Datos correctos con varios equipos que escriben
 
@@ -1103,8 +1103,8 @@ Se empieza con cuatro módulos de Gradle y se dividen cuando crezcan:
 | Segundo plano | WorkManager, trabajos normales (no expeditos) | Subida de respaldo y descarga periódica, agrupadas por Doze, sin servicio en primer plano ni notificación. |
 | Ciclo de vida | `ProcessLifecycleOwner` + corrutinas y `Flow` | Revisión y latido solo con la app al frente; subida inmediata en ON_STOP. Se prueba con `kotlinx-coroutines-test`. |
 | Reloj | Hora del servidor anclada con `SystemClock.elapsedRealtime()` | Un cambio de hora del aparato sin conexión no mueve las marcas. Después de reiniciar usa el reloj normal con un aviso, hasta la siguiente sincronización. |
-| QR | CameraX + ML Kit (modelo incluido en la app) | Funciona sin descargar el modelo de Google Play. Como respaldo, la URL y el token se teclean a mano. |
-| Vinculación y criptografía | `java.net.Socket` hacia la PC, solo durante la vinculación; Android Keystore + `javax.crypto` (HmacSHA256, HKDF con HmacSHA256, AES-256-GCM) | Sin depender de `EncryptedSharedPreferences`. Se comprueba con los vectores y el `PairingReferenceClient` de 8.14. |
+| QR | CameraX + ML Kit (modelo incluido en la app) | Lee el QR de la PC con la URL y el token (8.14). Funciona sin descargar el modelo de Google Play. Si falla, se pegan a mano. |
+| Credencial | Android Keystore + `javax.crypto` (AES-256-GCM) para envolver la URL y el token | Sin depender de `EncryptedSharedPreferences`. Desde la decisión del 2026-10-11 no hay conexión a la PC ni protocolo de vinculación (8.14). |
 | Receta en PDF para compartir | `android.graphics.pdf.PdfDocument` dibujado a partir del modelo `PrescriptionSheet` y los vectores `prescription-sheet` y `prescription-html-fields` (8.11), en media carta horizontal, con el membrete de `ClinicAssets` | `PrintDocumentAdapter` no genera un PDF sin el diálogo de impresión del sistema. Se compara a ojo con la de la PC en la tablet real al empezar K4. |
 | Imprimir la receta | WebView con la plantilla portada de `PrescriptionHtmlBuilder` y la impresión del sistema | Mismo HTML que la PC; aquí sí se quiere el diálogo de impresión. |
 | Ticket en PDF o imagen | `PdfDocument` con `TicketText` | El ticket son 42 columnas de texto. |
@@ -1195,7 +1195,7 @@ Entre paréntesis, los pasos de la PC que necesita cada uno.
 1. **K0.** Esqueleto con los cuatro módulos, CI, textos en español y tema.
 2. **K1.** Contrato y reglas del celular, con sus vectores: reportes, receta y ticket (8.3, 8.11).
 3. **K2.** Cliente Hrana y motor de lectura: primer arranque, descarga completa, cursor por página, recálculo, generación y freno (8.6, 8.7, 8.9, 8.13). Datos de prueba con un token pegado en las compilaciones de desarrollo.
-4. **K3.** Vinculación en la red local y seguridad: QR, conexión a la PC con el secreto (HMAC), código de confirmación, credencial cifrada, respaldo a mano, Keystore, SQLCipher, revocación y reglas del 401 (8.14, 8.15). Si la versión de Android pide permiso para la red local, se pide al vincular.
+4. **K3.** Vinculación y seguridad: pegar o escanear la URL y el token, esperar la aprobación de la PC, Keystore, SQLCipher, bloqueo de pantalla, revocación y reglas del 401 (8.14, 8.15).
 5. **K4.** Celular: resumen, corte, alertas, compra sugerida, expedientes, inventario (existencias y lotes) y agenda de solo lectura, y compartir la receta y el ticket (8.11, 8.12). Solo baja datos y escribe su latido. **Primera versión del celular.**
 
 **Tablet:**
