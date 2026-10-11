@@ -1,6 +1,6 @@
 # Pendientes antes de iniciar la app Android (tablet y celular)
 
-Estado al 2026-10-10 (TPVC v1.22.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
+Estado al 2026-10-10 (TPVC v1.23.0). Objetivo: una app Android en **Kotlin nativo** para la tablet
 (expedientes NOM-004, consulta, receta, citas y cobro, igual que en Windows, también sin internet) y para el
 celular (expedientes, agenda, inventario con entradas de mercancía, resumen y corte de caja).
 
@@ -82,6 +82,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.23.0 (receta: orden normado, carta y letras)
+
+- [ ] En una consulta, agregar a la receta un medicamento del catálogo que tenga su genérico capturado (y uno de marca): el renglón dice primero el genérico con su concentración y forma, la marca entre paréntesis y, junto, la presentación (*Paracetamol 500 mg tabletas (Tempra) · Caja con 20 tabletas*). *Se surte aquí* lo sigue cobrando bien.
+- [ ] Una receta con muchos medicamentos o indicaciones largas: la vista previa dice "sale en hoja carta vertical", y la impresión y el PDF salen en carta, en una sola hoja. Una receta corta sigue en media carta.
+- [ ] *Médico y consultorio → Letras de la receta*: elegir otra letra para el texto y para el nombre; la vista previa del encabezado, la de la receta, la impresión y el PDF la usan. Al volver a abrir TPVC sigue elegida.
+- [ ] Para Kotlin: cada medicamento de la receta puede traer `Presentation` en el JSON (`ActivePrescriptionJson`, `PrescriptionsJson`); la receta en media carta o carta según quepa (C2).
 
 ### v1.22.0 (ingresar pedido del proveedor)
 

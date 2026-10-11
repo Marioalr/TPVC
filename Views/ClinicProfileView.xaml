@@ -159,6 +159,54 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Letras de la receta (desde v1.23.0): se guardan al elegirlas, en este equipo -->
+                    <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TextSection}" Text="Letras de la receta" />
+                            <TextBlock Style="{StaticResource TextDetail}" TextWrapping="Wrap" Margin="0,4,0,12"
+                                       Text="Se eligen entre las letras instaladas en esta computadora y se guardan al elegirlas. Se usan al imprimir, al guardar en PDF y en la vista previa." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Texto de la receta" />
+                                    <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding BodyFontChoices}" SelectedItem="{Binding SelectedBodyFont}"
+                                              TextSearch.TextPath="Label" AutomationProperties.Name="Letra del texto de la receta">
+                                        <ComboBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel />
+                                            </ItemsPanelTemplate>
+                                        </ComboBox.ItemsPanel>
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Label}" FontFamily="{Binding Family, TargetNullValue='Neue Haas Grotesk Text Pro, Segoe UI, Arial'}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Nombre del médico" />
+                                    <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding DoctorFontChoices}" SelectedItem="{Binding SelectedDoctorFont}"
+                                              TextSearch.TextPath="Label" AutomationProperties.Name="Letra del nombre del médico">
+                                        <ComboBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel />
+                                            </ItemsPanelTemplate>
+                                        </ComboBox.ItemsPanel>
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Label}" FontFamily="{Binding Family, TargetNullValue='Frosted Breath, Segoe Script, Segoe UI'}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
                         <StackPanel>
                             <TextBlock Style="{StaticResource TextSection}" Text="Consultorio" Margin="0,0,0,12" />
@@ -204,7 +252,7 @@
                 <StackPanel Grid.Column="2">
                     <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Así sale en la receta" Margin="0,0,0,8" />
                     <Border Background="#FFFFFF" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="8" Padding="16,14" Margin="0,0,0,16"
-                            TextElement.Foreground="#000000" TextElement.FontSize="12">
+                            TextElement.Foreground="#000000" TextElement.FontSize="12" TextElement.FontFamily="{Binding BodyFontFamily}">
                         <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -216,7 +264,7 @@
                                        Visibility="{Binding HasCrestImage, Converter={StaticResource BoolToVis}}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding PreviewDoctorName}" TextWrapping="Wrap" TextAlignment="Center"
-                                               FontFamily="Frosted Breath, Segoe Script, Segoe UI" FontSize="18">
+                                               FontFamily="{Binding DoctorFontFamily}" FontSize="18">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#0369A1" />

@@ -5,8 +5,34 @@ using System.Linq;
 
 namespace TPVC.Models;
 
-/// <summary>Un medicamento de la receta: el nombre en un renglón y su posología en el siguiente.</summary>
-public sealed record PrescriptionSheetLine(string Medicine, string Posology);
+/// <summary>
+/// Un medicamento de la receta: el nombre (en negritas) con su presentación y lo que se surte junto a él, y la
+/// posología en el siguiente renglón. <paramref name="Detail"/> empieza con " · " o está vacío.
+/// </summary>
+public sealed record PrescriptionSheetLine(string Medicine, string Posology, string Detail = "");
+
+/// <summary>El papel de la receta: media carta horizontal (la del Excel) o carta vertical cuando no cabe en una media carta.</summary>
+public enum PrescriptionPaper
+{
+    HalfLetter,
+    Letter
+}
+
+/// <summary>
+/// Las letras de la receta (las elige cada equipo en Médico y consultorio: dependen de lo que tenga instalado). Cada
+/// una es una lista de familias de respaldo, como en CSS y en WPF.
+/// </summary>
+public sealed record PrescriptionFonts(string Body, string Doctor)
+{
+    public const string DefaultBody = "Neue Haas Grotesk Text Pro, Segoe UI, Arial";
+    public const string DefaultDoctor = "Frosted Breath, Segoe Script, Segoe UI";
+    public static readonly PrescriptionFonts Default = new(DefaultBody, DefaultDoctor);
+
+    /// <summary>La elegida (con las de siempre detrás, por si en otro equipo no está) o las de siempre.</summary>
+    public static PrescriptionFonts From(string? body, string? doctor) => new(
+        string.IsNullOrWhiteSpace(body) ? DefaultBody : $"{body.Trim()}, Segoe UI, Arial",
+        string.IsNullOrWhiteSpace(doctor) ? DefaultDoctor : $"{doctor.Trim()}, Segoe Script, Segoe UI");
+}
 
 /// <summary>
 /// La receta tal como sale en papel, copiada de la hoja RECETA del Excel del médico (media carta
@@ -28,6 +54,20 @@ public sealed class PrescriptionSheet
     public const double PageHeight = PageHeightInches * 96; // 528
     public const double MarginLeftRight = MarginLeftRightInches * 96;
     public const double MarginTopBottom = MarginTopBottomInches * 96;
+
+    /// <summary>Carta vertical (8.5 x 11 in), cuando la receta no cabe en una media carta (desde v1.23.0).</summary>
+    public const double LetterPageHeightInches = 11;
+    public const double LetterPageHeight = LetterPageHeightInches * 96; // 1056
+
+    /// <summary>El papel: lo decide quien puede medir la hoja (la impresión, con WPF). Media carta si nadie lo mide.</summary>
+    public PrescriptionPaper Paper { get; set; } = PrescriptionPaper.HalfLetter;
+
+    public double PaperHeightInches => Paper == PrescriptionPaper.Letter ? LetterPageHeightInches : PageHeightInches;
+    public double PaperHeight => Paper == PrescriptionPaper.Letter ? LetterPageHeight : PageHeight;
+
+    /// <summary>Letra del cuerpo y del nombre del médico (listas de familias de respaldo).</summary>
+    public string BodyFont { get; init; } = PrescriptionFonts.DefaultBody;
+    public string DoctorFont { get; init; } = PrescriptionFonts.DefaultDoctor;
 
     public string DoctorName { get; init; } = string.Empty;
     public string University { get; init; } = string.Empty;
@@ -69,9 +109,11 @@ public sealed class PrescriptionSheet
         IEnumerable<PatientPrescriptionItem>? items,
         ClinicProfile? profile,
         string? generalNotes,
-        DateTime date)
+        DateTime date,
+        PrescriptionFonts? fonts = null)
     {
         profile ??= new ClinicProfile();
+        fonts ??= PrescriptionFonts.Default;
         var vitals = Vitals.From(patient.VitalSigns);
         var license = (profile.ProfessionalLicense ?? string.Empty).Trim();
 
@@ -92,13 +134,15 @@ public sealed class PrescriptionSheet
             OxygenSaturation = vitals.OxygenSaturation,
             Medicines = (items ?? Enumerable.Empty<PatientPrescriptionItem>())
                 .Where(i => !string.IsNullOrWhiteSpace(i.MedicineName))
-                .Select(i => new PrescriptionSheetLine(i.MedicineName.Trim(), (i.Dosage ?? string.Empty).Trim()))
+                .Select(i => new PrescriptionSheetLine(i.MedicineName.Trim(), (i.Dosage ?? string.Empty).Trim(), i.SheetDetail))
                 .ToList(),
             GeneralMeasures = string.IsNullOrWhiteSpace(generalNotes) ? PrescriptionDefaults.Indications : generalNotes.Trim(),
             Phone = (profile.Phone ?? string.Empty).Trim(),
             Address = (profile.Address ?? string.Empty).Trim(),
             CrestImagePath = profile.CrestImagePath,
-            HeaderImagePath = profile.HeaderImagePath
+            HeaderImagePath = profile.HeaderImagePath,
+            BodyFont = fonts.Body,
+            DoctorFont = fonts.Doctor
         };
     }
 

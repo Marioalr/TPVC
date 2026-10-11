@@ -163,7 +163,7 @@ public class FlowCharacterizationTests
 
         // Sin descartar: la nota sigue y el expediente no vuelve a como estaba antes de la consulta
         var stored = (await clinic.Inventory.GetPatientByIdAsync(patient.Id))!;
-        Assert.AreEqual("Paracetamol 500 mg (Caja con 20 tabletas)", stored.ActivePrescription.Single().MedicineName);
+        Assert.AreEqual("Paracetamol 500 mg tabletas", stored.ActivePrescription.Single().MedicineName);
         CollectionAssert.AreNotEqual(previous, stored.ActivePrescription.Select(p => p.MedicineName).ToList());
         Assert.AreEqual("E11.9 Diabetes mellitus tipo 2 sin complicaciones", stored.LastDiagnosis);
         Assert.IsTrue((await clinic.Inventory.GetPatientConsultationsAsync(patient.Id)).Any(c => c.Folio == folio));
@@ -176,7 +176,7 @@ public class FlowCharacterizationTests
         // ficha toman la instancia de la base (SelectedPatient cambia por referencia, no por Id)
         await WaitUntilAsync(() => !ReferenceEquals(records.Patients.Single(p => p.Id == patient.Id), before), "La lista vuelve a leer el expediente");
         Assert.AreSame(records.Patients.Single(p => p.Id == patient.Id), records.SelectedPatient, "La ficha también toma la de la base");
-        Assert.AreEqual("Paracetamol 500 mg (Caja con 20 tabletas)", records.Patients.Single(p => p.Id == patient.Id).ActivePrescription.Single().MedicineName);
+        Assert.AreEqual("Paracetamol 500 mg tabletas", records.Patients.Single(p => p.Id == patient.Id).ActivePrescription.Single().MedicineName);
         records.Dispose();
     }
 

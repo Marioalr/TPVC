@@ -152,6 +152,7 @@ public sealed class ConsultationRecordState
         MedicineName = item.MedicineName,
         Dosage = item.Dosage,
         RecommendedQuantity = item.RecommendedQuantity,
+        Presentation = item.Presentation,
         DispenseInClinic = item.DispenseInClinic
     };
 }

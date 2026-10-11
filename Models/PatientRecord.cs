@@ -14,6 +14,20 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
     public string Dosage { get; set; } = string.Empty;
     public int RecommendedQuantity { get; set; } = 1;
 
+    /// <summary>
+    /// La presentación que se surte ("Caja con 20 tabletas"), aparte del nombre (art. 30 del Reglamento de Insumos para
+    /// la Salud). Desde v1.23.0; las recetas anteriores no la traen.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Presentation { get; set; }
+
+    /// <summary>
+    /// Lo que va junto al nombre en la hoja: " · Caja con 20 tabletas" (vacío sin presentación). La receta sigue sin
+    /// cantidades, como la del Excel: la cantidad solo sirve para cobrar lo que se surte en el consultorio.
+    /// </summary>
+    [JsonIgnore]
+    public string SheetDetail => string.IsNullOrWhiteSpace(Presentation) ? string.Empty : " · " + Presentation.Trim();
+
     private bool _dispenseInClinic;
 
     /// <summary>

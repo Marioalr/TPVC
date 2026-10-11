@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.23.0] - 2026-10-10
+
+### Cambiado — la receta
+* Cada medicamento sale **en el orden que pide la norma mexicana**: primero el genérico (principio activo) con su concentración y forma, la marca entre paréntesis si es de marca, y junto a él la presentación, como en *Paracetamol 500 mg tabletas (Tempra) · Caja con 20 tabletas*. Al elegirlo del catálogo se escribe así solo, si el producto tiene su genérico. La receta sigue sin cantidades.
+* Si la receta no cabe en una media carta, sale en **hoja carta** vertical, tanto al imprimirla como al guardarla en PDF; la vista previa lo avisa. Antes pasaba a una segunda media carta.
+* **Letras de la receta** en *Médico y consultorio*: se elige la letra del texto y la del nombre del médico entre las instaladas en la computadora.
+* La captura recuerda qué escribir: genérico, concentración y forma en el medicamento; dosis, vía, frecuencia y duración en las indicaciones.
+* 471 pruebas.
+
 ## [1.22.0] - 2026-10-10
 
 ### Añadido — ingresar el pedido del proveedor

@@ -43,6 +43,47 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPrescriptionPdfModalOpen;
 
+    /// <summary>El papel en que saldrá: carta si la receta no cabe en una media carta (lo mide la impresión).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewMinHeight), nameof(PaperDescription))]
+    private PrescriptionPaper _paper = PrescriptionPaper.HalfLetter;
+
+    /// <summary>Alto mínimo de la hoja de la vista previa: media carta (528) o carta (1056), en píxeles de 1/96".</summary>
+    public double PreviewMinHeight => Paper == PrescriptionPaper.Letter ? PrescriptionSheet.LetterPageHeight : PrescriptionSheet.PageHeight;
+
+    public string PaperDescription => Paper == PrescriptionPaper.Letter
+        ? "Así se imprime o se guarda: no cabe en una media carta, así que sale en hoja carta vertical"
+        : "Así se imprime o se guarda: media carta horizontal, con el formato de su receta de Excel";
+
+    /// <summary>Las letras de la receta en este equipo (Médico y consultorio).</summary>
+    [ObservableProperty]
+    private string _bodyFontFamily = PrescriptionFonts.DefaultBody;
+
+    [ObservableProperty]
+    private string _doctorFontFamily = PrescriptionFonts.DefaultDoctor;
+
+    /// <summary>Vuelve a medir el papel y a leer las letras (al abrir la vista previa).</summary>
+    public void RefreshPaperAndFonts()
+    {
+        var fonts = _printingService?.PrescriptionFonts ?? PrescriptionFonts.Default;
+        BodyFontFamily = fonts.Body;
+        DoctorFontFamily = fonts.Doctor;
+        var patient = _session.SelectedPatient;
+        Paper = patient == null || _printingService == null
+            ? PrescriptionPaper.HalfLetter
+            : _printingService.ChoosePaper(patient, patient.ActivePrescription, CurrentProfile(), PrescriptionIndications);
+    }
+
+    private ClinicProfile CurrentProfile() => _clinicProfileService?.CurrentProfile ?? new ClinicProfile
+    {
+        DoctorName = _clinic.DoctorName,
+        DoctorLicense = _clinic.DoctorLicense,
+        DoctorSpecialty = _clinic.DoctorSpecialty,
+        ClinicName = _clinic.ClinicName,
+        ClinicAddress = _clinic.ClinicAddress,
+        ClinicPhone = _clinic.ClinicPhone
+    };
+
     /// <summary>Lo que se guarda como plan cuando la consulta termina sin plan escrito.</summary>
     internal const string SavedTreatmentPlanPlaceholder = "Tratamiento e indicaciones médicas según receta.";
 
@@ -88,6 +129,7 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
             return;
         }
 
+        RefreshPaperAndFonts();
         IsPrescriptionPdfModalOpen = true;
     }
 
