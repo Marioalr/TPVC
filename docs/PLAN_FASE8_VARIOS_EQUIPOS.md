@@ -790,7 +790,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.12b · Resultados de laboratorio en la nube (agregado el 2026-10-11)
-- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 en `scripts/verify-turso-blobs.ps1`; **V20 es crítica** (si borrar no libera cuota, el tope cambia).
+- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 con `scripts/verify-turso-blobs.ps1` (escrito el 2026-10-11 y probado contra el servidor simulado; falta correrlo en Turso real); **V20 es crítica** (si borrar no libera cuota, el tope cambia).
 - **Cambia:** lo de `docs/EVALUACION_RESULTADOS_LABORATORIO.md` §6, elegido por el médico el 2026-10-10 («Turso + copia en la laptop»):
   - Tabla sincronizada `LabResults` (solo metadatos) y tablas solo de la nube `LabBlobs`/`LabBlobChunks`, en trozos de 512 KiB.
   - La laptop guarda una copia completa en `%LocalAppData%\TPVC\laboratorio\`, fuera de `consultorio.db` y de sus respaldos diarios.

@@ -147,7 +147,7 @@ CREATE TABLE LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, D
 - Los resultados son datos sensibles: quedan igual de expuestos que las notas, porque un token `full-access` ya lee todo.
 - Hasta que se suba, la única copia está en el equipo, como cualquier cambio hecho sin conexión.
 
-**Comprobaciones.** Van en un script nuevo, `scripts/verify-turso-blobs.ps1`, con el mismo estilo de `verify-turso-hrana.ps1`: solo tablas `vtest_*` en una base de prueba, ~100 MB temporales. Los BLOB se generan en el servidor con `randomblob`, salvo en V17.
+**Comprobaciones.** Están en `scripts/verify-turso-blobs.ps1` (desde el 2026-10-11), con el mismo estilo de `verify-turso-hrana.ps1`: solo tablas `vtest_*` en una base de prueba, ~100 MB temporales. Los BLOB se generan en el servidor con `randomblob`, salvo en V17, V22 y V23. V20 mide con `PRAGMA page_count`/`freelist_count`, `dbstat` (si existe) y `turso db inspect` (con `-DbName`); V22 se corre en cada red con `-Only V22 -Network …`. V18 se hizo aparte (`verify-turso-hrana.ps1 -Only V18`).
 
 | # | Qué se comprueba | Qué decide |
 |---|---|---|
