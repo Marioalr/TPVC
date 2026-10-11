@@ -93,6 +93,7 @@ variable termina en el acto, así que no estorba en la CI normal.
 | `TPVC_FAKE_TURSO_MINUTES` | `30` | Cuánto escucha como máximo. |
 | `TPVC_FAKE_TURSO_TOKEN` | (cualquiera) | Si se pone, solo acepta ese token; los demás reciben 401. |
 | `TPVC_FAKE_TURSO_READY_FILE` | — | Archivo donde escribe la URL cuando ya está listo. |
+| `TPVC_FAKE_TURSO_SEED` | `demo` | `none` deja la nube vacía: así se prueban los scripts de `scripts/verify-turso-*.ps1`, que se niegan a correr en una base con datos (`-Url http://127.0.0.1:8787`). |
 
 Antes de escuchar, una PC con los datos de demostración (pacientes, consultas, productos, lotes y ventas) sube todo y hace
 la «Sincronización completa», así que la nube tiene esquema, identidad (`clinicId`, generación) y datos, como la del

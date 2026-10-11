@@ -115,7 +115,9 @@ public class FakeTursoHostTests
         var token = Environment.GetEnvironmentVariable("TPVC_FAKE_TURSO_TOKEN");
 
         using var server = new FakeHranaServer(Path.Combine(_folder, "nube.db"));
-        await FakeTursoHost.SeedDemoCloudAsync(server, Path.Combine(_folder, "pc"));
+        // TPVC_FAKE_TURSO_SEED=none: una nube vacía (para probar los scripts de comprobación, que se niegan a correr en una
+        // base con datos)
+        if (Environment.GetEnvironmentVariable("TPVC_FAKE_TURSO_SEED") != "none") await FakeTursoHost.SeedDemoCloudAsync(server, Path.Combine(_folder, "pc"));
         if (!string.IsNullOrEmpty(token)) server.AcceptedTokens = new() { token };
 
         using var host = new FakeTursoHost(server, port);

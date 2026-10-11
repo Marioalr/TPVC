@@ -11,6 +11,13 @@
   - V14: si una petición "batch" con BEGIN/COMMIT es atómica (un error a la mitad no deja nada escrito).
   - V18: cómo regresa Turso un BLOB (se espera {"type":"blob","base64":…} sin el relleno '=') y si acepta el base64
     de un argumento con y sin relleno.
+  - V3 (antes del paso 8.14): qué responde Turso a un token inventado y a uno con la firma alterada (estado HTTP y
+    cuerpo). No anula nada.
+  - V16 (antes del 8.16): el contador de folios en una sola instrucción (INSERT … ON CONFLICT DO UPDATE … RETURNING),
+    también con 40 peticiones a la vez: cada una debe recibir un número distinto y sin huecos.
+  - V4 y V3 con una rotación real, solo con -Rotate (antes del 8.15): mide cuánto sigue sirviendo el token viejo después
+    de "turso db tokens invalidate" y cuánto tarda el nuevo. CUIDADO: anula TODOS los tokens del grupo de la base; úsela
+    solo si la base de prueba está en otro grupo que la del consultorio (vea la columna Group de "turso db list").
 
   Usa solo tablas que empiezan con "vtest_" y las borra al terminar. Se niega a correr en una base que ya tenga otras
   tablas (por ejemplo, la del consultorio). El token se pide sin mostrarlo y no se guarda.
@@ -23,14 +30,28 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V18
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3,V16
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts\verify-turso-hrana.ps1 -Url libsql://tpvc-pruebas-usuario.turso.io -Only V3 -Rotate -DbName tpvc-pruebas
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Url,
     [int]$Rows = 20000,
-    [ValidateSet('V12', 'V14', 'V15', 'V18')][string[]]$Only = @('V15', 'V12', 'V14', 'V18')
+    [string[]]$Only = @('V15', 'V12', 'V14', 'V18', 'V3', 'V16'),
+    [switch]$Rotate,
+    [string]$DbName = '<base-de-prueba>'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Con "powershell -File", "-Only V3,V16" llega como un solo texto: se separa por comas
+$Only = @($Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToUpperInvariant() } | Where-Object { $_ })
+$known = @('V3', 'V12', 'V14', 'V15', 'V16', 'V18')
+$unknown = @($Only | Where-Object { $known -notcontains $_ })
+if ($unknown.Count -gt 0) { throw "Comprobación desconocida: $($unknown -join ', '). Use: $($known -join ', ')." }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 function Wants([string]$check) { return $Only -contains $check }
@@ -71,15 +92,16 @@ function Stmt([string]$sql, [object[]]$values = @()) {
 function Exec([string]$sql, [object[]]$values = @()) { return @{ type = 'execute'; stmt = (Stmt $sql $values) } }
 
 # Una petición /v2/pipeline. Devuelve el estado HTTP, los bytes de la respuesta y, si no es enorme, el JSON.
-function Send([object[]]$requests, [int]$timeoutSec = 120, [switch]$NoParse) {
+function Send([object[]]$requests, [int]$timeoutSec = 120, [switch]$NoParse, [string]$WithToken = '') {
     $all = @($requests) + @(@{ type = 'close' })
     $body = @{ requests = $all } | ConvertTo-Json -Depth 30 -Compress
     $bytes = [Text.Encoding]::UTF8.GetBytes($body)
     $status = 0
     $content = ''
+    $bearer = if ($WithToken) { $WithToken } else { $token }
     try {
         $resp = Invoke-WebRequest -Uri $pipeline -Method Post -UseBasicParsing -TimeoutSec $timeoutSec `
-            -Headers @{ Authorization = "Bearer $token" } -ContentType 'application/json' -Body $bytes
+            -Headers @{ Authorization = "Bearer $bearer" } -ContentType 'application/json' -Body $bytes
         $status = [int]$resp.StatusCode
         $content = $resp.Content
     }
@@ -170,7 +192,8 @@ if ($existing.Count -gt 0) {
     exit 1
 }
 
-$costs = @{ V15 = "~$($Rows + 2003) filas escritas"; V12 = '~200 MB de descarga'; V14 = '~5 filas escritas'; V18 = '~10 filas escritas' }
+$costs = @{ V15 = "~$($Rows + 2003) filas escritas"; V12 = '~200 MB de descarga'; V14 = '~5 filas escritas'; V18 = '~10 filas escritas';
+    V3 = 'nada (2 peticiones con un token inválido)'; V16 = '~45 filas escritas' }
 Write-Host "Se crearán tablas vtest_* y se borrarán al final. Costo: $(@($Only | ForEach-Object { "$_, $($costs[$_])" }) -join '; ')."
 $answer = Read-Host '¿Continuar? (s/n)'
 if ($answer -notmatch '^[sS]') { exit 0 }
@@ -395,9 +418,117 @@ try {
             $(if ($accepted[7]) { 'lo acepta' } else { 'lo rechaza' }), $(if ($storedOk) { 'correctos' } else { 'REVISAR' }))
         Say ''
     }
+
+    # ============================================================== V3 · token desconocido (sin anular nada)
+    if (Wants 'V3') {
+        Say '== V3: qué responde Turso a un token que no sirve (no se anula nada)'
+        $fake = Send @(Exec 'SELECT 1') -WithToken 'tpvc-v3-no-es-un-token'
+        Say ("    Token inventado: HTTP {0} · {1}" -f $fake.Status, $fake.Content.Substring(0, [Math]::Min(300, $fake.Content.Length)))
+        $parts = $token.Split('.')
+        if ($parts.Count -eq 3 -and $parts[2].Length -gt 4) {
+            # La misma cabecera y los mismos datos, con la firma cambiada en un carácter: como un token de otra llave
+            $sig = $parts[2]
+            $flip = if ($sig[$sig.Length - 2] -eq 'A') { 'B' } else { 'A' }
+            $altered = $parts[0] + '.' + $parts[1] + '.' + $sig.Substring(0, $sig.Length - 2) + $flip + $sig.Substring($sig.Length - 1)
+            $bad = Send @(Exec 'SELECT 1') -WithToken $altered
+            Say ("    Token con la firma alterada: HTTP {0} · {1}" -f $bad.Status, $bad.Content.Substring(0, [Math]::Min(300, $bad.Content.Length)))
+        }
+        else {
+            Say '    (El token no tiene forma de JWT; no se probó la firma alterada.)'
+        }
+        Say '  Cómo leerlo: TPVC espera HTTP 401; el texto del cuerpo es el que traducirá a "Turso rechazó el token: pegue el token nuevo".'
+        Say ''
+    }
+
+    # ============================================================== V16 · contador de folios en una instrucción
+    if (Wants 'V16') {
+        Say '== V16: el contador de folios en una sola instrucción, también con 40 peticiones a la vez'
+        Run @((Exec 'DROP TABLE IF EXISTS vtest_FolioCounters'),
+            (Exec 'CREATE TABLE vtest_FolioCounters (Series TEXT PRIMARY KEY NOT NULL, LastNumber INTEGER NOT NULL)')) 'Crear vtest_FolioCounters' | Out-Null
+        $counterSql = "INSERT INTO vtest_FolioCounters (Series, LastNumber) VALUES ('EXP-2026', 1) " +
+                      'ON CONFLICT(Series) DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber'
+        $first = Run @(Exec $counterSql) 'Primer folio'
+        $second = Run @(Exec $counterSql) 'Segundo folio'
+        $n1 = Cell (Rows (ResultAt $first 0))[0] 0
+        $n2 = Cell (Rows (ResultAt $second 0))[0] 0
+        Say ("    Una a la vez: regresa {0} y luego {1} (se esperan 1 y 2)" -f $n1, $n2)
+
+        Add-Type -AssemblyName System.Net.Http
+        $http = New-Object System.Net.Http.HttpClient
+        $http.Timeout = [TimeSpan]::FromSeconds(60)
+        $http.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue('Bearer', $token)
+        $payload = @{ requests = @((Exec $counterSql), @{ type = 'close' }) } | ConvertTo-Json -Depth 10 -Compress
+        $tasks = @()
+        for ($i = 0; $i -lt 40; $i++) {
+            $tasks += $http.PostAsync($pipeline, (New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')))
+        }
+        [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]$tasks)
+        $numbers = New-Object System.Collections.Generic.List[int]
+        $failures = 0
+        foreach ($t in $tasks) {
+            $json = $t.Result.Content.ReadAsStringAsync().Result | ConvertFrom-Json
+            $res = $json.results[0]
+            if ($t.Result.StatusCode -ne 200 -or $res.type -ne 'ok') { $failures++; continue }
+            $numbers.Add([int]$res.response.result.rows[0][0].value)
+        }
+        $http.Dispose()
+        $unique = @($numbers | Sort-Object -Unique)
+        $expected = 40 - $failures
+        $contiguous = $unique.Count -gt 0 -and ($unique[-1] - $unique[0] + 1) -eq $unique.Count
+        Say ("    40 a la vez: {0} respondieron, {1} números distintos, del {2} al {3}; {4}" -f $numbers.Count, $unique.Count,
+            $(if ($unique.Count) { $unique[0] } else { '-' }), $(if ($unique.Count) { $unique[-1] } else { '-' }),
+            $(if ($unique.Count -eq $expected -and $contiguous -and $failures -eq 0) { 'sin repetidos ni huecos: sirve como contador' } else { "REVISAR ($failures con error)" }))
+        Say ''
+    }
+
+    # ============================================================== V3 y V4 · rotación real (solo con -Rotate)
+    if ($Rotate) {
+        Say '== V4 (y V3 con un token anulado de verdad): rotar los tokens'
+        Write-Host ''
+        Write-Host 'CUIDADO: "turso db tokens invalidate" anula TODOS los tokens de la base y de su GRUPO.' -ForegroundColor Red
+        Write-Host 'Si la base del consultorio está en el mismo grupo, la PC del consultorio deja de sincronizar hasta pegarle un token nuevo.' -ForegroundColor Red
+        Write-Host 'Revise la columna Group con "turso db list" antes de seguir.' -ForegroundColor Red
+        $confirm = Read-Host 'Escriba ROTAR para seguir (otra cosa lo omite)'
+        if ($confirm -cne 'ROTAR') {
+            Say '    Rotación omitida.'
+        }
+        else {
+            Write-Host "En OTRA terminal corra:  turso db tokens invalidate $DbName -y"
+            Read-Host 'Pulse Enter aquí en cuanto termine' | Out-Null
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $rejected = $null
+            while ($clock.Elapsed.TotalSeconds -lt 180) {
+                $r = Send @(Exec 'SELECT 1') -timeoutSec 30
+                if ($r.Status -ne 200) { $rejected = $r; break }
+                Start-Sleep -Seconds 2
+            }
+            if ($rejected) {
+                Say ("    El token viejo dejó de servir a los {0:N0} s: HTTP {1} · {2}" -f $clock.Elapsed.TotalSeconds, $rejected.Status,
+                    $rejected.Content.Substring(0, [Math]::Min(300, $rejected.Content.Length)))
+            }
+            else {
+                Say '    El token viejo siguió sirviendo 3 minutos después de anularlo (REVISAR).'
+            }
+
+            Write-Host "Ahora cree uno nuevo:  turso db tokens create $DbName"
+            $secureNew = Read-Host -AsSecureString 'Token NUEVO (no se muestra)'
+            $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureNew))
+            $clock.Restart()
+            $working = $false
+            while ($clock.Elapsed.TotalSeconds -lt 180) {
+                $r = Send @(Exec 'SELECT 1') -timeoutSec 30
+                if ($r.Status -eq 200) { $working = $true; break }
+                Start-Sleep -Seconds 2
+            }
+            Say ("    El token nuevo {0}" -f $(if ($working) { "sirvió a los {0:N0} s de pegarlo" -f $clock.Elapsed.TotalSeconds } else { 'no sirvió en 3 minutos (REVISAR)' }))
+            Say '  Cómo leerlo: la interrupción para los equipos dura lo que tarde el médico en pegar el token nuevo, más lo que tarde Turso en aceptarlo.'
+        }
+        Say ''
+    }
 }
 finally {
-    $cleanup = Send @((Exec 'DROP TABLE IF EXISTS vtest_Rows'), (Exec 'DROP TABLE IF EXISTS vtest_Handoffs'), (Exec 'DROP TABLE IF EXISTS vtest_Atomic'), (Exec 'DROP TABLE IF EXISTS vtest_Blob'))
+    $cleanup = Send @((Exec 'DROP TABLE IF EXISTS vtest_Rows'), (Exec 'DROP TABLE IF EXISTS vtest_Handoffs'), (Exec 'DROP TABLE IF EXISTS vtest_Atomic'), (Exec 'DROP TABLE IF EXISTS vtest_Blob'),
+        (Exec 'DROP TABLE IF EXISTS vtest_FolioCounters'))
     if ($cleanup.Status -eq 200) { Say 'Tablas vtest_* borradas.' } else { Say "No se pudieron borrar las tablas vtest_* (HTTP $($cleanup.Status)); bórrelas a mano o borre la base de prueba." }
 
     $file = Join-Path (Get-Location) ("turso-verificacion-{0}.txt" -f (Get-Date -Format 'yyyyMMdd-HHmm'))
