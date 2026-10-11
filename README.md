@@ -119,7 +119,7 @@ Sistema integral de gestión de consulta, expedientes, punto de venta e inventar
 * **Inyección de Dependencias**: `Microsoft.Extensions.DependencyInjection`
 * **Persistencia / ORM**: Entity Framework Core 10 (`Microsoft.EntityFrameworkCore.Sqlite`)
 * **Acceso a Datos**: `IDbContextFactory` con un contexto de vida corta por operación (lecturas sin tracking, escrituras atómicas)
-* **Pruebas Automatizadas**: MSTest con **468 pruebas** unitarias y de integración
+* **Pruebas Automatizadas**: MSTest con **471 pruebas** unitarias y de integración
 
 ---
 

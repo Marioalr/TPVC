@@ -9,7 +9,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * Si la receta no cabe en una media carta, sale en **hoja carta** vertical, tanto al imprimirla como al guardarla en PDF; la vista previa lo avisa. Antes pasaba a una segunda media carta.
 * **Letras de la receta** en *Médico y consultorio*: se elige la letra del texto y la del nombre del médico entre las instaladas en la computadora.
 * La captura recuerda qué escribir: genérico, concentración y forma en el medicamento; dosis, vía, frecuencia y duración en las indicaciones.
-* 468 pruebas.
+* 471 pruebas.
 
 ## [1.22.0] - 2026-10-10
 
@@ -20,7 +20,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * **Ingresar pedido** suma todas las existencias de una vez y crea los productos nuevos, sin precio de venta, para completarlo después. También actualiza el costo y deja en el kardex «Pedido LUIN #…». Si el mismo pedido ya se había ingresado, lo avisa.
 * TPVC recuerda la **clave del proveedor** de cada producto, así el siguiente pedido se empareja solo; se puede ver y corregir en la ficha del producto.
 * Para la nube: el contrato de sincronización pasa a la revisión 3, con una columna nueva en Productos.
-* 452 pruebas.
+* 455 pruebas.
 
 ## [1.21.0] - 2026-10-10
 
@@ -30,14 +30,18 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * La **lista de compras sugerida** usa el costo capturado. Los productos sin costo se siguen estimando con el 65 % del precio de venta, ahora marcados con **≈** (también en el CSV y en el informe).
 * Los productos de ejemplo del asistente traen costo.
 * Para la nube: el contrato de sincronización pasa a la revisión 2, con dos columnas nuevas en Productos. Una PC con la versión anterior sigue sincronizando y no borra el costo.
-* 440 pruebas.
+* 443 pruebas.
 
 ## [1.20.7] - 2026-10-10
 
 ### Corregido — una sola ventana
 * Con TPVC abierto, dar doble clic en el ícono del escritorio o abrirlo desde el menú de inicio ya no abre otra ventana: trae al frente la que estaba abierta (y la restaura si estaba minimizada). Antes quedaban dos ventanas sobre los mismos datos, lo que confundía.
 * Si la ventana abierta no responde, TPVC lo avisa en lugar de abrir otra.
-* 432 pruebas.
+
+### Corregido — sincronización
+* Los datos binarios (BLOB) que regresa Turso se leen como bytes, con o sin el relleno `=` del base64. Antes se leían vacíos. Hoy ninguna tabla sincronizada los usa; los usarán el membrete en la nube y los resultados de laboratorio.
+* `scripts/verify-turso-hrana.ps1` agrega la comprobación V18 (cómo regresa y acepta Turso los BLOB) y `-Only` para correr una sola comprobación.
+* 435 pruebas.
 
 ## [1.20.6] - 2026-10-10
 
