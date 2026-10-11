@@ -183,12 +183,12 @@ public class TursoTests
     public void TursoSettingsService_DailyCounters_ResetAtMidnight_AndBrakeSurvivesRestart()
     {
         var clock = new ManualTimeProvider(new DateTimeOffset(2026, 10, 10, 15, 0, 0, TimeSpan.Zero));
-        var service = new TursoSettingsService(_tempConfigPath) { Clock = clock };
+        var service = new TursoSettingsService(_tempConfigPath, clock);
         service.RecordUsage(1_000, 10);
         service.RecordFullPull();
         service.TripConsumptionBrake();
 
-        var reloaded = new TursoSettingsService(_tempConfigPath) { Clock = clock };
+        var reloaded = new TursoSettingsService(_tempConfigPath, clock);
         Assert.AreEqual(1_000, reloaded.GetQuotaSummary().RowsReadToday);
         Assert.AreEqual(1, reloaded.GetQuotaSummary().FullPullsToday);
         Assert.IsNotNull(reloaded.CurrentSettings.ConsumptionBrakeTrippedUtc, "El freno sigue activo al reabrir el programa");
