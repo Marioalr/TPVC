@@ -164,5 +164,5 @@ CREATE TABLE LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, D
 - **V19:** registrar un archivo escribe 2 filas y cada trozo otras 2 (la fila y su llave, lo que también contesta V10); un trozo repetido escribe 0. Bajar 4 trozos lee 4 filas, cerrar lee 5 y escribe 1, y la suma de 50 archivos lee 50. Los números de §3 se quedan.
 - **V20:** `dbstat` bajó de 102.1 a 52.1 MB al borrar la mitad, y a 0 al borrar las tablas. `page_count` no baja, pero las páginas libres se reúsan antes de que el archivo crezca, y Turso cuenta con `dbstat`. **Desalojar libera cuota:** el tope de 2 GB se queda sobre lo que hay en la nube. La PC lo mide con `(page_count − freelist_count) × page_size`, que dio lo mismo que `dbstat`.
 - **V21:** sin gzip; la bajada cuesta el +33% del archivo, y el freno de bytes cuenta lo que viaja.
-- **V22:** un trozo de 512 KiB sube en 0.6 s y baja en 0.4 s; uno de 2 MiB, 1.7 s y 0.9 s. Faltan el Wi-Fi del consultorio y LTE.
+- **V22:** un trozo de 512 KiB sube en 0.6 s y baja en 0.4 s; uno de 2 MiB, 1.7 s y 0.9 s. En el Wi-Fi del consultorio, casi igual: 0.6 s y 0.4 s; 1.8 s y 0.9 s. Falta LTE.
 - **V23:** atómico. El último trozo y el cierre van en la misma transacción, y el desalojo también.

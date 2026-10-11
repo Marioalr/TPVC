@@ -812,7 +812,7 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
   - Turso no comprime la bajada (+33%).
   - Un trozo de 512 KiB tarda menos de 1 s por el Wi-Fi de casa.
   - El `batch` con un BLOB es atómico.
-  - Falta medir V22 en el Wi-Fi del consultorio y por LTE; no detiene nada.
+  - V22 en el Wi-Fi del consultorio (el mismo día): igual que en casa, 0.6 s para subir un trozo y 0.4 s para bajarlo. Falta LTE; no detiene nada.
 - **Cambia:** lo de `docs/EVALUACION_RESULTADOS_LABORATORIO.md` §6, elegido por el médico el 2026-10-10 («Turso + copia en la laptop»):
   - Tabla sincronizada `LabResults` (solo metadatos) y tablas solo de la nube `LabBlobs`/`LabBlobChunks`, en trozos de 512 KiB.
   - La laptop guarda una copia completa en `%LocalAppData%\TPVC\laboratorio\`, fuera de `consultorio.db` y de sus respaldos diarios.
