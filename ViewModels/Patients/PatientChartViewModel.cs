@@ -283,6 +283,7 @@ public partial class PatientChartViewModel : ObservableObject
         {
             var title = !string.IsNullOrWhiteSpace(c.Diagnosis) ? c.Diagnosis.Trim() : (string.IsNullOrWhiteSpace(c.ChiefComplaint) ? "Consulta" : c.ChiefComplaint.Trim());
             var prescriptions = c.Prescriptions;
+            var labOrder = c.LabOrder;
             var lines = new List<TimelineLine>();
             void Add(string label, string? value)
             {
@@ -292,13 +293,15 @@ public partial class PatientChartViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(c.Diagnosis)) Add("Motivo", c.ChiefComplaint);
             Add("Signos", c.VitalSigns?.Replace(" | ", " · "));
             Add("Receta", string.Join(" · ", prescriptions.Select(r => r.MedicineName.Trim()).Where(n => n.Length > 0)));
+            Add("Laboratorio", string.Join(" · ", labOrder.Studies.Select(s => s.Name)));
             Add("Plan", c.TreatmentPlan);
 
             // La búsqueda revisa todo lo de la consulta, también lo que no se ve en la tarjeta
             var searchText = string.Join("\n", new[]
             {
                 c.ChiefComplaint, c.SystemsReview, c.PhysicalExamination, c.VitalSigns, c.TreatmentPlan, c.Notes,
-                string.Join("\n", prescriptions.Select(r => $"{r.MedicineName} {r.Presentation} {r.Dosage}"))
+                string.Join("\n", prescriptions.Select(r => $"{r.MedicineName} {r.Presentation} {r.Dosage}")),
+                string.Join("\n", labOrder.Studies.Select(s => s.Name)), labOrder.Indications
             }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
             entries.Add((new TimelineEntry(TimelineKind.Consultation, c.Date, title, searchText, c.Folio, c, lines), 0));

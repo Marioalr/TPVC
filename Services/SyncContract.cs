@@ -22,8 +22,9 @@ public static class SyncContract
     /// nuevas). La PC la escribe en <c>_tpvc_meta.contract</c> y entra a la huella del esquema.
     /// 2 (v1.21.0): <c>Products.UnitCost</c> y <c>Products.CostExcludesVat</c>.
     /// 3 (v1.22.0): <c>Products.SupplierCode</c>.
+    /// 4 (v1.25.0): <c>PatientConsultations.LabOrderJson</c>.
     /// </summary>
-    public const int Revision = 3;
+    public const int Revision = 4;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -86,6 +87,8 @@ public static class SyncContract
             "Resumen: la fecha de la última consulta. Quien guarda una nota la actualiza en la misma escritura.",
         [(typeof(PatientRecord), nameof(PatientRecord.NextAppointmentDate))] =
             "Resumen: la fecha de la siguiente cita. Quien agenda la actualiza en la misma escritura.",
+        [(typeof(PatientConsultation), nameof(PatientConsultation.LabOrderJson))] =
+            "Orden de laboratorio (desde la revisión 4): JSON {\"Studies\":[{\"Name\",\"Area\"}],\"Indications\"}, con acentos sin escapar; \"\" si la consulta no pidió estudios. Los nombres de las propiedades se leen sin distinguir mayúsculas.",
     };
 
     private static readonly string[] Rules =

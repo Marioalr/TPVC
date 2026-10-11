@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using TPVC.Models;
 
 namespace TPVC.ViewModels.Patients;
 
-/// <summary>Impresión y exportación de la receta (en WPF, el servicio de impresión con sus mismas firmas).</summary>
+/// <summary>
+/// Impresión y exportación de las hojas del consultorio: la receta y, desde v1.25.0, la solicitud de laboratorio (en
+/// WPF, el servicio de impresión con sus mismas firmas).
+/// </summary>
 public interface IPrescriptionOutput
 {
     /// <param name="consultation">La consulta de la receta: una anterior sale con su fecha y sus signos (desde v1.24.0).</param>
@@ -31,4 +35,29 @@ public interface IPrescriptionOutput
 
     /// <summary>Las letras de la receta en este equipo.</summary>
     PrescriptionFonts PrescriptionFonts => PrescriptionFonts.Default;
+
+    /// <summary>La solicitud de laboratorio como saldrá (con el papel medido); la usa la vista previa.</summary>
+    /// <param name="consultation">La consulta de la orden: una anterior sale con su fecha; null = hoy.</param>
+    LabOrderSheet CreateLabOrderSheet(
+        PatientRecord patient,
+        LabOrder order,
+        ClinicProfile profile,
+        string? diagnosis,
+        PatientConsultation? consultation = null) =>
+        LabOrderSheet.Create(patient, order, profile, diagnosis, consultation?.Date ?? DateTime.Now, PrescriptionFonts);
+
+    bool PrintLabOrder(
+        PatientRecord patient,
+        LabOrder order,
+        ClinicProfile profile,
+        string? diagnosis,
+        PatientConsultation? consultation = null) => false;
+
+    string? ExportLabOrderDocument(
+        PatientRecord patient,
+        LabOrder order,
+        ClinicProfile profile,
+        string? diagnosis,
+        string? targetFilePath = null,
+        PatientConsultation? consultation = null) => null;
 }

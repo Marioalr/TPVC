@@ -50,6 +50,10 @@ public sealed class ConsultationDraft
     /// <summary>Última receta emitida antes de esta consulta (para "Repetir"); null en borradores anteriores a v1.14.</summary>
     public List<PatientPrescriptionItem>? PreviousPrescriptions { get; set; }
 
+    /// <summary>Orden de laboratorio de esta consulta (desde v1.25.0); no se escribe si no se pidió nada.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LabOrder? LabOrder { get; set; }
+
     /// <summary>Resumen del expediente antes de la consulta (vuelve tal cual si se descarta).</summary>
     public PatientSummarySnapshot? PatientBefore { get; set; }
 
