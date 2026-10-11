@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.22.0] - 2026-10-10
+
+### Añadido — ingresar el pedido del proveedor
+* **Productos → Ingresar pedido**: se copia del correo del proveedor la parte «Detalles de la Compra» y se pega. TPVC lee todos los productos, con su SKU, cantidad y total, y dice si suman lo mismo que el correo. Por ahora lee los correos de LUIN.
+* Cada renglón se empareja solo con su producto del catálogo, o queda como **Producto nuevo**. Los que solo se parecen se marcan para revisarlos, y cualquiera se puede cambiar a mano.
+* Antes de ingresar se pueden corregir la cantidad y el **costo por unidad**, que llega precargado con el total del renglón entre la cantidad, y capturar **lote y caducidad**, que son opcionales.
+* **Ingresar pedido** suma todas las existencias de una vez y crea los productos nuevos, sin precio de venta, para completarlo después. También actualiza el costo y deja en el kardex «Pedido LUIN #…». Si el mismo pedido ya se había ingresado, lo avisa.
+* TPVC recuerda la **clave del proveedor** de cada producto, así el siguiente pedido se empareja solo; se puede ver y corregir en la ficha del producto.
+* Para la nube: el contrato de sincronización pasa a la revisión 3, con una columna nueva en Productos.
+* 452 pruebas.
+
 ## [1.21.0] - 2026-10-10
 
 ### Añadido — costo del producto
