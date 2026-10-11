@@ -46,6 +46,8 @@ internal sealed record FakeRecordedRequest(int Number, IReadOnlyList<FakeRecorde
 /// Servidor Hrana v2 (/v2/pipeline) simulado sobre SQLite. Copia de Turso lo que importa a la app:
 /// <list type="bullet">
 /// <item>Valida la codificación de valores: un entero enviado como número JSON provoca HTTP 400 Bad Request.</item>
+/// <item>BLOB como libSQL (libsql-hrana, proto.rs): responde el base64 sin relleno '=' y acepta los argumentos con o sin
+/// él; un base64 inválido también es HTTP 400.</item>
 /// <item>Un resultado por instrucción y sin transacción: cada instrucción se confirma sola. Una petición "batch"
 /// con BEGIN/COMMIT y condiciones sí es atómica (V14, comprobado en Turso real el 2026-10-10).</item>
 /// <item>Un escritor a la vez (<see cref="Lock"/>).</item>
@@ -201,17 +203,25 @@ internal sealed class FakeHranaServer : HttpMessageHandler
             };
         }
 
-        // Validación estricta del protocolo (como el servidor real): un entero como número JSON rechaza todo
+        // Validación estricta del protocolo (como el servidor real): un entero como número JSON o un BLOB que no es
+        // base64 rechaza todo
         foreach (var stmt in body["requests"]!.AsArray().SelectMany(Statements))
         {
             foreach (var arg in stmt["args"]?.AsArray() ?? new JsonArray())
             {
-                if (arg!["type"]!.GetValue<string>() == "integer" && arg["value"] is JsonValue v && v.GetValueKind() != System.Text.Json.JsonValueKind.String)
+                var argType = arg!["type"]!.GetValue<string>();
+                string? invalid = null;
+                if (argType == "integer" && arg["value"] is JsonValue v && v.GetValueKind() != System.Text.Json.JsonValueKind.String)
+                    invalid = "invalid type: integer, expected a string";
+                else if (argType == "blob" && (arg["base64"] is not JsonValue b || b.GetValueKind() != System.Text.Json.JsonValueKind.String || DecodeBlobArg(b.GetValue<string>()) == null))
+                    invalid = "invalid value, expected binary data encoded as base64";
+
+                if (invalid != null)
                 {
                     Record(number, recorded, HttpStatusCode.BadRequest);
                     return new HttpResponseMessage(HttpStatusCode.BadRequest)
                     {
-                        Content = new StringContent("Failed to deserialize the JSON body: invalid type: integer, expected a string")
+                        Content = new StringContent($"Failed to deserialize the JSON body: {invalid}")
                     };
                 }
             }
@@ -485,7 +495,7 @@ internal sealed class FakeHranaServer : HttpMessageHandler
                     raw.sqlite3_bind_text(stmt, position, arg["value"]!.GetValue<string>());
                     break;
                 case "blob":
-                    raw.sqlite3_bind_blob(stmt, position, Convert.FromBase64String(arg["base64"]!.GetValue<string>()));
+                    raw.sqlite3_bind_blob(stmt, position, DecodeBlobArg(arg["base64"]!.GetValue<string>())!);
                     break;
                 default:
                     raw.sqlite3_bind_null(stmt, position);
@@ -500,9 +510,23 @@ internal sealed class FakeHranaServer : HttpMessageHandler
         raw.SQLITE_NULL => new JsonObject { ["type"] = "null" },
         raw.SQLITE_INTEGER => new JsonObject { ["type"] = "integer", ["value"] = raw.sqlite3_column_int64(stmt, i).ToString(CultureInfo.InvariantCulture) },
         raw.SQLITE_FLOAT => new JsonObject { ["type"] = "float", ["value"] = raw.sqlite3_column_double(stmt, i) },
-        raw.SQLITE_BLOB => new JsonObject { ["type"] = "blob", ["base64"] = Convert.ToBase64String(raw.sqlite3_column_blob(stmt, i).ToArray()) },
+        // Como Turso: base64 sin relleno (libSQL codifica con STANDARD_NO_PAD)
+        raw.SQLITE_BLOB => new JsonObject { ["type"] = "blob", ["base64"] = Convert.ToBase64String(raw.sqlite3_column_blob(stmt, i).ToArray()).TrimEnd('=') },
         _ => new JsonObject { ["type"] = "text", ["value"] = raw.sqlite3_column_text(stmt, i).utf8_to_string() }
     };
+
+    /// <summary>
+    /// Un argumento BLOB como lo lee libSQL: sin los '=' del final y decodificado sin relleno, así que acepta las dos
+    /// formas. null si no es base64. No usa <see cref="TPVC.Services.TursoClient.DecodeBase64"/> a propósito: un error
+    /// del cliente no debe repetirse en el servidor que lo prueba.
+    /// </summary>
+    private static byte[]? DecodeBlobArg(string text)
+    {
+        var digits = text.TrimEnd('=');
+        var padded = digits + new string('=', (4 - digits.Length % 4) % 4);
+        var bytes = new byte[padded.Length / 4 * 3];
+        return Convert.TryFromBase64String(padded, bytes, out var written) ? bytes[..written] : null;
+    }
 
     private long ScalarLong(string sql, JsonArray args)
     {

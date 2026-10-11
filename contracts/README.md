@@ -4,7 +4,7 @@ Lo que la app de Android tiene que cumplir para hablar el protocolo v2 con la nu
 Plan: `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` (paso 8.3 y §7.3); protocolo: `docs/TURSO_SYNC_ARCHITECTURE.md` §4.
 
 **No se editan a mano.** Los genera `tests/TPVC.Tests/GoldenVectorTests.cs` desde el mismo código que usa la PC
-(`Services/SyncSchema.cs`, `SyncContract.cs`, `SyncRules.cs`, `SyncIds.cs`, `TursoClient.FormatArg` y
+(`Services/SyncSchema.cs`, `SyncContract.cs`, `SyncRules.cs`, `SyncIds.cs`, `TursoClient.FormatArg`/`ExtractValue` y
 `TursoSyncService.ToRemoteValue`/`FromRemoteValue`). La prueba compara cada archivo con lo que sale del código:
 si cambia el modelo de EF o una regla sin regenerarlos, la CI falla. Para regenerarlos:
 
@@ -44,10 +44,17 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 
 | Archivo | Regla |
 |---|---|
-| `values.json` | Codificación Hrana de cada tipo (`encode`) y lectura de una fila (`decode`), con el nulo de una columna obligatoria. |
+| `values.json` | Codificación Hrana de cada tipo (`encode`) y lectura de una fila (`decode`), con el nulo de una columna obligatoria. Un BLOB (`byte[]`) va en hexadecimal en `value` y `expected`; ver abajo. |
 | `lww.json` | Qué versión gana: al bajar una fila o una lápida, lo que hace la nube con la subida (el SQL real de la PC, ejecutado en SQLite) y qué hacer si la nube rechaza una subida (desde el paso 8.6). |
 | `stamping.json` | La marca `UpdatedAtUtc` de un cambio local: `max(hora + desfase, marca guardada + 1 ms)`. |
 | `uuid5.json` | UUIDv5 de RFC 4122, el espacio de nombres de TPVC, los SyncId del catálogo que siembra la PC (desde v1.20.6; Kotlin nunca siembra) y los SyncId derivados (un SyncId en mayúsculas da lo mismo). |
+
+**BLOB.** Viaja como `{"type":"blob","base64":…}`, sin `value`. Según el código de libSQL, Turso responde el base64
+estándar **sin el relleno `=`** y acepta los argumentos con o sin él (pendiente de ver en Turso real: V18 del plan). El
+lector tiene que aceptar las dos formas: `java.util.Base64.getDecoder()` las acepta; `kotlin.io.encoding.Base64.Default`
+exige el relleno salvo con `withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)`. Un BLOB vacío no es nulo. Hoy ninguna
+tabla sincronizada tiene BLOB (en `schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); el primero llega con el
+membrete en la nube (paso 8.12).
 
 ## Lo que viene
 
