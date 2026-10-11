@@ -65,4 +65,13 @@ public sealed class LocalPreferences
 
     /// <summary>El proveedor del último pedido ingresado («Ingresar pedido» lo propone la siguiente vez).</summary>
     public string? LastSupplierName { get; set; }
+
+    /// <summary>Letra de la receta en este equipo (Médico y consultorio); null = la de siempre.</summary>
+    public string? PrescriptionBodyFont { get; set; }
+
+    /// <summary>Letra del nombre del médico en la receta; null = la de siempre (manuscrita).</summary>
+    public string? PrescriptionDoctorFont { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TPVC.Models.PrescriptionFonts PrescriptionFonts => TPVC.Models.PrescriptionFonts.From(PrescriptionBodyFont, PrescriptionDoctorFont);
 }

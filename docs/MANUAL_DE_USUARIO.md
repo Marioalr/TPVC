@@ -118,6 +118,8 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 ### Consulta
 * Cinco secciones en el orden de la entrevista (motivo, signos vitales, exploración, diagnóstico CIE-10, tratamiento y receta). **Ctrl + ↓/↑** cambia de sección, **Ctrl + Enter** termina, **Ctrl + S** guarda al instante (también se guarda sola).
 * **Receta**: empieza vacía. Si el paciente tenía receta, aparece **Receta anterior · Repetir** para copiarla (revisa alergias y existencias). *Se surte aquí* (marcada si hay existencias) carga el medicamento a la cuenta.
+* Cada medicamento sale **en el orden que pide la norma mexicana** (Reglamento de Insumos para la Salud, arts. 30 y 31): primero el **genérico** (principio activo) con su concentración y forma, la **marca** entre paréntesis si el producto es de marca, y junto a él la **presentación**. Ej.: *Paracetamol 500 mg tabletas (Tempra) · Caja con 20 tabletas*. Al elegirlo del catálogo se escribe así solo (si el producto tiene su genérico capturado); a mano, conviene escribirlo igual. En las indicaciones van la dosis, la vía, la frecuencia y la duración.
+* La receta sale en **media carta** horizontal; si no cabe en una sola media carta (muchos medicamentos o indicaciones largas), sale en **hoja carta** vertical, también al guardarla en PDF. La vista previa dice cuál usará.
 * **Cuenta de la consulta** a la derecha: honorario, medicamentos surtidos, insumos y servicios (inyección, curación…) se agregan en cuanto se usan.
 * **Expediente** abre la ficha sin cerrar la consulta; un aviso arriba lleva de regreso.
 * **Terminar consulta** guarda la nota y abre el cobro (forma de pago, recibido, cambio). *Volver a la consulta* (o Esc) permite agregar algo que faltó. **Descartar** borra lo capturado sin cobrar y deja el expediente como estaba.
@@ -180,7 +182,7 @@ Bitácora de todo lo que mueve las existencias, con **existencias antes → desp
 Lo que se cobra además de los productos (consulta, curación, inyección, certificado…): precio, duración y los **insumos que usa** cada uno, que se agregan solos a la cuenta y se descuentan del inventario. Se editan en un panel lateral. **Desactivar** un servicio lo quita del Punto de Venta y de la consulta sin borrar los tickets donde aparece ("Mostrar desactivados" para volver a activarlo).
 
 ### Médico y consultorio
-Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y notas al pie. A la derecha se ve **cómo sale en la receta**. Se edita con **Editar** y se guarda con **Guardar**.
+Nombre, cédula, especialidad, universidad, nombre y datos del consultorio y notas al pie. A la derecha se ve **cómo sale en la receta**. Se edita con **Editar** y se guarda con **Guardar**. En **Letras de la receta** se eligen, entre las instaladas en la computadora, la letra del texto y la del nombre del médico; se guardan al elegirlas, en ese equipo.
 
 ### Apariencia
 * **Modo** claro u oscuro, con una muestra de cada uno.

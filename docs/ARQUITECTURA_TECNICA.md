@@ -200,6 +200,7 @@ TPVC/
 │   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync
 │   ├── InventoryService.SupplierOrders.cs # «Ingresar pedido» (v1.22.0): emparejar renglones con el catálogo y recibir todo en una transacción
 │   ├── SupplierOrderParser.cs   # Lee el pedido del correo del proveedor pegado como texto (formato de LUIN)
+│   ├── PrescriptionNaming.cs    # El medicamento de la receta en el orden normado (RIS arts. 30–31): genérico, concentración, forma, (marca); v1.23.0
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas
 │   ├── TursoSyncService.cs      # Sincronización con Turso (protocolo v2)
 │   ├── ConsultationHandoffService.cs # Consulta entre equipos (tabla ConsultationHandoffs)
@@ -293,6 +294,7 @@ La CI (`ci.yml`) corre en `windows-latest` todas las pruebas, una vez en UTC y o
 * **Migración aditiva automática** (`DatabaseInitializer.EnsureSchema`): compara el modelo de EF con `sqlite_master`/`pragma_table_info` y crea tablas, columnas e índices faltantes. Una huella del modelo en `PRAGMA user_version` evita repetir la comparación en cada arranque.
 * **Respaldos** con la API de backup en línea de SQLite (`BackupService`): uno diario automático + manual, se conservan 14.
 * **Una sola ventana por base** (desde v1.20.7, `Helpers/SingleInstanceGuard.cs`): al arrancar, antes de tocar la base, `App.OnStartup` toma un mutex con nombre (`Local\TPVC-<hash de la ruta de la base>-instancia`, por sesión de Windows). Si ya lo tiene otra instancia (doble clic en el escritorio o el menú de inicio con TPVC abierto), le avisa con un semáforo con nombre, cede el primer plano (`AllowSetForegroundWindow`) y termina; la primera restaura y activa su ventana y responde con otro semáforo. Semáforos y no eventos: dos aperturas seguidas son dos avisos con su respuesta cada uno. Si la primera no responde en 5 s (colgada), la segunda lo dice en un mensaje. Un cierre a la fuerza deja el mutex abandonado y la siguiente apertura lo toma. El instalador ya cerraba las instancias abiertas antes de instalar y abre la nueva al final, así que la actualización no cambia.
+* **Receta en media carta o carta** (desde v1.23.0): `PrintingService.CreatePrescriptionSheet` arma la `PrescriptionSheet` con las letras del equipo (`LocalPreferences.PrescriptionBodyFont` y `PrescriptionDoctorFont`, que se eligen en Médico y consultorio) y la mide con `MeasurePaper`: pagina el mismo FlowDocument que se imprime en media carta horizontal y, si sale más de una hoja, usa carta vertical (`PrescriptionPaper.Letter`, 8.5 x 11 in). La impresión pide ese papel a la impresora, el HTML/PDF pone su `@page` y la vista previa su alto, así que las tres coinciden. Junto al nombre de cada medicamento va su presentación (`PatientPrescriptionItem.Presentation`, en el JSON de la receta); la receta sigue sin cantidades.
 
 ### Metadatos de sincronización
 Todas las entidades de negocio implementan `ISyncEntity`:

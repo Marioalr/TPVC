@@ -2363,7 +2363,8 @@ public class InventoryTests
         await vm.Prescription.SelectAndAddPrescriptionProductAsync(chosenMedicine);
 
         Assert.AreEqual(1, patient.ActivePrescription.Count);
-        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMedicine.Name));
+        Assert.AreEqual(PrescriptionNaming.MedicineLine(chosenMedicine), patient.ActivePrescription[0].MedicineName, "En el orden normado");
+        Assert.AreEqual(string.IsNullOrWhiteSpace(chosenMedicine.Presentation) ? null : chosenMedicine.Presentation, patient.ActivePrescription[0].Presentation);
         Assert.AreEqual(string.Empty, vm.Prescription.PrescriptionSearchText);
         Assert.AreEqual(string.Empty, vm.Prescription.PrescriptionDosage);
 
@@ -2665,7 +2666,8 @@ public class InventoryTests
         await vm.CatalogBrowser.AddProductFromCatalogBrowserAsync(chosenMed);
         Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras agregar");
         Assert.AreEqual(1, patient.ActivePrescription.Count);
-        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(chosenMed.Name));
+        Assert.AreEqual(PrescriptionNaming.MedicineLine(chosenMed), patient.ActivePrescription[0].MedicineName, "En el orden normado");
+        Assert.AreEqual(string.IsNullOrWhiteSpace(chosenMed.Presentation) ? null : chosenMed.Presentation, patient.ActivePrescription[0].Presentation);
 
         // 2. Catálogo desde Insumos -> Sólo Insumos
         await vm.Supplies.OpenSupplyCatalogAsync();
@@ -2823,7 +2825,8 @@ public class InventoryTests
         // Doctor confirms override under clinical discretion
         await vm.Prescription.ConfirmOverrideAllergyPrescriptionAsync();
         Assert.IsFalse(vm.Prescription.IsAllergyAlertOpen, "El modal debe cerrarse tras confirmar el override");
-        Assert.IsTrue(patient.ActivePrescription[0].MedicineName.Contains(amoxi.Name));
+        Assert.AreEqual(PrescriptionNaming.MedicineLine(amoxi), patient.ActivePrescription[0].MedicineName, "En el orden normado");
+        Assert.AreEqual(string.IsNullOrWhiteSpace(amoxi.Presentation) ? null : amoxi.Presentation, patient.ActivePrescription[0].Presentation);
     }
 
     [TestMethod]

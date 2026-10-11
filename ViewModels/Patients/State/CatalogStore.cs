@@ -131,7 +131,9 @@ public partial class CatalogStore : ObservableObject
         return AvailableProducts.FirstOrDefault(p =>
             p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
             $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)));
+            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)) ||
+            // El renglón en el orden normado (desde v1.23.0): "Paracetamol 500 mg tabletas (Tempra)"
+            (!string.IsNullOrEmpty(p.GenericName) && PrescriptionNaming.MedicineLine(p).Equals(clean, StringComparison.OrdinalIgnoreCase)));
     }
 
     public static bool ProductMatchesName(Product product, string name)
@@ -141,7 +143,8 @@ public partial class CatalogStore : ObservableObject
         return n == productName
                || n == TextSearch.Normalize($"{product.Name} ({product.Presentation})")
                || n.StartsWith(productName + " ", StringComparison.Ordinal)
-               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName));
+               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName))
+               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(PrescriptionNaming.MedicineLine(product)));
     }
 
     public static bool IsProductMedication(Product p)

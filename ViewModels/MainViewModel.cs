@@ -178,7 +178,7 @@ public partial class MainViewModel : ObservableObject
         InventoryVM = new InventoryViewModel(inventoryService, Notifications, localPreferences);
         BatchesVM = new BatchesViewModel(inventoryService);
         MovementsVM = new MovementsViewModel(inventoryService);
-        ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService);
+        ClinicProfileVM = new ClinicProfileViewModel(_clinicProfileService, preferences: localPreferences);
         // "Temas y ajustes" se dividió en Apariencia, Respaldos y datos (con la importación que
         // estaba en la página de la nube) y Actualizaciones
         AppearanceVM = new AppearanceViewModel(themeService);

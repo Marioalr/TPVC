@@ -113,6 +113,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     private string _pendingAllergyMedName = string.Empty;
     private string _pendingAllergyDosage = string.Empty;
     private int _pendingAllergyQty = 1;
+    private string? _pendingAllergyPresentation;
 
     [RelayCommand]
     public void CancelAllergyPrescription()
@@ -132,6 +133,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         var name = _pendingAllergyMedName;
         var dosage = _pendingAllergyDosage;
         var qty = _pendingAllergyQty;
+        var presentation = _pendingAllergyPresentation;
+        _pendingAllergyPresentation = null;
 
         _pendingAllergyProduct = null;
         _pendingAllergyMedName = string.Empty;
@@ -140,7 +143,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
         if (!string.IsNullOrWhiteSpace(name))
         {
-            await AddPrescriptionItemInternalAsync(prod, name, dosage, qty);
+            await AddPrescriptionItemInternalAsync(prod, name, dosage, qty, presentation);
         }
     }
 
@@ -180,9 +183,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         }
         else if (product != null)
         {
-            name = string.IsNullOrWhiteSpace(product.Presentation)
-                ? product.Name
-                : $"{product.Name} ({product.Presentation})";
+            // En el orden normado: genérico, concentración y forma, y la marca entre paréntesis; la presentación aparte
+            name = PrescriptionNaming.MedicineLine(product);
         }
         else if (!string.IsNullOrWhiteSpace(PrescriptionSearchText))
         {
@@ -205,6 +207,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             : PrescriptionDosage.Trim();
 
         var qty = PrescriptionQuantity > 0 ? PrescriptionQuantity : 1;
+        var presentation = product != null && PrescriptionNaming.Presentation(product) is { Length: > 0 } p ? p : null;
 
         if (_session.SelectedPatient != null)
         {
@@ -215,6 +218,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
                 _pendingAllergyMedName = name;
                 _pendingAllergyDosage = dosage;
                 _pendingAllergyQty = qty;
+                _pendingAllergyPresentation = presentation;
                 AllergyAlertTitle = "Alerta de alergia a medicamento";
                 AllergyAlertMessage = allergyCheck.WarningDetails;
                 AllergyPatientAllergies = _session.SelectedPatient.Allergies ?? "Sin alergias declaradas";
@@ -223,10 +227,10 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             }
         }
 
-        await AddPrescriptionItemInternalAsync(product, name, dosage, qty);
+        await AddPrescriptionItemInternalAsync(product, name, dosage, qty, presentation);
     }
 
-    private async Task AddPrescriptionItemInternalAsync(Product? product, string name, string dosage, int qty)
+    private async Task AddPrescriptionItemInternalAsync(Product? product, string name, string dosage, int qty, string? presentation = null)
     {
         if (_session.SelectedPatient == null) return;
 
@@ -234,7 +238,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         {
             MedicineName = name,
             Dosage = dosage,
-            RecommendedQuantity = qty
+            RecommendedQuantity = qty,
+            Presentation = presentation
         };
 
         // "Se surte aquí" marcado por defecto cuando hay existencias: se carga solo a la cuenta.
@@ -528,7 +533,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
                 skipped.Add(item.MedicineName);
                 continue;
             }
-            await AddPrescriptionItemInternalAsync(product, item.MedicineName, item.Dosage, Math.Max(1, item.RecommendedQuantity));
+            await AddPrescriptionItemInternalAsync(product, item.MedicineName, item.Dosage, Math.Max(1, item.RecommendedQuantity), item.Presentation);
         }
 
         _workflow.NotifyPrescriptionStateChanged();

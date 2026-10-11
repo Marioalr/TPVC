@@ -66,11 +66,10 @@ public partial class PrintingService
     /// <summary>Sombreado gris muy claro de los campos del formato del Excel.</summary>
     private static readonly Brush PaperFill = Frozen(Color.FromRgb(0xF0, 0xF0, 0xF0));
 
-    // Letras de la hoja del Excel; si no están instaladas, las de Windows (el nombre, con letra manuscrita)
-    private static readonly Lazy<FontFamily> PaperFontFamily = new(() => new FontFamily("Neue Haas Grotesk Text Pro, Segoe UI, Arial"));
-    private static readonly Lazy<FontFamily> DoctorFontFamily = new(() => new FontFamily("Frosted Breath, Segoe Script, Segoe UI"));
-    private static FontFamily PaperFont => PaperFontFamily.Value;
-    private static FontFamily DoctorFont => DoctorFontFamily.Value;
+    // Las letras salen de la hoja (las de siempre o las que se eligieron en Médico y consultorio, desde v1.23.0); si
+    // no están instaladas, WPF usa las siguientes de la lista
+    private static FontFamily BodyFontOf(PrescriptionSheet sheet) => new(sheet.BodyFont);
+    private static FontFamily DoctorFontOf(PrescriptionSheet sheet) => new(sheet.DoctorFont);
 
     private static Brush Frozen(Color color)
     {
@@ -97,19 +96,20 @@ public partial class PrintingService
         {
             try
             {
+                // Primero la hoja: si no cabe en una media carta se imprime en carta vertical
+                var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes);
                 var dialog = new PrintDialog();
-                var presetPrinter = TryUseStatementLandscape(dialog);
+                var presetPrinter = TryUsePaper(dialog, sheet.Paper);
                 if (dialog.ShowDialog() != true) return false;
 
-                // Si eligió otra impresora en el diálogo, también se le pide media carta horizontal
+                // Si eligió otra impresora en el diálogo, también se le pide el papel de la receta
                 // (en la misma impresora se respeta el papel que haya escogido)
                 if (!string.Equals(presetPrinter, PrinterName(dialog), StringComparison.OrdinalIgnoreCase))
                 {
-                    TryUseStatementLandscape(dialog);
+                    TryUsePaper(dialog, sheet.Paper);
                 }
 
-                var (pageWidth, pageHeight) = PrescriptionPageSize(dialog);
-                var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes, DateTime.Now);
+                var (pageWidth, pageHeight) = PrescriptionPageSize(dialog, sheet.Paper);
                 var doc = BuildPrescriptionDocument(sheet, pageWidth, pageHeight);
 
                 var paginator = ((IDocumentPaginatorSource)doc).DocumentPaginator;
@@ -126,6 +126,76 @@ public partial class PrintingService
         });
     }
 
+    // ------------------------------------------------------------------ hoja, letras y papel (desde v1.23.0)
+
+    private readonly LocalPreferencesStore? _preferences;
+
+    /// <param name="preferences">Las letras de la receta que eligió este equipo (Médico y consultorio).</param>
+    public PrintingService(LocalPreferencesStore? preferences = null)
+    {
+        _preferences = preferences;
+    }
+
+    /// <summary>Las letras de la receta en este equipo: las elegidas o las de siempre.</summary>
+    public PrescriptionFonts PrescriptionFonts => _preferences?.Current.PrescriptionFonts ?? PrescriptionFonts.Default;
+
+    /// <summary>La hoja con las letras de este equipo y el papel medido: carta si no cabe en una media carta.</summary>
+    public PrescriptionSheet CreatePrescriptionSheet(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes)
+    {
+        var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes, DateTime.Now, PrescriptionFonts);
+        sheet.Paper = MeasurePaper(sheet);
+        return sheet;
+    }
+
+    /// <summary>El papel que usará la receta (la vista previa lo muestra igual que saldrá impresa).</summary>
+    public PrescriptionPaper ChoosePaper(PatientRecord patient, IEnumerable<PatientPrescriptionItem> items, ClinicProfile profile, string? generalNotes = null) =>
+        patient == null ? PrescriptionPaper.HalfLetter : CreatePrescriptionSheet(patient, items, profile, generalNotes).Paper;
+
+    /// <summary>
+    /// Media carta si la receta cabe en una sola hoja de media carta; si no, carta vertical. Se mide con el mismo
+    /// documento que se imprime (el texto real, con sus renglones partidos y la letra elegida), no con una estimación.
+    /// Sin WPF (pruebas en Linux), media carta.
+    /// </summary>
+    public static PrescriptionPaper MeasurePaper(PrescriptionSheet sheet)
+    {
+        try
+        {
+            return RunOnSta(() =>
+            {
+                var doc = BuildPrescriptionDocument(sheet, PrescriptionSheet.PageWidth, PrescriptionSheet.PageHeight);
+                var paginator = ((IDocumentPaginatorSource)doc).DocumentPaginator;
+                paginator.PageSize = new Size(PrescriptionSheet.PageWidth, PrescriptionSheet.PageHeight);
+                paginator.ComputePageCount();
+                return paginator.PageCount > 1 ? PrescriptionPaper.Letter : PrescriptionPaper.HalfLetter;
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"No se pudo medir la receta; sale en media carta: {ex.Message}");
+            return PrescriptionPaper.HalfLetter;
+        }
+    }
+
+    /// <summary>Corre en un hilo STA (WPF lo exige para armar el documento): este, el de la interfaz o uno nuevo.</summary>
+    private static T RunOnSta<T>(Func<T> action)
+    {
+        if (System.Threading.Thread.CurrentThread.GetApartmentState() == System.Threading.ApartmentState.STA) return action();
+        if (Application.Current?.Dispatcher is { } dispatcher) return dispatcher.Invoke(action);
+
+        T result = default!;
+        Exception? error = null;
+        var thread = new System.Threading.Thread(() =>
+        {
+            try { result = action(); }
+            catch (Exception ex) { error = ex; }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (error != null) throw error;
+        return result;
+    }
+
     private static string? PrinterName(PrintDialog dialog)
     {
         try { return dialog.PrintQueue?.FullName; }
@@ -133,32 +203,37 @@ public partial class PrintingService
     }
 
     /// <summary>
-    /// Pide media carta (Statement, 5.5 x 8.5 in) horizontal en la impresora del diálogo, si la impresora
-    /// tiene ese papel y la orientación horizontal. Devuelve el nombre de la impresora revisada.
+    /// Pide el papel de la receta en la impresora del diálogo: media carta (Statement, 5.5 x 8.5 in) horizontal o,
+    /// si la receta no cabe en ella, carta vertical; solo si la impresora tiene ese papel y esa orientación.
+    /// Devuelve el nombre de la impresora revisada.
     /// </summary>
-    private static string? TryUseStatementLandscape(PrintDialog dialog)
+    private static string? TryUsePaper(PrintDialog dialog, PrescriptionPaper paper)
     {
+        bool letter = paper == PrescriptionPaper.Letter;
+        var orientation = letter ? PageOrientation.Portrait : PageOrientation.Landscape;
+        Func<PageMediaSize?, bool> isWanted = letter ? IsLetter : IsStatement;
+        var description = letter ? "carta vertical" : "media carta horizontal";
         try
         {
             var queue = dialog.PrintQueue;
             if (queue == null) return null;
 
             var capabilities = queue.GetPrintCapabilities();
-            var statement = capabilities.PageMediaSizeCapability?.FirstOrDefault(IsStatement);
-            bool hasLandscape = capabilities.PageOrientationCapability?.Contains(PageOrientation.Landscape) == true;
-            if (statement == null || !hasLandscape)
+            var size = capabilities.PageMediaSizeCapability?.FirstOrDefault(s => isWanted(s));
+            bool hasOrientation = capabilities.PageOrientationCapability?.Contains(orientation) == true;
+            if (size == null || !hasOrientation)
             {
-                AppLogger.Info($"La impresora {queue.FullName} no tiene media carta horizontal: la receta se acomoda a su papel.");
+                AppLogger.Info($"La impresora {queue.FullName} no tiene {description}: la receta se acomoda a su papel.");
                 return queue.FullName;
             }
 
             var requested = new PrintTicket
             {
-                PageMediaSize = statement,
-                PageOrientation = PageOrientation.Landscape
+                PageMediaSize = size,
+                PageOrientation = orientation
             };
             var validated = queue.MergeAndValidatePrintTicket(dialog.PrintTicket ?? queue.UserPrintTicket, requested).ValidatedPrintTicket;
-            if (validated != null && IsStatement(validated.PageMediaSize) && validated.PageOrientation == PageOrientation.Landscape)
+            if (validated != null && isWanted(validated.PageMediaSize) && validated.PageOrientation == orientation)
             {
                 dialog.PrintTicket = validated;
             }
@@ -167,9 +242,18 @@ public partial class PrintingService
         catch (Exception ex)
         {
             // Controladores que no responden a la consulta: se imprime con lo que elija en el diálogo
-            AppLogger.Warn($"No se pudo pedir media carta horizontal a la impresora: {ex.Message}");
+            AppLogger.Warn($"No se pudo pedir {description} a la impresora: {ex.Message}");
             return null;
         }
+    }
+
+    private static bool IsLetter(PageMediaSize? size)
+    {
+        if (size == null) return false;
+        if (size.PageMediaSizeName == PageMediaSizeName.NorthAmericaLetter) return true;
+        return size.Width is { } w && size.Height is { } h
+               && Math.Abs(Math.Min(w, h) - PrescriptionSheet.PageWidth) <= 3
+               && Math.Abs(Math.Max(w, h) - PrescriptionSheet.LetterPageHeight) <= 3;
     }
 
     private static bool IsStatement(PageMediaSize? size)
@@ -186,15 +270,21 @@ public partial class PrintingService
     /// como carta vertical: la receta sale en la mitad de arriba) usa el tamaño del Excel; una hoja más angosta
     /// usa su ancho y un poco más de alto, y el texto se acomoda sin cortarse.
     /// </summary>
-    public static (double Width, double Height) PrescriptionPageSize(double paperWidth, double paperHeight)
+    public static (double Width, double Height) PrescriptionPageSize(double paperWidth, double paperHeight, PrescriptionPaper paper = PrescriptionPaper.HalfLetter)
     {
+        if (paper == PrescriptionPaper.Letter)
+        {
+            // Carta vertical; en una hoja más chica, lo que haya (el texto se acomoda y pasa a otra hoja si hace falta)
+            if (paperWidth <= 0 || paperHeight <= 0) return (PrescriptionSheet.PageWidth, PrescriptionSheet.LetterPageHeight);
+            return (Math.Min(paperWidth, PrescriptionSheet.PageWidth), Math.Min(paperHeight, PrescriptionSheet.LetterPageHeight));
+        }
         if (paperWidth <= 0 || paperHeight <= 0) return (PrescriptionSheet.PageWidth, PrescriptionSheet.PageHeight);
         double width = Math.Min(paperWidth, PrescriptionSheet.PageWidth);
         double height = Math.Min(paperHeight, Math.Max(PrescriptionSheet.PageHeight, PrescriptionSheet.PageHeight * PrescriptionSheet.PageWidth / width));
         return (width, height);
     }
 
-    private static (double Width, double Height) PrescriptionPageSize(PrintDialog dialog)
+    private static (double Width, double Height) PrescriptionPageSize(PrintDialog dialog, PrescriptionPaper paper)
     {
         double width = 0, height = 0;
         try
@@ -212,7 +302,7 @@ public partial class PrintingService
             width = dialog.PrintableAreaWidth;
             height = dialog.PrintableAreaHeight;
         }
-        return PrescriptionPageSize(width, height);
+        return PrescriptionPageSize(width, height, paper);
     }
 
     // ------------------------------------------------------------------ documento impreso
@@ -233,7 +323,7 @@ public partial class PrintingService
                 PrescriptionSheet.MarginLeftRight, PrescriptionSheet.MarginTopBottom),
             ColumnWidth = pageWidth, // una sola columna
             ColumnGap = 0,
-            FontFamily = PaperFont,
+            FontFamily = BodyFontOf(sheet),
             FontSize = BodyFontSize,
             TextAlignment = TextAlignment.Left,
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
@@ -243,11 +333,12 @@ public partial class PrintingService
         };
 
         var header = BuildPrescriptionHeader(sheet);
-        var patientRow = InfoRow(
+        var font = BodyFontOf(sheet);
+        var patientRow = InfoRow(font,
             ("Paciente:", sheet.PatientName, null, 0),
             ("Edad:", sheet.Age, null, AgeMinWidth),
             ("Fecha:", sheet.Date, null, DateMinWidth));
-        var vitalsRow = InfoRow(
+        var vitalsRow = InfoRow(font,
             ("Alergias:", sheet.Allergies, sheet.HasAllergies ? PaperDanger : null, 0),
             ("T/A:", sheet.BloodPressure, null, BloodPressureMinWidth),
             ("Temp:", sheet.Temperature, null, TemperatureMinWidth),
@@ -281,9 +372,9 @@ public partial class PrintingService
         return Math.Max(element.DesiredSize.Height, element.MinHeight);
     }
 
-    private static void ApplyPaperText(FrameworkElement element)
+    private static void ApplyPaperText(FrameworkElement element, FontFamily font)
     {
-        TextElement.SetFontFamily(element, PaperFont);
+        TextElement.SetFontFamily(element, font);
         TextElement.SetFontSize(element, BodyFontSize);
         TextElement.SetForeground(element, Brushes.Black);
     }
@@ -292,7 +383,7 @@ public partial class PrintingService
     private static Grid BuildPrescriptionHeader(PrescriptionSheet sheet)
     {
         var grid = new Grid { Height = HeaderHeight };
-        ApplyPaperText(grid);
+        ApplyPaperText(grid, BodyFontOf(sheet));
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CrestSize + 16) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -319,7 +410,7 @@ public partial class PrintingService
         titles.Children.Add(FitLine(new TextBlock
         {
             Text = sheet.DoctorName,
-            FontFamily = DoctorFont,
+            FontFamily = DoctorFontOf(sheet),
             FontSize = DoctorFontSize,
             Foreground = PaperAccent
         }, 48, 0));
@@ -364,10 +455,10 @@ public partial class PrintingService
     /// ancho mínimo 0 toma el espacio que sobra (nombre, alergias; puede ocupar dos renglones); los demás
     /// miden lo que su valor (sin partirse), con un mínimo para que el campo vacío se vea como en el Excel.
     /// </summary>
-    private static Grid InfoRow(params (string Label, string Value, Brush? Ink, double MinWidth)[] fields)
+    private static Grid InfoRow(FontFamily font, params (string Label, string Value, Brush? Ink, double MinWidth)[] fields)
     {
         var grid = new Grid { MinHeight = InfoRowHeight };
-        ApplyPaperText(grid);
+        ApplyPaperText(grid, font);
         int column = 0;
         foreach (var (label, value, ink, minWidth) in fields)
         {
@@ -427,13 +518,15 @@ public partial class PrintingService
         for (int i = 0; i < sheet.Medicines.Count; i++)
         {
             var line = sheet.Medicines[i];
-            medicines.Blocks.Add(new Paragraph(new Run(line.Medicine))
+            // El nombre en negritas; la presentación y lo que se surte, junto a él en letra normal
+            var name = new Paragraph(new Bold(new Run(line.Medicine)))
             {
-                FontWeight = FontWeights.Bold,
                 Margin = new Thickness(0),
                 LineHeight = LineHeight,
                 KeepWithNext = true
-            });
+            };
+            if (line.Detail.Length > 0) name.Inlines.Add(new Run(line.Detail));
+            medicines.Blocks.Add(name);
             medicines.Blocks.Add(new Paragraph(new Run(line.Posology))
             {
                 Margin = new Thickness(0, 0, 0, i < sheet.Medicines.Count - 1 ? LineHeight : 0),
@@ -482,7 +575,7 @@ public partial class PrintingService
     private static Grid BuildPrescriptionFooter(PrescriptionSheet sheet)
     {
         var grid = new Grid { MinHeight = FooterHeight };
-        ApplyPaperText(grid);
+        ApplyPaperText(grid, BodyFontOf(sheet));
         TextElement.SetFontSize(grid, SmallFontSize);
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
@@ -526,7 +619,7 @@ public partial class PrintingService
 
         try
         {
-            var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes, DateTime.Now);
+            var sheet = CreatePrescriptionSheet(patient, items, profile, generalNotes);
             string dest = targetFilePath ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 $"Receta_{patient.RecordNumber}_{DateTime.Now:yyyyMMdd_HHmmss}.html");
@@ -551,6 +644,14 @@ public partial class PrintingService
     /// <summary>Texto seguro para HTML (un "&lt;" en una dosis o un nombre ya no rompe el documento).</summary>
     private static string H(string? text) => System.Net.WebUtility.HtmlEncode(text ?? string.Empty);
 
+    /// <summary>"Neue Haas Grotesk Text Pro, Segoe UI, Arial" → "'Neue Haas Grotesk Text Pro', 'Segoe UI', 'Arial', sans-serif".</summary>
+    private static string CssFonts(string families, string generic) =>
+        string.Join(", ", families.Split(',')
+            .Select(f => f.Trim().Replace("'", string.Empty).Replace("<", string.Empty).Replace(";", string.Empty))
+            .Where(f => f.Length > 0)
+            .Select(f => $"'{f}'")
+            .Append(generic));
+
     /// <summary>Regla de CSS con números en formato invariable (0.197in, nunca 0,197in).</summary>
     private static string Css(FormattableString rule) => FormattableString.Invariant(rule);
 
@@ -567,15 +668,15 @@ public partial class PrintingService
         sb.AppendLine("<meta charset=\"utf-8\" />");
         sb.AppendLine($"<title>Receta médica - {H(sheet.PatientName)}</title>");
         sb.AppendLine("<style>");
-        sb.AppendLine(Css($"@page {{ size: {PrescriptionSheet.PageWidthInches}in {PrescriptionSheet.PageHeightInches}in; margin: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; }}"));
+        sb.AppendLine(Css($"@page {{ size: {PrescriptionSheet.PageWidthInches}in {sheet.PaperHeightInches}in; margin: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; }}"));
         sb.AppendLine("* { box-sizing: border-box; }");
         sb.AppendLine("html { background: #e5e7eb; }");
-        sb.AppendLine("body { margin: 0; padding: 24px 0; font-family: 'Neue Haas Grotesk Text Pro', 'Segoe UI', Arial, sans-serif; font-size: 10pt; line-height: 16px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }");
-        sb.AppendLine(Css($".sheet {{ width: {PrescriptionSheet.PageWidthInches}in; min-height: {PrescriptionSheet.PageHeightInches}in; margin: 0 auto; padding: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; }}"));
+        sb.AppendLine("body { margin: 0; padding: 24px 0; font-family: " + CssFonts(sheet.BodyFont, "sans-serif") + "; font-size: 10pt; line-height: 16px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }");
+        sb.AppendLine(Css($".sheet {{ width: {PrescriptionSheet.PageWidthInches}in; min-height: {sheet.PaperHeightInches}in; margin: 0 auto; padding: {PrescriptionSheet.MarginTopBottomInches}in {PrescriptionSheet.MarginLeftRightInches}in; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; }}"));
         sb.AppendLine(Css($".header {{ position: relative; height: {HeaderHeight}px; }}"));
         sb.AppendLine(Css($".crest {{ position: absolute; left: 0; top: 4px; width: {CrestSize}px; height: {CrestSize}px; object-fit: contain; }}"));
         sb.AppendLine(Css($".titles {{ margin-left: {CrestSize + 16}px; text-align: center; }}"));
-        sb.AppendLine(Css($".doctor {{ height: 48px; line-height: 48px; font-family: 'Frosted Breath', 'Segoe Script', 'Brush Script MT', cursive; font-size: {DoctorFontPx(sheet.DoctorName)}px; color: #0369A1; white-space: nowrap; }}"));
+        sb.AppendLine(Css($".doctor {{ height: 48px; line-height: 48px; font-family: {CssFonts(sheet.DoctorFont, "cursive")}; font-size: {DoctorFontPx(sheet.DoctorName)}px; color: #0369A1; white-space: nowrap; }}"));
         sb.AppendLine(Css($".university, .license {{ height: {InfoRowHeight}px; line-height: {InfoRowHeight}px; margin: 0 {HeaderImageWidth + 8}px; white-space: nowrap; }}"));
         sb.AppendLine(Css($".trace {{ position: absolute; right: 0; bottom: 0; width: {HeaderImageWidth}px; height: {HeaderImageHeight}px; object-fit: contain; }}"));
         sb.AppendLine(Css($".row {{ display: flex; align-items: stretch; min-height: {InfoRowHeight}px; }}"));
@@ -595,12 +696,13 @@ public partial class PrintingService
         sb.AppendLine(Css($".med {{ break-inside: avoid; margin-bottom: {LineHeight}px; }}"));
         sb.AppendLine(".med:last-child { margin-bottom: 0; }");
         sb.AppendLine(".med-name { font-weight: 700; }");
+        sb.AppendLine(".med-detail { font-weight: 400; }");
         sb.AppendLine(".measures-title { font-weight: 700; text-align: center; font-size: 9pt; margin-bottom: 4px; }");
         sb.AppendLine(".measures-text { white-space: pre-line; }");
         sb.AppendLine(Css($".footer {{ display: grid; grid-template-columns: 4fr 6fr; column-gap: 10px; margin-top: {FooterGap}px; font-size: 9pt; break-inside: avoid; }}"));
         sb.AppendLine(Css($".footer > div {{ background: #F0F0F0; min-height: {FooterHeight}px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; text-align: center; }}"));
         sb.AppendLine(".footer img { width: 16px; height: 16px; margin-right: 6px; flex: none; }");
-        sb.AppendLine(Css($"@media print {{ html {{ background: #fff; }} body {{ padding: 0; }} .sheet {{ width: auto; min-height: calc({PrescriptionSheet.PageHeightInches}in - {2 * PrescriptionSheet.MarginTopBottomInches + 0.03:0.###}in); padding: 0; margin: 0; box-shadow: none; }} }}"));
+        sb.AppendLine(Css($"@media print {{ html {{ background: #fff; }} body {{ padding: 0; }} .sheet {{ width: auto; min-height: calc({sheet.PaperHeightInches}in - {2 * PrescriptionSheet.MarginTopBottomInches + 0.03:0.###}in); padding: 0; margin: 0; box-shadow: none; }} }}"));
         sb.AppendLine("</style>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
@@ -646,7 +748,8 @@ public partial class PrintingService
         foreach (var line in sheet.Medicines)
         {
             sb.AppendLine("      <div class=\"med\">");
-            sb.AppendLine($"        <div class=\"med-name\">{H(line.Medicine)}</div>");
+            var detail = line.Detail.Length > 0 ? $"<span class=\"med-detail\">{H(line.Detail)}</span>" : string.Empty;
+            sb.AppendLine($"        <div class=\"med-name\">{H(line.Medicine)}{detail}</div>");
             sb.AppendLine($"        <div class=\"med-posology\">{H(line.Posology)}</div>");
             sb.AppendLine("      </div>");
         }

@@ -27,13 +27,13 @@
     {
       "ProductId": 1,
       "Code": "MED-001",
-      "Name": "Paracetamol 500 mg (Caja con 20 tabletas)",
+      "Name": "Paracetamol 500 mg tabletas",
       "GenericName": "Paracetamol",
       "Presentation": "Caja con 20 tabletas",
       "Unit": "Cajas",
       "UnitPrice": 45.0,
       "Subtotal": 45.0,
-      "ProductName": "Paracetamol 500 mg (Caja con 20 tabletas)",
+      "ProductName": "Paracetamol 500 mg tabletas",
       "AddedAt": "<fecha>",
       "CatalogSyncId": null,
       "LineKind": null,
@@ -117,9 +117,10 @@
   ],
   "Prescriptions": [
     {
-      "MedicineName": "Paracetamol 500 mg (Caja con 20 tabletas)",
+      "MedicineName": "Paracetamol 500 mg tabletas",
       "Dosage": "1 tableta cada 8 horas por 3 días",
       "RecommendedQuantity": 1,
+      "Presentation": "Caja con 20 tabletas",
       "DispenseInClinic": true
     }
   ],

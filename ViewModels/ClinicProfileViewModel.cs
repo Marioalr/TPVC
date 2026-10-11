@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
@@ -6,9 +8,88 @@ using TPVC.Services;
 
 namespace TPVC.ViewModels;
 
+/// <summary>
+/// Una letra para la receta: la familia (null = la de siempre) y cómo se llama en la lista. La lista la muestra con su
+/// propia letra.
+/// </summary>
+public sealed record FontChoice(string? Family, string Label)
+{
+    public static FontChoice For(string? family) => string.IsNullOrWhiteSpace(family) ? new(null, "La de siempre") : new(family.Trim(), family.Trim());
+
+    /// <summary>Para dibujar la opción con su letra: la elegida, o la de siempre del campo.</summary>
+    public string PreviewFamily(string defaultFamilies) => Family ?? defaultFamilies;
+
+    public override string ToString() => Label;
+}
+
 public partial class ClinicProfileViewModel : ObservableObject
 {
     private readonly ClinicProfileService _profileService;
+    private readonly LocalPreferencesStore? _preferences;
+
+    // ================================================================== letras de la receta (desde v1.23.0)
+
+    private static readonly Lazy<IReadOnlyList<string>> InstalledFamilies = new(() =>
+    {
+        try
+        {
+            return System.Windows.Media.Fonts.SystemFontFamilies
+                .Select(f => f.Source)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"No se pudieron leer las letras instaladas: {ex.Message}");
+            return Array.Empty<string>();
+        }
+    });
+
+    /// <summary>"La de siempre" y las letras instaladas en este equipo (la elegida aunque ya no esté instalada).</summary>
+    public IReadOnlyList<FontChoice> BodyFontChoices => Choices(SelectedBodyFont);
+
+    public IReadOnlyList<FontChoice> DoctorFontChoices => Choices(SelectedDoctorFont);
+
+    private static IReadOnlyList<FontChoice> Choices(FontChoice selected)
+    {
+        var list = new List<FontChoice> { FontChoice.For(null) };
+        list.AddRange(InstalledFamilies.Value.Select(name => new FontChoice(name, name)));
+        if (selected.Family != null && list.All(c => c != selected)) list.Insert(1, selected);
+        return list;
+    }
+
+    /// <summary>Letra de la receta (cuerpo). Se guarda al elegirla, en este equipo: depende de lo que tenga instalado.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BodyFontFamily))]
+    private FontChoice _selectedBodyFont;
+
+    /// <summary>Letra del nombre del médico en la receta.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DoctorFontFamily))]
+    private FontChoice _selectedDoctorFont;
+
+    /// <summary>Lo que usa la vista previa del encabezado (y la receta): la elegida con las de siempre de respaldo.</summary>
+    public string BodyFontFamily => PrescriptionFonts.From(SelectedBodyFont.Family, SelectedDoctorFont.Family).Body;
+
+    public string DoctorFontFamily => PrescriptionFonts.From(SelectedBodyFont.Family, SelectedDoctorFont.Family).Doctor;
+
+    public string DefaultBodyFontFamily => PrescriptionFonts.DefaultBody;
+
+    public string DefaultDoctorFontFamily => PrescriptionFonts.DefaultDoctor;
+
+    partial void OnSelectedBodyFontChanged(FontChoice value) => SaveFonts();
+
+    partial void OnSelectedDoctorFontChanged(FontChoice value) => SaveFonts();
+
+    private void SaveFonts()
+    {
+        if (_preferences == null || SelectedBodyFont == null || SelectedDoctorFont == null) return;
+        _preferences.Current.PrescriptionBodyFont = SelectedBodyFont.Family;
+        _preferences.Current.PrescriptionDoctorFont = SelectedDoctorFont.Family;
+        _preferences.Save();
+    }
 
     [ObservableProperty]
     private string _doctorName = string.Empty;
@@ -115,9 +196,13 @@ public partial class ClinicProfileViewModel : ObservableObject
     }
 
     /// <param name="pickImageFile">Selector de archivo (filtro, título); por defecto el diálogo de Windows.</param>
-    public ClinicProfileViewModel(ClinicProfileService profileService, Func<string, string, string?>? pickImageFile = null)
+    /// <param name="preferences">Preferencias de este equipo: las letras de la receta (desde v1.23.0).</param>
+    public ClinicProfileViewModel(ClinicProfileService profileService, Func<string, string, string?>? pickImageFile = null, LocalPreferencesStore? preferences = null)
     {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _preferences = preferences;
+        _selectedBodyFont = FontChoice.For(preferences?.Current.PrescriptionBodyFont);
+        _selectedDoctorFont = FontChoice.For(preferences?.Current.PrescriptionDoctorFont);
         _pickImageFile = pickImageFile ?? ((filter, title) => DialogService.ShowOpenFileDialog(filter, title));
         LoadFromProfile();
     }

@@ -58,7 +58,8 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Medicamento *" />
                             <TextBox x:Name="PrescriptionSearchTextBox" Style="{StaticResource FieldTextBox}"
                                      Text="{Binding Prescription.PrescriptionSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     helpers:Field.Placeholder="Nombre o genérico"
+                                     helpers:Field.Placeholder="Genérico, concentración y forma"
+                                     ToolTip="Primero el genérico (principio activo) con su concentración y forma; la marca, si la quiere, entre paréntesis. Al elegirlo del catálogo se escribe así solo."
                                      PreviewKeyDown="PrescriptionSearchTextBox_PreviewKeyDown"
                                      AutomationProperties.Name="Medicamento" />
                         </StackPanel>
@@ -66,7 +67,8 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="Indicaciones" />
                             <TextBox x:Name="PrescriptionDosageTextBox" Style="{StaticResource FieldTextBox}"
                                      Text="{Binding Prescription.PrescriptionDosage, UpdateSourceTrigger=PropertyChanged}"
-                                     helpers:Field.Placeholder="Ej. 1 tableta cada 8 horas por 5 días"
+                                     helpers:Field.Placeholder="Ej. 1 tableta vía oral cada 8 horas por 5 días"
+                                     ToolTip="Dosis, vía de administración, frecuencia y duración del tratamiento (art. 30 del Reglamento de Insumos para la Salud)"
                                      PreviewKeyDown="PrescriptionAuxInput_PreviewKeyDown"
                                      AutomationProperties.Name="Indicaciones" />
                         </StackPanel>

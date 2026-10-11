@@ -27,7 +27,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la receta" />
-                        <TextBlock Style="{StaticResource TextCaption}" Text="Así se imprime o se guarda: media carta horizontal, con el formato de su receta de Excel" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Preview.PaperDescription}" TextWrapping="Wrap" />
                     </StackPanel>
                     <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding Preview.ClosePrescriptionPdfPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
                         <helpers:Icon Data="{StaticResource IcoClose}" />
@@ -40,10 +40,10 @@
                      Con muchos medicamentos la hoja crece (al imprimir pasan a otra hoja) -->
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <Viewbox Stretch="Uniform" VerticalAlignment="Top">
-                        <Border Width="816" MinHeight="528" Padding="22.66,18.91" BorderThickness="1"
+                        <Border Width="816" MinHeight="{Binding Preview.PreviewMinHeight}" Padding="22.66,18.91" BorderThickness="1"
                                 Background="{DynamicResource ThemeSurface}" BorderBrush="{DynamicResource ThemeBorder}"
                                 TextElement.Foreground="{DynamicResource ThemeText}"
-                                TextElement.FontFamily="Neue Haas Grotesk Text Pro, Segoe UI, Arial"
+                                TextElement.FontFamily="{Binding Preview.BodyFontFamily}"
                                 TextElement.FontSize="13.333">
                             <Border.Resources>
                                 <!-- Tinta sobre papel blanco (≥ 4.5:1, también sobre el sombreado de los campos) -->
@@ -104,7 +104,7 @@
                                            Source="{Binding Clinic.CrestImagePath, Converter={StaticResource ImageFile}}" />
                                     <StackPanel Grid.Column="1">
                                         <Viewbox Height="48" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center">
-                                            <TextBlock Text="{Binding Clinic.DoctorName}" FontFamily="Frosted Breath, Segoe Script, Segoe UI" FontSize="32"
+                                            <TextBlock Text="{Binding Clinic.DoctorName}" FontFamily="{Binding Preview.DoctorFontFamily}" FontSize="32"
                                                        Foreground="{DynamicResource ThemeAccentForeground}" VerticalAlignment="Center" />
                                         </Viewbox>
                                         <Viewbox Style="{StaticResource PaperCentered}">
@@ -220,7 +220,10 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Margin="0,0,0,16">
-                                                        <TextBlock Text="{Binding MedicineName}" FontWeight="Bold" TextWrapping="Wrap" />
+                                                        <!-- El nombre en negritas y, junto a él, la presentación y lo que se surte -->
+                                                        <TextBlock TextWrapping="Wrap">
+                                                            <Run Text="{Binding MedicineName, Mode=OneWay}" FontWeight="Bold" /><Run Text="{Binding SheetDetail, Mode=OneWay}" />
+                                                        </TextBlock>
                                                         <TextBlock Text="{Binding Dosage}" TextWrapping="Wrap" />
                                                     </StackPanel>
                                                 </DataTemplate>
