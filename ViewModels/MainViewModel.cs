@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.29.0";
+    private string _appVersion = "1.30.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -135,7 +135,8 @@ public partial class MainViewModel : ObservableObject
         ConsultationDraftStore? consultationDraftStore = null,
         NotificationService? notificationService = null,
         ConsultationHandoffService? consultationHandoffService = null,
-        LocalPreferencesStore? localPreferences = null)
+        LocalPreferencesStore? localPreferences = null,
+        LabResultService? labResultService = null)
     {
         Notifications = notificationService ?? new NotificationService();
         _inventoryService = inventoryService;
@@ -163,7 +164,7 @@ public partial class MainViewModel : ObservableObject
         // a medias del mostrador. El POS solo manda a la consulta ("Abrir consulta"), nunca al revés.
         PosVM = new PosViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, Notifications);
         MedicalRecordsVM = new MedicalRecordsViewModel(inventoryService, consultationService, _clinicProfileService, _printingService, consultationDraftStore, Notifications,
-            consultationHandoffService, localPreferences);
+            consultationHandoffService, localPreferences, labResultService);
         // MedicalRecordsViewModel ya inicia su propia carga en el constructor (antes se cargaba dos veces)
         _ = PosVM.InitializeAsync();
 
@@ -182,7 +183,7 @@ public partial class MainViewModel : ObservableObject
         // "Temas y ajustes" se dividió en Apariencia, Respaldos y datos (con la importación que
         // estaba en la página de la nube) y Actualizaciones
         AppearanceVM = new AppearanceViewModel(themeService);
-        DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications, _tursoSyncService);
+        DataVM = new DataManagementViewModel(backupService ?? new BackupService(), dataImportService, Notifications, _tursoSyncService, labResultService);
         UpdatesVM = new UpdatesViewModel(updateService);
         ServicesCatalogVM = new ServicesCatalogViewModel(inventoryService, Notifications);
         TursoSyncVM = new TursoSyncViewModel(_tursoSyncService, _tursoSettingsService);

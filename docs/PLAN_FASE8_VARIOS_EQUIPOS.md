@@ -1,6 +1,6 @@
 # Fase 8 · Datos listos para tres equipos con Turso
 
-Estado al 2026-10-11 (TPVC v1.29.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0) y 8.12 (v1.29.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
+Estado al 2026-10-11 (TPVC v1.30.0). **Hechos: los pasos 8.2 (v1.20.0), 8.3 (v1.20.1), 8.4 (v1.20.2), 8.5 (v1.20.3), 8.6 (v1.20.4), 8.7 (v1.20.5), 8.8 (v1.20.6), 8.9 (v1.26.0), 8.10 (v1.27.0), 8.11 (v1.28.0), 8.12 (v1.29.0) y 8.12b (v1.30.0).** Lo demás todavía es plan. Aquí se fijan la arquitectura, el contrato que tendrán que cumplir la PC y la app en Kotlin, y el orden de los pasos. El código viene después, un paso por versión. Cada versión deja la PC funcionando sola y trae pruebas que corren en Linux con el servidor Turso simulado (`FakeHranaServer`, en `tests/TPVC.Tests/TursoSyncEndToEndTests.cs`), sin equipos Android ni una base real de Turso. Para que eso funcione en la CI hace falta el paso 8.2: hoy el proyecto de pruebas es `net10.0-windows` y no arranca en Linux sin el runtime de escritorio.
 
 Esta versión **reemplaza el borrador del mismo día** que se publicó en este archivo (commit `0d9e12f`). Ese borrador convertía la PC en servidor de la red local y en la única que escribe, y dejaba Turso solo como respaldo. El médico lo descartó el 2026-10-09 después de ver que el uso real de Turso cabe de sobra en el plan gratuito (§3). Esta versión ya trae las correcciones de dos revisiones técnicas.
 
@@ -58,7 +58,8 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
             ▼                           ▼                           ▼
  ┌──────────────────────────────────────────────────────────────────────────────┐
  │ Turso · base del consultorio, sola en su grupo (libSQL, Hrana v2 por HTTPS): │
- │ 13 tablas sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,       │
+ │ 14 tablas sincronizadas, SyncTombstones, ClinicProfiles, ClinicAssets,       │
+ │ LabBlobs y LabBlobChunks (archivos de laboratorio),                          │
  │ RegisteredDevices, DeviceRegistry, ConsultationHandoffs, FolioCounters,      │
  │ _tpvc_meta                                                                   │
  └──────────────────────────────────────────────────────────────────────────────┘
@@ -204,7 +205,7 @@ Supuestos:
 |---|---|---|---|---|
 | Peticiones al día | ~8,700 | ~23,000 | ~12,800 (PC ~7.9k, tablet ~4.9k, celular ~40) | El plan no limita peticiones |
 | Filas leídas al mes | 0.4M–4.2M | hasta ~12M | 2M–4.5M: cada revisión lee 4–11 filas (con el índice parcial) y hay ~600 bajadas al día de ~25 filas | 0.4–0.9% de 500M |
-| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, ~975 latidos (960 de la PC y la tablet, cada 60 s, y ~15 del celular), ~400 filas de datos y ~300 `LastPushUtc` | ~0.5% de 10M; hasta ~1.5% si Turso cuenta las entradas de índice (V10) |
+| Filas escritas al mes | ~45k (el latido es 1,200 al día) | ~120k | ~50k: al día, ~975 latidos (960 de la PC y la tablet, cada 60 s, y ~15 del celular), ~400 filas de datos y ~300 `LastPushUtc` | ~1.5% de 10M: Turso cuenta también cada entrada de índice (V10); sin ellas sería ~0.5% |
 | Peor caso: PC y tablet abiertas 24 h en Pacientes | — | — | ~45k peticiones al día; ~7M lecturas y ~120k escrituras al mes | 1.4% y 1.2% |
 | Almacenamiento | Decenas de MB al año | Igual | Igual, más ~1 MB del membrete (`ClinicAssets`) | < 1% de 5 GB |
 | Bases | 1 | 1 | 1, sola en su grupo (§4.2) | 1 de 100 |
@@ -297,6 +298,12 @@ Lo que ve el médico:
 | V15 | `EXPLAIN QUERY PLAN` de F1 y F2 en Turso real (libSQL no es SQLite 3.53) | 8.6 y 8.24 | 8.6 |
 | V16 | Que `INSERT … ON CONFLICT DO UPDATE SET LastNumber = LastNumber + 1 RETURNING LastNumber` corra en Turso por Hrana como una sola instrucción atómica y regrese el número en su resultado, también con dos equipos a la vez | El contador de folios. Si no: leer el número n y `UPDATE … SET LastNumber = n + 1 WHERE Series = ? AND LastNumber = n`, que se reintenta si afecta 0 filas | 8.16 |
 | V18 | BLOB con y sin relleno de base64, y la forma en que regresa | Que la PC lea lo que manda Turso: según el código de libSQL responde `{"type":"blob","base64":…}` sin el relleno `=` y acepta los argumentos con o sin él. La PC ya lee las dos formas y manda con relleno; si Turso rechazara el relleno, la PC lo quitaría al mandar | 8.12 |
+| V17 | El tope de la petición con un BLOB de 0.5 a 32 MB | El tamaño del trozo y el manejo del error | 8.12b |
+| V19 | Filas escritas y leídas con `LabBlobs` y `LabBlobChunks` | El presupuesto de `EVALUACION_RESULTADOS_LABORATORIO.md` §3 | 8.12b |
+| V20 | Si borrar un BLOB libera el espacio que cuenta Turso, sin `VACUUM` | Si el tope de 2 GB es sobre lo que hay o sobre lo acumulado | 8.12b |
+| V21 | Si la respuesta viene con gzip | Si la bajada cuesta +0% o +33% | 8.12b |
+| V22 | Tiempos de 512 KiB y de 2 MiB en cada red | El tamaño del trozo y los tiempos de espera | 8.12b |
+| V23 | Un `batch` con `BEGIN`/`COMMIT` que lleva un BLOB de 1 MB | Si el cierre va en la misma transacción que el último trozo | 8.12b |
 
 V1, V2, V5, V6, V8 y V13 se retiraron: solo servían al nivel A o a la base de vinculación. El resultado se anota en `docs/TURSO_SYNC_ARCHITECTURE.md` §6.
 
@@ -790,7 +797,22 @@ Las etapas 0 y 1 valen la pena aunque nunca exista la app: dejan una sincronizac
 - **Riesgo:** bajo.
 
 #### 8.12b · Resultados de laboratorio en la nube (agregado el 2026-10-11)
-- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 en `scripts/verify-turso-blobs.ps1`; **V20 es crítica** (si borrar no libera cuota, el tope cambia).
+- **Hecho en v1.30.0 (2026-10-11).** Decisiones al programarlo:
+  - **Sin `LabOrders`.** La orden ya vive en `PatientConsultations.LabOrderJson` (v1.25.0); `LabResults` se liga a la consulta con `PatientConsultationSyncId` opcional, que queda en nulo si se borra la consulta. Tampoco `ThumbSha256`: la lista no muestra miniaturas, y una columna se agrega después sin romper nada.
+  - **Una fila, un archivo.** Varias fotos de un mismo resultado se juntan en un PDF con una página por foto (`JpegPdfWriter`, .NET puro: cada JPEG va tal cual con `/DCTDecode`), así Android solo abre PDF o JPEG. Las fotos se vuelven a guardar a 2000 px y calidad 80, derechas según el EXIF y sin metadatos (también sin la ubicación del GPS); el PDF va tal cual hasta 10 MB.
+  - **Cada PC archiva todo**, no solo la principal (2 GB caben en cualquier disco), y el archivo es inmutable: quitar un resultado no borra su archivo. La PC sabe qué subir sin preguntarle a la nube (`LabFileStates.UploadedTo`), así que una sincronización sin resultados nuevos no toca `LabBlobs`.
+  - **Fuera del candado de la sincronización.** La vuelta de los archivos corre después de cada sincronización buena, en segundo plano y con su propio candado: archivar 2 GB al unirse no detiene la sincronización.
+  - **El tope sigue sobre lo que hay** (V20). Nadie sube lo que no cabe; la PC principal desaloja una vez al día si pasa de 1.8 GB, o al subir algo que no cabe, pero nunca algo más nuevo que lo que sube (si lo que sube es lo más viejo, se queda fuera). Solo desaloja lo que tiene verificado en su archivo **y** en el respaldo externo que se ve en ese momento (una USB desconectada no cuenta). El orden es por la fecha del resultado, con el índice `IX_LabResults_ContentSha256` de la nube. Lo que la nube desalojó a propósito no se vuelve a subir.
+  - **Huérfanos en dos tiempos:** `OrphanSinceUtc` cuando ningún resultado lo nombra y se borra 30 días después (con la fecha de la creación se borraría de inmediato lo que un «Reemplazar la nube» deja sin nombrar).
+  - **Freno de bytes distinto por plataforma:** en la PC, 2.5 GB de bajada y 500 MB de subida al día (alcanza para archivar los 2 GB el día que se une); en Android, 300 y 150 MB. Cuenta lo que viaja (el base64). Abrir un resultado a pedido no se frena.
+  - **El espacio de toda la base** se mide con `(page_count − freelist_count) × page_size`, que en V20 dio lo mismo que `dbstat` sin recorrer tablas. Arriba de 4 GB no se sube ningún archivo.
+- **Antes:** la orden de laboratorio ya existe desde v1.25.0 (`PatientConsultations.LabOrderJson`, contrato revisión 4). Se necesitan 8.9 (Reemplazar la nube no toca el contenido), 8.10 (solo la PC crea tablas) y el patrón de 8.12 (binario por hash, bajado bajo pedido). [T] V17, V19–V23 con `scripts/verify-turso-blobs.ps1`. **Hechas el 2026-10-11** (`TURSO_SYNC_ARCHITECTURE.md` §6):
+  - No hay tope de petición hasta 32 MB, y cada trozo escribe 2 filas.
+  - **Borrar sí libera cuota (V20):** `dbstat` baja en cuanto se borra y las páginas libres se reúsan. El tope de 2 GB queda como estaba.
+  - Turso no comprime la bajada (+33%).
+  - Un trozo de 512 KiB tarda menos de 1 s por el Wi-Fi de casa.
+  - El `batch` con un BLOB es atómico.
+  - V22 en el Wi-Fi del consultorio (el mismo día): igual que en casa, 0.6 s para subir un trozo y 0.4 s para bajarlo. Falta LTE; no detiene nada.
 - **Cambia:** lo de `docs/EVALUACION_RESULTADOS_LABORATORIO.md` §6, elegido por el médico el 2026-10-10 («Turso + copia en la laptop»):
   - Tabla sincronizada `LabResults` (solo metadatos) y tablas solo de la nube `LabBlobs`/`LabBlobChunks`, en trozos de 512 KiB.
   - La laptop guarda una copia completa en `%LocalAppData%\TPVC\laboratorio\`, fuera de `consultorio.db` y de sus respaldos diarios.

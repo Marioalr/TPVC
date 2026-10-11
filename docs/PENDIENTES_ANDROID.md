@@ -83,6 +83,17 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.30.0 (paso 8.12b: resultados de laboratorio)
+
+- [ ] En la ficha de un paciente, *Resultados de laboratorio › Agregar*: un PDF del laboratorio, y luego dos o tres fotos de un resultado tomadas con el celular. Las fotos quedan derechas y en un solo PDF; *Abrir* los muestra con el visor de Windows y la letra chica se lee bien (si no, decirlo: se sube la calidad).
+- [ ] Con la nube activada: el resultado sube después de sincronizar; en otra computadora unida a la nube aparece en el expediente y, un momento después, *Abrir* lo muestra sin esperar.
+- [ ] En *Respaldos y datos › Resultados de laboratorio*: elegir una USB o una carpeta de OneDrive; se copian los archivos y *Respaldar ahora* dice que ya estaba al día.
+- [ ] *Nube y dispositivos*: después de un día, la cuota muestra el espacio de la nube y los resultados de laboratorio en la nube (lo mide la PC principal una vez al día).
+- [x] [T] V22 en el Wi-Fi del consultorio (2026-10-11): un trozo de 512 KiB sube en 0.6 s y baja en 0.4 s.
+- [ ] [T] V22 con los datos del celular compartidos a la laptop: `scripts\verify-turso-blobs.ps1 -Only V22 -Network …`. Un trozo de 512 KiB debe tardar bastante menos que 30 s.
+- [ ] Para Kotlin (K4, ver y bajar en el celular y la tablet): `LabResults` es la tabla sincronizada número 14 (revisión 7). Para abrir uno, bajar el archivo de `LabBlobs`/`LabBlobChunks` como dice la regla «Resultados de laboratorio» y `contracts/golden/lab-files.json` (4 trozos por petición, revisar tamaño y SHA-256), con una caché LRU cifrada con AES-GCM y una llave del Keystore en `noBackupFilesDir` (500 MB en la tablet, 200 MB en el celular) que se borra al revocar el equipo. Mensajes: sin `CompletedAtUtc`, «se está subiendo desde otro equipo»; con `EvictedAtUtc`, «está en la PC principal». Freno de 300 MB de bajada al día; abrir a pedido no se frena.
+- [ ] Para Kotlin (K7, capturar y subir en la tablet; el celular no sube nada clínico): fotos a JPEG de 2000 px en el lado largo y calidad 80, derechas y sin EXIF; varias fotos en un PDF con una página cada una; un PDF tal cual hasta 10 MB. Antes de registrar, sumar `LabBlobs` sin `EvictedAtUtc`: si no cabe en 2 GB, el archivo se queda en la tablet. El último trozo va en un `batch` con `BEGIN`/`COMMIT` junto con el cierre. Freno de 150 MB de subida al día. Kotlin nunca desaloja ni borra trozos.
+
 ### v1.29.0 (paso 8.12: membrete en la nube)
 
 - [ ] En la PC principal, con la nube activada: elegir un escudo y una imagen del encabezado en *Médico y consultorio* y sincronizar. En otra computadora unida a la nube, después de sincronizar, la receta sale con las mismas imágenes.
@@ -199,7 +210,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] *Configuración › Nube y dispositivos*: la cuota dice 500 millones de lecturas, 10 millones de escrituras y 5 GB, y el consumo de hoy; ya no aparece "Uso" en *Este equipo* ni "Generar código" (los botones dicen "Disponible con la vinculación por QR").
 - [ ] Pegar una URL `http://192.168.…` y *Probar conexión*: se rechaza por no estar cifrada. Con la URL de siempre (`libsql://…`) sincroniza igual que antes.
 - [ ] Con la nube activa, un día normal de consulta: al final del día *Nube y dispositivos* no muestra la pausa y el consumo de hoy queda muy por debajo de los topes del freno.
-- [ ] [T] En una base de prueba de Turso (otra cuenta o grupo, nunca la del consultorio), anotar en `docs/TURSO_SYNC_ARCHITECTURE.md` §6: V7 (texto y estado HTTP de `BLOCKED`), V9 (qué error da una base archivada) y V10 (si las entradas de índice cuentan como escrituras).
+- [ ] [T] En una base de prueba de Turso (otra cuenta o grupo, nunca la del consultorio), anotar en `docs/TURSO_SYNC_ARCHITECTURE.md` §6: V7 (texto y estado HTTP de `BLOCKED`) y V9 (qué error da una base archivada). V10 ya está: las entradas de índice sí cuentan como escrituras (V19, 2026-10-11).
 
 ### v1.19.0 (Fin de la Fase 6: el módulo de Pacientes sin WPF)
 

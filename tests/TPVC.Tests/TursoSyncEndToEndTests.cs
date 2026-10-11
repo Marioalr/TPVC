@@ -35,6 +35,9 @@ public partial class TursoSyncEndToEndTests
 
         /// <summary>Su turso_config.json (para volver a abrirlo con otro servicio, como al reiniciar TPVC).</summary>
         public string SettingsPath { get; init; } = string.Empty;
+
+        /// <summary>Sus resultados de laboratorio, con su archivo junto a su base (paso 8.12b).</summary>
+        public LabResultService Labs { get; init; } = null!;
     }
 
     private string TempFile(string ext)
@@ -110,13 +113,21 @@ public partial class TursoSyncEndToEndTests
         // Su perfil y su carpeta del membrete junto a su base (paso 8.12: cada equipo con sus imágenes)
         var profile = new ClinicProfileService(Path.Combine(dir, "clinic_profile.json"));
         var inventory = new InventoryService(factory);
-        var sync = new TursoSyncService(factory, settings, profile, inventory)
+        var labs = new LabResultService(factory, new TPVC.Services.LabFiles.LabFileStore(Path.Combine(dir, "laboratorio")),
+            new LocalPreferencesStore(Path.Combine(dir, "preferencias.json")));
+        var sync = new TursoSyncService(factory, settings, profile, inventory, labs)
         {
-            ClientFactory = (url, token) => new TursoClient(url, token, new HttpClient(_server, disposeHandler: false))
+            ClientFactory = (url, token) => new TursoClient(url, token, new HttpClient(_server, disposeHandler: false)),
+            // Las pruebas corren la vuelta de los archivos de laboratorio a mano (RunLabTransfersAsync)
+            AutoLabTransfers = false
         };
         if (clock != null) sync.Clock = clock;
 
-        return new Device { Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync, DbPath = dbPath, SettingsPath = settingsPath };
+        return new Device
+        {
+            Factory = factory, Inventory = inventory, Settings = settings, Profile = profile, Sync = sync, DbPath = dbPath, SettingsPath = settingsPath,
+            Labs = labs
+        };
     }
 
     [TestMethod]

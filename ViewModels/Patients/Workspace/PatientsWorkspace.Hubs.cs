@@ -17,7 +17,9 @@ public partial class PatientsWorkspace
         if (oldValue?.Id != newValue?.Id || newValue == null)
         {
             Consultation.IsCurrentConsultationSaved = false;
+            LabResults.ResetForPatientChange();
         }
+        _ = LabResults.LoadForPatientAsync(newValue?.Id);
         Prescription.RaiseShowsPediatricDose();
         Consultation.NotifyVitalSignsWarningChanged();
         Chart.RefreshChartData();

@@ -50,7 +50,8 @@ public partial class GoldenVectorTests
         Assert.IsLessThan(tables.IndexOf("ProductBatches"), tables.IndexOf("Products"));
         Assert.IsLessThan(tables.IndexOf("PatientConsultations"), tables.IndexOf("Patients"));
         Assert.IsLessThan(tables.IndexOf("SaleItems"), tables.IndexOf("Sales"));
-        Assert.AreEqual(13, tables.Count);
+        Assert.IsLessThan(tables.IndexOf("LabResults"), tables.IndexOf("PatientConsultations"));
+        Assert.AreEqual(14, tables.Count);
 
         // Toda fecha dice cómo se interpreta, y una columna obligatoria dice qué guarda si llega nula
         foreach (var column in schema["tables"]!.AsArray().SelectMany(t => t!["columns"]!.AsArray()))

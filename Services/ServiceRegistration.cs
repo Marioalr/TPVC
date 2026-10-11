@@ -27,11 +27,15 @@ public static class ServiceRegistration
         services.AddSingleton<ClinicProfileService>();
         services.AddSingleton<PrintingService>();
         services.AddSingleton<TursoSettingsService>();
+        services.AddSingleton(sp => new LabResultService(
+            sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
+            preferences: sp.GetRequiredService<LocalPreferencesStore>()));
         services.AddSingleton(sp => new TursoSyncService(
             sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
             sp.GetRequiredService<TursoSettingsService>(),
             sp.GetRequiredService<ClinicProfileService>(),
-            sp.GetRequiredService<InventoryService>()));
+            sp.GetRequiredService<InventoryService>(),
+            sp.GetRequiredService<LabResultService>()));
         services.AddSingleton(sp => new ConsultationHandoffService(
             sp.GetRequiredService<TursoSyncService>(),
             sp.GetRequiredService<TursoSettingsService>()));

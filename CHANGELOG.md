@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.30.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.12b: resultados de laboratorio
+* La ficha del paciente tiene **Resultados de laboratorio**: el PDF del laboratorio o fotos de las hojas, con la fecha, el laboratorio y notas. *Abrir* los muestra con el programa de Windows y *Quitar* los quita del expediente.
+* Las fotos se guardan más ligeras (2000 px), derechas como se ven en el celular y sin los datos de la cámara ni la ubicación. Varias fotos de un mismo resultado quedan en un solo PDF.
+* Los archivos se guardan aparte de la base, en `%LocalAppData%\TPVC\laboratorio`, para que los respaldos diarios no crezcan. En *Respaldos y datos* se elige una USB o una carpeta de OneDrive para copiarlos, y *Traer del respaldo* los pasa a una computadora nueva.
+* Con la nube, cada resultado sube después de sincronizar, en partes, y si se corta el internet sigue donde iba. Las demás computadoras guardan una copia de todo; abrir uno que todavía no llega lo baja en ese momento.
+* La nube guarda hasta 2 GB de resultados para no llenar el plan gratuito. Si tiene respaldo externo, la PC principal libera lo más viejo, que sigue en la computadora y en la copia; si no, lo nuevo se queda en la computadora donde se agregó. *Nube y dispositivos* muestra el espacio usado y avisa desde 1.6 GB.
+* Turso ya se comprobó con archivos (V17 y V19–V23): borrar libera el espacio que cobra, una transacción con un archivo es completa o nada y una parte de 512 KiB tarda menos de un segundo.
+* 541 pruebas.
+
 ## [1.29.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.12: el membrete en la nube

@@ -74,6 +74,7 @@ internal sealed class UiSmokeSession
 
     private readonly string _workDir = Path.Combine(Path.GetTempPath(), $"tpvc_ui_{Guid.NewGuid():N}");
     private readonly string? _screenshotDir = Environment.GetEnvironmentVariable("TPVC_SCREENSHOTS_DIR");
+    private bool _labsSeeded;
     private readonly BindingErrorCollector _bindingErrors = new();
     private readonly List<string> _failures = new();
     private System.Windows.Application _app = null!;
@@ -179,6 +180,17 @@ internal sealed class UiSmokeSession
         return null;
     }
 
+
+    /// <summary>El primer elemento con ese nombre de accesibilidad (AutomationProperties.Name).</summary>
+    private static System.Windows.FrameworkElement? FindNamed(System.Windows.DependencyObject root, string name)
+    {
+        if (root is System.Windows.FrameworkElement element && System.Windows.Automation.AutomationProperties.GetName(element) == name) return element;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            if (FindNamed(System.Windows.Media.VisualTreeHelper.GetChild(root, i), name) is { } found) return found;
+        }
+        return null;
+    }
     private static T? FindDescendant<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject
     {
         if (root is T match) return match;
@@ -208,6 +220,9 @@ internal sealed class UiSmokeSession
         SeedDoctorLetterhead(profile);
         var tursoSettings = new TursoSettingsService(Path.Combine(_workDir, "turso.json"));
         var tursoSync = new TursoSyncService(factory, tursoSettings, profile, inventory);
+        // Paso 8.12b: los resultados de laboratorio de la ficha, con su archivo en la carpeta de la prueba
+        var labs = new LabResultService(factory, new TPVC.Services.LabFiles.LabFileStore(Path.Combine(_workDir, "laboratorio")),
+            new LocalPreferencesStore(Path.Combine(_workDir, "preferencias.json")));
 
         // Nube simulada: "Enviar a…" con equipos enlazados y el aviso de una consulta recibida
         _cloud = new FakeHranaServer(Path.Combine(_workDir, "nube.db"));
@@ -261,7 +276,8 @@ internal sealed class UiSmokeSession
             dataImportService: null,
             consultationDraftStore: new ConsultationDraftStore(Path.Combine(_workDir, "consulta.json")),
             notificationService: notifications,
-            consultationHandoffService: handoff);
+            consultationHandoffService: handoff,
+            labResultService: labs);
         main.IsFirstRunWizardOpen = false;
         // Equipos vinculados (paso 8.10) se lee a mano antes de su captura, no al abrir la sección
         main.TursoSyncVM.RefreshDevicesOnOpen = false;
@@ -348,6 +364,44 @@ internal sealed class UiSmokeSession
 
             records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
             Capture(host, $"05-ficha-{suffix}");
+
+            // Resultados de laboratorio (paso 8.12b): uno con su archivo aquí, otro que se baja al abrirlo, y el formulario
+            var chartPatient = records.Session.SelectedPatient!;
+            if (!_labsSeeded)
+            {
+                _labsSeeded = true;
+                var pdf = System.Text.Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj << /Type /Page >> endobj\n2 0 obj << /Type /Page >> endobj\n%%EOF");
+                WaitFor(labs.AddAsync(chartPatient.Id, new LabResultDraft("Química sanguínea de 6 elementos", "Laboratorio Central", DateTime.Today.AddDays(-3),
+                    "Glucosa 112 mg/dL; resto normal"), new TPVC.Services.LabFiles.PreparedLabFile(pdf, LabResult.PdfMimeType, 2, "qs6.pdf")));
+                var remote = WaitFor(labs.AddAsync(chartPatient.Id, new LabResultDraft("Biometría hemática", "Laboratorio Central", DateTime.Today.AddDays(-40), string.Empty),
+                    new TPVC.Services.LabFiles.PreparedLabFile(new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 }, LabResult.JpegMimeType, 1, "bh.jpg")));
+                File.Delete(labs.Store.PathFor(remote.ContentSha256));
+            }
+            WaitFor(records.LabResults.LoadForPatientAsync(chartPatient.Id));
+            var picker = DialogService.OpenFilesPickerHandler;
+            var pickedPath = Path.Combine(_workDir, "resultado-ego.pdf");
+            File.WriteAllBytes(pickedPath, System.Text.Encoding.Latin1.GetBytes("%PDF-1.4\n%%EOF"));
+            DialogService.OpenFilesPickerHandler = (_, _) => new[] { pickedPath };
+            try
+            {
+                records.LabResults.StartAdd();
+            }
+            finally
+            {
+                DialogService.OpenFilesPickerHandler = picker;
+            }
+            records.LabResults.NewTitle = "Examen general de orina";
+            Capture(host, $"05b-ficha-laboratorio-{suffix}");
+            if (records.LabResults.Items.Count != 2 || !records.LabResults.IsAddFormOpen)
+                _failures.Add($"[05b-{suffix}] La tarjeta de laboratorio no muestra sus 2 resultados y el formulario");
+            records.LabResults.CancelAdd();
+            Pump();
+            if (FindNamed(host, "Resultados de laboratorio") is { } labCard)
+            {
+                Layout(host, Width, Height);
+                labCard.BringIntoView();
+            }
+            Capture(host, $"05c-ficha-laboratorio-lista-{suffix}");
             records.Chart.ToggleAntecedent(records.Chart.AntecedentSections.First());
             records.Chart.IsVitalsChartVisible = true;
             Capture(host, $"06-ficha-detalle-{suffix}");

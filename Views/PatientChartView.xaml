@@ -6,6 +6,7 @@
              xmlns:vm="clr-namespace:TPVC.ViewModels"
              xmlns:models="clr-namespace:TPVC.Models"
              xmlns:views="clr-namespace:TPVC.Views"
+             xmlns:patients="clr-namespace:TPVC.ViewModels.Patients"
              xmlns:helpers="clr-namespace:TPVC.Helpers"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}"
@@ -122,6 +123,92 @@
                             </ItemsControl>
                             <TextBlock Style="{StaticResource TextCaption}" Text="Sin receta registrada. La receta se hace dentro de la consulta."
                                        Visibility="{Binding Chart.HasActivePrescription, Converter={StaticResource InverseBoolToVis}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Resultados de laboratorio (paso 8.12b): el PDF o las fotos de cada resultado -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,16" AutomationProperties.Name="Resultados de laboratorio"
+                            Visibility="{Binding LabResults.IsAvailable, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource TextLabel}" Text="RESULTADOS DE LABORATORIO" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Style="{StaticResource ButtonSecondary}" Padding="10,4" MinHeight="0"
+                                        Command="{Binding LabResults.StartAddCommand}" AutomationProperties.Name="Agregar resultado"
+                                        Visibility="{Binding LabResults.CanAdd, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <helpers:Icon Data="{StaticResource IcoPlus}" Width="14" Height="14" Margin="0,0,6,0" />
+                                        <TextBlock Text="Agregar" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <!-- Agregar: los archivos ya elegidos, de qué estudio es, el laboratorio y la fecha -->
+                            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,10"
+                                    Visibility="{Binding LabResults.IsAddFormOpen, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <helpers:Icon Data="{StaticResource IcoFile}" Width="14" Height="14" Margin="0,0,6,0" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding LabResults.NewFilesText}" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+                                    </StackPanel>
+                                    <TextBox Style="{StaticResource FieldTextBox}" Margin="0,0,0,6" AutomationProperties.Name="Estudio"
+                                             Text="{Binding LabResults.NewTitle, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Estudio (ej. Biometría hemática)" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Margin="0,0,0,6" AutomationProperties.Name="Laboratorio"
+                                             Text="{Binding LabResults.NewLaboratory, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Laboratorio (opcional)" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Margin="0,0,0,6" AutomationProperties.Name="Fecha del resultado"
+                                             Text="{Binding LabResults.NewDateText, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Fecha dd/mm/aaaa" helpers:DateMask.IsEnabled="True" />
+                                    <TextBox Style="{StaticResource FieldTextBox}" Margin="0,0,0,8" AutomationProperties.Name="Notas del resultado"
+                                             Text="{Binding LabResults.NewNotes, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="Notas (opcional)"
+                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" VerticalContentAlignment="Top" />
+                                    <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeDangerText}" Text="{Binding LabResults.FormError}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                               Visibility="{Binding LabResults.HasFormError, Converter={StaticResource BoolToVis}}" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Style="{StaticResource ButtonGhost}" Content="Cancelar" Command="{Binding LabResults.CancelAddCommand}" Margin="0,0,8,0" />
+                                        <Button Style="{StaticResource ButtonPrimary}" Content="Guardar" Command="{Binding LabResults.SaveNewCommand}" AutomationProperties.Name="Guardar resultado" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding LabResults.Items}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type patients:LabResultItem}">
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="52" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding DayText}" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding YearText}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                                <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Notes}" TextWrapping="Wrap" Foreground="{DynamicResource ThemeText}"
+                                                           Visibility="{Binding HasNotes, Converter={StaticResource BoolToVis}}" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding StatusText}" Foreground="{DynamicResource ThemeTextSecondary}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                                                <Button Style="{StaticResource ButtonSecondary}" Content="Abrir" Padding="10,4" MinHeight="0" Margin="0,0,4,0"
+                                                        Command="{Binding DataContext.LabResults.OpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Abrir el resultado: {0}'}" />
+                                                <Button Style="{StaticResource ButtonIconSecondary}" ToolTip="Quitar del expediente"
+                                                        Command="{Binding DataContext.LabResults.DeleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title, StringFormat='Quitar el resultado: {0}'}">
+                                                    <helpers:Icon Data="{StaticResource IcoTrash}" Width="14" Height="14" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                       Text="Sin resultados. Agregue el PDF del laboratorio o fotos de las hojas."
+                                       Visibility="{Binding LabResults.HasItems, Converter={StaticResource InverseBoolToVis}}" />
                         </StackPanel>
                     </Border>
 

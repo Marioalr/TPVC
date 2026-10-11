@@ -78,7 +78,7 @@ public class SyncChangeLogTests
         var triggers = ChangeLogTestSupport.TriggerNames(db);
         var tables = SyncSchema.FromModel(db.Model).Tables;
 
-        Assert.AreEqual(13, tables.Count);
+        Assert.AreEqual(14, tables.Count);
         Assert.AreEqual(tables.Count * 3, triggers.Count);
         foreach (var name in triggers)
         {
@@ -231,7 +231,7 @@ public class SyncChangeLogTests
 
         using (var db = NewContext())
         {
-            Assert.HasCount(39, ChangeLogTestSupport.TriggerNames(db));
+            Assert.HasCount(42, ChangeLogTestSupport.TriggerNames(db));
             DatabaseInitializer.EnsureSchema(db);
         }
         Assert.HasCount(1, Directory.GetFiles(backups, "consultorio-*-antes-registro-de-cambios.db"), "Solo la primera vez");

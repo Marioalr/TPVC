@@ -314,6 +314,27 @@ internal sealed class SyncSchema
         $"CREATE TABLE IF NOT EXISTS {ClinicAssetChunksTable} (Hash TEXT NOT NULL, Part INTEGER NOT NULL, Content BLOB NOT NULL, PRIMARY KEY (Hash, Part))"
     };
 
+    public const string LabBlobsTable = "LabBlobs";
+    public const string LabBlobChunksTable = "LabBlobChunks";
+
+    /// <summary>
+    /// Paso 8.12b: el contenido de los resultados de laboratorio por su SHA-256, fuera de las tablas sincronizadas (la fila
+    /// de LabResults solo lleva los datos). LabBlobs tiene una fila por archivo: se registra antes de subir sus trozos y
+    /// CompletedAtUtc dice que ya están todos. La PC principal anota ArchivedAtUtc cuando lo tiene en su archivo,
+    /// EvictedAtUtc cuando borra sus trozos para no pasar del tope (la fila se queda) y OrphanSinceUtc cuando ningún
+    /// resultado lo nombra (a los 30 días borra la fila y los trozos). Tablas con rowid, no WITHOUT ROWID: las filas son
+    /// grandes. El índice de LabResults.ContentSha256 sirve para buscar los huérfanos sin recorrer LabResults.
+    /// </summary>
+    public static readonly string[] LabFileStatements =
+    {
+        $"CREATE TABLE IF NOT EXISTS {LabBlobsTable} (Sha256 TEXT PRIMARY KEY NOT NULL, SizeBytes INTEGER NOT NULL, ChunkSize INTEGER NOT NULL, " +
+        "ChunkCount INTEGER NOT NULL, MimeType TEXT NOT NULL, CreatedAtUtc TEXT NOT NULL, OriginDeviceId TEXT, CompletedAtUtc TEXT, " +
+        "ArchivedAtUtc TEXT, EvictedAtUtc TEXT, OrphanSinceUtc TEXT)",
+        $"CREATE TABLE IF NOT EXISTS {LabBlobChunksTable} (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, Data BLOB NOT NULL, " +
+        "PRIMARY KEY (Sha256, ChunkIndex))",
+        "CREATE INDEX IF NOT EXISTS \"IX_LabResults_ContentSha256\" ON \"LabResults\" (\"ContentSha256\")"
+    };
+
     /// <summary>
     /// Columnas del latido que agregó el paso 8.10. Todas aceptan nulo: el upsert de una PC v1.17–v1.26 (con sus columnas
     /// explícitas) sigue igual. En una nube que ya tenía la tabla llegan con <c>ALTER TABLE</c>, revisado con
@@ -360,6 +381,7 @@ internal sealed class SyncSchema
         foreach (var statement in TombstoneStatements) yield return statement;
         yield return ClinicProfilesStatement;
         foreach (var statement in ClinicAssetStatements) yield return statement;
+        foreach (var statement in LabFileStatements) yield return statement;
         yield return RegisteredDevicesStatement;
         foreach (var statement in DeviceRegistryStatements) yield return statement;
 

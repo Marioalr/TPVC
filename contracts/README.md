@@ -18,7 +18,7 @@ y revisar la diferencia antes de subirla: la app de Kotlin lee estos archivos.
 
 ## `sync/schema.json`
 
-Las 13 tablas sincronizadas **en el orden de subida** (los principales antes que sus dependientes), cada una con:
+Las 14 tablas sincronizadas (13 hasta la revisión 6) **en el orden de subida** (los principales antes que sus dependientes), cada una con:
 
 - `entityType`: el nombre de la clase de C#; es el `EntityType` de las lápidas.
 - `columns`: nombre, tipo remoto, si acepta nulo y tipo de C#. Además, según la columna:
@@ -47,6 +47,7 @@ Los cambios del esquema solo pueden agregar (tablas, columnas o valores de un en
 | 4 | v1.25.0 | `PatientConsultations.LabOrderJson` (texto, `""` si falta): la orden de laboratorio de la consulta, `{"Studies":[{"Name","Area"}],"Indications"}` con acentos sin escapar; `""` si no se pidieron estudios. |
 | 5 | v1.27.0 | Paso 8.10, en `otherTables` (no se replican): la tabla `DeviceRegistry` (rol, código y revocación de cada equipo; solo la escribe la PC) y las columnas nuevas del latido en `RegisteredDevices` (`Platform`, `SyncProtocol`, `HandoffProtocol`, `ContractRevision`, `LastPushUtc`, `PendingCount`, `OldestPendingUtc`, `InstanceNonce`, todas con nulo). Las reglas «Equipos» y «Latido» dicen qué escribe Kotlin. Ninguna tabla sincronizada cambia. |
 | 6 | v1.29.0 | Paso 8.12, en `otherTables`: `ClinicProfiles.CrestImageHash` y `HeaderImageHash` (SHA-256 en hex con minúsculas; `''` sin imagen, `NULL` si ninguna PC lo escribió), y las tablas `ClinicAssets` (una fila por imagen completa) y `ClinicAssetChunks` (sus bytes en trozos de 512 KiB, `Content BLOB`). La regla «Membrete» dice cómo bajar una imagen. Ninguna tabla sincronizada cambia. |
+| 7 | v1.30.0 | Paso 8.12b, los resultados de laboratorio: la tabla sincronizada `LabResults` (solo los datos: paciente con borrado en cascada, consulta opcional que queda en nulo, título, laboratorio, `ResultDate` solo fecha, notas, tipo, páginas, tamaño y `ContentSha256`), y en `otherTables` `LabBlobs` (una fila por archivo, por su SHA-256, con su estado) y `LabBlobChunks` (trozos de 512 KiB, `Data BLOB`), más el índice de la nube `IX_LabResults_ContentSha256`. La regla «Resultados de laboratorio» y `golden/lab-files.json` dicen cómo subir y bajar. |
 
 ## `golden/`
 
@@ -65,6 +66,7 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 | `prescription-sheet.json` | Lo que dice la receta a partir del paciente, los medicamentos y el perfil: edad, fecha, alergias, signos con unidades y medidas generales, en las dos zonas (`Models/PrescriptionSheet.cs`). |
 | `prescription-html-fields.json` | Los valores de la receta en HTML (`data-field`), el papel y lo que se dibuja en cada lugar (`Services/Documents/PrescriptionHtmlBuilder.cs`): de aquí sale el PDF del celular. |
 | `ticket-text.json` | El ticket en 42 columnas, renglón por renglón (`Services/Documents/TicketText.cs`); la PC imprime los mismos textos. |
+| `lab-files.json` | Desde v1.30.0 (paso 8.12b): cómo se parte un archivo de laboratorio en trozos (con el SHA-256 de cada uno, para un contenido que Kotlin genera igual), el SQL literal de registrar, subir un trozo, cerrar, bajar, medir, archivar, desalojar y limpiar huérfanos (`TursoSyncService.LabFiles.cs`) y los topes: 2 GB en la nube, aviso en 1.6, desalojo hasta 1.8, 10 MB por archivo, fotos de 2000 px en JPEG de calidad 80 y el freno de bytes de Android (300 MB de bajada y 150 de subida al día). |
 
 Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál regla de redondeo usa (decimal al par con `Math.Round`; hacia arriba en el IVA y en el formato F2/N2). Lo que depende de "hoy" se genera en UTC y en America/Mexico_City con un instante en que el día cambia; los desempates por nombre llevan acentos (Collator es-MX).
 
@@ -73,8 +75,9 @@ Todo redondeo lleva un caso de punto medio y cada archivo dice en `notes` cuál 
 lector tiene que aceptar las dos formas: `java.util.Base64.getDecoder()` las acepta; `kotlin.io.encoding.Base64.Default`
 exige el relleno salvo con `withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)`. Un argumento que no sea base64 válido
 hace fallar **toda la petición** con HTTP 400. Un BLOB vacío no es nulo. Ninguna tabla sincronizada tiene BLOB (en
-`schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); el primero es `ClinicAssetChunks.Content`, del membrete en
-la nube (desde v1.29.0, paso 8.12).
+`schema.json` sería `remoteType: BLOB`, `clrType: byte[]`); los BLOB están en `ClinicAssetChunks.Content`, del membrete
+en la nube (desde v1.29.0, paso 8.12), y en `LabBlobChunks.Data`, de los resultados de laboratorio (desde v1.30.0, paso
+8.12b). Turso no comprime las respuestas (V21): bajar un trozo cuesta el +33% del base64.
 
 ## Lo que viene
 

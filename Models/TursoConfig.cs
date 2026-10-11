@@ -127,6 +127,18 @@ public static class TursoConsumptionBrake
     public const long MaxRowsReadPerDay = 3_000_000L;
     public const long MaxRowsWrittenPerDay = 30_000L;
 
+    /// <summary>
+    /// Freno de bytes de los resultados de laboratorio en la PC (paso 8.12b), por día: alcanza para archivar los 2 GB de la
+    /// nube en un día después de unirse. Turso no cobra el tráfico; esto frena un ciclo de bajadas descontrolado. Abrir un
+    /// resultado a pedido del médico no se frena. En Android: 300 MB de bajada y 150 MB de subida.
+    /// </summary>
+    public const long MaxLabBytesDownPerDay = 2_500_000_000L;
+    public const long MaxLabBytesUpPerDay = 500_000_000L;
+
+    /// <summary>El freno de bytes de la tablet y el celular (datos móviles); va en el contrato para Kotlin.</summary>
+    public const long AndroidMaxLabBytesDownPerDay = 300_000_000L;
+    public const long AndroidMaxLabBytesUpPerDay = 150_000_000L;
+
     /// <summary>Tras BLOCKED, la sincronización automática espera esto antes de reintentar.</summary>
     public static readonly TimeSpan QuotaRetryInterval = TimeSpan.FromHours(1);
 
@@ -229,7 +241,22 @@ public class TursoSettings
 
     /// <summary>Cuándo se activó el freno de consumo; null = no está activo. Se conserva al cerrar el programa.</summary>
     public DateTime? ConsumptionBrakeTrippedUtc { get; set; }
+
+    /// <summary>Bytes de resultados de laboratorio que este equipo subió hoy (lo que viaja: base64), para su freno.</summary>
+    public long DailyLabBytesUp { get; set; }
+
+    /// <summary>Bytes de resultados de laboratorio que este equipo bajó hoy (lo que viaja: base64), para su freno.</summary>
+    public long DailyLabBytesDown { get; set; }
+
+    /// <summary>Lo que había en la nube de laboratorio la última vez que se midió (paso 8.12b); null si nunca.</summary>
+    public LabCloudSummary? LabCloud { get; set; }
 }
+
+/// <summary>
+/// El uso de la nube por los resultados de laboratorio (paso 8.12b): los archivos sin desalojar y su suma, y el espacio
+/// de toda la base según SQLite ((page_count − freelist_count) × page_size, lo mismo que cuenta Turso con dbstat; V20).
+/// </summary>
+public sealed record LabCloudSummary(int Files, long Bytes, long? CloudSpaceBytes, DateTime MeasuredUtc, string? MeasuredDay = null);
 
 /// <summary>
 /// Resumen del consumo de cuota gratuita en Turso (estimación de este equipo; la cifra real está en el panel de Turso).
