@@ -673,10 +673,12 @@ public partial class InventoryService
         if (string.IsNullOrWhiteSpace(folio)) return null;
         var cleanFolio = folio.Trim();
         await using var db = CreateContext();
+        // Paso 8.17: también por el folio con letra con que se cobró sin conexión
+        var lower = cleanFolio.ToLower();
         return await db.Sales
             .AsNoTracking()
             .Include(s => s.Items)
-            .FirstOrDefaultAsync(s => s.Folio.ToLower() == cleanFolio.ToLower());
+            .FirstOrDefaultAsync(s => s.Folio.ToLower() == lower || (s.OriginalFolio != null && s.OriginalFolio.ToLower() == lower));
     }
 
     public async Task<List<Sale>> GetSalesHistoryAsync(DateTime? fromDate = null, DateTime? toDate = null, string? searchFolio = null, int limit = 150)
@@ -702,7 +704,8 @@ public partial class InventoryService
         if (!string.IsNullOrWhiteSpace(searchFolio))
         {
             var needle = searchFolio.Trim().ToLower();
-            query = query.Where(s => s.Folio.ToLower().Contains(needle) || s.CustomerName.ToLower().Contains(needle));
+            query = query.Where(s => s.Folio.ToLower().Contains(needle) || (s.OriginalFolio != null && s.OriginalFolio.ToLower().Contains(needle))
+                                     || s.CustomerName.ToLower().Contains(needle));
         }
 
         return await query.OrderByDescending(s => s.Date).Take(limit).ToListAsync();
@@ -1103,7 +1106,7 @@ public partial class InventoryService
         {
             var q = TextSearch.Normalize(searchText);
             patients = patients
-                .Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.Phone, p.LastDiagnosis, p.Email))
+                .Where(p => TextSearch.Matches(q, p.FullName, p.RecordNumber, p.OriginalFolio ?? string.Empty, p.Phone, p.LastDiagnosis, p.Email))
                 .ToList();
         }
 
@@ -1216,8 +1219,10 @@ public partial class InventoryService
         if (string.IsNullOrWhiteSpace(recordNumber)) return false;
         var normalized = recordNumber.Trim().ToUpper();
         await using var db = CreateContext();
+        // Paso 8.17: también el folio con letra de uno ya regularizado
         return await db.Patients
-            .AnyAsync(p => p.IsActive && p.Id != excludePatientId && p.RecordNumber.ToUpper() == normalized);
+            .AnyAsync(p => p.IsActive && p.Id != excludePatientId
+                           && (p.RecordNumber.ToUpper() == normalized || (p.OriginalFolio != null && p.OriginalFolio.ToUpper() == normalized)));
     }
 
     /// <summary>

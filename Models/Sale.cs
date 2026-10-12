@@ -14,6 +14,12 @@ public class Sale : ISyncEntity
     public DateTime UpdatedAtUtc { get; set; }
 
     public string Folio { get; set; } = string.Empty; // TKT-yyyyMMdd-0001
+
+    /// <summary>
+    /// Paso 8.17: el folio con letra con que se cobró sin conexión (TKT-20261009-T1-0001), después de que la PC principal le
+    /// dio el número normal. El ticket reimpreso lo muestra y la búsqueda lo compara. null si nunca llevó letra.
+    /// </summary>
+    public string? OriginalFolio { get; set; }
     public DateTime Date { get; set; } = DateTime.Now;
     public string CustomerName { get; set; } = "Público General";
     public string PatientName { get => CustomerName; set => CustomerName = value; }

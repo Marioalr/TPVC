@@ -51,15 +51,20 @@ public static class TicketText
         return lines;
     }
 
-    /// <summary>Folio, fecha, paciente, forma de pago y quién atendió.</summary>
-    public static IReadOnlyList<string> MetaLines(SaleReceipt receipt) => new[]
+    /// <summary>
+    /// Folio, fecha, paciente, forma de pago y quién atendió. Un ticket cobrado sin conexión y ya regularizado (paso 8.17)
+    /// lleva debajo del folio el que se imprimió entonces.
+    /// </summary>
+    public static IReadOnlyList<string> MetaLines(SaleReceipt receipt)
     {
-        $"FOLIO:    {receipt.Folio}",
-        $"FECHA:    {receipt.Date.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}",
-        $"PACIENTE: {receipt.PatientName}",
-        $"PAGO:     {receipt.PaymentMethod}",
-        $"ATENDIÓ:  {receipt.Cashier}"
-    };
+        var lines = new List<string> { $"FOLIO:    {receipt.Folio}" };
+        if (!string.IsNullOrWhiteSpace(receipt.OriginalFolio)) lines.Add($"FOLIO SIN CONEXIÓN: {receipt.OriginalFolio}");
+        lines.Add($"FECHA:    {receipt.Date.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}");
+        lines.Add($"PACIENTE: {receipt.PatientName}");
+        lines.Add($"PAGO:     {receipt.PaymentMethod}");
+        lines.Add($"ATENDIÓ:  {receipt.Cashier}");
+        return lines;
+    }
 
     public static readonly IReadOnlyList<string> ItemHeaders = new[] { "Cant", "Descripción", "P.U.", "Total" };
 

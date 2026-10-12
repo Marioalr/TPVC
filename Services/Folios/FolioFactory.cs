@@ -5,6 +5,9 @@ using System.Text.RegularExpressions;
 
 namespace TPVC.Services.Folios;
 
+/// <summary>Un folio hecho sin conexión: su tipo, su serie normal (EXP-2026, TKT-20261009), el código del equipo y su número.</summary>
+public sealed record LetteredFolio(FolioKind Kind, string Series, string DeviceCode, int Number);
+
 /// <summary>Los folios que llevan un consecutivo: el expediente (EXP) y el ticket (TKT).</summary>
 public enum FolioKind
 {
@@ -97,6 +100,26 @@ public static class FolioFactory
         var lettered = LetteredSeries(Series(kind, localDate), deviceCode);
         int number = Math.Max(savedLast, MaxIn(lettered, existing)) + 1;
         return (Format(kind, lettered, number), lettered, number);
+    }
+
+    private static readonly Regex LetteredPattern = new(
+        "^(?<kind>EXP|TKT)-(?<period>[0-9]{4}|[0-9]{8})-(?<code>[PTC][0-9]{1,4})-(?<number>[0-9]{1,9})$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Paso 8.17: un folio con la letra de un equipo (EXP-2026-T1-001, TKT-20261009-P1-0001), con su serie normal (la que
+    /// recibe el número al regularizarlo). null si no lleva letra (o es CNS, que nunca se regulariza).
+    /// </summary>
+    public static LetteredFolio? ParseLettered(string? folio)
+    {
+        if (folio == null) return null;
+        var match = LetteredPattern.Match(folio.Trim());
+        if (!match.Success) return null;
+        var kind = match.Groups["kind"].Value.Equals("EXP", StringComparison.OrdinalIgnoreCase) ? FolioKind.Patient : FolioKind.Sale;
+        var period = match.Groups["period"].Value;
+        if (period.Length != (kind == FolioKind.Patient ? 4 : 8)) return null;
+        var series = (kind == FolioKind.Patient ? "EXP-" : "TKT-") + period;
+        return new LetteredFolio(kind, series, match.Groups["code"].Value.ToUpperInvariant(), int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture));
     }
 
     /// <summary>La nota de consulta: <c>CNS-20261009-103015</c>; sin conexión, <c>CNS-20261009-T1-103015</c>. Nunca se regulariza.</summary>

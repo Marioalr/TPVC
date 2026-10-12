@@ -50,7 +50,7 @@ public partial class TursoSyncService : IFolioSource
     private string? _foliosSeededUrl;
 
     /// <summary>Los contadores de la nube: activa, con URL y token, sin conflicto de identidad y con la nube verificada.</summary>
-    private async Task<bool> IsFolioCounterEnabledAsync(CancellationToken ct)
+    internal async Task<bool> IsFolioCounterEnabledAsync(CancellationToken ct)
     {
         var settings = _settingsService.CurrentSettings;
         if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl) || string.IsNullOrWhiteSpace(settings.AuthToken)) return false;
@@ -79,7 +79,7 @@ public partial class TursoSyncService : IFolioSource
     }
 
     /// <summary>El número de la nube, o null sin conexión, sin respuesta en 2 s, con la sincronización en pausa o con un error.</summary>
-    private async Task<int?> TryTakeFolioAsync(string series, int floor, CancellationToken ct)
+    internal async Task<int?> TryTakeFolioAsync(string series, int floor, CancellationToken ct)
     {
         // Cuota agotada, freno de consumo o token rechazado: no se pregunta
         if (PauseReason != Models.TursoSyncPauseReason.None) return null;
@@ -173,6 +173,20 @@ public partial class TursoSyncService : IFolioSource
         await client.ExecuteBatchAsync(statements, ct);
         return statements.Count;
     }
+
+    // =========================================================================
+    // REGULARIZACIÓN (paso 8.17)
+    // =========================================================================
+
+    /// <summary>Esta PC es la principal de la nube de ahora (según el registro de esta sesión).</summary>
+    internal bool IsPrimaryOnCurrentCloud =>
+        Registration is { IsPrimary: true } && _registryCheckedUrl == _settingsService.CurrentSettings.DatabaseUrl;
+
+    /// <summary>
+    /// Después de regularizar: las pantallas recargan pacientes y ventas (en el hilo de la interfaz) y, como son cambios de
+    /// este equipo, la sincronización automática los sube.
+    /// </summary>
+    internal void NotifyFoliosRegularized() => RunOnUiThread(() => _inventoryService?.NotifyAllChanged());
 
     // =========================================================================
     // FOLIOS REPETIDOS

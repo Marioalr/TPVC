@@ -139,7 +139,11 @@ public partial class PatientChartViewModel : ObservableObject
             if (p == null) return string.Empty;
             var parts = new List<string> { p.AgeDisplay };
             if (!string.IsNullOrWhiteSpace(p.Gender)) parts.Add(p.Gender);
-            if (!string.IsNullOrWhiteSpace(p.RecordNumber)) parts.Add(p.RecordNumber);
+            if (!string.IsNullOrWhiteSpace(p.RecordNumber))
+            {
+                // Paso 8.17: el folio con letra con que se creó sin conexión, si la PC principal ya le dio el normal
+                parts.Add(string.IsNullOrWhiteSpace(p.OriginalFolio) ? p.RecordNumber : $"{p.RecordNumber} (sin conexión: {p.OriginalFolio})");
+            }
             if (!string.IsNullOrWhiteSpace(p.BloodType) && p.BloodType != PatientFormViewModel.BloodTypeUnknown) parts.Add(p.BloodType);
             if (!string.IsNullOrWhiteSpace(p.Phone)) parts.Add(p.FormattedPhone);
             return string.Join(" · ", parts);

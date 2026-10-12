@@ -84,6 +84,12 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.35.0 (paso 8.17: regularización diaria de folios en la PC principal)
+
+- [ ] Sin internet, dar de alta un paciente y cobrar un ticket (salen con `-P1-`). Con internet otra vez y sin consulta ni venta abiertas, después de **Sincronizar ahora** el paciente queda con el siguiente `EXP-2026-…` y su ficha dice "(sin conexión: EXP-2026-P1-…)"; buscarlo por cualquiera de los dos folios lo encuentra. El ticket reimpreso dice "FOLIO SIN CONEXIÓN".
+- [ ] Con una consulta abierta o productos en la caja no cambia nada; al cerrarla, en la siguiente sincronización sí.
+- [ ] Para Kotlin: la tablet y el celular nunca regularizan; su búsqueda de pacientes y tickets compara también `OriginalFolio`, y el ticket reimpreso lleva "FOLIO SIN CONEXIÓN" (`contracts/golden/ticket-text.json`).
+
 ### v1.34.0 (paso 8.16: folios consecutivos desde Turso, lado de la PC)
 
 - [ ] Con la nube del consultorio: dar de alta un paciente en la PC y otro en una segunda computadora (o en la misma PC después de cambiar a mano el contador en el panel de Turso): los folios salen seguidos y sin repetir. En el panel de Turso, la tabla `FolioCounters` tiene `EXP-2026` y el día de hoy.

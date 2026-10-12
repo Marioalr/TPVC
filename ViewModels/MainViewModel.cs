@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.34.0";
+    private string _appVersion = "1.35.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -202,6 +202,11 @@ public partial class MainViewModel : ObservableObject
             ServicesCatalogVM,
             AppVersion,
             new DesignSystemViewModel(themeService, Notifications));
+
+        // Paso 8.17: en la PC principal, una vez al día después de una sincronización buena, los folios hechos sin conexión
+        // reciben su número normal; nunca con una consulta, una venta o el formulario de un paciente abiertos
+        _tursoSyncService.FolioRegularization.Host = new FolioRegularizationHost(MedicalRecordsVM, PosVM);
+        _tursoSyncService.FolioRegularization.AutoRun = true;
 
         // Suscribir eventos del estado de Turso
         _tursoSyncService.StatusChanged += (st, msg) => UpdateTursoStatus(st, msg);
