@@ -9,7 +9,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * Los insumos y servicios recuerdan por su identificador de la nube el producto o servicio con que se cargaron. Al recibir una consulta de otro equipo, + / − y la X mueven el renglón correcto de la cuenta aunque los números internos de cada equipo sean distintos (antes, entre dos PC, podían mover otro).
 * Con PC de versiones distintas, los renglones que cargó una PC anterior conservan sus números, y esa PC los sigue descontando bien si la consulta regresa a ella.
 * Lo que un equipo más nuevo agregue a un renglón se conserva cuando la PC lo vuelve a guardar.
-* Contrato de sincronización en la revisión 10 (regla «Hojas del paciente») y vector `contracts/golden/synced-json-columns.json` para la app de Kotlin. 583 pruebas.
+* Contrato de sincronización en la revisión 10 (regla «Hojas del paciente») y vector `contracts/golden/synced-json-columns.json` para la app de Kotlin. 589 pruebas.
 
 ## [1.35.0] - 2026-10-11
 
