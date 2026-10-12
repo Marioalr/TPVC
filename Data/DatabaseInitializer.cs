@@ -311,20 +311,32 @@ public static partial class DatabaseInitializer
         context.Products.AddRange(productos);
         context.SaveChanges();
 
-        // Sembrar movimientos iniciales de apertura
+        // Sembrar movimientos iniciales de apertura: uno por lote y otro sin lote para el resto (paso 8.19), así el libro de
+        // existencias cuadra desde el principio
+        var openedAt = DateTime.Now.AddDays(-10);
         foreach (var p in productos)
         {
-            context.InventoryMovements.Add(new InventoryMovement
+            int stock = 0;
+            var parts = p.Batches.Select(b => (Batch: (ProductBatch?)b, b.Quantity))
+                .Append((Batch: null, Quantity: p.CurrentStock - p.Batches.Sum(b => b.Quantity)))
+                .Where(part => part.Quantity > 0);
+            foreach (var (batch, quantity) in parts)
             {
-                ProductId = p.Id,
-                MovementType = MovementType.EntradaAjuste,
-                Quantity = p.CurrentStock,
-                StockBefore = 0,
-                StockAfter = p.CurrentStock,
-                Date = DateTime.Now.AddDays(-10),
-                Reason = "Inventario inicial de apertura de consultorio",
-                Responsible = "Dr. Titular"
-            });
+                context.InventoryMovements.Add(new InventoryMovement
+                {
+                    ProductId = p.Id,
+                    BatchId = batch?.Id,
+                    MovementType = MovementType.EntradaAjuste,
+                    Quantity = quantity,
+                    Delta = quantity,
+                    StockBefore = stock,
+                    StockAfter = stock + quantity,
+                    Date = openedAt,
+                    Reason = "Inventario inicial de apertura de consultorio",
+                    Responsible = "Dr. Titular"
+                });
+                stock += quantity;
+            }
         }
         context.SaveChanges();
     }

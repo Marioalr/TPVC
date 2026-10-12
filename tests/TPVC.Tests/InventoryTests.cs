@@ -1900,27 +1900,25 @@ public class InventoryTests
             CategoryId = category.Id,
             Price = 45m,
             Unit = "pza",
-            CurrentStock = 15,
             IsActive = true
         };
         await _inventoryService.SaveProductAsync(product);
 
-        var batch1 = new ProductBatch
+        // Paso 8.19: los lotes entran con su movimiento (SaveBatchAsync, que no dejaba ninguno, ya no existe)
+        await _inventoryService.ReceiveBatchAsync(new ProductBatch
         {
             ProductId = product.Id,
             BatchNumber = "LOT-FEFO-01",
             ExpirationDate = DateTime.Today.AddDays(5),
             Quantity = 5
-        };
-        var batch2 = new ProductBatch
+        });
+        await _inventoryService.ReceiveBatchAsync(new ProductBatch
         {
             ProductId = product.Id,
             BatchNumber = "LOT-FEFO-02",
             ExpirationDate = DateTime.Today.AddDays(25),
             Quantity = 10
-        };
-        await _inventoryService.SaveBatchAsync(batch1);
-        await _inventoryService.SaveBatchAsync(batch2);
+        });
 
         // Descontar 8 unidades: debe agotar batch1 (5) y tomar 3 de batch2
         await _inventoryService.RegisterQuickConsultationUsageAsync(
@@ -1943,11 +1941,21 @@ public class InventoryTests
         Assert.IsNotNull(b2);
         Assert.AreEqual(7, b2.Quantity, "El segundo lote debe tener 10 - 3 = 7 unidades");
 
-        var movements = await _inventoryService.GetRecentMovementsAsync(5);
-        var mov = movements.FirstOrDefault(m => m.ProductId == product.Id);
+        // Un movimiento por lote en el libro…
+        var rows = (await _inventoryService.GetRecentMovementsAsync(5))
+            .Where(m => m.ProductId == product.Id && m.MovementType == MovementType.SalidaConsulta)
+            .ToList();
+        Assert.HasCount(2, rows);
+        Assert.AreEqual(-5, rows.Single(m => m.BatchId == b1.Id).Delta);
+        Assert.AreEqual(-3, rows.Single(m => m.BatchId == b2.Id).Delta);
+
+        // …y un solo renglón en el Kardex, como antes
+        var mov = (await _inventoryService.GetKardexAsync(5)).FirstOrDefault(m => m.ProductId == product.Id);
         Assert.IsNotNull(mov);
         Assert.AreEqual(MovementType.SalidaConsulta, mov.MovementType);
         Assert.AreEqual(8, mov.Quantity);
+        Assert.AreEqual(15, mov.StockBefore);
+        Assert.AreEqual(7, mov.StockAfter);
     }
 
     [TestMethod]

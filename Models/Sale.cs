@@ -27,6 +27,15 @@ public class Sale : ISyncEntity
     public string Cashier { get; set; } = string.Empty;
     public decimal Total { get; set; }
 
+    /// <summary>
+    /// Paso 8.19: cómo se cancela. 1 = la venta dejó un movimiento por lote con su renglón (<see cref="InventoryMovement.SaleItemId"/>)
+    /// y cada uno se devuelve a su lote; 0 = venta anterior, que se devuelve por producto con los movimientos que dicen
+    /// "Venta POS {folio}". Toda venta nueva lleva <see cref="CurrentLedgerVersion"/>.
+    /// </summary>
+    public int LedgerVersion { get; set; }
+
+    public const int CurrentLedgerVersion = 1;
+
     public bool IsCancelled { get; set; }
     public DateTime? CancelledAt { get; set; }
     public string? CancellationReason { get; set; }

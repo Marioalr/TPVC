@@ -251,8 +251,28 @@ public partial class TursoSyncEndToEndTests
     [TestMethod]
     public async Task Deletions_PropagateThroughTombstones()
     {
+        // Paso 8.19: los lotes ya no se borran; la nota de una consulta sí
         var pc = CreateDevice("pc", seed: true);
-        var batch = (await pc.Inventory.GetBatchesAsync()).First();
+        var patient = (await pc.Inventory.GetPatientsAsync()).First();
+        await pc.Inventory.AddConsultationNoteAsync(patient.Id, new PatientConsultation { Folio = "CNS-BORRAR-001", ChiefComplaint = "Nota que se borra" });
+        var note = (await pc.Inventory.GetPatientConsultationsAsync(patient.Id)).Single(c => c.Folio == "CNS-BORRAR-001");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var tablet = CreateDevice("tablet", seed: false);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        using (var db = tablet.Factory.CreateDbContext()) Assert.IsTrue(db.PatientConsultations.Any(c => c.SyncId == note.SyncId));
+
+        Assert.IsTrue(await pc.Inventory.DeleteConsultationNoteAsync(patient.Id, "CNS-BORRAR-001"));
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        using (var db = tablet.Factory.CreateDbContext()) Assert.IsFalse(db.PatientConsultations.Any(c => c.SyncId == note.SyncId));
+    }
+
+    [TestMethod]
+    public async Task ClosedBatch_ReachesTheOtherDevice_StillThere()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        var batch = (await pc.Inventory.GetBatchesAsync()).First(b => b.Quantity > 0);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         var tablet = CreateDevice("tablet", seed: false);
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
@@ -261,7 +281,10 @@ public partial class TursoSyncEndToEndTests
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
 
-        Assert.IsFalse((await tablet.Inventory.GetBatchesAsync()).Any(b => b.SyncId == batch.SyncId));
+        var onTablet = (await tablet.Inventory.GetBatchesAsync()).Single(b => b.SyncId == batch.SyncId);
+        Assert.IsNotNull(onTablet.ClosedAtUtc, "El lote cerrado llega cerrado, no borrado");
+        Assert.AreEqual(0, onTablet.Quantity);
+        Assert.IsTrue(onTablet.IsDepleted);
     }
 
     [TestMethod]

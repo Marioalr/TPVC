@@ -205,10 +205,17 @@ public class DataLayerTests
         var adjust = (await _service.GetRecentMovementsAsync(5)).First(m => m.ProductId == product.Id);
         Assert.AreEqual(MovementType.AjusteInventario, adjust.MovementType);
         Assert.AreEqual(7, adjust.Quantity);
+        Assert.AreEqual(-7, adjust.Delta, "Paso 8.19: lleva el libro del lote a 0");
+        Assert.AreEqual(batch.Id, adjust.BatchId);
 
+        // Paso 8.19: el lote ya no se borra, se cierra (y deja de verse)
         using var db = NewContext();
-        Assert.IsTrue(await db.SyncTombstones.AnyAsync(t => t.EntityType == nameof(ProductBatch)),
-            "El borrado físico debe quedar registrado para sincronización");
+        var closed = await db.ProductBatches.SingleAsync(b => b.Id == batch.Id);
+        Assert.IsNotNull(closed.ClosedAtUtc);
+        Assert.AreEqual(0, closed.Quantity);
+        Assert.IsTrue(closed.IsDepleted);
+        Assert.IsFalse(await db.SyncTombstones.AnyAsync(t => t.EntityType == nameof(ProductBatch)), "Sin borrado, sin lápida");
+        Assert.IsTrue((await StockLedger.VerifyAsync(db)).IsClean);
     }
 
     [TestMethod]

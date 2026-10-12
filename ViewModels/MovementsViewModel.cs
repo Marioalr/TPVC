@@ -41,7 +41,7 @@ public partial class MovementsViewModel : ObservableObject
         "Ventas" => movement.MovementType == MovementType.SalidaVenta,
         "Consultas" => movement.MovementType == MovementType.SalidaConsulta,
         "Bajas" => movement.MovementType is MovementType.SalidaCaducidad or MovementType.SalidaMerma,
-        "Ajustes" => movement.MovementType == MovementType.AjusteInventario,
+        "Ajustes" => movement.MovementType is MovementType.AjusteInventario or MovementType.SaldoInicial,
         _ => true
     };
 
@@ -73,7 +73,8 @@ public partial class MovementsViewModel : ObservableObject
 
     public async Task LoadMovementsAsync()
     {
-        _loadedMovements = await _inventoryService.GetRecentMovementsAsync(MovementsPageSize);
+        // Paso 8.19: una operación por renglón aunque haya salido de varios lotes (KardexRows)
+        _loadedMovements = await _inventoryService.GetKardexAsync(MovementsPageSize);
         ApplySearchFilter();
     }
 

@@ -52,6 +52,12 @@ public partial class ProductDialogViewModel : ObservableObject
     [ObservableProperty]
     private int _currentStock = 0;
 
+    /// <summary>
+    /// Paso 8.19: la existencia que mostró el diálogo al abrirse. Si el campo no cambió, guardar no toca la existencia (una
+    /// venta que bajó mientras tanto no se revierte); null en un producto nuevo.
+    /// </summary>
+    public int? OriginalStock { get; private set; }
+
     [ObservableProperty]
     private int _minStock = 5;
 
@@ -153,6 +159,7 @@ public partial class ProductDialogViewModel : ObservableObject
             UnitCost = existing.UnitCost;
             CostExcludesVat = existing.CostExcludesVat;
             CurrentStock = existing.CurrentStock;
+            OriginalStock = existing.CurrentStock;
             MinStock = existing.MinStock;
             OptimalStock = existing.OptimalStock;
             Location = existing.Location ?? string.Empty;
@@ -175,6 +182,7 @@ public partial class ProductDialogViewModel : ObservableObject
         UnitCost = 0m;
         CostExcludesVat = false;
         CurrentStock = 0;
+        OriginalStock = null;
         MinStock = 5;
         OptimalStock = 20;
         Location = string.Empty;
@@ -248,7 +256,7 @@ public partial class ProductDialogViewModel : ObservableObject
                 Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()
             };
 
-            await _inventoryService.SaveProductAsync(product);
+            await _inventoryService.SaveProductAsync(product, IsNew ? null : OriginalStock);
             Saved?.Invoke();
 
             if (IsNew)

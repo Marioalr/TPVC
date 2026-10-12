@@ -639,6 +639,8 @@ public partial class TursoSyncService
         {
             using var db = _contextFactory.CreateDbContext();
             DbMeta.Remove(db, DbMeta.CloudDownloadPending);
+            // Paso 8.19: las existencias de la nube traen su propia historia; la foto del libro se toma con ellas
+            await StockLedger.RetakeBaselineAsync(db, ct);
             AppLogger.Info("Turso: terminó la descarga completa de la nube.");
         }
 
@@ -1140,6 +1142,8 @@ public partial class TursoSyncService
         await DbMeta.SetAsync(db, DbMeta.CloudDownloadPending, "1", ct);
         // Lo que había aquí ya no cuenta: tampoco un respaldo restaurado pendiente de decidir
         DbMeta.Remove(db, DbMeta.RestoredWithCloud);
+        // La foto del libro de existencias era de lo que había aquí: se vuelve a tomar al terminar de bajar (paso 8.19)
+        DbMeta.Remove(db, DbMeta.StockLedgerBaseline);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);

@@ -37,6 +37,10 @@ public static partial class DatabaseInitializer
             // Fuera del atajo de user_version: un respaldo viejo restaurado también recibe los triggers, y un
             // trigger cuya definición cambió (una columna nueva) se vuelve a crear
             SyncChangeLog.EnsureInstalled(context);
+
+            // Paso 8.19: la foto de las diferencias que la base ya traía entre sus existencias y el libro de movimientos,
+            // una sola vez (también en un respaldo anterior que se restaura): la verificación solo reporta lo nuevo
+            Services.StockLedger.EnsureBaseline(context);
         }
         finally
         {

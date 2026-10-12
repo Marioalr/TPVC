@@ -62,7 +62,7 @@ public partial class DashboardViewModel : ObservableObject
     {
         Metrics = await _inventoryService.GetDashboardMetricsAsync();
 
-        var movements = await _inventoryService.GetRecentMovementsAsync(15);
+        var movements = await _inventoryService.GetKardexAsync(15);
         RecentMovements = new ObservableCollection<InventoryMovement>(movements);
 
         var lowStock = await _inventoryService.GetProductsAsync(onlyLowStock: true);

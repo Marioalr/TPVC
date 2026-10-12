@@ -29,6 +29,15 @@ public class ProductBatch : ISyncEntity
     public string? Notes { get; set; }
     public bool IsDepleted { get; set; }
 
+    /// <summary>
+    /// Paso 8.19: cuándo se cerró (UTC). Un lote ya no se borra: «Eliminar lote» lo cierra, con su cantidad en 0, y deja un
+    /// movimiento que lleva su libro a 0. Un movimiento de otro equipo que llega después sigue en este lote. FEFO lo salta y
+    /// las pantallas no lo muestran. null = abierto.
+    /// </summary>
+    public DateTime? ClosedAtUtc { get; set; }
+
+    public bool IsClosed => ClosedAtUtc != null;
+
     // Helpers
     public int DaysRemaining => DaysRemainingOn(ClinicClock.Today);
 

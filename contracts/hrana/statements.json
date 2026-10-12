@@ -1,5 +1,5 @@
 {
-  "contract": 10,
+  "contract": 11,
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.HranaStatements.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [
@@ -183,21 +183,6 @@
       "pageSize": 500
     },
     {
-      "name": "page.InventoryMovements",
-      "sql": "SELECT * FROM \"InventoryMovements\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
-      "args": [
-        "SyncedAtUtc del cursor",
-        "SyncedAtUtc del cursor",
-        "SyncedAtUtc del cursor",
-        "SyncId del cursor",
-        "DeviceId de este equipo"
-      ],
-      "when": "Una página de la bajada. El cursor empieza en '' y '' y es (SyncedAtUtc, SyncId) de la última fila aplicada, sin pasar de la marca de agua. Una página que no se llena termina la tabla.",
-      "sqlWithoutOwnFilter": "SELECT * FROM \"InventoryMovements\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
-      "whenWithoutOwnFilter": "La primera descarga después de unirse o de un cambio de generación: también baja lo que subió este equipo (sin el último argumento).",
-      "pageSize": 500
-    },
-    {
       "name": "page.Sales",
       "sql": "SELECT * FROM \"Sales\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
       "args": [
@@ -224,6 +209,21 @@
       ],
       "when": "Una página de la bajada. El cursor empieza en '' y '' y es (SyncedAtUtc, SyncId) de la última fila aplicada, sin pasar de la marca de agua. Una página que no se llena termina la tabla.",
       "sqlWithoutOwnFilter": "SELECT * FROM \"SaleItems\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
+      "whenWithoutOwnFilter": "La primera descarga después de unirse o de un cambio de generación: también baja lo que subió este equipo (sin el último argumento).",
+      "pageSize": 500
+    },
+    {
+      "name": "page.InventoryMovements",
+      "sql": "SELECT * FROM \"InventoryMovements\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) AND (\"OriginDeviceId\" IS NULL OR \"OriginDeviceId\" <> ?) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
+      "args": [
+        "SyncedAtUtc del cursor",
+        "SyncedAtUtc del cursor",
+        "SyncedAtUtc del cursor",
+        "SyncId del cursor",
+        "DeviceId de este equipo"
+      ],
+      "when": "Una página de la bajada. El cursor empieza en '' y '' y es (SyncedAtUtc, SyncId) de la última fila aplicada, sin pasar de la marca de agua. Una página que no se llena termina la tabla.",
+      "sqlWithoutOwnFilter": "SELECT * FROM \"InventoryMovements\" WHERE \"SyncedAtUtc\" >= ? AND (\"SyncedAtUtc\" > ? OR (\"SyncedAtUtc\" = ? AND \"SyncId\" > ?)) ORDER BY \"SyncedAtUtc\", \"SyncId\" LIMIT 500;",
       "whenWithoutOwnFilter": "La primera descarga después de unirse o de un cambio de generación: también baja lo que subió este equipo (sin el último argumento).",
       "pageSize": 500
     },

@@ -199,7 +199,12 @@ public partial class InventoryService
             .AnyAsync(p => p.IsActive && p.Id != excludeProductId && p.Code.ToUpper() == normalized);
     }
 
-    public async Task SaveProductAsync(Product product)
+    /// <param name="originalStock">
+    /// Paso 8.19: la existencia que mostró el diálogo del producto al abrirse. Si el campo no cambió, la existencia no se
+    /// toca: una venta que bajó mientras el diálogo estaba abierto no se revierte. Sin ella se compara con la guardada,
+    /// como antes.
+    /// </param>
+    public async Task SaveProductAsync(Product product, int? originalStock = null)
     {
         product.Code = product.Code.Trim();
         product.Name = product.Name.Trim();
@@ -220,13 +225,14 @@ public partial class InventoryService
             db.Products.Add(product);
 
             // Si tiene stock inicial, registrar movimiento de entrada (mismo guardado atómico)
-            if (product.CurrentStock > 0)
+            if (product.CurrentStock != 0)
             {
                 db.InventoryMovements.Add(new InventoryMovement
                 {
                     Product = product,
-                    MovementType = MovementType.EntradaAjuste,
-                    Quantity = product.CurrentStock,
+                    MovementType = product.CurrentStock > 0 ? MovementType.EntradaAjuste : MovementType.AjusteInventario,
+                    Quantity = Math.Abs(product.CurrentStock),
+                    Delta = product.CurrentStock,
                     StockBefore = 0,
                     StockAfter = product.CurrentStock,
                     Date = now,
@@ -243,20 +249,25 @@ public partial class InventoryService
                 throw new InvalidOperationException("El producto ya no existe en la base de datos.");
             }
 
-            // Un cambio manual de existencias se registra en el Kardex como ajuste
-            if (existing.CurrentStock != product.CurrentStock)
+            // Un cambio manual de existencias se registra en el Kardex como ajuste, sin lote. Solo si el campo cambió: si
+            // no, lo guardado (con lo que se vendió mientras tanto) se queda
+            bool typed = product.CurrentStock != (originalStock ?? existing.CurrentStock);
+            int delta = product.CurrentStock - existing.CurrentStock;
+            if (typed && delta != 0)
             {
                 db.InventoryMovements.Add(new InventoryMovement
                 {
                     ProductId = existing.Id,
                     MovementType = MovementType.AjusteInventario,
-                    Quantity = Math.Abs(product.CurrentStock - existing.CurrentStock),
+                    Quantity = Math.Abs(delta),
+                    Delta = delta,
                     StockBefore = existing.CurrentStock,
                     StockAfter = product.CurrentStock,
                     Date = now,
                     Reason = "Ajuste manual de existencias desde la ficha del producto",
                     Responsible = "Dr. Consulta"
                 });
+                existing.CurrentStock = product.CurrentStock;
             }
 
             existing.Code = product.Code;
@@ -269,7 +280,6 @@ public partial class InventoryService
             existing.UnitCost = product.UnitCost;
             existing.CostExcludesVat = product.CostExcludesVat;
             existing.SupplierCode = product.SupplierCode;
-            existing.CurrentStock = product.CurrentStock;
             existing.MinStock = product.MinStock;
             existing.OptimalStock = product.OptimalStock;
             existing.Location = product.Location;
@@ -328,33 +338,6 @@ public partial class InventoryService
     }
 
     /// <summary>
-    /// Guarda el lote tal cual (no modifica existencias). Para recepciones de mercancía
-    /// usar <see cref="ReceiveBatchAsync"/>, que además suma stock y registra el Kardex.
-    /// </summary>
-    public async Task SaveBatchAsync(ProductBatch batch)
-    {
-        await using var db = CreateContext();
-        if (batch.Id == 0)
-        {
-            batch.Product = null;
-            db.Entry(batch).State = EntityState.Added;
-        }
-        else
-        {
-            var existing = await db.ProductBatches.FindAsync(batch.Id)
-                ?? throw new InvalidOperationException("El lote ya no existe.");
-            existing.BatchNumber = batch.BatchNumber;
-            existing.Quantity = batch.Quantity;
-            existing.ExpirationDate = batch.ExpirationDate;
-            existing.ReceivedDate = batch.ReceivedDate;
-            existing.Notes = batch.Notes;
-            existing.IsDepleted = batch.IsDepleted;
-        }
-        await db.SaveChangesAsync();
-        NotifyInventoryChanged();
-    }
-
-    /// <summary>
     /// Recepción de un lote nuevo: crea el lote, suma existencias y registra la entrada
     /// en el Kardex en una sola transacción.
     /// </summary>
@@ -380,6 +363,7 @@ public partial class InventoryService
             Batch = batch,
             MovementType = MovementType.EntradaCompra,
             Quantity = batch.Quantity,
+            Delta = batch.Quantity,
             StockBefore = stockBefore,
             StockAfter = product.CurrentStock,
             Date = DateTime.Now,
@@ -392,76 +376,119 @@ public partial class InventoryService
     }
 
     /// <summary>
-    /// Elimina un lote. Si aún tenía piezas, se descuentan de las existencias del producto
-    /// con un ajuste en el Kardex para que stock y lotes no se desalineen.
+    /// «Eliminar lote» (paso 8.19): el lote ya no se borra, se cierra (<see cref="ProductBatch.ClosedAtUtc"/>, con su
+    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto, sin tope, y un movimiento con su lote
+    /// lleva su libro a 0 (Delta = −libro del lote). Un movimiento de otro equipo que llegue después sigue en este lote.
     /// </summary>
     public async Task DeleteBatchAsync(int id)
     {
         await using var db = CreateContext();
+        await using var transaction = await db.Database.BeginTransactionAsync();
         var batch = await db.ProductBatches.Include(b => b.Product).FirstOrDefaultAsync(b => b.Id == id);
-        if (batch == null) return;
+        if (batch?.Product == null || batch.IsClosed) return;
 
-        if (!batch.IsDepleted && batch.Quantity > 0 && batch.Product != null)
+        int ledger = (await db.InventoryMovements
+                .Where(m => m.BatchId == id)
+                .Select(m => new { m.Delta, m.MovementType, m.Quantity, m.StockBefore, m.StockAfter })
+                .ToListAsync())
+            .Sum(m => StockLedger.EffectiveDelta(m.Delta, m.MovementType, m.Quantity, m.StockBefore, m.StockAfter));
+
+        var now = DateTime.Now;
+        var product = batch.Product;
+        if (batch.Quantity != 0) product.UpdatedAt = now;
+
+        void Close(int? batchId, int delta)
         {
-            var product = batch.Product;
-            int stockBefore = product.CurrentStock;
-            int removed = Math.Min(batch.Quantity, stockBefore);
-            product.CurrentStock = stockBefore - removed;
-            product.UpdatedAt = DateTime.Now;
-
-            if (removed > 0)
+            if (delta == 0) return;
+            int before = product.CurrentStock;
+            product.CurrentStock = before + delta;
+            db.InventoryMovements.Add(new InventoryMovement
             {
-                db.InventoryMovements.Add(new InventoryMovement
-                {
-                    ProductId = product.Id,
-                    MovementType = MovementType.AjusteInventario,
-                    Quantity = removed,
-                    StockBefore = stockBefore,
-                    StockAfter = product.CurrentStock,
-                    Date = DateTime.Now,
-                    Reason = $"Eliminación del lote {batch.BatchNumber}",
-                    Responsible = "Dr. Consulta"
-                });
-            }
+                ProductId = product.Id,
+                BatchId = batchId,
+                MovementType = MovementType.AjusteInventario,
+                Quantity = Math.Abs(delta),
+                Delta = delta,
+                StockBefore = before,
+                StockAfter = product.CurrentStock,
+                Date = now,
+                Reason = $"Eliminación del lote {batch.BatchNumber}",
+                Responsible = "Dr. Consulta"
+            });
         }
 
-        db.ProductBatches.Remove(batch);
+        // El libro del lote a 0, con su lote. Un lote de antes del Kardex completo puede mostrar otra cantidad que su libro
+        // (FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento): esa diferencia sale de las piezas sin
+        // lote, así las existencias del producto bajan lo que el lote mostraba y su libro baja lo mismo. En el Kardex las
+        // dos partes son un renglón
+        Close(batch.Id, -ledger);
+        Close(null, -(batch.Quantity - ledger));
+
+        batch.Quantity = 0;
+        batch.IsDepleted = true;
+        batch.ClosedAtUtc = db.SyncClock.UtcNow + db.SyncClock.OffsetFor(db);
+
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         NotifyInventoryChanged();
     }
 
+    /// <summary>Lo que sale de un lote, o con <see cref="Batch"/> null de las piezas sin lote (paso 8.19).</summary>
+    internal readonly record struct BatchAllocation(ProductBatch? Batch, int Quantity);
+
     /// <summary>
-    /// Descuenta piezas de los lotes activos (FEFO: primero el que caduca antes) y devuelve
-    /// el Id del primer lote afectado. Si se indica un lote preferido, se descuenta de él primero.
+    /// Descuenta piezas de los lotes abiertos con piezas (FEFO: primero el que caduca antes; si se indica un lote
+    /// preferido, primero ese) y regresa cuánto salió de cada uno, más lo que no alcanzó con los lotes, sin lote.
     /// </summary>
-    private static int? DeductFromBatches(Product product, int quantity, int? preferredBatchId = null)
+    internal static List<BatchAllocation> DeductFromBatches(Product product, int quantity, int? preferredBatchId = null)
     {
         int remaining = quantity;
         var activeBatches = product.Batches
-            .Where(b => !b.IsDepleted && b.Quantity > 0)
+            .Where(b => !b.IsClosed && !b.IsDepleted && b.Quantity > 0)
             .OrderBy(b => b.Id == preferredBatchId ? 0 : 1)
             .ThenBy(b => b.ExpirationDate)
             .ToList();
 
-        int? primaryBatchId = null;
+        var allocations = new List<BatchAllocation>();
         foreach (var batch in activeBatches)
         {
             if (remaining <= 0) break;
-            primaryBatchId ??= batch.Id;
-
-            if (batch.Quantity <= remaining)
-            {
-                remaining -= batch.Quantity;
-                batch.Quantity = 0;
-                batch.IsDepleted = true;
-            }
-            else
-            {
-                batch.Quantity -= remaining;
-                remaining = 0;
-            }
+            int taken = Math.Min(batch.Quantity, remaining);
+            batch.Quantity -= taken;
+            if (batch.Quantity == 0) batch.IsDepleted = true;
+            remaining -= taken;
+            allocations.Add(new BatchAllocation(batch, taken));
         }
-        return primaryBatchId;
+        if (remaining > 0) allocations.Add(new BatchAllocation(null, remaining));
+        return allocations;
+    }
+
+    /// <summary>
+    /// Paso 8.19: una salida deja un movimiento por cada lote del que salió y otro sin lote para el resto, con la existencia
+    /// del producto bajando renglón por renglón. <paramref name="template"/> trae el tipo, la fecha, el motivo, el
+    /// responsable y el renglón del ticket; no se guarda.
+    /// </summary>
+    private static void AddOutgoingMovements(AppDbContext db, Product product, IEnumerable<BatchAllocation> allocations, InventoryMovement template)
+    {
+        foreach (var allocation in allocations)
+        {
+            int before = product.CurrentStock;
+            product.CurrentStock = before - allocation.Quantity;
+            db.InventoryMovements.Add(new InventoryMovement
+            {
+                ProductId = product.Id,
+                BatchId = allocation.Batch?.Id,
+                SaleItem = template.SaleItem,
+                MovementType = template.MovementType,
+                Quantity = allocation.Quantity,
+                Delta = -allocation.Quantity,
+                StockBefore = before,
+                StockAfter = product.CurrentStock,
+                Date = template.Date,
+                Reason = template.Reason,
+                Responsible = template.Responsible
+            });
+        }
     }
 
     private static void EnsureStock(Product product, int quantity)
@@ -488,20 +515,12 @@ public partial class InventoryService
 
         EnsureStock(product, quantity);
 
-        int stockBefore = product.CurrentStock;
-        product.CurrentStock = stockBefore - quantity;
-        product.UpdatedAt = DateTime.Now;
-        int? primaryBatchId = DeductFromBatches(product, quantity);
-
-        db.InventoryMovements.Add(new InventoryMovement
+        var now = DateTime.Now;
+        product.UpdatedAt = now;
+        AddOutgoingMovements(db, product, DeductFromBatches(product, quantity), new InventoryMovement
         {
-            ProductId = product.Id,
-            BatchId = primaryBatchId,
             MovementType = MovementType.SalidaConsulta,
-            Quantity = quantity,
-            StockBefore = stockBefore,
-            StockAfter = product.CurrentStock,
-            Date = DateTime.Now,
+            Date = now,
             Reason = string.IsNullOrWhiteSpace(notes) ? "Uso / aplicación durante consulta médica" : notes,
             Responsible = responsible ?? "Dr. Consulta"
         });
@@ -576,6 +595,7 @@ public partial class InventoryService
         var sale = new Sale
         {
             Folio = await NextSaleFolioAsync(db, now),
+            LedgerVersion = Sale.CurrentLedgerVersion,
             Date = now,
             CustomerName = clientText,
             PaymentMethod = methodText,
@@ -587,25 +607,8 @@ public partial class InventoryService
             if (line.ProductId > 0)
             {
                 var product = products[line.ProductId];
-                int stockBefore = product.CurrentStock;
-                product.CurrentStock = stockBefore - line.Quantity;
                 product.UpdatedAt = now;
-                int? primaryBatchId = DeductFromBatches(product, line.Quantity);
-
-                db.InventoryMovements.Add(new InventoryMovement
-                {
-                    ProductId = product.Id,
-                    BatchId = primaryBatchId,
-                    MovementType = MovementType.SalidaVenta,
-                    Quantity = line.Quantity,
-                    StockBefore = stockBefore,
-                    StockAfter = product.CurrentStock,
-                    Date = now,
-                    Reason = $"Venta POS {sale.Folio} - Paciente/Cliente: {clientText} ({methodText})",
-                    Responsible = responsibleText
-                });
-
-                sale.Items.Add(new SaleItem
+                var item = new SaleItem
                 {
                     ProductId = product.Id,
                     Code = line.Code ?? product.Code,
@@ -613,6 +616,17 @@ public partial class InventoryService
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
                     Subtotal = line.Quantity * line.UnitPrice
+                };
+                sale.Items.Add(item);
+
+                // Paso 8.19: un movimiento por lote (y sin lote para el resto), cada uno con su renglón del ticket
+                AddOutgoingMovements(db, product, DeductFromBatches(product, line.Quantity), new InventoryMovement
+                {
+                    SaleItem = item,
+                    MovementType = MovementType.SalidaVenta,
+                    Date = now,
+                    Reason = SaleMovementReason(sale.Folio, clientText, methodText),
+                    Responsible = responsibleText
                 });
             }
             else
@@ -641,6 +655,13 @@ public partial class InventoryService
         NotifySalesChanged();
         return sale;
     }
+
+    /// <summary>El motivo de la salida de una venta en el Kardex: "Venta POS {folio} - Paciente/Cliente: … (Efectivo)".</summary>
+    private static string SaleMovementReason(string folio, string client, string method) =>
+        $"{SaleMovementReasonPrefix(folio)}Paciente/Cliente: {client} ({method})";
+
+    /// <summary>Así empieza el motivo de las salidas de una venta (desde v1.5.0): con él una venta anterior al paso 8.19 encuentra las suyas.</summary>
+    private static string SaleMovementReasonPrefix(string folio) => $"Venta POS {folio} - ";
 
     /// <summary>
     /// El folio del ticket (paso 8.16): del contador de la nube (2 s como máximo, dentro de la transacción de la venta) o,
@@ -712,8 +733,11 @@ public partial class InventoryService
     }
 
     /// <summary>
-    /// Cancela o devuelve un ticket previamente cobrado, reintegrando de forma atómica
-    /// el stock de todos los productos y generando los movimientos de Kardex de devolución.
+    /// Cancela o devuelve un ticket previamente cobrado, reintegrando de forma atómica las existencias de sus productos con
+    /// movimientos de devolución. Paso 8.19: cada salida vuelve a su propio lote, con un SyncId determinista: dos equipos
+    /// que cancelan el mismo ticket escriben la misma fila, y si la devolución ya está aquí la cancelación cuenta como hecha.
+    /// Una venta con <see cref="Sale.LedgerVersion"/> 1 cuyos movimientos no han llegado completos no se cancela
+    /// ("Sincronice primero").
     /// </summary>
     public async Task<bool> CancelSaleAsync(int saleId, string reason = "Devolución / Cancelación de ticket", string responsible = "Dr. Titular")
     {
@@ -738,61 +762,54 @@ public partial class InventoryService
             throw new InvalidOperationException($"El ticket {sale.Folio} ya se encuentra cancelado.");
         }
 
+        var returns = await PlanSaleReturnsAsync(db, sale);
+
+        // Las devoluciones que ya están aquí (este ticket se canceló en otro equipo y llegaron antes que el ticket
+        // cancelado) cuentan como hechas: no se vuelven a sumar
+        var returnIds = returns.Select(r => r.SyncId).ToList();
+        var alreadyReturned = (await db.InventoryMovements.Where(m => returnIds.Contains(m.SyncId)).Select(m => m.SyncId).ToListAsync()).ToHashSet();
+
         var now = DateTime.Now;
         sale.IsCancelled = true;
         sale.CancelledAt = now;
         sale.CancellationReason = reasonText;
 
-        // Reintegrar stock de productos al inventario
-        var productItemGroups = sale.Items
-            .Where(i => !i.IsService && i.ProductId.HasValue && i.Quantity > 0)
-            .GroupBy(i => i.ProductId!.Value)
-            .ToList();
+        var pending = returns.Where(r => !alreadyReturned.Contains(r.SyncId)).ToList();
+        var productIds = pending.Select(r => r.ProductId).Distinct().ToList();
+        var products = await db.Products
+            .Include(p => p.Batches)
+            .Where(p => productIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id);
 
-        if (productItemGroups.Count > 0)
+        foreach (var planned in pending)
         {
-            var productIds = productItemGroups.Select(g => g.Key).ToList();
-            var products = await db.Products
-                .Include(p => p.Batches)
-                .Where(p => productIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id);
+            if (!products.TryGetValue(planned.ProductId, out var product)) continue;
+            int stockBefore = product.CurrentStock;
+            product.CurrentStock = stockBefore + planned.Quantity;
+            product.UpdatedAt = now;
 
-            foreach (var group in productItemGroups)
+            // A su propio lote. Un lote agotado vuelve a contar para FEFO; uno cerrado se queda cerrado
+            if (planned.BatchId is int batchId && product.Batches.FirstOrDefault(b => b.Id == batchId) is { } batch)
             {
-                if (products.TryGetValue(group.Key, out var product))
-                {
-                    int totalQtyToRestore = group.Sum(i => i.Quantity);
-                    int stockBefore = product.CurrentStock;
-                    product.CurrentStock = stockBefore + totalQtyToRestore;
-                    product.UpdatedAt = now;
-
-                    // Reintegrar a un lote activo si existe
-                    // Se reintegra al lote vigente que caduca más tarde (el que se habría vendido al final por FEFO)
-                    var targetBatch = product.Batches
-                                          .Where(b => b.ExpirationDate.Date >= DateTime.Today)
-                                          .OrderByDescending(b => b.ExpirationDate)
-                                          .FirstOrDefault()
-                                      ?? product.Batches.OrderByDescending(b => b.ExpirationDate).FirstOrDefault();
-                    if (targetBatch != null)
-                    {
-                        targetBatch.Quantity += totalQtyToRestore;
-                        targetBatch.IsDepleted = false; // un lote agotado vuelve a contar para FEFO
-                    }
-
-                    db.InventoryMovements.Add(new InventoryMovement
-                    {
-                        ProductId = product.Id,
-                        BatchId = targetBatch?.Id,
-                        MovementType = MovementType.EntradaDevolucion,
-                        Quantity = totalQtyToRestore,
-                        StockBefore = stockBefore,
-                        StockAfter = product.CurrentStock,
-                        Date = now,
-                        Reason = $"Devolución por cancelación de ticket {sale.Folio}: {reasonText}",
-                        Responsible = responsibleText
-                    });
-                }
+                batch.Quantity += planned.Quantity;
+                if (!batch.IsClosed && batch.Quantity > 0) batch.IsDepleted = false;
             }
+
+            db.InventoryMovements.Add(new InventoryMovement
+            {
+                SyncId = planned.SyncId,
+                ProductId = product.Id,
+                BatchId = planned.BatchId,
+                SaleItemId = planned.SaleItemId,
+                MovementType = MovementType.EntradaDevolucion,
+                Quantity = planned.Quantity,
+                Delta = planned.Quantity,
+                StockBefore = stockBefore,
+                StockAfter = product.CurrentStock,
+                Date = now,
+                Reason = $"Devolución por cancelación de ticket {sale.Folio}: {reasonText}",
+                Responsible = responsibleText
+            });
         }
 
         await db.SaveChangesAsync();
@@ -801,6 +818,69 @@ public partial class InventoryService
         NotifyInventoryChanged();
         NotifySalesChanged();
         return true;
+    }
+
+    /// <summary>Una devolución por escribir al cancelar un ticket: su SyncId determinista, adónde regresa y cuántas piezas.</summary>
+    private sealed record PlannedReturn(Guid SyncId, int ProductId, int? BatchId, int? SaleItemId, int Quantity);
+
+    /// <summary>
+    /// Las devoluciones de un ticket, con la regla de su <see cref="Sale.LedgerVersion"/> (no según lo que encuentre):
+    /// <list type="bullet">
+    /// <item>1: una por cada salida del ticket (por su renglón, <see cref="InventoryMovement.SaleItemId"/>), a su lote, con
+    /// SyncId uuid5("return:" + SyncId de la salida). Si a un renglón le faltan salidas (la suma no da su cantidad), se niega.</item>
+    /// <item>0 (venta anterior): una por producto, con lo que suman sus renglones, al lote de la primera salida que diga
+    /// "Venta POS {folio}" (o su folio sin conexión, paso 8.17) o sin lote si no hay, con SyncId uuid5("return:" + SyncId de la
+    /// venta + ":" + SyncId del producto).</item>
+    /// </list>
+    /// </summary>
+    private static async Task<List<PlannedReturn>> PlanSaleReturnsAsync(AppDbContext db, Sale sale)
+    {
+        var productItems = sale.Items.Where(i => !i.IsService && i.ProductId.HasValue && i.Quantity > 0).ToList();
+        if (productItems.Count == 0) return new List<PlannedReturn>();
+
+        if (sale.LedgerVersion >= Sale.CurrentLedgerVersion)
+        {
+            var itemIds = productItems.Select(i => i.Id).ToList();
+            var exits = await db.InventoryMovements.AsNoTracking()
+                .Where(m => m.SaleItemId != null && itemIds.Contains(m.SaleItemId.Value) && m.MovementType == MovementType.SalidaVenta)
+                .ToListAsync();
+            foreach (var item in productItems)
+            {
+                if (exits.Where(m => m.SaleItemId == item.Id).Sum(m => Math.Abs(m.Delta)) != item.Quantity)
+                {
+                    throw new InvalidOperationException(
+                        $"Este equipo todavía no tiene todos los movimientos del ticket {sale.Folio} ({item.Description}). Sincronice primero y vuelva a intentarlo.");
+                }
+            }
+            return exits
+                .OrderBy(m => m.Date).ThenBy(m => m.SyncId)
+                .Select(m => new PlannedReturn(StockLedger.ReturnSyncId(m.SyncId), m.ProductId, m.BatchId, m.SaleItemId, Math.Abs(m.Delta)))
+                .ToList();
+        }
+
+        var productIds = productItems.Select(i => i.ProductId!.Value).Distinct().ToList();
+        var productSyncIds = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.SyncId);
+        var prefixes = new[] { sale.Folio, sale.OriginalFolio }
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => SaleMovementReasonPrefix(f!))
+            .ToList();
+        var exitsByProduct = (await db.InventoryMovements.AsNoTracking()
+                .Where(m => productIds.Contains(m.ProductId) && m.MovementType == MovementType.SalidaVenta && m.Reason != null
+                            && m.Reason.StartsWith("Venta POS "))
+                .Select(m => new { m.ProductId, m.BatchId, m.Reason, m.Date, m.SyncId })
+                .ToListAsync())
+            .Where(m => prefixes.Any(prefix => m.Reason!.StartsWith(prefix, StringComparison.Ordinal)))
+            .GroupBy(m => m.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(m => m.Date).ThenBy(m => m.SyncId).First().BatchId);
+
+        return productItems
+            .GroupBy(i => i.ProductId!.Value)
+            .Where(g => productSyncIds.ContainsKey(g.Key))
+            .Select(g => new PlannedReturn(StockLedger.LegacyReturnSyncId(sale.SyncId, productSyncIds[g.Key]), g.Key,
+                exitsByProduct.GetValueOrDefault(g.Key), null, g.Sum(i => i.Quantity)))
+            .ToList();
     }
 
     /// <summary>
@@ -903,9 +983,14 @@ public partial class InventoryService
         NotifySalesChanged();
     }
 
-    // Registro genérico de movimiento
+    /// <summary>
+    /// Registro genérico de movimiento. Una entrada suma sus piezas (a su lote, si trae uno); una salida descuenta por FEFO,
+    /// empezando por el lote que traiga, y desde el paso 8.19 deja un movimiento por lote y otro sin lote para el resto.
+    /// </summary>
     public async Task RegisterMovementAsync(InventoryMovement movement)
     {
+        if (movement.Quantity <= 0) throw new InvalidOperationException("La cantidad debe ser mayor a cero.");
+
         await using var db = CreateContext();
         var product = await db.Products
             .Include(p => p.Batches)
@@ -914,24 +999,33 @@ public partial class InventoryService
 
         movement.Product = null;
         movement.Batch = null;
+        movement.SaleItem = null;
         movement.StockBefore = product.CurrentStock;
+
+        var now = DateTime.Now;
+        movement.Date = now;
+        product.UpdatedAt = now;
 
         if (movement.IsEntry)
         {
+            if (movement.BatchId is int batchId)
+            {
+                var batch = product.Batches.FirstOrDefault(b => b.Id == batchId)
+                    ?? throw new InvalidOperationException("El lote no es de este producto.");
+                batch.Quantity += movement.Quantity;
+                if (!batch.IsClosed) batch.IsDepleted = false;
+            }
+            movement.Delta = movement.Quantity;
             movement.StockAfter = product.CurrentStock + movement.Quantity;
+            product.CurrentStock = movement.StockAfter;
+            db.Entry(movement).State = EntityState.Added;
         }
         else
         {
             EnsureStock(product, movement.Quantity);
-            movement.StockAfter = product.CurrentStock - movement.Quantity;
-            movement.BatchId = DeductFromBatches(product, movement.Quantity, movement.BatchId) ?? movement.BatchId;
+            AddOutgoingMovements(db, product, DeductFromBatches(product, movement.Quantity, movement.BatchId), movement);
         }
 
-        product.CurrentStock = movement.StockAfter;
-        product.UpdatedAt = DateTime.Now;
-        movement.Date = DateTime.Now;
-
-        db.Entry(movement).State = EntityState.Added;
         await db.SaveChangesAsync();
         NotifyInventoryChanged();
     }
@@ -948,6 +1042,37 @@ public partial class InventoryService
             .ThenByDescending(m => m.Id)
             .Take(count)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// El Kardex como lo ve el médico (paso 8.19): las <paramref name="count"/> operaciones más recientes, con los
+    /// movimientos por lote de cada una unidos en un renglón (<see cref="KardexRows"/>).
+    /// </summary>
+    public async Task<List<InventoryMovement>> GetKardexAsync(int count = 50)
+    {
+        await using var db = CreateContext();
+        var query = db.InventoryMovements
+            .AsNoTracking()
+            .Include(m => m.Product)
+            .ThenInclude(p => p!.Category)
+            .Include(m => m.Batch)
+            .OrderByDescending(m => m.Date)
+            .ThenByDescending(m => m.Id);
+
+        // Se leen renglones de más hasta tener una operación después de la última que se muestra: así la última está completa
+        for (int take = count + 16; ; take *= 2)
+        {
+            var rows = await query.Take(take).ToListAsync();
+            var operations = KardexRows.Group(rows);
+            if (rows.Count < take || operations.Count > count) return operations.Take(count).ToList();
+        }
+    }
+
+    /// <summary>Paso 8.19: lo guardado contra el libro de existencias, sin cambiar nada (<see cref="StockLedger.VerifyAsync"/>).</summary>
+    public async Task<StockLedgerReport> VerifyStockLedgerAsync()
+    {
+        await using var db = CreateContext();
+        return await StockLedger.VerifyAsync(db);
     }
 
     public async Task<DashboardMetrics> GetDashboardMetricsAsync()
@@ -978,7 +1103,13 @@ public partial class InventoryService
             LowStockCount = await activeProducts.CountAsync(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock),
             ExpiringSoonCount = await activeBatches.CountAsync(b => b.ExpirationDate >= today && b.ExpirationDate < expiringLimit),
             ExpiredCount = await activeBatches.CountAsync(b => b.ExpirationDate < today),
-            MovementsToday = await todayMovements.CountAsync(),
+            // Operaciones, no renglones del libro (paso 8.19): las partes de una operación comparten producto, tipo, hora,
+            // renglón del ticket, motivo y responsable (KardexRows.SameOperation); una fila anterior es su propia operación
+            MovementsToday = await todayMovements.CountAsync(m => m.Delta == 0)
+                             + await todayMovements.Where(m => m.Delta != 0)
+                                 .Select(m => new { m.ProductId, m.MovementType, m.Date, m.SaleItemId, m.Reason, m.Responsible })
+                                 .Distinct()
+                                 .CountAsync(),
             ConsumedInConsultationToday = await todayMovements
                 .Where(m => m.MovementType == MovementType.SalidaConsulta)
                 .SumAsync(m => (int?)m.Quantity) ?? 0,
