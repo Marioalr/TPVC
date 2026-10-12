@@ -2,6 +2,14 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.35.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.17: los folios hechos sin internet reciben su número normal
+* Una vez al día, la PC principal le da el número normal a los expedientes y tickets que se hicieron sin internet (`EXP-2026-P1-001` pasa a ser el siguiente `EXP-2026-…`) y guarda el folio con letra. Lo hace sola después de sincronizar, cuando no hay consulta, venta ni formulario abiertos y ningún equipo tiene cambios sin subir.
+* Se puede buscar un paciente o un ticket por cualquiera de los dos folios. La ficha muestra el de sin conexión junto al folio, el detalle del ticket debajo, y el ticket reimpreso lleva «FOLIO SIN CONEXIÓN».
+* *Equipos vinculados* avisa si un equipo tiene cambios sin subir y no se conecta desde hace una semana o más, porque mientras tanto los folios no se regularizan.
+* 570 pruebas.
+
 ## [1.34.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.16: folios consecutivos con varios equipos (lado de la PC)
