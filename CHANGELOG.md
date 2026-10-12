@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.37.0] - 2026-10-12
+
+### Añadido — Fase 8, paso 8.19: Kardex completo
+* Cada venta, uso en consulta y salida manual deja un movimiento por cada lote del que salió (antes solo se anotaba el primero). Cancelar un ticket devuelve las piezas a sus propios lotes.
+* Cancelar el mismo ticket en dos equipos sin conexión deja una sola devolución.
+* «Eliminar» un lote ahora lo cierra: deja de verse y de usarse, pero su historial queda en el Kardex, y lo que otro equipo venda después de ese lote queda registrado en él. Igual que antes, la existencia nunca baja de 0 al eliminarlo.
+* El editor de producto ya no revierte una venta hecha mientras estaba abierto: la existencia solo cambia si se edita ese campo.
+* El Kardex y «Movimientos recientes» muestran una fila por operación, aunque salga de varios lotes.
+* Al abrir, la PC comprueba que las existencias guardadas coincidan con los movimientos y anota en la bitácora cualquier diferencia nueva (preparación del paso 8.20, en el que las existencias saldrán de los movimientos).
+* Contrato de sincronización en la revisión 11 para la app de Kotlin. 624 pruebas.
+
 ## [1.36.0] - 2026-10-12
 
 ### Añadido — Fase 8, paso 8.18: los renglones de las hojas del paciente con identidad propia
