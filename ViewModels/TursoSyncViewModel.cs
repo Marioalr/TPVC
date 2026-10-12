@@ -137,6 +137,10 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _deviceIdNoticeText = string.Empty;
 
+    /// <summary>Equipos que detienen la regularización de folios (paso 8.17); vacío si no hay.</summary>
+    [ObservableProperty]
+    private string _staleDevicesNoticeText = string.Empty;
+
     /// <summary>Folios repetidos (paso 8.16: ya no se renombran con -R1); vacío si no hay.</summary>
     [ObservableProperty]
     private string _duplicateFoliosNoticeText = string.Empty;
@@ -193,6 +197,9 @@ public partial class TursoSyncViewModel : ObservableObject
                 RefreshNotices();
             });
         };
+
+        // Paso 8.17: la regularización de folios (los equipos que la detienen)
+        _syncService.FolioRegularization.Completed += _ => RunOnUIThread(RefreshNotices);
 
         // Paso 8.12b: la vuelta de los archivos de laboratorio (tope, freno, respaldo externo)
         _syncService.LabTransfersCompleted += report =>
@@ -344,6 +351,15 @@ public partial class TursoSyncViewModel : ObservableObject
             : string.Empty;
 
         DeviceIdNoticeText = _settingsService.CurrentSettings.DeviceIdNotice ?? string.Empty;
+
+        // Paso 8.17: un equipo con cambios sin subir que no se ve hace 7 días detiene la regularización de folios
+        var stale = _syncService.FolioRegularization.StaleDevices;
+        StaleDevicesNoticeText = stale.Count == 0
+            ? string.Empty
+            : string.Join(" ", stale.Select(d =>
+                  $"«{d.DeviceName}» tiene {d.PendingText.ToLowerInvariant()} y no se conecta " +
+                  (d.LastSeenUtc is { } seen ? $"desde el {seen.ToLocalTime():dd/MM/yyyy}." : "desde hace tiempo."))) +
+              " Mientras no suba esos cambios, los folios hechos sin conexión no reciben su número normal. Conéctelo a internet, o quítelo si ya no se usa.";
 
         // Paso 8.16: un folio repetido ya no se renombra con -R1
         var duplicates = _syncService.DuplicateFolios;

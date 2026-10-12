@@ -12,14 +12,16 @@ namespace TPVC.Services.Documents;
 /// </summary>
 public static class TicketHtml
 {
-    /// <summary>HTML del ticket (también XML bien formado). Los datos llevan data-field: folio, fecha, paciente, pago, atendio, articulos, total.</summary>
+    /// <summary>HTML del ticket (también XML bien formado). Los datos llevan data-field: folio, folio-sin-conexion (paso 8.17, solo si lo hay), fecha, paciente, pago, atendio, articulos, total.</summary>
     public static string Build(SaleReceipt receipt, ClinicProfile? profile)
     {
         profile ??= new ClinicProfile();
         var header = TicketText.HeaderLines(profile);
         var meta = TicketText.MetaLines(receipt);
         var totals = TicketText.TotalLines(receipt);
-        string[] metaFields = { "folio", "fecha", "paciente", "pago", "atendio" };
+        string[] metaFields = string.IsNullOrWhiteSpace(receipt.OriginalFolio)
+            ? new[] { "folio", "fecha", "paciente", "pago", "atendio" }
+            : new[] { "folio", "folio-sin-conexion", "fecha", "paciente", "pago", "atendio" };
 
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html>");

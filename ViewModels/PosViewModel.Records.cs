@@ -191,6 +191,7 @@ public partial class PosViewModel
         CurrentReceipt = new SaleReceipt
         {
             Folio = SelectedSaleForDetail.Folio,
+            OriginalFolio = SelectedSaleForDetail.OriginalFolio,
             Date = SelectedSaleForDetail.Date,
             PatientName = SelectedSaleForDetail.PatientName,
             PaymentMethod = SelectedSaleForDetail.PaymentMethod,

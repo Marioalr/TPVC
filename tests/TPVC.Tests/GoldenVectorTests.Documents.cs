@@ -483,7 +483,14 @@ public partial class GoldenVectorTests
             {
                 Folio = "TKT-20261011-003", Date = new DateTime(2026, 1, 5, 23, 59, 0), PatientName = "Juan", PaymentMethod = "Transferencia", Cashier = "PC",
                 Items = { new SaleReceiptItem { Name = "Curación", Quantity = 1, UnitPrice = 150m } }
-            }, new ClinicProfile())
+            }, new ClinicProfile()),
+            // Paso 8.17: cobrado sin conexión y ya regularizado: debajo del folio, el que se imprimió entonces
+            ("reimpresión de un ticket cobrado sin conexión", new SaleReceipt
+            {
+                Folio = "TKT-20261011-0004", OriginalFolio = "TKT-20261011-T1-0001", Date = new DateTime(2026, 10, 11, 12, 30, 0), PatientName = "Público General",
+                PaymentMethod = "Efectivo", Cashier = "Recepción",
+                Items = { new SaleReceiptItem { Name = "Consulta general", Quantity = 1, UnitPrice = 500m } }
+            }, profile)
         };
 
         var cases = new JsonArray();
@@ -502,7 +509,8 @@ public partial class GoldenVectorTests
                         ["items"] = new JsonArray(receipt.Items.Select(i => (JsonNode)new JsonObject
                         {
                             ["name"] = i.Name, ["quantity"] = i.Quantity, ["unitPrice"] = Money(i.UnitPrice)
-                        }).ToArray())
+                        }).ToArray()),
+                        ["originalFolio"] = receipt.OriginalFolio
                     },
                     ["profile"] = new JsonObject
                     {
@@ -518,6 +526,7 @@ public partial class GoldenVectorTests
             "Cabecera centrada (relleno a la izquierda de (42 − largo) / 2 espacios, sin relleno a la derecha): el consultorio en mayúsculas ('CONSULTORIO MÉDICO TPVC' si no hay), el médico ('Dr. Titular' si no hay) con ' • Céd. ' y la cédula, domicilio y 'Tel: ' + teléfono si los hay. Un renglón largo se parte por palabras a 42; una palabra más larga se corta.",
             "Partidas: Cant (4, a la derecha), Descripción (17, partida por palabras; el resto en renglones solo con la descripción), P.U. y Total (9 cada uno, a la derecha), con un espacio entre columnas y sin espacios al final.",
             "Importes de las partidas: '$' + F2 (sin miles; un tercer decimal se redondea con el medio hacia arriba: 0.125 da 0.13). Total pagado: '$' + N2 con miles + ' MXN'. Fecha 'dd/MM/yyyy HH:mm' en la hora del consultorio.",
-            "Separadores de 42 '-' y '='. El pie va centrado."));
+            "Separadores de 42 '-' y '='. El pie va centrado.",
+            "Paso 8.17: con 'originalFolio' (un ticket cobrado sin conexión que la PC principal ya regularizó), debajo del folio va 'FOLIO SIN CONEXIÓN: ' + ese folio; null si no lo hay."));
     }
 }

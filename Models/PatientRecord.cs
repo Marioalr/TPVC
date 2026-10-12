@@ -309,6 +309,13 @@ public class PatientRecord : ISyncEntity
     public override bool Equals(object? obj) => obj is PatientRecord other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
     public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     public string RecordNumber { get; set; } = string.Empty; // ej. EXP-2026-001
+
+    /// <summary>
+    /// Paso 8.17: el folio con letra con que se creó sin conexión (EXP-2026-T1-001), después de que la PC principal le dio
+    /// el número normal. La búsqueda también lo compara. null si nunca llevó letra.
+    /// </summary>
+    public string? OriginalFolio { get; set; }
+
     public string FullName { get; set; } = string.Empty;
 
     // Con fecha de nacimiento la edad se calcula al día (no se queda congelada en la del alta);

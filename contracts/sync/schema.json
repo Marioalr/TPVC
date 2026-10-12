@@ -1,7 +1,7 @@
 {
-  "contract": 8,
+  "contract": 9,
   "protocol": 2,
-  "fingerprint": "7CC431010325CCAA",
+  "fingerprint": "2C21CB7C0635ABA5",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -14,7 +14,7 @@
     "El upsert escribe solo las columnas que el equipo conoce (ON CONFLICT DO UPDATE SET columna por columna, nunca INSERT OR REPLACE), para no borrar las que agregue una versión más nueva.",
     "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
     "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Desde la revisión 8 (paso 8.16) Patients.RecordNumber y Sales.Folio ya no son únicas: un folio repetido que llega se guarda tal cual (antes se renombraba con -R1 solo en el equipo que lo recibía) y aparece en un aviso.",
-    "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json.",
+    "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json. Regularización (paso 8.17): solo la PC principal, una vez al día y con todos los equipos sin cambios pendientes, le da a cada expediente y ticket con letra el siguiente número de su serie (EXP del año del folio, TKT de su día), guarda el folio con letra en OriginalFolio y actualiza las citas del paciente que lo copian (PatientRecordNumber); todo sube por el ciclo normal. Un registro que vuelve con su folio con letra recibe el mismo número que ya tenía. La tablet y el celular nunca regularizan, y su búsqueda compara también OriginalFolio.",
     "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl', también las columnas nuevas de RegisteredDevices con ALTER TABLE) y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos. Kotlin nunca corre DDL ni la limpieza de RegisteredDevices y ConsultationHandoffs, y no sincroniza si falta _tpvc_meta.schema («Sincronice primero la PC»).",
     "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
     "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
@@ -706,6 +706,15 @@
           }
         },
         {
+          "name": "OriginalFolio",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false,
+          "note": "El folio con letra (EXP-2026-T1-001) con que se creó sin conexión, después de que la PC principal le dio el número normal (desde la revisión 9). La búsqueda compara RecordNumber y OriginalFolio. Solo la escribe la PC principal; nulo si nunca llevó letra."
+        },
+        {
           "name": "PapSmear",
           "role": "data",
           "remoteType": "TEXT",
@@ -853,7 +862,7 @@
       "references": [],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"OriginalFolio\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2402,6 +2411,15 @@
           }
         },
         {
+          "name": "OriginalFolio",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false,
+          "note": "El folio con letra (TKT-20261009-T1-0001) con que se cobró sin conexión, después de que la PC principal le dio el número normal (desde la revisión 9). El ticket reimpreso lo muestra debajo del folio y la búsqueda lo compara. Solo la escribe la PC principal; nulo si nunca llevó letra."
+        },
+        {
           "name": "PatientName",
           "role": "data",
           "remoteType": "TEXT",
@@ -2442,7 +2460,7 @@
       "references": [],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2856,7 +2874,7 @@
     "CREATE INDEX IF NOT EXISTS \"IX_Categories_SyncedAtUtc\" ON \"Categories\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"ClinicalServices\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Category\" TEXT, \"Code\" TEXT, \"CreatedAt\" TEXT, \"Description\" TEXT, \"EstimatedDurationMinutes\" INTEGER, \"IsActive\" INTEGER, \"Name\" TEXT, \"Price\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_ClinicalServices_SyncedAtUtc\" ON \"ClinicalServices\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"OriginalFolio\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"Appointments\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CreatedAt\" TEXT, \"Date\" TEXT, \"DurationMinutes\" INTEGER, \"Notes\" TEXT, \"PatientName\" TEXT, \"PatientPhone\" TEXT, \"PatientRecordNumber\" TEXT, \"Reason\" TEXT, \"Status\" TEXT, \"Time\" TEXT, \"PatientRecordSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Appointments_SyncedAtUtc\" ON \"Appointments\" (\"SyncedAtUtc\")",
@@ -2874,7 +2892,7 @@
     "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")",

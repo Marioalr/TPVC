@@ -296,6 +296,11 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Paso 8.17: un equipo con cambios sin subir que no se ve hace 7 días detiene la regularización de folios -->
+                        <Border Style="{StaticResource NoticeWarning}" Margin="0,12,0,0" Visibility="{Binding StaleDevicesNoticeText, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding StaleDevicesNoticeText}" TextWrapping="Wrap" />
+                        </Border>
+
                         <!-- Paso 8.15: cortar el acceso de un equipo perdido (o seguir después de que se anularon los tokens) -->
                         <Border Style="{StaticResource NoticeDanger}" Margin="0,12,0,0" Visibility="{Binding CutAccessGuideText, Converter={StaticResource BoolToVis}}"
                                 AutomationProperties.Name="Cortar el acceso">

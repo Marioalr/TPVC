@@ -116,6 +116,9 @@
                                 </Grid.RowDefinitions>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource TextHeading}" FontFamily="{StaticResource FontFamilyMono}" Text="{Binding Folio}" />
+                                    <!-- Paso 8.17: el folio con que se cobró sin conexión -->
+                                    <TextBlock Style="{StaticResource TextDetail}" Margin="0,2,0,0" Text="{Binding OriginalFolio, StringFormat='Folio sin conexión: {0}'}"
+                                               Visibility="{Binding OriginalFolio, Converter={StaticResource BoolToVis}}" />
                                     <TextBlock Style="{StaticResource TextDetail}" Margin="0,2,0,0">
                                         <TextBlock.Text>
                                             <MultiBinding StringFormat="{}{0:dddd d MMM yyyy, HH:mm} · {1} · atendió {2}" ConverterCulture="es-MX">

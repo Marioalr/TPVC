@@ -68,6 +68,18 @@ public partial class GoldenVectorTests
             cases.Add(Case($"código de equipo · '{code}'", new JsonObject { ["code"] = code }, FolioFactory.IsDeviceCode(code)));
         }
 
+        // Paso 8.17: los folios que la PC principal regulariza, con la serie que recibe el número
+        foreach (var folio in new[] { "EXP-2026-T1-004", "tkt-20261009-p1-0012", "EXP-2026-C2-001", "EXP-2026-004", "EXP-2026-005-R1", "EXP-2026-X1-001", "CNS-20261009-T1-103015", "TKT-2026-T1-0001" })
+        {
+            var parsed = FolioFactory.ParseLettered(folio);
+            cases.Add(Case($"con letra · '{folio}'", new JsonObject { ["folio"] = folio }, parsed == null ? null : new JsonObject
+            {
+                ["kind"] = parsed.Kind.ToString(), ["series"] = parsed.Series, ["deviceCode"] = parsed.DeviceCode, ["number"] = parsed.Number
+            }));
+        }
+        Assert.AreEqual("TKT-20261009", FolioFactory.ParseLettered("tkt-20261009-p1-0012")!.Series);
+        Assert.IsNull(FolioFactory.ParseLettered("TKT-2026-T1-0001"), "Un TKT lleva el día, no el año");
+
         cases.Add(Case("CNS · con conexión", new JsonObject { ["now"] = "2026-10-09 10:30:15", ["offlineDeviceCode"] = null }, FolioFactory.Consultation(day)));
         cases.Add(Case("CNS · sin conexión", new JsonObject { ["now"] = "2026-10-09 10:30:15", ["offlineDeviceCode"] = "T1" }, FolioFactory.Consultation(day, "T1")));
 
@@ -78,6 +90,7 @@ public partial class GoldenVectorTests
             "Sin conexión, sin respuesta en 2 s, con la cuota agotada o con el token rechazado: el folio lleva el código del equipo de DeviceRegistry (P, T o C y su número; X nunca numera) y el número siguiente de esa serie con letra, el mayor entre el último guardado fuera de la base ('savedLast', que no se borra al bajar todo otra vez) y el máximo local. Sin código, no se crea el folio.",
             "Con la nube apagada o sin verificar: el mayor número local de la serie + 1.",
             "CNS sale de la hora (yyyyMMdd-HHmmss); sin conexión lleva la letra (CNS-yyyyMMdd-T1-HHmmss) y nunca se regulariza.",
-            "Un folio repetido (de antes del paso 8.16 o tecleado a mano) se conserva: ya no se renombra con -R1."));
+            "Un folio repetido (de antes del paso 8.16 o tecleado a mano) se conserva: ya no se renombra con -R1.",
+            "Con letra (paso 8.17): EXP-yyyy o TKT-yyyyMMdd, un guion, el código de equipo (P, T o C y su número; sin importar mayúsculas), un guion y dígitos. 'series' es la serie normal que recibe el número al regularizarlo; 'expected' null si no es un folio con letra (CNS nunca se regulariza). La búsqueda compara RecordNumber/Folio y OriginalFolio."));
     }
 }
