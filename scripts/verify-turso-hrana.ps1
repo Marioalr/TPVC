@@ -83,6 +83,8 @@ $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServ
 if ([string]::IsNullOrWhiteSpace($token)) { throw 'Falta el token.' }
 
 $report = New-Object System.Collections.Generic.List[string]
+# Dónde va V4 (-Rotate): si la corrida se interrumpe, el reporte dice en qué paso
+$v4Stage = $null
 function Say([string]$text = '') {
     Write-Host $text
     $report.Add($text)
@@ -547,8 +549,11 @@ try {
         Write-Host 'grupo y se niega si otra base lo comparte.' -ForegroundColor Yellow
         Write-Host 'Es un token de la API de la PLATAFORMA, distinto del de la base que se pega en TPVC: en app.turso.tech, menú de su' -ForegroundColor Yellow
         Write-Host 'avatar › Settings › API Tokens (de preferencia limitado al grupo de la base de prueba). Bórrelo al terminar.' -ForegroundColor Yellow
+        $v4Stage = 'al pedir el token de la API'
         $apiSecure = Read-Host -AsSecureString 'Token de la API de Turso (no se muestra; Enter para hacerlo a mano con la CLI)'
         $apiToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($apiSecure))
+        Say $(if ($apiToken) { '    Con token de la API.' } else { '    Sin token de la API: anular a mano con la CLI ("turso db tokens invalidate").' })
+        $v4Stage = 'al revisar el grupo de la base'
 
         $rotateDb = $null
         $canRotate = $false
@@ -590,12 +595,14 @@ try {
         }
 
         if ($canRotate) {
+            $v4Stage = 'al pedir ROTAR (no se anuló nada)'
             $confirm = Read-Host 'Escriba ROTAR para anular los tokens (otra cosa lo omite)'
             if ($confirm -cne 'ROTAR') {
                 Say '    Rotación omitida.'
             }
             else {
                 $clock = [Diagnostics.Stopwatch]::StartNew()
+                $v4Stage = 'al anular los tokens'
                 if ($rotateDb) {
                     $rotated = Api 'POST' "/v1/organizations/$orgSlug/databases/$($rotateDb.Name)/auth/rotate" $apiToken
                     Say ("    La API anuló los tokens en {0:N1} s (HTTP {1}{2})." -f $clock.Elapsed.TotalSeconds, $rotated.Status, $(if ($rotated.Content) { ' · ' + (Short $rotated.Content) } else { '' }))
@@ -606,6 +613,7 @@ try {
                     Read-Host 'Pulse Enter aquí en cuanto termine' | Out-Null
                 }
 
+                $v4Stage = 'al esperar que el token viejo deje de servir (los tokens ya se pidieron anular: cree uno nuevo en el panel)'
                 $clock.Restart()
                 $rejected = WaitFor { param($r) $r.Status -ne 200 } $clock
                 if ($rejected) {
@@ -616,6 +624,7 @@ try {
                 }
 
                 # El token nuevo: lo crea la API (o se pega uno creado a mano)
+                $v4Stage = 'al crear o esperar el token nuevo (los tokens ya se anularon: cree uno nuevo en el panel)'
                 if ($rotateDb) {
                     $created = Api 'POST' "/v1/organizations/$orgSlug/databases/$($rotateDb.Name)/auth/tokens?expiration=never&authorization=full-access" $apiToken
                     if ($created.Status -ne 200) { throw "No se pudo crear el token nuevo: HTTP $($created.Status) · $(Short $created.Content)" }
@@ -642,10 +651,17 @@ try {
             }
         }
         $apiToken = $null
+        $v4Stage = 'listo'
         Say ''
     }
 }
+catch {
+    # El error queda también en el reporte (antes solo salía en la pantalla)
+    Say "  ERROR: $($_.Exception.Message)"
+    throw
+}
 finally {
+    if ($v4Stage -and $v4Stage -ne 'listo') { Say "  V4 se interrumpió $v4Stage." }
     $cleanup = Send @((Exec 'DROP TABLE IF EXISTS vtest_Rows'), (Exec 'DROP TABLE IF EXISTS vtest_Handoffs'), (Exec 'DROP TABLE IF EXISTS vtest_Atomic'), (Exec 'DROP TABLE IF EXISTS vtest_Blob'),
         (Exec 'DROP TABLE IF EXISTS vtest_FolioCounters'))
     if ($cleanup.Status -eq 200) { Say 'Tablas vtest_* borradas.' } else { Say "No se pudieron borrar las tablas vtest_* (HTTP $($cleanup.Status)); bórrelas a mano o borre la base de prueba." }
