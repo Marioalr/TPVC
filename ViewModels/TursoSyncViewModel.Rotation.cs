@@ -36,8 +36,8 @@ public partial class TursoSyncViewModel
         var first = _settingsService.IsCurrentTokenRejected
             ? "1. ✓ Los tokens ya se anularon: Turso rechazó el de esta computadora."
             : $"1. Anule los tokens de la base ({cloud}) en el panel de Turso, o en una terminal con 'turso db tokens invalidate' y el " +
-              "nombre de la base. Se anulan todos, también el de esta computadora: los equipos dejan de sincronizar hasta recibir el " +
-              "nuevo, sin perder nada.";
+              "nombre de la base. Se anulan al instante todos, también el de esta computadora (V4): los equipos dejan de sincronizar " +
+              "hasta recibir el nuevo, sin perder nada.";
         CutAccessGuideText =
             "Para cortarle el acceso al equipo perdido:\n" +
             first + "\n" +

@@ -38,7 +38,9 @@ y, desde v1.31.0, también por HTTP en `127.0.0.1` (`FakeTursoHost`). Vive en el
   database: invalid JWT token: can't be decoded with any of the existing keys`"}``. Un token que ni siquiera es un JWT
   recibe en Turso HTTP 400 `{"error":"JWT error: InvalidToken"}`; el simulador no lo copia (los tokens de las pruebas no
   son JWT), y el equipo lo trata igual que el 401. En Turso, `turso db tokens invalidate` anula todos los
-  tokens de la base y del grupo.
+  tokens de la base y del grupo, al instante (V4, 2026-10-11); un token anulado recibe 401 con otro texto, ``invalid JWT
+  token: role was invalidated after token was issued``. El simulador manda siempre el primero: el equipo no distingue
+  el texto, solo el estado.
 
 ## Lo que no copia
 
