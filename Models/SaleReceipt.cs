@@ -16,6 +16,10 @@ public class SaleReceiptItem
 public class SaleReceipt
 {
     public string Folio { get; set; } = string.Empty;
+
+    /// <summary>Paso 8.17: el folio con letra con que se cobró sin conexión, si la PC principal ya lo regularizó.</summary>
+    public string? OriginalFolio { get; set; }
+
     public DateTime Date { get; set; } = DateTime.Now;
     public string PatientName { get; set; } = "Público General";
     public string PaymentMethod { get; set; } = "Efectivo";

@@ -231,7 +231,13 @@ public partial class TursoSyncService
         }
 
         _settingsService.SettingsChanged += UpdateInitialStatus;
+
+        // Paso 8.17: la regularización diaria de folios (la app la enciende con AutoRun)
+        FolioRegularization = new Folios.FolioRegularizationService(contextFactory, this);
     }
+
+    /// <summary>Paso 8.17: la PC principal da el número normal a los folios hechos sin conexión, una vez al día.</summary>
+    public Folios.FolioRegularizationService FolioRegularization { get; }
 
     private void UpdateInitialStatus()
     {

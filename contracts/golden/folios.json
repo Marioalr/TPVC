@@ -3,7 +3,7 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 8,
+  "contract": 9,
   "notes": [
     "Serie: EXP-yyyy (año del consultorio) con 3 dígitos; TKT-yyyyMMdd (día) con 4. Más dígitos si el número no cabe.",
     "Un folio cuenta para su serie solo si es la serie, un guion y dígitos (sin importar mayúsculas ni espacios en los extremos): uno con letra (EXP-2026-T1-004), con -R1 o con otro texto no cuenta.",
@@ -11,7 +11,8 @@
     "Sin conexión, sin respuesta en 2 s, con la cuota agotada o con el token rechazado: el folio lleva el código del equipo de DeviceRegistry (P, T o C y su número; X nunca numera) y el número siguiente de esa serie con letra, el mayor entre el último guardado fuera de la base ('savedLast', que no se borra al bajar todo otra vez) y el máximo local. Sin código, no se crea el folio.",
     "Con la nube apagada o sin verificar: el mayor número local de la serie + 1.",
     "CNS sale de la hora (yyyyMMdd-HHmmss); sin conexión lleva la letra (CNS-yyyyMMdd-T1-HHmmss) y nunca se regulariza.",
-    "Un folio repetido (de antes del paso 8.16 o tecleado a mano) se conserva: ya no se renombra con -R1."
+    "Un folio repetido (de antes del paso 8.16 o tecleado a mano) se conserva: ya no se renombra con -R1.",
+    "Con letra (paso 8.17): EXP-yyyy o TKT-yyyyMMdd, un guion, el código de equipo (P, T o C y su número; sin importar mayúsculas), un guion y dígitos. 'series' es la serie normal que recibe el número al regularizarlo; 'expected' null si no es un folio con letra (CNS nunca se regulariza). La búsqueda compara RecordNumber/Folio y OriginalFolio."
   ],
   "cases": [
     {
@@ -267,6 +268,77 @@
         "code": ""
       },
       "expected": false
+    },
+    {
+      "name": "con letra · 'EXP-2026-T1-004'",
+      "input": {
+        "folio": "EXP-2026-T1-004"
+      },
+      "expected": {
+        "kind": "Patient",
+        "series": "EXP-2026",
+        "deviceCode": "T1",
+        "number": 4
+      }
+    },
+    {
+      "name": "con letra · 'tkt-20261009-p1-0012'",
+      "input": {
+        "folio": "tkt-20261009-p1-0012"
+      },
+      "expected": {
+        "kind": "Sale",
+        "series": "TKT-20261009",
+        "deviceCode": "P1",
+        "number": 12
+      }
+    },
+    {
+      "name": "con letra · 'EXP-2026-C2-001'",
+      "input": {
+        "folio": "EXP-2026-C2-001"
+      },
+      "expected": {
+        "kind": "Patient",
+        "series": "EXP-2026",
+        "deviceCode": "C2",
+        "number": 1
+      }
+    },
+    {
+      "name": "con letra · 'EXP-2026-004'",
+      "input": {
+        "folio": "EXP-2026-004"
+      },
+      "expected": null
+    },
+    {
+      "name": "con letra · 'EXP-2026-005-R1'",
+      "input": {
+        "folio": "EXP-2026-005-R1"
+      },
+      "expected": null
+    },
+    {
+      "name": "con letra · 'EXP-2026-X1-001'",
+      "input": {
+        "folio": "EXP-2026-X1-001"
+      },
+      "expected": null
+    },
+    {
+      "name": "con letra · 'CNS-20261009-T1-103015'",
+      "input": {
+        "folio": "CNS-20261009-T1-103015"
+      },
+      "expected": null
+    },
+    {
+      "name": "con letra · 'TKT-2026-T1-0001'",
+      "input": {
+        "folio": "TKT-2026-T1-0001"
+      },
+      "expected": null
     },
     {
       "name": "CNS · con conexión",

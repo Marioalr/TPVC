@@ -112,10 +112,16 @@ public partial class PatientsWorkspace
     /// La instancia abierta se puede cambiar por la de la base salvo que alguien trabaje sobre ella
     /// (alta o edición abierta, o es el paciente de la consulta en curso).
     /// </summary>
-    private bool CanReplaceSelectedPatientInstance(PatientRecord patient) =>
+    private bool CanReplaceSelectedPatientInstance(PatientRecord patient) => CanReplacePatientInstance(patient.Id);
+
+    /// <summary>
+    /// La misma regla por Id (paso 8.17): la regularización de folios no toca a un paciente abierto en su ficha, en el
+    /// formulario o en la consulta, porque guardar después la copia vieja regresaría su folio con letra.
+    /// </summary>
+    public bool CanReplacePatientInstance(int patientId) =>
         !PatientForm.IsPatientModalOpen
-        && (Record.Patient == null || Record.Patient.Id != patient.Id)
-        && !(Active.HasActiveConsultation && Active.ActiveConsultation?.PatientId == patient.Id);
+        && (Record.Patient == null || Record.Patient.Id != patientId)
+        && !(Active.HasActiveConsultation && Active.ActiveConsultation?.PatientId == patientId);
 
     private bool NeedsConsultationsLoad(PatientRecord patient) =>
         _inventoryService != null && patient.Id > 0 && patient.Consultations.Count == 0 && patient.ConsultationCount > 0;

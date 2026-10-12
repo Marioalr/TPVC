@@ -67,7 +67,7 @@ public partial class PatientsHomeViewModel : ObservableObject
             .Select(p =>
             {
                 var name = TextSearch.Normalize(p.FullName);
-                var other = TextSearch.Normalize($"{p.RecordNumber} {p.LastDiagnosis}");
+                var other = TextSearch.Normalize($"{p.RecordNumber} {p.OriginalFolio} {p.LastDiagnosis}");
                 int rank;
                 if (name.StartsWith(q, StringComparison.Ordinal)) rank = 0;
                 else if ((" " + name).Contains(" " + q, StringComparison.Ordinal)) rank = 1;

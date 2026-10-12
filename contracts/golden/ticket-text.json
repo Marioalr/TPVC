@@ -3,13 +3,14 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 8,
+  "contract": 9,
   "notes": [
     "Services/Documents/TicketText.cs: el ticket en 42 columnas, renglón por renglón; lo mismo que imprime la PC en la impresora térmica (sus textos salen de aquí).",
     "Cabecera centrada (relleno a la izquierda de (42 − largo) / 2 espacios, sin relleno a la derecha): el consultorio en mayúsculas ('CONSULTORIO MÉDICO TPVC' si no hay), el médico ('Dr. Titular' si no hay) con ' • Céd. ' y la cédula, domicilio y 'Tel: ' + teléfono si los hay. Un renglón largo se parte por palabras a 42; una palabra más larga se corta.",
     "Partidas: Cant (4, a la derecha), Descripción (17, partida por palabras; el resto en renglones solo con la descripción), P.U. y Total (9 cada uno, a la derecha), con un espacio entre columnas y sin espacios al final.",
     "Importes de las partidas: '$' + F2 (sin miles; un tercer decimal se redondea con el medio hacia arriba: 0.125 da 0.13). Total pagado: '$' + N2 con miles + ' MXN'. Fecha 'dd/MM/yyyy HH:mm' en la hora del consultorio.",
-    "Separadores de 42 '-' y '='. El pie va centrado."
+    "Separadores de 42 '-' y '='. El pie va centrado.",
+    "Paso 8.17: con 'originalFolio' (un ticket cobrado sin conexión que la PC principal ya regularizó), debajo del folio va 'FOLIO SIN CONEXIÓN: ' + ese folio; null si no lo hay."
   ],
   "cases": [
     {
@@ -32,7 +33,8 @@
               "quantity": 2,
               "unitPrice": "12.5"
             }
-          ]
+          ],
+          "originalFolio": null
         },
         "profile": {
           "clinicName": "Consultorio Médico Santa Lucía",
@@ -94,7 +96,8 @@
               "quantity": 10,
               "unitPrice": "9.99"
             }
-          ]
+          ],
+          "originalFolio": null
         },
         "profile": {
           "clinicName": "Consultorio Médico Santa Lucía",
@@ -150,7 +153,8 @@
               "quantity": 1,
               "unitPrice": "150"
             }
-          ]
+          ],
+          "originalFolio": null
         },
         "profile": {
           "clinicName": "",
@@ -175,6 +179,57 @@
         "------------------------------------------",
         "TOTAL DE ARTÍCULOS: 1",
         "TOTAL PAGADO:       $150.00 MXN",
+        "==========================================",
+        "   ¡Gracias por su visita y confianza!",
+        "Comprobante de atención médica y farmacia"
+      ]
+    },
+    {
+      "name": "reimpresión de un ticket cobrado sin conexión",
+      "input": {
+        "receipt": {
+          "folio": "TKT-20261011-0004",
+          "date": "2026-10-11 12:30",
+          "patientName": "Público General",
+          "paymentMethod": "Efectivo",
+          "cashier": "Recepción",
+          "items": [
+            {
+              "name": "Consulta general",
+              "quantity": 1,
+              "unitPrice": "500"
+            }
+          ],
+          "originalFolio": "TKT-20261011-T1-0001"
+        },
+        "profile": {
+          "clinicName": "Consultorio Médico Santa Lucía",
+          "doctorName": "Dra. María del Cielo Alberto Galicia",
+          "professionalLicense": "15632243",
+          "address": "Av. Siempre Viva 742, Col. Centro, Ciudad de México",
+          "phone": "55 1234 5678"
+        }
+      },
+      "expected": [
+        "      CONSULTORIO MÉDICO SANTA LUCÍA",
+        "  Dra. María del Cielo Alberto Galicia •",
+        "              Céd. 15632243",
+        "Av. Siempre Viva 742, Col. Centro, Ciudad",
+        "                de México",
+        "            Tel: 55 1234 5678",
+        "------------------------------------------",
+        "FOLIO:    TKT-20261011-0004",
+        "FOLIO SIN CONEXIÓN: TKT-20261011-T1-0001",
+        "FECHA:    11/10/2026 12:30",
+        "PACIENTE: Público General",
+        "PAGO:     Efectivo",
+        "ATENDIÓ:  Recepción",
+        "==========================================",
+        "Cant Descripción            P.U.     Total",
+        "   1 Consulta general    $500.00   $500.00",
+        "------------------------------------------",
+        "TOTAL DE ARTÍCULOS: 1",
+        "TOTAL PAGADO:       $500.00 MXN",
         "==========================================",
         "   ¡Gracias por su visita y confianza!",
         "Comprobante de atención médica y farmacia"

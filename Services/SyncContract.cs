@@ -27,8 +27,9 @@ public static class SyncContract
     /// 6 (v1.29.0): el membrete en la nube: <c>ClinicProfiles.CrestImageHash</c> y <c>HeaderImageHash</c>, <c>ClinicAssets</c> y <c>ClinicAssetChunks</c>.
     /// 7 (v1.30.0): los resultados de laboratorio: la tabla sincronizada <c>LabResults</c>, y <c>LabBlobs</c> y <c>LabBlobChunks</c> con su contenido.
     /// 8 (v1.34.0): los folios desde la nube: la tabla <c>FolioCounters</c>, y <c>Patients.RecordNumber</c> y <c>Sales.Folio</c> dejan de ser únicos.
+    /// 9 (v1.35.0): <c>Patients.OriginalFolio</c> y <c>Sales.OriginalFolio</c>, el folio con letra que la PC principal regularizó.
     /// </summary>
-    public const int Revision = 8;
+    public const int Revision = 9;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -89,6 +90,10 @@ public static class SyncContract
     {
         [(typeof(Product), nameof(Product.CurrentStock))] =
             "Existencias del producto. Hoy viaja como valor y se aplica al bajar; quien registra una venta o un movimiento la actualiza en la misma escritura. Pasa a derivada en el paso 8.20.",
+        [(typeof(PatientRecord), nameof(PatientRecord.OriginalFolio))] =
+            "El folio con letra (EXP-2026-T1-001) con que se creó sin conexión, después de que la PC principal le dio el número normal (desde la revisión 9). La búsqueda compara RecordNumber y OriginalFolio. Solo la escribe la PC principal; nulo si nunca llevó letra.",
+        [(typeof(Sale), nameof(Sale.OriginalFolio))] =
+            "El folio con letra (TKT-20261009-T1-0001) con que se cobró sin conexión, después de que la PC principal le dio el número normal (desde la revisión 9). El ticket reimpreso lo muestra debajo del folio y la búsqueda lo compara. Solo la escribe la PC principal; nulo si nunca llevó letra.",
         [(typeof(PatientRecord), nameof(PatientRecord.LastVisit))] =
             "Resumen: la fecha de la última consulta. Quien guarda una nota la actualiza en la misma escritura.",
         [(typeof(PatientRecord), nameof(PatientRecord.NextAppointmentDate))] =
@@ -117,7 +122,7 @@ public static class SyncContract
         "El upsert escribe solo las columnas que el equipo conoce (ON CONFLICT DO UPDATE SET columna por columna, nunca INSERT OR REPLACE), para no borrar las que agregue una versión más nueva.",
         "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
         "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Desde la revisión 8 (paso 8.16) Patients.RecordNumber y Sales.Folio ya no son únicas: un folio repetido que llega se guarda tal cual (antes se renombraba con -R1 solo en el equipo que lo recibía) y aparece en un aviso.",
-        "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json.",
+        "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json. Regularización (paso 8.17): solo la PC principal, una vez al día y con todos los equipos sin cambios pendientes, le da a cada expediente y ticket con letra el siguiente número de su serie (EXP del año del folio, TKT de su día), guarda el folio con letra en OriginalFolio y actualiza las citas del paciente que lo copian (PatientRecordNumber); todo sube por el ciclo normal. Un registro que vuelve con su folio con letra recibe el mismo número que ya tenía. La tablet y el celular nunca regularizan, y su búsqueda compara también OriginalFolio.",
         "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl', también las columnas nuevas de RegisteredDevices con ALTER TABLE) y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos. Kotlin nunca corre DDL ni la limpieza de RegisteredDevices y ConsultationHandoffs, y no sincroniza si falta _tpvc_meta.schema («Sincronice primero la PC»).",
         "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
         "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
