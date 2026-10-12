@@ -2,6 +2,18 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.34.0] - 2026-10-11
+
+### Añadido — Fase 8, paso 8.16: folios consecutivos con varios equipos (lado de la PC)
+* Con la nube activa, el folio de un expediente nuevo y el de cada ticket salen de un contador en la nube: dos equipos nunca dan el mismo, aunque guarden al mismo tiempo. El formulario del paciente muestra el siguiente probable; si otro equipo lo usó mientras tanto, el aviso de guardado dice con cuál quedó.
+* Sin internet, el folio lleva el código de la computadora (`EXP-2026-P1-001`, `TKT-20261011-P1-0001`) y su propio consecutivo, que se guarda también fuera de la base: restaurar un respaldo no repite un folio ya impreso. Más adelante la PC principal les dará el número normal.
+* *Nube y dispositivos* avisa si hay folios repetidos.
+
+### Cambiado
+* Un folio repetido que llega de otro equipo ya no se renombra con `-R1`: se conservan los dos registros con su folio.
+* Con la nube apagada, los folios salen como siempre.
+* 567 pruebas.
+
 ## [1.33.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.15: equipo perdido y tokens anulados (lado de la PC)
@@ -10,7 +22,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 
 ### Cambiado
 * Si Turso rechaza el token de esta computadora, la sincronización se detiene y dice qué hacer, en lugar de reintentar sola. No se borra nada: lo que no había subido sube con el token nuevo, y al pegarlo la sincronización sigue.
-* 558 pruebas.
+* 559 pruebas.
 
 ## [1.32.0] - 2026-10-11
 

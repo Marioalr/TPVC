@@ -1,7 +1,7 @@
 {
-  "contract": 7,
+  "contract": 8,
   "protocol": 2,
-  "fingerprint": "87F02D03D8953AE4",
+  "fingerprint": "7CC431010325CCAA",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -13,7 +13,8 @@
     "Una columna obligatoria que llega nula se guarda con su 'nullValue'.",
     "El upsert escribe solo las columnas que el equipo conoce (ON CONFLICT DO UPDATE SET columna por columna, nunca INSERT OR REPLACE), para no borrar las que agregue una versión más nueva.",
     "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
-    "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Hasta el paso 8.16, un folio repetido que llega se guarda con sufijo -R1, -R2… solo en el equipo que lo recibe y no se sube.",
+    "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Desde la revisión 8 (paso 8.16) Patients.RecordNumber y Sales.Folio ya no son únicas: un folio repetido que llega se guarda tal cual (antes se renombraba con -R1 solo en el equipo que lo recibía) y aparece en un aviso.",
+    "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json.",
     "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl', también las columnas nuevas de RegisteredDevices con ALTER TABLE) y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos. Kotlin nunca corre DDL ni la limpieza de RegisteredDevices y ConsultationHandoffs, y no sincroniza si falta _tpvc_meta.schema («Sincronice primero la PC»).",
     "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
     "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
@@ -850,11 +851,7 @@
         }
       ],
       "references": [],
-      "unique": [
-        [
-          "RecordNumber"
-        ]
-      ],
+      "unique": [],
       "ddl": [
         "CREATE TABLE IF NOT EXISTS \"Patients\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"AbortionsCount\" INTEGER, \"ActivePrescriptionJson\" TEXT, \"ActiveServicesJson\" TEXT, \"ActiveSuppliesJson\" TEXT, \"Address\" TEXT, \"Age\" INTEGER, \"Allergies\" TEXT, \"BirthDate\" TEXT, \"BloodType\" TEXT, \"CesareansCount\" INTEGER, \"ChronicDiseases\" TEXT, \"ClinicalNotes\" TEXT, \"CreatedAt\" TEXT, \"DevelopmentalMilestones\" TEXT, \"Diet\" TEXT, \"Email\" TEXT, \"EmergencyContactName\" TEXT, \"EmergencyContactPhone\" TEXT, \"FamilyHistory\" TEXT, \"FullName\" TEXT, \"Gender\" TEXT, \"GestationalWeeks\" TEXT, \"Hospitalizations\" TEXT, \"HousingConditions\" TEXT, \"ImmunizationSchedule\" TEXT, \"IsActive\" INTEGER, \"IsCurrentlyPregnant\" INTEGER, \"IsPeriodHeavy\" TEXT, \"LastDiagnosis\" TEXT, \"LastVisit\" TEXT, \"MenarcheAge\" TEXT, \"NextAppointmentDate\" TEXT, \"NextAppointmentNotes\" TEXT, \"NextAppointmentReason\" TEXT, \"NextAppointmentTime\" TEXT, \"Occupation\" TEXT, \"PapSmear\" TEXT, \"PeriodDuration\" TEXT, \"Phone\" TEXT, \"PregnanciesCount\" INTEGER, \"RecordNumber\" TEXT, \"Religion\" TEXT, \"SexualOnsetAge\" TEXT, \"SexualPartnersCount\" TEXT, \"Surgeries\" TEXT, \"Transfusions\" TEXT, \"VitalSigns\" TEXT, \"Zoonosis\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Patients_SyncedAtUtc\" ON \"Patients\" (\"SyncedAtUtc\")"
@@ -2443,11 +2440,7 @@
         }
       ],
       "references": [],
-      "unique": [
-        [
-          "Folio"
-        ]
-      ],
+      "unique": [],
       "ddl": [
         "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")"
@@ -2840,6 +2833,14 @@
       ]
     },
     {
+      "table": "FolioCounters",
+      "replicated": false,
+      "purpose": "Un consecutivo por serie de folios (paso 8.16): 'EXP-2026' (año) y 'TKT-20261009' (día). La crea la PC; la PC y la tablet toman el siguiente número con una sola instrucción ('folio.take' de hrana/statements.json). No se replica y reemplazar la nube con un respaldo no la toca.",
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS FolioCounters (Series TEXT PRIMARY KEY NOT NULL, LastNumber INTEGER NOT NULL)"
+      ]
+    },
+    {
       "table": "ConsultationHandoffs",
       "replicated": false,
       "purpose": "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente.",
@@ -2890,6 +2891,7 @@
     "CREATE TABLE IF NOT EXISTS RegisteredDevices (DeviceId TEXT PRIMARY KEY, DeviceName TEXT NOT NULL, DeviceRole TEXT NOT NULL, AppVersion TEXT NOT NULL, LastSeenUtc TEXT NOT NULL, Platform TEXT, SyncProtocol INTEGER, HandoffProtocol INTEGER, ContractRevision INTEGER, LastPushUtc TEXT, PendingCount INTEGER, OldestPendingUtc TEXT, InstanceNonce TEXT)",
     "CREATE TABLE IF NOT EXISTS DeviceRegistry (DeviceId TEXT PRIMARY KEY NOT NULL, DeviceCode TEXT NOT NULL, Role TEXT NOT NULL, DisplayName TEXT NOT NULL, Model TEXT, PairedAtUtc TEXT NOT NULL, RevokedAtUtc TEXT, RevokedReason TEXT)",
     "CREATE UNIQUE INDEX IF NOT EXISTS UX_DeviceRegistry_DeviceCode ON DeviceRegistry (DeviceCode)",
+    "CREATE TABLE IF NOT EXISTS FolioCounters (Series TEXT PRIMARY KEY NOT NULL, LastNumber INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS ConsultationHandoffs (Id TEXT PRIMARY KEY NOT NULL, FromDeviceId TEXT NOT NULL, FromDeviceName TEXT NOT NULL, ToDeviceId TEXT NOT NULL, ToDeviceName TEXT NOT NULL, PatientSyncId TEXT NOT NULL, PatientName TEXT NOT NULL, Folio TEXT NOT NULL, Payload TEXT NOT NULL, PayloadVersion INTEGER NOT NULL, State TEXT NOT NULL, AcceptToken TEXT, SenderAckAtUtc TEXT, CreatedAtUtc TEXT NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
     "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)"
   ]

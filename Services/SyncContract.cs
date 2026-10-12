@@ -26,8 +26,9 @@ public static class SyncContract
     /// 5 (v1.27.0): la tabla <c>DeviceRegistry</c> y las columnas nuevas del latido en <c>RegisteredDevices</c>.
     /// 6 (v1.29.0): el membrete en la nube: <c>ClinicProfiles.CrestImageHash</c> y <c>HeaderImageHash</c>, <c>ClinicAssets</c> y <c>ClinicAssetChunks</c>.
     /// 7 (v1.30.0): los resultados de laboratorio: la tabla sincronizada <c>LabResults</c>, y <c>LabBlobs</c> y <c>LabBlobChunks</c> con su contenido.
+    /// 8 (v1.34.0): los folios desde la nube: la tabla <c>FolioCounters</c>, y <c>Patients.RecordNumber</c> y <c>Sales.Folio</c> dejan de ser únicos.
     /// </summary>
-    public const int Revision = 7;
+    public const int Revision = 8;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -115,7 +116,8 @@ public static class SyncContract
         "Una columna obligatoria que llega nula se guarda con su 'nullValue'.",
         "El upsert escribe solo las columnas que el equipo conoce (ON CONFLICT DO UPDATE SET columna por columna, nunca INSERT OR REPLACE), para no borrar las que agregue una versión más nueva.",
         "Un equipo que se actualiza y conoce columnas nuevas de una tabla la baja completa antes de subir nada (la PC lo hace desde el paso 8.7).",
-        "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Hasta el paso 8.16, un folio repetido que llega se guarda con sufijo -R1, -R2… solo en el equipo que lo recibe y no se sube.",
+        "Las columnas de 'unique' son únicas solo en la base local; en la nube la única llave es SyncId. Desde la revisión 8 (paso 8.16) Patients.RecordNumber y Sales.Folio ya no son únicas: un folio repetido que llega se guarda tal cual (antes se renombraba con -R1 solo en el equipo que lo recibía) y aparece en un aviso.",
+        "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json.",
         "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl', también las columnas nuevas de RegisteredDevices con ALTER TABLE) y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos. Kotlin nunca corre DDL ni la limpieza de RegisteredDevices y ConsultationHandoffs, y no sincroniza si falta _tpvc_meta.schema («Sincronice primero la PC»).",
         "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
         "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
@@ -176,6 +178,8 @@ public static class SyncContract
                 OtherTable("RegisteredDevices", "Latido de cada equipo (LastSeenUtc y LastPushUtc con la hora de la nube). Desde el paso 8.10 también la plataforma, los protocolos, la revisión del contrato, los cambios sin subir y el InstanceNonce. No se replica; la PC borra cada 6 h los revocados y los que no se ven hace 60 días.", SyncSchema.RegisteredDevicesStatement),
                 OtherTable(SyncSchema.DeviceRegistryTable, "Rol, código (P1, T1, C1…) y revocación de cada equipo (paso 8.10). Solo la escribe la PC; sus filas nunca se borran y un código nunca se reutiliza.",
                     SyncSchema.DeviceRegistryStatements),
+                OtherTable(SyncSchema.FolioCountersTable, "Un consecutivo por serie de folios (paso 8.16): 'EXP-2026' (año) y 'TKT-20261009' (día). La crea la PC; la PC y la tablet toman el siguiente número con una sola instrucción ('folio.take' de hrana/statements.json). No se replica y reemplazar la nube con un respaldo no la toca.",
+                    SyncSchema.FolioCountersStatement),
                 OtherTable("ConsultationHandoffs", "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente.",
                     ConsultationHandoffService.HandoffTableDdl)),
             ["ddl"] = new JsonArray(schema.Statements.Select(s => (JsonNode)JsonValue.Create(s)!).ToArray())

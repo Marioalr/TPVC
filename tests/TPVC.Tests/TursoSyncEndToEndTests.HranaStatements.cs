@@ -77,6 +77,10 @@ public partial class TursoSyncEndToEndTests
             "Una imagen del membrete cuyo hash cambió: sin fila, todavía no está completa."));
         statements.Add(Statement("asset.chunk", TursoSyncService.AssetChunkSql, Texts("Hash", "Part"),
             "Cada trozo, cuatro por petición; se revisan el tamaño y el SHA-256."));
+        statements.Add(Statement("folio.take", TursoSyncService.TakeFolioSql, Texts("Series ('EXP-2026' o 'TKT-20261009')", "Piso (integer)", "Piso (integer)"),
+            "Paso 8.16: al guardar un expediente o un ticket, con 2 s de espera; el piso es el mayor número de esa serie en la base del equipo (los folios con letra no cuentan). Sin respuesta, el folio lleva la letra del equipo (golden/folios.json)."));
+        statements.Add(Statement("folio.raise", TursoSyncService.RaiseFolioSql, Texts("Series", "Número (integer)"),
+            "Paso 8.16: un folio tecleado a mano mayor que el contador lo sube. La PC principal además siembra el año y el día al empezar cada sesión; la tablet y el celular no."));
 
         var file = new JsonObject
         {

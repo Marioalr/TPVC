@@ -192,7 +192,8 @@ internal sealed class FakeHranaServer : HttpMessageHandler
             .SelectMany(Statements)
             .Select(s => s["sql"]?.GetValue<string>())
             .Where(q => q != null));
-        if (BeforeExecuteAsync != null) await BeforeExecuteAsync(sql);
+        // Como una red de verdad: cancelar la petición deja de esperar (el gancho sigue solo)
+        if (BeforeExecuteAsync != null) await BeforeExecuteAsync(sql).WaitAsync(cancellationToken);
 
         HttpResponseMessage response;
         await _gate.WaitAsync(cancellationToken);

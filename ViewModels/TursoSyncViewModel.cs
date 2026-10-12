@@ -137,6 +137,10 @@ public partial class TursoSyncViewModel : ObservableObject
     [ObservableProperty]
     private string _deviceIdNoticeText = string.Empty;
 
+    /// <summary>Folios repetidos (paso 8.16: ya no se renombran con -R1); vacío si no hay.</summary>
+    [ObservableProperty]
+    private string _duplicateFoliosNoticeText = string.Empty;
+
     /// <summary>Equipos vinculados (paso 8.10): los que usan esta nube, menos los quitados.</summary>
     public ObservableCollection<LinkedDevice> Devices { get; } = new();
 
@@ -340,6 +344,15 @@ public partial class TursoSyncViewModel : ObservableObject
             : string.Empty;
 
         DeviceIdNoticeText = _settingsService.CurrentSettings.DeviceIdNotice ?? string.Empty;
+
+        // Paso 8.16: un folio repetido ya no se renombra con -R1
+        var duplicates = _syncService.DuplicateFolios;
+        DuplicateFoliosNoticeText = duplicates.Count == 0
+            ? string.Empty
+            : "Folios repetidos en esta computadora: " + string.Join(", ", duplicates.Take(8)) +
+              (duplicates.Count > 8 ? $" y {duplicates.Count - 8} más" : string.Empty) +
+              ". Vienen de antes de que los folios salieran de la nube (cada equipo numeraba solo) o de un folio tecleado a mano. " +
+              "Se conservan todos los registros; si dos expedientes tienen el mismo folio, cambie el de uno en su ficha.";
 
         var conflict = _syncService.IdentityConflict;
         CanAdoptCloudIdentity = conflict is { LocalClinicId: null };

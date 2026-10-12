@@ -346,7 +346,7 @@ public partial class ConsultationViewModel : ObservableObject
             ? ConsultationFolio.Trim()
             : (!string.IsNullOrWhiteSpace(active?.Folio)
                 ? active.Folio
-                : $"CNS-{DateTime.Today:yyyyMMdd}-{Random.Shared.Next(100, 999)}");
+                : TPVC.Services.Folios.FolioFactory.Consultation(DateTime.Now));
         ConsultationFolio = folio;
         if (active != null) active.Folio = folio;
 
@@ -445,7 +445,7 @@ public partial class ConsultationViewModel : ObservableObject
             _record.BeginConsultationOnRecord(_session.SelectedPatient);
             _workflow.SyncActiveConsultation();
 
-            ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
+            ConsultationFolio = _consultationService.CurrentConsultation?.Folio ?? TPVC.Services.Folios.FolioFactory.Consultation(DateTime.Now);
             ClearConsultationFields();
             _workflow.NotifyAccountChanged();
             // La pantalla de consulta ya indica que está en curso: sin ventana emergente que interrumpa

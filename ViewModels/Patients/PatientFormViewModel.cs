@@ -36,6 +36,10 @@ public partial class PatientFormViewModel : ObservableObject
     private readonly AutosaveOptions _autosaveOptions;
     private readonly IPatientsWorkflow _workflow;
 
+    // Paso 8.16: el folio probable que se mostró al abrir un expediente nuevo. Si no se cambió, el definitivo se toma al
+    // guardar (con la nube, del contador: otro equipo pudo usar este mientras tanto)
+    private string? _suggestedRecordNumber;
+
     public PatientFormViewModel(
         InventoryService? inventoryService,
         ConsultationService? consultationService,
@@ -495,10 +499,12 @@ public partial class PatientFormViewModel : ObservableObject
         if (_inventoryService != null)
         {
             FormRecordNumber = await _inventoryService.GenerateNextRecordNumberAsync();
+            _suggestedRecordNumber = FormRecordNumber;
         }
         else
         {
             FormRecordNumber = $"EXP-{DateTime.Today.Year}-{(_session.Patients.Count + 1):D3}";
+            _suggestedRecordNumber = null;
         }
 
         FormFirstName = string.Empty;
@@ -563,6 +569,7 @@ public partial class PatientFormViewModel : ObservableObject
 
         FormPatientId = _session.SelectedPatient.Id;
         FormErrorMessage = null;
+        _suggestedRecordNumber = null;
 
         FormRecordNumber = _session.SelectedPatient.RecordNumber;
         FormFullName = _session.SelectedPatient.FullName;
@@ -647,7 +654,14 @@ public partial class PatientFormViewModel : ObservableObject
         FormFullName = PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName);
 
         var normalizedFolio = FormRecordNumber.Trim();
-        if (_inventoryService != null)
+        // El folio probable sin cambiar: el definitivo lo pone el servicio al guardar
+        bool assignOnSave = _inventoryService != null && FormPatientId == 0 && _suggestedRecordNumber != null
+                            && string.Equals(normalizedFolio, _suggestedRecordNumber, StringComparison.OrdinalIgnoreCase);
+        if (assignOnSave)
+        {
+            // Se revisa al tomar el número
+        }
+        else if (_inventoryService != null)
         {
             var isTaken = await _inventoryService.IsRecordNumberTakenAsync(normalizedFolio, FormPatientId);
             if (isTaken)
@@ -671,7 +685,7 @@ public partial class PatientFormViewModel : ObservableObject
             : (FormPatientId > 0 ? _session.Patients.FirstOrDefault(p => p.Id == FormPatientId) ?? new PatientRecord() : new PatientRecord());
         patient.Id = FormPatientId;
 
-        patient.RecordNumber = normalizedFolio;
+        patient.RecordNumber = assignOnSave ? string.Empty : normalizedFolio;
         patient.FullName = FormFullName.Trim();
         patient.Age = parsedAge;
         patient.Gender = FormGender;
@@ -738,6 +752,10 @@ public partial class PatientFormViewModel : ObservableObject
 
         IsPatientModalOpen = false;
         FormErrorMessage = null;
-        _feedback.ShowSuccess($"Expediente de {patient.FullName} guardado");
+        // Paso 8.16: si otro equipo tomó el folio que se mostraba, se dice cuál quedó
+        _feedback.ShowSuccess(assignOnSave && !string.Equals(patient.RecordNumber, normalizedFolio, StringComparison.OrdinalIgnoreCase)
+            ? $"Expediente de {patient.FullName} guardado con el folio {patient.RecordNumber}"
+            : $"Expediente de {patient.FullName} guardado");
+        _suggestedRecordNumber = null;
     }
 }

@@ -84,10 +84,17 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.34.0 (paso 8.16: folios consecutivos desde Turso, lado de la PC)
+
+- [ ] Con la nube del consultorio: dar de alta un paciente en la PC y otro en una segunda computadora (o en la misma PC después de cambiar a mano el contador en el panel de Turso): los folios salen seguidos y sin repetir. En el panel de Turso, la tabla `FolioCounters` tiene `EXP-2026` y el día de hoy.
+- [ ] Sin internet (desconectar el Wi-Fi): un paciente nuevo sale como `EXP-2026-P1-001` y un ticket como `TKT-…-P1-0001`; el siguiente, `-002`. Con internet otra vez, el siguiente vuelve a la serie normal.
+- [ ] Si hay folios repetidos de antes (filas con `-R1` no cuentan), *Nube y dispositivos* los lista.
+- [ ] Para Kotlin (K3): al guardar un expediente o un ticket con conexión, `folio.take` de `contracts/hrana/statements.json` con el piso local; sin respuesta en 2 s, el folio con la letra del equipo y su consecutivo guardado en un archivo que no se borra al volver a bajar todo (`contracts/golden/folios.json`). CNS sin conexión con la letra. La tablet y el celular no siembran.
+
 ### v1.33.0 (paso 8.15: quitar, equipo perdido y token rechazado, lado de la PC)
 
 - [ ] *Equipos vinculados* › **Perdí este equipo** en otra computadora o en una tablet de prueba: el equipo sale de la lista y aparecen los pasos para anular los tokens; **Abrir el panel de Turso** abre app.turso.tech.
-- [ ] [T] En `prueba-estres` (solo si está en otro grupo que la base del consultorio): anular los tokens con `turso db tokens invalidate prueba-estres`. La PC conectada a esa base muestra «Sincronización detenida: Turso rechazó el token» y no vuelve a intentar sola. Al pegar un token nuevo y **Sincronizar ahora**, sube lo pendiente y los pasos se cierran solos. Es V4: anotar cuánto tardó el token nuevo en funcionar.
+- [ ] [T] Con TPVC conectado a `prueba-estres` (una instalación de prueba, no la del consultorio): anular los tokens con el script de V4 (abajo). TPVC muestra «Sincronización detenida: Turso rechazó el token» y no vuelve a intentar solo. Al final el script ofrece copiar el token nuevo (escriba COPIAR); péguelo en TPVC y **Sincronizar ahora**: sube lo pendiente y los pasos se cierran solos.
 - [ ] Pegar un token incompleto (cortar el final): el aviso dice que Turso rechazó el token, no un error en inglés.
 - [ ] Para Kotlin (K3): con `RevokedReason = 'quitado'`, subir lo pendiente (o exportarlo) y después borrar la base, la credencial y los borradores; con `'perdido'`, borrarlos sin subir nada. Ante un 401, o un 400 con "JWT" en el cuerpo, no borrar nada y mostrar "Pegue el token nuevo"; sin nada pendiente, borrarse tras dos 401 con 10 minutos de diferencia (el 400 no cuenta). Con el token nuevo no hay que aprobar otra vez: la fila de `DeviceRegistry` sigue.
 
@@ -96,7 +103,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] *Nube y dispositivos › Vincular tablet y celular › Mostrar QR para la tablet o el celular*: aparece el código con el aviso de no fotografiarlo, la cuenta regresiva y **Cerrar**; a los 2 minutos se cierra solo.
 - [ ] Leer ese QR con la cámara del celular (cualquier lector): el texto empieza con `tpvc-link:1:`. Se lee bien desde la pantalla de la laptop.
 - [x] [T] V3 y V16 en `prueba-estres` (2026-10-11): un token mal copiado da HTTP 400 `JWT error: InvalidToken` y uno anulado da 401 (los dos se tratan igual); el contador de folios dio 40 números distintos sin huecos con 40 peticiones a la vez. Detalle en `TURSO_SYNC_ARCHITECTURE.md` §6.
-- [ ] [T] V4, solo si `prueba-estres` está en otro grupo que la base del consultorio (`turso db list`): el mismo script con `-Only V3 -Rotate -DbName prueba-estres`.
+- [x] [T] V4 en `prueba-estres` (2026-10-11, con la API de la plataforma, sin la CLI): anular tomó 0.2 s, el token viejo recibió 401 al instante ("role was invalidated after token was issued") y el nuevo sirvió al crearlo. La base de prueba estaba sola en el grupo `default`. Borrar el token de la API en el panel.
 - [ ] Para Kotlin (K3): leer el QR (`contracts/golden/link-qr.json`) o pegar la URL y el token; negarse sin bloqueo de pantalla; guardar la credencial envuelta con el Keystore; escribir el latido con `Platform = 'Android'` y el rol que pide en `DeviceRole`; mostrar los últimos 6 caracteres del `DeviceId` en mayúsculas y esperar la fila de `DeviceRegistry` sin bajar nada. Con código X o `RevokedReason = 'rechazado'`: "La PC rechazó este equipo". Ante un 401, o un 400 cuyo cuerpo trae "JWT" (token mal copiado, V3): "Pegue el token nuevo", sin borrar lo pendiente.
 
 ### v1.31.0 (paso 8.13: kit de conformidad de lectura)

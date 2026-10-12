@@ -371,6 +371,15 @@ internal sealed class SyncSchema
         $"CREATE UNIQUE INDEX IF NOT EXISTS UX_{DeviceRegistryTable}_DeviceCode ON {DeviceRegistryTable} (DeviceCode)"
     };
 
+    public const string FolioCountersTable = "FolioCounters";
+
+    /// <summary>
+    /// Paso 8.16: un consecutivo por serie (EXP-2026, TKT-20261009) para todos los equipos. No es tabla sincronizada: la
+    /// incrementan la PC y la tablet con una sola instrucción (V16) y reemplazar la nube con un respaldo no la toca.
+    /// </summary>
+    public static readonly string FolioCountersStatement =
+        $"CREATE TABLE IF NOT EXISTS {FolioCountersTable} (Series TEXT PRIMARY KEY NOT NULL, LastNumber INTEGER NOT NULL)";
+
     private static IEnumerable<string> BuildStatements(IReadOnlyList<TableMap> tables)
     {
         yield return MetaStatement;
@@ -384,6 +393,7 @@ internal sealed class SyncSchema
         foreach (var statement in LabFileStatements) yield return statement;
         yield return RegisteredDevicesStatement;
         foreach (var statement in DeviceRegistryStatements) yield return statement;
+        yield return FolioCountersStatement;
 
         // Consultas enviadas entre equipos (no se replica: cada equipo la consulta directamente)
         foreach (var ddl in ConsultationHandoffService.HandoffTableDdl) yield return ddl;

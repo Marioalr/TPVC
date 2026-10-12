@@ -38,7 +38,9 @@ y, desde v1.31.0, también por HTTP en `127.0.0.1` (`FakeTursoHost`). Vive en el
   database: invalid JWT token: can't be decoded with any of the existing keys`"}``. Un token que ni siquiera es un JWT
   recibe en Turso HTTP 400 `{"error":"JWT error: InvalidToken"}`; el simulador no lo copia (los tokens de las pruebas no
   son JWT), y el equipo lo trata igual que el 401. En Turso, `turso db tokens invalidate` anula todos los
-  tokens de la base y del grupo.
+  tokens de la base y del grupo, al instante (V4, 2026-10-11); un token anulado recibe 401 con otro texto, ``invalid JWT
+  token: role was invalidated after token was issued``. El simulador manda siempre el primero: el equipo no distingue
+  el texto, solo el estado.
 
 ## Lo que no copia
 
@@ -97,6 +99,8 @@ variable termina en el acto, así que no estorba en la CI normal.
 | `TPVC_FAKE_TURSO_TOKEN` | (cualquiera) | Si se pone, solo acepta ese token; los demás reciben 401. |
 | `TPVC_FAKE_TURSO_READY_FILE` | — | Archivo donde escribe la URL cuando ya está listo. |
 | `TPVC_FAKE_TURSO_SEED` | `demo` | `none` deja la nube vacía: así se prueban los scripts de `scripts/verify-turso-*.ps1`, que se niegan a correr en una base con datos (`-Url http://127.0.0.1:8787`). |
+| `TPVC_FAKE_TURSO_API_TOKEN` | — | Paso 8.15: con un valor, también hace de API de la plataforma de Turso (solo lo de la rotación) y pide ese token. `GET /v1/organizations/{org}/databases` lista la base simulada (`prueba-simulada`, grupo `pruebas`, `Hostname` 127.0.0.1); `POST …/databases/prueba-simulada/auth/rotate` anula todos los tokens; `POST …/auth/tokens` crea uno y lo regresa en `jwt`. Para `verify-turso-hrana.ps1 -Rotate -ApiBase http://127.0.0.1:8787`. |
+| `TPVC_FAKE_TURSO_GROUP_PEERS` | — | Otras bases (separadas por comas) en el mismo grupo: el script se niega a rotar. |
 
 Antes de escuchar, una PC con los datos de demostración (pacientes, consultas, productos, lotes y ventas) sube todo y hace
 la «Sincronización completa», así que la nube tiene esquema, identidad (`clinicId`, generación) y datos, como la del
