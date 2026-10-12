@@ -162,11 +162,14 @@ internal sealed class FakeTursoHost : IDisposable
         var parts = path.Trim('/').Split('/');
         if (request.HttpMethod == "GET" && parts.Length == 4 && parts[3] == "databases")
         {
+            // Como Turso: 'Hostname' y 'hostname' (solo cambian en mayúsculas; PowerShell 5.1 no los lee con ConvertFrom-Json).
+            // Aquí el primero es la dirección vieja y el segundo la que usa el equipo
             var databases = new[] { FakeDatabaseName }.Concat(GroupPeers)
                 .Select(name => new System.Text.Json.Nodes.JsonObject
                 {
                     ["Name"] = name,
-                    ["Hostname"] = name == FakeDatabaseName ? BaseUri.Host : $"{name}.fake.turso.io",
+                    ["Hostname"] = $"{name}-simulada.turso.io",
+                    ["hostname"] = name == FakeDatabaseName ? BaseUri.Host : $"{name}-simulada.aws-us-east-2.turso.io",
                     ["group"] = FakeGroupName
                 });
             var json = new System.Text.Json.Nodes.JsonObject { ["databases"] = new System.Text.Json.Nodes.JsonArray(databases.ToArray<System.Text.Json.Nodes.JsonNode?>()) };

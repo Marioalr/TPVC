@@ -153,6 +153,33 @@ function Api([string]$method, [string]$path, [string]$apiToken) {
     }
 }
 
+# La API de la plataforma regresa claves que solo cambian en mayúsculas ('Hostname' y 'hostname'), y ConvertFrom-Json
+# de PowerShell 5.1 se niega a leerlas (2026-10-11, prueba-estres). JavaScriptSerializer regresa diccionarios que sí
+# distinguen mayúsculas
+function ApiJson([string]$text) {
+    Add-Type -AssemblyName System.Web.Extensions
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = [int]::MaxValue
+    return $serializer.DeserializeObject($text)
+}
+
+function Pick($dict, [string[]]$keys) {
+    foreach ($key in $keys) { if ($dict.ContainsKey($key) -and $null -ne $dict[$key]) { return [string]$dict[$key] } }
+    return $null
+}
+
+# Las bases de la lista con su nombre, su grupo y todas sus direcciones (en minúsculas): 'Hostname' y 'hostname' pueden
+# ser la dirección vieja y la de la región
+function ApiDatabases([string]$text) {
+    foreach ($db in @((ApiJson $text)['databases'])) {
+        [pscustomobject]@{
+            Name      = Pick $db @('Name', 'name')
+            group     = Pick $db @('group', 'Group')
+            Hostnames = @($db.Keys | Where-Object { $_ -ieq 'hostname' } | ForEach-Object { ([string]$db[$_]).ToLowerInvariant() })
+        }
+    }
+}
+
 # Un token de la base (el que se pega en TPVC) lleva en su JWT el permiso "a" ("rw" o "ro"); uno de la API de la
 # plataforma no. Turso responde 401 "could not parse jwt id" si se usa uno de la base con la API
 function IsDatabaseToken([string]$jwt) {
@@ -572,8 +599,8 @@ try {
                 Say ("    No se pudo leer la lista de bases de '{0}' (HTTP {1} · {2}). {3} No se anuló nada." -f $orgSlug, $list.Status, (Short $list.Content), $hint)
             }
             else {
-                $databases = @(($list.Content | ConvertFrom-Json).databases)
-                $rotateDb = $databases | Where-Object { [string]::Equals([string]$_.Hostname, $hostName, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+                $databases = @(ApiDatabases $list.Content)
+                $rotateDb = $databases | Where-Object { $_.Hostnames -contains $hostName.ToLowerInvariant() } | Select-Object -First 1
                 if ($null -eq $rotateDb) {
                     Say "    Ninguna base de '$orgSlug' tiene la dirección $hostName. Rotación omitida."
                 }
@@ -628,7 +655,7 @@ try {
                 if ($rotateDb) {
                     $created = Api 'POST' "/v1/organizations/$orgSlug/databases/$($rotateDb.Name)/auth/tokens?expiration=never&authorization=full-access" $apiToken
                     if ($created.Status -ne 200) { throw "No se pudo crear el token nuevo: HTTP $($created.Status) · $(Short $created.Content)" }
-                    $token = ($created.Content | ConvertFrom-Json).jwt
+                    $token = [string](ApiJson $created.Content)['jwt']
                 }
                 else {
                     Write-Host "Ahora cree uno nuevo:  turso db tokens create $DbName"

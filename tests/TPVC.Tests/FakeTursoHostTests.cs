@@ -110,7 +110,9 @@ public class FakeTursoHostTests
 
         var list = System.Text.Json.Nodes.JsonNode.Parse(await http.GetStringAsync("v1/organizations/simulada/databases"))!["databases"]!.AsArray();
         Assert.HasCount(2, list);
-        Assert.AreEqual("127.0.0.1", list.Single(d => (string?)d!["Name"] == FakeTursoHost.FakeDatabaseName)!["Hostname"]!.GetValue<string>());
+        var own = list.Single(d => (string?)d!["Name"] == FakeTursoHost.FakeDatabaseName)!.AsObject();
+        Assert.AreEqual("127.0.0.1", own["hostname"]!.GetValue<string>(), "La dirección del equipo va en 'hostname'");
+        Assert.IsNotNull(own["Hostname"], "Y la vieja en 'Hostname', como en Turso (2026-10-11)");
         Assert.IsTrue(list.All(d => (string?)d!["group"] == FakeTursoHost.FakeGroupName), "El script se niega a rotar con otra base en el grupo");
 
         using var old = new TursoClient(host.BaseUri.ToString(), "token-viejo");
