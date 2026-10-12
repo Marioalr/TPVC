@@ -7,7 +7,7 @@
   "notes": [
     "Services/Rules/StockAlertRules.cs y ProductBatch.StatusTextOn.",
     "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",
-    "Caducidad: cuentan los lotes con piezas, sin marcar como agotados y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
+    "Caducidad: cuentan los lotes con piezas, sin marcar como agotados, abiertos (closedAtUtc nulo, desde v1.37.0) y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
     "Estado del lote (Inventario): 'Vencido' antes de hoy; 'Vence en N días' de hoy a 60 días; si no, 'Vigente'.",
     "Hoy es la fecha local del consultorio: el mismo instante da 12/10/2026 en UTC y 11/10/2026 en America/Mexico_City (UTC-6, sin horario de verano desde 2022)."
   ],
@@ -79,6 +79,7 @@
             "expiration": "2026-10-10",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -86,6 +87,7 @@
             "expiration": "2026-10-11",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -93,6 +95,7 @@
             "expiration": "2026-10-12",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -100,6 +103,7 @@
             "expiration": "2026-11-10",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -107,6 +111,7 @@
             "expiration": "2026-11-11",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -114,6 +119,7 @@
             "expiration": "2026-11-12",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -121,6 +127,7 @@
             "expiration": "2026-10-01",
             "quantity": 0,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -128,6 +135,7 @@
             "expiration": "2026-10-01",
             "quantity": 3,
             "depleted": true,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -135,7 +143,16 @@
             "expiration": "2026-10-01",
             "quantity": 3,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": false
+          },
+          {
+            "batch": "CERRADO-CON-PIEZAS",
+            "expiration": "2026-10-01",
+            "quantity": 3,
+            "depleted": false,
+            "closedAtUtc": "2026-10-05 12:00:00.0000000",
+            "productActive": true
           }
         ]
       },
@@ -159,7 +176,8 @@
           "VENCE-12-NOV": "Vence en 31 días",
           "AGOTADO": "Vencido",
           "MARCADO-AGOTADO": "Vencido",
-          "DE-INACTIVO": "Vencido"
+          "DE-INACTIVO": "Vencido",
+          "CERRADO-CON-PIEZAS": "Vencido"
         }
       }
     },
@@ -175,6 +193,7 @@
             "expiration": "2026-10-10",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -182,6 +201,7 @@
             "expiration": "2026-10-11",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -189,6 +209,7 @@
             "expiration": "2026-10-12",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -196,6 +217,7 @@
             "expiration": "2026-11-10",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -203,6 +225,7 @@
             "expiration": "2026-11-11",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -210,6 +233,7 @@
             "expiration": "2026-11-12",
             "quantity": 5,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -217,6 +241,7 @@
             "expiration": "2026-10-01",
             "quantity": 0,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -224,6 +249,7 @@
             "expiration": "2026-10-01",
             "quantity": 3,
             "depleted": true,
+            "closedAtUtc": null,
             "productActive": true
           },
           {
@@ -231,7 +257,16 @@
             "expiration": "2026-10-01",
             "quantity": 3,
             "depleted": false,
+            "closedAtUtc": null,
             "productActive": false
+          },
+          {
+            "batch": "CERRADO-CON-PIEZAS",
+            "expiration": "2026-10-01",
+            "quantity": 3,
+            "depleted": false,
+            "closedAtUtc": "2026-10-05 12:00:00.0000000",
+            "productActive": true
           }
         ]
       },
@@ -254,7 +289,8 @@
           "VENCE-12-NOV": "Vence en 32 días",
           "AGOTADO": "Vencido",
           "MARCADO-AGOTADO": "Vencido",
-          "DE-INACTIVO": "Vencido"
+          "DE-INACTIVO": "Vencido",
+          "CERRADO-CON-PIEZAS": "Vencido"
         }
       }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq.Expressions;
 
 namespace TPVC.Models;
 
@@ -37,6 +38,18 @@ public class ProductBatch : ISyncEntity
     public DateTime? ClosedAtUtc { get; set; }
 
     public bool IsClosed => ClosedAtUtc != null;
+
+    /// <summary>
+    /// Un lote que se muestra, avisa y cuenta para FEFO: ni agotado ni cerrado. Es la regla de todas las pantallas y
+    /// consultas (también en SQL). Un lote cerrado puede volver con piezas y sin marcar como agotado si una PC anterior a
+    /// v1.37.0, que no conoce <see cref="ClosedAtUtc"/>, le devuelve una cancelación: sigue oculto.
+    /// </summary>
+    public static readonly Expression<Func<ProductBatch, bool>> IsAvailableExpression = b => !b.IsDepleted && b.ClosedAtUtc == null;
+
+    private static readonly Func<ProductBatch, bool> IsAvailableRule = IsAvailableExpression.Compile();
+
+    /// <summary><see cref="IsAvailableExpression"/> en memoria.</summary>
+    public bool IsAvailable => IsAvailableRule(this);
 
     // Helpers
     public int DaysRemaining => DaysRemainingOn(ClinicClock.Today);

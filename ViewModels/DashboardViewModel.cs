@@ -69,7 +69,7 @@ public partial class DashboardViewModel : ObservableObject
         LowStockProducts = new ObservableCollection<Product>(lowStock.Take(8));
 
         var batches = await _inventoryService.GetBatchesAsync();
-        var expiring = batches.Where(b => !b.IsDepleted && b.Quantity > 0 && b.DaysRemaining <= 60)
+        var expiring = batches.Where(b => b.IsAvailable && b.Quantity > 0 && b.DaysRemaining <= 60)
                               .OrderBy(b => b.ExpirationDate)
                               .Take(8);
         ExpiringBatches = new ObservableCollection<ProductBatch>(expiring);

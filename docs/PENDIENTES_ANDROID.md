@@ -92,7 +92,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] Eliminar un lote con piezas: desaparece de Lotes, las existencias bajan lo que tenía y el Kardex muestra un renglón «Eliminación del lote …». En el panel de Turso el lote sigue, con `ClosedAtUtc` y cantidad 0.
 - [ ] Abrir la ficha de un producto, cobrar una pieza de ese producto en la caja y guardar la ficha cambiando solo el precio: la existencia queda con la pieza vendida descontada (antes la ficha la regresaba).
 - [ ] Al arrancar, la bitácora (`%LocalAppData%\TPVC\logs`) dice "Libro de existencias: sin diferencias nuevas (…)". Si dice "diferencias nuevas", anotar cuáles: el paso 8.20 necesita varios días sin ninguna.
-- [ ] Para Kotlin (K7): toda salida descuenta por FEFO y deja un movimiento por lote más otro sin lote con lo que no alcanzó, con `Delta` (nunca 0) y, en una venta, el `SaleItemSyncId` de su renglón y `LedgerVersion` 1. Cancelar escribe las devoluciones con el `SyncId` determinista (`contracts/golden/uuid5.json`) y se niega si faltan salidas. Un lote no se borra: se cierra.
+- [ ] Para Kotlin (K7): toda salida descuenta por FEFO y deja un movimiento por lote más otro sin lote con lo que no alcanzó, con `Delta` (nunca 0) y, en una venta, el `SaleItemSyncId` de su renglón y `LedgerVersion` 1. Cancelar escribe las devoluciones con el `SyncId` determinista (`contracts/golden/uuid5.json`) y se niega si faltan salidas. Un lote no se borra: se cierra, con los SyncId deterministas del cierre (`close:` y `close-rest:`), y un lote cerrado no se muestra ni avisa aunque tenga piezas.
 
 ### v1.36.0 (paso 8.18: renglones con identidad en las hojas del paciente)
 

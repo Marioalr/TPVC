@@ -107,6 +107,19 @@ public static class StockLedger
     /// </summary>
     public static Guid LegacyReturnSyncId(Guid saleSyncId, Guid productSyncId) => SyncIds.Derived(ReturnPrefix, saleSyncId, productSyncId);
 
+    /// <summary>Prefijos de los SyncId de los movimientos que cierran un lote: la parte con su lote y la parte sin lote.</summary>
+    public const string ClosePrefix = "close:";
+    public const string CloseRestPrefix = "close-rest:";
+
+    /// <summary>
+    /// SyncId del movimiento que lleva a 0 el libro de un lote al cerrarlo: uuid5(tpvc, "close:" + SyncId del lote). Dos
+    /// equipos que cierran el mismo lote sin conexión escriben la misma fila y la nube conserva una.
+    /// </summary>
+    public static Guid CloseSyncId(Guid batchSyncId) => SyncIds.Derived(ClosePrefix, batchSyncId);
+
+    /// <summary>SyncId de la parte sin lote del cierre: uuid5(tpvc, "close-rest:" + SyncId del lote).</summary>
+    public static Guid CloseRestSyncId(Guid batchSyncId) => SyncIds.Derived(CloseRestPrefix, batchSyncId);
+
     /// <summary>
     /// Compara lo guardado con el libro, por lote y por producto, sin cambiar nada. Una diferencia que ya estaba en la foto
     /// (<see cref="DbMeta.StockLedgerBaseline"/>) no cuenta como nueva, salvo en un lote cerrado: al cerrarlo, lo guardado y

@@ -413,6 +413,127 @@ public class StockLedgerTests
     }
 
     [TestMethod]
+    public async Task DeleteBatch_AfterTheDialogLoweredTheStock_NeverLeavesItNegative()
+    {
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "PISO-1", Name = "Producto con un lote", CategoryId = category.Id, Price = 10m };
+        await _service.SaveProductAsync(product);
+        var batch = new ProductBatch { ProductId = product.Id, BatchNumber = "PISO-L", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 10 };
+        await _service.ReceiveBatchAsync(batch);
+
+        // El médico corrige la existencia a 8 en la ficha (ajuste sin lote); el lote sigue mostrando 10
+        var dialog = new ProductDialogViewModel(_service);
+        await dialog.InitializeAsync(await _service.GetProductByIdAsync(product.Id));
+        dialog.CurrentStock = 8;
+        await dialog.SaveAsync();
+
+        await _service.DeleteBatchAsync(batch.Id);
+
+        Assert.AreEqual(0, (await _service.GetProductByIdAsync(product.Id))!.CurrentStock, "Como antes: sin pasar de lo que tenía el producto");
+        var parts = (await MovementsOfAsync(product.Id)).Where(m => m.Reason == "Eliminación del lote PISO-L").OrderBy(m => m.Id).ToList();
+        CollectionAssert.AreEqual(new int?[] { batch.Id, null }, parts.Select(m => m.BatchId).ToArray());
+        CollectionAssert.AreEqual(new[] { -10, 2 }, parts.Select(m => m.Delta).ToArray(), "El libro del lote a 0 y lo que el producto ya no tenía");
+        Assert.AreEqual(StockLedger.CloseSyncId(batch.SyncId), parts[0].SyncId);
+        Assert.AreEqual(StockLedger.CloseRestSyncId(batch.SyncId), parts[1].SyncId);
+        var row = (await _service.GetKardexAsync(5)).First();
+        Assert.AreEqual(8, row.Quantity);
+        Assert.AreEqual(8, row.StockBefore);
+        Assert.AreEqual(0, row.StockAfter);
+        Assert.IsTrue((await VerifyAsync()).IsClean);
+    }
+
+    [TestMethod]
+    public async Task ClosedLotThatAnOldPcRefilled_IsNotShownNorAlerted()
+    {
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "OCULTO-1", Name = "Producto del lote reabierto", CategoryId = category.Id, Price = 10m };
+        await _service.SaveProductAsync(product);
+        var batch = new ProductBatch { ProductId = product.Id, BatchNumber = "OCULTO-L", ExpirationDate = DateTime.Today.AddDays(10), Quantity = 4 };
+        await _service.ReceiveBatchAsync(batch);
+        int expiringBefore = (await _service.GetDashboardMetricsAsync()).ExpiringSoonCount;
+        await _service.DeleteBatchAsync(batch.Id);
+
+        // Una PC anterior a v1.37.0 cancela un ticket y devuelve las piezas a este lote: no conoce ClosedAtUtc, así que
+        // queda cerrado pero con piezas y sin marcar como agotado
+        await using (var db = NewContext())
+        {
+            await db.Database.ExecuteSqlRawAsync("UPDATE \"ProductBatches\" SET \"Quantity\" = 3, \"IsDepleted\" = 0 WHERE \"Id\" = {0}", batch.Id);
+        }
+
+        var batches = new BatchesViewModel(_service);
+        await batches.LoadBatchesAsync();
+        Assert.IsFalse(batches.Batches.Any(b => b.Id == batch.Id), "Lotes no lo muestra");
+        var dashboard = new DashboardViewModel(_service, _ => { });
+        await dashboard.RefreshAsync();
+        Assert.IsFalse(dashboard.ExpiringBatches.Any(b => b.Id == batch.Id));
+        Assert.AreEqual(expiringBefore - 1, dashboard.Metrics.ExpiringSoonCount);
+        var alerts = await _service.GetSystemAlertsSummaryAsync();
+        Assert.IsFalse(alerts.NearExpiryBatches.Concat(alerts.ExpiredBatches).Any(b => b.Id == batch.Id), "Ni avisa");
+        Assert.IsFalse((await _service.GetProductsAsync(onlyExpiring: true)).Any(p => p.Id == product.Id));
+        Assert.IsFalse(StockAlertRules.CountsForAlerts((await _service.GetBatchesAsync(product.Id)).Single()));
+    }
+
+    [TestMethod]
+    public async Task CancelledTicketOfTwoLines_ShowsOneKardexRowPerLine()
+    {
+        var (first, _, _) = await ProductWithTwoLotsAsync("DOS-A");
+        var (second, _, _) = await ProductWithTwoLotsAsync("DOS-B");
+        var sale = await _service.RegisterSaleAsync(new[] { (first.Id, 6, 10m), (second.Id, 7, 10m) }, null, null);
+        Assert.IsTrue(await _service.CancelSaleAsync(sale!.Id));
+
+        var kardex = await _service.GetKardexAsync(20);
+        CollectionAssert.AreEquivalent(new[] { 6, 7 }, kardex.Where(m => m.MovementType == MovementType.EntradaDevolucion).Select(m => m.Quantity).ToArray());
+        CollectionAssert.AreEquivalent(new[] { 6, 7 }, kardex.Where(m => m.MovementType == MovementType.SalidaVenta).Select(m => m.Quantity).ToArray());
+    }
+
+    [TestMethod]
+    public void KardexRows_JoinTheParts_EvenInterleavedAndInAnyOrder()
+    {
+        var date = new DateTime(2026, 10, 12, 10, 0, 0);
+        InventoryMovement Part(int id, int productId, int item, int before, int delta) => new()
+        {
+            Id = id, ProductId = productId, SaleItemId = item, MovementType = MovementType.EntradaDevolucion, Date = date,
+            Quantity = Math.Abs(delta), Delta = delta, StockBefore = before, StockAfter = before + delta, Reason = "Devolución TKT-1"
+        };
+
+        // Dos renglones de un ticket, cada uno con dos lotes, intercalados por su Id local (como llegan de otro equipo)
+        var rows = KardexRows.Group(new[]
+        {
+            Part(14, 2, 20, 4, 3), Part(13, 1, 10, 2, 5), Part(12, 2, 20, 1, 3), Part(11, 1, 10, 1, 1),
+            new InventoryMovement { Id = 9, ProductId = 1, MovementType = MovementType.SalidaVenta, Date = date.AddMinutes(-1), Quantity = 6, Delta = -6, StockBefore = 7, StockAfter = 1 }
+        });
+
+        Assert.HasCount(3, rows);
+        Assert.AreEqual(2, rows[0].ProductId, "En el orden en que aparece la primera parte");
+        Assert.AreEqual(6, rows[0].Quantity);
+        Assert.AreEqual(1, rows[0].StockBefore);
+        Assert.AreEqual(7, rows[0].StockAfter);
+        Assert.AreEqual(1, rows[1].ProductId);
+        Assert.AreEqual(6, rows[1].Quantity);
+        Assert.AreEqual(1, rows[1].StockBefore);
+        Assert.AreEqual(7, rows[1].StockAfter);
+        Assert.AreEqual(9, rows[2].Id);
+    }
+
+    [TestMethod]
+    public async Task Kardex_ReadsTheWholeLastOperation_WhenItCrossesThePage()
+    {
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "MUCHOS", Name = "Producto de muchos lotes", CategoryId = category.Id, Price = 1m };
+        await _service.SaveProductAsync(product);
+        for (int i = 0; i < 40; i++)
+        {
+            await _service.ReceiveBatchAsync(new ProductBatch { ProductId = product.Id, BatchNumber = $"M-{i:00}", ExpirationDate = DateTime.Today.AddDays(30 + i), Quantity = 1 });
+        }
+        await _service.RegisterQuickConsultationUsageAsync(product.Id, 40, "Todo de una vez");
+
+        var row = (await _service.GetKardexAsync(1)).Single();
+        Assert.AreEqual(40, row.Quantity, "Una salida de 40 lotes es un renglón aunque pase de lo que se lee primero");
+        Assert.AreEqual(40, row.StockBefore);
+        Assert.AreEqual(0, row.StockAfter);
+    }
+
+    [TestMethod]
     public async Task CancelSale_IntoAClosedLot_KeepsItClosed()
     {
         var (product, soon, _) = await ProductWithTwoLotsAsync();
@@ -587,6 +708,8 @@ public class StockLedgerTests
 
             var report = await VerifyAsync();
             Assert.IsEmpty(report.Entries, $"Semilla {seed}, paso {step} ({operation}): {report.Summary}");
+            var negative = (await _service.GetProductsAsync()).FirstOrDefault(p => p.CurrentStock < 0);
+            Assert.IsNull(negative, $"Semilla {seed}, paso {step} ({operation}): {negative?.Name} quedó en {negative?.CurrentStock}");
         }
     }
 }

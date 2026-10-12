@@ -181,21 +181,24 @@ public partial class GoldenVectorTests
             var today = TodayIn(zone);
             var active = new Product { Name = "Activo", IsActive = true };
             var inactive = new Product { Name = "Inactivo", IsActive = false };
-            var batches = new (string Batch, DateTime Expiration, int Quantity, bool Depleted, Product Product)[]
+            var closedAt = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
+            var batches = new (string Batch, DateTime Expiration, int Quantity, bool Depleted, DateTime? Closed, Product Product)[]
             {
-                ("VENCIDO-AYER", new DateTime(2026, 10, 10), 5, false, active),
-                ("VENCE-11-OCT", new DateTime(2026, 10, 11), 5, false, active),
-                ("VENCE-12-OCT", new DateTime(2026, 10, 12), 5, false, active),
-                ("VENCE-10-NOV", new DateTime(2026, 11, 10), 5, false, active),
-                ("VENCE-11-NOV", new DateTime(2026, 11, 11), 5, false, active),
-                ("VENCE-12-NOV", new DateTime(2026, 11, 12), 5, false, active),
-                ("AGOTADO", new DateTime(2026, 10, 1), 0, false, active),
-                ("MARCADO-AGOTADO", new DateTime(2026, 10, 1), 3, true, active),
-                ("DE-INACTIVO", new DateTime(2026, 10, 1), 3, false, inactive)
+                ("VENCIDO-AYER", new DateTime(2026, 10, 10), 5, false, null, active),
+                ("VENCE-11-OCT", new DateTime(2026, 10, 11), 5, false, null, active),
+                ("VENCE-12-OCT", new DateTime(2026, 10, 12), 5, false, null, active),
+                ("VENCE-10-NOV", new DateTime(2026, 11, 10), 5, false, null, active),
+                ("VENCE-11-NOV", new DateTime(2026, 11, 11), 5, false, null, active),
+                ("VENCE-12-NOV", new DateTime(2026, 11, 12), 5, false, null, active),
+                ("AGOTADO", new DateTime(2026, 10, 1), 0, false, null, active),
+                ("MARCADO-AGOTADO", new DateTime(2026, 10, 1), 3, true, null, active),
+                ("DE-INACTIVO", new DateTime(2026, 10, 1), 3, false, null, inactive),
+                // Paso 8.19: cerrado, con piezas y sin marcar como agotado (una PC anterior le devolvió una cancelación)
+                ("CERRADO-CON-PIEZAS", new DateTime(2026, 10, 1), 3, false, closedAt, active)
             };
             var models = batches.Select(b => new ProductBatch
             {
-                BatchNumber = b.Batch, ExpirationDate = b.Expiration, Quantity = b.Quantity, IsDepleted = b.Depleted, Product = b.Product
+                BatchNumber = b.Batch, ExpirationDate = b.Expiration, Quantity = b.Quantity, IsDepleted = b.Depleted, ClosedAtUtc = b.Closed, Product = b.Product
             }).ToList();
             var (expired, near) = StockAlertRules.SplitByExpiration(models, today);
             cases.Add(Case($"caducidad en {zoneName}",
@@ -206,7 +209,8 @@ public partial class GoldenVectorTests
                     ["now"] = VectorNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
                     ["batches"] = new JsonArray(batches.Select(b => (JsonNode)new JsonObject
                     {
-                        ["batch"] = b.Batch, ["expiration"] = Day(b.Expiration), ["quantity"] = b.Quantity, ["depleted"] = b.Depleted, ["productActive"] = b.Product.IsActive
+                        ["batch"] = b.Batch, ["expiration"] = Day(b.Expiration), ["quantity"] = b.Quantity, ["depleted"] = b.Depleted,
+                        ["closedAtUtc"] = b.Closed is { } closed ? TPVC.Services.TursoSyncService.FormatDate(closed) : null, ["productActive"] = b.Product.IsActive
                     }).ToArray())
                 },
                 new JsonObject
@@ -222,7 +226,7 @@ public partial class GoldenVectorTests
         CheckOrWrite("contracts/golden/alerts.json", DatedVectorFile("alerts", null, VectorNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture), cases,
             "Services/Rules/StockAlertRules.cs y ProductBatch.StatusTextOn.",
             "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",
-            "Caducidad: cuentan los lotes con piezas, sin marcar como agotados y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
+            "Caducidad: cuentan los lotes con piezas, sin marcar como agotados, abiertos (closedAtUtc nulo, desde v1.37.0) y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
             "Estado del lote (Inventario): 'Vencido' antes de hoy; 'Vence en N días' de hoy a 60 días; si no, 'Vigente'.",
             "Hoy es la fecha local del consultorio: el mismo instante da 12/10/2026 en UTC y 11/10/2026 en America/Mexico_City (UTC-6, sin horario de verano desde 2022)."));
     }

@@ -9,7 +9,8 @@
     "Espacios de nombres: dns y url de RFC 4122; tpvc = uuid5(url, \"https://github.com/Marioalr/TPVC/sync\"), fijo para siempre.",
     "Catálogo sembrado por la PC (paso 8.8; Kotlin nunca siembra): 'Category:<nombre>', 'ClinicalService:<código>', 'ServiceDefaultProduct:<código del servicio>|<código del producto>'.",
     "Derivados: nombre = prefix + los syncIds en minúsculas unidos con ':' (un SyncId leído en mayúsculas da lo mismo).",
-    "Devoluciones al cancelar un ticket (paso 8.19, regla «Existencias» de schema.json): con Sales.LedgerVersion 1, una por salida con 'return:' + SyncId de la salida; con 0 (venta anterior), una por producto con 'return:' + SyncId de la venta + ':' + SyncId del producto. Dos equipos que cancelan el mismo ticket escriben la misma fila."
+    "Devoluciones al cancelar un ticket (paso 8.19, regla «Existencias» de schema.json): con Sales.LedgerVersion 1, una por salida con 'return:' + SyncId de la salida; con 0 (venta anterior), una por producto con 'return:' + SyncId de la venta + ':' + SyncId del producto. Dos equipos que cancelan el mismo ticket escriben la misma fila.",
+    "Cerrar un lote (paso 8.19): la parte con su lote con 'close:' + SyncId del lote y la parte sin lote con 'close-rest:' + SyncId del lote; dos equipos que cierran el mismo lote escriben las mismas filas."
   ],
   "cases": [
     {
@@ -142,6 +143,28 @@
         ]
       },
       "expected": "4197aedb-48b8-5556-a356-7bd9d4e81be9"
+    },
+    {
+      "name": "cerrar un lote · la parte con su lote: close:<SyncId del lote>",
+      "input": {
+        "namespace": "tpvc",
+        "prefix": "close:",
+        "syncIds": [
+          "e8b1d2c4-6f7a-4b3c-9d0e-1f2a3b4c5d6e"
+        ]
+      },
+      "expected": "6127d50b-14d6-54cb-b051-4036a326c524"
+    },
+    {
+      "name": "cerrar un lote · la parte sin lote: close-rest:<SyncId del lote>",
+      "input": {
+        "namespace": "tpvc",
+        "prefix": "close-rest:",
+        "syncIds": [
+          "e8b1d2c4-6f7a-4b3c-9d0e-1f2a3b4c5d6e"
+        ]
+      },
+      "expected": "7f937c91-0b27-55e1-8e4e-e1281ba0cb67"
     }
   ]
 }

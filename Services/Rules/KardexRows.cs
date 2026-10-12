@@ -28,9 +28,11 @@ public static class KardexRows
         && string.Equals(a.Responsible, b.Responsible, StringComparison.Ordinal);
 
     /// <summary>
-    /// Une los movimientos seguidos de una misma operación (la lista viene en el orden del Kardex, del más nuevo al más
-    /// viejo). Un grupo de uno se regresa tal cual; uno de varios, como un renglón nuevo con lo que movió en total, la
-    /// existencia antes de la primera parte y después de la última, y sin lote.
+    /// Une las partes de cada operación (la lista viene en el orden del Kardex, del más nuevo al más viejo). Las partes de
+    /// una operación tienen la misma hora, pero dentro de esa hora pueden venir intercaladas con las de otra (un ticket de
+    /// dos renglones, o filas que llegaron de otro equipo en otro orden): se juntan todas las de cada hora, en el orden en
+    /// que aparece la primera. Un grupo de uno se regresa tal cual; uno de varios, como un renglón nuevo con lo que movió
+    /// en total, la existencia antes de la primera parte y después de la última, y sin lote.
     /// </summary>
     public static List<InventoryMovement> Group(IReadOnlyList<InventoryMovement> movements)
     {
@@ -39,8 +41,16 @@ public static class KardexRows
         while (i < movements.Count)
         {
             int end = i + 1;
-            while (end < movements.Count && SameOperation(movements[i], movements[end])) end++;
-            rows.Add(end - i == 1 ? movements[i] : Merge(movements.Skip(i).Take(end - i).ToList()));
+            while (end < movements.Count && movements[end].Date == movements[i].Date) end++;
+
+            var operations = new List<List<InventoryMovement>>();
+            for (int k = i; k < end; k++)
+            {
+                var operation = operations.FirstOrDefault(o => SameOperation(o[0], movements[k]));
+                if (operation != null) operation.Add(movements[k]);
+                else operations.Add(new List<InventoryMovement> { movements[k] });
+            }
+            rows.AddRange(operations.Select(o => o.Count == 1 ? o[0] : Merge(o)));
             i = end;
         }
         return rows;

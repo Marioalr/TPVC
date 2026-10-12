@@ -171,7 +171,7 @@ public partial class InventoryService
         if (onlyExpiring)
         {
             products = products
-                .Where(p => p.Batches.Any(b => !b.IsDepleted && b.Quantity > 0 && b.DaysRemaining <= ExpirationWarningDays))
+                .Where(p => p.Batches.Any(b => b.IsAvailable && b.Quantity > 0 && b.DaysRemaining <= ExpirationWarningDays))
                 .ToList();
         }
 
@@ -377,8 +377,10 @@ public partial class InventoryService
 
     /// <summary>
     /// «Eliminar lote» (paso 8.19): el lote ya no se borra, se cierra (<see cref="ProductBatch.ClosedAtUtc"/>, con su
-    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto, sin tope, y un movimiento con su lote
-    /// lleva su libro a 0 (Delta = −libro del lote). Un movimiento de otro equipo que llegue después sigue en este lote.
+    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto, como antes sin dejarlas en negativo, y
+    /// un movimiento con su lote lleva su libro a 0 (Delta = −libro del lote). Los movimientos del cierre llevan SyncId
+    /// deterministas: dos equipos que cierran el mismo lote escriben las mismas filas. Un movimiento de otro equipo que
+    /// llegue después sigue en este lote.
     /// </summary>
     public async Task DeleteBatchAsync(int id)
     {
@@ -393,17 +395,24 @@ public partial class InventoryService
                 .ToListAsync())
             .Sum(m => StockLedger.EffectiveDelta(m.Delta, m.MovementType, m.Quantity, m.StockBefore, m.StockAfter));
 
+        var lotPartId = StockLedger.CloseSyncId(batch.SyncId);
+        var restPartId = StockLedger.CloseRestSyncId(batch.SyncId);
+        var parts = new List<Guid> { lotPartId, restPartId };
+        var written = (await db.InventoryMovements.Where(m => parts.Contains(m.SyncId)).Select(m => m.SyncId).ToListAsync()).ToHashSet();
+
         var now = DateTime.Now;
         var product = batch.Product;
-        if (batch.Quantity != 0) product.UpdatedAt = now;
 
-        void Close(int? batchId, int delta)
+        void Close(Guid syncId, int? batchId, int delta)
         {
-            if (delta == 0) return;
+            // Otro equipo ya cerró este lote y su movimiento llegó: esa parte no se vuelve a escribir ni a descontar
+            if (delta == 0 || written.Contains(syncId)) return;
             int before = product.CurrentStock;
             product.CurrentStock = before + delta;
+            product.UpdatedAt = now;
             db.InventoryMovements.Add(new InventoryMovement
             {
+                SyncId = syncId,
                 ProductId = product.Id,
                 BatchId = batchId,
                 MovementType = MovementType.AjusteInventario,
@@ -417,12 +426,13 @@ public partial class InventoryService
             });
         }
 
-        // El libro del lote a 0, con su lote. Un lote de antes del Kardex completo puede mostrar otra cantidad que su libro
-        // (FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento): esa diferencia sale de las piezas sin
-        // lote, así las existencias del producto bajan lo que el lote mostraba y su libro baja lo mismo. En el Kardex las
-        // dos partes son un renglón
-        Close(batch.Id, -ledger);
-        Close(null, -(batch.Quantity - ledger));
+        // Lo que sale del producto es lo que el lote mostraba, sin pasar de lo que tiene (como antes del paso 8.19: un lote
+        // de antes puede mostrar más que el producto). El libro del lote va a 0 con su lote, y lo que falte para que el libro
+        // del producto baje lo mismo va sin lote (un lote de antes del Kardex completo puede mostrar otra cantidad que su
+        // libro: FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento). En el Kardex es un renglón
+        int removed = Math.Min(batch.Quantity, Math.Max(product.CurrentStock, 0));
+        Close(lotPartId, batch.Id, -ledger);
+        Close(restPartId, null, -(removed - ledger));
 
         batch.Quantity = 0;
         batch.IsDepleted = true;
@@ -444,7 +454,7 @@ public partial class InventoryService
     {
         int remaining = quantity;
         var activeBatches = product.Batches
-            .Where(b => !b.IsClosed && !b.IsDepleted && b.Quantity > 0)
+            .Where(b => b.IsAvailable && b.Quantity > 0)
             .OrderBy(b => b.Id == preferredBatchId ? 0 : 1)
             .ThenBy(b => b.ExpirationDate)
             .ToList();
@@ -852,8 +862,9 @@ public partial class InventoryService
                         $"Este equipo todavía no tiene todos los movimientos del ticket {sale.Folio} ({item.Description}). Sincronice primero y vuelva a intentarlo.");
                 }
             }
+            // Las de un renglón juntas: en el Kardex son una operación
             return exits
-                .OrderBy(m => m.Date).ThenBy(m => m.SyncId)
+                .OrderBy(m => m.Date).ThenBy(m => m.SaleItemId).ThenBy(m => m.SyncId)
                 .Select(m => new PlannedReturn(StockLedger.ReturnSyncId(m.SyncId), m.ProductId, m.BatchId, m.SaleItemId, Math.Abs(m.Delta)))
                 .ToList();
         }
@@ -1059,12 +1070,19 @@ public partial class InventoryService
             .OrderByDescending(m => m.Date)
             .ThenByDescending(m => m.Id);
 
-        // Se leen renglones de más hasta tener una operación después de la última que se muestra: así la última está completa
+        // Las partes de una operación tienen la misma hora: la última hora leída puede seguir en lo que no se leyó, así que se
+        // deja fuera y se leen más renglones hasta juntar las operaciones completas que se muestran
         for (int take = count + 16; ; take *= 2)
         {
             var rows = await query.Take(take).ToListAsync();
+            bool all = rows.Count < take;
+            if (!all)
+            {
+                var lastDate = rows[^1].Date;
+                rows = rows.Where(r => r.Date != lastDate).ToList();
+            }
             var operations = KardexRows.Group(rows);
-            if (rows.Count < take || operations.Count > count) return operations.Take(count).ToList();
+            if (all || operations.Count >= count) return operations.Take(count).ToList();
         }
     }
 
@@ -1086,7 +1104,8 @@ public partial class InventoryService
         // Agregados calculados en SQLite: no se materializan catálogos completos
         var activeProducts = db.Products.Where(p => p.IsActive);
         var activeBatches = db.ProductBatches
-            .Where(b => !b.IsDepleted && b.Quantity > 0 && (b.Product == null || b.Product.IsActive));
+            .Where(ProductBatch.IsAvailableExpression)
+            .Where(b => b.Quantity > 0 && (b.Product == null || b.Product.IsActive));
         var todayMovements = db.InventoryMovements.Where(m => m.Date >= today);
         var todaySales = db.Sales.Where(s => s.Date >= today && s.Date < tomorrow);
 
@@ -1794,7 +1813,8 @@ public partial class InventoryService
         var batches = await db.ProductBatches
             .AsNoTracking()
             .Include(b => b.Product)
-            .Where(b => b.Quantity > 0 && !b.IsDepleted && b.ExpirationDate < in31Days && (b.Product == null || b.Product.IsActive))
+            .Where(ProductBatch.IsAvailableExpression)
+            .Where(b => b.Quantity > 0 && b.ExpirationDate < in31Days && (b.Product == null || b.Product.IsActive))
             .OrderBy(b => b.ExpirationDate)
             .ToListAsync();
 
