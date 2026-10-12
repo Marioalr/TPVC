@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -166,9 +167,7 @@ public partial class SuppliesSheetViewModel : ObservableObject
         decimal unitPrice;
         if (product != null)
         {
-            name = string.IsNullOrWhiteSpace(product.Presentation)
-                ? product.Name
-                : $"{product.Name} ({product.Presentation})";
+            name = PatientSheetRows.SupplyDisplayName(product);
             unitPrice = product.Price;
         }
         else if (!string.IsNullOrWhiteSpace(SupplySearchText))
@@ -307,8 +306,10 @@ public partial class SuppliesSheetViewModel : ObservableObject
             return;
         }
 
-        // El mismo producto (o cargo libre) con que se cargó, aunque otro del inventario se llame igual
-        int lineId = _account.SupplyLineId(item);
+        // El mismo producto (o cargo libre) con que se cargó, aunque otro del inventario se llame igual o el renglón lo
+        // haya cargado otro equipo (paso 8.18: por el SyncId del producto)
+        var line = _account.SupplyLine(item);
+        int lineId = line.LineId;
         var product = lineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == lineId) : null;
         int difference = quantity - item.Quantity;
         if (difference > 0 && lineId > 0 && product == null)
@@ -340,6 +341,8 @@ public partial class SuppliesSheetViewModel : ObservableObject
         }
 
         item.Quantity += difference;
+        // El renglón queda con el Id local de la línea que movió; uno viejo recibe también su clase y su SyncId
+        PatientSheetRows.RefreshSupplyLine(item, line);
         _session.SelectedPatient.SyncSuppliesJson();
 
         if (_inventoryService != null)

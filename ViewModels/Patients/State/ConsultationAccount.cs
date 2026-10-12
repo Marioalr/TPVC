@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -124,13 +125,19 @@ public partial class ConsultationAccount : ObservableObject
 
     /// <summary>
     /// Carga el insumo recién agregado (todas sus piezas) y anota en el renglón con qué renglón de la
-    /// cuenta se cargó; false si no se pudo (sin consulta o sin precio).
+    /// cuenta se cargó: la clase y el SyncId del producto, que valen en cualquier equipo (paso 8.18), y el Id
+    /// local, que leen las PC anteriores; false si no se pudo (sin consulta o sin precio).
     /// </summary>
     public bool ChargeSupply(PatientSupplyItem item, Product? knownProduct)
     {
         var product = knownProduct ?? _catalog.FindCatalogProduct(item.SupplyName);
         bool charged = ChargeSupplyUnits(item, product, Math.Max(1, item.Quantity));
-        if (charged) item.ChargedLineId = product?.Id ?? FreeChargeId(item.SupplyName);
+        if (charged)
+        {
+            PatientSheetRows.SetSupplyLine(item, product != null
+                ? PatientSheetRows.SupplyLine.ForProduct(product)
+                : PatientSheetRows.SupplyLine.Free(item.SupplyName));
+        }
         if (!charged)
         {
             _info.InfoModalMessage = $"'{item.SupplyName}' no está en el inventario ni tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
@@ -165,8 +172,11 @@ public partial class ConsultationAccount : ObservableObject
         return true;
     }
 
-    private ClinicalService? FindService(PatientServiceItem item) =>
-        _catalog.Services.FirstOrDefault(s => (item.ServiceId > 0 && s.Id == item.ServiceId) || s.Name.Equals(item.ServiceName, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// El servicio del catálogo de este equipo de un renglón de la hoja (paso 8.18): por su SyncId, fuera del catálogo
+    /// si no tiene ni SyncId ni Id, por el Id viejo si el nombre coincide, o por nombre. null = cargo libre.
+    /// </summary>
+    private ClinicalService? FindService(PatientServiceItem item) => PatientSheetRows.ResolveService(item, _catalog.Services);
 
     /// <summary>
     /// Carga piezas de un insumo: como el producto dado o, sin él, como cargo libre a su precio.
@@ -180,11 +190,23 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>
-    /// Renglón de la cuenta de un insumo: el que se anotó al cargarlo o, en renglones anteriores a
-    /// v1.18.7, el que corresponde a su nombre.
+    /// Renglón de la cuenta de un insumo en este equipo (paso 8.18): por el SyncId del producto con que se cargó, el
+    /// cargo libre de su nombre, el Id anotado solo si ese producto tiene el mismo nombre (un renglón que cargó otro
+    /// equipo trae los Id de aquel), o por nombre (renglones anteriores a v1.18.7).
     /// </summary>
-    public int SupplyLineId(PatientSupplyItem item) =>
-        item.ChargedLineId != 0 ? item.ChargedLineId : _catalog.FindCatalogProduct(item.SupplyName)?.Id ?? FreeChargeId(item.SupplyName);
+    public PatientSheetRows.SupplyLine SupplyLine(PatientSupplyItem item) =>
+        PatientSheetRows.ResolveSupplyLine(item, _catalog.AvailableProducts, _catalog.ProductRefs);
+
+    /// <summary>El Id local del renglón de la cuenta de un insumo (<see cref="SupplyLine"/>).</summary>
+    public int SupplyLineId(PatientSupplyItem item) => SupplyLine(item).LineId;
+
+    /// <summary>
+    /// Recibir una consulta de otro equipo también traduce las hojas (paso 8.18): los renglones de insumos y servicios
+    /// que cargó esa consulta quedan con los Id de este equipo, los mismos de su cuenta ya traducida. Se guardan con la
+    /// siguiente escritura del expediente.
+    /// </summary>
+    public int TranslateReceivedSheets(PatientRecord patient, ConsultationDraft received) =>
+        PatientSheetRows.TranslateReceivedRows(patient, received.Folio, received.Items, _catalog.AvailableProducts, _catalog.ProductRefs, _catalog.Services);
 
     /// <summary>Descuenta piezas de un insumo de la cuenta, del mismo renglón con que se cargaron (producto o cargo libre).</summary>
     public void UnchargeSupplyUnits(PatientSupplyItem item, int units) => Uncharge(SupplyLineId(item), units);

@@ -625,7 +625,7 @@ public partial class MainViewModel : ObservableObject
                 break;
             case "Records":
                 CurrentView = MedicalRecordsVM;
-                MedicalRecordsVM.EnterPatientsSection();
+                MedicalRecordsVM!.EnterPatientsSection();
                 break;
             case "Config":
                 CurrentView = ConfigurationShellVM;

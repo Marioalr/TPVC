@@ -1049,8 +1049,8 @@ public partial class ConsultationHandoffViewModel : ObservableObject
             return;
         }
 
-        // 2. Paciente, cargos, cita y honorario de este equipo
-        var (mapped, error) = await MapIncomingDraftAsync(payload, row);
+        // 2. Paciente, cargos, cita y honorario de este equipo (CanRead ya descartó la copia nula)
+        var (mapped, error) = await MapIncomingDraftAsync(payload!, row);
         if (mapped == null)
         {
             _feedback.ShowWarning(error ?? "No se pudo preparar la consulta recibida.");
@@ -1200,6 +1200,10 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         mapped.Draft.ReceivedHandoffToken = token;
         _appliedIncoming.Add(row.Id);
 
+        // Paso 8.18: los renglones de insumos y servicios que cargó esta consulta en el otro equipo quedan con los Id de
+        // este, los de su cuenta ya traducida (+ / − y la X los encuentran igual por su SyncId; así también los escribe
+        // esta PC al guardar la hoja)
+        _account.TranslateReceivedSheets(mapped.Patient, mapped.Draft);
         _autosave.ApplyConsultationDraft(mapped.Patient, mapped.Draft);
         _autosave.IsConsultationRecovered = false;
         if (!_autosave.SaveConsultationDraftChecked())

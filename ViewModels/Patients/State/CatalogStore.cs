@@ -36,6 +36,13 @@ public partial class CatalogStore : ObservableObject
 
     partial void OnServicesChanged(ObservableCollection<ClinicalService> value) => _hubs.OnServicesChanged();
 
+    /// <summary>
+    /// Paso 8.18: Id y SyncId de todos los productos de la base, también los inactivos. Con ellos la hoja de insumos
+    /// reconoce el renglón de la cuenta que cargó este mismo equipo aunque el producto se haya desactivado después
+    /// (<see cref="TPVC.Services.Rules.PatientSheetRows.ResolveSupplyLine"/>). Vacía sin base de datos.
+    /// </summary>
+    public IReadOnlyList<CatalogRef> ProductRefs { get; private set; } = Array.Empty<CatalogRef>();
+
     /// <summary>Servicios y productos de la base (o los de demostración sin base de datos).</summary>
     public async Task LoadAsync()
     {
@@ -46,6 +53,8 @@ public partial class CatalogStore : ObservableObject
 
             var prods = await _inventoryService.GetProductsAsync();
             AvailableProducts = new ObservableCollection<Product>(prods);
+
+            ProductRefs = (await _inventoryService.GetCatalogRefsAsync()).Where(r => r.Kind == CatalogRefKind.Product).ToList();
         }
         else
         {
@@ -123,18 +132,11 @@ public partial class CatalogStore : ObservableObject
         }
     }
 
-    /// <summary>Producto del inventario por nombre exacto, "Nombre (Presentación)" o genérico.</summary>
-    public Product? FindCatalogProduct(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return null;
-        var clean = name.Trim();
-        return AvailableProducts.FirstOrDefault(p =>
-            p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
-            $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)) ||
-            // El renglón en el orden normado (desde v1.23.0): "Paracetamol 500 mg tabletas (Tempra)"
-            (!string.IsNullOrEmpty(p.GenericName) && PrescriptionNaming.MedicineLine(p).Equals(clean, StringComparison.OrdinalIgnoreCase)));
-    }
+    /// <summary>
+    /// Producto del inventario por nombre exacto, "Nombre (Presentación)", genérico o el renglón en el orden normado
+    /// (desde v1.23.0: "Paracetamol 500 mg tabletas (Tempra)").
+    /// </summary>
+    public Product? FindCatalogProduct(string? name) => TPVC.Services.Rules.PatientSheetRows.FindProductByName(AvailableProducts, name);
 
     public static bool ProductMatchesName(Product product, string name)
     {
