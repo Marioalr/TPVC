@@ -17,7 +17,8 @@
     también con 40 peticiones a la vez: cada una debe recibir un número distinto y sin huecos.
   - V4 y V3 con una rotación real, solo con -Rotate: anula los tokens de la base de prueba (lo mismo que "turso db tokens
     invalidate") con la API de la plataforma de Turso, sin la CLI, mide cuánto sigue sirviendo el token viejo, crea uno
-    nuevo y mide cuánto tarda en servir. Pide un token de la API (app.turso.tech › Settings › API Tokens; de preferencia
+    nuevo y mide cuánto tarda en servir. Pide un token de la API de la plataforma, distinto del de la base (app.turso.tech,
+    menú del avatar › Settings › API Tokens, o "turso auth api-tokens mint"; de preferencia
     limitado al grupo de la base de prueba) sin mostrarlo, y se niega si otra base comparte el grupo: anular corta a
     todas las del grupo. Al final puede copiar el token nuevo al portapapeles para pegarlo en TPVC. Sin token de la API,
     pide correr "turso db tokens invalidate" a mano con -DbName.
@@ -148,6 +149,20 @@ function Api([string]$method, [string]$path, [string]$apiToken) {
         if (-not $content -and $_.ErrorDetails) { $content = $_.ErrorDetails.Message }
         return [pscustomobject]@{ Status = [int]$r.StatusCode; Content = $content }
     }
+}
+
+# Un token de la base (el que se pega en TPVC) lleva en su JWT el permiso "a" ("rw" o "ro"); uno de la API de la
+# plataforma no. Turso responde 401 "could not parse jwt id" si se usa uno de la base con la API
+function IsDatabaseToken([string]$jwt) {
+    $parts = $jwt.Trim().Split('.')
+    if ($parts.Count -ne 3) { return $false }
+    try {
+        $payload = $parts[1].Replace('-', '+').Replace('_', '/')
+        $payload += '=' * ((4 - $payload.Length % 4) % 4)
+        $claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
+        return $null -ne $claims.PSObject.Properties['a']
+    }
+    catch { return $false }
 }
 
 function Short([string]$text, [int]$max = 300) { if ($null -eq $text) { return '' } return $text.Substring(0, [Math]::Min($max, $text.Length)) }
@@ -529,20 +544,27 @@ try {
         Say '== V4 (y V3 con un token anulado de verdad): anular los tokens de la base de prueba'
         Write-Host ''
         Write-Host 'Anular los tokens corta a TODAS las bases del mismo grupo de Turso. Con el token de la API, el script revisa el' -ForegroundColor Yellow
-        Write-Host 'grupo y se niega si otra base lo comparte. Créelo en app.turso.tech › Settings › API Tokens (de preferencia limitado' -ForegroundColor Yellow
-        Write-Host 'al grupo de la base de prueba) y bórrelo al terminar.' -ForegroundColor Yellow
+        Write-Host 'grupo y se niega si otra base lo comparte.' -ForegroundColor Yellow
+        Write-Host 'Es un token de la API de la PLATAFORMA, distinto del de la base que se pega en TPVC: en app.turso.tech, menú de su' -ForegroundColor Yellow
+        Write-Host 'avatar › Settings › API Tokens (de preferencia limitado al grupo de la base de prueba). Bórrelo al terminar.' -ForegroundColor Yellow
         $apiSecure = Read-Host -AsSecureString 'Token de la API de Turso (no se muestra; Enter para hacerlo a mano con la CLI)'
         $apiToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($apiSecure))
 
         $rotateDb = $null
         $canRotate = $false
-        if ($apiToken) {
+        if ($apiToken -and (IsDatabaseToken $apiToken)) {
+            Say '    Ese es un token de la BASE (lleva el permiso "rw" o "ro"), no uno de la API de la plataforma. No se anuló nada.'
+            Say '    Cree uno en app.turso.tech › avatar › Settings › API Tokens y vuelva a correr el script.'
+        }
+        elseif ($apiToken) {
             # La organización: -Org, o lo que sigue al último guion de "base-organizacion" en la URL
             $orgSlug = $Org
             if (-not $orgSlug) { $first = $hostName.Split('.')[0]; $orgSlug = $first.Substring($first.LastIndexOf('-') + 1) }
             $list = Api 'GET' "/v1/organizations/$orgSlug/databases" $apiToken
             if ($list.Status -ne 200) {
-                Say ("    No se pudo leer la lista de bases de '{0}' (HTTP {1} · {2}). Revise el token de la API, o pase -Org con su organización." -f $orgSlug, $list.Status, (Short $list.Content))
+                $hint = if ($list.Status -eq 401) { 'Turso no aceptó el token: debe ser un token de la API de la plataforma (avatar › Settings › API Tokens), no el de la base.' }
+                        else { 'Revise el token de la API, o pase -Org con su organización.' }
+                Say ("    No se pudo leer la lista de bases de '{0}' (HTTP {1} · {2}). {3} No se anuló nada." -f $orgSlug, $list.Status, (Short $list.Content), $hint)
             }
             else {
                 $databases = @(($list.Content | ConvertFrom-Json).databases)
