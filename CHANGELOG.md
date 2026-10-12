@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.36.0] - 2026-10-12
+
+### Añadido — Fase 8, paso 8.18: los renglones de las hojas del paciente con identidad propia
+* Cada renglón de la receta, los insumos y los servicios del paciente lleva su propio identificador, el mismo en todos los equipos. Prepara el paso 8.22, en el que dos equipos podrán editar la misma hoja sin pisarse. Los renglones que ya existían reciben ese identificador igual en cada equipo y se guarda en su siguiente cambio.
+* Los insumos y servicios recuerdan por su identificador de la nube el producto o servicio con que se cargaron. Al recibir una consulta de otro equipo, + / − y la X mueven el renglón correcto de la cuenta aunque los números internos de cada equipo sean distintos (antes, entre dos PC, podían mover otro).
+* Con PC de versiones distintas, los renglones que cargó una PC anterior conservan sus números, y esa PC los sigue descontando bien si la consulta regresa a ella.
+* Lo que un equipo más nuevo agregue a un renglón se conserva cuando la PC lo vuelve a guardar.
+* Contrato de sincronización en la revisión 10 (regla «Hojas del paciente») y vector `contracts/golden/synced-json-columns.json` para la app de Kotlin. 583 pruebas.
+
 ## [1.35.0] - 2026-10-11
 
 ### Añadido — Fase 8, paso 8.17: los folios hechos sin internet reciben su número normal
