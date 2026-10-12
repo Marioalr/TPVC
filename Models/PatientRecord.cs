@@ -28,8 +28,8 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
 {
     /// <summary>
     /// Paso 8.18: identidad del renglón en la hoja (GUID). Uno nuevo lo recibe al azar al guardarse; uno viejo, el
-    /// determinista de <see cref="TPVC.Services.Rules.PatientSheetRows.LegacyRowId"/> al leerse. Las copias de la
-    /// consulta en curso (borrador) no lo llevan.
+    /// determinista de <see cref="TPVC.Services.Rules.PatientSheetRows.LegacyRowId"/> al leerse. En el borrador de la
+    /// consulta solo lo lleva la receta anterior (<c>PreviousPrescriptions</c>); sin él no se escribe.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? RowId { get; set; }

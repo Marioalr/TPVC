@@ -88,7 +88,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 
 - [ ] Con dos PC en la misma nube: en una, durante una consulta, agregar un insumo del inventario, un insumo que no está en el inventario y un servicio; enviarla a la otra PC. En la que la recibe, + / − en los insumos y la X en el servicio cambian la cuenta de la consulta (el insumo, el cargo libre, el servicio y sus insumos por defecto), sin avisos de "ya no está en el inventario".
 - [ ] Un expediente con hojas de antes de esta versión se ve igual; al guardarlo (cualquier cambio), en el panel de Turso sus hojas llevan `RowId` en cada renglón.
-- [ ] Para Kotlin: cada renglón de las hojas lleva `RowId`; un insumo cargado lleva `ChargedLineKind` y `ChargedLineSyncId`, y un servicio del catálogo `ServiceSyncId`. La tablet no escribe `ChargedLineId` y conserva los campos que no conoce al reescribir una hoja.
+- [ ] Para Kotlin: cada renglón de las hojas lleva `RowId`; un insumo cargado lleva `ChargedLineKind` y `ChargedLineSyncId`, y un servicio del catálogo `ServiceSyncId`. La tablet no escribe `ChargedLineId` y conserva los campos que no conoce al reescribir una hoja. En la consulta entre equipos (K8), cada renglón de `PreviousPrescriptions` lleva su `RowId` (y los campos que no conoce): al descartar la consulta o terminarla sin receta, la receta anterior vuelve con esos mismos renglones.
 
 ### v1.35.0 (paso 8.17: regularización diaria de folios en la PC principal)
 

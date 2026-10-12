@@ -240,7 +240,8 @@ public partial class ConsultationAutosave : ObservableObject
             Items = active.Items.Select(CloneItem).ToList(),
             Prescriptions = ((_record.Patient ?? _session.SelectedPatient)?.ActivePrescription ?? new List<PatientPrescriptionItem>())
                 .Select(ConsultationRecordState.ClonePrescription).ToList(),
-            PreviousPrescriptions = _record.PreviousPrescriptionKnown ? _record.PreviousPrescription.Select(ConsultationRecordState.ClonePrescription).ToList() : null,
+            // La receta anterior con su RowId y sus campos desconocidos (paso 8.18): al restaurarla son los mismos renglones
+            PreviousPrescriptions = _record.PreviousPrescriptionKnown ? _record.PreviousPrescription.Select(ConsultationRecordState.ClonePrescriptionKeepingIdentity).ToList() : null,
             LabOrder = _labOrder.IsBlank ? null : _labOrder.Snapshot(),
             PatientBefore = _record.SummaryBeforeConsultation,
             AttendingAppointmentId = _consultation.AttendingAppointmentId,

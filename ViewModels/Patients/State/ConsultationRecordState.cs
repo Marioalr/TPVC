@@ -82,7 +82,8 @@ public sealed class ConsultationRecordState
         Patient = patient;
         SummaryBeforeConsultation = draft.PatientBefore;
         PreviousPrescriptionKnown = draft.PreviousPrescriptions != null;
-        PreviousPrescription = draft.PreviousPrescriptions?.Select(ClonePrescription).ToList() ?? new();
+        // Con el RowId y los campos desconocidos que trae la copia (paso 8.18; un borrador anterior no los trae)
+        PreviousPrescription = draft.PreviousPrescriptions?.Select(ClonePrescriptionKeepingIdentity).ToList() ?? new();
 
         patient.ActivePrescription = resumed;
         patient.SyncPrescriptionJson();
@@ -149,9 +150,10 @@ public sealed class ConsultationRecordState
     }
 
     /// <summary>
-    /// Copia para la memoria de esta consulta (la receta anterior): conserva el <c>RowId</c> y una copia de los campos que
-    /// esta PC no conoce, así al restaurarla la hoja tiene los mismos renglones (paso 8.18). El borrador y la copia que
-    /// viaja a otro equipo se arman con <see cref="ClonePrescription"/> y no los llevan.
+    /// Copia de la receta anterior (paso 8.18): conserva el <c>RowId</c> y una copia de los campos que esta PC no conoce,
+    /// así al restaurarla la hoja tiene los mismos renglones. La usan la memoria de la consulta, su borrador y la copia
+    /// que viaja a otro equipo (<c>PreviousPrescriptions</c>, campo aditivo: sin <c>RowId</c> no se escribe y una PC
+    /// anterior lo ignora). La receta en curso del borrador se copia con <see cref="ClonePrescription"/>.
     /// </summary>
     internal static PatientPrescriptionItem ClonePrescriptionKeepingIdentity(PatientPrescriptionItem item)
     {
