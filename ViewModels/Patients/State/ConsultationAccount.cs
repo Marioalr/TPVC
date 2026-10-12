@@ -80,11 +80,12 @@ public partial class ConsultationAccount : ObservableObject
         return true;
     }
 
-    private bool ChargeFreeLine(string code, string name, string? category, string unit, decimal price, int quantity)
+    /// <param name="lineId">El renglón libre de la cuenta que ya tiene el insumo (paso 8.18: puede llevar otro nombre); sin él, el de su nombre.</param>
+    private bool ChargeFreeLine(string code, string name, string? category, string unit, decimal price, int quantity, int? lineId = null)
     {
         if (_consultationService?.CurrentConsultation == null || quantity <= 0 || price <= 0) return false;
         _consultationService.AddCartItemToActiveConsultation(
-            FreeChargeId(name), string.IsNullOrWhiteSpace(code) ? "CARGO" : code, name, category, null, unit, price, quantity);
+            lineId ?? FreeChargeId(name), string.IsNullOrWhiteSpace(code) ? "CARGO" : code, name, category, null, unit, price, quantity);
         _workflow.SyncActiveConsultation();
         return true;
     }
@@ -179,23 +180,30 @@ public partial class ConsultationAccount : ObservableObject
     private ClinicalService? FindService(PatientServiceItem item) => PatientSheetRows.ResolveService(item, _catalog.Services);
 
     /// <summary>
-    /// Carga piezas de un insumo: como el producto dado o, sin él, como cargo libre a su precio.
+    /// Carga piezas de un insumo: como el producto dado o, sin él, como cargo libre a su precio (en
+    /// <paramref name="freeLineId"/> si el renglón ya tiene uno, aunque se llame distinto).
     /// Devuelve false si no hay consulta o el cargo libre no tiene precio.
     /// </summary>
-    public bool ChargeSupplyUnits(PatientSupplyItem item, Product? product, int units)
+    public bool ChargeSupplyUnits(PatientSupplyItem item, Product? product, int units, int? freeLineId = null)
     {
         return product != null
             ? ChargeProduct(product, units, item.SupplyName)
-            : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, units);
+            : ChargeFreeLine("INSUMO", item.SupplyName, "Material clínico", "Piezas", item.UnitPrice, units, freeLineId);
     }
 
     /// <summary>
     /// Renglón de la cuenta de un insumo en este equipo (paso 8.18): por el SyncId del producto con que se cargó, el
     /// cargo libre de su nombre, el Id anotado solo si ese producto tiene el mismo nombre (un renglón que cargó otro
-    /// equipo trae los Id de aquel), o por nombre (renglones anteriores a v1.18.7).
+    /// equipo trae los Id de aquel), o por nombre (renglones anteriores a v1.18.7). Antes, un renglón anterior al paso
+    /// que cargó este mismo equipo (su Id tiene en esta cuenta un renglón con su nombre) es ese renglón, aunque el
+    /// producto se haya renombrado o desactivado después.
     /// </summary>
-    public PatientSheetRows.SupplyLine SupplyLine(PatientSupplyItem item) =>
-        PatientSheetRows.ResolveSupplyLine(item, _catalog.AvailableProducts, _catalog.ProductRefs);
+    public PatientSheetRows.SupplyLine SupplyLine(PatientSupplyItem item)
+    {
+        var account = _consultationService?.CurrentConsultation?.Items;
+        if (account != null && PatientSheetRows.AccountLegacySupplyLine(item, account, _catalog.ProductRefs) is { } own) return own;
+        return PatientSheetRows.ResolveSupplyLine(item, _catalog.AvailableProducts, _catalog.ProductRefs);
+    }
 
     /// <summary>El Id local del renglón de la cuenta de un insumo (<see cref="SupplyLine"/>).</summary>
     public int SupplyLineId(PatientSupplyItem item) => SupplyLine(item).LineId;
@@ -221,6 +229,20 @@ public partial class ConsultationAccount : ObservableObject
     /// </summary>
     public void UnchargeServiceUnits(PatientServiceItem item, int units)
     {
+        // Un renglón anterior al paso 8.18 que cargó este equipo: su Id tiene en la cuenta un renglón con su nombre,
+        // aunque el servicio ya se llame distinto o esté inactivo (con sus insumos por defecto de ese servicio)
+        var account = _consultationService?.CurrentConsultation?.Items;
+        if (account != null && PatientSheetRows.AccountLegacyServiceId(item, account) is int ownId)
+        {
+            Uncharge(-ownId, units);
+            var own = _catalog.AllServices.FirstOrDefault(s => s.Id == ownId) ?? _catalog.Services.FirstOrDefault(s => s.Id == ownId);
+            foreach (var dp in own?.DefaultProducts ?? Enumerable.Empty<ServiceDefaultProduct>())
+            {
+                if (dp.Product != null) Uncharge(dp.Product.Id, Math.Max(1, dp.Quantity) * units);
+            }
+            return;
+        }
+
         var service = FindService(item);
         if (service == null)
         {

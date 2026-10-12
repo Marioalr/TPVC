@@ -241,9 +241,9 @@ public class PatientSheetRowsTests
         var items = consultations.CurrentConsultation.Items;
         Assert.AreEqual(2, items.Single(i => i.ProductId == product.Id).Quantity, "Por nombre: el producto de este equipo");
         Assert.IsFalse(items.Any(i => i.ProductId == 987_654));
-        Assert.AreEqual(product.Id, row.ChargedLineId, "El renglón queda con el Id de este equipo…");
-        Assert.AreEqual(HandoffPayloadCodec.LineProduct, row.ChargedLineKind, "…su clase…");
-        Assert.AreEqual(product.SyncId, row.ChargedLineSyncId, "…y el SyncId del producto, al volver a cargarse");
+        Assert.AreEqual(HandoffPayloadCodec.LineProduct, row.ChargedLineKind, "Al volver a cargarse, el renglón recibe su clase…");
+        Assert.AreEqual(product.SyncId, row.ChargedLineSyncId, "…y el SyncId del producto…");
+        Assert.AreEqual(987_654, row.ChargedLineId, "…y conserva el Id de la PC que lo cargó, que lo usa tal cual si la consulta le regresa");
 
         await records.Supplies.RemoveSupplyItemFromPatientAsync(row);
         Assert.IsFalse(items.Any(i => i.ProductId == product.Id), "La X descuenta las dos piezas");
@@ -346,5 +346,267 @@ public class PatientSheetRowsTests
         CollectionAssert.AreEqual(Ids(onPc.ActiveServices), Ids(after.ActiveServices));
         Assert.AreEqual(-1234567, after.ActiveSupplies[1].ChargedLineId, "Sin relleno: el renglón viejo conserva lo que traía");
         Assert.IsNull(after.ActiveSupplies[1].ChargedLineKind);
+    }
+
+    // ================================================================== revisión: versiones mezcladas
+
+    /// <summary>
+    /// Un renglón que escribió una PC anterior (solo con sus Id) no se traduce al recibir la consulta: si la consulta
+    /// le regresa a esa PC, ella usa sus Id tal cual. Aquí + / − y la X lo encuentran igual, por nombre.
+    /// </summary>
+    [TestMethod]
+    public async Task ReceivedRowsFromAnOlderPc_KeepTheSendersIds_AndPlusMinusXStillHitTheRightLines()
+    {
+        using var pc = new Fase6Clinic();
+        await pc.ConnectCloudAsync();
+        using var tablet = new Fase6Clinic(seed: false);
+        ShiftLocalIds(tablet);
+        await tablet.ConnectCloudAsync(pc.Cloud, "device-tablet-sala", "Tablet de la sala");
+        Assert.IsTrue((await pc.Sync!.SyncAsync()).Success);
+
+        var pcConsultations = new ConsultationService(seedDemoPatients: false);
+        var pcRecords = await pc.OpenAsync(pcConsultations);
+        var tabletConsultations = new ConsultationService(seedDemoPatients: false);
+        var tabletRecords = await tablet.OpenAsync(tabletConsultations);
+
+        pcRecords.OpenPatientChart(Fase6Scenarios.ScriptedPatient(pcRecords));
+        pcRecords.ChartPrimaryAction();
+        var pcGauze = pcRecords.Catalog.AvailableProducts.First(p => p.Name == "Gasa Estéril 10x10 cm");
+        var pcCuracion = pcRecords.Catalog.Services.Single(s => s.Code == "SERV-002");
+        pcRecords.Supplies.SupplyQuantity = 2;
+        await pcRecords.Supplies.SelectAndAddSupplyProductAsync(pcGauze);
+        pcRecords.ClinicalServices.ServiceModalQuantity = 1;
+        await pcRecords.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(pcCuracion);
+
+        // Como los habría escrito una PC v1.35: sin clase, sin SyncId, solo con sus Id
+        var pcPatient = pcRecords.SelectedPatient!;
+        var pcRow = pcPatient.ActiveSupplies.Single(r => r.ChargedLineSyncId == pcGauze.SyncId);
+        pcRow.ChargedLineKind = null;
+        pcRow.ChargedLineSyncId = null;
+        var pcServiceRow = pcPatient.ActiveServices.Single(r => r.ServiceSyncId == pcCuracion.SyncId);
+        pcServiceRow.ServiceSyncId = null;
+        await pc.Inventory.SavePatientAsync(pcPatient);
+        StringAssert.DoesNotMatch(StoredPatient(pc, pcPatient.SyncId).ActiveSuppliesJson, new System.Text.RegularExpressions.Regex("ChargedLineKind"));
+
+        await Task.Delay(200);
+        pcRecords.Autosave.SaveConsultationDraftNow();
+        await pcRecords.Handoff.OpenSendConsultationSheetAsync();
+        pcRecords.Handoff.SelectedHandoffDevice = pcRecords.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
+        await pcRecords.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(pcRecords.Handoff.IsConsultationHandedOff, pcRecords.Handoff.HandoffSheetError ?? pcRecords.Info.InfoModalMessage);
+        await tabletRecords.Handoff.PollHandoffsOnceAsync();
+        await tabletRecords.Handoff.AcceptIncomingHandoffAsync();
+        Assert.IsTrue(tabletConsultations.HasActiveConsultation, tabletRecords.Info.InfoModalMessage);
+
+        var gauze = tabletRecords.Catalog.AvailableProducts.Single(p => p.SyncId == pcGauze.SyncId);
+        var curacion = tabletRecords.Catalog.Services.Single(s => s.SyncId == pcCuracion.SyncId);
+        var patient = tabletRecords.SelectedPatient!;
+        var row = patient.ActiveSupplies.Single(r => r.RowId == pcRow.RowId);
+        var serviceRow = patient.ActiveServices.Single(r => r.RowId == pcServiceRow.RowId);
+        Assert.AreEqual(pcGauze.Id, row.ChargedLineId, "Recibir no traduce un renglón viejo");
+        Assert.AreEqual(pcCuracion.Id, serviceRow.ServiceId);
+
+        var items = tabletConsultations.CurrentConsultation!.Items;
+        int Charged(int lineId) => items.FirstOrDefault(i => i.ProductId == lineId)?.Quantity ?? 0;
+        int gauzeBefore = Charged(gauze.Id);
+
+        await tabletRecords.Supplies.IncreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(gauzeBefore + 1, Charged(gauze.Id), "+ carga la gasa de la tablet (por nombre)");
+        Assert.AreEqual(HandoffPayloadCodec.LineProduct, row.ChargedLineKind, "El renglón viejo recibe su clase…");
+        Assert.AreEqual(gauze.SyncId, row.ChargedLineSyncId, "…y el SyncId del producto…");
+        Assert.AreEqual(pcGauze.Id, row.ChargedLineId, "…y conserva el Id de la PC que lo cargó");
+
+        // Lo guardado en la tablet sigue con los Id de la PC anterior
+        var stored = StoredPatient(tablet, patient.SyncId);
+        var storedRow = new PatientRecord { SyncId = patient.SyncId, ActiveSuppliesJson = stored.ActiveSuppliesJson }.ActiveSupplies.Single(r => r.RowId == row.RowId);
+        Assert.AreEqual(pcGauze.Id, storedRow.ChargedLineId);
+        var storedService = new PatientRecord { SyncId = patient.SyncId, ActiveServicesJson = stored.ActiveServicesJson }.ActiveServices.Single(r => r.RowId == serviceRow.RowId);
+        Assert.AreEqual(pcCuracion.Id, storedService.ServiceId);
+        Assert.IsNull(storedService.ServiceSyncId);
+
+        await tabletRecords.Supplies.DecreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(gauzeBefore, Charged(gauze.Id), "− descuenta la gasa de la tablet");
+        var afterService = curacion.DefaultProducts.Where(dp => dp.Product != null)
+            .ToDictionary(dp => dp.Product!.Id, dp => Charged(dp.Product!.Id) - Math.Max(1, dp.Quantity));
+        await tabletRecords.ClinicalServices.RemoveServiceItemFromPatientAsync(serviceRow);
+        Assert.AreEqual(0, Charged(-curacion.Id), "La X del servicio viejo descuenta el de la tablet");
+        foreach (var (productId, expected) in afterService) Assert.AreEqual(expected, Charged(productId));
+        await tabletRecords.Supplies.RemoveSupplyItemFromPatientAsync(row);
+        Assert.IsEmpty(items, "Cada X encontró su renglón");
+
+        tabletRecords.Dispose();
+        pcRecords.Dispose();
+    }
+
+    // ================================================================== revisión: la receta anterior
+
+    [TestMethod]
+    public async Task PreviousPrescription_KeepsItsRowIdAndUnknownFields_WhenTheConsultationIsDiscardedOrHasNoPrescription()
+    {
+        using var clinic = new Fase6Clinic();
+        var rowId = Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+        int patientId;
+        using (var db = new AppDbContext(clinic.Options))
+        {
+            var row = db.Patients.Single(p => p.RecordNumber == Fase6Scenarios.ScriptedRecord);
+            patientId = row.Id;
+            row.ActivePrescriptionJson = $$$"""[{"RowId":"{{{rowId}}}","MedicineName":"Paracetamol 500 mg","Dosage":"1 cada 8 horas","RecommendedQuantity":1,"DispenseInClinic":false,"Plantilla":{"Id":"fiebre"}}]""";
+            db.SaveChanges();
+        }
+
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await clinic.OpenAsync(consultations, drafts: false);
+        var patient = records.Patients.Single(p => p.Id == patientId);
+
+        void AssertKept(string when)
+        {
+            var stored = JsonNode.Parse(StoredPatient(clinic, patient.SyncId).ActivePrescriptionJson)!.AsArray();
+            Assert.HasCount(1, stored, when);
+            Assert.AreEqual(rowId.ToString(), stored[0]!["RowId"]!.GetValue<string>(), $"{when}: el mismo RowId");
+            Assert.AreEqual("fiebre", stored[0]!["Plantilla"]!["Id"]!.GetValue<string>(), $"{when}: el campo desconocido");
+            Assert.AreEqual(rowId, patient.ActivePrescription.Single().RowId, when);
+        }
+
+        // Descartada: la receta anterior vuelve con sus renglones
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        Assert.IsEmpty(patient.ActivePrescription, "La consulta empieza con la receta vacía");
+        await records.DiscardActiveConsultationAsync();
+        Assert.IsFalse(consultations.HasActiveConsultation);
+        AssertKept("Descartada");
+
+        // Terminada y cobrada sin receta: la última emitida sigue siendo la anterior
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        await records.Consultation.FinalizeConsultationAsync();
+        records.Consultation.Checkout.SetExactCash();
+        await records.Consultation.Checkout.ChargeCommand.ExecuteAsync(null);
+        Assert.IsFalse(consultations.HasActiveConsultation, records.Info.InfoModalMessage);
+        AssertKept("Terminada sin receta");
+
+        // El borrador no los lleva: su formato no cambia
+        Assert.IsNull(ConsultationRecordState.ClonePrescription(patient.ActivePrescription.Single()).RowId);
+        records.Dispose();
+    }
+
+    // ================================================================== revisión: + en un renglón traducido a un cargo libre
+
+    [TestMethod]
+    public async Task PlusMinus_OnARowTranslatedToAFreeLineWithAnotherName_ChargeAndUnchargeTheSameLine()
+    {
+        using var clinic = new Fase6Clinic();
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await clinic.OpenAsync(consultations, drafts: false);
+        records.OpenPatientChart(Fase6Scenarios.ScriptedPatient(records));
+        records.ChartPrimaryAction();
+        var patient = records.SelectedPatient!;
+        var folio = consultations.CurrentConsultation!.Folio;
+
+        // Como queda al recibir una consulta cuyo producto no existe aquí: la cuenta lo cobra como el cargo libre del
+        // nombre de su renglón (lo abrió un insumo por defecto) y el renglón de la hoja apunta a ese cargo
+        const string accountName = "Venda de yeso 15 cm";
+        var accountLine = HandoffPayloadCodec.FreeChargeId(accountName);
+        Assert.IsTrue(consultations.AddCartItemToActiveConsultation(accountLine, "CARGO", accountName, null, null, "Piezas", 40m, 2));
+        var row = new PatientSupplyItem
+        {
+            SupplyName = "Venda de yeso 15 cm (Rollo)", Quantity = 2, UnitPrice = 40m, ChargedConsultationFolio = folio, ChargedUnits = 2,
+            ChargedLineId = accountLine, ChargedLineKind = HandoffPayloadCodec.LineProduct, ChargedLineSyncId = Guid.NewGuid()
+        };
+        var otherLine = HandoffPayloadCodec.FreeChargeId(row.SupplyName);
+        Assert.AreNotEqual(accountLine, otherLine);
+        patient.ActiveSupplies = new List<PatientSupplyItem>(patient.ActiveSupplies) { row };
+        records.Supplies.OpenSuppliesModal();
+
+        var items = consultations.CurrentConsultation.Items;
+        int Charged(int lineId) => items.FirstOrDefault(i => i.ProductId == lineId)?.Quantity ?? 0;
+        await records.Supplies.IncreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(3, Charged(accountLine), "+ carga el mismo cargo libre");
+        Assert.AreEqual(0, Charged(otherLine), "No abre otro cargo con el nombre de la hoja");
+        await records.Supplies.DecreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(2, Charged(accountLine));
+        await records.Supplies.IncreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(3, Charged(accountLine));
+        Assert.AreEqual(HandoffPayloadCodec.LineProduct, row.ChargedLineKind, "Sigue siendo el producto en los demás equipos");
+
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(row);
+        Assert.IsEmpty(items, "La X descuenta todo lo que cargó el renglón");
+        records.Dispose();
+    }
+
+    // ================================================================== revisión: renglones viejos de este equipo
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "producto renombrado")]
+    [DataRow(true, DisplayName = "producto desactivado")]
+    public async Task X_OnALegacyRowOfThisPc_UnchargesIt_AfterTheProductIsRenamedOrDeactivated(bool deactivate)
+    {
+        using var clinic = new Fase6Clinic();
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await clinic.OpenAsync(consultations, drafts: false);
+        records.OpenPatientChart(Fase6Scenarios.ScriptedPatient(records));
+        records.ChartPrimaryAction();
+        var patient = records.SelectedPatient!;
+        var product = records.Catalog.AvailableProducts.First(p => CatalogStore.IsProductSupply(p) && p.CurrentStock >= 3 && p.Price > 0);
+
+        // Cargado por esta PC con v1.35: solo su Id
+        records.Supplies.SupplyQuantity = 2;
+        await records.Supplies.SelectAndAddSupplyProductAsync(product);
+        var row = patient.ActiveSupplies.Last();
+        row.ChargedLineKind = null;
+        row.ChargedLineSyncId = null;
+        var items = consultations.CurrentConsultation!.Items;
+        Assert.AreEqual(2, items.Single(i => i.ProductId == product.Id).Quantity);
+
+        using (var db = new AppDbContext(clinic.Options))
+        {
+            var stored = db.Products.Single(p => p.Id == product.Id);
+            if (deactivate) stored.IsActive = false;
+            else stored.Name = "Nombre nuevo del producto";
+            db.SaveChanges();
+        }
+        await records.LoadServicesAsync();
+        Assert.AreEqual(!deactivate, records.Catalog.AvailableProducts.Any(p => p.Id == product.Id));
+
+        await records.Supplies.DecreaseSupplyQuantityAsync(row);
+        Assert.AreEqual(1, items.Single(i => i.ProductId == product.Id).Quantity, "− descuenta del renglón con que se cargó");
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(row);
+        Assert.IsEmpty(items, "La X lo descuenta");
+        records.Dispose();
+    }
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "servicio renombrado")]
+    [DataRow(true, DisplayName = "servicio desactivado")]
+    public async Task X_OnALegacyServiceRowOfThisPc_UnchargesItAndItsDefaults_AfterTheServiceIsRenamedOrDeactivated(bool deactivate)
+    {
+        using var clinic = new Fase6Clinic();
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await clinic.OpenAsync(consultations, drafts: false);
+        records.OpenPatientChart(Fase6Scenarios.ScriptedPatient(records));
+        records.ChartPrimaryAction();
+        var patient = records.SelectedPatient!;
+        var curacion = records.Catalog.Services.Single(s => s.Code == "SERV-002");
+        Assert.IsNotEmpty(curacion.DefaultProducts);
+
+        records.ClinicalServices.ServiceModalQuantity = 1;
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(curacion);
+        var row = patient.ActiveServices.Last();
+        row.ServiceSyncId = null;
+        var items = consultations.CurrentConsultation!.Items;
+        Assert.AreEqual(1, items.Single(i => i.ProductId == -curacion.Id).Quantity);
+
+        using (var db = new AppDbContext(clinic.Options))
+        {
+            var stored = db.ClinicalServices.Single(s => s.Id == curacion.Id);
+            if (deactivate) stored.IsActive = false;
+            else stored.Name = "Curación con otro nombre";
+            db.SaveChanges();
+        }
+        await records.LoadServicesAsync();
+        Assert.AreEqual(!deactivate, records.Catalog.Services.Any(s => s.Id == curacion.Id));
+
+        await records.ClinicalServices.RemoveServiceItemFromPatientAsync(row);
+        Assert.IsEmpty(items, "La X descuenta el servicio y sus insumos por defecto");
+        records.Dispose();
     }
 }

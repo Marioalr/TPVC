@@ -330,7 +330,8 @@ public partial class SuppliesSheetViewModel : ObservableObject
 
         if (difference > 0)
         {
-            if (!_account.ChargeSupplyUnits(item, product, difference)) return;
+            // Un cargo libre, en el renglón libre que ya tiene (al recibir la consulta pudo quedar en uno con otro nombre)
+            if (!_account.ChargeSupplyUnits(item, product, difference, lineId < 0 ? lineId : null)) return;
             item.ChargedUnits += difference;
         }
         else

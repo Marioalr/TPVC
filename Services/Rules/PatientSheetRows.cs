@@ -154,17 +154,50 @@ public static class PatientSheetRows
     }
 
     /// <summary>
-    /// Al volver a cargar o descontar piezas (+ / −): el Id local siempre; la clase y el SyncId solo si el renglón todavía
-    /// no los tiene (uno viejo los recibe así, en su siguiente guardado). Los que ya tiene no cambian: un producto que
-    /// aquí no existe y se cobra como cargo libre sigue siendo ese producto en los demás equipos.
+    /// Al volver a cargar o descontar piezas (+ / −). Un renglón con el formato del paso 8.18 queda con el Id local; su
+    /// clase y su SyncId no cambian (un producto que aquí no existe y se cobra como cargo libre sigue siendo ese producto
+    /// en los demás equipos). Uno viejo recibe la clase y el SyncId, en su siguiente guardado, y conserva su
+    /// <c>ChargedLineId</c> si tenía uno: es el de la PC que lo cargó, que lo usa tal cual si la consulta le regresa.
     /// </summary>
     public static void RefreshSupplyLine(PatientSupplyItem row, SupplyLine line)
     {
-        row.ChargedLineId = line.LineId;
-        if (row.ChargedLineKind != null) return;
+        if (row.ChargedLineKind != null)
+        {
+            row.ChargedLineId = line.LineId;
+            return;
+        }
+        if (row.ChargedLineId == 0) row.ChargedLineId = line.LineId;
         row.ChargedLineKind = line.Kind;
         row.ChargedLineSyncId = line.IsFree ? null : line.SyncId;
     }
+
+    /// <summary>
+    /// Solo en la PC, antes de <see cref="ResolveSupplyLine"/>: un renglón anterior al paso 8.18 (sin clase ni SyncId)
+    /// cuyo <c>ChargedLineId</c> tiene en la cuenta abierta un renglón con el mismo nombre lo cargó este equipo, aunque
+    /// después se renombrara o desactivara el producto: es ese renglón. El Id de otro equipo nunca coincide con un
+    /// renglón de esta cuenta con el mismo nombre. El SyncId sale de <paramref name="allProducts"/> si se conoce.
+    /// </summary>
+    public static SupplyLine? AccountLegacySupplyLine(PatientSupplyItem row, IEnumerable<ConsultationProductItem> accountItems,
+        IEnumerable<CatalogRef>? allProducts = null)
+    {
+        if (row.ChargedLineKind != null || row.ChargedLineSyncId != null || row.ChargedLineId <= 0) return null;
+        if (!accountItems.Any(i => i.ProductId == row.ChargedLineId && SameAccountName(i.Name, row.SupplyName))) return null;
+        var syncId = allProducts?.FirstOrDefault(r => r.Kind == CatalogRefKind.Product && r.Id == row.ChargedLineId)?.SyncId;
+        return new SupplyLine(HandoffPayloadCodec.LineProduct, row.ChargedLineId, syncId is { } s && s != Guid.Empty ? s : null);
+    }
+
+    /// <summary>
+    /// Lo mismo para un servicio sin <c>ServiceSyncId</c>: si la cuenta abierta tiene el renglón de su <c>ServiceId</c> con
+    /// el mismo nombre (el que tenía el servicio al cargarlo), es ese servicio aunque ya se llame distinto o esté inactivo.
+    /// </summary>
+    public static int? AccountLegacyServiceId(PatientServiceItem row, IEnumerable<ConsultationProductItem> accountItems)
+    {
+        if ((row.ServiceSyncId is { } syncId && syncId != Guid.Empty) || row.ServiceId <= 0) return null;
+        return accountItems.Any(i => i.ProductId == -row.ServiceId && SameAccountName(i.Name, row.ServiceName)) ? row.ServiceId : null;
+    }
+
+    private static bool SameAccountName(string? accountName, string? rowName) =>
+        !string.IsNullOrWhiteSpace(rowName) && string.Equals(accountName?.Trim(), rowName.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>El nombre del renglón normalizado (sin acentos ni mayúsculas) es el del producto o "Nombre (Presentación)".</summary>
     public static bool SameSupplyName(Product product, string? name)
@@ -226,12 +259,14 @@ public static class PatientSheetRows
     // ================================================================== consulta recibida
 
     /// <summary>
-    /// Al recibir una consulta de otro equipo: los renglones que ella cargó (su folio) quedan con el Id local de este
-    /// equipo (<c>ChargedLineId</c> y <c>ServiceId</c>). Un insumo cargado como producto toma el renglón de la cuenta
-    /// recibida con el mismo SyncId, ya traducido (<see cref="HandoffPayloadCodec.MapReceivedItems"/>: si el producto
-    /// no existe aquí, es el cargo libre del nombre de ese renglón); lo demás se resuelve como arriba. La clase y los
-    /// SyncId no se tocan: valen igual en todos los equipos, y un renglón viejo los recibe hasta que se vuelva a cargar
-    /// (no hay relleno). Devuelve cuántos renglones cambiaron.
+    /// Al recibir una consulta de otro equipo: los renglones con el formato del paso 8.18 que ella cargó (su folio)
+    /// quedan con el Id local de este equipo (<c>ChargedLineId</c> y <c>ServiceId</c>). Un insumo cargado como producto
+    /// toma el renglón de la cuenta recibida con el mismo SyncId, ya traducido
+    /// (<see cref="HandoffPayloadCodec.MapReceivedItems"/>: si el producto no existe aquí, es el cargo libre del nombre de
+    /// ese renglón); lo demás se resuelve como arriba. La clase y los SyncId no se tocan: valen igual en todos los equipos.
+    /// Un renglón viejo (sin <c>ChargedLineKind</c>, o un servicio sin <c>ServiceSyncId</c>) no se toca: trae los Id de la
+    /// PC anterior que lo escribió, que los usa tal cual si la consulta le regresa, y aquí se resuelve igual al moverlo.
+    /// Devuelve cuántos renglones cambiaron.
     /// </summary>
     public static int TranslateReceivedRows(PatientRecord patient, string folio, IEnumerable<ConsultationProductItem> receivedItems,
         IEnumerable<Product> products, IEnumerable<CatalogRef>? allProducts, IEnumerable<ClinicalService> services)
@@ -241,7 +276,7 @@ public static class PatientSheetRows
         var received = receivedItems.ToList();
         var productList = products.ToList();
         var refs = allProducts?.ToList();
-        foreach (var row in patient.ActiveSupplies.Where(r => r != null && r.ChargedConsultationFolio == folio))
+        foreach (var row in patient.ActiveSupplies.Where(r => r != null && r.ChargedConsultationFolio == folio && r.ChargedLineKind != null))
         {
             var mapped = row.ChargedLineKind == HandoffPayloadCodec.LineProduct && row.ChargedLineSyncId is { } syncId && syncId != Guid.Empty
                 ? received.FirstOrDefault(i => i.LineKind == HandoffPayloadCodec.LineProduct && i.CatalogSyncId == syncId && i.ProductId != 0)
@@ -253,7 +288,8 @@ public static class PatientSheetRows
         }
 
         var serviceList = services.ToList();
-        foreach (var row in patient.ActiveServices.Where(r => r != null && r.ChargedConsultationFolio == folio))
+        foreach (var row in patient.ActiveServices.Where(r => r != null && r.ChargedConsultationFolio == folio
+                                                              && r.ServiceSyncId is { } syncId && syncId != Guid.Empty))
         {
             var id = ResolveService(row, serviceList)?.Id ?? 0;
             if (row.ServiceId == id) continue;

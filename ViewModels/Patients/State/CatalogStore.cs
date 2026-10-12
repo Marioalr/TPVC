@@ -43,13 +43,20 @@ public partial class CatalogStore : ObservableObject
     /// </summary>
     public IReadOnlyList<CatalogRef> ProductRefs { get; private set; } = Array.Empty<CatalogRef>();
 
+    /// <summary>
+    /// Paso 8.18: todos los servicios de la base, también los inactivos, con sus insumos por defecto. Con ellos la X de un
+    /// renglón viejo descuenta un servicio que se desactivó a media consulta. <see cref="Services"/> son los activos.
+    /// </summary>
+    public IReadOnlyList<ClinicalService> AllServices { get; private set; } = Array.Empty<ClinicalService>();
+
     /// <summary>Servicios y productos de la base (o los de demostración sin base de datos).</summary>
     public async Task LoadAsync()
     {
         if (_inventoryService != null)
         {
-            var dbServices = await _inventoryService.GetClinicalServicesAsync();
-            Services = new ObservableCollection<ClinicalService>(dbServices);
+            var allServices = await _inventoryService.GetClinicalServicesAsync(includeInactive: true);
+            AllServices = allServices;
+            Services = new ObservableCollection<ClinicalService>(allServices.Where(s => s.IsActive));
 
             var prods = await _inventoryService.GetProductsAsync();
             AvailableProducts = new ObservableCollection<Product>(prods);
@@ -114,6 +121,7 @@ public partial class CatalogStore : ObservableObject
             }
         };
 
+        AllServices = services;
         Services = new ObservableCollection<ClinicalService>(services);
 
         if (AvailableProducts.Count == 0)
