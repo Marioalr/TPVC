@@ -166,6 +166,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
         string category;
         string code;
         int serviceId;
+        Guid? serviceSyncId;
 
         if (service != null)
         {
@@ -174,6 +175,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
             category = service.Category;
             code = service.Code;
             serviceId = service.Id;
+            serviceSyncId = service.SyncId;
         }
         else if (!string.IsNullOrWhiteSpace(ServiceModalSearchText))
         {
@@ -183,6 +185,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
             category = serviceObj?.Category ?? "Consulta";
             code = serviceObj?.Code ?? "SERV-001";
             serviceId = serviceObj?.Id ?? 0;
+            serviceSyncId = serviceObj?.SyncId;
         }
         else
         {
@@ -195,9 +198,11 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
 
         var qty = ServiceModalQuantity > 0 ? ServiceModalQuantity : 1;
 
+        // Paso 8.18: el SyncId del servicio vale en cualquier equipo; el Id local sigue para las PC anteriores
         var newItem = new PatientServiceItem
         {
             ServiceId = serviceId,
+            ServiceSyncId = serviceSyncId is { } syncId && syncId != Guid.Empty ? syncId : null,
             ServiceCode = code,
             ServiceName = name,
             Category = category,

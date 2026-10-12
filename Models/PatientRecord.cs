@@ -8,8 +8,32 @@ using System.Text.Json.Serialization;
 
 namespace TPVC.Models;
 
-public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChanged
+/// <summary>
+/// Renglón de una hoja del paciente (paso 8.18): receta, insumos o servicios en <c>Active*Json</c>. Su <see cref="RowId"/>
+/// lo identifica en cualquier equipo (la combinación por renglón del paso 8.22 lo usa) y <see cref="ExtensionData"/>
+/// conserva los campos que agregue un equipo más nuevo, para que una reescritura de la PC no los tire. Las reglas, en
+/// <see cref="TPVC.Services.Rules.PatientSheetRows"/>.
+/// </summary>
+public interface IPatientSheetRow
 {
+    Guid? RowId { get; set; }
+
+    /// <summary>El nombre que entra al RowId determinista de un renglón viejo: el medicamento, el insumo o el servicio.</summary>
+    string RowName { get; }
+
+    Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
+public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow
+{
+    /// <summary>
+    /// Paso 8.18: identidad del renglón en la hoja (GUID). Uno nuevo lo recibe al azar al guardarse; uno viejo, el
+    /// determinista de <see cref="TPVC.Services.Rules.PatientSheetRows.LegacyRowId"/> al leerse. En el borrador de la
+    /// consulta solo lo lleva la receta anterior (<c>PreviousPrescriptions</c>); sin él no se escribe.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? RowId { get; set; }
+
     public string MedicineName { get; set; } = string.Empty;
     public string Dosage { get; set; } = string.Empty;
     public int RecommendedQuantity { get; set; } = 1;
@@ -45,11 +69,21 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
         }
     }
 
+    string IPatientSheetRow.RowName => MedicineName;
+
+    /// <summary>Paso 8.18: los campos que este equipo no conoce (de una versión más nueva) se vuelven a escribir tal cual.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
-public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
+public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow
 {
+    /// <summary>Paso 8.18: identidad del renglón en la hoja (ver <see cref="PatientPrescriptionItem.RowId"/>).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? RowId { get; set; }
+
     public string SupplyName { get; set; } = string.Empty;
     public string Instructions { get; set; } = string.Empty;
 
@@ -80,9 +114,23 @@ public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ChargedUnits { get; set; }
 
-    /// <summary>Renglón de la cuenta con que se cargó: Id del producto o, fuera del inventario, el del cargo libre.</summary>
+    /// <summary>
+    /// Renglón de la cuenta con que se cargó: Id del producto o, fuera del inventario, el del cargo libre. Es el Id local
+    /// del equipo que lo escribió; la PC lo sigue escribiendo para las PC anteriores al paso 8.18, que solo leen este.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ChargedLineId { get; set; }
+
+    /// <summary>
+    /// Paso 8.18: la clase del renglón de la cuenta con que se cargó, con las palabras de la consulta entre equipos:
+    /// <c>producto</c> (con <see cref="ChargedLineSyncId"/>) o <c>libre</c> (cada equipo calcula su Id con el nombre).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChargedLineKind { get; set; }
+
+    /// <summary>Paso 8.18: SyncId del producto con que se cargó (vale en cualquier equipo); null en un cargo libre.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ChargedLineSyncId { get; set; }
 
     private bool _isFromEarlierConsultation;
 
@@ -99,12 +147,28 @@ public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged
         }
     }
 
+    string IPatientSheetRow.RowName => SupplyName;
+
+    /// <summary>Paso 8.18: los campos que este equipo no conoce (de una versión más nueva) se vuelven a escribir tal cual.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
-public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged
+public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow
 {
+    /// <summary>Paso 8.18: identidad del renglón en la hoja (ver <see cref="PatientPrescriptionItem.RowId"/>).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? RowId { get; set; }
+
+    /// <summary>Id local del servicio en el equipo que escribió el renglón (0 en un servicio fuera del catálogo).</summary>
     public int ServiceId { get; set; }
+
+    /// <summary>Paso 8.18: SyncId del servicio del catálogo (vale en cualquier equipo); null fuera del catálogo.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ServiceSyncId { get; set; }
+
     public string ServiceCode { get; set; } = string.Empty;
     public string ServiceName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
@@ -137,6 +201,12 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged
             PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsFromEarlierConsultation)));
         }
     }
+
+    string IPatientSheetRow.RowName => ServiceName;
+
+    /// <summary>Paso 8.18: los campos que este equipo no conoce (de una versión más nueva) se vuelven a escribir tal cual.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
@@ -501,41 +571,54 @@ public class PatientRecord : ISyncEntity
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>
+    /// Lee una hoja guardada. Paso 8.18: cada renglón sin <c>RowId</c> (escrito antes del paso o por un equipo que no lo
+    /// conoce) recibe el determinista del paciente, la hoja, su posición y su nombre, así dos equipos le ponen el mismo.
+    /// Se guarda con la siguiente escritura de la hoja (no hay relleno al arrancar).
+    /// </summary>
+    private List<T> ReadSheet<T>(string json, string column) where T : IPatientSheetRow
+    {
+        List<T> rows;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            rows = new List<T>();
+        }
+        else
+        {
+            try
+            {
+                rows = JsonSerializer.Deserialize<List<T>>(json, _jsonOptions) ?? new();
+            }
+            catch
+            {
+                rows = new List<T>();
+            }
+        }
+        TPVC.Services.Rules.PatientSheetRows.AssignLegacyRowIds(rows, SyncId, column);
+        return rows;
+    }
+
+    /// <summary>Escribe una hoja: un renglón nuevo (sin <c>RowId</c>) recibe uno al azar (paso 8.18).</summary>
+    private static string WriteSheet<T>(List<T> rows) where T : IPatientSheetRow
+    {
+        TPVC.Services.Rules.PatientSheetRows.AssignNewRowIds(rows);
+        return JsonSerializer.Serialize(rows, _jsonOptions);
+    }
+
     [NotMapped]
     public List<PatientPrescriptionItem> ActivePrescription
     {
-        get
-        {
-            if (_activePrescription == null)
-            {
-                if (string.IsNullOrWhiteSpace(ActivePrescriptionJson))
-                {
-                    _activePrescription = new List<PatientPrescriptionItem>();
-                }
-                else
-                {
-                    try
-                    {
-                        _activePrescription = JsonSerializer.Deserialize<List<PatientPrescriptionItem>>(ActivePrescriptionJson, _jsonOptions) ?? new();
-                    }
-                    catch
-                    {
-                        _activePrescription = new List<PatientPrescriptionItem>();
-                    }
-                }
-            }
-            return _activePrescription;
-        }
+        get => _activePrescription ??= ReadSheet<PatientPrescriptionItem>(ActivePrescriptionJson, TPVC.Services.Rules.PatientSheetRows.PrescriptionColumn);
         set
         {
             _activePrescription = value ?? new();
-            ActivePrescriptionJson = JsonSerializer.Serialize(_activePrescription, _jsonOptions);
+            ActivePrescriptionJson = WriteSheet(_activePrescription);
         }
     }
 
     public void SyncPrescriptionJson()
     {
-        ActivePrescriptionJson = JsonSerializer.Serialize(ActivePrescription, _jsonOptions);
+        ActivePrescriptionJson = WriteSheet(ActivePrescription);
     }
 
     public string ActiveSuppliesJson { get; set; } = string.Empty;
@@ -546,38 +629,17 @@ public class PatientRecord : ISyncEntity
     [NotMapped]
     public List<PatientSupplyItem> ActiveSupplies
     {
-        get
-        {
-            if (_activeSupplies == null)
-            {
-                if (string.IsNullOrWhiteSpace(ActiveSuppliesJson))
-                {
-                    _activeSupplies = new List<PatientSupplyItem>();
-                }
-                else
-                {
-                    try
-                    {
-                        _activeSupplies = JsonSerializer.Deserialize<List<PatientSupplyItem>>(ActiveSuppliesJson, _jsonOptions) ?? new();
-                    }
-                    catch
-                    {
-                        _activeSupplies = new List<PatientSupplyItem>();
-                    }
-                }
-            }
-            return _activeSupplies;
-        }
+        get => _activeSupplies ??= ReadSheet<PatientSupplyItem>(ActiveSuppliesJson, TPVC.Services.Rules.PatientSheetRows.SuppliesColumn);
         set
         {
             _activeSupplies = value ?? new();
-            ActiveSuppliesJson = JsonSerializer.Serialize(_activeSupplies, _jsonOptions);
+            ActiveSuppliesJson = WriteSheet(_activeSupplies);
         }
     }
 
     public void SyncSuppliesJson()
     {
-        ActiveSuppliesJson = JsonSerializer.Serialize(ActiveSupplies, _jsonOptions);
+        ActiveSuppliesJson = WriteSheet(ActiveSupplies);
     }
 
     public string ActiveServicesJson { get; set; } = string.Empty;
@@ -588,38 +650,17 @@ public class PatientRecord : ISyncEntity
     [NotMapped]
     public List<PatientServiceItem> ActiveServices
     {
-        get
-        {
-            if (_activeServices == null)
-            {
-                if (string.IsNullOrWhiteSpace(ActiveServicesJson))
-                {
-                    _activeServices = new List<PatientServiceItem>();
-                }
-                else
-                {
-                    try
-                    {
-                        _activeServices = JsonSerializer.Deserialize<List<PatientServiceItem>>(ActiveServicesJson, _jsonOptions) ?? new();
-                    }
-                    catch
-                    {
-                        _activeServices = new List<PatientServiceItem>();
-                    }
-                }
-            }
-            return _activeServices;
-        }
+        get => _activeServices ??= ReadSheet<PatientServiceItem>(ActiveServicesJson, TPVC.Services.Rules.PatientSheetRows.ServicesColumn);
         set
         {
             _activeServices = value ?? new();
-            ActiveServicesJson = JsonSerializer.Serialize(_activeServices, _jsonOptions);
+            ActiveServicesJson = WriteSheet(_activeServices);
         }
     }
 
     public void SyncServicesJson()
     {
-        ActiveServicesJson = JsonSerializer.Serialize(ActiveServices, _jsonOptions);
+        ActiveServicesJson = WriteSheet(ActiveServices);
     }
 
     public bool HasAllergies => !string.IsNullOrWhiteSpace(Allergies) && !DeniesAllergies(Allergies);

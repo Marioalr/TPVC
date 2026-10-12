@@ -2443,7 +2443,7 @@ public class InventoryTests
 
         Assert.IsNotNull(movement);
         Assert.AreEqual(2, movement.Quantity);
-        Assert.IsTrue(movement.Reason.Contains(sale.Folio));
+        Assert.IsTrue(movement.Reason!.Contains(sale.Folio));
     }
 
     [TestMethod]

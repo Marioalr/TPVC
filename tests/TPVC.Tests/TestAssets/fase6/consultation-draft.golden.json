@@ -126,12 +126,14 @@
   ],
   "PreviousPrescriptions": [
     {
+      "RowId": "<guid>",
       "MedicineName": "Tiras Reactivas para Glucosa Capilar",
       "Dosage": "Monitoreo matutino en ayunas 3 veces por semana",
       "RecommendedQuantity": 1,
       "DispenseInClinic": false
     },
     {
+      "RowId": "<guid>",
       "MedicineName": "Alcohol Etílico Desnaturalizado 70%",
       "Dosage": "Asepsia para toma de glucosa",
       "RecommendedQuantity": 1,

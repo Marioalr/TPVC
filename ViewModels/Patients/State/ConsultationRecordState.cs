@@ -59,7 +59,8 @@ public sealed class ConsultationRecordState
     {
         Patient = patient;
         SummaryBeforeConsultation = PatientSummarySnapshot.Of(patient);
-        PreviousPrescription = patient.ActivePrescription.Select(ClonePrescription).ToList();
+        // Con su RowId y sus campos desconocidos (paso 8.18): si la receta anterior se restaura, son los mismos renglones
+        PreviousPrescription = patient.ActivePrescription.Select(ClonePrescriptionKeepingIdentity).ToList();
         foreach (var item in PreviousPrescription) item.DispenseInClinic = false;
         PreviousPrescriptionKnown = true;
 
@@ -81,7 +82,8 @@ public sealed class ConsultationRecordState
         Patient = patient;
         SummaryBeforeConsultation = draft.PatientBefore;
         PreviousPrescriptionKnown = draft.PreviousPrescriptions != null;
-        PreviousPrescription = draft.PreviousPrescriptions?.Select(ClonePrescription).ToList() ?? new();
+        // Con el RowId y los campos desconocidos que trae la copia (paso 8.18; un borrador anterior no los trae)
+        PreviousPrescription = draft.PreviousPrescriptions?.Select(ClonePrescriptionKeepingIdentity).ToList() ?? new();
 
         patient.ActivePrescription = resumed;
         patient.SyncPrescriptionJson();
@@ -145,6 +147,20 @@ public sealed class ConsultationRecordState
         SummaryBeforeConsultation = null;
         PreviousPrescription = new List<PatientPrescriptionItem>();
         PreviousPrescriptionKnown = false;
+    }
+
+    /// <summary>
+    /// Copia de la receta anterior (paso 8.18): conserva el <c>RowId</c> y una copia de los campos que esta PC no conoce,
+    /// así al restaurarla la hoja tiene los mismos renglones. La usan la memoria de la consulta, su borrador y la copia
+    /// que viaja a otro equipo (<c>PreviousPrescriptions</c>, campo aditivo: sin <c>RowId</c> no se escribe y una PC
+    /// anterior lo ignora). La receta en curso del borrador se copia con <see cref="ClonePrescription"/>.
+    /// </summary>
+    internal static PatientPrescriptionItem ClonePrescriptionKeepingIdentity(PatientPrescriptionItem item)
+    {
+        var copy = ClonePrescription(item);
+        copy.RowId = item.RowId;
+        copy.ExtensionData = item.ExtensionData is { } extra ? new(extra) : null;
+        return copy;
     }
 
     internal static PatientPrescriptionItem ClonePrescription(PatientPrescriptionItem item) => new()

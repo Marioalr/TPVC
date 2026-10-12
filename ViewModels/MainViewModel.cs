@@ -43,7 +43,7 @@ public partial class MainViewModel : ObservableObject
     private string _appTitle = "TPVC - Consultorio Médico";
 
     [ObservableProperty]
-    private string _appVersion = "1.35.0";
+    private string _appVersion = "1.36.0";
 
     [ObservableProperty]
     private string _tursoStatusText = "Modo Local (SQLite)";
@@ -625,7 +625,7 @@ public partial class MainViewModel : ObservableObject
                 break;
             case "Records":
                 CurrentView = MedicalRecordsVM;
-                MedicalRecordsVM.EnterPatientsSection();
+                MedicalRecordsVM!.EnterPatientsSection();
                 break;
             case "Config":
                 CurrentView = ConfigurationShellVM;
