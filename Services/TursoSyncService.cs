@@ -222,6 +222,8 @@ public partial class TursoSyncService
 
         if (_inventoryService != null)
         {
+            // Paso 8.16: EXP y TKT toman su número del contador de la nube
+            _inventoryService.Folios = this;
             _inventoryService.OnInventoryChanged += OnLocalDataChanged;
             _inventoryService.OnPatientsChanged += OnLocalDataChanged;
             _inventoryService.OnSalesChanged += OnLocalDataChanged;
@@ -645,6 +647,11 @@ public partial class TursoSyncService
 
         // 5. Paso 8.15: el primer token que funciona después de anularlos se anota en la nube
         registryWrites += await RecordTokenRotationAsync(client, ct);
+
+        // 6. Paso 8.16: los contadores de folios, hasta el mayor número de esta base (una vez por sesión y en cada
+        //    «Sincronización completa»), y los folios repetidos para el aviso
+        registryWrites += await SeedFolioCountersAsync(client, force: fullResync, ct);
+        await RefreshDuplicateFoliosAsync(ct);
 
         settings.LastPulledServerWatermark = watermark;
         settings.LastSyncUtc = DateTime.UtcNow;

@@ -66,6 +66,12 @@ public partial class InventoryService
 
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
 
+    /// <summary>
+    /// Paso 8.16: el contador de folios de la nube (lo asigna TursoSyncService). Sin él, o con la nube apagada o sin
+    /// verificar, EXP y TKT salen del mayor número local + 1, como en v1.19.
+    /// </summary>
+    public Services.Folios.IFolioSource? Folios { get; set; }
+
     /// <summary>Cambios en productos, lotes, movimientos, ventas o servicios clínicos.</summary>
     public event Action? OnInventoryChanged;
 
@@ -569,7 +575,7 @@ public partial class InventoryService
         var now = DateTime.Now;
         var sale = new Sale
         {
-            Folio = await GenerateNextSaleFolioAsync(db, now),
+            Folio = await NextSaleFolioAsync(db, now),
             Date = now,
             CustomerName = clientText,
             PaymentMethod = methodText,
@@ -636,20 +642,19 @@ public partial class InventoryService
         return sale;
     }
 
-    private static async Task<string> GenerateNextSaleFolioAsync(AppDbContext db, DateTime date)
+    /// <summary>
+    /// El folio del ticket (paso 8.16): del contador de la nube (2 s como máximo, dentro de la transacción de la venta) o,
+    /// sin conexión, con la letra del equipo; con la nube apagada, el mayor del día + 1.
+    /// </summary>
+    private async Task<string> NextSaleFolioAsync(AppDbContext db, DateTime date)
     {
-        var prefix = $"TKT-{date:yyyyMMdd}-";
+        var series = Services.Folios.FolioFactory.Series(Services.Folios.FolioKind.Sale, date);
         var existing = await db.Sales
-            .Where(s => s.Folio.StartsWith(prefix))
+            .Where(s => s.Folio.StartsWith(series))
             .Select(s => s.Folio)
             .ToListAsync();
-
-        int max = 0;
-        foreach (var folio in existing)
-        {
-            if (int.TryParse(folio.AsSpan(prefix.Length), out int n) && n > max) max = n;
-        }
-        return $"{prefix}{max + 1:D4}";
+        return (Folios == null ? null : await Folios.NextAsync(Services.Folios.FolioKind.Sale, date, existing))
+               ?? Services.Folios.FolioFactory.Local(Services.Folios.FolioKind.Sale, date, existing);
     }
 
     public async Task<List<Sale>> GetSalesAsync(DateTime from, DateTime to)
@@ -1215,38 +1220,48 @@ public partial class InventoryService
             .AnyAsync(p => p.IsActive && p.Id != excludePatientId && p.RecordNumber.ToUpper() == normalized);
     }
 
+    /// <summary>
+    /// El siguiente folio probable (el mayor de la base + 1), para mostrarlo al abrir el formulario. Con la nube, el número
+    /// definitivo se toma al guardar (paso 8.16): otro equipo pudo usar este mientras tanto.
+    /// </summary>
     public async Task<string> GenerateNextRecordNumberAsync()
     {
-        var year = DateTime.Today.Year;
-        var prefix = $"EXP-{year}-";
-
-        await using var db = CreateContext();
-        var existingRecords = await db.Patients
-            .Where(p => p.RecordNumber.StartsWith(prefix))
-            .Select(p => p.RecordNumber)
-            .ToListAsync();
-
-        int maxNum = 0;
-        foreach (var rec in existingRecords)
-        {
-            var suffix = rec.Substring(prefix.Length);
-            if (int.TryParse(suffix, out int parsed) && parsed > maxNum)
-            {
-                maxNum = parsed;
-            }
-        }
-
-        return $"{prefix}{(maxNum + 1):D3}";
+        var today = DateTime.Today;
+        return Services.Folios.FolioFactory.Local(Services.Folios.FolioKind.Patient, today, await RecordNumbersInSeriesAsync(today));
     }
 
+    private async Task<List<string>> RecordNumbersInSeriesAsync(DateTime today)
+    {
+        var series = Services.Folios.FolioFactory.Series(Services.Folios.FolioKind.Patient, today);
+        await using var db = CreateContext();
+        return await db.Patients
+            .Where(p => p.RecordNumber.StartsWith(series))
+            .Select(p => p.RecordNumber)
+            .ToListAsync();
+    }
+
+    /// <summary>El folio de un expediente nuevo sin folio (paso 8.16): del contador de la nube, con la letra del equipo o local.</summary>
+    private async Task<string> AssignRecordNumberAsync()
+    {
+        var today = DateTime.Today;
+        var existing = await RecordNumbersInSeriesAsync(today);
+        return (Folios == null ? null : await Folios.NextAsync(Services.Folios.FolioKind.Patient, today, existing))
+               ?? Services.Folios.FolioFactory.Local(Services.Folios.FolioKind.Patient, today, existing);
+    }
+
+    /// <summary>
+    /// Guarda el expediente. Uno nuevo sin folio recibe el siguiente al guardar (paso 8.16: el contador de la nube, o la
+    /// letra del equipo sin conexión). Un folio tecleado a mano que ya usa otro expediente activo de esta base se rechaza.
+    /// </summary>
     public async Task<PatientRecord> SavePatientAsync(PatientRecord patient)
     {
         patient.RecordNumber = patient.RecordNumber.Trim();
         patient.FullName = patient.FullName.Trim();
 
-        if (string.IsNullOrWhiteSpace(patient.RecordNumber))
+        bool typed = !string.IsNullOrWhiteSpace(patient.RecordNumber);
+        if (!typed)
         {
-            patient.RecordNumber = await GenerateNextRecordNumberAsync();
+            patient.RecordNumber = await AssignRecordNumberAsync();
         }
 
         if (await IsRecordNumberTakenAsync(patient.RecordNumber, patient.Id))
@@ -1260,6 +1275,7 @@ public partial class InventoryService
 
         await using var db = CreateContext();
         PatientRecord? tracked = null;
+        bool newNumber = typed;
 
         if (patient.Id == 0)
         {
@@ -1272,6 +1288,7 @@ public partial class InventoryService
             tracked = existing;
             if (existing != null)
             {
+                newNumber = typed && !string.Equals(existing.RecordNumber, patient.RecordNumber, StringComparison.OrdinalIgnoreCase);
                 // Copia todas las columnas escalares (incluye los JSON de receta/insumos/servicios)
                 // conservando los metadatos de sincronización del registro guardado.
                 var syncId = existing.SyncId;
@@ -1291,6 +1308,18 @@ public partial class InventoryService
         // equipo se distingue de lo que este mismo equipo acaba de guardar
         if (tracked != null) patient.UpdatedAtUtc = tracked.UpdatedAtUtc;
         NotifyPatientsChanged();
+
+        // Paso 8.16: un folio tecleado a mano mayor que el contador de la nube lo sube (sin esperar: ya se guardó)
+        if (newNumber && Folios is { } folios)
+        {
+            var folio = patient.RecordNumber;
+            var today = DateTime.Today;
+            _ = Task.Run(async () =>
+            {
+                try { await folios.NoteManualAsync(folio, today); }
+                catch (Exception ex) { AppLogger.Warn($"No se pudo anotar el folio tecleado {folio} en la nube: {ex.Message}"); }
+            });
+        }
         return patient;
     }
 

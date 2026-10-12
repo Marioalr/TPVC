@@ -35,8 +35,8 @@ public partial class ConsultationProductItem : ObservableObject
 
 public partial class ActiveConsultation : ObservableObject
 {
-    // Folio con fecha y hora: único para un consultorio sin depender de números aleatorios
-    public string Folio { get; set; } = $"CNS-{DateTime.Now:yyyyMMdd-HHmmss}";
+    // Folio con fecha y hora: único para un consultorio sin depender de números aleatorios (paso 8.16: FolioFactory)
+    public string Folio { get; set; } = TPVC.Services.Folios.FolioFactory.Consultation(DateTime.Now);
     public int PatientId { get; set; }
     public string PatientName { get; set; } = string.Empty;
     public string ChiefComplaint { get; set; } = "Consulta Médica General";

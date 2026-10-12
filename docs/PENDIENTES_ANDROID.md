@@ -84,6 +84,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.34.0 (paso 8.16: folios consecutivos desde Turso, lado de la PC)
+
+- [ ] Con la nube del consultorio: dar de alta un paciente en la PC y otro en una segunda computadora (o en la misma PC después de cambiar a mano el contador en el panel de Turso): los folios salen seguidos y sin repetir. En el panel de Turso, la tabla `FolioCounters` tiene `EXP-2026` y el día de hoy.
+- [ ] Sin internet (desconectar el Wi-Fi): un paciente nuevo sale como `EXP-2026-P1-001` y un ticket como `TKT-…-P1-0001`; el siguiente, `-002`. Con internet otra vez, el siguiente vuelve a la serie normal.
+- [ ] Si hay folios repetidos de antes (filas con `-R1` no cuentan), *Nube y dispositivos* los lista.
+- [ ] Para Kotlin (K3): al guardar un expediente o un ticket con conexión, `folio.take` de `contracts/hrana/statements.json` con el piso local; sin respuesta en 2 s, el folio con la letra del equipo y su consecutivo guardado en un archivo que no se borra al volver a bajar todo (`contracts/golden/folios.json`). CNS sin conexión con la letra. La tablet y el celular no siembran.
+
 ### v1.33.0 (paso 8.15: quitar, equipo perdido y token rechazado, lado de la PC)
 
 - [ ] *Equipos vinculados* › **Perdí este equipo** en otra computadora o en una tablet de prueba: el equipo sale de la lista y aparecen los pasos para anular los tokens; **Abrir el panel de Turso** abre app.turso.tech.

@@ -1,5 +1,5 @@
 {
-  "contract": 7,
+  "contract": 8,
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.HranaStatements.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [
@@ -331,6 +331,25 @@
         "Part"
       ],
       "when": "Cada trozo, cuatro por petición; se revisan el tamaño y el SHA-256."
+    },
+    {
+      "name": "folio.take",
+      "sql": "INSERT INTO FolioCounters (Series, LastNumber) VALUES (?, ? + 1) ON CONFLICT(Series) DO UPDATE SET LastNumber = max(LastNumber, ?) + 1 RETURNING LastNumber;",
+      "args": [
+        "Series ('EXP-2026' o 'TKT-20261009')",
+        "Piso (integer)",
+        "Piso (integer)"
+      ],
+      "when": "Paso 8.16: al guardar un expediente o un ticket, con 2 s de espera; el piso es el mayor número de esa serie en la base del equipo (los folios con letra no cuentan). Sin respuesta, el folio lleva la letra del equipo (golden/folios.json)."
+    },
+    {
+      "name": "folio.raise",
+      "sql": "INSERT INTO FolioCounters (Series, LastNumber) VALUES (?, ?) ON CONFLICT(Series) DO UPDATE SET LastNumber = max(LastNumber, excluded.LastNumber);",
+      "args": [
+        "Series",
+        "Número (integer)"
+      ],
+      "when": "Paso 8.16: un folio tecleado a mano mayor que el contador lo sube. La PC principal además siembra el año y el día al empezar cada sesión; la tablet y el celular no."
     }
   ]
 }

@@ -98,7 +98,8 @@ public partial class TursoSyncEndToEndTests
             }
         }
 
-        var settingsPath = TempFile(".json");
+        // En su carpeta, como %LocalAppData%\TPVC: ahí va también su folios.json (paso 8.16)
+        var settingsPath = Path.Combine(dir, "turso_config.json");
         var settings = new TursoSettingsService(settingsPath);
         if (clock != null) settings.Clock = clock;
         var s = settings.CurrentSettings;
@@ -264,14 +265,15 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
-    public async Task DuplicateRecordNumbersFromTwoDevices_DoNotBlockSync()
+    public async Task DuplicateRecordNumbersFromTwoDevices_SyncWithoutRenaming_AndAppearInTheNotice()
     {
+        // Sin la «Sincronización completa» la nube no está verificada: cada equipo numera solo, como antes del paso 8.16
         var pc = CreateDevice("pc", seed: true);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         var tablet = CreateDevice("tablet", seed: false);
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
 
-        // Ambos equipos crean un expediente nuevo sin conexión: obtienen el mismo folio
+        // Ambos equipos crean un expediente nuevo: obtienen el mismo folio
         var onPc = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente PC", Age = 30 });
         var onTablet = await tablet.Inventory.SavePatientAsync(new PatientRecord { FullName = "Paciente Tablet", Age = 5 });
         Assert.AreEqual(onPc.RecordNumber, onTablet.RecordNumber);
@@ -280,9 +282,11 @@ public partial class TursoSyncEndToEndTests
         var result = await pc.Sync.SyncAsync();
         Assert.IsTrue(result.Success, result.ErrorMessage);
 
+        // Paso 8.16: ya no se renombra con -R1; las dos filas se conservan y la PC lo avisa
         var pcPatients = await pc.Inventory.GetPatientsAsync();
-        Assert.IsTrue(pcPatients.Any(p => p.FullName == "Paciente Tablet" && p.RecordNumber == onTablet.RecordNumber + "-R1"));
+        Assert.IsTrue(pcPatients.Any(p => p.FullName == "Paciente Tablet" && p.RecordNumber == onTablet.RecordNumber));
         Assert.IsTrue(pcPatients.Any(p => p.FullName == "Paciente PC" && p.RecordNumber == onPc.RecordNumber));
+        CollectionAssert.AreEqual(new[] { $"{onPc.RecordNumber} (2 expedientes)" }, pc.Sync.DuplicateFolios.ToArray());
     }
 
     [TestMethod]

@@ -88,11 +88,21 @@ public static partial class DatabaseInitializer
         BackfillSyncColumns(context, model);
 
         var existingIndexes = QueryNames(connection, "SELECT name FROM sqlite_master WHERE type = 'index'");
-        var missingIndexes = desired.OfType<CreateIndexOperation>()
-            .Where(i => !existingIndexes.Contains(i.Name))
-            .Cast<MigrationOperation>()
-            .ToList();
-        Execute(context, generator, model, missingIndexes);
+        var uniqueIndexes = QueryNames(connection,
+            "SELECT il.name FROM sqlite_master AS m, pragma_index_list(m.name) AS il WHERE m.type = 'table' AND il.\"unique\" = 1");
+        var indexOperations = new List<MigrationOperation>();
+        foreach (var index in desired.OfType<CreateIndexOperation>())
+        {
+            if (existingIndexes.Contains(index.Name))
+            {
+                // Un índice que dejó de ser único (paso 8.16: RecordNumber y Sale.Folio) se vuelve a crear. Al revés no: con
+                // filas repetidas fallaría al abrir
+                if (index.IsUnique || !uniqueIndexes.Contains(index.Name)) continue;
+                indexOperations.Add(new DropIndexOperation { Name = index.Name, Table = index.Table });
+            }
+            indexOperations.Add(index);
+        }
+        Execute(context, generator, model, indexOperations);
 
         context.Database.ExecuteSqlRaw($"PRAGMA user_version = {fingerprint};");
     }
@@ -149,7 +159,8 @@ public static partial class DatabaseInitializer
             }
             foreach (var index in entityType.GetIndexes())
             {
-                parts.Add($"{table}#{index.GetDatabaseName(storeObject)}");
+                // Con "!" si es único: así un índice que cambia de único a normal también dispara la migración
+                parts.Add($"{table}#{index.GetDatabaseName(storeObject)}{(index.IsUnique ? "!" : string.Empty)}");
             }
         }
         parts.Sort(StringComparer.Ordinal);

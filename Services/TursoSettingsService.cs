@@ -19,6 +19,9 @@ public class TursoSettingsService
 
     public event Action? SettingsChanged;
 
+    /// <summary>La carpeta de turso_config.json (%LocalAppData%\TPVC); ahí va también folios.json (paso 8.16).</summary>
+    public string ConfigFolder => Path.GetDirectoryName(Path.GetFullPath(_configFilePath)) ?? AppContext.BaseDirectory;
+
     /// <summary>Reloj de los contadores del mes y del día (reemplazable en pruebas).</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 

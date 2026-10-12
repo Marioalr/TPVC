@@ -209,10 +209,11 @@ public class AppDbContext : DbContext
             .HasForeignKey(sp => sp.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Expedientes Clínicos y Consultas (NOM-004-SSA3)
+        // Expedientes Clínicos y Consultas (NOM-004-SSA3). Paso 8.16: el folio ya no es único. Con varios equipos sale de un
+        // contador en Turso, y uno repetido (filas viejas o tecleado a mano) se conserva y aparece en un aviso en lugar de
+        // renombrarse con -R1; el formulario sigue rechazando uno repetido en esta base
         modelBuilder.Entity<PatientRecord>()
-            .HasIndex(p => p.RecordNumber)
-            .IsUnique();
+            .HasIndex(p => p.RecordNumber);
 
         modelBuilder.Entity<PatientRecord>()
             .HasIndex(p => p.FullName);
@@ -247,10 +248,9 @@ public class AppDbContext : DbContext
             .HasForeignKey(a => a.PatientRecordId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Ventas persistidas (tickets)
+        // Ventas persistidas (tickets). Paso 8.16: el folio ya no es único (ver RecordNumber)
         modelBuilder.Entity<Sale>()
-            .HasIndex(s => s.Folio)
-            .IsUnique();
+            .HasIndex(s => s.Folio);
 
         modelBuilder.Entity<Sale>()
             .HasIndex(s => s.Date);
