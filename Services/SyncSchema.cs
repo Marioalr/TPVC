@@ -49,6 +49,15 @@ internal sealed class TableMap
     /// <summary>Todos los índices únicos de la base local, salvo el de SyncId (nombres de columna).</summary>
     public required List<string[]> UniqueColumns { get; init; }
 
+    /// <summary>
+    /// Columnas derivadas (paso 8.22; el 8.20 agrega las existencias): cada equipo las calcula con sus datos, suben como
+    /// información y nunca se aplican al bajar, salvo al crear aquí la fila (no hay otro valor; enseguida se recalculan). No
+    /// están en los triggers del registro de cambios: recalcularlas no deja nada que subir. Nombres de columna.
+    /// </summary>
+    public required IReadOnlySet<string> DerivedColumns { get; init; }
+
+    public bool IsDerived(string column) => DerivedColumns.Contains(column);
+
     public IEnumerable<string> RemoteColumnNames =>
         Columns.Select(c => c.Name).Concat(References.Select(r => r.RemoteColumn));
 
@@ -92,6 +101,20 @@ internal sealed class SyncSchema
     {
         (typeof(SaleItem), nameof(SaleItem.ProductId), typeof(Product)),
         (typeof(SaleItem), nameof(SaleItem.ClinicalServiceId), typeof(ClinicalService)),
+    };
+
+    /// <summary>
+    /// Las columnas derivadas de cada tabla (<see cref="TableMap.DerivedColumns"/>). Paso 8.22: el resumen del expediente
+    /// que sale de sus citas y consultas (<see cref="Rules.PatientSummaryRules"/>). El paso 8.20 agrega aquí
+    /// <c>Products.CurrentStock</c>, <c>ProductBatches.Quantity</c> e <c>IsDepleted</c>.
+    /// </summary>
+    public static readonly IReadOnlyList<(Type Entity, string Property)> DerivedProperties = new (Type, string)[]
+    {
+        (typeof(PatientRecord), nameof(PatientRecord.LastVisit)),
+        (typeof(PatientRecord), nameof(PatientRecord.NextAppointmentDate)),
+        (typeof(PatientRecord), nameof(PatientRecord.NextAppointmentTime)),
+        (typeof(PatientRecord), nameof(PatientRecord.NextAppointmentReason)),
+        (typeof(PatientRecord), nameof(PatientRecord.NextAppointmentNotes)),
     };
 
     /// <summary>Tablas en orden de dependencias: la subida va en este orden.</summary>
@@ -185,6 +208,12 @@ internal sealed class SyncSchema
                 .Select(i => i.Properties[0].PropertyInfo!)
                 .ToList();
 
+            var derived = DerivedProperties
+                .Where(d => d.Entity == entityType.ClrType)
+                .Select(d => columns.SingleOrDefault(c => c.Property.Name == d.Property)?.Name
+                             ?? throw new InvalidOperationException($"{entityType.ClrType.Name}.{d.Property} es derivada pero no es una columna que viaja."))
+                .ToHashSet(StringComparer.Ordinal);
+
             maps.Add(new TableMap
             {
                 ClrType = entityType.ClrType,
@@ -194,7 +223,8 @@ internal sealed class SyncSchema
                 UniqueProperties = uniqueProps,
                 UniqueColumns = uniqueIndexes
                     .Select(i => i.Properties.Select(p => p.GetColumnName(storeObject) ?? p.Name).ToArray())
-                    .ToList()
+                    .ToList(),
+                DerivedColumns = derived
             });
         }
 

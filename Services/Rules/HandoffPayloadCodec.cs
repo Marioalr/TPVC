@@ -25,8 +25,12 @@ public static class HandoffPayloadCodec
     /// Deja el borrador listo para viajar: sin los Id locales ni las marcas del envío, con los identificadores de
     /// sincronización del expediente, la nota, la cita y el honorario, y cada cargo con su clase y su SyncId.
     /// </summary>
+    /// <param name="patientFieldStampsJson">Paso 8.22: el <c>FieldStampsJson</c> del expediente en este equipo; viajan sus marcas
+    /// (sin la de la fila) para que quien recibe espere a tenerlas.</param>
+    /// <param name="progressNoteUpdatedAtUtc">Paso 8.22: la marca del avance de la nota.</param>
     public static void PrepareForSending(ConsultationDraft draft, IReadOnlyList<CatalogRef> refs, Guid patientSyncId, DateTime? patientUpdatedAtUtc,
-        Guid? progressNoteSyncId, Guid? appointmentSyncId, int? feeServiceId, DateTime savedAt)
+        Guid? progressNoteSyncId, Guid? appointmentSyncId, int? feeServiceId, DateTime savedAt,
+        string? patientFieldStampsJson = null, DateTime? progressNoteUpdatedAtUtc = null)
     {
         draft.Handoff = null;
         draft.ReceivedHandoffId = null;
@@ -36,6 +40,10 @@ public static class HandoffPayloadCodec
         draft.SavedAt = savedAt;
         draft.PatientSyncId = patientSyncId;
         draft.PatientUpdatedAtUtc = patientUpdatedAtUtc;
+        draft.PatientFieldStamps = patientFieldStampsJson != null && patientUpdatedAtUtc is { } version
+            ? FieldStampsForPayload(patientFieldStampsJson, version)
+            : null;
+        draft.ProgressNoteUpdatedAtUtc = progressNoteSyncId != null ? progressNoteUpdatedAtUtc : null;
         draft.ProgressNoteSyncId = progressNoteSyncId;
         draft.AttendingAppointmentSyncId = appointmentSyncId;
         draft.FeeServiceSyncId = feeServiceId is > 0 ? refs.FirstOrDefault(r => r.Kind == CatalogRefKind.Service && r.Id == feeServiceId)?.SyncId : null;
@@ -57,6 +65,86 @@ public static class HandoffPayloadCodec
             item.CatalogSyncId = match?.SyncId;
             item.ProductId = 0;
         }
+    }
+
+    /// <summary>
+    /// Paso 8.22: las marcas por campo que viajan en la copia: todas las de <c>FieldStampsJson</c> menos la de la fila, cada una
+    /// como cuenta en su fila (nunca más que su <c>UpdatedAtUtc</c>), en orden ordinal de sus llaves. Sin marcas, ninguna (la
+    /// copia lleva el objeto vacío: quien recibe sabe que el que envía ya las conoce).
+    /// </summary>
+    public static Dictionary<string, DateTime> FieldStampsForPayload(string? fieldStampsJson, DateTime patientUpdatedAtUtc)
+    {
+        var stamps = PatientFieldStamps.Parse(fieldStampsJson);
+        var result = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        foreach (var key in stamps.Entries.Keys.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            if (key == PatientFieldStamps.RowStampKey) continue;
+            if (PatientFieldStamps.ParseStamp(stamps.Effective(key, patientUpdatedAtUtc)) is { } stamp) result[key] = stamp;
+        }
+        return result;
+    }
+
+    /// <summary>Qué le falta a este equipo para tomar una consulta recibida (paso 8.22: también las marcas por campo).</summary>
+    public enum Arrival
+    {
+        /// <summary>Ya tiene todo: se puede tomar.</summary>
+        Ready,
+
+        /// <summary>Todavía no llega el expediente.</summary>
+        PatientMissing,
+
+        /// <summary>Llegó, pero no con los últimos cambios del equipo que la envió.</summary>
+        PatientBehind,
+
+        /// <summary>Todavía no llega el avance de la nota.</summary>
+        NoteMissing,
+
+        /// <summary>Llegó la nota, pero no su última versión.</summary>
+        NoteBehind
+    }
+
+    /// <summary>
+    /// Antes de tomar una consulta recibida, ya con la sincronización hecha: el expediente debe existir aquí con al menos la
+    /// versión de la copia (<c>PatientUpdatedAtUtc</c>) y, desde el paso 8.22, cada marca por campo de la copia
+    /// (<c>PatientFieldStamps</c>) debe ser menor o igual a la de aquí: comparar solo la marca de la fila dejaba tomar la
+    /// consulta en un equipo cuya fila era "más nueva" por otro campo sin los últimos cargos del que la envió. Una marca de
+    /// aquí cuenta como en su fila (nunca más que su <c>UpdatedAtUtc</c>); si la fila de aquí la escribió alguien sin marcas
+    /// (<see cref="PatientFieldStamps.IsStampless"/>), cada marca cuenta al menos como su <c>UpdatedAtUtc</c>. Una marca de
+    /// quitado que aquí ya se purgaría (90 días antes de la marca más nueva de aquí) no se exige. Con el avance de la nota:
+    /// debe existir y, si la copia trae su marca (<c>ProgressNoteUpdatedAtUtc</c>), tenerla o una más nueva. Una copia de antes
+    /// del paso (sin esos campos) se revisa como antes. Si falta algo: "Intente de nuevo en unos segundos".
+    /// </summary>
+    public static Arrival CheckArrival(ConsultationDraft payload, bool patientExists, DateTime? patientUpdatedAtUtc, string? patientFieldStampsJson,
+        bool noteExists, DateTime? noteUpdatedAtUtc)
+    {
+        if (!patientExists) return Arrival.PatientMissing;
+        var localUpdated = patientUpdatedAtUtc ?? DateTime.MinValue;
+        if (payload.PatientUpdatedAtUtc is { } version && localUpdated < version) return Arrival.PatientBehind;
+
+        if (payload.PatientFieldStamps is { Count: > 0 } wanted)
+        {
+            var local = PatientFieldStamps.Parse(patientFieldStampsJson);
+            bool stampless = local.IsStampless(localUpdated);
+            var rowStamp = PatientFieldStamps.Format(localUpdated);
+            var horizon = local.Newest() is { } newest ? PatientFieldStamps.Format(newest - PatientFieldStamps.RemovedRowRetention) : null;
+            foreach (var (key, stamp) in wanted)
+            {
+                if (key == PatientFieldStamps.RowStampKey) continue;
+                var theirs = PatientFieldStamps.Format(stamp);
+                if (horizon != null && key.EndsWith(PatientFieldStamps.RemovedSuffix, StringComparison.Ordinal)
+                    && string.CompareOrdinal(theirs, horizon) < 0) continue;
+                var mine = local.Effective(key, localUpdated);
+                if (stampless) mine = PatientFieldStamps.Max(mine, rowStamp);
+                if (PatientFieldStamps.Compare(mine, theirs) < 0) return Arrival.PatientBehind;
+            }
+        }
+
+        if (payload.ProgressNoteSyncId != null)
+        {
+            if (!noteExists) return Arrival.NoteMissing;
+            if (payload.ProgressNoteUpdatedAtUtc is { } note && (noteUpdatedAtUtc ?? DateTime.MinValue) < note) return Arrival.NoteBehind;
+        }
+        return Arrival.Ready;
     }
 
     /// <summary>

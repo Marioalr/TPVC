@@ -1492,7 +1492,12 @@ public partial class InventoryService
             var entry = db.Entry(existing);
             foreach (var field in write)
             {
-                entry.Property(field.Name).CurrentValue = field.Get(edited);
+                // Paso 8.22: una hoja editada desde una copia con foto lleva sus ediciones por renglón sobre la de la base (un
+                // renglón que bajó de otro equipo mientras tanto se queda); sin foto de esa hoja se escribe completa, como antes
+                entry.Property(field.Name).CurrentValue = field.IsSheet && baseline != null && baseline.Has(field)
+                    ? Services.Rules.PatientSheetCanonical.Rebase(field.Name, baseline[field] as string, field.Get(edited) as string,
+                        field.Get(existing) as string, existing.SyncId)
+                    : field.Get(edited);
             }
         }
 
@@ -1528,21 +1533,43 @@ public partial class InventoryService
         return await db.Patients.AsNoTracking().Where(p => p.Id == patientId).Select(p => (DateTime?)p.UpdatedAtUtc).FirstOrDefaultAsync();
     }
 
+    /// <summary>
+    /// Paso 8.22: la versión guardada del expediente con sus marcas por campo (para la copia que viaja y para revisar la que
+    /// llega); null si no existe.
+    /// </summary>
+    public async Task<(DateTime UpdatedAtUtc, string FieldStampsJson)?> GetPatientVersionAsync(int patientId)
+    {
+        await using var db = CreateContext();
+        var row = await db.Patients.AsNoTracking().Where(p => p.Id == patientId)
+            .Select(p => new { p.UpdatedAtUtc, p.FieldStampsJson })
+            .FirstOrDefaultAsync();
+        return row == null ? null : (row.UpdatedAtUtc, row.FieldStampsJson ?? string.Empty);
+    }
+
     /// <summary>Avance de nota ya guardado con ese folio, si existe.</summary>
-    public async Task<Guid?> FindConsultationNoteSyncIdAsync(int patientId, string folio)
+    public async Task<Guid?> FindConsultationNoteSyncIdAsync(int patientId, string folio) =>
+        (await FindConsultationNoteVersionAsync(patientId, folio))?.SyncId;
+
+    /// <summary>Paso 8.22: el avance de nota guardado con ese folio y su marca, si existe.</summary>
+    public async Task<(Guid SyncId, DateTime UpdatedAtUtc)?> FindConsultationNoteVersionAsync(int patientId, string folio)
     {
         if (string.IsNullOrWhiteSpace(folio)) return null;
         await using var db = CreateContext();
-        return await db.PatientConsultations.AsNoTracking()
+        var row = await db.PatientConsultations.AsNoTracking()
             .Where(c => c.PatientRecordId == patientId && c.Folio == folio)
-            .Select(c => (Guid?)c.SyncId)
+            .Select(c => new { c.SyncId, c.UpdatedAtUtc })
             .FirstOrDefaultAsync();
+        return row == null ? null : (row.SyncId, row.UpdatedAtUtc);
     }
 
-    public async Task<bool> ConsultationNoteExistsAsync(Guid syncId)
+    public async Task<bool> ConsultationNoteExistsAsync(Guid syncId) => await GetConsultationNoteUpdatedAtAsync(syncId) != null;
+
+    /// <summary>Paso 8.22: la marca de una nota por su SyncId; null si todavía no llega.</summary>
+    public async Task<DateTime?> GetConsultationNoteUpdatedAtAsync(Guid syncId)
     {
         await using var db = CreateContext();
-        return await db.PatientConsultations.AsNoTracking().AnyAsync(c => c.SyncId == syncId);
+        return await db.PatientConsultations.AsNoTracking().Where(c => c.SyncId == syncId)
+            .Select(c => (DateTime?)c.UpdatedAtUtc).FirstOrDefaultAsync();
     }
 
     /// <summary>Productos y servicios (también los dados de baja) con sus identificadores.</summary>
@@ -1768,19 +1795,8 @@ public partial class InventoryService
             }
         }
 
-        // Sincronizar en PatientRecord si corresponde
-        if (appointment.PatientRecordId > 0)
-        {
-            var pat = await db.Patients.FindAsync(appointment.PatientRecordId);
-            if (pat != null && appointment.Status != "Cancelada")
-            {
-                pat.NextAppointmentDate = appointment.Date;
-                pat.NextAppointmentTime = appointment.Time;
-                pat.NextAppointmentReason = appointment.Reason;
-                pat.NextAppointmentNotes = appointment.Notes;
-            }
-        }
-
+        // Paso 8.22: agendar ya no escribe el expediente. La próxima cita es un resumen derivado (en orden clínico, no la
+        // última que se guardó): el guardado la recalcula sin marca ni nada que subir (PatientSummary)
         await db.SaveChangesAsync();
         NotifyAppointmentsChanged();
         NotifyPatientsChanged();

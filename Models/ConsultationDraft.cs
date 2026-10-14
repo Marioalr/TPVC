@@ -68,8 +68,20 @@ public sealed class ConsultationDraft
     /// <summary>Versión del expediente en el equipo que envía: el que recibe espera tenerla tras descargar.</summary>
     public DateTime? PatientUpdatedAtUtc { get; set; }
 
+    /// <summary>
+    /// Paso 8.22: las marcas por campo del expediente en el equipo que envía (<c>FieldStampsJson</c> sin la marca de la fila):
+    /// el que recibe exige tener cada una o una más nueva. Campo aditivo: sin él (una copia de antes) se revisa solo
+    /// <see cref="PatientUpdatedAtUtc"/>, y <c>PayloadVersion</c> sigue en 1. Nunca va en el borrador local.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, DateTime>? PatientFieldStamps { get; set; }
+
     /// <summary>Avance de la nota ya guardado con este folio (debe llegar antes de continuar en el otro equipo).</summary>
     public Guid? ProgressNoteSyncId { get; set; }
+
+    /// <summary>Paso 8.22: la marca (<c>UpdatedAtUtc</c>) de ese avance de la nota; el que recibe exige tenerla o una más nueva.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? ProgressNoteUpdatedAtUtc { get; set; }
 
     public Guid? AttendingAppointmentSyncId { get; set; }
 

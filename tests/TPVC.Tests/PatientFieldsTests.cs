@@ -87,9 +87,11 @@ public class PatientFieldsTests
         CollectionAssert.IsSubsetOf(PatientFields.Sheets.ToList(), PatientFields.All.Select(f => f.Name).ToList());
         Assert.IsTrue(PatientFields.All.All(f => f.Property.CanWrite), "Cada campo se puede poner al día desde la fila");
 
-        // Lo que viaja a la nube es un campo, salvo la fecha de alta (la identidad y la marca no son columnas de la tabla)
+        // Lo que viaja a la nube es un campo, salvo la fecha de alta y las marcas por campo del paso 8.22 (la identidad y la
+        // marca no son columnas de la tabla)
         var synced = SyncSchema.FromModel(db.Model).Tables.Single(t => t.ClrType == typeof(PatientRecord)).Columns.Select(c => c.Name);
-        CollectionAssert.AreEquivalent(synced.Except(new[] { nameof(PatientRecord.CreatedAt) }).ToList(), PatientFields.All.Select(f => f.Name).ToList());
+        CollectionAssert.AreEquivalent(synced.Except(new[] { nameof(PatientRecord.CreatedAt), nameof(PatientRecord.FieldStampsJson) }).ToList(),
+            PatientFields.All.Select(f => f.Name).ToList());
     }
 
     /// <summary>Un valor distinto para cada campo según su tipo: un tipo nuevo obliga a decidir cómo se compara.</summary>
@@ -247,14 +249,17 @@ public class PatientFieldsTests
         var copy = (await inventory.GetPatientByIdAsync(ScriptedId(clinic)))!;
 
         var first = DateTime.Today.AddDays(7);
-        await inventory.SaveAppointmentAsync(new PatientAppointment { PatientRecordId = copy.Id, Date = first, Time = "09:00", Reason = "Revisión" });
+        var appointment = await inventory.SaveAppointmentAsync(new PatientAppointment { PatientRecordId = copy.Id, Date = first, Time = "09:00", Reason = "Revisión" });
         copy.ActiveSupplies = new List<PatientSupplyItem>(copy.ActiveSupplies) { new() { SupplyName = "Venda", Quantity = 1 } };
         Assert.AreSame(copy, await inventory.SavePatientAsync(copy), "Regresa la misma instancia");
         Assert.AreEqual(first, copy.NextAppointmentDate, "La copia toma la cita de la fila");
 
-        // La cita se cambia de día y baja un teléfono nuevo; la misma copia guarda otra cosa
+        // La cita se cambia de día y baja un teléfono nuevo; la misma copia guarda otra cosa (paso 8.22: la próxima cita
+        // sale de las citas, así que se mueve la misma)
         var second = DateTime.Today.AddDays(9);
-        await inventory.SaveAppointmentAsync(new PatientAppointment { PatientRecordId = copy.Id, Date = second, Time = "12:00", Reason = "Revisión" });
+        appointment.Date = second;
+        appointment.Time = "12:00";
+        await inventory.SaveAppointmentAsync(appointment);
         Download(clinic, copy.Id, p => p.Phone = "5533334444");
         copy.Allergies = "Sulfas";
         await inventory.SavePatientAsync(copy);

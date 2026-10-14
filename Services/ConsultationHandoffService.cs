@@ -48,6 +48,12 @@ public sealed class ConsultationHandoffService
 
     /// <summary>Un equipo que no se ve en este tiempo ya no se ofrece para enviarle la consulta.</summary>
     private static readonly TimeSpan ForgottenDeviceAge = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Paso 8.22: una PC con Windows vista en este tiempo con una revisión del contrato anterior a la de las marcas por campo
+    /// (<see cref="SyncContract.FieldStampsRevision"/>) recibe el aviso de que sus cambios se combinan como fila completa.
+    /// </summary>
+    public static readonly TimeSpan OldPcWarningWindow = TimeSpan.FromDays(30);
     private const string ServerNow = TursoSyncService.ServerNowSql;
 
     private const string Columns = "Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, Folio, " +
@@ -234,6 +240,7 @@ public sealed class ConsultationHandoffService
             {
                 IsPrimary = primaryDeviceId != null && string.Equals(primaryDeviceId, id, StringComparison.OrdinalIgnoreCase),
                 IsThisDevice = thisDevice,
+                MergesAsWholeRow = device.MergesAsWholeRow && !thisDevice,
                 // Paso 8.15: no se ha conectado desde que se anularon los tokens (sin latido, tampoco)
                 TokensRotatedAtUtc = !thisDevice && !device.IsRevoked && !device.IsPendingApproval
                                      && rotatedAt is { } at && (device.LastSeenUtc == null || device.LastSeenUtc < at)
@@ -291,6 +298,14 @@ public sealed class ConsultationHandoffService
         var name = registry?.GetValueOrDefault("DisplayName")?.ToString() is { Length: > 0 } registered
             ? registered
             : row.GetValueOrDefault("DeviceName")?.ToString() is { Length: > 0 } heartbeatName ? heartbeatName : "Equipo sin nombre";
+        // Paso 8.22: una PC (Windows, o sin plataforma: v1.19–v1.26) que todavía no marca cada campo del expediente
+        var contractRevision = ParseInt(row.GetValueOrDefault("ContractRevision"));
+        bool windows = platform == null
+            ? role is not (DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin)
+            : string.Equals(platform, TursoSyncService.WindowsPlatform, StringComparison.OrdinalIgnoreCase);
+        bool mergesAsWholeRow = windows && revokedAt == null && lastSeen != null && serverNowUtc - lastSeen.Value < OldPcWarningWindow
+                                && (contractRevision ?? 0) < SyncContract.FieldStampsRevision;
+
         return new LinkedDevice(
             row.GetValueOrDefault("DeviceId")?.ToString() ?? string.Empty,
             name,
@@ -302,6 +317,8 @@ public sealed class ConsultationHandoffService
             status)
         {
             Platform = platform,
+            ContractRevision = contractRevision,
+            MergesAsWholeRow = mergesAsWholeRow,
             DeviceCode = registry?.GetValueOrDefault("DeviceCode")?.ToString(),
             IsRevoked = revokedAt != null,
             IsPendingApproval = pendingApproval,

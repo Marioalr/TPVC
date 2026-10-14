@@ -547,6 +547,14 @@ public class PatientRecord : ISyncEntity
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+    /// <summary>
+    /// Paso 8.22: cuándo cambió por última vez cada campo y cada renglón de las hojas, para combinar por campo al bajar
+    /// (<see cref="TPVC.Services.Rules.PatientFieldStamps"/>, <see cref="TPVC.Services.Rules.PatientMerge"/>). La mantienen el
+    /// sello de cada guardado y la combinación; nadie la edita a mano. No es un campo del expediente (paso 8.21): guardar una
+    /// copia nunca escribe la suya.
+    /// </summary>
+    public string FieldStampsJson { get; set; } = string.Empty;
+
     public List<PatientConsultation> Consultations { get; set; } = new();
 
     private int? _consultationCount;
@@ -606,6 +614,27 @@ public class PatientRecord : ISyncEntity
         TPVC.Services.Rules.PatientSheetRows.AssignNewRowIds(rows);
         return JsonSerializer.Serialize(rows, _jsonOptions);
     }
+
+    /// <summary>
+    /// Paso 8.22: los renglones de una hoja guardada tal como los lee la PC (con el <c>RowId</c> determinista de un renglón
+    /// viejo), en su posición; un elemento nulo del arreglo queda nulo. Para combinar por renglón sin una instancia.
+    /// </summary>
+    internal static List<IPatientSheetRow?> ReadSheetRows(string column, string? json, Guid patientSyncId) => column switch
+    {
+        TPVC.Services.Rules.PatientSheetRows.PrescriptionColumn => ReadSheet<PatientPrescriptionItem>(json, column, patientSyncId).Cast<IPatientSheetRow?>().ToList(),
+        TPVC.Services.Rules.PatientSheetRows.SuppliesColumn => ReadSheet<PatientSupplyItem>(json, column, patientSyncId).Cast<IPatientSheetRow?>().ToList(),
+        TPVC.Services.Rules.PatientSheetRows.ServicesColumn => ReadSheet<PatientServiceItem>(json, column, patientSyncId).Cast<IPatientSheetRow?>().ToList(),
+        _ => throw new ArgumentOutOfRangeException(nameof(column), column, "No es una hoja del paciente.")
+    };
+
+    /// <summary>Paso 8.22: el texto de una hoja con estos renglones, con el formato de la PC.</summary>
+    internal static string WriteSheetRows(string column, IEnumerable<IPatientSheetRow> rows) => column switch
+    {
+        TPVC.Services.Rules.PatientSheetRows.PrescriptionColumn => WriteSheet(rows.Cast<PatientPrescriptionItem>().ToList()),
+        TPVC.Services.Rules.PatientSheetRows.SuppliesColumn => WriteSheet(rows.Cast<PatientSupplyItem>().ToList()),
+        TPVC.Services.Rules.PatientSheetRows.ServicesColumn => WriteSheet(rows.Cast<PatientServiceItem>().ToList()),
+        _ => throw new ArgumentOutOfRangeException(nameof(column), column, "No es una hoja del paciente.")
+    };
 
     /// <summary>
     /// Paso 8.21: el texto con que esta PC escribiría la hoja guardada en <paramref name="json"/>: leída como siempre (con

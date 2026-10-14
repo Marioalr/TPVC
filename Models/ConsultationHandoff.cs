@@ -131,6 +131,21 @@ public sealed record LinkedDevice(
 
     public bool NeedsNewToken => TokensRotatedAtUtc != null;
 
+    /// <summary>La revisión del contrato de su último latido (paso 8.10); null en una PC anterior a v1.27.0.</summary>
+    public int? ContractRevision { get; init; }
+
+    /// <summary>
+    /// Paso 8.22: otra PC con Windows, vista en los últimos 30 días, con una versión que todavía no marca cada campo del
+    /// expediente (revisión del contrato anterior a la 12): lo que cambie en un expediente se combina como fila completa.
+    /// </summary>
+    public bool MergesAsWholeRow { get; init; }
+
+    public string WholeRowMergeText => MergesAsWholeRow
+        ? $"Tiene una versión anterior de TPVC{(string.IsNullOrWhiteSpace(AppVersion) ? string.Empty : $" ({AppVersion})")}: lo que cambie en un " +
+          "expediente se combina como fila completa (si los dos equipos editan el mismo expediente, gana todo lo de la versión más " +
+          "reciente). Actualícela a TPVC 1.39.0 o posterior para que se combine campo por campo."
+        : string.Empty;
+
     public string NewTokenText => TokensRotatedAtUtc is { } at
         ? (Role is DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin
               ? "Pegue el token nuevo en este equipo o lea con él el QR de esta PC"

@@ -1,0 +1,245 @@
+{
+  "rule": "field-stamps",
+  "culture": "es-MX",
+  "today": null,
+  "now": null,
+  "contract": 12,
+  "notes": [
+    "Marcas por campo de Patients.FieldStampsJson (Services/Rules/PatientFieldStamps, paso 8.22): objeto JSON plano en forma canónica (contracts/golden/canonical-json.json), marcas de 27 caracteres en UTC. Llaves: '<columna>' (último cambio del campo; en una hoja, de su orden: qué renglones tiene y en qué orden), '<hoja>/<RowId>' (renglón agregado o cambiado), '<hoja>/<RowId>/quitado' (renglón quitado) y 'UpdatedAtUtc' (el UpdatedAtUtc de la fila con que se mantuvieron). Cualquier otra llave se conserva.",
+    "local-write: lo que deja un guardado local con la marca 'stamp' (la misma que su UpdatedAtUtc): cada campo de 'changedFields' (los que cambiaron por su significado) toma la marca; en cada hoja de 'sheets' (texto de antes y de después) cada renglón agregado o cuya forma canónica cambió toma la marca en su llave, cada renglón que ya no está la toma en su llave de quitado, y si cambió la lista de RowId (qué renglones y en qué orden), la hoja la toma en su propia llave. Al final 'UpdatedAtUtc' = la marca y se purga. 'expected' es el texto que se guarda ('' sin marcas).",
+    "purge: un renglón quitado (su marca de quitado es mayor o igual que la del renglón) cuya marca de quitado es anterior a (la marca más nueva de todas las llaves salvo 'UpdatedAtUtc') − 90 días pierde sus dos llaves. Depende solo de las marcas: dos equipos purgan lo mismo.",
+    "stampless: una escritura sin marcas (una PC v1.19–v1.38 sube la fila sin tocar esta columna): el UpdatedAtUtc de la fila es mayor que la llave 'UpdatedAtUtc', o no la hay (vacío o dañado cuenta como sin marcas).",
+    "effective: una marca nunca vale más que el UpdatedAtUtc de su fila; null si no hay."
+  ],
+  "cases": [
+    {
+      "name": "guardar · un campo que cambió toma la marca nueva; la llave de la fila también",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"Allergies\":\"2026-10-14 15:00:10.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [
+          "Phone"
+        ],
+        "sheets": []
+      },
+      "expected": "{\"Allergies\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · alta: sin campos, solo la llave de la fila",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [],
+        "sheets": []
+      },
+      "expected": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · hoja: renglón agregado, cambiado y quitado; cambió qué renglones hay, así que la hoja marca su orden",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001\":\"2026-10-14 15:00:05.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:05.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [],
+        "sheets": [
+          {
+            "column": "ActiveSuppliesJson",
+            "before": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5},{\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"SupplyName\":\"Venda\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "after": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":2,\"UnitPrice\":12.5},{\"RowId\":\"a0000000-0000-4000-8000-000000000003\",\"SupplyName\":\"Alcohol\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]"
+          }
+        ]
+      },
+      "expected": "{\"ActiveSuppliesJson\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:05.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000003\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · hoja: solo cambia la cantidad de un renglón; el orden no se marca",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [],
+        "sheets": [
+          {
+            "column": "ActiveSuppliesJson",
+            "before": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "after": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":5,\"UnitPrice\":12.5}]"
+          }
+        ]
+      },
+      "expected": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · hoja: mismo significado con otro texto (sin RowId, otro orden de llaves): nada que marcar",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [],
+        "sheets": [
+          {
+            "column": "ActiveSuppliesJson",
+            "before": "[{\"SupplyName\":\"Gasa\",\"Quantity\":1}]",
+            "after": "[{\"Quantity\":1,\"RowId\":\"d88a6927-7e69-5b4a-ae14-5a5984e25278\",\"SupplyName\":\"Gasa\"}]"
+          }
+        ]
+      },
+      "expected": "{\"ActiveSuppliesJson/d88a6927-7e69-5b4a-ae14-5a5984e25278\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · hoja: un renglón que se había quitado vuelve con el mismo RowId (descartar la consulta): su marca rebasa la de quitado",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:10.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [],
+        "sheets": [
+          {
+            "column": "ActiveSuppliesJson",
+            "before": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "after": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5},{\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"SupplyName\":\"Venda\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]"
+          }
+        ]
+      },
+      "expected": "{\"ActiveSuppliesJson\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:10.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "guardar · llaves desconocidas: se conservan",
+      "input": {
+        "check": "local-write",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "fieldStampsJson": "{\"ColumnaNueva\":\"2026-01-01 00:00:00.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "stamp": "2026-10-14 15:00:20.0000000",
+        "changedFields": [
+          "Phone"
+        ],
+        "sheets": []
+      },
+      "expected": "{\"ColumnaNueva\":\"2026-01-01 00:00:00.0000000\",\"Phone\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+    },
+    {
+      "name": "purgar · quitado hace más de 90 días de la marca más nueva: se purgan su llave y la de quitado",
+      "input": {
+        "check": "purge",
+        "fieldStampsJson": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:01.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:02.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+      },
+      "expected": "{\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+    },
+    {
+      "name": "purgar · quitado justo 90 días antes: se queda",
+      "input": {
+        "check": "purge",
+        "fieldStampsJson": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+      },
+      "expected": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+    },
+    {
+      "name": "purgar · una edición posterior a quitarlo: vive, no se purga",
+      "input": {
+        "check": "purge",
+        "fieldStampsJson": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:03.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:02.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+      },
+      "expected": "{\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:03.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:02.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+    },
+    {
+      "name": "purgar · las de los campos nunca se purgan",
+      "input": {
+        "check": "purge",
+        "fieldStampsJson": "{\"Allergies\":\"2026-10-14 15:00:01.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+      },
+      "expected": "{\"Allergies\":\"2026-10-14 15:00:01.0000000\",\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}"
+    },
+    {
+      "name": "sin marcas · con la llave de la fila igual a UpdatedAtUtc: con marcas",
+      "input": {
+        "check": "stampless",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000"
+      },
+      "expected": {
+        "stampless": false
+      }
+    },
+    {
+      "name": "sin marcas · UpdatedAtUtc mayor que la llave de la fila: escritura sin marcas",
+      "input": {
+        "check": "stampless",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:11.0000000"
+      },
+      "expected": {
+        "stampless": true
+      }
+    },
+    {
+      "name": "sin marcas · sin llave de la fila: sin marcas",
+      "input": {
+        "check": "stampless",
+        "fieldStampsJson": "{\"Phone\":\"2026-10-14 15:00:05.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000"
+      },
+      "expected": {
+        "stampless": true
+      }
+    },
+    {
+      "name": "sin marcas · vacío: sin marcas",
+      "input": {
+        "check": "stampless",
+        "fieldStampsJson": "",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000"
+      },
+      "expected": {
+        "stampless": true
+      }
+    },
+    {
+      "name": "sin marcas · dañado: sin marcas",
+      "input": {
+        "check": "stampless",
+        "fieldStampsJson": "{no es json",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000"
+      },
+      "expected": {
+        "stampless": true
+      }
+    },
+    {
+      "name": "marca efectiva · una marca menor que la fila cuenta tal cual",
+      "input": {
+        "check": "effective",
+        "fieldStampsJson": "{\"Phone\":\"2026-10-14 15:00:05.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000",
+        "key": "Phone"
+      },
+      "expected": "2026-10-14 15:00:05.0000000"
+    },
+    {
+      "name": "marca efectiva · una marca mayor que la fila (la fila se reparó por estar en el futuro) cuenta como la fila",
+      "input": {
+        "check": "effective",
+        "fieldStampsJson": "{\"Phone\":\"2026-10-14 16:00:00.0000000\",\"UpdatedAtUtc\":\"2026-10-14 16:00:00.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000",
+        "key": "Phone"
+      },
+      "expected": "2026-10-14 15:00:10.0000000"
+    },
+    {
+      "name": "marca efectiva · sin marca: la mínima (null)",
+      "input": {
+        "check": "effective",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}",
+        "rowUpdatedAtUtc": "2026-10-14 15:00:10.0000000",
+        "key": "Phone"
+      },
+      "expected": null
+    }
+  ]
+}

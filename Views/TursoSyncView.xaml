@@ -354,6 +354,9 @@
                                                 <!-- Paso 8.15: no se conecta desde que se anularon los tokens -->
                                                 <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" Margin="0,4,0,0" TextWrapping="Wrap"
                                                            Text="{Binding NewTokenText}" Visibility="{Binding NeedsNewToken, Converter={StaticResource BoolToVis}}" />
+                                                <!-- Paso 8.22: otra PC con una versión que combina los expedientes como fila completa -->
+                                                <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           Text="{Binding WholeRowMergeText}" Visibility="{Binding MergesAsWholeRow, Converter={StaticResource BoolToVis}}" />
                                                 <!-- Paso 8.14: un equipo nuevo espera que lo vinculen -->
                                                 <StackPanel Margin="0,8,0,0" Visibility="{Binding IsPendingApproval, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Style="{StaticResource TextCaption}" Foreground="{DynamicResource ThemeWarningText}" TextWrapping="Wrap" Text="{Binding ApprovalText}" />

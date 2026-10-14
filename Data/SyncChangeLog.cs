@@ -63,8 +63,9 @@ public static class SyncChangeLog
     internal sealed record Trigger(string Name, string Table, string Sql);
 
     /// <summary>
-    /// Tres triggers por tabla sincronizada: AFTER INSERT, AFTER UPDATE OF las columnas que viajan (hoy ninguna es
-    /// derivada) más la llave y la marca, y AFTER DELETE, que además pone la lápida.
+    /// Tres triggers por tabla sincronizada: AFTER INSERT, AFTER UPDATE OF las columnas que viajan menos las derivadas
+    /// (paso 8.22: recalcular el resumen del expediente no deja nada que subir) más la llave y la marca, y AFTER DELETE, que
+    /// además pone la lápida.
     /// </summary>
     internal static IReadOnlyList<Trigger> BuildTriggers(IEnumerable<TableMap> tables)
     {
@@ -73,7 +74,7 @@ public static class SyncChangeLog
         {
             var entity = map.ClrType.Name;
             var columns = new[] { nameof(ISyncEntity.SyncId), nameof(ISyncEntity.UpdatedAtUtc) }
-                .Concat(map.Columns.Select(c => c.Name))
+                .Concat(map.Columns.Where(c => !map.IsDerived(c.Name)).Select(c => c.Name))
                 .Concat(map.References.Select(r => r.LocalColumn))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(Q);
@@ -247,13 +248,19 @@ public static class SyncChangeLog
     /// </summary>
     /// <param name="meta">Claves de <see cref="DbMeta"/> que se guardan en la misma transacción (el cursor de bajada de la
     /// página: nunca queda adelante de lo aplicado).</param>
+    /// <param name="markForUpload">Filas que se decidieron al bajar y sí deben subir (paso 8.22: el resultado de una
+    /// combinación), anotadas en la misma transacción (<see cref="MarkForUploadAsync"/>).</param>
     public static async Task<int> SaveRemoteChangesAsync(AppDbContext db, CancellationToken ct = default,
-        IReadOnlyDictionary<string, string>? meta = null)
+        IReadOnlyDictionary<string, string>? meta = null, IReadOnlyCollection<(string EntityType, Guid SyncId)>? markForUpload = null)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync($"INSERT OR IGNORE INTO {Q(ApplyStateTable)} (\"Applying\") VALUES (1);", ct);
         var saved = await db.SaveChangesAsync(ct);
         await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(ApplyStateTable)};", ct);
+        foreach (var (entityType, syncId) in markForUpload ?? Array.Empty<(string, Guid)>())
+        {
+            await MarkForUploadAsync(db, entityType, syncId, ct);
+        }
         foreach (var (key, value) in meta ?? new Dictionary<string, string>())
         {
             await DbMeta.SetAsync(db, key, value, ct);
@@ -264,8 +271,8 @@ public static class SyncChangeLog
 
     /// <summary>
     /// Anota una fila para subir aunque los triggers estén apagados: lo que se decide durante la bajada y sí debe
-    /// subir (el resultado de una combinación, paso 8.22; una reasignación, 8.A). Quien la llama le pone a la fila
-    /// una marca nueva.
+    /// subir (el resultado de una combinación de pacientes desde el paso 8.22; una reasignación, 8.A). Quien la llama le
+    /// pone a la fila una marca nueva.
     /// </summary>
     public static Task MarkForUploadAsync(AppDbContext db, string entityType, Guid syncId, CancellationToken ct = default) =>
         db.Database.ExecuteSqlRawAsync(

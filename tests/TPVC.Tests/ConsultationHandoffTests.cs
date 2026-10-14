@@ -569,6 +569,46 @@ public class ConsultationHandoffTests
         Assert.AreEqual("enviada", ServerState());
     }
 
+    /// <summary>
+    /// Paso 8.22: la tablet edita el expediente sin haber bajado lo último de la PC y su fila gana en la nube (LWW por fila),
+    /// así que su marca de fila es "más nueva" que la de la copia. Antes aceptaba sin el renglón que la PC acababa de cargar;
+    /// ahora la copia trae las marcas por campo y la tablet espera a tenerlas.
+    /// </summary>
+    [TestMethod]
+    public async Task AcceptingWithAnOlderLocalField_AsksToWait_UntilTheSendersChangesArrive()
+    {
+        var (pc, tablet) = await TwoDevicesAsync();
+        var (patient, _, _) = await StartConsultationAsync(pc);
+
+        // La PC agrega un renglón a la hoja de insumos del expediente y envía (sube antes de enviar)
+        var onPc = (await pc.Device.Inventory.GetPatientsAsync()).Single(p => p.Id == patient.Id);
+        onPc.ActiveSupplies = new List<PatientSupplyItem>(onPc.ActiveSupplies) { new() { SupplyName = "Gasa estéril", Quantity = 2 } };
+        await pc.Device.Inventory.SavePatientAsync(onPc);
+        await SendToAsync(pc, tablet);
+        Assert.IsTrue(pc.Records.Handoff.IsConsultationHandedOff, pc.Records.Handoff.HandoffSheetError);
+
+        // La tablet, sin bajar, cambia el teléfono del mismo expediente: al aceptar, su sincronización sube su fila (más nueva)
+        // y no baja nada (es la suya)
+        await Task.Delay(5);
+        var onTablet = (await tablet.Device.Inventory.GetPatientsAsync()).Single(p => p.SyncId == patient.SyncId);
+        onTablet.Phone = "5544332211";
+        await tablet.Device.Inventory.SavePatientAsync(onTablet);
+        await tablet.Records.Handoff.PollHandoffsOnceAsync();
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
+        Assert.IsFalse(tablet.Consultations.HasActiveConsultation, "No la toma sin los cambios de la PC");
+        StringAssert.Contains(tablet.Records.Info.InfoModalMessage, "Intente de nuevo en unos segundos");
+        Assert.AreEqual("enviada", ServerState());
+
+        // La PC sincroniza (combina el teléfono con su hoja y lo sube); la tablet ya puede tomarla, con las dos cosas
+        Assert.IsTrue((await pc.Device.Sync.SyncAsync()).Success);
+        await tablet.Records.Handoff.AcceptIncomingHandoffAsync();
+        Assert.IsTrue(tablet.Consultations.HasActiveConsultation, tablet.Records.Info.InfoModalMessage);
+        using var db = tablet.Device.Factory.CreateDbContext();
+        var stored = db.Patients.AsNoTracking().Single(p => p.SyncId == patient.SyncId);
+        Assert.IsTrue(stored.ActiveSupplies.Any(s => s.SupplyName == "Gasa estéril"), "El renglón de la PC llegó");
+        Assert.AreEqual("5544332211", stored.Phone, "Y se conserva el teléfono de la tablet");
+    }
+
     [TestMethod]
     public async Task ProductMissingOnReceiver_IsChargedAsFreeLine_WithAWarning()
     {
