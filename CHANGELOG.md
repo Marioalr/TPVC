@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.39.0] - 2026-10-14
+
+### Añadido — Fase 8, paso 8.22: los cambios de varios equipos en un mismo paciente se combinan
+* Si dos equipos cambian el mismo expediente, se conservan los dos cambios. Por ejemplo: las alergias en la tablet y el teléfono en la PC, aunque uno de los dos estuviera sin conexión. Antes ganaba el último guardado y el otro cambio se perdía.
+* En la receta, los insumos y los servicios del paciente se conservan los renglones agregados en cualquier equipo. Quitar un renglón en un equipo gana sobre una edición anterior en otro, y una edición posterior gana sobre el quitado.
+* La próxima cita y la última visita se calculan con las citas y las consultas del paciente. La próxima cita es la primera de hoy en adelante que no esté cancelada ni atendida, aunque después se haya agendado otra. Agendar una cita ya no reescribe el expediente.
+* Al aceptar una consulta enviada desde otro equipo, si todavía no llegan los últimos cambios del expediente, el programa pide intentar de nuevo en unos segundos.
+* En Equipos vinculados aparece un aviso si otra PC sigue con una versión anterior. Mientras no se actualice, sus cambios se combinan como expediente completo, así que conviene actualizar todas las PC.
+* Al actualizar desde la v1.38, la primera sincronización no vuelve a subir los expedientes que ya están iguales en la nube. Lo que una PC sin actualizar escribió antes se respeta.
+* Contrato de sincronización en la revisión 12: columna `FieldStampsJson`, regla «Pacientes por campo» y columnas derivadas, con sus vectores para la app de Kotlin. 693 pruebas.
+
 ## [1.38.0] - 2026-10-14
 
 ### Corregido — Fase 8, paso 8.21: guardar solo lo que cambió en el expediente

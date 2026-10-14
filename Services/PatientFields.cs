@@ -25,14 +25,17 @@ namespace TPVC.Services;
 /// renueva después de cada guardado. Regla: la foto es lo que la instancia tenía la última vez que estuvo al día con la
 /// base, campo por campo; lo editado es lo que difiere de ella. La foto nunca se mueve sin la instancia.</item>
 /// <item><b>Las hojas</b> (<see cref="Sheets"/>) se comparan por su texto canónico
-/// (<c>PatientRecord.CanonicalSheetJson</c>), después de <c>Sync*Json</c>. Una hoja que cambió se escribe completa: la
-/// combinación por renglón es del paso 8.22.</item>
+/// (<c>PatientRecord.CanonicalSheetJson</c>), después de <c>Sync*Json</c>. Desde el paso 8.22 una hoja que cambió ya no se
+/// escribe completa: sus ediciones renglón por renglón contra la foto (agregar, cambiar, quitar) se ponen sobre la hoja que
+/// está en la base (<see cref="PatientSheetCanonical.Rebase"/>), así un renglón que bajó de otro equipo mientras la copia
+/// estaba abierta se queda, y el sello solo marca lo que la copia hizo.</item>
 /// <item><b>Después de guardar</b> (<see cref="Refresh"/>) la instancia toma de la fila fresca los campos que no editó (la
-/// próxima cita, la última visita, el folio…) y la foto queda con la fila fresca. Una hoja que no editó y que en la base
-/// es otra no se cambia en memoria: sus renglones son los objetos que ven las hojas, la cuenta de la consulta y "Se surte
-/// aquí", y cambiarlos a media consulta los soltaría. Su foto se queda como estaba (la instancia sigue sin editarla, así
-/// que no se escribe) y la instancia no toma la marca de la fila: al soltarla (se cierra la consulta o el formulario)
-/// <c>PatientsWorkspace.ReloadIfReleasedAsync</c> recarga y la cambia por la de la base.</item>
+/// próxima cita, la última visita, el folio…) y la foto queda con la fila fresca. Una hoja que en la base es otra que la de
+/// la instancia no se cambia en memoria: sus renglones son los objetos que ven las hojas, la cuenta de la consulta y "Se surte
+/// aquí", y cambiarlos a media consulta los soltaría. Si no la editó, su foto se queda como estaba; si la editó (y la base
+/// tiene además renglones de otro equipo), su foto pasa a ser lo que la instancia tiene. Así la instancia sigue sin editarla
+/// y no se escribe, ni quita los renglones que no ve; la instancia no toma la marca de la fila, y al soltarla (se cierra la
+/// consulta o el formulario) <c>PatientsWorkspace.ReloadIfReleasedAsync</c> recarga y la cambia por la de la base.</item>
 /// </list>
 /// </summary>
 public static class PatientFields
@@ -43,10 +46,15 @@ public static class PatientFields
         nameof(PatientRecord.Id),
         nameof(PatientRecord.SyncId),
         nameof(PatientRecord.UpdatedAtUtc),
-        nameof(PatientRecord.CreatedAt)
+        nameof(PatientRecord.CreatedAt),
+        // Paso 8.22: las marcas por campo las pone el sello; una copia nunca escribe las suyas
+        nameof(PatientRecord.FieldStampsJson)
     };
 
-    /// <summary>Las hojas del paciente: se comparan por su texto canónico y se escriben completas.</summary>
+    /// <summary>
+    /// Las hojas del paciente: se comparan por su texto canónico; desde el paso 8.22 una hoja editada se escribe como sus
+    /// ediciones por renglón sobre la de la base (<see cref="PatientSheetCanonical.Rebase"/>).
+    /// </summary>
     public static readonly IReadOnlySet<string> Sheets = new HashSet<string>(StringComparer.Ordinal)
     {
         PatientSheetRows.PrescriptionColumn,
@@ -212,6 +220,9 @@ public static class PatientFields
     /// <item>uno que editó se queda (ya es el de la fila, o lo volvieron a cambiar mientras se guardaba: sigue siendo una
     /// edición para el siguiente guardado);</item>
     /// <item>una hoja que no editó y que en la base es otra se queda como estaba, con su foto (ver la clase);</item>
+    /// <item>una hoja que editó y que en la base quedó distinta (sus ediciones se pusieron sobre renglones que bajaron de otro
+    /// equipo, paso 8.22) también se queda como está, y su foto pasa a ser lo que la instancia tiene: así el siguiente guardado
+    /// no ve como quitados los renglones que la instancia no tiene;</item>
     /// <item>la foto nueva es la fila, y la marca de la fila pasa a la instancia salvo que le quede una hoja vieja.</item>
     /// </list>
     /// </summary>
@@ -238,7 +249,9 @@ public static class PatientFields
                 }
                 else
                 {
-                    values[field.Index] = stored;
+                    // Paso 8.22: editada y la base tiene más (o menos) que la instancia: la foto es lo que la instancia ve
+                    values[field.Index] = current;
+                    staleSheet = true;
                 }
             }
             else

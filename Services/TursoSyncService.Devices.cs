@@ -584,7 +584,7 @@ public partial class TursoSyncService
     internal static (string Sql, object?[]? Args)[] DeviceListQueries() => new (string, object?[]?)[]
     {
         ($"SELECT {ServerNowSql} AS ServerNow;", null),
-        ("SELECT DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, PendingCount, OldestPendingUtc FROM RegisteredDevices;", null),
+        ("SELECT DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, ContractRevision, PendingCount, OldestPendingUtc FROM RegisteredDevices;", null),
         ($"SELECT DeviceId, DeviceCode, Role, DisplayName, RevokedAtUtc, RevokedReason FROM {SyncSchema.DeviceRegistryTable};", null),
         ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{PrimaryDeviceKey}';", null),
         ($"SELECT \"Value\" FROM {Q(MetaTable)} WHERE \"Key\" = '{TokensRotatedKey}';", null)

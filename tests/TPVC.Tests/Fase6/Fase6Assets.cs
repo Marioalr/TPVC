@@ -109,11 +109,21 @@ internal static class Fase6Assets
     /// <summary>
     /// JSON de un borrador sin lo que cambia en cada corrida: fechas y horas (cualquier fecha ISO),
     /// identificadores de sincronización (GUID) y folios de consulta con fecha y hora. Lo demás
-    /// (textos, Id locales de la base sembrada, cantidades, precios) se compara tal cual.
+    /// (textos, Id locales de la base sembrada, cantidades, precios) se compara tal cual. Las marcas por campo de la
+    /// copia (paso 8.22) van ordenadas por su llave ya sin el GUID: su orden real depende de los RowId de cada corrida.
     /// </summary>
     public static string NormalizeDraftJson(string json)
     {
         var node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        if (node["PatientFieldStamps"] is System.Text.Json.Nodes.JsonObject stamps)
+        {
+            var sorted = stamps.Select(kv => (Key: Guid.Replace(kv.Key, "<guid>"), Original: kv.Key, Value: kv.Value?.DeepClone()))
+                .OrderBy(e => e.Key, StringComparer.Ordinal)
+                .ToList();
+            var replaced = new System.Text.Json.Nodes.JsonArray();
+            foreach (var entry in sorted) replaced.Add(new System.Text.Json.Nodes.JsonArray(entry.Key, entry.Value));
+            node["PatientFieldStamps"] = replaced;
+        }
         var pretty = node.ToJsonString(new System.Text.Json.JsonSerializerOptions
         {
             WriteIndented = true,

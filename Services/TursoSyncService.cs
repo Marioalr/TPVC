@@ -123,6 +123,9 @@ public partial class TursoSyncService
     // perdía y lo guardado después del corte de la otra no subía hasta el siguiente cambio)
     private int _autoSyncSkipped;
 
+    // Paso 8.22: expedientes que una combinación dejó distintos de la nube en esta sincronización (suben al final de ella)
+    private int _mergedForUpload;
+
     // Lecturas y escrituras de otras partes (revisión de consultas enviadas) para el monitor de cuota
     private long _externalRowsRead;
     private long _externalRowsWritten;
@@ -581,6 +584,7 @@ public partial class TursoSyncService
         var settings = _settingsService.CurrentSettings;
         _syncGeneration = null;
         _generationChecked = false;
+        Interlocked.Exchange(ref _mergedForUpload, 0);
 
         // Paso 8.10: si este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo, se baja todo una vez
         await ApplyRedownloadRequestAsync(settings, ct);
@@ -635,6 +639,15 @@ public partial class TursoSyncService
         if (fullPull) _settingsService.RecordFullPull(); // se cuenta al empezar a bajar, cuando la red ya respondió
         var (pulled, rowsRead, watermark) = await PullRemoteChangesAsync(client, settings.DeviceId, cursors,
             skipOwnRows: !fullResync && !downloadPending, incremental: !fullPull, cloudChecked, ct);
+
+        // 2b. Paso 8.22: lo que una combinación de expedientes dejó distinto de la nube sube en esta misma sincronización (una
+        //     sola vez: lo que la nube rechace ahí se combina otra vez y sube en la siguiente)
+        if (Interlocked.Exchange(ref _mergedForUpload, 0) > 0)
+        {
+            var (merged, mergedReads) = await PushLocalChangesAsync(client, settings.DeviceId, fullResync: false, ct);
+            pushed += merged;
+            pushReads += mergedReads;
+        }
         if (downloadPending)
         {
             using var db = _contextFactory.CreateDbContext();
@@ -1170,9 +1183,33 @@ public partial class TursoSyncService
         }
         repaired += await db.Database.ExecuteSqlRawAsync(
             $"UPDATE {Q(TombstonesTable)} SET \"DeletedAtUtc\" = {{0}} WHERE \"DeletedAtUtc\" > {{1}};", new object[] { now, limit }, ct);
+
+        // Paso 8.22: también las marcas por campo de los expedientes (una marca nunca vale más que su fila, pero si se queda
+        // en el futuro subiría con cada edición posterior de otro campo)
+        var futureStamps = await db.Database.SqlQueryRaw<FutureFieldStamps>(
+                "SELECT \"Id\", \"FieldStampsJson\" FROM \"Patients\" WHERE json_valid(\"FieldStampsJson\") " +
+                "AND EXISTS (SELECT 1 FROM json_each(\"Patients\".\"FieldStampsJson\") WHERE json_each.value > {0})", limit)
+            .ToListAsync(ct);
+        foreach (var row in futureStamps)
+        {
+            var stamps = Rules.PatientFieldStamps.Parse(row.FieldStampsJson);
+            foreach (var (key, value) in stamps.Entries.ToList())
+            {
+                if (string.CompareOrdinal(value, limit) > 0 && Rules.PatientFieldStamps.ParseStamp(value) != null) stamps[key] = now;
+            }
+            repaired += await db.Database.ExecuteSqlRawAsync("UPDATE \"Patients\" SET \"FieldStampsJson\" = {0} WHERE \"Id\" = {1};",
+                new object[] { stamps.ToJson(), row.Id }, ct);
+        }
         await db.Database.ExecuteSqlRawAsync($"DELETE FROM {Q(SyncChangeLog.ApplyStateTable)};", ct);
         await tx.CommitAsync(ct);
         if (repaired > 0) AppLogger.Warn($"Turso: {repaired} marcas locales en el futuro se volvieron a marcar con la hora del servidor.");
+    }
+
+    /// <summary>Un expediente con marcas por campo en el futuro (para repararlas).</summary>
+    private sealed class FutureFieldStamps
+    {
+        public int Id { get; set; }
+        public string FieldStampsJson { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -2153,11 +2190,41 @@ public partial class TursoSyncService
             .ToDictionary(p => (p.EntityType, p.SyncId));
 
         int applied = 0;
+        // Paso 8.22: un expediente que ya existe aquí no sigue el LWW por fila: se combina por campo. Lo que queda distinto de la
+        // versión de la nube se anota para subir en la misma transacción. «Volver a aplicar» (force) lo escribe tal cual
+        bool mergePatients = typeof(T) == typeof(PatientRecord) && !force;
+        var markForUpload = new List<(string EntityType, Guid SyncId)>();
+        SyncChangeLog.PendingPush? pendingPush = null;
         foreach (var (row, syncIdNullable) in incoming)
         {
             var syncId = syncIdNullable!.Value;
             var remoteUpdated = ParseDate(row.GetValueOrDefault("UpdatedAtUtc"));
             locals.TryGetValue(syncId, out var local);
+
+            // La primera bajada después de actualizar desde v1.38 (FieldStampsJson es columna nueva): una fila sin marcas y sin
+            // nada pendiente de subir es una copia que esa versión bajó por LWW, sin las marcas que tenía en la nube, y no una
+            // escritura de la fila completa. No se combina (su UpdatedAtUtc como piso desharía lo que la nube ya tenía):
+            // sigue el LWW de fila y toma la de la nube completa, con sus marcas, si no es más vieja. Una fila sin marcas con
+            // una edición de v1.38 pendiente sí se combina con su piso, y después de esta bajada una fila sin marcas es copia
+            // fiel de una escritura sin marcas de la nube (su piso es real) y también se combina
+            bool stamplessCopy = false;
+            if (mergePatients && newColumns?.Contains(nameof(PatientRecord.FieldStampsJson)) == true && local is PatientRecord copy
+                && Rules.PatientFieldStamps.Parse(copy.FieldStampsJson).IsStampless(copy.UpdatedAtUtc))
+            {
+                pendingPush ??= await SyncChangeLog.ReadPendingPushAsync(db, entityType, ct);
+                stamplessCopy = !pendingPush.Contains(syncId);
+            }
+
+            if (mergePatients && local is PatientRecord patient && !stamplessCopy)
+            {
+                Unpark(db, parked, entityType, syncId);
+                var merged = PatientFieldMerge.Merge(patient, row, map);
+                if (!merged.DiffersFromLocal && merged.UpdatedAtUtc == patient.UpdatedAtUtc && merged.FieldStampsJson == patient.FieldStampsJson) continue;
+                PatientFieldMerge.Apply(db.Entry(patient), merged, row, map);
+                if (merged.DiffersFromRemote) markForUpload.Add((entityType, syncId));
+                applied++;
+                continue;
+            }
 
             // Last-Write-Wins: la versión local igual o más nueva se conserva (en el desempate, solo la más nueva), y lo
             // apartado de esta fila ya no hace falta
@@ -2169,6 +2236,7 @@ public partial class TursoSyncService
             // apartó porque le faltaba un principal (paso 8.19). Se aplica al reintentar o al volver a leerla en el traslape
             // (o se vuelve a apartar); si no, se perdería con sus columnas nuevas
             if (!remoteWins && local != null && remoteUpdated == local.UpdatedAtUtc && parked.ContainsKey((entityType, syncId))) remoteWins = true;
+            if (stamplessCopy && remoteUpdated >= local!.UpdatedAtUtc) remoteWins = true;
             bool onlyNewColumns = false;
             if (!remoteWins && newColumns != null && local != null)
             {
@@ -2251,9 +2319,13 @@ public partial class TursoSyncService
             }
 
             var entry = db.Entry(local);
+            bool created = entry.State == EntityState.Added;
             foreach (var column in map.Columns)
             {
                 if (onlyNewColumns && !newColumns!.Contains(column.Name)) continue;
+                // Una columna derivada (paso 8.22) nunca se aplica al bajar: solo da su primer valor a una fila nueva aquí, y
+                // enseguida se recalcula
+                if (map.IsDerived(column.Name) && !created) continue;
                 if (!row.TryGetValue(column.Name, out var raw)) continue;
                 // Todas las columnas nuevas aceptan nulo en la nube y el ALTER las llena con nulo: un nulo ahí no es un valor
                 // que haya escrito otro equipo, y no pisa lo que se escribió aquí después de actualizar (paso 8.19)
@@ -2269,7 +2341,12 @@ public partial class TursoSyncService
         }
 
         await ResolveUniqueConflictsAsync(db, map, ct);
-        await SyncChangeLog.SaveRemoteChangesAsync(db, ct, cursor);
+        await SyncChangeLog.SaveRemoteChangesAsync(db, ct, cursor, markForUpload);
+        if (markForUpload.Count > 0)
+        {
+            Interlocked.Add(ref _mergedForUpload, markForUpload.Count);
+            AppLogger.Info($"Turso: {markForUpload.Count} expedientes combinados por campo quedaron distintos de la nube y suben.");
+        }
         return applied;
     }
 

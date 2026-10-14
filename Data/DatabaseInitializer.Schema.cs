@@ -41,6 +41,18 @@ public static partial class DatabaseInitializer
             // Paso 8.19: la foto de las diferencias que la base ya traía entre sus existencias y el libro de movimientos,
             // una sola vez (también en un respaldo anterior que se restaura): la verificación solo reporta lo nuevo
             Services.StockLedger.EnsureBaseline(context);
+
+            // Paso 8.22: el resumen derivado de cada expediente (la próxima cita en orden clínico y la última visita), completo
+            // al abrir: así cuenta el día que pasó, y una base anterior pasa de "la última cita guardada" al orden clínico
+            try
+            {
+                var written = Services.PatientSummary.Recompute(context);
+                if (written > 0) Services.AppLogger.Info($"Resumen de los expedientes: {written} recalculados (próxima cita y última visita).");
+            }
+            catch (Exception ex)
+            {
+                Services.AppLogger.Warn($"No se pudo recalcular el resumen de los expedientes al abrir: {ex.Message}");
+            }
         }
         finally
         {

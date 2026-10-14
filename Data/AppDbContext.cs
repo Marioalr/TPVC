@@ -85,13 +85,23 @@ public class AppDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampSyncMetadata();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        var summary = PatientSummary.Collect(this);
+        var saved = base.SaveChanges(acceptAllChangesOnSuccess);
+        PatientSummary.Apply(this, summary);
+        return saved;
     }
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Después de guardar, el resumen derivado de los expedientes que tocó el guardado (paso 8.22,
+    /// <see cref="PatientSummary"/>): también al aplicar lo que bajó de la nube, dentro de su transacción.
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         StampSyncMetadata();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        var summary = PatientSummary.Collect(this);
+        var saved = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        PatientSummary.Apply(this, summary);
+        return saved;
     }
 
     /// <summary>
@@ -109,7 +119,8 @@ public class AppDbContext : DbContext
     /// desfase con la nube, pero siempre después de la marca que ya tenía el registro (si la última versión vino de un
     /// equipo con el reloj adelantado, una edición hecha aquí "después" tendría una marca anterior y la nube la
     /// descartaría). Desde el paso 8.5 la lápida de un borrado la ponen los triggers del registro de cambios
-    /// (<see cref="SyncChangeLog"/>), también la de cada fila borrada en cascada.
+    /// (<see cref="SyncChangeLog"/>), también la de cada fila borrada en cascada. Desde el paso 8.22, en un expediente
+    /// también las marcas por campo (<see cref="PatientFieldMerge.StampLocalWrite"/>).
     /// </summary>
     private void StampSyncMetadata()
     {
@@ -134,6 +145,9 @@ public class AppDbContext : DbContext
                 var stored = (DateTime)entry.Property(nameof(ISyncEntity.UpdatedAtUtc)).OriginalValue!;
                 entry.Entity.UpdatedAtUtc = SyncRules.NextLocalStamp(now, stored, offset);
             }
+
+            // Paso 8.22: el expediente también marca cada campo que cambió, con la misma marca (FieldStampsJson)
+            if (entry.Entity is PatientRecord) PatientFieldMerge.StampLocalWrite(entry, entry.Entity.UpdatedAtUtc);
         }
     }
 

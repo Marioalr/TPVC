@@ -750,13 +750,14 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         if (patient == null || patient.SyncId == Guid.Empty) return null;
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
-        var patientUpdatedAt = await _inventoryService.GetPatientUpdatedAtAsync(patient.Id);
-        var noteSyncId = await _inventoryService.FindConsultationNoteSyncIdAsync(patient.Id, draft.Folio);
+        // Paso 8.22: con la versión del expediente viajan sus marcas por campo, y con la nota su marca
+        var version = await _inventoryService.GetPatientVersionAsync(patient.Id);
+        var note = await _inventoryService.FindConsultationNoteVersionAsync(patient.Id, draft.Folio);
         var appointmentSyncId = _consultation.AttendingAppointmentId is int appointmentId
             ? await _inventoryService.GetAppointmentSyncIdAsync(appointmentId)
             : null;
-        HandoffPayloadCodec.PrepareForSending(draft, refs, patient.SyncId, patientUpdatedAt, noteSyncId, appointmentSyncId,
-            _account.ConsultationFeeService?.Id, DateTime.Now);
+        HandoffPayloadCodec.PrepareForSending(draft, refs, patient.SyncId, version?.UpdatedAtUtc, note?.SyncId, appointmentSyncId,
+            _account.ConsultationFeeService?.Id, DateTime.Now, version?.FieldStampsJson, note?.UpdatedAtUtc);
         return draft;
     }
 
@@ -1164,18 +1165,30 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         await _workflow.LoadServicesAsync();
 
         var patient = _session.Patients.FirstOrDefault(p => p.SyncId == patientSyncId);
-        if (patient == null)
+        // Paso 8.22: además de la versión de la fila, cada marca por campo de la copia y la de la nota (de la base, no de la
+        // copia en memoria: lo que bajó puede no estar en ella)
+        var version = patient == null ? null : await _inventoryService.GetPatientVersionAsync(patient.Id);
+        DateTime? noteUpdatedAt = payload.ProgressNoteSyncId is Guid noteSyncId
+            ? await _inventoryService.GetConsultationNoteUpdatedAtAsync(noteSyncId)
+            : null;
+        var arrival = HandoffPayloadCodec.CheckArrival(payload, patient != null && version != null, version?.UpdatedAtUtc, version?.FieldStampsJson,
+            noteUpdatedAt != null, noteUpdatedAt);
+        if (patient == null || arrival == HandoffPayloadCodec.Arrival.PatientMissing)
         {
             return (null, $"Todavía no llega el expediente de {row.PatientName} a este equipo. Intente de nuevo en unos segundos.");
         }
-        if (payload.PatientUpdatedAtUtc is DateTime version && patient.UpdatedAtUtc < version)
+        switch (arrival)
         {
-            return (null, $"Todavía no llegan los últimos cambios del expediente de {row.PatientName}. Intente de nuevo en unos segundos.");
+            case HandoffPayloadCodec.Arrival.PatientBehind:
+                return (null, $"Todavía no llegan los últimos cambios del expediente de {row.PatientName}. Intente de nuevo en unos segundos.");
+            case HandoffPayloadCodec.Arrival.NoteMissing:
+                return (null, "Todavía no llega el avance de la nota de esta consulta. Intente de nuevo en unos segundos.");
+            case HandoffPayloadCodec.Arrival.NoteBehind:
+                return (null, "Todavía no llega la última versión del avance de la nota de esta consulta. Intente de nuevo en unos segundos.");
         }
-        if (payload.ProgressNoteSyncId is Guid noteSyncId && !await _inventoryService.ConsultationNoteExistsAsync(noteSyncId))
-        {
-            return (null, "Todavía no llega el avance de la nota de esta consulta. Intente de nuevo en unos segundos.");
-        }
+        // Lo que solo servía para revisar no se queda en el borrador de este equipo
+        payload.PatientFieldStamps = null;
+        payload.ProgressNoteUpdatedAtUtc = null;
 
         var refs = await _inventoryService.GetCatalogRefsAsync();
         var freeLines = HandoffPayloadCodec.MapReceivedItems(payload, refs);

@@ -1848,10 +1848,6 @@ public class InventoryTests
             FullName = "Carlos Santana",
             RecordNumber = "EXP-TEST-PERSIST",
             Age = 45,
-            NextAppointmentDate = DateTime.Today.AddDays(5),
-            NextAppointmentTime = "09:00 AM",
-            NextAppointmentReason = "Retiro de puntos",
-            NextAppointmentNotes = "Verificar cicatrización",
             ActiveSupplies = new List<PatientSupplyItem>
             {
                 new PatientSupplyItem { SupplyName = "Gasas Estériles", Quantity = 4, UnitPrice = 15m }
@@ -1865,6 +1861,12 @@ public class InventoryTests
         var saved = await _inventoryService.SavePatientAsync(patient);
         Assert.IsTrue(saved.Id > 0);
 
+        // Paso 8.22: la próxima cita es un resumen derivado de las citas (no se escribe en el expediente)
+        var appointment = await _inventoryService.SaveAppointmentAsync(new PatientAppointment
+        {
+            PatientRecordId = saved.Id, Date = DateTime.Today.AddDays(5), Time = "09:00 AM", Reason = "Retiro de puntos", Notes = "Verificar cicatrización"
+        });
+
         var retrieved = await _inventoryService.GetPatientByIdAsync(saved.Id);
         Assert.IsNotNull(retrieved);
         Assert.AreEqual(DateTime.Today.AddDays(5).Date, retrieved.NextAppointmentDate?.Date);
@@ -1877,8 +1879,11 @@ public class InventoryTests
         Assert.HasCount(1, retrieved.ActiveServices);
         Assert.AreEqual("Curación Básica", retrieved.ActiveServices[0].ServiceName);
 
-        // Actualizar y verificar que la persistencia se actualiza
-        retrieved.NextAppointmentTime = "10:30 AM";
+        // Actualizar y verificar que la persistencia se actualiza: la cita cambia de hora y la hoja gana un renglón. Escribir
+        // la próxima cita a mano en el expediente no cuenta: se vuelve a calcular de las citas
+        appointment.Time = "10:30 AM";
+        await _inventoryService.SaveAppointmentAsync(appointment);
+        retrieved.NextAppointmentTime = "11:45 AM";
         retrieved.ActiveSupplies.Add(new PatientSupplyItem { SupplyName = "Venda Elástica", Quantity = 2 });
         await _inventoryService.SavePatientAsync(retrieved);
 

@@ -148,11 +148,24 @@ public partial class TursoSyncEndToEndTests
         Assert.AreEqual(patient.RecordNumber, (await PatientBySyncIdAsync(pc, patient.SyncId)).OriginalFolio);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
-        // La laptop, sin bajar todavía, edita el expediente: vuelve a subir el folio con letra
+        // La laptop, sin bajar todavía, edita el expediente y sube su fila con el folio con letra. Desde el paso 8.22 la
+        // combinación por campo conserva las dos cosas: el folio regularizado (marcado al regularizar) y su teléfono
         var stale = await PatientBySyncIdAsync(laptop, patient.SyncId);
         stale.Phone = "5512345678";
         await laptop.Inventory.SavePatientAsync(stale);
         Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var merged = await PatientBySyncIdAsync(pc, patient.SyncId);
+        Assert.AreEqual(regularized, merged.RecordNumber, "El folio regularizado no se pierde");
+        Assert.AreEqual("5512345678", merged.Phone, "Ni la edición de la laptop");
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.AreEqual(regularized, (await PatientBySyncIdAsync(laptop, patient.SyncId)).RecordNumber, "La laptop recibe la combinación");
+
+        // Una PC anterior al paso 8.22 (sube la fila completa sin marcas) que todavía tenía el folio con letra: gana con su
+        // UpdatedAtUtc, como antes con el LWW
+        ExecuteCloud($"UPDATE Patients SET RecordNumber = '{patient.RecordNumber}', OriginalFolio = NULL, " +
+                     $"UpdatedAtUtc = '{TursoSyncService.FormatDate(DateTime.UtcNow.AddMinutes(1))}', SyncedAtUtc = {TursoSyncService.ServerNowSql}, " +
+                     $"OriginDeviceId = 'device-pc-v1-38' WHERE SyncId = '{TursoSyncService.FormatGuid(patient.SyncId)}'");
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         Assert.AreEqual(patient.RecordNumber, (await PatientBySyncIdAsync(pc, patient.SyncId)).RecordNumber);
 
