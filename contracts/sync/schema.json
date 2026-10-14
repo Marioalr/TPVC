@@ -518,7 +518,7 @@
             "type": "text",
             "value": ""
           },
-          "note": "Marcas por campo (desde la revisión 12): objeto JSON plano en forma canónica {llave: marca}, marcas de 27 caracteres en UTC. Llaves: '<columna>' (la última vez que cambió ese campo; en una hoja, su orden), '<hoja>/<RowId>' (renglón agregado o cambiado), '<hoja>/<RowId>/quitado' (renglón quitado) y 'UpdatedAtUtc' (el UpdatedAtUtc de la fila con que se mantuvieron; si la fila tiene uno mayor, es una escritura sin marcas). Las llaves que no se conocen se conservan. '' = sin marcas. Regla «Pacientes por campo», contracts/golden/field-stamps.json."
+          "note": "Marcas por campo (desde la revisión 12): objeto JSON plano en forma canónica {llave: marca}, marcas de 27 caracteres en UTC. Llaves: '<columna>' (la última vez que cambió ese campo; en una hoja, su orden), '<hoja>/<RowId>' (renglón agregado o cambiado), '<hoja>/<RowId>/quitado' (renglón quitado), '#piso' (lo que no tiene marca propia vale al menos esta: la última escritura de la fila completa) y 'UpdatedAtUtc' (el UpdatedAtUtc de la fila con que se mantuvieron; si la fila tiene uno mayor o no la tiene, es una escritura sin marcas, con piso en su UpdatedAtUtc). Las llaves que no se conocen se conservan. '' = sin marcas; un texto dañado o con una llave repetida, también. Regla «Pacientes por campo», contracts/golden/field-stamps.json."
         },
         {
           "name": "FullName",
