@@ -402,6 +402,37 @@ public class PatientFieldsTests
         records.Dispose();
     }
 
+    [TestMethod]
+    public async Task AnotherPatientsForm_MidConsultation_DoesNotSwapTheConsultationCopy_UntilTheConsultationEnds()
+    {
+        using var clinic = new Fase6Clinic();
+        var (records, _, patient) = await OpenScriptedAsync(clinic);
+        records.ChartPrimaryAction();
+        Download(clinic, patient.Id, p => p.Allergies = "Látex");
+        await records.LoadPatientsAsync();
+        Assert.AreSame(patient, records.SelectedPatient, "La copia de la consulta se queda");
+
+        // A media consulta se abre otro expediente y se cierra su edición: no se cambia la copia de la consulta
+        var other = records.Patients.First(p => p.Id != patient.Id);
+        records.OpenPatientChart(other);
+        records.PatientForm.EditPatient();
+        records.PatientForm.ClosePatientModal();
+        Assert.AreSame(patient, records.Patients.Single(p => p.Id == patient.Id), "Con otro seleccionado la lista conserva la copia de la consulta");
+        await records.LoadPatientsAsync();
+        Assert.AreSame(patient, records.Patients.Single(p => p.Id == patient.Id), "Tampoco una recarga cualquiera");
+
+        // "Volver a la consulta" la retoma sobre la misma instancia
+        records.ShowConsultation();
+        Assert.AreSame(patient, records.SelectedPatient);
+        Assert.AreNotEqual("Látex", patient.Allergies);
+
+        // Al terminar la consulta la ficha muestra lo de la base (el guardado del descarte ya la pone al día)
+        await records.DiscardActiveConsultationAsync();
+        Assert.AreEqual("Látex", records.SelectedPatient!.Allergies);
+        Assert.AreEqual("Látex", Stored(clinic, patient.Id).Allergies, "Descartar no regresa las alergias de antes");
+        records.Dispose();
+    }
+
     // ================================================================== descartar la consulta
 
     [TestMethod]
