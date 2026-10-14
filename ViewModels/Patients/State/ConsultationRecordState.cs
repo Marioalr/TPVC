@@ -108,9 +108,14 @@ public sealed class ConsultationRecordState
         SummaryBeforeConsultation = null;
 
         bool changed = false;
+        // Paso 8.21: al descartar, lo que se regresa se escribe aunque la foto de la instancia diga que no cambió. La nota
+        // de la consulta lo escribe en la base y la instancia lo refleja (y lo marca como guardado), pero si algo se
+        // cruzara con eso, comparar con la foto vería "sin cambios" y el expediente se quedaría con la consulta descartada
+        var restored = new List<string>();
         if (discarded && summary != null)
         {
             summary.ApplyTo(patient);
+            restored.AddRange(PatientSummarySnapshot.Fields);
             changed = true;
         }
         if (known && (discarded || patient.ActivePrescription.Count == 0)
@@ -118,6 +123,7 @@ public sealed class ConsultationRecordState
         {
             patient.ActivePrescription = previous;
             patient.SyncPrescriptionJson();
+            if (discarded) restored.Add(nameof(PatientRecord.ActivePrescriptionJson));
             changed = true;
         }
 
@@ -125,7 +131,7 @@ public sealed class ConsultationRecordState
         {
             try
             {
-                await _inventoryService.SavePatientAsync(patient);
+                await _inventoryService.SavePatientAsync(patient, patient.StoredSnapshot?.Without(restored));
             }
             catch (Exception ex)
             {

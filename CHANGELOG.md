@@ -2,6 +2,17 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.38.0] - 2026-10-14
+
+### Corregido — Fase 8, paso 8.21: guardar solo lo que cambió en el expediente
+* Al guardar el expediente, la PC ya solo escribe lo que se cambió. Antes copiaba el expediente completo desde la ficha abierta y podía borrar lo que otra parte del programa u otro equipo había guardado mientras tanto: la próxima cita agendada, la última visita, el folio regularizado, o las alergias o el teléfono editados en la tablet.
+* Pasaba también con la PC sola. Por ejemplo, agendar una cita mientras la ficha del paciente estaba abierta y después agregar un insumo podía regresar la próxima cita a la anterior.
+* Después de guardar, la ficha muestra lo que llegó mientras tanto. Si a media consulta llega de otro equipo un cambio en una hoja (receta, insumos o servicios), esa hoja se actualiza en la ficha al terminar o descartar la consulta, o al cerrar el formulario.
+* Guardar sin cambios ya no escribe ni sube nada a la nube.
+* Descartar una consulta sigue dejando el expediente exactamente como estaba antes de empezarla.
+* Un expediente con un folio repetido (que llegó de dos equipos) ya guarda sus hojas; antes el cambio se perdía sin aviso.
+* Sin cambios en el contrato de sincronización (revisión 11). 640 pruebas.
+
 ## [1.37.0] - 2026-10-12
 
 ### Añadido — Fase 8, paso 8.19: Kardex completo

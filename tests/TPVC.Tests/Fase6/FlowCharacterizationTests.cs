@@ -291,6 +291,11 @@ public class FlowCharacterizationTests
         Assert.AreNotEqual("Látex", patient.Allergies);
         records.PatientForm.ClosePatientModal();
 
+        // Paso 8.21: al soltarla (se cierra el formulario) se recarga y la ficha toma la de la base
+        Assert.AreNotSame(patient, records.SelectedPatient, "Ya libre, la copia vieja se cambia por la de la base");
+        Assert.AreEqual("Látex", records.SelectedPatient!.Allergies);
+        patient = records.SelectedPatient;
+
         // Paciente de la consulta en curso
         records.ChartPrimaryAction();
         Assert.IsTrue(records.Chart.IsConsultationForSelectedPatient);

@@ -380,6 +380,9 @@ public partial class PatientFormViewModel : ObservableObject
         }
 
         OnPatientFormClosedForDraft();
+        _formPatient = null;
+        _formBaseline = null;
+        _ = _workflow.ReloadIfReleasedAsync();
         if (!_nav.IsFormPage) return;
         // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
         if (_nav.PageBeforeForm == PatientsNavigation.PageConsultation && _active.HasActiveConsultation) _workflow.ShowConsultation();
@@ -622,6 +625,86 @@ public partial class PatientFormViewModel : ObservableObject
         FormClinicalNotes = _session.SelectedPatient.ClinicalNotes;
 
         IsPatientModalOpen = true;
+        _formPatient = _session.SelectedPatient;
+        _formBaseline = FormBaselineFor(_formPatient);
+    }
+
+    // Paso 8.21: el expediente que se edita y la foto con que se guarda (ver FormBaselineFor)
+    private PatientRecord? _formPatient;
+    private PatientFieldSnapshot? _formBaseline;
+
+    /// <summary>
+    /// Paso 8.21: la foto con que se guarda la edición. Es la del expediente (lo que tenía la última vez que estuvo al día
+    /// con la base), pero en los campos que el formulario escribe distinto aunque nadie los toque (el teléfono solo con
+    /// dígitos, "No determinado", "Normal", el nombre armado de sus partes…) lleva lo que el formulario escribiría. Así lo
+    /// editado es solo lo que el médico cambió aquí; lo que el formulario solo normaliza se sigue escribiendo si en la base
+    /// está igual que al abrirlo, y si otro equipo lo cambió mientras tanto se queda el suyo
+    /// (<see cref="PatientFields.ToWrite"/>). Sin foto (un expediente hecho en memoria) se guarda completo, como antes.
+    /// </summary>
+    private PatientFieldSnapshot? FormBaselineFor(PatientRecord patient)
+    {
+        if (patient.StoredSnapshot is not { } stored) return null;
+        var asSaved = new PatientRecord { SyncId = patient.SyncId };
+        foreach (var field in PatientFields.All) field.Set(asSaved, field.Get(patient));
+        ApplyFormTo(asSaved, FormRecordNumber.Trim(),
+            PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName).Trim(), patient.Age);
+
+        var normalized = new List<(PatientFields.Field, object?)>();
+        foreach (var field in PatientFields.All)
+        {
+            var current = field.Get(patient);
+            var written = field.Get(asSaved);
+            // Solo donde la instancia sigue igual que la base: un cambio que aún no se guarda se compara con la base
+            if (!Equals(current, written) && stored.Has(field) && PatientFields.SameValue(patient, field, current, stored[field]))
+            {
+                normalized.Add((field, written));
+            }
+        }
+        return stored.With(normalized);
+    }
+
+    /// <summary>Lo que el formulario escribe en el expediente (alta y edición).</summary>
+    private void ApplyFormTo(PatientRecord patient, string recordNumber, string fullName, int age)
+    {
+        patient.RecordNumber = recordNumber;
+        patient.FullName = fullName;
+        patient.Age = age;
+        patient.Gender = FormGender;
+        patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        patient.Email = FormEmail?.Trim() ?? string.Empty;
+        patient.Address = FormAddress?.Trim() ?? string.Empty;
+        patient.BloodType = string.IsNullOrWhiteSpace(FormBloodType) ? BloodTypeUnknown : FormBloodType;
+        patient.Allergies = FormAllergies.Trim();
+        patient.ChronicDiseases = FormChronicDiseases?.Trim() ?? string.Empty;
+        patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
+        patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        patient.BirthDate = FormBirthDate;
+        patient.Occupation = FormOccupation?.Trim() ?? string.Empty;
+        patient.Religion = FormReligion?.Trim() ?? string.Empty;
+        patient.FamilyHistory = FormFamilyHistory?.Trim() ?? string.Empty;
+        patient.Surgeries = FormSurgeries?.Trim() ?? string.Empty;
+        patient.Transfusions = FormTransfusions?.Trim() ?? string.Empty;
+        patient.Hospitalizations = FormHospitalizations?.Trim() ?? string.Empty;
+        patient.ImmunizationSchedule = FormImmunizationSchedule?.Trim() ?? string.Empty;
+        patient.MenarcheAge = FormMenarcheAge?.Trim() ?? string.Empty;
+        patient.SexualOnsetAge = FormSexualOnsetAge?.Trim() ?? string.Empty;
+        patient.SexualPartnersCount = FormSexualPartnersCount?.Trim() ?? string.Empty;
+        patient.PeriodDuration = FormPeriodDuration?.Trim() ?? string.Empty;
+        patient.IsPeriodHeavy = FormIsPeriodHeavy?.Trim() ?? string.Empty;
+        patient.PapSmear = FormPapSmear?.Trim() ?? string.Empty;
+        patient.PregnanciesCount = FormPregnanciesCount;
+        patient.CesareansCount = FormCesareansCount;
+        patient.AbortionsCount = FormAbortionsCount;
+        patient.IsCurrentlyPregnant = FormIsCurrentlyPregnant;
+        patient.GestationalWeeks = FormGestationalWeeks?.Trim() ?? string.Empty;
+        patient.DevelopmentalMilestones = FormDevelopmentalMilestones?.Trim() ?? string.Empty;
+        patient.Diet = FormDiet?.Trim() ?? string.Empty;
+        patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
+        patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
+
+        // Los signos vitales no se capturan aquí: se conservan los registrados en las consultas
+        patient.ClinicalNotes = FormClinicalNotes.Trim();
     }
 
     [RelayCommand]
@@ -685,53 +768,18 @@ public partial class PatientFormViewModel : ObservableObject
             : (FormPatientId > 0 ? _session.Patients.FirstOrDefault(p => p.Id == FormPatientId) ?? new PatientRecord() : new PatientRecord());
         patient.Id = FormPatientId;
 
-        patient.RecordNumber = assignOnSave ? string.Empty : normalizedFolio;
-        patient.FullName = FormFullName.Trim();
-        patient.Age = parsedAge;
-        patient.Gender = FormGender;
-        patient.Phone = new string((FormPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-        patient.Email = FormEmail?.Trim() ?? string.Empty;
-        patient.Address = FormAddress?.Trim() ?? string.Empty;
-        patient.BloodType = string.IsNullOrWhiteSpace(FormBloodType) ? BloodTypeUnknown : FormBloodType;
-        patient.Allergies = FormAllergies.Trim();
-        patient.ChronicDiseases = FormChronicDiseases?.Trim() ?? string.Empty;
-        patient.EmergencyContactName = FormEmergencyContactName?.Trim() ?? string.Empty;
-        patient.EmergencyContactPhone = new string((FormEmergencyContactPhone ?? string.Empty).Where(char.IsDigit).ToArray());
-
-        patient.BirthDate = FormBirthDate;
-        patient.Occupation = FormOccupation?.Trim() ?? string.Empty;
-        patient.Religion = FormReligion?.Trim() ?? string.Empty;
-        patient.FamilyHistory = FormFamilyHistory?.Trim() ?? string.Empty;
-        patient.Surgeries = FormSurgeries?.Trim() ?? string.Empty;
-        patient.Transfusions = FormTransfusions?.Trim() ?? string.Empty;
-        patient.Hospitalizations = FormHospitalizations?.Trim() ?? string.Empty;
-        patient.ImmunizationSchedule = FormImmunizationSchedule?.Trim() ?? string.Empty;
-        patient.MenarcheAge = FormMenarcheAge?.Trim() ?? string.Empty;
-        patient.SexualOnsetAge = FormSexualOnsetAge?.Trim() ?? string.Empty;
-        patient.SexualPartnersCount = FormSexualPartnersCount?.Trim() ?? string.Empty;
-        patient.PeriodDuration = FormPeriodDuration?.Trim() ?? string.Empty;
-        patient.IsPeriodHeavy = FormIsPeriodHeavy?.Trim() ?? string.Empty;
-        patient.PapSmear = FormPapSmear?.Trim() ?? string.Empty;
-        patient.PregnanciesCount = FormPregnanciesCount;
-        patient.CesareansCount = FormCesareansCount;
-        patient.AbortionsCount = FormAbortionsCount;
-        patient.IsCurrentlyPregnant = FormIsCurrentlyPregnant;
-        patient.GestationalWeeks = FormGestationalWeeks?.Trim() ?? string.Empty;
-        patient.DevelopmentalMilestones = FormDevelopmentalMilestones?.Trim() ?? string.Empty;
-        patient.Diet = FormDiet?.Trim() ?? string.Empty;
-        patient.HousingConditions = FormHousingConditions?.Trim() ?? string.Empty;
-        patient.Zoonosis = FormZoonosis?.Trim() ?? string.Empty;
-
-        // Los signos vitales no se capturan aquí: se conservan los registrados en las consultas
-        patient.ClinicalNotes = FormClinicalNotes.Trim();
+        // Paso 8.21: la edición se guarda con la foto tomada al abrirla (solo lo que el médico cambió aquí)
+        var baseline = FormPatientId > 0 && ReferenceEquals(patient, _formPatient) ? _formBaseline : patient.StoredSnapshot;
+        ApplyFormTo(patient, assignOnSave ? string.Empty : normalizedFolio, FormFullName.Trim(), parsedAge);
 
         if (_inventoryService != null)
         {
             try
             {
-                var saved = await _inventoryService.SavePatientAsync(patient);
+                // La instancia queda al día con la fila guardada (también lo que no se editó aquí)
+                await _inventoryService.SavePatientAsync(patient, baseline);
                 await _workflow.LoadPatientsAsync();
-                _session.SelectedPatient = _session.Patients.FirstOrDefault(p => p.Id == saved.Id) ?? saved;
+                _session.SelectedPatient = _session.Patients.FirstOrDefault(p => p.Id == patient.Id) ?? patient;
             }
             catch (Exception ex)
             {

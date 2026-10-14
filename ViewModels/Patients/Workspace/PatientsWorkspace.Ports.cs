@@ -22,6 +22,8 @@ public partial class PatientsWorkspace
 
     Task IPatientsWorkflow.LoadPatientsAsync() => LoadPatientsAsync();
 
+    Task IPatientsWorkflow.ReloadIfReleasedAsync() => ReloadIfReleasedAsync();
+
     Task IPatientsWorkflow.LoadServicesAsync() => LoadServicesAsync();
 
     void IPatientsWorkflow.StartActiveConsultation() => Consultation.StartActiveConsultation();

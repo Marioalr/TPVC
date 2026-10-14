@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -47,6 +48,7 @@ public partial class PatientsWorkspace
             // abiertos trabajan sobre ella); solo se toma de la base su historial de consultas.
             PatientRecord? keptSelected = null;
             bool replacedSelected = false;
+            var staleKept = new HashSet<int>();
             if (prevSelected != null && prevSelectedId > 0)
             {
                 var index = dbPatients.FindIndex(p => p.Id == prevSelectedId);
@@ -59,8 +61,9 @@ public partial class PatientsWorkspace
                     var fresh = dbPatients[index];
                     var consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
                     bool forced = Session.ForceFreshPatientIds.Contains(prevSelectedId);
+                    bool stale = forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc;
                     if (ReferenceEquals(Session.SelectedPatient, prevSelected)
-                        && (forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc)
+                        && stale
                         && CanReplaceSelectedPatientInstance(prevSelected))
                     {
                         Session.ForceFreshPatientIds.Remove(prevSelectedId);
@@ -73,9 +76,24 @@ public partial class PatientsWorkspace
                         prevSelected.Consultations = consultations;
                         dbPatients[index] = prevSelected;
                         keptSelected = prevSelected;
+                        // Paso 8.21: se queda la copia vieja (alguien trabaja sobre ella); al soltarla se recarga
+                        if (stale) staleKept.Add(prevSelectedId);
                     }
                 }
             }
+
+            // Paso 8.21: la copia del paciente en consulta se queda en la lista aunque esté seleccionado otro (un alta a
+            // media consulta): "Volver a la consulta" la toma de ahí, y otra instancia partiría la consulta en dos
+            if (Record.Patient is { } inUse && inUse.Id != prevSelectedId)
+            {
+                var index = dbPatients.FindIndex(p => p.Id == inUse.Id);
+                if (index >= 0)
+                {
+                    if (dbPatients[index].UpdatedAtUtc > inUse.UpdatedAtUtc) staleKept.Add(inUse.Id);
+                    dbPatients[index] = inUse;
+                }
+            }
+            _staleInstanceIds = staleKept;
 
             Session.Patients = new ObservableCollection<PatientRecord>(dbPatients);
 
@@ -106,6 +124,25 @@ public partial class PatientsWorkspace
                 Session.SelectedPatient = Session.Patients.FirstOrDefault(p => p.FullName == activeName);
             }
         }
+    }
+
+    /// <summary>
+    /// Paso 8.21: una recarga dejó la copia abierta aunque la base tenía una más nueva (una hoja que bajó de otro equipo a
+    /// media consulta, que el guardado no escribe ni cambia en memoria). Al soltarla, al cerrar la consulta o el formulario,
+    /// se recarga; si no, la siguiente edición de esa hoja en la ficha la escribiría vieja hasta otra recarga.
+    /// </summary>
+    private HashSet<int> _staleInstanceIds = new();
+
+    /// <summary>
+    /// Recarga si quedó alguna copia vieja y ya nadie trabaja sobre ninguna (se revisa cada una por su Id, no el paciente
+    /// seleccionado: a media consulta puede estar seleccionado otro).
+    /// </summary>
+    public async Task ReloadIfReleasedAsync()
+    {
+        var stale = _staleInstanceIds;
+        if (stale.Count == 0 || stale.Any(id => !CanReplacePatientInstance(id))) return;
+        _staleInstanceIds = new();
+        await LoadPatientsAsync();
     }
 
     /// <summary>
@@ -162,6 +199,7 @@ public partial class PatientsWorkspace
             Handoff.ReceivedHandoffToken = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (Record.Patient != null) _ = Record.EndConsultationOnRecordAsync(discarded: false);
+            _ = ReloadIfReleasedAsync();
         }
 
         Autosave.OnActiveConsultationStateChangedForAutosave();
@@ -325,7 +363,8 @@ public partial class PatientsWorkspace
         var id = Active.ActiveConsultation!.PatientId;
         if (Session.SelectedPatient?.Id != id)
         {
-            var patient = Session.Patients.FirstOrDefault(p => p.Id == id);
+            // La copia de la consulta (Record.Patient) antes que la de la lista: deben ser la misma
+            var patient = Record.Patient?.Id == id ? Record.Patient : Session.Patients.FirstOrDefault(p => p.Id == id);
             if (patient != null) Session.SelectedPatient = patient;
         }
         Navigation.PatientsPage = PageConsultation;

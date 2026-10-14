@@ -105,6 +105,12 @@ public sealed class ConsultationDraft
 /// </summary>
 public sealed record PatientSummarySnapshot(DateTime LastVisit, string LastDiagnosis, string VitalSigns, string ClinicalNotes)
 {
+    /// <summary>Los campos del expediente que regresa <see cref="ApplyTo"/>.</summary>
+    public static readonly IReadOnlyList<string> Fields = new[]
+    {
+        nameof(PatientRecord.LastVisit), nameof(PatientRecord.LastDiagnosis), nameof(PatientRecord.VitalSigns), nameof(PatientRecord.ClinicalNotes)
+    };
+
     public static PatientSummarySnapshot Of(PatientRecord patient) =>
         new(patient.LastVisit, patient.LastDiagnosis ?? string.Empty, patient.VitalSigns ?? string.Empty, patient.ClinicalNotes ?? string.Empty);
 

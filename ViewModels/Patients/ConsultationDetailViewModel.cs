@@ -286,11 +286,12 @@ public partial class ConsultationDetailViewModel : ObservableObject
         bool isLatest = _session.ConsultationsHistory.Count > 0
                         && _session.ConsultationsHistory.OrderByDescending(c => c.Date).First() is { } latest
                         && (ReferenceEquals(latest, consultation) || (latest.Id > 0 && latest.Id == consultation.Id));
+        List<PatientPrescriptionItem>? stored = null;
         try
         {
             if (_inventoryService != null && consultation.Id > 0)
             {
-                await _inventoryService.UpdateConsultationPrescriptionAsync(consultation.Id, items, updateActivePrescription: isLatest);
+                stored = await _inventoryService.UpdateConsultationPrescriptionAsync(consultation.Id, items, updateActivePrescription: isLatest);
             }
         }
         catch (Exception ex)
@@ -305,10 +306,19 @@ public partial class ConsultationDetailViewModel : ObservableObject
         consultation.Prescriptions = items;
         if (isLatest)
         {
-            patient.ActivePrescription = items.Select(i => new PatientPrescriptionItem
+            if (stored != null)
             {
-                MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
-            }).ToList();
+                // Paso 8.21: los mismos renglones que quedaron en la base (con sus RowId), y la foto de la instancia los toma
+                patient.ActivePrescription = stored;
+                PatientFields.MarkStored(patient, new[] { nameof(PatientRecord.ActivePrescriptionJson) });
+            }
+            else
+            {
+                patient.ActivePrescription = items.Select(i => new PatientPrescriptionItem
+                {
+                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
+                }).ToList();
+            }
             _session.NotifySelectedPatientMutated();
         }
         var history = _session.ConsultationsHistory;
