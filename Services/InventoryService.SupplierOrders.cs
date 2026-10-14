@@ -258,6 +258,7 @@ public partial class InventoryService
                 Batch = batch,
                 MovementType = MovementType.EntradaCompra,
                 Quantity = line.Quantity,
+                Delta = line.Quantity,
                 StockBefore = before,
                 StockAfter = product.CurrentStock,
                 Date = now,

@@ -436,11 +436,37 @@ public partial class GoldenVectorTests
                 SyncIds.Format(derived)));
         }
 
+        // Paso 8.19: las devoluciones al cancelar un ticket, con las funciones que usa la PC (StockLedger)
+        const string exitMovement = "5B6C1F0E-2A44-4D7B-9E31-8F0A6C2D9B47";
+        const string sale = "a1d3c5e7-0b2f-4c6e-8a9d-1e3f5a7c9b0d";
+        const string product = "c0ffee00-1234-4abc-9def-0123456789ab";
+        var newRule = StockLedger.ReturnSyncId(Guid.Parse(exitMovement));
+        var oldRule = StockLedger.LegacyReturnSyncId(Guid.Parse(sale), Guid.Parse(product));
+        Assert.AreEqual(SyncIds.Derived("return:", Guid.Parse(exitMovement)), newRule);
+        Assert.AreEqual(SyncIds.Derived("return:", Guid.Parse(sale), Guid.Parse(product)), oldRule);
+        cases.Add(Case("devolución · venta con LedgerVersion 1: return:<SyncId de la salida> (en mayúsculas da lo mismo)",
+            new JsonObject { ["namespace"] = "tpvc", ["prefix"] = StockLedger.ReturnPrefix, ["syncIds"] = new JsonArray(exitMovement) }, SyncIds.Format(newRule)));
+        cases.Add(Case("devolución · venta con LedgerVersion 0: return:<SyncId de la venta>:<SyncId del producto>",
+            new JsonObject { ["namespace"] = "tpvc", ["prefix"] = StockLedger.ReturnPrefix, ["syncIds"] = new JsonArray(sale, product) }, SyncIds.Format(oldRule)));
+
+        // Paso 8.19: los dos movimientos que cierran un lote
+        const string batch = "e8b1d2c4-6f7a-4b3c-9d0e-1f2a3b4c5d6e";
+        Assert.AreEqual(SyncIds.Derived("close:", Guid.Parse(batch)), StockLedger.CloseSyncId(Guid.Parse(batch)));
+        Assert.AreEqual(SyncIds.Derived("close-rest:", Guid.Parse(batch)), StockLedger.CloseRestSyncId(Guid.Parse(batch)));
+        cases.Add(Case("cerrar un lote · la parte con su lote: close:<SyncId del lote>",
+            new JsonObject { ["namespace"] = "tpvc", ["prefix"] = StockLedger.ClosePrefix, ["syncIds"] = new JsonArray(batch) },
+            SyncIds.Format(StockLedger.CloseSyncId(Guid.Parse(batch)))));
+        cases.Add(Case("cerrar un lote · la parte sin lote: close-rest:<SyncId del lote>",
+            new JsonObject { ["namespace"] = "tpvc", ["prefix"] = StockLedger.CloseRestPrefix, ["syncIds"] = new JsonArray(batch) },
+            SyncIds.Format(StockLedger.CloseRestSyncId(Guid.Parse(batch)))));
+
         CheckOrWrite("contracts/golden/uuid5.json", VectorFile("uuid5", cases,
             "UUID versión 5 de RFC 4122 (SHA-1 del espacio de nombres en orden de red + el nombre en UTF-8). 'expected' en minúsculas con guiones.",
             "Espacios de nombres: dns y url de RFC 4122; tpvc = uuid5(url, \"https://github.com/Marioalr/TPVC/sync\"), fijo para siempre.",
             "Catálogo sembrado por la PC (paso 8.8; Kotlin nunca siembra): 'Category:<nombre>', 'ClinicalService:<código>', 'ServiceDefaultProduct:<código del servicio>|<código del producto>'.",
-            "Derivados: nombre = prefix + los syncIds en minúsculas unidos con ':' (un SyncId leído en mayúsculas da lo mismo)."));
+            "Derivados: nombre = prefix + los syncIds en minúsculas unidos con ':' (un SyncId leído en mayúsculas da lo mismo).",
+            "Devoluciones al cancelar un ticket (paso 8.19, regla «Existencias» de schema.json): con Sales.LedgerVersion 1, una por salida con 'return:' + SyncId de la salida; con 0 (venta anterior), una por producto con 'return:' + SyncId de la venta + ':' + SyncId del producto. Dos equipos que cancelan el mismo ticket escriben la misma fila.",
+            "Cerrar un lote (paso 8.19): la parte con su lote con 'close:' + SyncId del lote y la parte sin lote con 'close-rest:' + SyncId del lote; dos equipos que cierran el mismo lote escriben las mismas filas."));
     }
 
     // ================================================================== utilidades

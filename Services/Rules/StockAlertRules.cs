@@ -21,9 +21,12 @@ public static class StockAlertRules
     public static List<Product> LowStock(IEnumerable<Product> products) =>
         products.Where(IsLowStock).OrderBy(p => p.CurrentStock).ToList();
 
-    /// <summary>Un lote cuenta para las alertas si tiene piezas, no está agotado y su producto sigue activo.</summary>
+    /// <summary>
+    /// Un lote cuenta para las alertas si tiene piezas, no está agotado ni cerrado (<see cref="ProductBatch.IsAvailable"/>,
+    /// paso 8.19) y su producto sigue activo.
+    /// </summary>
     public static bool CountsForAlerts(ProductBatch batch) =>
-        batch.Quantity > 0 && !batch.IsDepleted && (batch.Product == null || batch.Product.IsActive);
+        batch.Quantity > 0 && batch.IsAvailable && (batch.Product == null || batch.Product.IsActive);
 
     /// <summary>
     /// Los lotes vencidos (antes de <paramref name="today"/>) y los que vencen de hoy a 30 días, por fecha de caducidad.

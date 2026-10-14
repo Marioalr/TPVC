@@ -1,7 +1,7 @@
 {
-  "contract": 10,
+  "contract": 11,
   "protocol": 2,
-  "fingerprint": "1E08A16572ACD0EC",
+  "fingerprint": "E5E3BBE28694C868",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -17,6 +17,7 @@
     "Folios (paso 8.16): con la nube verificada, EXP y TKT toman su número de FolioCounters con la instrucción 'folio.take' de hrana/statements.json (2 s de espera; el piso es el mayor número local de la serie). Sin conexión, sin respuesta, con la cuota agotada o con el token rechazado, el folio lleva el código del equipo de DeviceRegistry (EXP-2026-T1-001, TKT-20261009-T1-0001) y el consecutivo de esa serie con letra, el mayor entre el guardado fuera de la base y el local; sin código no se crea. Con la nube apagada o sin verificar, el mayor local + 1. CNS sale de la hora y sin conexión lleva la letra. Los folios con letra no cuentan para la serie normal. Vectores en contracts/golden/folios.json. Regularización (paso 8.17): solo la PC principal, una vez al día y con todos los equipos sin cambios pendientes, le da a cada expediente y ticket con letra el siguiente número de su serie (EXP del año del folio, TKT de su día), guarda el folio con letra en OriginalFolio y actualiza las citas del paciente que lo copian (PatientRecordNumber); todo sube por el ciclo normal. Un registro que vuelve con su folio con letra recibe el mismo número que ya tenía. La tablet y el celular nunca regularizan, y su búsqueda compara también OriginalFolio.",
     "Solo la PC con Windows crea o cambia el esquema de la nube ('ddl', también las columnas nuevas de RegisteredDevices con ALTER TABLE) y escribe _tpvc_meta (claves 'schema' = 'fingerprint' y 'contract' = 'contract'). Los cambios del esquema son aditivos. Kotlin nunca corre DDL ni la limpieza de RegisteredDevices y ConsultationHandoffs, y no sincroniza si falta _tpvc_meta.schema («Sincronice primero la PC»).",
     "En esta revisión ninguna columna es derivada ('derived'): todas se aplican al bajar.",
+    "Existencias (paso 8.19, revisión 11): el libro de un lote es la suma del Delta de sus movimientos (BatchSyncId), y el de las piezas sin lote de un producto, la de sus movimientos sin lote; en una fila con Delta 0 cuenta la regla vieja (la 'note' de Delta). Una salida (venta, consumo, baja) descuenta por FEFO de los lotes abiertos con piezas, primero el que caduca antes (o el lote que se eligió), y deja un movimiento por lote más otro sin lote con lo que no alcanzó; en una venta cada uno lleva el SaleItemSyncId de su renglón y la venta LedgerVersion 1. Cancelar un ticket devuelve cada salida a su propio lote con un movimiento EntradaDevolucion de SyncId determinista: con LedgerVersion 1, uno por salida (las de cada renglón, por SaleItemSyncId), uuid5(tpvc, 'return:' + SyncId de la salida), y si la suma de |Delta| de las salidas de un renglón no da su Quantity no se cancela ('Sincronice primero'); con LedgerVersion 0, uno por producto con lo que suman sus renglones, al lote de la primera salida cuyo Reason empieza con 'Venta POS <Folio> - ' (o con el OriginalFolio) o sin lote, uuid5(tpvc, 'return:' + SyncId de la venta + ':' + SyncId del producto). Si la devolución ya existe, cuenta como hecha y no se vuelve a sumar: dos equipos que cancelan el mismo ticket escriben la misma fila (contracts/golden/uuid5.json). Cerrar un lote (ClosedAtUtc) escribe Delta = −libro del lote con su lote, con SyncId uuid5(tpvc, 'close:' + SyncId del lote), y le resta al producto lo que el lote tenía sin dejarlo en negativo; lo que falte para que el libro del producto baje lo mismo (un lote de antes de la revisión 11 puede mostrar otra cantidad que su libro) va en otro movimiento sin lote, con SyncId uuid5(tpvc, 'close-rest:' + SyncId del lote), la misma hora y el mismo motivo. Una parte cuyo SyncId ya existe (otro equipo cerró el mismo lote) no se vuelve a escribir ni a descontar. Los lotes no se borran; FEFO, las pantallas y las alertas solo toman lotes ni agotados ni cerrados (un lote cerrado al que una PC anterior le devolvió piezas sigue oculto). Las partes de una operación (mismo producto, tipo, Date, SaleItemSyncId, Reason y Responsible) se muestran en el Kardex como un renglón. Hasta el paso 8.20, Products.CurrentStock, ProductBatches.Quantity e IsDepleted se siguen guardando y viajando como valor, y quien escribe un movimiento los actualiza en la misma escritura.",
     "Hojas del paciente (paso 8.18, revisión 10): ActivePrescriptionJson, ActiveSuppliesJson y ActiveServicesJson son arreglos JSON de renglones (ver la 'note' de cada columna). Cada renglón lleva RowId (GUID en minúsculas): uno nuevo lo recibe al azar; uno que llega sin él (escrito por una PC anterior, que además lo borra al reescribir la hoja), con el GUID vacío o repetido en la misma hoja recibe al leerse uuid5(tpvc, 'sheetrow:<SyncId del paciente>:<columna>:<posición desde 0>:<nombre tal cual>'), y se guarda con la siguiente escritura (no hay relleno al arrancar). Los Id locales no viajan: un insumo cargado a la cuenta lleva ChargedLineKind ('producto' o 'libre', las palabras de la consulta entre equipos) y ChargedLineSyncId, y un servicio del catálogo ServiceSyncId; la PC sigue escribiendo ChargedLineId y ServiceId (sus Id) para las PC viejas y Kotlin no los escribe. El renglón de la cuenta se busca por 'libre' (el cargo libre de su nombre); un ChargedLineId negativo es un cargo libre en cualquier equipo, también en un producto (su Id sale de un nombre); luego el SyncId (el producto activo o, si no, el de este equipo aunque esté inactivo); un Id viejo positivo cuenta solo si ese producto o servicio local tiene el mismo nombre (en la PC); y si no, por nombre. Al recibir una consulta, los renglones con este formato que ella cargó (ChargedConsultationFolio) se traducen a los Id del equipo que la recibe (un producto, al renglón de la cuenta recibida con su SyncId); uno viejo conserva los Id de la PC anterior que lo escribió, que los usa tal cual si la consulta le regresa, salvo un insumo que aquí es un cargo libre que la cuenta recibida tiene (queda con ese Id negativo). Quien reescribe una hoja conserva los campos que no conoce de cada renglón. Vectores en contracts/golden/synced-json-columns.json.",
     "Cerca de generación (protocolo 3, paso 8.9): cada upsert, lápida y DELETE de la subida lleva AND (SELECT \"Value\" FROM _tpvc_meta WHERE \"Key\" = 'generation') IS ? con la generación del equipo como último argumento, y cada petición de subida y cada página de bajada termina con SELECT de _tpvc_meta.generation; si no es la del equipo, se detiene sin avanzar sus cursores (contracts/golden/lww.json).",
     "Generaciones (paso 8.9): _tpvc_meta.generation cambia solo cuando una PC reemplaza la nube con un respaldo; entonces escribe generationPrevious (la anterior, o 'none') y sube minClientProtocol a 3, y al terminar de subir escribe generationReady igual a la nueva. Un equipo que ve otra generación guarda lo que no había subido (cada fila con su protocolo y su revisión del contrato), no escribe ni baja nada mientras generationReady no sea la nueva, y después se vacía, baja todo y ofrece «Volver a aplicar N cambios» (cada fila se vuelve a escribir con marca nueva). Un equipo sin generación guardada adopta la de la nube solo si no existe generationPrevious; si existe, hace lo mismo que con otra generación.",
@@ -2059,6 +2060,16 @@
           }
         },
         {
+          "name": "ClosedAtUtc",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "utc",
+          "note": "Lote cerrado (desde la revisión 11): «Eliminar lote» ya no lo borra; lo cierra con Quantity 0 e IsDepleted 1 y deja un movimiento con su lote que lleva su libro a 0. Nulo = abierto. FEFO salta los cerrados y las pantallas no los muestran; un movimiento que llega después sigue en su lote."
+        },
+        {
           "name": "ExpirationDate",
           "role": "data",
           "remoteType": "TEXT",
@@ -2136,174 +2147,12 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ClosedAtUtc\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")"
       ]
     },
     {
       "order": 11,
-      "table": "InventoryMovements",
-      "entityType": "InventoryMovement",
-      "columns": [
-        {
-          "name": "SyncId",
-          "role": "system",
-          "remoteType": "TEXT",
-          "nullable": false,
-          "note": "Llave: GUID en minúsculas con guiones."
-        },
-        {
-          "name": "UpdatedAtUtc",
-          "role": "system",
-          "remoteType": "TEXT",
-          "nullable": false,
-          "timeKind": "utc",
-          "note": "Marca del equipo que escribió (decide qué versión gana)."
-        },
-        {
-          "name": "SyncedAtUtc",
-          "role": "system",
-          "remoteType": "TEXT",
-          "nullable": false,
-          "timeKind": "utc",
-          "note": "Hora de la nube al escribir la fila; la usa la descarga."
-        },
-        {
-          "name": "OriginDeviceId",
-          "role": "system",
-          "remoteType": "TEXT",
-          "nullable": true,
-          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
-        },
-        {
-          "name": "Date",
-          "role": "data",
-          "remoteType": "TEXT",
-          "nullable": false,
-          "clrType": "DateTime",
-          "derived": false,
-          "timeKind": "clinicLocal",
-          "nullValue": {
-            "type": "text",
-            "value": "0001-01-01 00:00:00.0000000"
-          }
-        },
-        {
-          "name": "MovementType",
-          "role": "data",
-          "remoteType": "INTEGER",
-          "nullable": false,
-          "clrType": "enum",
-          "derived": false,
-          "enumType": "MovementType",
-          "enumValues": {
-            "EntradaCompra": 0,
-            "EntradaAjuste": 1,
-            "SalidaConsulta": 2,
-            "SalidaCaducidad": 3,
-            "SalidaMerma": 4,
-            "AjusteInventario": 5,
-            "SalidaVenta": 6,
-            "EntradaDevolucion": 7
-          },
-          "nullValue": {
-            "type": "integer",
-            "value": "0"
-          }
-        },
-        {
-          "name": "Quantity",
-          "role": "data",
-          "remoteType": "INTEGER",
-          "nullable": false,
-          "clrType": "int",
-          "derived": false,
-          "nullValue": {
-            "type": "integer",
-            "value": "0"
-          }
-        },
-        {
-          "name": "Reason",
-          "role": "data",
-          "remoteType": "TEXT",
-          "nullable": true,
-          "clrType": "string",
-          "derived": false
-        },
-        {
-          "name": "Responsible",
-          "role": "data",
-          "remoteType": "TEXT",
-          "nullable": true,
-          "clrType": "string",
-          "derived": false
-        },
-        {
-          "name": "StockAfter",
-          "role": "data",
-          "remoteType": "INTEGER",
-          "nullable": false,
-          "clrType": "int",
-          "derived": false,
-          "nullValue": {
-            "type": "integer",
-            "value": "0"
-          }
-        },
-        {
-          "name": "StockBefore",
-          "role": "data",
-          "remoteType": "INTEGER",
-          "nullable": false,
-          "clrType": "int",
-          "derived": false,
-          "nullValue": {
-            "type": "integer",
-            "value": "0"
-          }
-        },
-        {
-          "name": "BatchSyncId",
-          "role": "reference",
-          "remoteType": "TEXT",
-          "nullable": true,
-          "clrType": "Guid"
-        },
-        {
-          "name": "ProductSyncId",
-          "role": "reference",
-          "remoteType": "TEXT",
-          "nullable": false,
-          "clrType": "Guid"
-        }
-      ],
-      "references": [
-        {
-          "column": "BatchSyncId",
-          "localProperty": "BatchId",
-          "principal": "ProductBatch",
-          "required": false,
-          "kind": "foreignKey",
-          "onDelete": "setNull"
-        },
-        {
-          "column": "ProductSyncId",
-          "localProperty": "ProductId",
-          "principal": "Product",
-          "required": true,
-          "kind": "foreignKey",
-          "onDelete": "cascade"
-        }
-      ],
-      "unique": [],
-      "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT)",
-        "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")"
-      ]
-    },
-    {
-      "order": 12,
       "table": "Sales",
       "entityType": "Sale",
       "columns": [
@@ -2416,6 +2265,19 @@
           }
         },
         {
+          "name": "LedgerVersion",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Cómo se cancela (desde la revisión 11): 1 = la venta dejó un movimiento por lote con su SaleItemSyncId y cada uno se devuelve a su lote; 0 = venta anterior, que se devuelve por producto (regla «Existencias»). Toda venta nueva lleva 1."
+        },
+        {
           "name": "OriginalFolio",
           "role": "data",
           "remoteType": "TEXT",
@@ -2465,12 +2327,12 @@
       "references": [],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"LedgerVersion\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")"
       ]
     },
     {
-      "order": 13,
+      "order": 12,
       "table": "SaleItems",
       "entityType": "SaleItem",
       "columns": [
@@ -2641,6 +2503,199 @@
       "ddl": [
         "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")"
+      ]
+    },
+    {
+      "order": 13,
+      "table": "InventoryMovements",
+      "entityType": "InventoryMovement",
+      "columns": [
+        {
+          "name": "SyncId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "note": "Llave: GUID en minúsculas con guiones."
+        },
+        {
+          "name": "UpdatedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Marca del equipo que escribió (decide qué versión gana)."
+        },
+        {
+          "name": "SyncedAtUtc",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "timeKind": "utc",
+          "note": "Hora de la nube al escribir la fila; la usa la descarga."
+        },
+        {
+          "name": "OriginDeviceId",
+          "role": "system",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "note": "DeviceId del equipo que escribió; la descarga omite lo propio."
+        },
+        {
+          "name": "Date",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "DateTime",
+          "derived": false,
+          "timeKind": "clinicLocal",
+          "nullValue": {
+            "type": "text",
+            "value": "0001-01-01 00:00:00.0000000"
+          }
+        },
+        {
+          "name": "Delta",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Lo que el movimiento suma al libro de existencias, con signo: positivo entra, negativo sale (desde la revisión 11). Quantity es |Delta|. 0 = fila anterior a la revisión 11: cuenta +Quantity si MovementType es EntradaCompra, EntradaAjuste o EntradaDevolucion, o AjusteInventario con StockAfter >= StockBefore, y si no −Quantity. Un movimiento nuevo nunca lleva 0 (regla «Existencias»)."
+        },
+        {
+          "name": "MovementType",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "enum",
+          "derived": false,
+          "enumType": "MovementType",
+          "enumValues": {
+            "EntradaCompra": 0,
+            "EntradaAjuste": 1,
+            "SalidaConsulta": 2,
+            "SalidaCaducidad": 3,
+            "SalidaMerma": 4,
+            "AjusteInventario": 5,
+            "SalidaVenta": 6,
+            "EntradaDevolucion": 7,
+            "SaldoInicial": 8
+          },
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "SaldoInicial (8, desde la revisión 11) solo lo escribe la PC principal al convertir las existencias en libro (paso 8.20)."
+        },
+        {
+          "name": "Quantity",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "Reason",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "Responsible",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "string",
+          "derived": false
+        },
+        {
+          "name": "StockAfter",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          }
+        },
+        {
+          "name": "StockBefore",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": false,
+          "clrType": "int",
+          "derived": false,
+          "nullValue": {
+            "type": "integer",
+            "value": "0"
+          },
+          "note": "Existencia del producto antes de este renglón y, en StockAfter, después (informativo: el Kardex la muestra). Las partes de una operación la van bajando renglón por renglón."
+        },
+        {
+          "name": "BatchSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        },
+        {
+          "name": "ProductSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": false,
+          "clrType": "Guid"
+        },
+        {
+          "name": "SaleItemSyncId",
+          "role": "reference",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "Guid"
+        }
+      ],
+      "references": [
+        {
+          "column": "BatchSyncId",
+          "localProperty": "BatchId",
+          "principal": "ProductBatch",
+          "required": false,
+          "kind": "foreignKey",
+          "onDelete": "setNull"
+        },
+        {
+          "column": "ProductSyncId",
+          "localProperty": "ProductId",
+          "principal": "Product",
+          "required": true,
+          "kind": "foreignKey",
+          "onDelete": "cascade"
+        },
+        {
+          "column": "SaleItemSyncId",
+          "localProperty": "SaleItemId",
+          "principal": "SaleItem",
+          "required": false,
+          "kind": "foreignKey",
+          "onDelete": "setNull"
+        }
+      ],
+      "unique": [],
+      "ddl": [
+        "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
+        "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")"
       ]
     },
     {
@@ -2893,14 +2948,14 @@
     "CREATE INDEX IF NOT EXISTS \"IX_PrescriptionTemplates_SyncedAtUtc\" ON \"PrescriptionTemplates\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"Products\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"CostExcludesVat\" INTEGER, \"CreatedAt\" TEXT, \"CurrentStock\" INTEGER, \"GenericName\" TEXT, \"IsActive\" INTEGER, \"Location\" TEXT, \"MinStock\" INTEGER, \"Name\" TEXT, \"Notes\" TEXT, \"OptimalStock\" INTEGER, \"Presentation\" TEXT, \"Price\" TEXT, \"RequiresRefrigeration\" INTEGER, \"SupplierCode\" TEXT, \"Unit\" TEXT, \"UnitCost\" TEXT, \"UpdatedAt\" TEXT, \"CategorySyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Products_SyncedAtUtc\" ON \"Products\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"ProductBatches\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"BatchNumber\" TEXT, \"ClosedAtUtc\" TEXT, \"ExpirationDate\" TEXT, \"IsDepleted\" INTEGER, \"Notes\" TEXT, \"Quantity\" INTEGER, \"ReceivedDate\" TEXT, \"ProductSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT)",
-    "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"LedgerVersion\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")",
+    "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
+    "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"ServiceDefaultProducts\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Instructions\" TEXT, \"Quantity\" INTEGER, \"ClinicalServiceSyncId\" TEXT, \"ProductSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_ServiceDefaultProducts_SyncedAtUtc\" ON \"ServiceDefaultProducts\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"SyncTombstones\" (\"EntityType\" TEXT NOT NULL, \"SyncId\" TEXT NOT NULL, \"DeletedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, PRIMARY KEY (\"EntityType\", \"SyncId\"))",

@@ -62,14 +62,14 @@ public partial class DashboardViewModel : ObservableObject
     {
         Metrics = await _inventoryService.GetDashboardMetricsAsync();
 
-        var movements = await _inventoryService.GetRecentMovementsAsync(15);
+        var movements = await _inventoryService.GetKardexAsync(15);
         RecentMovements = new ObservableCollection<InventoryMovement>(movements);
 
         var lowStock = await _inventoryService.GetProductsAsync(onlyLowStock: true);
         LowStockProducts = new ObservableCollection<Product>(lowStock.Take(8));
 
         var batches = await _inventoryService.GetBatchesAsync();
-        var expiring = batches.Where(b => !b.IsDepleted && b.Quantity > 0 && b.DaysRemaining <= 60)
+        var expiring = batches.Where(b => b.IsAvailable && b.Quantity > 0 && b.DaysRemaining <= 60)
                               .OrderBy(b => b.ExpirationDate)
                               .Take(8);
         ExpiringBatches = new ObservableCollection<ProductBatch>(expiring);

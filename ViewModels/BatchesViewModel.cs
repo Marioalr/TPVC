@@ -187,7 +187,8 @@ public partial class BatchesViewModel : ObservableObject
     public async Task LoadBatchesAsync()
     {
         var allBatches = await _inventoryService.GetBatchesAsync();
-        var active = allBatches.Where(b => !b.IsDepleted).ToList();
+        // Ni agotados ni cerrados (paso 8.19: «Eliminar lote» lo cierra)
+        var active = allBatches.Where(b => b.IsAvailable).ToList();
 
         CountTodos = active.Count;
         CountProximos = active.Count(b => b.Status == ExpirationStatus.ProximoAVencer);
@@ -286,7 +287,7 @@ public partial class BatchesViewModel : ObservableObject
     {
         if (batch == null) return;
 
-        var remaining = !batch.IsDepleted && batch.Quantity > 0
+        var remaining = batch.IsAvailable && batch.Quantity > 0
             ? $"\n\nSe descontarán {batch.Quantity} pieza(s) restantes de las existencias de '{batch.Product?.Name}'."
             : string.Empty;
         if (!DialogService.Confirm($"¿Eliminar el lote {batch.BatchNumber}?{remaining}\n\nEsta acción no se puede deshacer.", "Eliminar lote"))

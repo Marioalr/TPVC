@@ -639,6 +639,8 @@ public partial class TursoSyncService
         {
             using var db = _contextFactory.CreateDbContext();
             DbMeta.Remove(db, DbMeta.CloudDownloadPending);
+            // Paso 8.19: las existencias de la nube traen su propia historia; la foto del libro se toma con ellas
+            await StockLedger.RetakeBaselineAsync(db, ct);
             AppLogger.Info("Turso: terminó la descarga completa de la nube.");
         }
 
@@ -1140,6 +1142,8 @@ public partial class TursoSyncService
         await DbMeta.SetAsync(db, DbMeta.CloudDownloadPending, "1", ct);
         // Lo que había aquí ya no cuenta: tampoco un respaldo restaurado pendiente de decidir
         DbMeta.Remove(db, DbMeta.RestoredWithCloud);
+        // La foto del libro de existencias era de lo que había aquí: se vuelve a tomar al terminar de bajar (paso 8.19)
+        DbMeta.Remove(db, DbMeta.StockLedgerBaseline);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);
@@ -2161,6 +2165,10 @@ public partial class TursoSyncService
             bool remoteWins = force || (serverRowAfterReject
                 ? SyncRules.ServerRowAppliesAfterReject(local?.UpdatedAtUtc, remoteUpdated)
                 : SyncRules.RemoteRowWins(local?.UpdatedAtUtc, remoteUpdated));
+            // Una versión apartada con la misma marca que la local es la misma versión: la bajada de columnas nuevas la
+            // apartó porque le faltaba un principal (paso 8.19). Se aplica al reintentar o al volver a leerla en el traslape
+            // (o se vuelve a apartar); si no, se perdería con sus columnas nuevas
+            if (!remoteWins && local != null && remoteUpdated == local.UpdatedAtUtc && parked.ContainsKey((entityType, syncId))) remoteWins = true;
             bool onlyNewColumns = false;
             if (!remoteWins && newColumns != null && local != null)
             {
@@ -2183,6 +2191,8 @@ public partial class TursoSyncService
             {
                 if (onlyNewColumns && !newColumns!.Contains(reference.RemoteColumn)) continue;
                 var principalSyncId = ParseGuid(row.GetValueOrDefault(reference.RemoteColumn));
+                // Nulo en una columna recién agregada: es lo que dejó el ALTER, no un valor; se queda el de aquí (más nuevo)
+                if (onlyNewColumns && !principalSyncId.HasValue) continue;
                 int? localId = null;
                 if (principalSyncId.HasValue)
                 {
@@ -2245,6 +2255,9 @@ public partial class TursoSyncService
             {
                 if (onlyNewColumns && !newColumns!.Contains(column.Name)) continue;
                 if (!row.TryGetValue(column.Name, out var raw)) continue;
+                // Todas las columnas nuevas aceptan nulo en la nube y el ALTER las llena con nulo: un nulo ahí no es un valor
+                // que haya escrito otro equipo, y no pisa lo que se escribió aquí después de actualizar (paso 8.19)
+                if (onlyNewColumns && raw == null) continue;
                 entry.Property(column.Property.Name).CurrentValue = FromRemoteValue(raw, column.ClrType, column.IsNullable);
             }
             foreach (var (property, id) in resolved)

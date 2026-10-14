@@ -85,6 +85,14 @@ public static class DbMeta
     /// </summary>
     public const string RedownloadAll = "RedownloadAll";
 
+    /// <summary>
+    /// Paso 8.19: la foto de las diferencias entre lo guardado y el libro de existencias que ya traía la base (las de
+    /// antes del Kardex completo: FEFO de un solo lote, devoluciones a un lote adivinado…), en JSON. Se toma una vez, al
+    /// migrar o al terminar de bajar una nube, y <see cref="Services.StockLedger.VerifyAsync"/> solo reporta lo que cambió
+    /// desde entonces. La absorben los saldos iniciales del paso 8.20.
+    /// </summary>
+    public const string StockLedgerBaseline = "StockLedgerBaseline";
+
     internal const string CreateTableSql = "CREATE TABLE IF NOT EXISTS \"DbMeta\" (\"Key\" TEXT PRIMARY KEY NOT NULL, \"Value\" TEXT)";
 
     private const string SelectSql = "SELECT \"Value\" FROM \"DbMeta\" WHERE \"Key\" = {0}";

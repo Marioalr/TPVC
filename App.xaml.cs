@@ -161,6 +161,22 @@ public partial class App : Application
             }
             AppLogger.PurgeOldLogs();
         });
+
+        // Paso 8.19: el libro de existencias corre al lado de lo guardado; la bitácora dice si se separaron (requisito del 8.20)
+        var inventory = Services.GetRequiredService<InventoryService>();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var report = await inventory.VerifyStockLedgerAsync();
+                if (report.IsClean) AppLogger.Info(report.Summary);
+                else AppLogger.Warn(report.Summary);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo revisar el libro de existencias", ex);
+            }
+        });
     }
 
     /// <summary>

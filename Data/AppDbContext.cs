@@ -191,6 +191,14 @@ public class AppDbContext : DbContext
             .HasForeignKey(m => m.BatchId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Paso 8.19: la salida de una venta (y su devolución) apunta a su renglón del ticket; viaja como SaleItemSyncId. Los
+        // tickets no se borran, pero si un renglón desapareciera el movimiento se queda, sin renglón (como con el lote)
+        modelBuilder.Entity<InventoryMovement>()
+            .HasOne(m => m.SaleItem)
+            .WithMany()
+            .HasForeignKey(m => m.SaleItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<ClinicalService>()
             .HasIndex(s => s.Code);
 
