@@ -382,6 +382,7 @@ public partial class PatientFormViewModel : ObservableObject
         OnPatientFormClosedForDraft();
         _formPatient = null;
         _formBaseline = null;
+        _ = _workflow.ReloadIfReleasedAsync();
         if (!_nav.IsFormPage) return;
         // De vuelta a la consulta con su paciente (el formulario pudo ser de otro expediente)
         if (_nav.PageBeforeForm == PatientsNavigation.PageConsultation && _active.HasActiveConsultation) _workflow.ShowConsultation();
@@ -648,15 +649,15 @@ public partial class PatientFormViewModel : ObservableObject
         ApplyFormTo(asSaved, FormRecordNumber.Trim(),
             PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName).Trim(), patient.Age);
 
-        var normalized = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var normalized = new List<(PatientFields.Field, object?)>();
         foreach (var field in PatientFields.All)
         {
             var current = field.Get(patient);
             var written = field.Get(asSaved);
             // Solo donde la instancia sigue igual que la base: un cambio que aún no se guarda se compara con la base
-            if (!Equals(current, written) && stored.Has(field.Name) && PatientFields.SameValue(patient, field, current, stored[field.Name]))
+            if (!Equals(current, written) && stored.Has(field) && PatientFields.SameValue(patient, field, current, stored[field]))
             {
-                normalized[field.Name] = written;
+                normalized.Add((field, written));
             }
         }
         return stored.With(normalized);

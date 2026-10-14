@@ -137,6 +137,13 @@ public partial class App : Application
             return;
         }
 
+        // Paso 8.21: la lista de campos del expediente se arma aquí, fuera del hilo de la interfaz, y no en la primera carga de pacientes
+        _ = Task.Run(() =>
+        {
+            try { PatientFields.Warm(); }
+            catch (Exception ex) { AppLogger.Warn($"No se pudieron preparar los campos del expediente: {ex.Message}"); }
+        });
+
         // Cargar y aplicar configuración de temas guardada
         var themeService = Services.GetRequiredService<ThemeService>();
         themeService.LoadTheme();

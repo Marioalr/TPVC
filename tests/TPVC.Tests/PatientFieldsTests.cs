@@ -359,12 +359,46 @@ public class PatientFieldsTests
         Assert.IsFalse(patient.ActiveSupplies.Any(s => s.SupplyName == "Venda de la tablet"), "En memoria no se cambia a media consulta");
         Assert.IsLessThan(stored.UpdatedAtUtc, patient.UpdatedAtUtc, "La copia no se da por al día");
 
-        // Descartar la consulta tampoco la escribe, y ya libre la recarga toma la de la base
+        // Descartar la consulta tampoco la escribe, y al soltar la copia se recarga sola y toma la de la base
         await records.DiscardActiveConsultationAsync();
         Assert.AreEqual("Venda de la tablet", Stored(clinic, patient.Id).ActiveSupplies.Single().SupplyName);
-        await records.LoadPatientsAsync();
         Assert.AreNotSame(patient, records.SelectedPatient, "Libre otra vez: la recarga cambia la copia por la de la base");
         Assert.AreEqual("Venda de la tablet", records.SelectedPatient!.ActiveSupplies.Single().SupplyName);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task AfterTheConsultation_TheChartTakesTheSheetThatCameMeanwhile_AndEditingItKeepsTheOtherDevicesRow()
+    {
+        using var clinic = new Fase6Clinic();
+        var (records, _, patient) = await OpenScriptedAsync(clinic);
+        Download(clinic, patient.Id, p => p.ActiveSupplies = new List<PatientSupplyItem> { new() { SupplyName = "Gasas", Quantity = 1 } });
+        await records.LoadPatientsAsync();
+        patient = records.SelectedPatient!;
+        Assert.AreEqual("Gasas", patient.ActiveSupplies.Single().SupplyName, "Sin consulta, la recarga toma la hoja de la base");
+
+        // A media consulta baja la hoja con un renglón más de la tablet: la copia abierta se queda como estaba
+        records.ChartPrimaryAction();
+        Download(clinic, patient.Id, p => p.ActiveSupplies = new List<PatientSupplyItem>
+        {
+            new() { SupplyName = "Gasas", Quantity = 1 },
+            new() { SupplyName = "Venda de la tablet", Quantity = 1 }
+        });
+        await records.LoadPatientsAsync();
+        Assert.AreSame(patient, records.SelectedPatient);
+        records.Prescription.PrescriptionMedicineName = "Loratadina 10 mg";
+        records.Prescription.PrescriptionDosage = "1 tableta cada 24 horas";
+        await records.Prescription.SelectAndAddPrescriptionProductAsync(null);
+
+        // Se descarta: la ficha ya muestra la hoja de la base sin otra recarga
+        await records.DiscardActiveConsultationAsync();
+        var chart = records.SelectedPatient!;
+        Assert.AreNotSame(patient, chart, "Al cerrar la consulta la copia vieja se cambia por la de la base");
+        CollectionAssert.AreEqual(new[] { "Gasas", "Venda de la tablet" }, chart.ActiveSupplies.Select(s => s.SupplyName).ToList());
+
+        // Quitar las gasas en la ficha no se lleva la venda de la tablet
+        await records.Supplies.RemoveSupplyItemFromPatientAsync(chart.ActiveSupplies.Single(s => s.SupplyName == "Gasas"));
+        Assert.AreEqual("Venda de la tablet", Stored(clinic, patient.Id).ActiveSupplies.Single().SupplyName);
         records.Dispose();
     }
 

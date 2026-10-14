@@ -25,6 +25,9 @@ public interface IPatientsWorkflow
     /// <summary>Recarga los expedientes de la base (después de guardar el alta o la edición).</summary>
     Task LoadPatientsAsync();
 
+    /// <summary>Se soltó el expediente (se cerró el formulario): si una recarga lo dejó viejo, se recarga ya (paso 8.21).</summary>
+    Task ReloadIfReleasedAsync();
+
     /// <summary>Recarga servicios y productos del catálogo y vuelve a filtrar las hojas y el explorador.</summary>
     Task LoadServicesAsync();
 

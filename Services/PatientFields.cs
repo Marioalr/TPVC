@@ -31,8 +31,8 @@ namespace TPVC.Services;
 /// próxima cita, la última visita, el folio…) y la foto queda con la fila fresca. Una hoja que no editó y que en la base
 /// es otra no se cambia en memoria: sus renglones son los objetos que ven las hojas, la cuenta de la consulta y "Se surte
 /// aquí", y cambiarlos a media consulta los soltaría. Su foto se queda como estaba (la instancia sigue sin editarla, así
-/// que no se escribe) y la instancia no toma la marca de la fila: la siguiente recarga la cambia por la de la base en
-/// cuanto nadie trabaje sobre ella.</item>
+/// que no se escribe) y la instancia no toma la marca de la fila: al soltarla (se cierra la consulta o el formulario)
+/// <c>PatientsWorkspace.ReloadIfReleasedAsync</c> recarga y la cambia por la de la base.</item>
 /// </list>
 /// </summary>
 public static class PatientFields
@@ -54,12 +54,13 @@ public static class PatientFields
         PatientSheetRows.ServicesColumn
     };
 
-    /// <summary>Un campo: su nombre (el de la propiedad y la columna) y cómo leerlo y escribirlo sin reflexión en cada uso.</summary>
+    /// <summary>Un campo: su nombre (el de la propiedad y la columna), su lugar en la foto y cómo leerlo y escribirlo sin reflexión en cada uso.</summary>
     public sealed class Field
     {
-        internal Field(PropertyInfo property)
+        internal Field(PropertyInfo property, int index)
         {
             Property = property;
+            Index = index;
             var instance = Expression.Parameter(typeof(PatientRecord), "patient");
             var value = Expression.Parameter(typeof(object), "value");
             var member = Expression.Property(instance, property);
@@ -70,15 +71,28 @@ public static class PatientFields
 
         public string Name => Property.Name;
         public PropertyInfo Property { get; }
+        /// <summary>Su lugar en <see cref="All"/> y en los valores de <see cref="PatientFieldSnapshot"/>.</summary>
+        internal int Index { get; }
         public bool IsSheet => Sheets.Contains(Name);
         internal Func<PatientRecord, object?> Get { get; }
         internal Action<PatientRecord, object?> Set { get; }
     }
 
     private static readonly Lazy<IReadOnlyList<Field>> _all = new(() => FromModel(DesignModel()));
+    private static readonly Lazy<IReadOnlyDictionary<string, Field>> _byName =
+        new(() => All.ToDictionary(f => f.Name, StringComparer.Ordinal));
 
     /// <summary>Los campos del expediente, en orden por nombre.</summary>
     public static IReadOnlyList<Field> All => _all.Value;
+
+    /// <summary>El campo con ese nombre, o null si no es un campo del expediente.</summary>
+    internal static Field? Find(string name) => _byName.Value.TryGetValue(name, out var field) ? field : null;
+
+    /// <summary>
+    /// Arma la lista fuera del hilo de la interfaz (al arrancar): la primera vez lee el modelo y compila los accesos, y si
+    /// no, lo pagaría la primera carga de pacientes.
+    /// </summary>
+    public static void Warm() => _ = _byName.Value;
 
     /// <summary>Los campos de un modelo de EF: sus propiedades de <see cref="PatientRecord"/> menos <see cref="Metadata"/>.</summary>
     internal static IReadOnlyList<Field> FromModel(IModel model)
@@ -87,17 +101,22 @@ public static class PatientFields
                      ?? throw new InvalidOperationException("El modelo no tiene la tabla de expedientes.");
         return entity.GetProperties()
             .Where(p => !Metadata.Contains(p.Name))
-            .Select(p => new Field(p.PropertyInfo
-                                   ?? throw new InvalidOperationException($"La columna {p.Name} del expediente no es una propiedad de PatientRecord.")))
-            .OrderBy(f => f.Name, StringComparer.Ordinal)
+            .Select(p => p.PropertyInfo
+                         ?? throw new InvalidOperationException($"La columna {p.Name} del expediente no es una propiedad de PatientRecord."))
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .Select((p, index) => new Field(p, index))
             .ToList();
     }
 
-    /// <summary>El modelo de <see cref="AppDbContext"/> sin abrir ninguna base (el mismo que usan todos los contextos).</summary>
+    /// <summary>
+    /// El modelo de <see cref="AppDbContext"/> sin abrir ninguna base. Con las mismas opciones que la app
+    /// (<see cref="AppDbContext.ConfigureSqlite"/>), EF lo toma del que ya armó en lugar de armarlo otra vez.
+    /// </summary>
     private static IModel DesignModel()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=:memory:").Options;
-        using var db = new AppDbContext(options);
+        var builder = new DbContextOptionsBuilder<AppDbContext>();
+        AppDbContext.ConfigureSqlite(builder, "Data Source=:memory:");
+        using var db = new AppDbContext(builder.Options);
         return db.Model;
     }
 
@@ -106,8 +125,9 @@ public static class PatientFields
     /// <summary>La foto de los campos de una instancia tal como están ahora.</summary>
     public static PatientFieldSnapshot Capture(PatientRecord patient)
     {
-        var values = new Dictionary<string, object?>(All.Count, StringComparer.Ordinal);
-        foreach (var field in All) values[field.Name] = field.Get(patient);
+        var fields = All;
+        var values = new object?[fields.Count];
+        for (int i = 0; i < values.Length; i++) values[i] = fields[i].Get(patient);
         return new PatientFieldSnapshot(values);
     }
 
@@ -131,7 +151,7 @@ public static class PatientFields
     public static IReadOnlyList<Field> Changed(PatientRecord edited, PatientFieldSnapshot? baseline) =>
         baseline == null
             ? All
-            : All.Where(f => !baseline.Has(f.Name) || !SameValue(edited, f, f.Get(edited), baseline[f.Name])).ToList();
+            : All.Where(f => !baseline.Has(f) || !SameValue(edited, f, f.Get(edited), baseline[f])).ToList();
 
     /// <summary>
     /// Lo que un guardado escribe sobre la fila recién leída (<paramref name="stored"/>):
@@ -155,9 +175,9 @@ public static class PatientFields
         {
             foreach (var field in All.Except(write).ToList())
             {
-                if (own.Has(field.Name)
-                    && !SameValue(edited, field, field.Get(edited), own[field.Name])
-                    && SameValue(edited, field, field.Get(stored), own[field.Name]))
+                if (own.Has(field)
+                    && !SameValue(edited, field, field.Get(edited), own[field])
+                    && SameValue(edited, field, field.Get(stored), own[field]))
                 {
                     write.Add(field);
                 }
@@ -198,33 +218,33 @@ public static class PatientFields
     public static void Refresh(PatientRecord instance, PatientRecord fresh, PatientFieldSnapshot? baseline)
     {
         if (ReferenceEquals(instance, fresh)) return;
-        var values = new Dictionary<string, object?>(All.Count, StringComparer.Ordinal);
+        var values = new object?[All.Count];
         bool staleSheet = false;
         foreach (var field in All)
         {
             var current = field.Get(instance);
             var stored = field.Get(fresh);
-            bool untouched = baseline != null && baseline.Has(field.Name) && SameValue(instance, field, current, baseline[field.Name]);
+            bool untouched = baseline != null && baseline.Has(field) && SameValue(instance, field, current, baseline[field]);
             if (field.IsSheet)
             {
                 if (SameValue(instance, field, current, stored))
                 {
-                    values[field.Name] = stored;
+                    values[field.Index] = stored;
                 }
                 else if (untouched)
                 {
-                    values[field.Name] = baseline![field.Name];
+                    values[field.Index] = baseline![field];
                     staleSheet = true;
                 }
                 else
                 {
-                    values[field.Name] = stored;
+                    values[field.Index] = stored;
                 }
             }
             else
             {
                 if (untouched) field.Set(instance, stored);
-                values[field.Name] = stored;
+                values[field.Index] = stored;
             }
         }
 
@@ -240,13 +260,12 @@ public static class PatientFields
     public static void MarkStored(PatientRecord patient, IEnumerable<string> fields)
     {
         if (patient.StoredSnapshot is not { } snapshot) return;
-        var updates = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var updates = new List<(PatientFields.Field, object?)>();
         foreach (var name in fields)
         {
-            var field = All.FirstOrDefault(f => f.Name == name)
-                        ?? throw new ArgumentException($"{name} no es un campo del expediente.", nameof(fields));
+            var field = Find(name) ?? throw new ArgumentException($"{name} no es un campo del expediente.", nameof(fields));
             if (field.IsSheet) patient.SyncSheetJson(name);
-            updates[name] = field.Get(patient);
+            updates.Add((field, field.Get(patient)));
         }
         patient.StoredSnapshot = snapshot.With(updates);
     }
@@ -254,33 +273,47 @@ public static class PatientFields
 
 /// <summary>
 /// Paso 8.21: los valores de los campos de un expediente (<see cref="PatientFields"/>) en un momento dado; las hojas, con
-/// el texto guardado. No cambia: una versión nueva es otra foto.
+/// el texto guardado. No cambia: una versión nueva es otra foto. Los valores van en un arreglo por el lugar de cada campo
+/// en <see cref="PatientFields.All"/> (cada carga de la lista toma la foto de todos los pacientes).
 /// </summary>
 public sealed class PatientFieldSnapshot
 {
-    private readonly IReadOnlyDictionary<string, object?> _values;
+    /// <summary>Un campo que no está en la foto (<see cref="Without"/>).</summary>
+    private static readonly object Missing = new();
 
-    internal PatientFieldSnapshot(IReadOnlyDictionary<string, object?> values)
+    private readonly object?[] _values;
+
+    internal PatientFieldSnapshot(object?[] values)
     {
         _values = values;
     }
 
-    public bool Has(string field) => _values.ContainsKey(field);
+    public bool Has(string field) => PatientFields.Find(field) is { } f && Has(f);
 
-    public object? this[string field] => _values[field];
+    public object? this[string field] =>
+        this[PatientFields.Find(field) ?? throw new KeyNotFoundException($"{field} no es un campo del expediente.")];
+
+    internal bool Has(PatientFields.Field field) => !ReferenceEquals(_values[field.Index], Missing);
+
+    internal object? this[PatientFields.Field field] =>
+        Has(field) ? _values[field.Index] : throw new KeyNotFoundException($"{field.Name} no está en la foto.");
 
     /// <summary>La misma foto sin esos campos: al guardar con ella se escriben aunque no hayan cambiado.</summary>
     public PatientFieldSnapshot Without(IEnumerable<string> fields)
     {
-        var skip = new HashSet<string>(fields, StringComparer.Ordinal);
-        return new PatientFieldSnapshot(_values.Where(v => !skip.Contains(v.Key)).ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal));
+        var values = (object?[])_values.Clone();
+        foreach (var name in fields)
+        {
+            if (PatientFields.Find(name) is { } field) values[field.Index] = Missing;
+        }
+        return new PatientFieldSnapshot(values);
     }
 
     /// <summary>La misma foto con esos valores.</summary>
-    internal PatientFieldSnapshot With(IReadOnlyDictionary<string, object?> updates)
+    internal PatientFieldSnapshot With(IEnumerable<(PatientFields.Field Field, object? Value)> updates)
     {
-        var values = new Dictionary<string, object?>(_values, StringComparer.Ordinal);
-        foreach (var (key, value) in updates) values[key] = value;
+        var values = (object?[])_values.Clone();
+        foreach (var (field, value) in updates) values[field.Index] = value;
         return new PatientFieldSnapshot(values);
     }
 }

@@ -59,8 +59,9 @@ public partial class PatientsWorkspace
                     var fresh = dbPatients[index];
                     var consultations = await _inventoryService.GetPatientConsultationsAsync(prevSelectedId);
                     bool forced = Session.ForceFreshPatientIds.Contains(prevSelectedId);
+                    bool stale = forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc;
                     if (ReferenceEquals(Session.SelectedPatient, prevSelected)
-                        && (forced || fresh.UpdatedAtUtc > prevSelected.UpdatedAtUtc)
+                        && stale
                         && CanReplaceSelectedPatientInstance(prevSelected))
                     {
                         Session.ForceFreshPatientIds.Remove(prevSelectedId);
@@ -73,6 +74,8 @@ public partial class PatientsWorkspace
                         prevSelected.Consultations = consultations;
                         dbPatients[index] = prevSelected;
                         keptSelected = prevSelected;
+                        // Paso 8.21: se queda la copia vieja (alguien trabaja sobre ella); al soltarla se recarga
+                        if (stale) _staleInstanceKept = true;
                     }
                 }
             }
@@ -106,6 +109,21 @@ public partial class PatientsWorkspace
                 Session.SelectedPatient = Session.Patients.FirstOrDefault(p => p.FullName == activeName);
             }
         }
+    }
+
+    /// <summary>
+    /// Paso 8.21: una recarga dejó la copia abierta aunque la base tenía una más nueva (una hoja que bajó de otro equipo a
+    /// media consulta, que el guardado no escribe ni cambia en memoria). Al soltarla, al cerrar la consulta o el formulario,
+    /// se recarga; si no, la siguiente edición de esa hoja en la ficha la escribiría vieja hasta otra recarga.
+    /// </summary>
+    private bool _staleInstanceKept;
+
+    public async Task ReloadIfReleasedAsync()
+    {
+        if (!_staleInstanceKept) return;
+        if (Session.SelectedPatient is { } selected && !CanReplaceSelectedPatientInstance(selected)) return;
+        _staleInstanceKept = false;
+        await LoadPatientsAsync();
     }
 
     /// <summary>
@@ -162,6 +180,7 @@ public partial class PatientsWorkspace
             Handoff.ReceivedHandoffToken = null;
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (Record.Patient != null) _ = Record.EndConsultationOnRecordAsync(discarded: false);
+            _ = ReloadIfReleasedAsync();
         }
 
         Autosave.OnActiveConsultationStateChangedForAutosave();
