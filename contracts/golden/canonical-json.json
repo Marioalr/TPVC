@@ -6,7 +6,7 @@
   "contract": 12,
   "notes": [
     "Forma canónica (Services/Rules/CanonicalJson y PatientSheetCanonical, paso 8.22): para saber si dos versiones de un expediente dicen lo mismo sin depender de cómo las escribió cada equipo. 'expected' es el texto canónico.",
-    "json: sin espacios; llaves de objeto ordenadas por unidades UTF-16 (String.compareTo de Kotlin); texto con solo \\\" \\\\ y los caracteres de control escapados (\\b \\f \\n \\r \\t; los demás \\u00xx en minúsculas), lo demás tal cual; números en decimal sin exponente, sin ceros de más en la fracción ni punto final, y 0 sin signo (BigDecimal.stripTrailingZeros().toPlainString(), con 0 para el cero); true, false y null tal cual.",
+    "json: sin espacios; llaves de objeto ordenadas por unidades UTF-16 (String.compareTo de Kotlin), y si una se repite se queda el último valor; texto con solo \\\" \\\\ y los caracteres de control escapados (\\b \\f \\n \\r \\t; los demás \\u00xx en minúsculas), lo demás tal cual; números en decimal sin exponente, sin ceros de más en la fracción ni punto final, y 0 sin signo (BigDecimal.stripTrailingZeros().toPlainString(), con 0 para el cero); true, false y null tal cual.",
     "value: el valor de una columna sincronizada como valor canónico: texto como texto, entero y enum como número, booleano como true/false (en la nube es 0/1), fecha como texto de 27 caracteres, GUID en minúsculas, decimal como número canónico, nulo como null. Los nombres de 'clrType' son los de contracts/sync/schema.json.",
     "sheet: una hoja del paciente (Active*Json) como arreglo de renglones canónicos, en su orden. Se lee como la PC (nombres sin distinguir mayúsculas, lo que falta con su valor por omisión: Quantity y RecommendedQuantity 1, los demás números 0, textos '' salvo Presentation, ChargedConsultationFolio, ChargedLineKind y los SyncId, que son null; un texto que no se puede leer es una hoja vacía; RowId determinista de contracts/golden/synced-json-columns.json para un renglón sin él) y cada renglón lleva TODOS sus campos conocidos menos los Id locales (ChargedLineId en insumos, ServiceId en servicios), más los desconocidos tal cual. Campos: receta RowId, MedicineName, Dosage, RecommendedQuantity, Presentation, DispenseInClinic; insumos RowId, SupplyName, Instructions, Quantity, UnitPrice, ChargedConsultationFolio, ChargedUnits, ChargedLineKind, ChargedLineSyncId; servicios RowId, ServiceSyncId, ServiceCode, ServiceName, Category, Notes, Price, Quantity, ChargedConsultationFolio, ChargedUnits."
   ],
@@ -34,6 +34,14 @@
         "json": "[35.0, 12.50, 1e3, -0, -0.0, 0.10, 100, 2.5E-2]"
       },
       "expected": "[35,12.5,1000,0,0,0.1,100,0.025]"
+    },
+    {
+      "name": "json · una llave repetida: se queda el último valor (como kotlinx)",
+      "input": {
+        "check": "json",
+        "json": "{\"a\":1,\"b\":{\"x\":1,\"x\":2},\"a\":3}"
+      },
+      "expected": "{\"a\":3,\"b\":{\"x\":2}}"
     },
     {
       "name": "json · texto: acentos, ñ y símbolos tal cual; solo se escapan comillas, diagonal invertida y control",
@@ -173,6 +181,16 @@
         "json": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"ServiceId\":21,\"ServiceSyncId\":\"b1b2c3d4-0000-4000-8000-000000000001\",\"ServiceCode\":\"SERV-002\",\"ServiceName\":\"Curación Menor y Asepsia\",\"Price\":250,\"Quantity\":1}]"
       },
       "expected": "[{\"Category\":\"\",\"ChargedConsultationFolio\":null,\"ChargedUnits\":0,\"Notes\":\"\",\"Price\":250,\"Quantity\":1,\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"ServiceCode\":\"SERV-002\",\"ServiceName\":\"Curación Menor y Asepsia\",\"ServiceSyncId\":\"b1b2c3d4-0000-4000-8000-000000000001\"}]"
+    },
+    {
+      "name": "hoja · un campo desconocido con una llave repetida, o el mismo campo dos veces: se queda el último",
+      "input": {
+        "check": "sheet",
+        "column": "ActiveSuppliesJson",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "json": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"SupplyName\":\"Gasa estéril\",\"Extra\":{\"x\":1,\"x\":2},\"Extra2\":1,\"Extra2\":2}]"
+      },
+      "expected": "[{\"ChargedConsultationFolio\":null,\"ChargedLineKind\":null,\"ChargedLineSyncId\":null,\"ChargedUnits\":0,\"Extra\":{\"x\":2},\"Extra2\":2,\"Instructions\":\"\",\"Quantity\":1,\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa estéril\",\"UnitPrice\":0}]"
     },
     {
       "name": "hoja · hoja vacía o que no se puede leer: arreglo vacío",

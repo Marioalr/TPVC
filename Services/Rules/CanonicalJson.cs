@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -31,8 +32,46 @@ public static class CanonicalJson
         return sb.ToString();
     }
 
-    /// <summary>El texto canónico de un texto JSON (cualquier valor). Un texto que no es JSON válido lanza <see cref="JsonException"/>.</summary>
-    public static string Normalize(string json) => Write(JsonNode.Parse(json));
+    /// <summary>
+    /// El texto canónico de un texto JSON (cualquier valor). Un texto que no es JSON válido lanza <see cref="JsonException"/>.
+    /// En un objeto con una llave repetida se queda el último valor (como kotlinx).
+    /// </summary>
+    public static string Normalize(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return Write(FromElement(document.RootElement));
+    }
+
+    /// <summary>
+    /// Un valor JSON leído como nodo. En un objeto con una llave repetida se queda el último valor (como kotlinx), en lugar de
+    /// fallar como <c>JsonNode.Parse</c>: un campo desconocido de una hoja escrito así no detiene la combinación.
+    /// </summary>
+    public static JsonNode? FromElement(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var values = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
+                var order = new List<string>();
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (!values.ContainsKey(property.Name)) order.Add(property.Name);
+                    values[property.Name] = FromElement(property.Value);
+                }
+                var obj = new JsonObject();
+                foreach (var name in order) obj[name] = values[name];
+                return obj;
+            case JsonValueKind.Array:
+                var array = new JsonArray();
+                foreach (var item in element.EnumerateArray()) array.Add(FromElement(item));
+                return array;
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+                return null;
+            default:
+                return JsonNode.Parse(element.GetRawText());
+        }
+    }
 
     /// <summary>Un texto como valor JSON canónico (entre comillas y con su escape).</summary>
     public static string Quote(string text)

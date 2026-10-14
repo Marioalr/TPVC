@@ -13,8 +13,9 @@ namespace TPVC.Tests;
 
 /// <summary>
 /// Paso 8.22 (H1b) con dos y tres equipos sobre el servidor simulado: la combinación por campo y por renglón al bajar, lo que
-/// sube después de combinar (una sola vez), la escritura de una PC anterior (sin marcas), la próxima cita derivada en orden
-/// clínico, las llaves desconocidas de FieldStampsJson y el aviso de otra PC sin actualizar.
+/// sube después de combinar (una sola vez), la escritura de una PC anterior (sin marcas) y la actualización desde v1.38 (el
+/// piso), la próxima cita derivada en orden clínico, las llaves desconocidas de FieldStampsJson y el aviso de otra PC sin
+/// actualizar.
 /// </summary>
 public partial class TursoSyncEndToEndTests
 {
@@ -86,7 +87,7 @@ public partial class TursoSyncEndToEndTests
         using var db = device.Factory.CreateDbContext();
         var row = await db.Patients.AsNoTracking().SingleAsync(p => p.SyncId == syncId);
         var version = PatientFieldMerge.LocalVersion(row, PatientFieldMerge.PatientsMap(db.Model));
-        return PatientMerge.CanonicalVersion(version.Values, PatientFieldStamps.Parse(version.FieldStampsJson), PatientFieldMerge.ColumnNames(db.Model), syncId);
+        return PatientMerge.Meaning(version, PatientFieldMerge.ColumnNames(db.Model));
     }
 
     // ================================================================== por campo
@@ -236,6 +237,221 @@ public partial class TursoSyncEndToEndTests
         var final = await StoredAsync(tablet, patient);
         Assert.AreEqual("Docente", final.Occupation);
         Assert.AreEqual("Ninguna", final.Religion);
+        await AssertNoMoreUploadsAsync(pc, tablet);
+    }
+
+    // ================================================================== al actualizar desde v1.38
+
+    /// <summary>
+    /// Deja la nube y los equipos como estaban con v1.38: ningún expediente tiene marcas por campo y la última bajada de
+    /// Patients no tenía FieldStampsJson (la primera sincronización de cada equipo con esta versión baja la tabla completa
+    /// antes de subir, como al actualizar). Sin triggers: no queda nada por subir.
+    /// </summary>
+    private async Task BackToV138Async(params Device[] devices)
+    {
+        ExecuteCloud("UPDATE Patients SET FieldStampsJson = ''");
+        foreach (var device in devices)
+        {
+            using var db = device.Factory.CreateDbContext();
+            db.ApplyingRemoteChanges = true;
+            foreach (var row in await db.Patients.ToListAsync()) row.FieldStampsJson = string.Empty;
+            await SyncChangeLog.SaveRemoteChangesAsync(db);
+
+            var key = DbMeta.PullColumnsPrefix + "Patients";
+            var pulled = (await DbMeta.GetAsync(db, key))!.Split(',').Where(c => c != nameof(PatientRecord.FieldStampsJson));
+            await DbMeta.SetAsync(db, key, string.Join(",", pulled));
+        }
+    }
+
+    /// <summary>
+    /// Una edición de una PC que todavía tiene v1.38: la fila completa con una marca nueva y sin tocar FieldStampsJson (no la
+    /// conoce). Con <paramref name="upload"/> la sube como lo hacía v1.38 (sin esa columna: en la nube se queda la que había);
+    /// si no, queda pendiente en su registro de cambios.
+    /// </summary>
+    private async Task EditAsV138Async(Device device, Guid syncId, Action<PatientRecord> change, bool upload)
+    {
+        using var db = device.Factory.CreateDbContext();
+        db.ApplyingRemoteChanges = true;
+        var row = await db.Patients.SingleAsync(p => p.SyncId == syncId);
+        change(row);
+        row.SyncSuppliesJson();
+        row.UpdatedAtUtc = DateTime.UtcNow;
+        await SyncChangeLog.SaveRemoteChangesAsync(db);
+        if (!upload)
+        {
+            await SyncChangeLog.MarkForUploadAsync(db, nameof(PatientRecord), syncId);
+            return;
+        }
+
+        string[] columns =
+        {
+            nameof(PatientRecord.Allergies), nameof(PatientRecord.Phone), nameof(PatientRecord.Occupation), nameof(PatientRecord.ActiveSuppliesJson)
+        };
+        using var held = _server.Lock();
+        using var cmd = _server.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE Patients SET " + string.Join(", ", columns.Select(c => $"\"{c}\" = ${c}")) +
+                          $", UpdatedAtUtc = $updated, SyncedAtUtc = {TursoSyncService.ServerNowSql}, OriginDeviceId = $device WHERE SyncId = $id";
+        foreach (var column in columns) cmd.Parameters.AddWithValue("$" + column, typeof(PatientRecord).GetProperty(column)!.GetValue(row));
+        cmd.Parameters.AddWithValue("$updated", TursoSyncService.FormatDate(row.UpdatedAtUtc));
+        cmd.Parameters.AddWithValue("$device", device.Settings.CurrentSettings.DeviceId);
+        cmd.Parameters.AddWithValue("$id", TursoSyncService.FormatGuid(syncId));
+        Assert.AreEqual(1, cmd.ExecuteNonQuery());
+    }
+
+    [TestMethod]
+    public async Task TheFirstSyncAfterUpdatingFromV138_UploadsNothing_ForPatientsThatAreTheSameOnBothSides()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        for (int i = 1; i <= 5; i++)
+        {
+            await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = $"Paciente de prueba {i}", Phone = $"55000000{i:00}", Allergies = "Negadas" });
+        }
+        await QuiesceAsync(pc, tablet);
+        var count = (long)CloudScalar("SELECT COUNT(*) FROM Patients")!;
+        Assert.IsGreaterThanOrEqualTo(6L, count);
+        await BackToV138Async(pc, tablet);
+
+        // Cada equipo se actualiza: baja la tabla completa (las mismas filas sin marcas) y no sube ninguna
+        foreach (var device in new[] { pc, tablet })
+        {
+            var result = await device.Sync.SyncAsync();
+            Assert.IsTrue(result.Success, result.ErrorMessage);
+            Assert.AreEqual(0, result.RowsPushed, $"{device.Settings.CurrentSettings.DeviceName} subió {result.RowsPushed} de {count} expedientes iguales");
+            Assert.AreEqual(0, (await device.Sync.GetPendingChangesAsync()).Count);
+            using var db = device.Factory.CreateDbContext();
+            Assert.IsTrue(await db.Patients.AllAsync(p => p.FieldStampsJson == string.Empty), "Se queda la fila de la nube tal cual");
+        }
+        Assert.AreEqual(0L, (long)CloudScalar("SELECT COUNT(*) FROM Patients WHERE FieldStampsJson <> ''")!);
+        await AssertNoMoreUploadsAsync(pc, tablet);
+    }
+
+    [TestMethod]
+    public async Task TwoPcsUpdatedFromV138_OneAfterTheOther_TheStaleOneDoesNotUndoWhatTheFirstWroteBefore()
+    {
+        var pc = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        var other = CreateDevice("pc2", seed: false);
+        Assert.IsTrue((await other.Sync.SyncAsync()).Success);
+        var patient = (await pc.Inventory.GetPatientsAsync()).Single(p => p.RecordNumber == MergeRecord).SyncId;
+        await AddSupplyAsync(pc, patient, "Gasa estéril");
+        await AddSupplyAsync(pc, patient, "Venda elástica 10 cm");
+        await EditAsync(pc, patient, p => p.Allergies = "Negadas");
+        await QuiesceAsync(pc, other);
+        await BackToV138Async(pc, other);
+
+        // 1. Todavía con v1.38, la PC cambia las alergias y quita la venda, y sube la fila completa; la otra PC no baja
+        await Task.Delay(5);
+        await EditAsV138Async(pc, patient, p =>
+        {
+            p.Allergies = "Látex";
+            p.ActiveSupplies = p.ActiveSupplies.Where(s => s.SupplyName != "Venda elástica 10 cm").ToList();
+        }, upload: true);
+
+        // 2. La PC se actualiza (su primera sincronización no sube nada) y cambia el teléfono: se marca solo el teléfono, y lo
+        //    de antes conserva su hora como piso
+        var upgrade = await pc.Sync.SyncAsync();
+        Assert.IsTrue(upgrade.Success, upgrade.ErrorMessage);
+        Assert.AreEqual(0, upgrade.RowsPushed);
+        var v138 = (await StoredAsync(pc, patient)).UpdatedAtUtc;
+        await EditAsync(pc, patient, p => p.Phone = "5599887766");
+        var stamps = PatientFieldStamps.Parse((await StoredAsync(pc, patient)).FieldStampsJson);
+        Assert.AreEqual(PatientFieldStamps.Format(v138), stamps[PatientFieldStamps.FloorKey]);
+        Assert.IsNull(stamps[nameof(PatientRecord.Allergies)]);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // 3. La otra PC se actualiza con su copia de antes de todo eso (sin marcas): no deshace nada ni sube nada
+        var stale = await other.Sync.SyncAsync();
+        Assert.IsTrue(stale.Success, stale.ErrorMessage);
+        Assert.AreEqual(0, stale.RowsPushed, "Lo que bajó ya incluye su copia vieja");
+        foreach (var device in new[] { pc, other })
+        {
+            var stored = await StoredAsync(device, patient);
+            Assert.AreEqual("Látex", stored.Allergies, "La alergia de la PC v1.38 sobrevive");
+            CollectionAssert.AreEqual(new[] { "Gasa estéril" }, SupplyNames(stored), "La venda quitada no revive");
+            Assert.AreEqual("5599887766", stored.Phone);
+        }
+        Assert.AreEqual("Látex", CloudPatientValue(patient, nameof(PatientRecord.Allergies)));
+        Assert.AreEqual(await MeaningAsync(pc, patient), await MeaningAsync(other, patient));
+        await AssertNoMoreUploadsAsync(pc, other);
+    }
+
+    [TestMethod]
+    public async Task AnOfflineEditOnV138_ThenTheUpdate_AndAStampedEditBeforeSyncing_KeepsTheV138Edit()
+    {
+        var (pc, tablet, patient) = await PcAndTabletAsync();
+        await EditAsync(pc, patient, p => p.Allergies = "Negadas");
+        await QuiesceAsync(pc, tablet);
+        await BackToV138Async(pc, tablet);
+        var upgrade = await tablet.Sync.SyncAsync();
+        Assert.IsTrue(upgrade.Success, upgrade.ErrorMessage);
+        Assert.AreEqual(0, upgrade.RowsPushed, "La tablet se actualiza primero: no sube nada");
+
+        // 1. La PC, sin conexión y todavía con v1.38, cambia las alergias y agrega un renglón (queda pendiente, sin marcas)
+        await Task.Delay(5);
+        await EditAsV138Async(pc, patient, p =>
+        {
+            p.Allergies = "Látex";
+            p.ActiveSupplies = new List<PatientSupplyItem>(p.ActiveSupplies) { new() { SupplyName = "Alcohol 70%", Quantity = 1 } };
+        }, upload: false);
+        var v138 = (await StoredAsync(pc, patient)).UpdatedAtUtc;
+
+        // 2. Mientras, la tablet (ya actualizada) cambia la ocupación y sube
+        await Task.Delay(5);
+        await EditAsync(tablet, patient, p => p.Occupation = "Docente");
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // 3. La PC se actualiza y, antes de sincronizar, cambia el teléfono: lo de v1.38 conserva su hora como piso
+        await Task.Delay(5);
+        await EditAsync(pc, patient, p => p.Phone = "5511223344");
+        var stamps = PatientFieldStamps.Parse((await StoredAsync(pc, patient)).FieldStampsJson);
+        Assert.AreEqual(PatientFieldStamps.Format(v138), stamps[PatientFieldStamps.FloorKey]);
+        await QuiesceAsync(pc, tablet);
+
+        foreach (var device in new[] { pc, tablet })
+        {
+            var stored = await StoredAsync(device, patient);
+            Assert.AreEqual("Látex", stored.Allergies, "La edición de v1.38 es más nueva que lo que tenía la tablet (con el mismo valor ordinal perdería)");
+            CollectionAssert.Contains(SupplyNames(stored), "Alcohol 70%");
+            Assert.AreEqual("Docente", stored.Occupation);
+            Assert.AreEqual("5511223344", stored.Phone);
+        }
+        Assert.AreEqual(await MeaningAsync(pc, patient), await MeaningAsync(tablet, patient));
+        await AssertNoMoreUploadsAsync(pc, tablet);
+    }
+
+    [TestMethod]
+    public async Task ARowRemovedOrEditedOnThePc_AndAnotherRowEditedOnTheTablet_AllThreeEditsSurvive()
+    {
+        var (pc, tablet, patient) = await PcAndTabletAsync();
+        await AddSupplyAsync(pc, patient, "Gasa estéril");
+        await AddSupplyAsync(pc, patient, "Venda elástica 10 cm");
+        await AddSupplyAsync(pc, patient, "Alcohol 70%");
+        await QuiesceAsync(pc, tablet);
+
+        // La PC quita la gasa y le cambia la cantidad al alcohol; después, sin haberlo bajado, la tablet solo le cambia la
+        // cantidad a la venda: guardar la hoja marca solo el renglón que cambió
+        await EditAsync(pc, patient, p =>
+        {
+            p.ActiveSupplies = p.ActiveSupplies.Where(s => s.SupplyName != "Gasa estéril").ToList();
+            p.ActiveSupplies.Single(s => s.SupplyName == "Alcohol 70%").Quantity = 4;
+        });
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        await Task.Delay(5);
+        await EditAsync(tablet, patient, p => p.ActiveSupplies.Single(s => s.SupplyName == "Venda elástica 10 cm").Quantity = 2);
+        var onTablet = await StoredAsync(tablet, patient);
+        var stamp = PatientFieldStamps.Format(onTablet.UpdatedAtUtc);
+        var stamped = PatientFieldStamps.Parse(onTablet.FieldStampsJson).Entries.Where(e => e.Value == stamp).Select(e => e.Key).ToList();
+        var venda = onTablet.ActiveSupplies.Single(s => s.SupplyName == "Venda elástica 10 cm").RowId!.Value;
+        CollectionAssert.AreEquivalent(new[] { PatientFieldStamps.RowKey(PatientSheetRows.SuppliesColumn, venda), PatientFieldStamps.RowStampKey }, stamped);
+
+        await QuiesceAsync(tablet, pc);
+        foreach (var device in new[] { pc, tablet })
+        {
+            var stored = await StoredAsync(device, patient);
+            CollectionAssert.DoesNotContain(SupplyNames(stored), "Gasa estéril", "Lo quitó la PC");
+            Assert.AreEqual(4, stored.ActiveSupplies.Single(s => s.SupplyName == "Alcohol 70%").Quantity, "Lo cambió la PC");
+            Assert.AreEqual(2, stored.ActiveSupplies.Single(s => s.SupplyName == "Venda elástica 10 cm").Quantity, "Lo cambió la tablet");
+        }
         await AssertNoMoreUploadsAsync(pc, tablet);
     }
 

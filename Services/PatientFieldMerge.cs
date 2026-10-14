@@ -41,23 +41,34 @@ public static class PatientFieldMerge
     // ================================================================== el sello
 
     /// <summary>
-    /// El sello de un guardado local de un expediente (alta o cambio), con la misma marca que su <c>UpdatedAtUtc</c>: cada
-    /// campo que EF va a escribir y cambió por su significado toma la marca; en una hoja, renglón por renglón
-    /// (<see cref="PatientFieldStamps.ApplyLocalWrite"/>). Un alta no marca campos: solo deja la marca de la fila (lo que no
-    /// se ha editado desde el alta cuenta como la marca mínima, y nadie más lo tiene).
+    /// El sello de un guardado local de un expediente (alta o cambio), con la misma marca que su <c>UpdatedAtUtc</c>
+    /// (<see cref="PatientFieldStamps.ApplyLocalWrite"/>): cada campo que EF va a escribir y cambió por su significado toma la
+    /// marca; en una hoja, renglón por renglón. Un alta no marca campos: solo deja la marca de la fila (lo que no se ha editado
+    /// desde el alta cuenta como la marca mínima, y nadie más lo tiene). Una fila que era una escritura sin marcas (de una PC
+    /// anterior, o de antes de actualizar) conserva su UpdatedAtUtc anterior como piso. Una fila marcada completa como
+    /// modificada sin cambiar nada (<c>EntityState.Modified</c>: «Volver a aplicar») es una escritura de la fila completa: el
+    /// piso sube a la marca nueva.
     /// </summary>
     internal static void StampLocalWrite(EntityEntry entry, DateTime stamp)
     {
         var patient = (PatientRecord)entry.Entity;
-        var stamps = PatientFieldStamps.Parse(patient.FieldStampsJson);
+        var columns = Columns(PatientsMap(entry.Context.Model));
         var fields = new List<string>();
         var sheets = new List<(string, string?, string?)>();
+        DateTime? previous = null;
+        bool everyColumnMarked = false;
         if (entry.State == EntityState.Modified)
         {
-            foreach (var column in Columns(PatientsMap(entry.Context.Model)))
+            previous = (DateTime?)entry.Property(nameof(PatientRecord.UpdatedAtUtc)).OriginalValue;
+            everyColumnMarked = true;
+            foreach (var column in columns)
             {
                 var property = entry.Property(column.Property.Name);
-                if (!property.IsModified) continue;
+                if (!property.IsModified)
+                {
+                    everyColumnMarked = false;
+                    continue;
+                }
                 if (PatientSheetCanonical.IsSheet(column.Name))
                 {
                     var before = property.OriginalValue as string;
@@ -75,8 +86,10 @@ public static class PatientFieldMerge
                 }
             }
         }
-        stamps.ApplyLocalWrite(stamp, fields, sheets, patient.SyncId);
-        patient.FieldStampsJson = stamps.ToJson();
+        bool wholeRow = everyColumnMarked && fields.Count == 0 && sheets.Count == 0;
+        var fieldColumns = PatientMerge.FieldColumns(columns.Select(c => c.Name));
+        patient.FieldStampsJson = PatientFieldStamps.ApplyLocalWrite(patient.FieldStampsJson, previous, stamp, fields, sheets, patient.SyncId,
+            fieldColumns, wholeRow).ToJson();
     }
 
     // ================================================================== al bajar

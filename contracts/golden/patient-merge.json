@@ -6,10 +6,10 @@
   "contract": 12,
   "notes": [
     "Combinación por campo al bajar una fila de Patients que ya existe aquí (Services/Rules/PatientMerge, paso 8.22; regla «Pacientes por campo» de contracts/sync/schema.json). 'local' y 'remote': UpdatedAtUtc, el texto de FieldStampsJson y los valores de las columnas que se combinan ('columns': las de Patients que viajan, menos las derivadas y FieldStampsJson; aquí unas cuantas), cada uno como valor canónico (contracts/golden/canonical-json.json); en una hoja, el texto guardado.",
-    "Por campo gana la marca mayor (field-stamps.json; una marca nunca vale más que el UpdatedAtUtc de su fila; una que falta cuenta como la mínima). Una versión sin marcas (UpdatedAtUtc mayor que su llave 'UpdatedAtUtc', o sin ella) cuenta con su UpdatedAtUtc en cada campo en que difiere, en cada renglón que tiene, en la marca de orden de cada hoja, y como quitados con ella los renglones que no tiene y la otra sí. Marcas iguales y valores distintos: gana el texto canónico mayor en orden ordinal (unidades UTF-16).",
-    "Hojas por RowId: la marca de un renglón y la de quitado son la mayor de los dos lados; vive si está en alguna de las dos hojas y su marca es mayor que la de quitado (iguales: quitado; sin marca de quitado: vive). Su contenido es el del lado con la marca mayor (iguales: el texto canónico mayor). Orden: con los renglones vivos, la lista del lado con la marca de orden ('<hoja>') mayor (iguales: la de texto canónico mayor, como arreglo JSON de los RowId) y al final los que solo tiene el otro lado, en su orden. Los arreglos solo llevan renglones vivos.",
-    "Después: las llaves desconocidas, con la marca mayor; se purgan los quitados viejos; y se compara por significado ({\"stamps\":…,\"values\":…} canónico, sin la llave 'UpdatedAtUtc'; las hojas como arreglos canónicos). differsFromRemote: el resultado sube con UpdatedAtUtc = max(local, remote) + 1 ms y FieldStampsJson con 'UpdatedAtUtc' igual. Si no, se queda la fila de la nube tal cual: su UpdatedAtUtc y su texto de FieldStampsJson.",
-    "'values' en 'expected' es canónico (las hojas como arreglos de renglones canónicos): el texto que escribe cada equipo puede ser otro. 'sources': de dónde sale el valor que se guarda: local (se queda el de aquí; también si los dos dicen lo mismo), remote (el de la nube, tal como llegó; en una hoja que dice lo mismo que la de la nube pero con otro texto, el de la nube) o merged (una hoja con renglones de los dos lados, escrita de nuevo). 'stamps' son las marcas combinadas sin 'UpdatedAtUtc'.",
+    "Cada versión se normaliza (field-stamps.json, 'state'): marcas nunca mayores que su fila, y su piso '#piso' (en una escritura sin marcas, la que tiene un UpdatedAtUtc mayor que su llave 'UpdatedAtUtc' o no la tiene, su UpdatedAtUtc: escribió la fila completa). Por campo gana la marca mayor, y la de un campo vale al menos el piso de su versión; sin piso ni marca, la mínima. Marcas iguales y valores distintos: gana el texto canónico mayor en orden ordinal (unidades UTF-16).",
+    "Hojas por RowId: un renglón que una versión tiene vale al menos su piso (su marca de quitado, la suya); uno que no tiene cuenta como quitado a más tardar en su piso (su marca de renglón, la suya). La marca de un renglón y la de quitado son la mayor de los dos lados; vive si está en alguna de las dos hojas y su marca es mayor que la de quitado (iguales: quitado; sin marca de quitado: vive). Su contenido es el del lado con la marca mayor (iguales: el texto canónico mayor). Orden: con los renglones vivos, la lista del lado con la marca de orden ('<hoja>', al menos el piso) mayor (iguales: la de texto canónico mayor, como arreglo JSON de los RowId) y al final los que solo tiene el otro lado, en su orden. Los arreglos solo llevan renglones vivos.",
+    "Después: el piso del resultado es el mayor de los dos; las llaves desconocidas, con la marca mayor; las conocidas que no rebasan el piso no se guardan; se purgan los quitados viejos; y se compara por significado ({\"stamps\":…,\"values\":…} canónico con el estado normalizado y purgado; las hojas como arreglos canónicos). differsFromRemote: el resultado sube con UpdatedAtUtc = max(local, remote) + 1 ms y FieldStampsJson con 'UpdatedAtUtc' igual. Si no, se queda la fila de la nube tal cual: su UpdatedAtUtc y su texto de FieldStampsJson. Dos filas sin marcas iguales no suben nada.",
+    "'values' en 'expected' es canónico (las hojas como arreglos de renglones canónicos): el texto que escribe cada equipo puede ser otro. 'sources': de dónde sale el valor que se guarda: local (se queda el de aquí; también si los dos dicen lo mismo), remote (el de la nube, tal como llegó; en una hoja que dice lo mismo que la de la nube pero con otro texto, el de la nube) o merged (una hoja con renglones de los dos lados, escrita de nuevo). 'stamps' es el estado combinado (con '#piso', sin 'UpdatedAtUtc').",
     "Las columnas derivadas (contracts/sync/schema.json, 'derived') no se combinan ni se tocan. En la PC, la edad (Age) con fecha de nacimiento se compara al día en los dos lados (se calcula con BirthDate), no por el número guardado."
   ],
   "cases": [
@@ -323,16 +323,12 @@
           "Phone": "remote"
         },
         "stamps": {
-          "ActivePrescriptionJson": "2026-10-14 15:00:50.0000000",
-          "ActiveSuppliesJson": "2026-10-14 15:00:50.0000000",
-          "Allergies": "2026-10-14 15:00:50.0000000",
-          "FullName": "2026-10-14 15:00:50.0000000",
-          "Phone": "2026-10-14 15:00:50.0000000"
+          "#piso": "2026-10-14 15:00:50.0000000"
         },
-        "differsFromRemote": true,
+        "differsFromRemote": false,
         "differsFromLocal": true,
-        "updatedAtUtc": "2026-10-14 15:00:50.0010000",
-        "fieldStampsJson": "{\"ActivePrescriptionJson\":\"2026-10-14 15:00:50.0000000\",\"ActiveSuppliesJson\":\"2026-10-14 15:00:50.0000000\",\"Allergies\":\"2026-10-14 15:00:50.0000000\",\"FullName\":\"2026-10-14 15:00:50.0000000\",\"Phone\":\"2026-10-14 15:00:50.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:50.0010000\"}"
+        "updatedAtUtc": "2026-10-14 15:00:50.0000000",
+        "fieldStampsJson": "{\"Allergies\":\"2026-10-14 15:00:10.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}"
       }
     },
     {
@@ -390,15 +386,13 @@
           "Phone": "local"
         },
         "stamps": {
-          "ActivePrescriptionJson": "2026-10-14 15:00:50.0000000",
-          "ActiveSuppliesJson": "2026-10-14 15:00:50.0000000",
-          "Allergies": "2026-10-14 15:00:50.0000000",
+          "#piso": "2026-10-14 15:00:50.0000000",
           "Phone": "2026-10-14 15:01:00.0000000"
         },
         "differsFromRemote": true,
         "differsFromLocal": true,
         "updatedAtUtc": "2026-10-14 15:01:00.0010000",
-        "fieldStampsJson": "{\"ActivePrescriptionJson\":\"2026-10-14 15:00:50.0000000\",\"ActiveSuppliesJson\":\"2026-10-14 15:00:50.0000000\",\"Allergies\":\"2026-10-14 15:00:50.0000000\",\"Phone\":\"2026-10-14 15:01:00.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:01:00.0010000\"}"
+        "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:50.0000000\",\"Phone\":\"2026-10-14 15:01:00.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:01:00.0010000\"}"
       }
     },
     {
@@ -456,14 +450,12 @@
           "Phone": "local"
         },
         "stamps": {
-          "ActivePrescriptionJson": "2026-10-14 15:00:06.0000000",
-          "ActiveSuppliesJson": "2026-10-14 15:00:06.0000000",
-          "Allergies": "2026-10-14 15:00:06.0000000"
+          "#piso": "2026-10-14 15:00:06.0000000"
         },
-        "differsFromRemote": true,
+        "differsFromRemote": false,
         "differsFromLocal": true,
-        "updatedAtUtc": "2026-10-14 15:00:06.0010000",
-        "fieldStampsJson": "{\"ActivePrescriptionJson\":\"2026-10-14 15:00:06.0000000\",\"ActiveSuppliesJson\":\"2026-10-14 15:00:06.0000000\",\"Allergies\":\"2026-10-14 15:00:06.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:06.0010000\"}"
+        "updatedAtUtc": "2026-10-14 15:00:06.0000000",
+        "fieldStampsJson": ""
       }
     },
     {
@@ -1016,16 +1008,12 @@
           "Phone": "local"
         },
         "stamps": {
-          "ActivePrescriptionJson": "2026-10-14 15:00:25.0000000",
-          "ActiveSuppliesJson": "2026-10-14 15:00:25.0000000",
-          "ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001": "2026-10-14 15:00:25.0000000",
-          "ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002": "2026-10-14 15:00:20.0000000",
-          "ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado": "2026-10-14 15:00:25.0000000"
+          "#piso": "2026-10-14 15:00:25.0000000"
         },
-        "differsFromRemote": true,
+        "differsFromRemote": false,
         "differsFromLocal": true,
-        "updatedAtUtc": "2026-10-14 15:00:25.0010000",
-        "fieldStampsJson": "{\"ActivePrescriptionJson\":\"2026-10-14 15:00:25.0000000\",\"ActiveSuppliesJson\":\"2026-10-14 15:00:25.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000001\":\"2026-10-14 15:00:25.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002\":\"2026-10-14 15:00:20.0000000\",\"ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado\":\"2026-10-14 15:00:25.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:25.0010000\"}"
+        "updatedAtUtc": "2026-10-14 15:00:25.0000000",
+        "fieldStampsJson": "{\"UpdatedAtUtc\":\"2026-10-14 15:00:10.0000000\"}"
       }
     },
     {
@@ -1315,6 +1303,245 @@
         "differsFromLocal": false,
         "updatedAtUtc": "2026-10-14 15:00:31.0010000",
         "fieldStampsJson": "{\"Allergies\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:31.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:31.0010000\"}"
+      }
+    },
+    {
+      "name": "copia vieja sin marcas contra fila recién marcada: gana la fila; un renglón quitado antes de marcar no revive",
+      "input": {
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "columns": [
+          "ActivePrescriptionJson",
+          "ActiveSuppliesJson",
+          "Allergies",
+          "FullName",
+          "IsActive",
+          "Phone"
+        ],
+        "local": {
+          "updatedAtUtc": "2026-10-14 15:00:09.0000000",
+          "fieldStampsJson": null,
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5},{\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"SupplyName\":\"Venda\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "Allergies": "Negadas",
+            "FullName": "Rodríguez Silva, María Elena",
+            "IsActive": true,
+            "Phone": "5598761234"
+          }
+        },
+        "remote": {
+          "updatedAtUtc": "2026-10-14 15:00:20.0000000",
+          "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}",
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "Allergies": "Penicilina",
+            "FullName": "Rodríguez Silva, María Elena",
+            "IsActive": true,
+            "Phone": "5511112222"
+          }
+        }
+      },
+      "expected": {
+        "values": {
+          "ActivePrescriptionJson": [],
+          "ActiveSuppliesJson": [
+            {
+              "RowId": "a0000000-0000-4000-8000-000000000001",
+              "SupplyName": "Gasa",
+              "Instructions": "",
+              "Quantity": 1,
+              "UnitPrice": 12.5,
+              "ChargedConsultationFolio": null,
+              "ChargedUnits": 0,
+              "ChargedLineKind": null,
+              "ChargedLineSyncId": null
+            }
+          ],
+          "Allergies": "Penicilina",
+          "FullName": "Rodríguez Silva, María Elena",
+          "IsActive": true,
+          "Phone": "5511112222"
+        },
+        "sources": {
+          "ActivePrescriptionJson": "local",
+          "ActiveSuppliesJson": "remote",
+          "Allergies": "remote",
+          "FullName": "local",
+          "IsActive": "local",
+          "Phone": "remote"
+        },
+        "stamps": {
+          "#piso": "2026-10-14 15:00:10.0000000",
+          "Phone": "2026-10-14 15:00:20.0000000"
+        },
+        "differsFromRemote": false,
+        "differsFromLocal": true,
+        "updatedAtUtc": "2026-10-14 15:00:20.0000000",
+        "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:20.0000000\"}"
+      }
+    },
+    {
+      "name": "primera escritura marcada sobre una fila sin marcas: lo que la fila tenía cuenta desde su piso",
+      "input": {
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "columns": [
+          "ActivePrescriptionJson",
+          "ActiveSuppliesJson",
+          "Allergies",
+          "FullName",
+          "IsActive",
+          "Phone"
+        ],
+        "local": {
+          "updatedAtUtc": "2026-10-14 15:00:12.0000000",
+          "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:12.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:12.0000000\"}",
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5},{\"RowId\":\"a0000000-0000-4000-8000-000000000003\",\"SupplyName\":\"Alcohol\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "Allergies": "Látex",
+            "FullName": "Rodríguez Silva, María Elena",
+            "IsActive": true,
+            "Phone": "5511112222"
+          }
+        },
+        "remote": {
+          "updatedAtUtc": "2026-10-14 15:00:11.0000000",
+          "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:09.0000000\",\"FullName\":\"2026-10-14 15:00:11.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:11.0000000\"}",
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"SupplyName\":\"Gasa\",\"Instructions\":\"\",\"Quantity\":1,\"UnitPrice\":12.5}]",
+            "Allergies": "Negadas",
+            "FullName": "Rodríguez Silva, María",
+            "IsActive": true,
+            "Phone": "5598761234"
+          }
+        }
+      },
+      "expected": {
+        "values": {
+          "ActivePrescriptionJson": [],
+          "ActiveSuppliesJson": [
+            {
+              "RowId": "a0000000-0000-4000-8000-000000000001",
+              "SupplyName": "Gasa",
+              "Instructions": "",
+              "Quantity": 1,
+              "UnitPrice": 12.5,
+              "ChargedConsultationFolio": null,
+              "ChargedUnits": 0,
+              "ChargedLineKind": null,
+              "ChargedLineSyncId": null
+            },
+            {
+              "RowId": "a0000000-0000-4000-8000-000000000003",
+              "SupplyName": "Alcohol",
+              "Instructions": "",
+              "Quantity": 1,
+              "UnitPrice": 12.5,
+              "ChargedConsultationFolio": null,
+              "ChargedUnits": 0,
+              "ChargedLineKind": null,
+              "ChargedLineSyncId": null
+            }
+          ],
+          "Allergies": "Látex",
+          "FullName": "Rodríguez Silva, María",
+          "IsActive": true,
+          "Phone": "5511112222"
+        },
+        "sources": {
+          "ActivePrescriptionJson": "local",
+          "ActiveSuppliesJson": "local",
+          "Allergies": "local",
+          "FullName": "remote",
+          "IsActive": "local",
+          "Phone": "local"
+        },
+        "stamps": {
+          "#piso": "2026-10-14 15:00:10.0000000",
+          "FullName": "2026-10-14 15:00:11.0000000",
+          "Phone": "2026-10-14 15:00:12.0000000"
+        },
+        "differsFromRemote": true,
+        "differsFromLocal": true,
+        "updatedAtUtc": "2026-10-14 15:00:12.0010000",
+        "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:10.0000000\",\"FullName\":\"2026-10-14 15:00:11.0000000\",\"Phone\":\"2026-10-14 15:00:12.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:12.0010000\"}"
+      }
+    },
+    {
+      "name": "la misma versión sin marcas al actualizar (otro texto, mismo significado): no hay nada que subir",
+      "input": {
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "columns": [
+          "ActivePrescriptionJson",
+          "ActiveSuppliesJson",
+          "Allergies",
+          "FullName",
+          "IsActive",
+          "Phone"
+        ],
+        "local": {
+          "updatedAtUtc": "2026-10-14 15:00:10.0000000",
+          "fieldStampsJson": null,
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"SupplyName\":\"Gasa\",\"Quantity\":1}]",
+            "Allergies": "Penicilina",
+            "FullName": "Rodríguez Silva, María Elena",
+            "IsActive": true,
+            "Phone": "5598761234"
+          }
+        },
+        "remote": {
+          "updatedAtUtc": "2026-10-14 15:00:10.0000000",
+          "fieldStampsJson": "",
+          "values": {
+            "ActivePrescriptionJson": "",
+            "ActiveSuppliesJson": "[{\"Quantity\":1,\"RowId\":\"d88a6927-7e69-5b4a-ae14-5a5984e25278\",\"SupplyName\":\"Gasa\",\"UnitPrice\":0.0}]",
+            "Allergies": "Penicilina",
+            "FullName": "Rodríguez Silva, María Elena",
+            "IsActive": true,
+            "Phone": "5598761234"
+          }
+        }
+      },
+      "expected": {
+        "values": {
+          "ActivePrescriptionJson": [],
+          "ActiveSuppliesJson": [
+            {
+              "RowId": "d88a6927-7e69-5b4a-ae14-5a5984e25278",
+              "SupplyName": "Gasa",
+              "Instructions": "",
+              "Quantity": 1,
+              "UnitPrice": 0,
+              "ChargedConsultationFolio": null,
+              "ChargedUnits": 0,
+              "ChargedLineKind": null,
+              "ChargedLineSyncId": null
+            }
+          ],
+          "Allergies": "Penicilina",
+          "FullName": "Rodríguez Silva, María Elena",
+          "IsActive": true,
+          "Phone": "5598761234"
+        },
+        "sources": {
+          "ActivePrescriptionJson": "local",
+          "ActiveSuppliesJson": "remote",
+          "Allergies": "local",
+          "FullName": "local",
+          "IsActive": "local",
+          "Phone": "local"
+        },
+        "stamps": {
+          "#piso": "2026-10-14 15:00:10.0000000"
+        },
+        "differsFromRemote": false,
+        "differsFromLocal": false,
+        "updatedAtUtc": "2026-10-14 15:00:10.0000000",
+        "fieldStampsJson": ""
       }
     },
     {

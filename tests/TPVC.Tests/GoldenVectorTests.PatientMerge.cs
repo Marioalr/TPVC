@@ -55,6 +55,7 @@ public partial class GoldenVectorTests
                      ("llaves ordenadas por unidades UTF-16 (mayúsculas antes que minúsculas; acentos al final)", """{"b":1,"a":2,"B":3,"á":4,"Z":5}"""),
                      ("sin espacios, también en objetos y arreglos anidados", """{ "x" : [ 1 , { "z" : true , "y" : null } ] }"""),
                      ("números: sin ceros de más, sin exponente, sin signo en el cero", """[35.0, 12.50, 1e3, -0, -0.0, 0.10, 100, 2.5E-2]"""),
+                     ("una llave repetida: se queda el último valor (como kotlinx)", """{"a":1,"b":{"x":1,"x":2},"a":3}"""),
                      ("texto: acentos, ñ y símbolos tal cual; solo se escapan comillas, diagonal invertida y control", """["Peña — 50 % ✓ <b> & / ü", "comilla \" y diagonal \\", "salto\nretorno\rtab\tcampana\u0007", "á escrita con escape"]"""),
                  })
         {
@@ -92,6 +93,8 @@ public partial class GoldenVectorTests
                          PatientSheetRows.PrescriptionColumn, """[{"MedicineName":"Paracetamol 500 mg","Dosage":"1 cada 8 horas","Plantilla":{"Id":"fiebre","V":2.0}}]"""),
                      ("servicios: sin ServiceId (el Id local), con ServiceSyncId",
                          PatientSheetRows.ServicesColumn, $$"""[{"RowId":"{{MergeRowB}}","ServiceId":21,"ServiceSyncId":"{{CuracionSyncId}}","ServiceCode":"SERV-002","ServiceName":"Curación Menor y Asepsia","Price":250,"Quantity":1}]"""),
+                     ("un campo desconocido con una llave repetida, o el mismo campo dos veces: se queda el último",
+                         PatientSheetRows.SuppliesColumn, $$"""[{"RowId":"{{MergeRowA}}","SupplyName":"Gasa","SupplyName":"Gasa estéril","Extra":{"x":1,"x":2},"Extra2":1,"Extra2":2}]"""),
                      ("hoja vacía o que no se puede leer: arreglo vacío", PatientSheetRows.SuppliesColumn, "no es JSON"),
                      ("texto vacío", PatientSheetRows.SuppliesColumn, ""),
                  })
@@ -102,7 +105,7 @@ public partial class GoldenVectorTests
 
         CheckOrWrite("contracts/golden/canonical-json.json", VectorFile("canonical-json", cases,
             "Forma canónica (Services/Rules/CanonicalJson y PatientSheetCanonical, paso 8.22): para saber si dos versiones de un expediente dicen lo mismo sin depender de cómo las escribió cada equipo. 'expected' es el texto canónico.",
-            "json: sin espacios; llaves de objeto ordenadas por unidades UTF-16 (String.compareTo de Kotlin); texto con solo \\\" \\\\ y los caracteres de control escapados (\\b \\f \\n \\r \\t; los demás \\u00xx en minúsculas), lo demás tal cual; números en decimal sin exponente, sin ceros de más en la fracción ni punto final, y 0 sin signo (BigDecimal.stripTrailingZeros().toPlainString(), con 0 para el cero); true, false y null tal cual.",
+            "json: sin espacios; llaves de objeto ordenadas por unidades UTF-16 (String.compareTo de Kotlin), y si una se repite se queda el último valor; texto con solo \\\" \\\\ y los caracteres de control escapados (\\b \\f \\n \\r \\t; los demás \\u00xx en minúsculas), lo demás tal cual; números en decimal sin exponente, sin ceros de más en la fracción ni punto final, y 0 sin signo (BigDecimal.stripTrailingZeros().toPlainString(), con 0 para el cero); true, false y null tal cual.",
             "value: el valor de una columna sincronizada como valor canónico: texto como texto, entero y enum como número, booleano como true/false (en la nube es 0/1), fecha como texto de 27 caracteres, GUID en minúsculas, decimal como número canónico, nulo como null. Los nombres de 'clrType' son los de contracts/sync/schema.json.",
             "sheet: una hoja del paciente (Active*Json) como arreglo de renglones canónicos, en su orden. Se lee como la PC (nombres sin distinguir mayúsculas, lo que falta con su valor por omisión: Quantity y RecommendedQuantity 1, los demás números 0, textos '' salvo Presentation, ChargedConsultationFolio, ChargedLineKind y los SyncId, que son null; un texto que no se puede leer es una hoja vacía; RowId determinista de contracts/golden/synced-json-columns.json para un renglón sin él) y cada renglón lleva TODOS sus campos conocidos menos los Id locales (ChargedLineId en insumos, ServiceId en servicios), más los desconocidos tal cual. Campos: receta RowId, MedicineName, Dosage, RecommendedQuantity, Presentation, DispenseInClinic; insumos RowId, SupplyName, Instructions, Quantity, UnitPrice, ChargedConsultationFolio, ChargedUnits, ChargedLineKind, ChargedLineSyncId; servicios RowId, ServiceSyncId, ServiceCode, ServiceName, Category, Notes, Price, Quantity, ChargedConsultationFolio, ChargedUnits."));
     }
@@ -116,34 +119,75 @@ public partial class GoldenVectorTests
         var col = PatientSheetRows.SuppliesColumn;
         var patient = SyncIds.Format(MergePatient);
 
-        foreach (var (name, before, fields, sheetBefore, sheetAfter) in new (string, string, string[], string?, string?)[]
+        var fieldColumns = new[] { "Allergies", "FullName", "Phone" };
+        var fieldColumnsNode = new JsonArray(fieldColumns.Select(c => (JsonNode)JsonValue.Create(c)).ToArray());
+        foreach (var (name, before, previous, fields, sheetBefore, sheetAfter, wholeRow) in new (string, string, int?, string[], string?, string?, bool)[]
                  {
-                     ("un campo que cambió toma la marca nueva; la llave de la fila también", StampsJson(10, ("Allergies", 10)), new[] { "Phone" }, null, null),
-                     ("alta: sin campos, solo la llave de la fila", "", Array.Empty<string>(), null, null),
+                     ("un campo que cambió toma la marca nueva; la llave de la fila también", StampsJson(10, ("Allergies", 10)), 10, new[] { "Phone" }, null, null, false),
+                     ("alta: sin campos ni piso, solo la llave de la fila", "", null, Array.Empty<string>(), null, null, false),
                      ("hoja: renglón agregado, cambiado y quitado; cambió qué renglones hay, así que la hoja marca su orden",
-                         StampsJson(10, (Rk(MergeRowA), 5), (Rk(MergeRowB), 5)), Array.Empty<string>(),
-                         SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1)), SupplySheet((MergeRowA, "Gasa", 2), (MergeRowC, "Alcohol", 1))),
-                     ("hoja: solo cambia la cantidad de un renglón; el orden no se marca", StampsJson(10), Array.Empty<string>(),
-                         SupplySheet((MergeRowA, "Gasa", 1)), SupplySheet((MergeRowA, "Gasa", 5))),
-                     ("hoja: mismo significado con otro texto (sin RowId, otro orden de llaves): nada que marcar", StampsJson(10), Array.Empty<string>(),
-                         """[{"SupplyName":"Gasa","Quantity":1}]""", $$"""[{"Quantity":1,"RowId":"{{PatientSheetRows.LegacyRowId(MergePatient, PatientSheetRows.SuppliesColumn, 0, "Gasa")}}","SupplyName":"Gasa"}]"""),
-                     ("hoja: un renglón que se había quitado vuelve con el mismo RowId (descartar la consulta): su marca rebasa la de quitado",
-                         StampsJson(10, (Qk(MergeRowB), 10)), Array.Empty<string>(), SupplySheet((MergeRowA, "Gasa", 1)), SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1))),
-                     ("llaves desconocidas: se conservan", """{"ColumnaNueva":"2026-01-01 00:00:00.0000000","UpdatedAtUtc":"2026-10-14 15:00:10.0000000"}""", new[] { "Phone" }, null, null),
+                         StampsJson(10, (Rk(MergeRowA), 5), (Rk(MergeRowB), 5)), 10, Array.Empty<string>(),
+                         SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1)), SupplySheet((MergeRowA, "Gasa", 2), (MergeRowC, "Alcohol", 1)), false),
+                     ("hoja: solo cambia la cantidad de un renglón: solo él toma la marca; el otro conserva la suya y el orden no se marca",
+                         StampsJson(10, (Rk(MergeRowB), 5)), 10, Array.Empty<string>(),
+                         SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1)), SupplySheet((MergeRowA, "Gasa", 5), (MergeRowB, "Venda", 1)), false),
+                     ("hoja: mismo significado con otro texto (sin RowId, otro orden de llaves): nada que marcar", StampsJson(10), 10, Array.Empty<string>(),
+                         """[{"SupplyName":"Gasa","Quantity":1}]""", $$"""[{"Quantity":1,"RowId":"{{PatientSheetRows.LegacyRowId(MergePatient, PatientSheetRows.SuppliesColumn, 0, "Gasa")}}","SupplyName":"Gasa"}]""", false),
+                     ("hoja: un renglón que se había quitado vuelve con el mismo RowId (descartar la consulta): solo él toma la marca, que rebasa la de quitado",
+                         StampsJson(10, (Qk(MergeRowB), 10)), 10, Array.Empty<string>(), SupplySheet((MergeRowA, "Gasa", 1)), SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1)), false),
+                     ("llaves desconocidas: se conservan", """{"ColumnaNueva":"2026-01-01 00:00:00.0000000","UpdatedAtUtc":"2026-10-14 15:00:10.0000000"}""", 10, new[] { "Phone" }, null, null, false),
+                     ("primera escritura marcada sobre una fila sin marcas: su UpdatedAtUtc anterior queda como piso", "", 15, new[] { "Phone" }, null, null, false),
+                     ("fila sin marcas con marcas viejas (la escribió una PC anterior después): el piso es su UpdatedAtUtc y las marcas viejas no se guardan",
+                         StampsJson(10, ("Allergies", 10), (Rk(MergeRowA), 8)), 15, new[] { "Phone" }, null, null, false),
+                     ("fila con piso: las marcas que no lo rebasan no se guardan, el piso no cambia",
+                         StampsJson(16, (PatientFieldStamps.FloorKey, 12), ("Allergies", 14), ("FullName", 11)), 16, new[] { "Phone" }, null, null, false),
+                     ("la fila completa reescrita («Volver a aplicar»): el piso sube a la marca nueva y las demás no se guardan",
+                         StampsJson(16, (PatientFieldStamps.FloorKey, 12), ("Allergies", 14), ("ColumnaNueva", 13)), 16, Array.Empty<string>(), null, null, true),
                  })
         {
-            var stamps = PatientFieldStamps.Parse(before);
             var sheets = sheetBefore == null ? Array.Empty<(string, string?, string?)>() : new[] { (col, (string?)sheetBefore, (string?)sheetAfter) };
-            stamps.ApplyLocalWrite(At(20), fields, sheets, MergePatient);
+            var stamps = PatientFieldStamps.ApplyLocalWrite(before, previous is { } p ? At(p) : null, At(20), fields, sheets, MergePatient, fieldColumns, wholeRow);
             cases.Add(Case($"guardar · {name}", new JsonObject
             {
                 ["check"] = "local-write",
                 ["patientSyncId"] = patient,
+                ["fieldColumns"] = fieldColumnsNode.DeepClone(),
                 ["fieldStampsJson"] = before,
+                ["previousUpdatedAtUtc"] = previous is { } prev ? Stamp(prev) : null,
                 ["stamp"] = Stamp(20),
                 ["changedFields"] = new JsonArray(fields.Select(f => (JsonNode)JsonValue.Create(f)).ToArray()),
-                ["sheets"] = sheetBefore == null ? new JsonArray() : new JsonArray(new JsonObject { ["column"] = col, ["before"] = sheetBefore, ["after"] = sheetAfter })
+                ["sheets"] = sheetBefore == null ? new JsonArray() : new JsonArray(new JsonObject { ["column"] = col, ["before"] = sheetBefore, ["after"] = sheetAfter }),
+                ["wholeRow"] = wholeRow
             }, stamps.ToJson()));
+        }
+
+        // El estado normalizado: con qué se compara y se combina
+        foreach (var (name, json, row) in new[]
+                 {
+                     ("con marcas y sin piso: tal cual, sin la llave de la fila", StampsJson(20, ("Allergies", 10), (Rk(MergeRowA), 12)), 20),
+                     ("sin marcas: el piso es su UpdatedAtUtc y las llaves conocidas viejas no cuentan; las desconocidas sí", StampsJson(10, ("Allergies", 9), ("ColumnaNueva", 8)), 15),
+                     ("vacío: solo el piso", "", 15),
+                     ("con piso: las conocidas que no lo rebasan no cuentan", StampsJson(20, (PatientFieldStamps.FloorKey, 12), ("Allergies", 12), ("Phone", 13), (Qk(MergeRowB), 11)), 20),
+                     ("una marca mayor que su fila cuenta como la fila (también el piso)", StampsJson(3600, (PatientFieldStamps.FloorKey, 3600), ("Phone", 3600)), 10),
+                 })
+        {
+            cases.Add(Case($"estado · {name}", new JsonObject
+            {
+                ["check"] = "state", ["fieldColumns"] = fieldColumnsNode.DeepClone(), ["fieldStampsJson"] = json, ["rowUpdatedAtUtc"] = Stamp(row)
+            }, PatientFieldStamps.Parse(json).State(At(row), fieldColumns).ToJson()));
+        }
+
+        foreach (var (name, json) in new[]
+                 {
+                     ("llaves ordenadas y sin espacios", """{ "Phone" : "2026-10-14 15:00:05.0000000", "Allergies":"2026-10-14 15:00:04.0000000" }"""),
+                     ("un valor que no es texto se ignora", """{"Phone":"2026-10-14 15:00:05.0000000","Otra":3,"Nula":null}"""),
+                     ("llaves repetidas cuentan como dañado: sin marcas (kotlinx se quedaría con la última)", """{"Phone":"2026-10-14 15:00:05.0000000","Phone":"2026-10-14 15:00:06.0000000"}"""),
+                     ("la misma llave escrita con escape también es repetida", """{"Phone":"2026-10-14 15:00:05.0000000","Ph\u006fne":"2026-10-14 15:00:06.0000000"}"""),
+                     ("no es un objeto: sin marcas", """["Phone"]"""),
+                     ("dañado: sin marcas", "{no es json"),
+                 })
+        {
+            cases.Add(Case($"leer · {name}", new JsonObject { ["check"] = "parse", ["fieldStampsJson"] = json }, PatientFieldStamps.Parse(json).ToJson()));
         }
 
         // La purga: 90 días después de la marca más nueva
@@ -154,6 +198,7 @@ public partial class GoldenVectorTests
                      ("quitado justo 90 días antes: se queda", StampsJson(day90 + 10, (Qk(MergeRowB), 10), ("Phone", day90 + 10))),
                      ("una edición posterior a quitarlo: vive, no se purga", StampsJson(day90 + 10, (Rk(MergeRowB), 3), (Qk(MergeRowB), 2), ("Phone", day90 + 10))),
                      ("las de los campos nunca se purgan", StampsJson(day90 + 10, ("Allergies", 1), ("Phone", day90 + 10))),
+                     ("el piso cuenta como la marca más nueva", StampsJson(day90 + 10, (PatientFieldStamps.FloorKey, day90 + 10), (Qk(MergeRowB), 2))),
                  })
         {
             var stamps = PatientFieldStamps.Parse(json);
@@ -168,6 +213,7 @@ public partial class GoldenVectorTests
                      ("sin llave de la fila: sin marcas", """{"Phone":"2026-10-14 15:00:05.0000000"}""", 10),
                      ("vacío: sin marcas", "", 10),
                      ("dañado: sin marcas", "{no es json", 10),
+                     ("llaves repetidas: dañado, sin marcas", """{"UpdatedAtUtc":"2026-10-14 15:00:10.0000000","UpdatedAtUtc":"2026-10-14 15:00:10.0000000"}""", 10),
                  })
         {
             cases.Add(Case($"sin marcas · {name}", new JsonObject { ["check"] = "stampless", ["fieldStampsJson"] = json, ["rowUpdatedAtUtc"] = Stamp(row) },
@@ -186,10 +232,12 @@ public partial class GoldenVectorTests
         }
 
         CheckOrWrite("contracts/golden/field-stamps.json", VectorFile("field-stamps", cases,
-            "Marcas por campo de Patients.FieldStampsJson (Services/Rules/PatientFieldStamps, paso 8.22): objeto JSON plano en forma canónica (contracts/golden/canonical-json.json), marcas de 27 caracteres en UTC. Llaves: '<columna>' (último cambio del campo; en una hoja, de su orden: qué renglones tiene y en qué orden), '<hoja>/<RowId>' (renglón agregado o cambiado), '<hoja>/<RowId>/quitado' (renglón quitado) y 'UpdatedAtUtc' (el UpdatedAtUtc de la fila con que se mantuvieron). Cualquier otra llave se conserva.",
-            "local-write: lo que deja un guardado local con la marca 'stamp' (la misma que su UpdatedAtUtc): cada campo de 'changedFields' (los que cambiaron por su significado) toma la marca; en cada hoja de 'sheets' (texto de antes y de después) cada renglón agregado o cuya forma canónica cambió toma la marca en su llave, cada renglón que ya no está la toma en su llave de quitado, y si cambió la lista de RowId (qué renglones y en qué orden), la hoja la toma en su propia llave. Al final 'UpdatedAtUtc' = la marca y se purga. 'expected' es el texto que se guarda ('' sin marcas).",
-            "purge: un renglón quitado (su marca de quitado es mayor o igual que la del renglón) cuya marca de quitado es anterior a (la marca más nueva de todas las llaves salvo 'UpdatedAtUtc') − 90 días pierde sus dos llaves. Depende solo de las marcas: dos equipos purgan lo mismo.",
-            "stampless: una escritura sin marcas (una PC v1.19–v1.38 sube la fila sin tocar esta columna): el UpdatedAtUtc de la fila es mayor que la llave 'UpdatedAtUtc', o no la hay (vacío o dañado cuenta como sin marcas).",
+            "Marcas por campo de Patients.FieldStampsJson (Services/Rules/PatientFieldStamps, paso 8.22): objeto JSON plano en forma canónica (contracts/golden/canonical-json.json), marcas de 27 caracteres en UTC. Llaves: '<columna>' (último cambio del campo; en una hoja, de su orden: qué renglones tiene y en qué orden), '<hoja>/<RowId>' (renglón agregado o cambiado), '<hoja>/<RowId>/quitado' (renglón quitado), '#piso' (el piso: la marca más nueva de una escritura de la fila completa sin marcas que esta versión ya incluye) y 'UpdatedAtUtc' (el UpdatedAtUtc de la fila con que se mantuvieron). Cualquier otra llave es de una versión más nueva: se conserva tal cual. 'fieldColumns' son las columnas de campos (sin las hojas) que este equipo conoce: con las tres hojas y sus renglones, las llaves 'conocidas', a las que el piso les aplica.",
+            "parse: vacío, nulo, dañado, que no es objeto o con una llave repetida (también la misma escrita con escape) = sin marcas; un valor que no es texto se ignora. 'expected' es el texto canónico ('' sin marcas).",
+            "state: el estado normalizado de una versión con su 'rowUpdatedAtUtc' (sin la llave de la fila): cada marca, nunca mayor que la fila; el piso = el mayor entre '#piso' y, en una escritura sin marcas (stampless, abajo), su UpdatedAtUtc; y una llave conocida que no rebasa el piso no se guarda (vale el piso). Es lo que se compara y se combina.",
+            "local-write: lo que deja un guardado local con la marca 'stamp' (la misma que su UpdatedAtUtc). Parte del estado de la fila antes de guardar con 'previousUpdatedAtUtc' (null en un alta: sin piso por escritura sin marcas; una fila sin marcas deja así su UpdatedAtUtc anterior como piso). Cada campo de 'changedFields' (los que cambiaron por su significado) toma la marca; en cada hoja de 'sheets' (texto de antes y de después) cada renglón agregado o cuya forma canónica (texto) cambió toma la marca en su llave, cada renglón que ya no está la toma en su llave de quitado, y si cambió la lista de RowId (qué renglones y en qué orden), la hoja la toma en su propia llave. 'wholeRow' (la fila completa reescrita sin cambios, como «Volver a aplicar») sube el piso a la marca en lugar de lo anterior. Al final se quitan las conocidas que no rebasan el piso, se purga y 'UpdatedAtUtc' = la marca. 'expected' es el texto que se guarda.",
+            "purge: un renglón quitado (su marca de quitado es mayor o igual que la del renglón) cuya marca de quitado es anterior a (la marca más nueva de todas las llaves salvo 'UpdatedAtUtc', el piso incluido) − 90 días pierde sus dos llaves. Depende solo de las marcas: dos equipos purgan lo mismo.",
+            "stampless: una escritura sin marcas (una PC v1.19–v1.38 sube la fila sin tocar esta columna): el UpdatedAtUtc de la fila es mayor que la llave 'UpdatedAtUtc', o no la hay (vacío, dañado o con llaves repetidas cuenta como sin marcas).",
             "effective: una marca nunca vale más que el UpdatedAtUtc de su fila; null si no hay."));
     }
 
@@ -287,6 +335,19 @@ public partial class GoldenVectorTests
             ("la versión de aquí ya incluye la de la nube: el resultado es la de aquí y sube",
                 MergeVersion(31, StampsJson(31, ("Allergies", 10), ("Phone", 31)), ("Allergies", "Penicilina"), ("Phone", "5511112222")),
                 MergeVersion(10, StampsJson(10, ("Allergies", 10)), ("Allergies", "Penicilina"))),
+            ("copia vieja sin marcas contra fila recién marcada: gana la fila; un renglón quitado antes de marcar no revive",
+                MergeVersion(9, null, ("Allergies", "Negadas"), (col, SupplySheet((MergeRowA, "Gasa", 1), (MergeRowB, "Venda", 1)))),
+                MergeVersion(20, StampsJson(20, (PatientFieldStamps.FloorKey, 10), ("Phone", 20)), ("Allergies", "Penicilina"), ("Phone", "5511112222"),
+                    (col, SupplySheet((MergeRowA, "Gasa", 1))))),
+            ("primera escritura marcada sobre una fila sin marcas: lo que la fila tenía cuenta desde su piso",
+                MergeVersion(12, StampsJson(12, (PatientFieldStamps.FloorKey, 10), ("Phone", 12)), ("Allergies", "Látex"), ("Phone", "5511112222"),
+                    (col, SupplySheet((MergeRowA, "Gasa", 1), (MergeRowC, "Alcohol", 1)))),
+                MergeVersion(11, StampsJson(11, (PatientFieldStamps.FloorKey, 9), ("FullName", 11)), ("FullName", "Rodríguez Silva, María"),
+                    (col, SupplySheet((MergeRowA, "Gasa", 1))))),
+            ("la misma versión sin marcas al actualizar (otro texto, mismo significado): no hay nada que subir",
+                MergeVersion(10, null, ("Allergies", "Penicilina"), (col, $$"""[{"SupplyName":"Gasa","Quantity":1}]""")),
+                MergeVersion(10, "", ("Allergies", "Penicilina"),
+                    (col, $$"""[{"Quantity":1,"RowId":"{{PatientSheetRows.LegacyRowId(MergePatient, PatientSheetRows.SuppliesColumn, 0, "Gasa")}}","SupplyName":"Gasa","UnitPrice":0.0}]"""))),
             ("nada nuevo: se queda la versión de la nube tal cual (marca y texto de FieldStampsJson)",
                 MergeVersion(10, StampsJson(10, ("Allergies", 10)), ("Allergies", "Penicilina")),
                 MergeVersion(12, StampsJson(12, ("Allergies", 10)), ("Allergies", "Penicilina"))),
@@ -324,10 +385,10 @@ public partial class GoldenVectorTests
 
         CheckOrWrite("contracts/golden/patient-merge.json", VectorFile("patient-merge", cases,
             "Combinación por campo al bajar una fila de Patients que ya existe aquí (Services/Rules/PatientMerge, paso 8.22; regla «Pacientes por campo» de contracts/sync/schema.json). 'local' y 'remote': UpdatedAtUtc, el texto de FieldStampsJson y los valores de las columnas que se combinan ('columns': las de Patients que viajan, menos las derivadas y FieldStampsJson; aquí unas cuantas), cada uno como valor canónico (contracts/golden/canonical-json.json); en una hoja, el texto guardado.",
-            "Por campo gana la marca mayor (field-stamps.json; una marca nunca vale más que el UpdatedAtUtc de su fila; una que falta cuenta como la mínima). Una versión sin marcas (UpdatedAtUtc mayor que su llave 'UpdatedAtUtc', o sin ella) cuenta con su UpdatedAtUtc en cada campo en que difiere, en cada renglón que tiene, en la marca de orden de cada hoja, y como quitados con ella los renglones que no tiene y la otra sí. Marcas iguales y valores distintos: gana el texto canónico mayor en orden ordinal (unidades UTF-16).",
-            "Hojas por RowId: la marca de un renglón y la de quitado son la mayor de los dos lados; vive si está en alguna de las dos hojas y su marca es mayor que la de quitado (iguales: quitado; sin marca de quitado: vive). Su contenido es el del lado con la marca mayor (iguales: el texto canónico mayor). Orden: con los renglones vivos, la lista del lado con la marca de orden ('<hoja>') mayor (iguales: la de texto canónico mayor, como arreglo JSON de los RowId) y al final los que solo tiene el otro lado, en su orden. Los arreglos solo llevan renglones vivos.",
-            "Después: las llaves desconocidas, con la marca mayor; se purgan los quitados viejos; y se compara por significado ({\"stamps\":…,\"values\":…} canónico, sin la llave 'UpdatedAtUtc'; las hojas como arreglos canónicos). differsFromRemote: el resultado sube con UpdatedAtUtc = max(local, remote) + 1 ms y FieldStampsJson con 'UpdatedAtUtc' igual. Si no, se queda la fila de la nube tal cual: su UpdatedAtUtc y su texto de FieldStampsJson.",
-            "'values' en 'expected' es canónico (las hojas como arreglos de renglones canónicos): el texto que escribe cada equipo puede ser otro. 'sources': de dónde sale el valor que se guarda: local (se queda el de aquí; también si los dos dicen lo mismo), remote (el de la nube, tal como llegó; en una hoja que dice lo mismo que la de la nube pero con otro texto, el de la nube) o merged (una hoja con renglones de los dos lados, escrita de nuevo). 'stamps' son las marcas combinadas sin 'UpdatedAtUtc'.",
+            "Cada versión se normaliza (field-stamps.json, 'state'): marcas nunca mayores que su fila, y su piso '#piso' (en una escritura sin marcas, la que tiene un UpdatedAtUtc mayor que su llave 'UpdatedAtUtc' o no la tiene, su UpdatedAtUtc: escribió la fila completa). Por campo gana la marca mayor, y la de un campo vale al menos el piso de su versión; sin piso ni marca, la mínima. Marcas iguales y valores distintos: gana el texto canónico mayor en orden ordinal (unidades UTF-16).",
+            "Hojas por RowId: un renglón que una versión tiene vale al menos su piso (su marca de quitado, la suya); uno que no tiene cuenta como quitado a más tardar en su piso (su marca de renglón, la suya). La marca de un renglón y la de quitado son la mayor de los dos lados; vive si está en alguna de las dos hojas y su marca es mayor que la de quitado (iguales: quitado; sin marca de quitado: vive). Su contenido es el del lado con la marca mayor (iguales: el texto canónico mayor). Orden: con los renglones vivos, la lista del lado con la marca de orden ('<hoja>', al menos el piso) mayor (iguales: la de texto canónico mayor, como arreglo JSON de los RowId) y al final los que solo tiene el otro lado, en su orden. Los arreglos solo llevan renglones vivos.",
+            "Después: el piso del resultado es el mayor de los dos; las llaves desconocidas, con la marca mayor; las conocidas que no rebasan el piso no se guardan; se purgan los quitados viejos; y se compara por significado ({\"stamps\":…,\"values\":…} canónico con el estado normalizado y purgado; las hojas como arreglos canónicos). differsFromRemote: el resultado sube con UpdatedAtUtc = max(local, remote) + 1 ms y FieldStampsJson con 'UpdatedAtUtc' igual. Si no, se queda la fila de la nube tal cual: su UpdatedAtUtc y su texto de FieldStampsJson. Dos filas sin marcas iguales no suben nada.",
+            "'values' en 'expected' es canónico (las hojas como arreglos de renglones canónicos): el texto que escribe cada equipo puede ser otro. 'sources': de dónde sale el valor que se guarda: local (se queda el de aquí; también si los dos dicen lo mismo), remote (el de la nube, tal como llegó; en una hoja que dice lo mismo que la de la nube pero con otro texto, el de la nube) o merged (una hoja con renglones de los dos lados, escrita de nuevo). 'stamps' es el estado combinado (con '#piso', sin 'UpdatedAtUtc').",
             "Las columnas derivadas (contracts/sync/schema.json, 'derived') no se combinan ni se tocan. En la PC, la edad (Age) con fecha de nacimiento se compara al día en los dos lados (se calcula con BirthDate), no por el número guardado."));
     }
 
@@ -446,6 +507,12 @@ public partial class GoldenVectorTests
                          Payload(20, StampsJson(20, (Qk(MergeRowB), 1))), true, day90 + 10, StampsJson(day90 + 10, ("Phone", day90 + 10)), false, null),
                      ("todavía no llega el expediente", Payload(20, sent), false, null, null, false, null),
                      ("copia de antes del paso (sin marcas): solo la marca de la fila", Payload(20, null), true, 30, StampsJson(30, ("Phone", 30)), false, null),
+                     ("un renglón quitado que aquí ya se purgó (su llave de quitado y la del renglón): no se exige",
+                         Payload(20, StampsJson(20, (Rk(MergeRowB), 1), (Qk(MergeRowB), 2))), true, day90 + 10, StampsJson(day90 + 10, ("Phone", day90 + 10)), false, null),
+                     ("el piso de la copia es más nuevo que el de aquí: esperar",
+                         Payload(20, StampsJson(20, (PatientFieldStamps.FloorKey, 15), ("Phone", 20))), true, 25, StampsJson(25, (PatientFieldStamps.FloorKey, 10), ("Phone", 20)), false, null),
+                     ("aquí el piso cubre las marcas de la copia: se toma",
+                         Payload(20, StampsJson(20, (PatientFieldStamps.FloorKey, 15), ("Allergies", 16))), true, 25, StampsJson(25, (PatientFieldStamps.FloorKey, 18)), false, null),
                      ("con la nota: todavía no llega", Payload(20, sent, noteId, 25), true, 31, StampsJson(31, ("Allergies", 10), (Rk(MergeRowA), 20), (col, 31)), false, null),
                      ("con la nota: llegó una versión anterior", Payload(20, sent, noteId, 25), true, 31, StampsJson(31, ("Allergies", 10), (Rk(MergeRowA), 20), (col, 31)), true, 24),
                      ("con la nota: llegó su versión", Payload(20, sent, noteId, 25), true, 31, StampsJson(31, ("Allergies", 10), (Rk(MergeRowA), 20), (col, 31)), true, 25),
@@ -476,8 +543,8 @@ public partial class GoldenVectorTests
         }
 
         CheckOrWrite("contracts/golden/handoff-accept.json", VectorFile("handoff-accept", cases,
-            "Aceptar una consulta recibida (Services/Rules/HandoffPayloadCodec.CheckArrival, paso 8.22), después de sincronizar. La copia (ConsultationDraft, PayloadVersion 1) trae, además de PatientUpdatedAtUtc, PatientFieldStamps (las marcas de FieldStampsJson del expediente en el equipo que envía, sin 'UpdatedAtUtc', cada una como cuenta en su fila; en la copia van como fecha ISO 8601 sin zona) y ProgressNoteUpdatedAtUtc (la marca del avance de la nota). Son campos aditivos: una copia de antes no los trae.",
-            "Orden: sin expediente aquí → PatientMissing. UpdatedAtUtc de aquí menor que PatientUpdatedAtUtc → PatientBehind. Con PatientFieldStamps: cada marca de la copia debe ser menor o igual a la de aquí (la de aquí nunca vale más que su UpdatedAtUtc; si la fila de aquí es una escritura sin marcas, cuenta al menos como su UpdatedAtUtc); una llave de quitado cuya marca ya se purgaría aquí (anterior a la marca más nueva de aquí − 90 días) no se exige; si falta alguna → PatientBehind. Con ProgressNoteSyncId: sin la nota → NoteMissing; con ProgressNoteUpdatedAtUtc y la nota de aquí más vieja → NoteBehind. Si no, Ready.",
+            "Aceptar una consulta recibida (Services/Rules/HandoffPayloadCodec.CheckArrival, paso 8.22), después de sincronizar. La copia (ConsultationDraft, PayloadVersion 1) trae, además de PatientUpdatedAtUtc, PatientFieldStamps (el estado normalizado de FieldStampsJson del expediente en el equipo que envía, con su '#piso' y sin 'UpdatedAtUtc'; en la copia van como fecha ISO 8601 sin zona) y ProgressNoteUpdatedAtUtc (la marca del avance de la nota). Son campos aditivos: una copia de antes no los trae.",
+            "Orden: sin expediente aquí → PatientMissing. UpdatedAtUtc de aquí menor que PatientUpdatedAtUtc → PatientBehind. Con PatientFieldStamps (el estado normalizado del que envía, con su '#piso'; field-stamps.json): lo de aquí se normaliza igual y cada marca de la copia debe ser menor o igual a la de aquí, que vale al menos el piso de aquí (en una escritura sin marcas, su UpdatedAtUtc); el '#piso' de la copia se compara con el piso de aquí. Antes, a la copia se le purgan los renglones quitados con el horizonte de aquí (la marca más nueva de aquí − 90 días): su llave de quitado y la del renglón si no la rebasa, que aquí ya se habrían purgado; si falta alguna → PatientBehind. Con ProgressNoteSyncId: sin la nota → NoteMissing; con ProgressNoteUpdatedAtUtc y la nota de aquí más vieja → NoteBehind. Si no, Ready.",
             "En pantalla: PatientMissing 'Todavía no llega el expediente de … a este equipo', PatientBehind 'Todavía no llegan los últimos cambios del expediente de …', NoteMissing 'Todavía no llega el avance de la nota de esta consulta', NoteBehind 'Todavía no llega la última versión del avance de la nota de esta consulta', todos con 'Intente de nuevo en unos segundos.'; la consulta sigue ofrecida."));
     }
 }

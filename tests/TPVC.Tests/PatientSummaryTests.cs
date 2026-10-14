@@ -170,4 +170,44 @@ public class PatientSummaryTests
         await inventory.SavePatientAsync(patient);
         Assert.AreEqual(stored.FieldStampsJson, Stored(clinic, patient.Id).FieldStampsJson);
     }
+
+    [TestMethod]
+    public async Task ASaveOnARowWithoutStamps_KeepsItsUpdatedAtUtcAsTheFloor_AndAWholeRowRewriteRaisesIt()
+    {
+        using var clinic = new Fase6Clinic();
+        var inventory = clinic.Inventory;
+        var patient = (await inventory.GetPatientsAsync()).Single(p => p.RecordNumber == Fase6Scenarios.ScriptedRecord);
+        using (var db = new AppDbContext(clinic.Options))
+        {
+            // La fila como la dejó una PC v1.38 (o como estaba antes de actualizar): sin marcas
+            db.ApplyingRemoteChanges = true;
+            db.Patients.Single(p => p.Id == patient.Id).FieldStampsJson = string.Empty;
+            db.SaveChanges();
+        }
+        var before = Stored(clinic, patient.Id).UpdatedAtUtc;
+        patient = (await inventory.GetPatientsAsync()).Single(p => p.Id == patient.Id);
+
+        // Se edita aquí: se marca solo el teléfono, y lo demás conserva la hora de la fila sin marcas como piso
+        patient.Phone = "5511223344";
+        await inventory.SavePatientAsync(patient);
+        var stored = Stored(clinic, patient.Id);
+        var stamps = PatientFieldStamps.Parse(stored.FieldStampsJson);
+        Assert.AreEqual(PatientFieldStamps.Format(before), stamps[PatientFieldStamps.FloorKey]);
+        Assert.AreEqual(PatientFieldStamps.Format(stored.UpdatedAtUtc), stamps[nameof(PatientRecord.Phone)]);
+        Assert.IsNull(stamps[nameof(PatientRecord.Allergies)]);
+
+        // La fila completa marcada como modificada sin cambiar nada («Volver a aplicar», RestampGenericAsync): el piso sube a
+        // la marca nueva, como el LWW de la fila completa
+        using (var db = new AppDbContext(clinic.Options))
+        {
+            var row = db.Patients.Single(p => p.Id == patient.Id);
+            db.Entry(row).State = EntityState.Modified;
+            db.SaveChanges();
+        }
+        var rewritten = Stored(clinic, patient.Id);
+        Assert.IsGreaterThan(stored.UpdatedAtUtc, rewritten.UpdatedAtUtc);
+        stamps = PatientFieldStamps.Parse(rewritten.FieldStampsJson);
+        Assert.AreEqual(PatientFieldStamps.Format(rewritten.UpdatedAtUtc), stamps[PatientFieldStamps.FloorKey]);
+        Assert.IsNull(stamps[nameof(PatientRecord.Phone)], "Todo vale el piso nuevo");
+    }
 }

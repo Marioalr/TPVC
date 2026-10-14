@@ -130,7 +130,8 @@ public class PatientMergeTests
         var lwwNew = V(T(6), null, ("Allergies", "B"), ("Phone", "1"));
         merged = PatientMerge.Merge(lwwOld, lwwNew, Columns);
         Assert.AreEqual("B", Value(merged, "Allergies"));
-        Assert.AreEqual(S(6), merged.Stamps["Allergies"], "La marca queda escrita");
+        Assert.AreEqual(S(6), merged.Stamps[PatientFieldStamps.FloorKey], "El piso queda escrito: la fila completa de los 6 s");
+        Assert.IsNull(merged.Stamps["Allergies"], "Vale el piso: no hace falta su marca");
     }
 
     [TestMethod]
@@ -252,14 +253,18 @@ public class PatientMergeTests
 
     // ================================================================== el sello
 
+    private static readonly IReadOnlyCollection<string> FieldColumns = PatientMerge.FieldColumns(Columns);
+
     [TestMethod]
     public void ALocalWrite_StampsTheChangedFields_AndEachSheetRow()
     {
         var col = PatientSheetRows.SuppliesColumn;
-        var stamps = PatientFieldStamps.Parse("{\"Otra\":\"x\"}");
-        stamps.ApplyLocalWrite(T(10), new[] { "Phone" },
-            new[] { (col, (string?)Supplies((RowA, "Gasa", 1), (RowB, "Venda", 1)), (string?)Supplies((RowA, "Gasa", 2), (RowC, "Alcohol", 1))) }, Patient);
+        // Una fila sin marcas (de antes de actualizar, escrita a los 9 s): su UpdatedAtUtc queda como piso
+        var stamps = PatientFieldStamps.ApplyLocalWrite("{\"Otra\":\"x\"}", T(9), T(10), new[] { "Phone" },
+            new[] { (col, (string?)Supplies((RowA, "Gasa", 1), (RowB, "Venda", 1)), (string?)Supplies((RowA, "Gasa", 2), (RowC, "Alcohol", 1))) }, Patient, FieldColumns);
+        Assert.AreEqual(S(9), stamps[PatientFieldStamps.FloorKey], "Lo que la fila tenía, lo tenía desde su UpdatedAtUtc");
         Assert.AreEqual(S(10), stamps["Phone"]);
+        Assert.IsNull(stamps["Allergies"], "No se editó: vale el piso");
         Assert.AreEqual(S(10), stamps[$"{col}/{RowA}"], "Cambió la cantidad");
         Assert.AreEqual(S(10), stamps[$"{col}/{RowC}"], "Nuevo");
         Assert.AreEqual(S(10), stamps[$"{col}/{RowB}/quitado"], "Quitado");
@@ -269,10 +274,131 @@ public class PatientMergeTests
         Assert.AreEqual("x", stamps["Otra"], "Lo desconocido se queda");
 
         // Solo cambia el contenido de un renglón: la hoja no marca su orden
-        var only = new PatientFieldStamps();
-        only.ApplyLocalWrite(T(11), Array.Empty<string>(), new[] { (col, (string?)Supplies((RowA, "Gasa", 1)), (string?)Supplies((RowA, "Gasa", 5))) }, Patient);
+        var only = PatientFieldStamps.ApplyLocalWrite(null, null, T(11), Array.Empty<string>(),
+            new[] { (col, (string?)Supplies((RowA, "Gasa", 1)), (string?)Supplies((RowA, "Gasa", 5))) }, Patient, FieldColumns);
         Assert.IsNull(only[col]);
+        Assert.IsNull(only[PatientFieldStamps.FloorKey], "Un alta no tiene piso");
         Assert.AreEqual(S(11), only[$"{col}/{RowA}"]);
+
+        // Una fila con marcas no cambia su piso, y la fila completa reescrita («Volver a aplicar») lo sube a la marca nueva
+        var stamped = PatientFieldStamps.ApplyLocalWrite(stamps.ToJson(), T(10), T(12), new[] { "Allergies" },
+            Array.Empty<(string, string?, string?)>(), Patient, FieldColumns);
+        Assert.AreEqual(S(9), stamped[PatientFieldStamps.FloorKey]);
+        Assert.AreEqual(S(12), stamped["Allergies"]);
+        var whole = PatientFieldStamps.ApplyLocalWrite(stamped.ToJson(), T(12), T(13), Array.Empty<string>(),
+            Array.Empty<(string, string?, string?)>(), Patient, FieldColumns, wholeRow: true);
+        Assert.AreEqual(S(13), whole[PatientFieldStamps.FloorKey]);
+        Assert.IsNull(whole["Allergies"], "Todo vale el piso nuevo");
+        Assert.AreEqual("x", whole["Otra"]);
+    }
+
+    [TestMethod]
+    public void ALocalWrite_StampsOnlyTheRowsThatChanged()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        var stamps = PatientFieldStamps.ApplyLocalWrite(Stamps(T(5), ($"{col}/{RowB}", 3)), T(5), T(10), Array.Empty<string>(),
+            new[] { (col, (string?)Supplies((RowA, "Gasa", 1), (RowB, "Venda", 1)), (string?)Supplies((RowA, "Gasa", 2), (RowB, "Venda", 1))) }, Patient, FieldColumns);
+        Assert.AreEqual(S(10), stamps[$"{col}/{RowA}"]);
+        Assert.AreEqual(S(3), stamps[$"{col}/{RowB}"], "La venda no cambió: su marca se queda");
+        Assert.IsNull(stamps[col], "La lista de renglones no cambió");
+    }
+
+    [TestMethod]
+    public void OneDeviceRemovesOrEditsARow_WhileTheOtherEditsAnotherRowOfTheSameSheet_BothSurvive()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        var start = V(T(1), Stamps(T(1), (col, 1), ($"{col}/{RowA}", 1), ($"{col}/{RowB}", 1)), (col, Supplies((RowA, "Gasa", 1), (RowB, "Venda", 1))));
+
+        PatientMerge.Version Write(PatientMerge.Version from, double at, string after)
+        {
+            var before = CanonicalJson.AsString(from.Values[col]);
+            var stamps = PatientFieldStamps.ApplyLocalWrite(from.FieldStampsJson, from.UpdatedAtUtc, T(at), Array.Empty<string>(),
+                new[] { (col, before, (string?)after) }, Patient, FieldColumns);
+            var values = new Dictionary<string, JsonNode?>(from.Values, StringComparer.Ordinal) { [col] = JsonValue.Create(after) };
+            return new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = T(at), FieldStampsJson = stamps.ToJson(), Values = values };
+        }
+
+        // B quita la venda a los 5 s; A le suma una gasa a los 10 s
+        var removed = Write(start, 5, Supplies((RowA, "Gasa", 1)));
+        var plus = Write(start, 10, Supplies((RowA, "Gasa", 2), (RowB, "Venda", 1)));
+        foreach (var (local, remote) in new[] { (removed, plus), (plus, removed) })
+        {
+            var merged = PatientMerge.Merge(local, remote, Columns);
+            CollectionAssert.AreEqual(new[] { "Gasa" }, SupplyNames(merged), "La venda sigue quitada");
+            Assert.AreEqual(2, ((PatientSupplyItem)PatientSheetCanonical.ReadRows(col, Value(merged, col), Patient).Single().Value).Quantity);
+        }
+
+        // B cambia la cantidad de la venda a los 5 s; A, la de la gasa a los 10 s: las dos se quedan
+        var venda = Write(start, 5, Supplies((RowA, "Gasa", 1), (RowB, "Venda", 4)));
+        foreach (var (local, remote) in new[] { (venda, plus), (plus, venda) })
+        {
+            var rows = PatientSheetCanonical.ReadRows(col, Value(PatientMerge.Merge(local, remote, Columns), col), Patient)
+                .ToDictionary(r => r.RowId, r => ((PatientSupplyItem)r.Value).Quantity);
+            Assert.AreEqual(2, rows[RowA]);
+            Assert.AreEqual(4, rows[RowB]);
+        }
+    }
+
+    [TestMethod]
+    public void DuplicatedOrDamagedStamps_CountAsNoStamps()
+    {
+        Assert.AreEqual(0, PatientFieldStamps.Parse("{\"Phone\":\"2026-10-14 15:00:01.0000000\",\"Phone\":\"2026-10-14 15:00:02.0000000\"}").Count);
+        Assert.AreEqual(0, PatientFieldStamps.Parse("{\"Phone\":\"x\",\"Ph\\u006fne\":\"y\"}").Count, "La misma llave escrita con escape");
+        Assert.AreEqual(0, PatientFieldStamps.Parse("{no es json").Count);
+        Assert.AreEqual(0, PatientFieldStamps.Parse("[1,2]").Count);
+        Assert.AreEqual(1, PatientFieldStamps.Parse("{\"Phone\":\"2026-10-14 15:00:01.0000000\",\"Otra\":3}").Count, "Un valor que no es texto se ignora");
+    }
+
+    // ================================================================== escritura sin marcas y el piso (al actualizar)
+
+    [TestMethod]
+    public void TheSameStamplessRow_OnBothSides_HasNothingToUpload()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        var row = V(T(10), null, ("Allergies", "Penicilina"), (col, Supplies((RowA, "Gasa", 1))));
+        var otherText = V(T(10), "", ("Allergies", "Penicilina"), (col, $"[{{\"SupplyName\":\"Gasa\",\"RowId\":\"{RowA}\",\"Quantity\":1,\"UnitPrice\":10.0}}]"));
+        var merged = PatientMerge.Merge(row, otherText, Columns);
+        Assert.IsFalse(merged.DiffersFromRemote, "La primera sincronización después de actualizar no sube nada");
+        Assert.IsFalse(merged.DiffersFromLocal);
+    }
+
+    [TestMethod]
+    public void AStaleCopyWithoutStamps_LosesToANewlyStampedRow_AndARowRemovedBeforeStampingDoesNotRevive()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        // A (v1.38) puso las alergias y quitó la venda a los 10 s; se actualizó y su primera escritura con marcas (el teléfono,
+        // a los 20 s) dejó el piso en 10 s
+        var a = V(T(20), Stamps(T(20), (PatientFieldStamps.FloorKey, 10), ("Phone", 20)),
+            ("Allergies", "Penicilina"), ("Phone", "5511112222"), (col, Supplies((RowA, "Gasa", 1))));
+        // B, sin bajar desde los 9 s, sin marcas
+        var b = V(T(9), null, ("Allergies", "Negadas"), ("Phone", "5500000000"), (col, Supplies((RowA, "Gasa", 1), (RowB, "Venda", 1))));
+        foreach (var (local, remote) in new[] { (a, b), (b, a) })
+        {
+            var merged = PatientMerge.Merge(local, remote, Columns);
+            Assert.AreEqual("Penicilina", Value(merged, "Allergies"), "Las alergias de las 10 le ganan a las de las 9");
+            Assert.AreEqual("5511112222", Value(merged, "Phone"));
+            CollectionAssert.AreEqual(new[] { "Gasa" }, SupplyNames(merged), "La venda se quitó a las 10: no revive");
+        }
+        Assert.IsFalse(PatientMerge.Merge(b, a, Columns).DiffersFromRemote, "La de A ya lo tiene todo: no hay nada que subir");
+    }
+
+    [TestMethod]
+    public void TheFirstStampedWriteOnAStamplessRow_KeepsWhatTheRowHadAtItsUpdatedAtUtc()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        // A, sin conexión con v1.38, editó las alergias y agregó un renglón a los 10 s; actualizó y a los 11 s cambió el teléfono
+        var stamps = PatientFieldStamps.ApplyLocalWrite(null, T(10), T(11), new[] { "Phone" }, Array.Empty<(string, string?, string?)>(), Patient, FieldColumns);
+        var a = V(T(11), stamps.ToJson(), ("Allergies", "Látex"), ("Phone", "5511112222"), (col, Supplies((RowA, "Gasa", 1), (RowC, "Alcohol", 1))));
+        // La tablet, desde la fila de las 9 s (sin marcas), cambió la religión a los 10.5 s
+        var tablet = V(T(10.5), Stamps(T(10.5), (PatientFieldStamps.FloorKey, 9), ("Religion", 10.5)),
+            ("Allergies", "Negadas"), ("Phone", "5500000000"), (col, Supplies((RowA, "Gasa", 1))));
+        foreach (var (local, remote) in new[] { (a, tablet), (tablet, a) })
+        {
+            var merged = PatientMerge.Merge(local, remote, Columns);
+            Assert.AreEqual("Látex", Value(merged, "Allergies"), "La edición de las 10 le gana a la fila de las 9");
+            Assert.AreEqual("5511112222", Value(merged, "Phone"));
+            CollectionAssert.AreEqual(new[] { "Gasa", "Alcohol" }, SupplyNames(merged), "El renglón de las 10 se queda");
+        }
     }
 
     // ================================================================== el semirretículo
@@ -280,10 +406,9 @@ public class PatientMergeTests
     private static PatientMerge.Version AsVersion(PatientMerge.Result r) =>
         new() { SyncId = Patient, UpdatedAtUtc = r.UpdatedAtUtc, FieldStampsJson = r.FieldStampsJson, Values = r.Values };
 
-    private static string Meaning(PatientMerge.Version v) =>
-        PatientMerge.CanonicalVersion(v.Values, PatientFieldStamps.Parse(v.FieldStampsJson), Columns, Patient);
+    private static string Meaning(PatientMerge.Version v) => PatientMerge.Meaning(v, Columns);
 
-    private static string Meaning(PatientMerge.Result r) => PatientMerge.CanonicalVersion(r.Values, r.Stamps, Columns, Patient);
+    private static string Meaning(PatientMerge.Result r) => PatientMerge.Meaning(AsVersion(r), Columns);
 
     /// <summary>
     /// Con versiones al azar (con y sin marcas): conmutativa, idempotente y absorbe (combinar con una versión que ya incluye el
@@ -355,10 +480,13 @@ public class PatientMergeTests
             if (random.Next(4) == 0) stamps[$"{col}/{id}/quitado"] = S(random.Next(0, 50));
         }
         if (random.Next(2) == 0) stamps[col] = S(random.Next(0, 50));
+        if (random.Next(3) == 0) stamps[PatientFieldStamps.FloorKey] = S(random.Next(0, 50));
         if (!stampless)
         {
-            // Una versión con marcas es coherente con su hoja: lo que tiene vive (su marca rebasa la de quitado) y lo que no
-            // tiene, si tiene marca, está quitado. Una sin marcas puede traer cualquier hoja (la escribió una PC anterior)
+            // Una versión con marcas es coherente con su hoja: lo que tiene vive (su marca, al menos el piso, rebasa la de
+            // quitado) y lo que no tiene, si tiene marca, está quitado (a más tardar en el piso). Una sin marcas puede traer
+            // cualquier hoja (la escribió una PC anterior)
+            var floor = stamps[PatientFieldStamps.FloorKey];
             var present = rows.Select(r => r.id).ToHashSet();
             foreach (var id in RowIds)
             {
@@ -366,10 +494,10 @@ public class PatientMergeTests
                 var removed = stamps[$"{col}/{id}/quitado"];
                 if (present.Contains(id))
                 {
-                    if (removed != null && PatientFieldStamps.Compare(edit, removed) <= 0)
+                    if (removed != null && PatientFieldStamps.Compare(PatientFieldStamps.Max(floor, edit), removed) <= 0)
                         stamps[$"{col}/{id}"] = PatientFieldStamps.Format(PatientFieldStamps.ParseStamp(removed)!.Value.AddSeconds(1));
                 }
-                else if (edit != null && PatientFieldStamps.Compare(edit, removed) > 0)
+                else if (edit != null && PatientFieldStamps.Compare(edit, PatientFieldStamps.Max(floor, removed)) > 0)
                 {
                     stamps[$"{col}/{id}/quitado"] = edit;
                 }
@@ -384,12 +512,16 @@ public class PatientMergeTests
 
     // ================================================================== prueba de propiedades: equipos que editan y sincronizan
 
-    /// <summary>Un equipo simulado: su versión, si tiene algo sin subir y su reloj.</summary>
+    /// <summary>
+    /// Un equipo simulado: su versión y si tiene algo sin subir. <see cref="Old"/>: una PC v1.38, que no conoce las marcas (su
+    /// fila no las tiene, sube la fila completa sin tocar FieldStampsJson en la nube y aplica lo que baja por LWW de fila).
+    /// </summary>
     private sealed class SimDevice
     {
         public required string Name { get; init; }
         public PatientMerge.Version Local { get; set; } = null!;
         public bool Pending { get; set; }
+        public bool Old { get; set; }
     }
 
     private sealed class SimCloud
@@ -402,7 +534,10 @@ public class PatientMergeTests
         public bool TryUpload(SimDevice device)
         {
             if (Row != null && device.Local.UpdatedAtUtc <= Row.UpdatedAtUtc) return false;
-            Row = device.Local;
+            // El upsert de una PC anterior no conoce la columna: la nube se queda con las marcas que tenía
+            Row = device.Old
+                ? new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = device.Local.UpdatedAtUtc, FieldStampsJson = Row?.FieldStampsJson, Values = device.Local.Values }
+                : device.Local;
             Origin = device.Name;
             Uploads++;
             return true;
@@ -423,12 +558,22 @@ public class PatientMergeTests
 
     private static void Apply(SimDevice device, SimCloud cloud)
     {
+        if (device.Old)
+        {
+            // LWW de fila (y, tras un rechazo, la de la nube aunque empate); la fila de la PC vieja no guarda las marcas
+            if (cloud.Row!.UpdatedAtUtc >= device.Local.UpdatedAtUtc)
+            {
+                device.Local = new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = cloud.Row.UpdatedAtUtc, FieldStampsJson = "", Values = cloud.Row.Values };
+                device.Pending = false;
+            }
+            return;
+        }
         var merged = PatientMerge.Merge(device.Local, cloud.Row!, Columns);
         device.Local = AsVersion(merged);
         device.Pending = merged.DiffersFromRemote;
     }
 
-    /// <summary>Un guardado local: los valores nuevos y el sello, con la marca monótona de siempre.</summary>
+    /// <summary>Un guardado local: los valores nuevos y el sello (salvo en una PC anterior), con la marca monótona de siempre.</summary>
     private static void Edit(SimDevice device, DateTime now, Random random, ISet<string>? onlyFields = null)
     {
         var col = PatientSheetRows.SuppliesColumn;
@@ -457,17 +602,19 @@ public class PatientMergeTests
             values[col] = JsonValue.Create(after);
         }
         var stamp = SyncRules.NextLocalStamp(now, before.UpdatedAtUtc, TimeSpan.Zero);
-        var stamps = PatientFieldStamps.Parse(before.FieldStampsJson);
-        stamps.ApplyLocalWrite(stamp, changed, sheets, Patient);
-        device.Local = new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = stamp, FieldStampsJson = stamps.ToJson(), Values = values };
+        var stamps = device.Old
+            ? string.Empty
+            : PatientFieldStamps.ApplyLocalWrite(before.FieldStampsJson, before.UpdatedAtUtc, stamp, changed, sheets, Patient, FieldColumns).ToJson();
+        device.Local = new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = stamp, FieldStampsJson = stamps, Values = values };
         device.Pending = true;
     }
 
-    private static (List<SimDevice> Devices, SimCloud Cloud) StartDevices(int count)
+    /// <param name="old">Cuántos de los equipos empiezan como PC v1.38 (y la fila de la nube, sin marcas).</param>
+    private static (List<SimDevice> Devices, SimCloud Cloud) StartDevices(int count, int old = 0)
     {
-        var start = V(T(0), Stamps(T(0)), ("Allergies", "Negadas"), ("Phone", "5500000000"),
+        var start = V(T(0), old > 0 ? null : Stamps(T(0)), ("Allergies", "Negadas"), ("Phone", "5500000000"),
             (PatientSheetRows.SuppliesColumn, Supplies((RowA, "Gasa", 1))));
-        var devices = Enumerable.Range(0, count).Select(i => new SimDevice { Name = "equipo" + i, Local = start }).ToList();
+        var devices = Enumerable.Range(0, count).Select(i => new SimDevice { Name = "equipo" + i, Local = start, Old = i < old }).ToList();
         return (devices, new SimCloud { Row = start, Origin = "inicio" });
     }
 
@@ -484,23 +631,30 @@ public class PatientMergeTests
         return -1;
     }
 
+    /// <summary>
+    /// Cualquier intercalado de ediciones y sincronizaciones entre 2 y 3 equipos (con PC v1.38 que se actualizan a media
+    /// historia, en cualquier orden) converge en pocas vueltas, y una vez iguales nadie vuelve a subir.
+    /// </summary>
     [TestMethod]
     public void AnyInterleavingOfEditsAndSyncs_Converges_WithoutRepeatedUploads()
     {
-        for (int seed = 1; seed <= 200; seed++)
+        for (int seed = 1; seed <= 300; seed++)
         {
             var random = new Random(seed);
-            var (devices, cloud) = StartDevices(2 + seed % 2);
+            var (devices, cloud) = StartDevices(2 + seed % 2, old: seed % 3);
             var now = T(1);
             for (int step = 0; step < 40; step++)
             {
                 // A veces dos equipos en el mismo instante (marcas iguales), a veces con relojes que se adelantan
                 if (random.Next(4) > 0) now = now.AddMilliseconds(random.Next(0, 3));
                 var device = devices[random.Next(devices.Count)];
-                if (random.Next(3) == 0) Sync(device, cloud);
+                int action = random.Next(8);
+                if (action == 0 && device.Old) device.Old = false; // se actualiza: su fila queda sin marcas
+                else if (action < 3) Sync(device, cloud);
                 else Edit(device, now.AddMilliseconds(random.Next(-2, 3)), random);
             }
 
+            foreach (var device in devices) device.Old = false;
             int rounds = Quiesce(devices, cloud);
             Assert.IsLessThanOrEqualTo(4, rounds, $"Semilla {seed}: demasiadas vueltas para converger");
             var meaning = Meaning(cloud.Row!);
@@ -510,6 +664,16 @@ public class PatientMergeTests
             foreach (var device in devices) Sync(device, cloud);
             Assert.AreEqual(uploads, cloud.Uploads, $"Semilla {seed}: una vez iguales, nadie vuelve a subir");
         }
+    }
+
+    /// <summary>Equipos que se actualizan con la misma fila sin marcas: la primera sincronización no sube nada.</summary>
+    [TestMethod]
+    public void UpgradingDevicesWithTheSameStamplessRow_UploadNothing()
+    {
+        var (devices, cloud) = StartDevices(3, old: 3);
+        foreach (var device in devices) device.Old = false;
+        foreach (var device in devices) Sync(device, cloud);
+        Assert.AreEqual(0, cloud.Uploads);
     }
 
     [TestMethod]
@@ -594,5 +758,25 @@ public class PatientMergeTests
         Assert.AreEqual(HandoffPayloadCodec.Arrival.NoteMissing, HandoffPayloadCodec.CheckArrival(withNote, true, T(31), complete, false, null));
         Assert.AreEqual(HandoffPayloadCodec.Arrival.NoteBehind, HandoffPayloadCodec.CheckArrival(withNote, true, T(31), complete, true, T(24)));
         Assert.AreEqual(HandoffPayloadCodec.Arrival.Ready, HandoffPayloadCodec.CheckArrival(withNote, true, T(31), complete, true, T(25)));
+    }
+
+    [TestMethod]
+    public void AHandoff_IsAccepted_WhenTheRemovedRowItBrings_WasAlreadyPurgedHere()
+    {
+        var col = PatientSheetRows.SuppliesColumn;
+        // La copia trae un renglón agregado y después quitado (sus dos llaves) y la marca de la hoja
+        var payload = Payload(T(20), Stamps(T(20), ($"{col}/{RowA}", 10), ($"{col}/{RowA}/quitado", 20), (col, 20)));
+
+        // Aquí ya se combinó, y con una edición 91 días después el par se purgó: no se exige ninguna de sus dos llaves
+        double later = 20 + 91 * 86400.0;
+        var purged = Stamps(T(later), (col, 20), ("Phone", later));
+        Assert.AreEqual(HandoffPayloadCodec.Arrival.Ready, HandoffPayloadCodec.CheckArrival(payload, true, T(later), purged, false, null));
+
+        // Antes de los 90 días el par todavía se exige completo
+        double soon = 20 + 89 * 86400.0;
+        var notYet = Stamps(T(soon), (col, 20), ("Phone", soon));
+        Assert.AreEqual(HandoffPayloadCodec.Arrival.PatientBehind, HandoffPayloadCodec.CheckArrival(payload, true, T(soon), notYet, false, null));
+        var complete = Stamps(T(soon), (col, 20), ("Phone", soon), ($"{col}/{RowA}", 10), ($"{col}/{RowA}/quitado", 20));
+        Assert.AreEqual(HandoffPayloadCodec.Arrival.Ready, HandoffPayloadCodec.CheckArrival(payload, true, T(soon), complete, false, null));
     }
 }

@@ -5,8 +5,8 @@
   "now": null,
   "contract": 12,
   "notes": [
-    "Aceptar una consulta recibida (Services/Rules/HandoffPayloadCodec.CheckArrival, paso 8.22), después de sincronizar. La copia (ConsultationDraft, PayloadVersion 1) trae, además de PatientUpdatedAtUtc, PatientFieldStamps (las marcas de FieldStampsJson del expediente en el equipo que envía, sin 'UpdatedAtUtc', cada una como cuenta en su fila; en la copia van como fecha ISO 8601 sin zona) y ProgressNoteUpdatedAtUtc (la marca del avance de la nota). Son campos aditivos: una copia de antes no los trae.",
-    "Orden: sin expediente aquí → PatientMissing. UpdatedAtUtc de aquí menor que PatientUpdatedAtUtc → PatientBehind. Con PatientFieldStamps: cada marca de la copia debe ser menor o igual a la de aquí (la de aquí nunca vale más que su UpdatedAtUtc; si la fila de aquí es una escritura sin marcas, cuenta al menos como su UpdatedAtUtc); una llave de quitado cuya marca ya se purgaría aquí (anterior a la marca más nueva de aquí − 90 días) no se exige; si falta alguna → PatientBehind. Con ProgressNoteSyncId: sin la nota → NoteMissing; con ProgressNoteUpdatedAtUtc y la nota de aquí más vieja → NoteBehind. Si no, Ready.",
+    "Aceptar una consulta recibida (Services/Rules/HandoffPayloadCodec.CheckArrival, paso 8.22), después de sincronizar. La copia (ConsultationDraft, PayloadVersion 1) trae, además de PatientUpdatedAtUtc, PatientFieldStamps (el estado normalizado de FieldStampsJson del expediente en el equipo que envía, con su '#piso' y sin 'UpdatedAtUtc'; en la copia van como fecha ISO 8601 sin zona) y ProgressNoteUpdatedAtUtc (la marca del avance de la nota). Son campos aditivos: una copia de antes no los trae.",
+    "Orden: sin expediente aquí → PatientMissing. UpdatedAtUtc de aquí menor que PatientUpdatedAtUtc → PatientBehind. Con PatientFieldStamps (el estado normalizado del que envía, con su '#piso'; field-stamps.json): lo de aquí se normaliza igual y cada marca de la copia debe ser menor o igual a la de aquí, que vale al menos el piso de aquí (en una escritura sin marcas, su UpdatedAtUtc); el '#piso' de la copia se compara con el piso de aquí. Antes, a la copia se le purgan los renglones quitados con el horizonte de aquí (la marca más nueva de aquí − 90 días): su llave de quitado y la del renglón si no la rebasa, que aquí ya se habrían purgado; si falta alguna → PatientBehind. Con ProgressNoteSyncId: sin la nota → NoteMissing; con ProgressNoteUpdatedAtUtc y la nota de aquí más vieja → NoteBehind. Si no, Ready.",
     "En pantalla: PatientMissing 'Todavía no llega el expediente de … a este equipo', PatientBehind 'Todavía no llegan los últimos cambios del expediente de …', NoteMissing 'Todavía no llega el avance de la nota de esta consulta', NoteBehind 'Todavía no llega la última versión del avance de la nota de esta consulta', todos con 'Intente de nuevo en unos segundos.'; la consulta sigue ofrecida."
   ],
   "cases": [
@@ -159,6 +159,72 @@
           "patientExists": true,
           "updatedAtUtc": "2026-10-14 15:00:30.0000000",
           "fieldStampsJson": "{\"Phone\":\"2026-10-14 15:00:30.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:30.0000000\"}",
+          "noteExists": false,
+          "noteUpdatedAtUtc": null
+        }
+      },
+      "expected": "Ready"
+    },
+    {
+      "name": "un renglón quitado que aquí ya se purgó (su llave de quitado y la del renglón): no se exige",
+      "input": {
+        "payload": {
+          "PatientUpdatedAtUtc": "2026-10-14 15:00:20.0000000",
+          "PatientFieldStamps": {
+            "ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002": "2026-10-14 15:00:01.0000000",
+            "ActiveSuppliesJson/a0000000-0000-4000-8000-000000000002/quitado": "2026-10-14 15:00:02.0000000"
+          },
+          "ProgressNoteSyncId": null,
+          "ProgressNoteUpdatedAtUtc": null
+        },
+        "local": {
+          "patientExists": true,
+          "updatedAtUtc": "2027-01-12 15:00:10.0000000",
+          "fieldStampsJson": "{\"Phone\":\"2027-01-12 15:00:10.0000000\",\"UpdatedAtUtc\":\"2027-01-12 15:00:10.0000000\"}",
+          "noteExists": false,
+          "noteUpdatedAtUtc": null
+        }
+      },
+      "expected": "Ready"
+    },
+    {
+      "name": "el piso de la copia es más nuevo que el de aquí: esperar",
+      "input": {
+        "payload": {
+          "PatientUpdatedAtUtc": "2026-10-14 15:00:20.0000000",
+          "PatientFieldStamps": {
+            "#piso": "2026-10-14 15:00:15.0000000",
+            "Phone": "2026-10-14 15:00:20.0000000"
+          },
+          "ProgressNoteSyncId": null,
+          "ProgressNoteUpdatedAtUtc": null
+        },
+        "local": {
+          "patientExists": true,
+          "updatedAtUtc": "2026-10-14 15:00:25.0000000",
+          "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:10.0000000\",\"Phone\":\"2026-10-14 15:00:20.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:25.0000000\"}",
+          "noteExists": false,
+          "noteUpdatedAtUtc": null
+        }
+      },
+      "expected": "PatientBehind"
+    },
+    {
+      "name": "aquí el piso cubre las marcas de la copia: se toma",
+      "input": {
+        "payload": {
+          "PatientUpdatedAtUtc": "2026-10-14 15:00:20.0000000",
+          "PatientFieldStamps": {
+            "#piso": "2026-10-14 15:00:15.0000000",
+            "Allergies": "2026-10-14 15:00:16.0000000"
+          },
+          "ProgressNoteSyncId": null,
+          "ProgressNoteUpdatedAtUtc": null
+        },
+        "local": {
+          "patientExists": true,
+          "updatedAtUtc": "2026-10-14 15:00:25.0000000",
+          "fieldStampsJson": "{\"#piso\":\"2026-10-14 15:00:18.0000000\",\"UpdatedAtUtc\":\"2026-10-14 15:00:25.0000000\"}",
           "noteExists": false,
           "noteUpdatedAtUtc": null
         }

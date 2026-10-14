@@ -68,18 +68,18 @@ public static class HandoffPayloadCodec
     }
 
     /// <summary>
-    /// Paso 8.22: las marcas por campo que viajan en la copia: todas las de <c>FieldStampsJson</c> menos la de la fila, cada una
-    /// como cuenta en su fila (nunca más que su <c>UpdatedAtUtc</c>), en orden ordinal de sus llaves. Sin marcas, ninguna (la
-    /// copia lleva el objeto vacío: quien recibe sabe que el que envía ya las conoce).
+    /// Paso 8.22: las marcas por campo que viajan en la copia: el estado normalizado de <c>FieldStampsJson</c>
+    /// (<see cref="PatientFieldStamps.State"/>: el piso <c>#piso</c> y cada marca, nunca más que su fila, sin la llave de la
+    /// fila), en orden ordinal de sus llaves. Sin marcas, ninguna (la copia lleva el objeto vacío: quien recibe sabe que el que
+    /// envía ya las conoce).
     /// </summary>
     public static Dictionary<string, DateTime> FieldStampsForPayload(string? fieldStampsJson, DateTime patientUpdatedAtUtc)
     {
-        var stamps = PatientFieldStamps.Parse(fieldStampsJson);
+        var stamps = PatientFieldStamps.Parse(fieldStampsJson).State(patientUpdatedAtUtc, Array.Empty<string>());
         var result = new Dictionary<string, DateTime>(StringComparer.Ordinal);
         foreach (var key in stamps.Entries.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
-            if (key == PatientFieldStamps.RowStampKey) continue;
-            if (PatientFieldStamps.ParseStamp(stamps.Effective(key, patientUpdatedAtUtc)) is { } stamp) result[key] = stamp;
+            if (PatientFieldStamps.ParseStamp(stamps[key]) is { } stamp) result[key] = stamp;
         }
         return result;
     }
@@ -107,10 +107,11 @@ public static class HandoffPayloadCodec
     /// Antes de tomar una consulta recibida, ya con la sincronización hecha: el expediente debe existir aquí con al menos la
     /// versión de la copia (<c>PatientUpdatedAtUtc</c>) y, desde el paso 8.22, cada marca por campo de la copia
     /// (<c>PatientFieldStamps</c>) debe ser menor o igual a la de aquí: comparar solo la marca de la fila dejaba tomar la
-    /// consulta en un equipo cuya fila era "más nueva" por otro campo sin los últimos cargos del que la envió. Una marca de
-    /// aquí cuenta como en su fila (nunca más que su <c>UpdatedAtUtc</c>); si la fila de aquí la escribió alguien sin marcas
-    /// (<see cref="PatientFieldStamps.IsStampless"/>), cada marca cuenta al menos como su <c>UpdatedAtUtc</c>. Una marca de
-    /// quitado que aquí ya se purgaría (90 días antes de la marca más nueva de aquí) no se exige. Con el avance de la nota:
+    /// consulta en un equipo cuya fila era "más nueva" por otro campo sin los últimos cargos del que la envió. Lo de aquí se
+    /// toma normalizado (<see cref="PatientFieldStamps.State"/>): cada marca cuenta al menos como el piso de aquí (en una
+    /// escritura sin marcas, su <c>UpdatedAtUtc</c>), y el piso de la copia (<c>#piso</c>) se compara con el de aquí. Un
+    /// renglón quitado que aquí ya se purgaría (su marca de quitado, 90 días antes de la marca más nueva de aquí, y la del
+    /// renglón si no la rebasa) no se exige: al combinar se volvería a purgar. Con el avance de la nota:
     /// debe existir y, si la copia trae su marca (<c>ProgressNoteUpdatedAtUtc</c>), tenerla o una más nueva. Una copia de antes
     /// del paso (sin esos campos) se revisa como antes. Si falta algo: "Intente de nuevo en unos segundos".
     /// </summary>
@@ -123,19 +124,21 @@ public static class HandoffPayloadCodec
 
         if (payload.PatientFieldStamps is { Count: > 0 } wanted)
         {
-            var local = PatientFieldStamps.Parse(patientFieldStampsJson);
-            bool stampless = local.IsStampless(localUpdated);
-            var rowStamp = PatientFieldStamps.Format(localUpdated);
-            var horizon = local.Newest() is { } newest ? PatientFieldStamps.Format(newest - PatientFieldStamps.RemovedRowRetention) : null;
+            // Lo de aquí, normalizado: cada marca cuenta al menos como el piso (en una escritura sin marcas, su UpdatedAtUtc)
+            var local = PatientFieldStamps.Parse(patientFieldStampsJson).State(localUpdated, Array.Empty<string>());
+            var floor = local[PatientFieldStamps.FloorKey];
+            // Lo que aquí ya se purgaría (un renglón quitado más de 90 días antes de la marca más nueva de aquí: su llave de
+            // quitado y la del renglón) no se exige: al combinar se volvería a purgar
+            var theirs = new PatientFieldStamps();
             foreach (var (key, stamp) in wanted)
             {
-                if (key == PatientFieldStamps.RowStampKey) continue;
-                var theirs = PatientFieldStamps.Format(stamp);
-                if (horizon != null && key.EndsWith(PatientFieldStamps.RemovedSuffix, StringComparison.Ordinal)
-                    && string.CompareOrdinal(theirs, horizon) < 0) continue;
-                var mine = local.Effective(key, localUpdated);
-                if (stampless) mine = PatientFieldStamps.Max(mine, rowStamp);
-                if (PatientFieldStamps.Compare(mine, theirs) < 0) return Arrival.PatientBehind;
+                if (key != PatientFieldStamps.RowStampKey) theirs[key] = PatientFieldStamps.Format(stamp);
+            }
+            if (local.Newest() is { } newest) theirs.PurgeBefore(PatientSheetCanonical.Columns, newest - PatientFieldStamps.RemovedRowRetention);
+            foreach (var (key, stamp) in theirs.Entries)
+            {
+                var mine = PatientFieldStamps.Max(floor, key == PatientFieldStamps.FloorKey ? null : local[key]);
+                if (PatientFieldStamps.Compare(mine, stamp) < 0) return Arrival.PatientBehind;
             }
         }
 

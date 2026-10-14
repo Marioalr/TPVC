@@ -147,7 +147,7 @@ public static class PatientSheetCanonical
         {
             foreach (var (key, element) in extra.OrderBy(kv => kv.Key, StringComparer.Ordinal))
             {
-                obj[key] = JsonNode.Parse(element.GetRawText());
+                obj[key] = CanonicalJson.FromElement(element);
             }
         }
         // Los nodos se reordenan al escribirlos: CanonicalJson.Write ordena las llaves
