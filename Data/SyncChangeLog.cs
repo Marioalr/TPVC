@@ -320,6 +320,35 @@ public static class SyncChangeLog
                 $"SELECT \"SyncId\" AS Value FROM {Q(Table)} WHERE \"EntityType\" = {{0}} AND \"Seq\" > {{1}}", entityType, afterSeq)
             .ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Paso 8.22: las filas de un tipo que todavía no suben: lo anotado después del cursor de subida y lo apartado al subir.
+    /// Sin cursor (esta base nunca ha subido con el registro), todas: la siguiente subida manda todo.
+    /// </summary>
+    internal sealed class PendingPush
+    {
+        public bool All { get; init; }
+        public HashSet<Guid> SyncIds { get; init; } = new();
+
+        public bool Contains(Guid syncId) => All || SyncIds.Contains(syncId);
+    }
+
+    /// <inheritdoc cref="PendingPush"/>
+    internal static async Task<PendingPush> ReadPendingPushAsync(AppDbContext db, string entityType, CancellationToken ct = default)
+    {
+        var cursor = await ReadPushCursorAsync(db, ct);
+        if (cursor == null) return new PendingPush { All = true };
+        var ids = new HashSet<Guid>();
+        foreach (var text in await PendingSyncIdsAsync(db, entityType, cursor.Value, ct))
+        {
+            if (Guid.TryParse(text, out var id)) ids.Add(id);
+        }
+        ids.UnionWith(await db.SyncParkedRows.AsNoTracking()
+            .Where(p => p.Direction == SyncParkedRow.Push && p.EntityType == entityType)
+            .Select(p => p.SyncId)
+            .ToListAsync(ct));
+        return new PendingPush { SyncIds = ids };
+    }
+
     /// <summary>El cursor de subida; null si esta base nunca ha subido con el registro (la siguiente subida manda todo).</summary>
     public static async Task<long?> ReadPushCursorAsync(AppDbContext db, CancellationToken ct = default) =>
         long.TryParse(await DbMeta.GetAsync(db, DbMeta.LastPushedSeq, ct), NumberStyles.None, CultureInfo.InvariantCulture, out var seq)

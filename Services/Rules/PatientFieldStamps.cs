@@ -21,8 +21,8 @@ namespace TPVC.Services.Rules;
 /// <item><c>"#piso"</c> (<see cref="FloorKey"/>, no puede ser una columna): el piso. La marca más nueva de una escritura de la
 /// fila completa sin marcas que esta versión ya incluye (una PC v1.19–v1.38, la fila de antes de actualizar, «Volver a
 /// aplicar»): todo lo que la fila tenía entonces lo tenía desde ese momento. Una llave conocida vale al menos el piso, así
-/// que una llave que no lo rebasa no se guarda; un renglón que la fila no tiene y del que no sabe nada más cuenta como
-/// quitado en el piso.</item>
+/// que una llave que no lo rebasa no se guarda; un renglón que la fila no tiene cuenta como quitado en el mayor entre el
+/// piso y su propia marca de quitado.</item>
 /// <item><c>"UpdatedAtUtc"</c>: el <c>UpdatedAtUtc</c> de la fila con que se mantuvieron estas marcas. Si la fila tiene un
 /// <c>UpdatedAtUtc</c> mayor, la escribió alguien que no conoce las marcas (una PC v1.19–v1.38 sube la fila sin tocar esta
 /// columna): es una escritura sin marcas (<see cref="IsStampless"/>) y su piso es ese <c>UpdatedAtUtc</c>.</item>

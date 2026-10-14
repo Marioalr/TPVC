@@ -20,7 +20,7 @@ namespace TPVC.Services.Rules;
 /// lados eligen lo mismo.</item>
 /// <item><b>Hojas por renglón</b> (por <c>RowId</c>): unión de los renglones; cada uno con su marca y su marca de quitado
 /// (vive si la suya es mayor; con marcas iguales gana quitado). Un renglón que una versión tiene vale al menos su piso; uno
-/// que no tiene cuenta como quitado a más tardar en su piso. Su contenido, el del lado con la marca mayor (con marcas
+/// que no tiene cuenta como quitado en el mayor entre su piso y su propia marca de quitado. Su contenido, el del lado con la marca mayor (con marcas
 /// iguales, el texto canónico mayor). El orden es el del lado con la marca de orden mayor (también al menos el piso; con
 /// marcas iguales, la lista de RowId de sus renglones vivos con el texto canónico mayor), y los renglones vivos que solo tiene
 /// el otro lado van al final en su orden.</item>
@@ -226,7 +226,8 @@ public static class PatientMerge
             bool inL = byL.TryGetValue(id, out var rowL);
             bool inR = byR.TryGetValue(id, out var rowR);
 
-            // Lo que una versión tiene, lo tiene al menos desde su piso; lo que no tiene, lo quitó a más tardar en su piso
+            // Lo que una versión tiene, lo tiene al menos desde su piso; lo que no tiene, lo quitó al menos en su piso (o en su
+            // propia marca de quitado, si es mayor)
             var eL = inL ? PatientFieldStamps.Max(floorL, sl[rowKey]) : sl[rowKey];
             var rL = inL ? sl[removedKey] : PatientFieldStamps.Max(floorL, sl[removedKey]);
             var eR = inR ? PatientFieldStamps.Max(floorR, sr[rowKey]) : sr[rowKey];

@@ -14,8 +14,8 @@ namespace TPVC.Tests;
 /// <summary>
 /// Paso 8.22 (H1b) con dos y tres equipos sobre el servidor simulado: la combinación por campo y por renglón al bajar, lo que
 /// sube después de combinar (una sola vez), la escritura de una PC anterior (sin marcas) y la actualización desde v1.38 (el
-/// piso), la próxima cita derivada en orden clínico, las llaves desconocidas de FieldStampsJson y el aviso de otra PC sin
-/// actualizar.
+/// piso, y la copia que v1.38 solo bajó), la próxima cita derivada en orden clínico, las llaves desconocidas de FieldStampsJson
+/// y el aviso de otra PC sin actualizar.
 /// </summary>
 public partial class TursoSyncEndToEndTests
 {
@@ -417,6 +417,119 @@ public partial class TursoSyncEndToEndTests
         }
         Assert.AreEqual(await MeaningAsync(pc, patient), await MeaningAsync(tablet, patient));
         await AssertNoMoreUploadsAsync(pc, tablet);
+    }
+
+    /// <summary>
+    /// Una bajada de una PC que todavía tiene v1.38: la fila de la nube por LWW, sin FieldStampsJson (no la conoce: la suya se
+    /// queda vacía). Sin triggers: no queda nada por subir.
+    /// </summary>
+    private async Task PullAsV138Async(Device device, Guid syncId)
+    {
+        string[] columns =
+        {
+            nameof(PatientRecord.Allergies), nameof(PatientRecord.Phone), nameof(PatientRecord.Occupation), nameof(PatientRecord.ActiveSuppliesJson)
+        };
+        var cloud = new Dictionary<string, object?>();
+        using (var held = _server.Lock())
+        using (var cmd = _server.Connection.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT {string.Join(", ", columns.Select(c => $"\"{c}\""))}, UpdatedAtUtc FROM Patients WHERE SyncId = $id";
+            cmd.Parameters.AddWithValue("$id", TursoSyncService.FormatGuid(syncId));
+            using var reader = cmd.ExecuteReader();
+            Assert.IsTrue(reader.Read());
+            for (int i = 0; i <= columns.Length; i++) cloud[reader.GetName(i)] = reader.GetValue(i);
+        }
+
+        using var db = device.Factory.CreateDbContext();
+        db.ApplyingRemoteChanges = true;
+        var row = await db.Patients.SingleAsync(p => p.SyncId == syncId);
+        foreach (var column in columns) typeof(PatientRecord).GetProperty(column)!.SetValue(row, cloud[column]?.ToString() ?? string.Empty);
+        row.UpdatedAtUtc = TursoSyncService.ParseDate(cloud["UpdatedAtUtc"]);
+        await SyncChangeLog.SaveRemoteChangesAsync(db);
+        Assert.AreEqual(string.Empty, (await StoredAsync(device, syncId)).FieldStampsJson);
+    }
+
+    /// <summary>Tres PC con v1.38 y el expediente sin marcas; dos se actualizan (sin subir nada) y la tercera sigue con v1.38.</summary>
+    private async Task<(Device A, Device B, Device S, Guid Patient)> ThreePcsFromV138Async()
+    {
+        var a = CreateDevice("pc", seed: true);
+        Assert.IsTrue((await a.Sync.SyncAsync()).Success);
+        var b = CreateDevice("pc2", seed: false);
+        Assert.IsTrue((await b.Sync.SyncAsync()).Success);
+        var s = CreateDevice("pc3", seed: false);
+        Assert.IsTrue((await s.Sync.SyncAsync()).Success);
+        var patient = (await a.Inventory.GetPatientsAsync()).Single(p => p.RecordNumber == MergeRecord).SyncId;
+        await EditAsync(a, patient, p => p.Allergies = "Negadas");
+        await QuiesceAsync(a, b, s);
+        await BackToV138Async(a, b, s);
+        foreach (var device in new[] { a, b })
+        {
+            var upgrade = await device.Sync.SyncAsync();
+            Assert.IsTrue(upgrade.Success, upgrade.ErrorMessage);
+            Assert.AreEqual(0, upgrade.RowsPushed);
+        }
+        return (a, b, s, patient);
+    }
+
+    [TestMethod]
+    public async Task APcUpdatedFromV138_WithACopyItOnlyPulled_TakesTheCloudRow_AndDoesNotUndoAnEarlierAllergy()
+    {
+        var (a, b, s, patient) = await ThreePcsFromV138Async();
+
+        // B (ya actualizada) cambia las alergias sin conexión; después A cambia el teléfono y sube (V1, sin la alergia)
+        await Task.Delay(5);
+        await EditAsync(b, patient, p => p.Allergies = "Látex");
+        await Task.Delay(5);
+        await EditAsync(a, patient, p => p.Phone = "5599887766");
+        Assert.IsTrue((await a.Sync.SyncAsync()).Success);
+
+        // S, todavía con v1.38, baja V1 por LWW (sin sus marcas); B se conecta y la nube pasa a la combinación con su alergia
+        await PullAsV138Async(s, patient);
+        Assert.IsTrue((await b.Sync.SyncAsync()).Success);
+        Assert.AreEqual("Látex", CloudPatientValue(patient, nameof(PatientRecord.Allergies)));
+
+        // S se actualiza: su copia solo se bajó, así que toma la fila de la nube y no sube nada
+        var upgrade = await s.Sync.SyncAsync();
+        Assert.IsTrue(upgrade.Success, upgrade.ErrorMessage);
+        Assert.AreEqual(0, upgrade.RowsPushed, "Una copia que solo se bajó no es una escritura de la fila completa");
+        Assert.AreEqual(CloudPatientValue(patient, nameof(PatientRecord.FieldStampsJson)), (await StoredAsync(s, patient)).FieldStampsJson);
+
+        await QuiesceAsync(a, b, s);
+        foreach (var device in new[] { a, b, s })
+        {
+            var stored = await StoredAsync(device, patient);
+            Assert.AreEqual("Látex", stored.Allergies, $"{device.Settings.CurrentSettings.DeviceName}: la alergia de B sobrevive");
+            Assert.AreEqual("5599887766", stored.Phone);
+        }
+        await AssertNoMoreUploadsAsync(a, b, s);
+    }
+
+    [TestMethod]
+    public async Task APcUpdatedFromV138_WhileTheCloudIsStillAtThePulledVersion_UploadsNothing_AndALaterAllergyFromAnotherPcWins()
+    {
+        var (a, b, s, patient) = await ThreePcsFromV138Async();
+        await Task.Delay(5);
+        await EditAsync(b, patient, p => p.Allergies = "Látex");
+        await Task.Delay(5);
+        await EditAsync(a, patient, p => p.Phone = "5599887766");
+        Assert.IsTrue((await a.Sync.SyncAsync()).Success);
+
+        // S baja V1 con v1.38 y se actualiza mientras la nube sigue en V1: la misma versión, con sus marcas
+        await PullAsV138Async(s, patient);
+        var upgrade = await s.Sync.SyncAsync();
+        Assert.IsTrue(upgrade.Success, upgrade.ErrorMessage);
+        Assert.AreEqual(0, upgrade.RowsPushed);
+        Assert.AreEqual(CloudPatientValue(patient, nameof(PatientRecord.FieldStampsJson)), (await StoredAsync(s, patient)).FieldStampsJson);
+
+        // B se conecta: su alergia (anterior a V1, pero posterior al piso de V1) sobrevive en los tres
+        await QuiesceAsync(b, a, s);
+        foreach (var device in new[] { a, b, s })
+        {
+            var stored = await StoredAsync(device, patient);
+            Assert.AreEqual("Látex", stored.Allergies, $"{device.Settings.CurrentSettings.DeviceName}: la alergia de B sobrevive");
+            Assert.AreEqual("5599887766", stored.Phone);
+        }
+        await AssertNoMoreUploadsAsync(a, b, s);
     }
 
     [TestMethod]

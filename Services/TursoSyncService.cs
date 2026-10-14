@@ -2194,13 +2194,28 @@ public partial class TursoSyncService
         // versión de la nube se anota para subir en la misma transacción. «Volver a aplicar» (force) lo escribe tal cual
         bool mergePatients = typeof(T) == typeof(PatientRecord) && !force;
         var markForUpload = new List<(string EntityType, Guid SyncId)>();
+        SyncChangeLog.PendingPush? pendingPush = null;
         foreach (var (row, syncIdNullable) in incoming)
         {
             var syncId = syncIdNullable!.Value;
             var remoteUpdated = ParseDate(row.GetValueOrDefault("UpdatedAtUtc"));
             locals.TryGetValue(syncId, out var local);
 
-            if (mergePatients && local is PatientRecord patient)
+            // La primera bajada después de actualizar desde v1.38 (FieldStampsJson es columna nueva): una fila sin marcas y sin
+            // nada pendiente de subir es una copia que esa versión bajó por LWW, sin las marcas que tenía en la nube, y no una
+            // escritura de la fila completa. No se combina (su UpdatedAtUtc como piso desharía lo que la nube ya tenía):
+            // sigue el LWW de fila y toma la de la nube completa, con sus marcas, si no es más vieja. Una fila sin marcas con
+            // una edición de v1.38 pendiente sí se combina con su piso, y después de esta bajada una fila sin marcas es copia
+            // fiel de una escritura sin marcas de la nube (su piso es real) y también se combina
+            bool stamplessCopy = false;
+            if (mergePatients && newColumns?.Contains(nameof(PatientRecord.FieldStampsJson)) == true && local is PatientRecord copy
+                && Rules.PatientFieldStamps.Parse(copy.FieldStampsJson).IsStampless(copy.UpdatedAtUtc))
+            {
+                pendingPush ??= await SyncChangeLog.ReadPendingPushAsync(db, entityType, ct);
+                stamplessCopy = !pendingPush.Contains(syncId);
+            }
+
+            if (mergePatients && local is PatientRecord patient && !stamplessCopy)
             {
                 Unpark(db, parked, entityType, syncId);
                 var merged = PatientFieldMerge.Merge(patient, row, map);
@@ -2221,6 +2236,7 @@ public partial class TursoSyncService
             // apartó porque le faltaba un principal (paso 8.19). Se aplica al reintentar o al volver a leerla en el traslape
             // (o se vuelve a apartar); si no, se perdería con sus columnas nuevas
             if (!remoteWins && local != null && remoteUpdated == local.UpdatedAtUtc && parked.ContainsKey((entityType, syncId))) remoteWins = true;
+            if (stamplessCopy && remoteUpdated >= local!.UpdatedAtUtc) remoteWins = true;
             bool onlyNewColumns = false;
             if (!remoteWins && newColumns != null && local != null)
             {

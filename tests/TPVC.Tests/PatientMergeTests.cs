@@ -484,7 +484,7 @@ public class PatientMergeTests
         if (!stampless)
         {
             // Una versión con marcas es coherente con su hoja: lo que tiene vive (su marca, al menos el piso, rebasa la de
-            // quitado) y lo que no tiene, si tiene marca, está quitado (a más tardar en el piso). Una sin marcas puede traer
+            // quitado) y lo que no tiene, si tiene marca, está quitado (al menos en el piso). Una sin marcas puede traer
             // cualquier hoja (la escribió una PC anterior)
             var floor = stamps[PatientFieldStamps.FloorKey];
             var present = rows.Select(r => r.id).ToHashSet();
@@ -522,6 +522,32 @@ public class PatientMergeTests
         public PatientMerge.Version Local { get; set; } = null!;
         public bool Pending { get; set; }
         public bool Old { get; set; }
+
+        /// <summary>Se acaba de actualizar: su siguiente sincronización baja la tabla completa antes de subir (columna nueva).</summary>
+        public bool JustUpdated { get; set; }
+
+        /// <summary>
+        /// Se actualiza: la columna llega vacía (su fila queda sin marcas) y la siguiente sincronización baja antes de subir. Una
+        /// edición de v1.38 todavía sin subir es una escritura de la fila completa con su UpdatedAtUtc (la anota en
+        /// <paramref name="writes"/>); sin nada pendiente, lo que tiene solo lo bajó.
+        /// </summary>
+        public void Update(List<(DateTime Stamp, string Field, string Value, bool Stamped)>? writes = null)
+        {
+            if (!Old) return;
+            Old = false;
+            JustUpdated = true;
+            if (Pending) RecordWholeRow(writes, Local);
+        }
+    }
+
+    /// <summary>Los campos cuya última escritura se revisa al final.</summary>
+    private static readonly string[] TrackedFields = { "Allergies", "Phone" };
+
+    /// <summary>Una escritura de la fila completa (una PC v1.38): cuenta en todos los campos con su UpdatedAtUtc.</summary>
+    private static void RecordWholeRow(List<(DateTime Stamp, string Field, string Value, bool Stamped)>? writes, PatientMerge.Version version)
+    {
+        if (writes == null) return;
+        foreach (var field in TrackedFields) writes.Add((version.UpdatedAtUtc, field, CanonicalJson.Write(version.Values[field]), false));
     }
 
     private sealed class SimCloud
@@ -530,11 +556,15 @@ public class PatientMergeTests
         public string Origin { get; set; } = string.Empty;
         public int Uploads { get; set; }
 
+        /// <summary>Si no es nulo, las escrituras que cuentan (aquí, las de las PC v1.38 que llegan a la nube).</summary>
+        public List<(DateTime Stamp, string Field, string Value, bool Stamped)>? Writes { get; init; }
+
         /// <summary>LWW por fila, como la nube: acepta solo una versión estrictamente más nueva.</summary>
         public bool TryUpload(SimDevice device)
         {
             if (Row != null && device.Local.UpdatedAtUtc <= Row.UpdatedAtUtc) return false;
             // El upsert de una PC anterior no conoce la columna: la nube se queda con las marcas que tenía
+            if (device.Old) RecordWholeRow(Writes, device.Local);
             Row = device.Old
                 ? new PatientMerge.Version { SyncId = Patient, UpdatedAtUtc = device.Local.UpdatedAtUtc, FieldStampsJson = Row?.FieldStampsJson, Values = device.Local.Values }
                 : device.Local;
@@ -547,6 +577,21 @@ public class PatientMergeTests
     /// <summary>Lo que hace la sincronización de la PC: subir lo pendiente, bajar, combinar y subir lo que la combinación dejó distinto.</summary>
     private static void Sync(SimDevice device, SimCloud cloud)
     {
+        // La primera después de actualizar baja la tabla completa antes de subir. Una fila sin marcas y sin nada pendiente es
+        // una copia que v1.38 bajó por LWW (sin las marcas que tenía en la nube): no se combina, toma la de la nube completa si
+        // no es más vieja (TursoSyncService.ApplyPageGenericAsync con la columna nueva)
+        if (device.JustUpdated)
+        {
+            device.JustUpdated = false;
+            if (cloud.Row != null && !device.Pending && PatientFieldStamps.Parse(device.Local.FieldStampsJson).IsStampless(device.Local.UpdatedAtUtc))
+            {
+                if (cloud.Row.UpdatedAtUtc >= device.Local.UpdatedAtUtc) device.Local = cloud.Row;
+            }
+            else if (cloud.Row != null)
+            {
+                Apply(device, cloud);
+            }
+        }
         if (device.Pending)
         {
             if (cloud.TryUpload(device)) device.Pending = false;
@@ -610,12 +655,13 @@ public class PatientMergeTests
     }
 
     /// <param name="old">Cuántos de los equipos empiezan como PC v1.38 (y la fila de la nube, sin marcas).</param>
-    private static (List<SimDevice> Devices, SimCloud Cloud) StartDevices(int count, int old = 0)
+    /// <param name="writes">Dónde anotar las escrituras que cuentan (las de las PC v1.38 que llegan a la nube).</param>
+    private static (List<SimDevice> Devices, SimCloud Cloud) StartDevices(int count, int old = 0, List<(DateTime Stamp, string Field, string Value, bool Stamped)>? writes = null)
     {
         var start = V(T(0), old > 0 ? null : Stamps(T(0)), ("Allergies", "Negadas"), ("Phone", "5500000000"),
             (PatientSheetRows.SuppliesColumn, Supplies((RowA, "Gasa", 1))));
         var devices = Enumerable.Range(0, count).Select(i => new SimDevice { Name = "equipo" + i, Local = start, Old = i < old }).ToList();
-        return (devices, new SimCloud { Row = start, Origin = "inicio" });
+        return (devices, new SimCloud { Row = start, Origin = "inicio", Writes = writes });
     }
 
     /// <summary>Sincroniza todos hasta que una vuelta completa no sube nada; regresa cuántas vueltas hicieron falta.</summary>
@@ -633,15 +679,19 @@ public class PatientMergeTests
 
     /// <summary>
     /// Cualquier intercalado de ediciones y sincronizaciones entre 2 y 3 equipos (con PC v1.38 que se actualizan a media
-    /// historia, en cualquier orden) converge en pocas vueltas, y una vez iguales nadie vuelve a subir.
+    /// historia, en cualquier orden) converge en pocas vueltas, una vez iguales nadie vuelve a subir, y una edición con marcas
+    /// solo la reemplaza una escritura igual o posterior: otra edición con marcas, o la fila completa de una PC v1.38 que llegó
+    /// a la nube o que estaba pendiente al actualizar. Lo que una PC solo bajó no es una escritura. (La fila completa de una PC
+    /// v1.38 sí puede perderse si otro equipo sube después una fila que no la incluye: es el LWW por fila de esa PC.)
     /// </summary>
     [TestMethod]
-    public void AnyInterleavingOfEditsAndSyncs_Converges_WithoutRepeatedUploads()
+    public void AnyInterleavingOfEditsAndSyncs_Converges_WithoutRepeatedUploads_AndKeepsTheLastWrite()
     {
         for (int seed = 1; seed <= 300; seed++)
         {
             var random = new Random(seed);
-            var (devices, cloud) = StartDevices(2 + seed % 2, old: seed % 3);
+            var writes = new List<(DateTime Stamp, string Field, string Value, bool Stamped)>();
+            var (devices, cloud) = StartDevices(2 + seed % 2, old: seed % 3, writes);
             var now = T(1);
             for (int step = 0; step < 40; step++)
             {
@@ -649,12 +699,28 @@ public class PatientMergeTests
                 if (random.Next(4) > 0) now = now.AddMilliseconds(random.Next(0, 3));
                 var device = devices[random.Next(devices.Count)];
                 int action = random.Next(8);
-                if (action == 0 && device.Old) device.Old = false; // se actualiza: su fila queda sin marcas
+                if (action == 0 && device.Old) device.Update(writes); // se actualiza: su fila queda sin marcas
                 else if (action < 3) Sync(device, cloud);
-                else Edit(device, now.AddMilliseconds(random.Next(-2, 3)), random);
+                else
+                {
+                    var before = device.Local;
+                    // Editar una copia que v1.38 bajó, antes de la primera sincronización después de actualizar: el sello no
+                    // sabe que solo la bajó y toma su UpdatedAtUtc como piso, como una escritura de la fila completa en ese
+                    // momento (lo que habría hecho v1.38 al subirla; queda documentado en el 8.22)
+                    if (!device.Old && device.JustUpdated && !device.Pending && PatientFieldStamps.Parse(before.FieldStampsJson).IsStampless(before.UpdatedAtUtc))
+                        RecordWholeRow(writes, before);
+                    Edit(device, now.AddMilliseconds(random.Next(-2, 3)), random);
+                    // Una edición con marcas cuenta en los campos que cambió; la de una PC v1.38, cuando llega a la nube
+                    if (device.Old) continue;
+                    foreach (var field in TrackedFields)
+                    {
+                        var value = CanonicalJson.Write(device.Local.Values[field]);
+                        if (value != CanonicalJson.Write(before.Values[field])) writes.Add((device.Local.UpdatedAtUtc, field, value, true));
+                    }
+                }
             }
 
-            foreach (var device in devices) device.Old = false;
+            foreach (var device in devices) device.Update(writes);
             int rounds = Quiesce(devices, cloud);
             Assert.IsLessThanOrEqualTo(4, rounds, $"Semilla {seed}: demasiadas vueltas para converger");
             var meaning = Meaning(cloud.Row!);
@@ -663,6 +729,18 @@ public class PatientMergeTests
             int uploads = cloud.Uploads;
             foreach (var device in devices) Sync(device, cloud);
             Assert.AreEqual(uploads, cloud.Uploads, $"Semilla {seed}: una vez iguales, nadie vuelve a subir");
+
+            // En cada campo queda la última edición con marcas o una escritura igual o posterior
+            foreach (var field in TrackedFields)
+            {
+                var stamped = writes.Where(w => w.Field == field && w.Stamped).ToList();
+                if (stamped.Count == 0) continue;
+                var last = stamped.Max(w => w.Stamp);
+                var expected = writes.Where(w => w.Field == field && w.Stamp >= last).Select(w => w.Value).ToHashSet();
+                var actual = CanonicalJson.Write(cloud.Row!.Values[field]);
+                Assert.Contains(actual, expected,
+                    $"Semilla {seed}: en {field} quedó {actual}, y desde la última edición con marcas ({PatientFieldStamps.Format(last)}) solo se escribió {string.Join(" o ", expected)}");
+            }
         }
     }
 
@@ -671,7 +749,7 @@ public class PatientMergeTests
     public void UpgradingDevicesWithTheSameStamplessRow_UploadNothing()
     {
         var (devices, cloud) = StartDevices(3, old: 3);
-        foreach (var device in devices) device.Old = false;
+        foreach (var device in devices) device.Update();
         foreach (var device in devices) Sync(device, cloud);
         Assert.AreEqual(0, cloud.Uploads);
     }
