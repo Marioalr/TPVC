@@ -77,6 +77,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] Paso 8.15 (K3) · "Quitar" un equipo con cambios pendientes: los sube antes de borrarse. "Perdí este equipo" con "Cortar acceso ahora": rotar los tokens en el panel de Turso y pegar los nuevos en la PC; los demás piden "Vuelva a vincular" sin perder lo pendiente.
 - [ ] Pasos 8.16 y 8.17 (K7) · Un paciente y un ticket creados en la tablet sin internet salen con letra (`EXP-2026-T1-001`); al día siguiente, con la laptop abierta y libre, tienen su número consecutivo, y buscar por cualquiera de los dos folios los encuentra. La reimpresión dice "Folio sin conexión: …".
 - [ ] Paso 8.19 (K7) · Cancelar el mismo ticket en la PC y en la tablet, las dos sin internet: al sincronizar queda una sola devolución por cada lote del que salió, y las existencias cuadran.
+- [ ] Paso 8.21 (K6 y K7) · Con la consulta de un paciente abierta en la PC, la tablet cambia sus alergias y le agenda la siguiente cita; la PC sincroniza y agrega un insumo: en la PC y en la tablet quedan las alergias, la cita y el insumo.
 - [ ] Paso 8.20 · Al convertir las existencias a libro de movimientos no cambia ninguna, y el Kardex muestra "Saldo inicial".
 - [ ] Paso 8.24 · Lo capturado en la tablet aparece en la PC en ≤ 8 s con la PC en Pacientes y en ≤ 35 s en otra pantalla.
 - [ ] Paso 8.20 (K7) · La última pieza vendida en la PC y en la tablet, las dos sin internet, queda en −1 con el aviso "revisar inventario".
@@ -84,6 +85,13 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K4b · Agendar una cita y registrar una entrada de mercancía desde el celular: la cita aparece en la agenda de la PC (con aviso si se empalma) y el lote nuevo en el Kardex.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
+
+### v1.38.0 (paso 8.21: guardar solo lo que cambió)
+
+- [ ] Abrir la consulta de un paciente, agendarle la siguiente cita desde la agenda y agregar un insumo en la consulta: la ficha sigue mostrando la próxima cita (antes el insumo la borraba) y la cita aparece en la agenda.
+- [ ] Con la ficha de un paciente abierta en esta PC, cambiarle el teléfono en otra PC con la misma nube y sincronizar las dos; en esta, editar en el formulario solo la ocupación y guardar: quedan el teléfono nuevo y la ocupación.
+- [ ] Empezar una consulta, guardar la nota con "Terminar consulta", volver y descartarla: el resumen de la ficha (último diagnóstico, signos, notas) y la receta vigente quedan como antes de empezarla.
+- [ ] Para Kotlin (K6 y K7): la tablet guarda un expediente igual que la PC. Lee la fila de su base, compara cada columna de `Patients` (menos `SyncId`, `UpdatedAtUtc` y `CreatedAt`) con lo que tenía al cargarla, escribe solo las que cambiaron y vuelve a leerla para la pantalla; las hojas `Active*Json` se comparan por su contenido (la lista con sus `RowId`, no el texto) y se escriben completas si cambiaron. Un guardado sin cambios no escribe. Descartar una consulta escribe el resumen y la receta anterior aunque parezcan iguales. Así lo que baja mientras la tablet tiene un expediente abierto (una cita agendada en otro equipo, alergias editadas en la PC) no se pierde con el siguiente guardado.
 
 ### v1.37.0 (paso 8.19: Kardex completo)
 

@@ -1260,6 +1260,8 @@ public partial class InventoryService
                 .ToList();
         }
 
+        // Paso 8.21: cada instancia lleva la foto con que se guarda solo lo que cambió
+        PatientFields.Track(patients);
         return patients;
     }
 
@@ -1282,6 +1284,7 @@ public partial class InventoryService
         foreach (var row in rows)
         {
             row.Patient.ConsultationCount = row.Count;
+            PatientFields.Track(row.Patient);
         }
         return rows.Select(r => r.Patient).ToList();
     }
@@ -1302,7 +1305,11 @@ public partial class InventoryService
     /// cobró no cambia: la cuenta de esa consulta ya se cerró.
     /// </summary>
     /// <param name="updateActivePrescription">También la receta vigente del expediente (la consulta es la última).</param>
-    public async Task UpdateConsultationPrescriptionAsync(int consultationId, IReadOnlyList<PatientPrescriptionItem> items, bool updateActivePrescription)
+    /// <returns>
+    /// La receta vigente tal como quedó en el expediente (con sus <c>RowId</c>), o null si no se cambió. Paso 8.21: la ficha
+    /// pone esos mismos renglones en la instancia abierta y los marca como guardados.
+    /// </returns>
+    public async Task<List<PatientPrescriptionItem>?> UpdateConsultationPrescriptionAsync(int consultationId, IReadOnlyList<PatientPrescriptionItem> items, bool updateActivePrescription)
     {
         await using var db = CreateContext();
         var consultation = await db.PatientConsultations.FirstOrDefaultAsync(c => c.Id == consultationId)
@@ -1317,6 +1324,7 @@ public partial class InventoryService
         }).Where(i => i.MedicineName.Length > 0).ToList();
         consultation.Prescriptions = saved;
 
+        List<PatientPrescriptionItem>? active = null;
         if (updateActivePrescription)
         {
             var patient = await db.Patients.FirstOrDefaultAsync(p => p.Id == consultation.PatientRecordId);
@@ -1326,11 +1334,13 @@ public partial class InventoryService
                 {
                     MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
                 }).ToList();
+                active = patient.ActivePrescription;
             }
         }
 
         await db.SaveChangesAsync();
         NotifyPatientsChanged();
+        return active;
     }
 
     /// <summary>
@@ -1358,10 +1368,11 @@ public partial class InventoryService
     public async Task<PatientRecord?> GetPatientByIdAsync(int id)
     {
         await using var db = CreateContext();
-        return await db.Patients
+        var patient = await db.Patients
             .AsNoTracking()
             .Include(p => p.Consultations.OrderByDescending(c => c.Date))
             .FirstOrDefaultAsync(p => p.Id == id);
+        return patient == null ? null : PatientFields.Track(patient);
     }
 
     public async Task<bool> IsRecordNumberTakenAsync(string recordNumber, int excludePatientId = 0)
@@ -1407,67 +1418,95 @@ public partial class InventoryService
     /// <summary>
     /// Guarda el expediente. Uno nuevo sin folio recibe el siguiente al guardar (paso 8.16: el contador de la nube, o la
     /// letra del equipo sin conexión). Un folio tecleado a mano que ya usa otro expediente activo de esta base se rechaza.
+    /// Paso 8.21: escribe solo lo que la instancia cambió desde su foto (<see cref="PatientFields"/>) y la deja al día con
+    /// la fila guardada; sin foto (una instancia hecha en memoria) la escribe completa, como antes.
     /// </summary>
+    /// <returns>La misma instancia, ya al día.</returns>
     public async Task<PatientRecord> SavePatientAsync(PatientRecord patient)
     {
-        patient.RecordNumber = patient.RecordNumber.Trim();
-        patient.FullName = patient.FullName.Trim();
+        await SavePatientAsync(patient, patient.StoredSnapshot);
+        return patient;
+    }
 
-        bool typed = !string.IsNullOrWhiteSpace(patient.RecordNumber);
-        if (!typed)
-        {
-            patient.RecordNumber = await AssignRecordNumberAsync();
-        }
-
-        if (await IsRecordNumberTakenAsync(patient.RecordNumber, patient.Id))
-        {
-            throw new InvalidOperationException($"El folio de expediente '{patient.RecordNumber}' ya está registrado.");
-        }
-
-        patient.SyncPrescriptionJson();
-        patient.SyncSuppliesJson();
-        patient.SyncServicesJson();
+    /// <summary>
+    /// Paso 8.21, la forma del plan: copia sobre la fila recién leída solo los campos donde <paramref name="edited"/> difiere
+    /// de <paramref name="baseline"/> (la foto tomada al cargar; sin ella, todos: ver <see cref="PatientFields.ToWrite"/>) y
+    /// deja a <paramref name="edited"/> al día con la fila guardada (<see cref="PatientFields.Refresh"/>) antes de avisar a
+    /// las pantallas. Un campo que no está en la foto (<see cref="PatientFieldSnapshot.Without"/>) se escribe aunque no
+    /// haya cambiado. Un expediente nuevo (<c>Id</c> 0) se da de alta completo, como siempre.
+    /// <list type="bullet">
+    /// <item>El folio se revisa (que no lo use otro expediente) y se anota en la nube solo si se escribe: una copia con un
+    /// folio viejo ya no impide guardar una hoja. Si el folio que quedaría guardado está vacío, recibe uno.</item>
+    /// <item>Sin cambios no escribe nada: la marca de la fila no se mueve y no hay nada que subir.</item>
+    /// </list>
+    /// </summary>
+    /// <returns>La fila tal como quedó en la base (otra instancia, con su propia foto).</returns>
+    public async Task<PatientRecord> SavePatientAsync(PatientRecord edited, PatientFieldSnapshot? baseline)
+    {
+        edited.RecordNumber = edited.RecordNumber.Trim();
+        edited.FullName = edited.FullName.Trim();
+        edited.SyncPrescriptionJson();
+        edited.SyncSuppliesJson();
+        edited.SyncServicesJson();
 
         await using var db = CreateContext();
-        PatientRecord? tracked = null;
-        bool newNumber = typed;
-
-        if (patient.Id == 0)
+        PatientRecord? existing = null;
+        List<PatientFields.Field> write = new();
+        bool writesFolio = true;
+        bool typed = !string.IsNullOrWhiteSpace(edited.RecordNumber);
+        if (edited.Id == 0)
         {
-            patient.CreatedAt = DateTime.Now;
-            db.Patients.Add(patient);
+            if (!typed) edited.RecordNumber = await AssignRecordNumberAsync();
         }
         else
         {
-            var existing = await db.Patients.FirstOrDefaultAsync(p => p.Id == patient.Id);
-            tracked = existing;
-            if (existing != null)
+            existing = await db.Patients.FirstOrDefaultAsync(p => p.Id == edited.Id)
+                       ?? throw new InvalidOperationException("El expediente ya no existe en la base de datos.");
+            write = PatientFields.ToWrite(edited, baseline, existing);
+            var folioField = PatientFields.All.Single(f => f.Name == nameof(PatientRecord.RecordNumber));
+            writesFolio = write.Contains(folioField);
+            // El folio que quedaría guardado (el de la instancia si se escribe, si no el de la base) vacío: recibe uno
+            if (string.IsNullOrWhiteSpace(writesFolio ? edited.RecordNumber : existing.RecordNumber))
             {
-                newNumber = typed && !string.Equals(existing.RecordNumber, patient.RecordNumber, StringComparison.OrdinalIgnoreCase);
-                // Copia todas las columnas escalares (incluye los JSON de receta/insumos/servicios)
-                // conservando los metadatos de sincronización del registro guardado.
-                var syncId = existing.SyncId;
-                var createdAt = existing.CreatedAt;
-                db.Entry(existing).CurrentValues.SetValues(patient);
-                existing.SyncId = syncId;
-                existing.CreatedAt = createdAt;
+                edited.RecordNumber = await AssignRecordNumberAsync();
+                if (!writesFolio) write.Add(folioField);
+                writesFolio = true;
+                typed = false;
             }
-            else
+        }
+
+        if (writesFolio && await IsRecordNumberTakenAsync(edited.RecordNumber, edited.Id))
+        {
+            throw new InvalidOperationException($"El folio de expediente '{edited.RecordNumber}' ya está registrado.");
+        }
+
+        bool newNumber = typed;
+        if (existing == null)
+        {
+            edited.CreatedAt = DateTime.Now;
+            db.Patients.Add(edited);
+        }
+        else
+        {
+            newNumber = typed && writesFolio && !string.Equals(existing.RecordNumber, edited.RecordNumber, StringComparison.OrdinalIgnoreCase);
+            var entry = db.Entry(existing);
+            foreach (var field in write)
             {
-                throw new InvalidOperationException("El expediente ya no existe en la base de datos.");
+                entry.Property(field.Name).CurrentValue = field.Get(edited);
             }
         }
 
         await db.SaveChangesAsync();
-        // La instancia en memoria lleva la versión guardada: así una descarga posterior de otro
-        // equipo se distingue de lo que este mismo equipo acaba de guardar
-        if (tracked != null) patient.UpdatedAtUtc = tracked.UpdatedAtUtc;
+        var fresh = PatientFields.Track(await db.Patients.AsNoTracking().FirstAsync(p => p.Id == edited.Id));
+        // La instancia queda al día con la fila antes del aviso: la recarga de las pantallas ve la versión guardada y
+        // distingue una descarga posterior de otro equipo de lo que este mismo equipo acaba de guardar
+        PatientFields.Refresh(edited, fresh, baseline);
         NotifyPatientsChanged();
 
         // Paso 8.16: un folio tecleado a mano mayor que el contador de la nube lo sube (sin esperar: ya se guardó)
         if (newNumber && Folios is { } folios)
         {
-            var folio = patient.RecordNumber;
+            var folio = edited.RecordNumber;
             var today = DateTime.Today;
             _ = Task.Run(async () =>
             {
@@ -1475,7 +1514,7 @@ public partial class InventoryService
                 catch (Exception ex) { AppLogger.Warn($"No se pudo anotar el folio tecleado {folio} en la nube: {ex.Message}"); }
             });
         }
-        return patient;
+        return fresh;
     }
 
     // =========================================================================
@@ -1571,25 +1610,9 @@ public partial class InventoryService
             consultation.EndedAt = DateTime.Now;
         }
 
-        // Actualizar datos del paciente con esta última consulta
-        patient.LastVisit = consultation.Date;
-        if (!string.IsNullOrWhiteSpace(consultation.Diagnosis))
-        {
-            patient.LastDiagnosis = consultation.Diagnosis;
-        }
-        if (!string.IsNullOrWhiteSpace(consultation.VitalSigns))
-        {
-            patient.VitalSigns = consultation.VitalSigns;
-        }
-        if (!string.IsNullOrWhiteSpace(consultation.Notes) || !string.IsNullOrWhiteSpace(consultation.TreatmentPlan))
-        {
-            patient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
-        }
-        if (consultation.Prescriptions != null && consultation.Prescriptions.Any())
-        {
-            patient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
-            patient.SyncPrescriptionJson();
-        }
+        // Actualizar datos del paciente con esta última consulta (la consulta en curso refleja lo mismo en la instancia
+        // abierta con la misma regla: PatientRecord.ApplyConsultationSummary)
+        patient.ApplyConsultationSummary(consultation);
 
         // La nota existente se busca dentro del MISMO paciente: un folio repetido en otro
         // expediente (p. ej. importado) nunca debe sobrescribir la consulta de otra persona

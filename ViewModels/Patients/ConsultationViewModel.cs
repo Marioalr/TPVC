@@ -285,21 +285,14 @@ public partial class ConsultationViewModel : ObservableObject
     public int? AttendingAppointmentId { get; set; }
 
     /// <summary>
-    /// Refleja en la instancia en memoria los datos que AddConsultationNoteAsync actualiza en la base.
+    /// Refleja en la instancia en memoria los datos que AddConsultationNoteAsync actualiza en la base (con la misma regla,
+    /// <see cref="PatientRecord.ApplyConsultationSummary"/>). Paso 8.21: esos campos ya están en la base, así que la foto
+    /// de la instancia los toma; si no, descartar la consulta regresaría el resumen solo en memoria (la instancia volvería a
+    /// ser igual a su foto vieja y guardar no vería nada que escribir).
     /// </summary>
     private static void ApplyConsultationSummary(PatientRecord patient, PatientConsultation consultation)
     {
-        patient.LastVisit = consultation.Date;
-        if (!string.IsNullOrWhiteSpace(consultation.Diagnosis)) patient.LastDiagnosis = consultation.Diagnosis;
-        if (!string.IsNullOrWhiteSpace(consultation.VitalSigns)) patient.VitalSigns = consultation.VitalSigns;
-        if (!string.IsNullOrWhiteSpace(consultation.Notes) || !string.IsNullOrWhiteSpace(consultation.TreatmentPlan))
-        {
-            patient.ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
-        }
-        if (consultation.Prescriptions.Count > 0)
-        {
-            patient.ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
-        }
+        PatientFields.MarkStored(patient, patient.ApplyConsultationSummary(consultation));
     }
 
     public async Task<PatientConsultation?> SaveActiveConsultationToDbAsync(DateTime? endedAt = null)

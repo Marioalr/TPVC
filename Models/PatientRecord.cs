@@ -576,7 +576,9 @@ public class PatientRecord : ISyncEntity
     /// conoce) recibe el determinista del paciente, la hoja, su posición y su nombre, así dos equipos le ponen el mismo.
     /// Se guarda con la siguiente escritura de la hoja (no hay relleno al arrancar).
     /// </summary>
-    private List<T> ReadSheet<T>(string json, string column) where T : IPatientSheetRow
+    private List<T> ReadSheet<T>(string json, string column) where T : IPatientSheetRow => ReadSheet<T>(json, column, SyncId);
+
+    private static List<T> ReadSheet<T>(string? json, string column, Guid patientSyncId) where T : IPatientSheetRow
     {
         List<T> rows;
         if (string.IsNullOrWhiteSpace(json))
@@ -594,7 +596,7 @@ public class PatientRecord : ISyncEntity
                 rows = new List<T>();
             }
         }
-        TPVC.Services.Rules.PatientSheetRows.AssignLegacyRowIds(rows, SyncId, column);
+        TPVC.Services.Rules.PatientSheetRows.AssignLegacyRowIds(rows, patientSyncId, column);
         return rows;
     }
 
@@ -603,6 +605,74 @@ public class PatientRecord : ISyncEntity
     {
         TPVC.Services.Rules.PatientSheetRows.AssignNewRowIds(rows);
         return JsonSerializer.Serialize(rows, _jsonOptions);
+    }
+
+    /// <summary>
+    /// Paso 8.21: el texto con que esta PC escribiría la hoja guardada en <paramref name="json"/>: leída como siempre (con
+    /// el <c>RowId</c> determinista de un renglón viejo) y escrita con su formato. Dos textos con el mismo significado
+    /// (otro orden de llaves, otro escape, sin los RowId que se derivan) dan el mismo; así una hoja que nadie tocó no
+    /// cuenta como cambiada. No toca las listas de la instancia.
+    /// </summary>
+    internal string CanonicalSheetJson(string column, string? json) => column switch
+    {
+        TPVC.Services.Rules.PatientSheetRows.PrescriptionColumn => WriteSheet(ReadSheet<PatientPrescriptionItem>(json, column, SyncId)),
+        TPVC.Services.Rules.PatientSheetRows.SuppliesColumn => WriteSheet(ReadSheet<PatientSupplyItem>(json, column, SyncId)),
+        TPVC.Services.Rules.PatientSheetRows.ServicesColumn => WriteSheet(ReadSheet<PatientServiceItem>(json, column, SyncId)),
+        _ => throw new ArgumentOutOfRangeException(nameof(column), column, "No es una hoja del paciente.")
+    };
+
+    /// <summary>Paso 8.21: vuelve a escribir el texto de una hoja con lo que tiene su lista (como <c>Sync*Json</c>).</summary>
+    internal void SyncSheetJson(string column)
+    {
+        switch (column)
+        {
+            case TPVC.Services.Rules.PatientSheetRows.PrescriptionColumn: SyncPrescriptionJson(); break;
+            case TPVC.Services.Rules.PatientSheetRows.SuppliesColumn: SyncSuppliesJson(); break;
+            case TPVC.Services.Rules.PatientSheetRows.ServicesColumn: SyncServicesJson(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(column), column, "No es una hoja del paciente.");
+        }
+    }
+
+    /// <summary>
+    /// Paso 8.21: la foto de los campos tal como estaban en la base la última vez que esta instancia estuvo al día con ella
+    /// (al leerla y después de cada guardado). Guardar compara con ella para escribir solo lo que cambió; null en una
+    /// instancia hecha en memoria, que se guarda completa como antes. Ver <see cref="TPVC.Services.PatientFields"/>.
+    /// No es columna ni viaja en ningún JSON.
+    /// </summary>
+    [NotMapped]
+    [JsonIgnore]
+    internal TPVC.Services.PatientFieldSnapshot? StoredSnapshot { get; set; }
+
+    /// <summary>
+    /// Lo que la nota de una consulta deja en el resumen del expediente: <c>AddConsultationNoteAsync</c> lo escribe en la
+    /// fila y la consulta en curso lo refleja en la instancia abierta con esta misma regla. Regresa los campos que cambió
+    /// (paso 8.21: la instancia los marca como guardados, ver <see cref="TPVC.Services.PatientFields.MarkStored"/>).
+    /// </summary>
+    internal IReadOnlyList<string> ApplyConsultationSummary(PatientConsultation consultation)
+    {
+        var fields = new List<string> { nameof(LastVisit) };
+        LastVisit = consultation.Date;
+        if (!string.IsNullOrWhiteSpace(consultation.Diagnosis))
+        {
+            LastDiagnosis = consultation.Diagnosis;
+            fields.Add(nameof(LastDiagnosis));
+        }
+        if (!string.IsNullOrWhiteSpace(consultation.VitalSigns))
+        {
+            VitalSigns = consultation.VitalSigns;
+            fields.Add(nameof(VitalSigns));
+        }
+        if (!string.IsNullOrWhiteSpace(consultation.Notes) || !string.IsNullOrWhiteSpace(consultation.TreatmentPlan))
+        {
+            ClinicalNotes = $"{consultation.ChiefComplaint}\n{consultation.Notes}\nPlan: {consultation.TreatmentPlan}".Trim();
+            fields.Add(nameof(ClinicalNotes));
+        }
+        if (consultation.Prescriptions.Count > 0)
+        {
+            ActivePrescription = new List<PatientPrescriptionItem>(consultation.Prescriptions);
+            fields.Add(nameof(ActivePrescriptionJson));
+        }
+        return fields;
     }
 
     [NotMapped]
