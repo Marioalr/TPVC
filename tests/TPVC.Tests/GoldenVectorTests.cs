@@ -616,13 +616,14 @@ public partial class GoldenVectorTests
 
     /// <summary>
     /// Paso 8.23, formato congelado: lo que <paramref name="generated"/> cambia de <paramref name="existing"/> sin ser aditivo.
-    /// Se admite: tablas, columnas y referencias nuevas (en la nube todas las columnas aceptan nulo), valores nuevos de un enum,
+    /// Se admite: tablas y columnas nuevas (en la nube todas las columnas aceptan nulo), referencias nuevas (opcionales en una
+    /// tabla que ya existe: un equipo anterior escribe nulo ahí y la PC descartaría la fila de una obligatoria), valores nuevos de un enum,
     /// una columna que pasa a derivada (un equipo anterior la sigue aplicando como valor, que es lo que hacía; el paso 8.20 lo
     /// hace con las existencias), un índice local que deja de ser único y otro orden de subida. No se admite: quitar o
     /// renombrar una tabla, columna o referencia; cambiar en una columna su tipo remoto o de C#, si acepta nulo, su timeKind,
     /// su papel, su alias o el número de un valor de su enum, o quitarle uno; que una derivada deje de serlo; cambiar el
-    /// principal de una referencia o si es obligatoria; ni agregar un índice único a una tabla que ya existía (un equipo
-    /// anterior pudo guardar filas repetidas).
+    /// principal de una referencia o si es obligatoria; ni agregar a una tabla que ya existía una referencia obligatoria (o una
+    /// columna de referencia sin nulo) o un índice único (un equipo anterior pudo guardar filas repetidas).
     /// </summary>
     private static List<string> NonAdditiveChanges(string existing, string generated)
     {
@@ -671,7 +672,22 @@ public partial class GoldenVectorTests
                 }
             }
 
+            // Una columna nueva de referencia que no acepta nulo, en una tabla que ya existía: un equipo anterior la deja vacía
+            var oldColumnNames = oldTable["columns"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+            foreach (var (column, newColumn) in newColumns.Where(c => !oldColumnNames.Contains(c.Key)))
+            {
+                if (newColumn["role"]?.GetValue<string>() == "reference" && newColumn["nullable"]?.GetValue<bool>() == false)
+                    problems.Add($"La tabla {name} ganó la columna de referencia {column} sin nulo.");
+            }
+
             var newReferences = newTable["references"]!.AsArray().ToDictionary(r => r!["column"]!.GetValue<string>(), r => r!.AsObject());
+            var oldReferenceColumns = oldTable["references"]!.AsArray().Select(r => r!["column"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+            foreach (var (column, newReference) in newReferences.Where(r => !oldReferenceColumns.Contains(r.Key)))
+            {
+                // Un equipo anterior escribe nulo ahí y la PC descartaría su fila al bajarla ("llegó sin …")
+                if (newReference["required"]?.GetValue<bool>() == true)
+                    problems.Add($"La tabla {name} ganó la referencia obligatoria {column}: en una tabla que ya existe solo puede ser opcional.");
+            }
             foreach (var oldReference in oldTable["references"]!.AsArray().Select(r => r!.AsObject()))
             {
                 var column = oldReference["column"]!.GetValue<string>();

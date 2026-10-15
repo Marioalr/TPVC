@@ -447,6 +447,9 @@ public partial class TursoSyncService
             };
         }
 
+        // Paso 8.23: la sincronización que tiene el candado, para que la rápida sepa a quién espera
+        var inFlight = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _runInFlight, inFlight.Task);
         var sw = Stopwatch.StartNew();
         try
         {
@@ -457,8 +460,7 @@ public partial class TursoSyncService
             sw.Stop();
 
             var parkedRows = RefreshParkedCount();
-            SyncArrivals arrivals;
-            lock (_arrivalsGate) arrivals = _arrivals;
+            var arrivals = TakeArrivals();
             var result = new TursoSyncResult
             {
                 Success = true,
@@ -486,9 +488,6 @@ public partial class TursoSyncService
                 NotifyLocalViews();
                 _labResults?.NotifyChanged();
             }
-
-            // Paso 8.23: citas empalmadas y posibles duplicados con lo que llegó (el aviso y el banner de la PC)
-            if (!arrivals.IsEmpty) RunOnUiThread(() => _inventoryService?.NotifySyncArrivals(arrivals));
 
             // Paso 8.12b: los archivos de laboratorio, fuera del candado de la sincronización
             ScheduleLabTransfers();
@@ -547,6 +546,8 @@ public partial class TursoSyncService
         }
         finally
         {
+            _checkingArrivals = false;
+            inFlight.TrySetResult();
             _syncLock.Release();
             if (Interlocked.Exchange(ref _autoSyncSkipped, 0) == 1) OnLocalDataChanged();
         }
@@ -581,7 +582,9 @@ public partial class TursoSyncService
         catch (GenerationReloadException reload)
         {
             // Otra PC reemplazó la nube con un respaldo y ya terminó: lo que esta no subió quedó guardado; se vacía y se
-            // vuelve a bajar todo, una sola vez
+            // vuelve a bajar todo, una sola vez (lo que había llegado y no se revisó ya no existe)
+            _checkingArrivals = false;
+            ResetArrivals();
             await ReloadNewGenerationAsync(reload.Handshake, ct);
             return await SyncOnceAsync(fullResync: false, ct);
         }
@@ -593,7 +596,7 @@ public partial class TursoSyncService
         _syncGeneration = null;
         _generationChecked = false;
         Interlocked.Exchange(ref _mergedForUpload, 0);
-        ResetArrivals();
+        lock (_arrivalsGate) _arrivals = SyncArrivals.None;
 
         // Paso 8.10: si este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo, se baja todo una vez
         await ApplyRedownloadRequestAsync(settings, ct);
@@ -610,6 +613,14 @@ public partial class TursoSyncService
         {
             downloadPending = await DbMeta.GetAsync(db, DbMeta.CloudDownloadPending, ct) == "1";
         }
+
+        // Paso 8.23: lo que llegue se revisa contra lo de aquí (empalmes y posibles duplicados), salvo en la primera descarga
+        // de esta base (sin cursores: la primera sincronización, unirse, reemplazar con la nube, otra generación), donde
+        // llega todo. En la «Sincronización completa» sí: solo se aplica lo que es más nuevo que lo de aquí. Se decide antes
+        // de bajar nada; lo que llegó en una sincronización que se cortó se revisa en la siguiente
+        bool checkArrivals = !downloadPending && (fullResync || !cursors.IsFirstDownload);
+        _checkingArrivals = checkArrivals;
+        if (!checkArrivals) ResetArrivals();
 
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
@@ -657,14 +668,9 @@ public partial class TursoSyncService
             pushed += merged;
             pushReads += mergedReads;
         }
-        // 2c. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados). No en la primera
-        //     descarga de esta base (sin cursores: la primera sincronización, unirse, reemplazar con la nube, otra generación):
-        //     ahí llega todo. En la «Sincronización completa» sí: solo se aplica lo que es más nuevo que lo de aquí
-        if (!downloadPending && (fullResync || !cursors.IsFirstDownload))
-        {
-            var arrivals = await CheckArrivalsAsync(ct);
-            lock (_arrivalsGate) _arrivals = arrivals;
-        }
+        // 2c. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados), a los avisos de este
+        //     equipo, que se quedan hasta que el médico los descarta
+        if (checkArrivals) await CheckAndKeepArrivalsAsync(ct);
         if (downloadPending)
         {
             using var db = _contextFactory.CreateDbContext();

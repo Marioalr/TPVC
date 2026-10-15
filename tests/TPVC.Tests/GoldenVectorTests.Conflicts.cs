@@ -104,7 +104,7 @@ public partial class GoldenVectorTests
         CheckOrWrite("contracts/golden/appointment-overlap.json", VectorFile("appointment-overlap", cases,
             "Citas empalmadas (Services/Rules/AppointmentRules, paso 8.23, H2). Dos citas (PatientAppointments) se empalman si: no son la misma (SyncId; uno vacío es una cita nueva sin guardar), ninguna tiene Status 'Cancelada' (exacto; 'Atendida' sí cuenta), tienen la misma Date (solo la fecha, dateOnly) y sus horarios [inicio, fin) se cruzan: inicioA < finB y inicioB < finA. Tocarse no es empalme.",
             "interval: en segundos desde la medianoche de su Date. El inicio es la hora de Time leída con la regla de patient-summary.json ('time': H:mm o HH:mm, :ss opcional, AM/PM opcional; lo que no se lee, las 10:00); 'minutes' es DurationMinutes, o 30 si es 0 o negativa (la agenda la dibuja igual); el fin, inicio + minutes. El fin puede pasar de 86400 (la medianoche) y sigue contando solo en su mismo día: no se compara con las citas del día siguiente.",
-            "Diferencia a propósito con DateTime.TryParse (la agenda de la PC lo usaba hasta v1.39.0): '3 PM' y '7:5' no se leen y cuentan como las 10:00. TPVC siempre escribe 'HH:mm'.",
+            "Diferencia a propósito con DateTime.TryParse (la agenda de la PC lo usaba hasta v1.39.0): '3 PM' y '7:5' no se leen y cuentan como las 10:00. Desde v1.14 la agenda escribe 'HH:mm'; las horas escritas a mano en v1.7–v1.13 ('5 pm', '12 PM', '4.30 pm', '16:30 PM', '7:5') la PC las pasa a 'HH:mm' una sola vez con el lector de antes y suben como una edición, así que Kotlin solo encuentra lo que esta regla lee o lo que ningún lector leía (que siempre se mostró a las 10:00).",
             "pairs: los pares empalmados de la lista, cada par una vez [primera, segunda] por hora y luego SyncId en minúsculas (orden ordinal), los días en orden. Con 'involving' (los SyncId de las citas que acaban de bajar) solo los pares en que está alguna; null = todos.",
             "Antes de agendar o cambiar una cita: sincronización rápida (3 s como máximo, regla «Sincronización rápida» de schema.json) y luego la pregunta 'Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?'. Después de bajar: 'pairs' con las citas que llegaron de hoy en adelante, aviso y la marca 'Empalme' en la agenda. Nunca se cancela una cita sola."));
     }
@@ -212,6 +212,19 @@ public partial class GoldenVectorTests
     private static JsonObject ColumnOf(JsonObject schema, string table, string column) =>
         TableOf(schema, table)["columns"]!.AsArray().Select(c => c!.AsObject()).Single(c => c["name"]!.GetValue<string>() == column);
 
+    private static void AddReference(JsonObject schema, string table, string column, bool required) =>
+        TableOf(schema, table)["references"]!.AsArray().Add(new JsonObject
+        {
+            ["column"] = column, ["localProperty"] = column[..^"SyncId".Length] + "Id", ["principal"] = "PatientConsultation",
+            ["required"] = required, ["kind"] = "foreignKey", ["onDelete"] = required ? "cascade" : "setNull"
+        });
+
+    private static void AddReferenceColumn(JsonObject schema, string table, string column, bool nullable) =>
+        TableOf(schema, table)["columns"]!.AsArray().Add(new JsonObject
+        {
+            ["name"] = column, ["role"] = "reference", ["remoteType"] = "TEXT", ["nullable"] = nullable, ["clrType"] = "Guid"
+        });
+
     [TestMethod]
     public void TheFrozenSchema_RejectsChangesThatAreNotAdditive()
     {
@@ -235,6 +248,8 @@ public partial class GoldenVectorTests
                      ("una referencia opcional pasa a obligatoria", s => TableOf(s, "InventoryMovements")["references"]!.AsArray()
                          .Single(r => r!["column"]!.GetValue<string>() == "SaleItemSyncId")!["required"] = true),
                      ("un índice único nuevo en una tabla que ya existe", s => TableOf(s, "Patients")["unique"]!.AsArray().Add(new JsonArray("RecordNumber"))),
+                     ("una referencia obligatoria nueva en una tabla que ya existe", s => AddReference(s, "Appointments", "ConsultationSyncId", required: true)),
+                     ("una columna de referencia nueva sin nulo en una tabla que ya existe", s => AddReferenceColumn(s, "Appointments", "ConsultationSyncId", nullable: false)),
                  })
         {
             // "Antes", el archivo de hoy; "generado", el cambiado
@@ -254,6 +269,11 @@ public partial class GoldenVectorTests
                          ["name"] = "CountedQuantity", ["role"] = "data", ["remoteType"] = "INTEGER", ["nullable"] = true, ["clrType"] = "int", ["derived"] = false
                      })),
                      ("un valor nuevo del enum (8.20: Conteo = 9)", s => ColumnOf(s, "InventoryMovements", "MovementType")["enumValues"]!["Conteo"] = 9),
+                     ("una referencia opcional nueva en una tabla que ya existe", s =>
+                     {
+                         AddReferenceColumn(s, "Appointments", "ConsultationSyncId", nullable: true);
+                         AddReference(s, "Appointments", "ConsultationSyncId", required: false);
+                     }),
                      ("una columna pasa a derivada (8.20: las existencias)", s => ColumnOf(s, "Products", "CurrentStock")["derived"] = true),
                      ("otra nota", s => ColumnOf(s, "Products", "CurrentStock")["note"] = "Otra nota"),
                  })

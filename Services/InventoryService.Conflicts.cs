@@ -103,18 +103,23 @@ public partial class InventoryService
         }).ToList();
     }
 
-    /// <summary>Paso 8.23: lo que una bajada trajo y choca con lo de este equipo (empalmes y posibles duplicados).</summary>
-    public event Action<SyncArrivals>? OnSyncArrivals;
+    // ================================================================== avisos de lo que llegó (persistentes)
 
-    /// <summary>La sincronización avisa lo que llegó (en el hilo de la interfaz).</summary>
-    public void NotifySyncArrivals(SyncArrivals arrivals)
+    /// <summary>
+    /// Paso 8.23: cambiaron los avisos de lo que llegó de otro equipo (empalmes y posibles duplicados): llegó algo nuevo de la
+    /// sincronización. Se quedan en la base local hasta que el médico los descarta (<see cref="SyncNotices"/>).
+    /// </summary>
+    public event Action? OnSyncNoticesChanged;
+
+    /// <summary>La sincronización avisa que agregó avisos (en el hilo de la interfaz).</summary>
+    public void NotifySyncNoticesChanged()
     {
-        if (arrivals.IsEmpty || OnSyncArrivals == null) return;
-        foreach (var handler in OnSyncArrivals.GetInvocationList().Cast<Action<SyncArrivals>>())
+        if (OnSyncNoticesChanged == null) return;
+        foreach (var handler in OnSyncNoticesChanged.GetInvocationList().Cast<Action>())
         {
             try
             {
-                handler(arrivals);
+                handler();
             }
             catch (Exception ex)
             {
@@ -122,4 +127,18 @@ public partial class InventoryService
             }
         }
     }
+
+    /// <summary>Los avisos de ahora, con los datos de ahora; lo que ya no aplica se depura.</summary>
+    public Task<SyncArrivals> GetSyncNoticesAsync() => SyncNotices.LoadAsync(_contextFactory, ClinicClock.Today);
+
+    /// <summary>Agrega avisos (lo que llegó; también las pruebas y las capturas). true si cambió algo.</summary>
+    public async Task<bool> AddSyncNoticesAsync(SyncArrivals arrivals)
+    {
+        var changed = await SyncNotices.AddAsync(_contextFactory, arrivals);
+        if (changed) NotifySyncNoticesChanged();
+        return changed;
+    }
+
+    /// <summary>«Entendido»: lo que se ve de ese aviso se descarta para siempre en este equipo.</summary>
+    public Task DismissSyncNoticesAsync(SyncNoticeKind kind) => SyncNotices.DismissAsync(_contextFactory, kind);
 }

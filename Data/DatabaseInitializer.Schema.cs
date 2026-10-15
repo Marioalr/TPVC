@@ -38,6 +38,18 @@ public static partial class DatabaseInitializer
             // trigger cuya definición cambió (una columna nueva) se vuelve a crear
             SyncChangeLog.EnsureInstalled(context);
 
+            // Paso 8.23: una sola vez, las horas de cita escritas a mano en v1.7–v1.13 ("5 pm", "4.30 pm") pasan a "HH:mm",
+            // con el guardado de siempre (después de los triggers: suben como una edición). Antes del resumen derivado, que
+            // las lee con la misma regla
+            try
+            {
+                Services.AppointmentTimeMigration.Run(context);
+            }
+            catch (Exception ex)
+            {
+                Services.AppLogger.Warn($"No se pudieron normalizar las horas de las citas: {ex.Message}");
+            }
+
             // Paso 8.19: la foto de las diferencias que la base ya traía entre sus existencias y el libro de movimientos,
             // una sola vez (también en un respaldo anterior que se restaura): la verificación solo reporta lo nuevo
             Services.StockLedger.EnsureBaseline(context);

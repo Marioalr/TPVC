@@ -42,7 +42,8 @@ public sealed record DuplicatePatientPair(PatientRecord First, PatientRecord Sec
 /// <summary>
 /// Paso 8.23: lo que una bajada trajo y choca con lo de este equipo: citas que se empalman (de hoy en adelante) y expedientes
 /// que pueden ser el mismo paciente. Solo se revisa lo que llegó (las filas que la bajada creó o cambió aquí), nunca en la
-/// primera descarga de una base (ahí llega todo).
+/// primera descarga de una base (ahí llega todo). Va a los avisos de este equipo (<see cref="SyncNotices"/>), que se quedan
+/// hasta que el médico los descarta; los mismos tipos sirven para mostrarlos.
 /// </summary>
 public sealed class SyncArrivals
 {
@@ -61,8 +62,8 @@ public sealed class SyncArrivals
     /// <summary>El aviso de los empalmes que llegaron (vacío si no hay): los tres primeros y cuántos más.</summary>
     public string OverlapNotice => Overlaps.Count == 0
         ? string.Empty
-        : (Overlaps.Count == 1 ? "Empalme en la agenda" : "Empalmes en la agenda") + " (llegó de otro equipo): " +
+        : (Overlaps.Count == 1 ? "Empalme en la agenda" : "Empalmes en la agenda") + " con lo que llegó de otro equipo: " +
           string.Join("; ", Overlaps.Take(3).Select(o => o.Text)) +
           (Overlaps.Count > 3 ? $" y {Overlaps.Count - 3} más" : string.Empty) +
-          ". Revise la agenda; no se canceló ninguna cita.";
+          ". No se canceló ninguna cita: decida cuál mover o cancelar.";
 }

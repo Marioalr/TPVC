@@ -139,6 +139,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Border Padding="18,14" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,0,0,1">
@@ -147,8 +148,26 @@
                             <TextBlock Style="{StaticResource TextCaption}" Text="Escriba en el buscador de arriba en cualquier momento: nombre, folio o teléfono." Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
-                    <!-- Paso 8.23: posibles expedientes duplicados que llegaron de otro equipo -->
+                    <!-- Paso 8.23: citas empalmadas que llegaron de otro equipo (se queda hasta «Entendido») -->
                     <Border Grid.Row="1" Style="{StaticResource NoticeWarning}" Margin="14,14,14,0"
+                            Visibility="{Binding Home.HasOverlapNotice, Converter={StaticResource BoolToVis}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Home.OverlapNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Style="{StaticResource ButtonGhost}" Padding="8,2" MinHeight="0" Margin="12,0,0,0" VerticalAlignment="Center"
+                                    Content="Ver en la agenda" Command="{Binding ShowOverlapsInAgendaCommand}"
+                                    Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
+                            <Button Grid.Column="2" Style="{StaticResource ButtonGhost}" Padding="8,2" MinHeight="0" Margin="4,0,0,0" VerticalAlignment="Center"
+                                    Content="Entendido" Command="{Binding Home.DismissOverlapNoticeCommand}"
+                                    Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
+                        </Grid>
+                    </Border>
+                    <!-- Paso 8.23: posibles expedientes duplicados que llegaron de otro equipo (se queda hasta «Entendido») -->
+                    <Border Grid.Row="2" Style="{StaticResource NoticeWarning}" Margin="14,14,14,0"
                             Visibility="{Binding Home.HasDuplicatePatientsNotice, Converter={StaticResource BoolToVis}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -161,7 +180,7 @@
                                     Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
                         </Grid>
                     </Border>
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Home.RecentPatients}" Margin="14,14,4,14" VerticalAlignment="Top">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>

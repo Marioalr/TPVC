@@ -72,10 +72,17 @@ public partial class TursoSyncEndToEndTests
         Assert.AreEqual(onPc.SyncId, overlap.First.SyncId, "La primera por hora");
         Assert.AreEqual(onTablet.SyncId, overlap.Second.SyncId);
 
-        // El aviso en la PC y la marca "Empalme" en la agenda de los dos equipos; ninguna cita se canceló
-        var notice = notifications.Items.Single(n => n.Kind == NotificationKind.Warning).Message;
-        StringAssert.StartsWith(notice, "Empalme en la agenda (llegó de otro equipo): ");
-        StringAssert.Contains(notice, $"{ana.FullName} (10:30) y {luis.FullName} (10:45)");
+        // El aviso en la PC (se queda hasta «Entendido», también al reiniciar) y la marca "Empalme" en la agenda de los dos
+        // equipos; ninguna cita se canceló
+        await WaitUntilAsync(() => records.Home.HasOverlapNotice);
+        StringAssert.StartsWith(records.Home.OverlapNoticeText, "Empalme en la agenda con lo que llegó de otro equipo: ");
+        StringAssert.Contains(records.Home.OverlapNoticeText, $"{ana.FullName} (10:30) y {luis.FullName} (10:45)");
+        Assert.IsFalse(notifications.Items.Any(n => n.Kind == NotificationKind.Warning), "Ya no es una nota que se va sola");
+        var (restarted, _) = await OpenRecordsAsync(pc);
+        Assert.IsTrue(restarted.Home.HasOverlapNotice, "Sigue al cerrar y abrir TPVC");
+        await restarted.ShowOverlapsInAgendaAsync();
+        Assert.IsTrue(restarted.Agenda.IsAgendaPanelOpen, "«Ver en la agenda» la abre");
+        Assert.AreEqual(day, restarted.Agenda.AgendaPanelDate, "en el día del empalme");
         foreach (var device in new[] { pc, tablet })
         {
             var slots = await AgendaOfAsync(device, day);
@@ -134,6 +141,7 @@ public partial class TursoSyncEndToEndTests
         var pair = pcSync.Arrivals.DuplicatePatients.Single();
         CollectionAssert.AreEquivalent(new[] { onPc.SyncId, onTablet.SyncId }, new[] { pair.First.SyncId, pair.Second.SyncId });
 
+        await WaitUntilAsync(() => records.Home.HasDuplicatePatientsNotice);
         var banner = records.Home.DuplicatePatientsNoticeText;
         Assert.IsTrue(records.Home.HasDuplicatePatientsNotice);
         StringAssert.StartsWith(banner, "Posible expediente duplicado con lo que llegó de otro equipo: ");
@@ -143,14 +151,54 @@ public partial class TursoSyncEndToEndTests
         Assert.AreEqual(2, (await pc.Inventory.GetPatientsAsync()).Count(p => p.FullName.Contains("IXCHEL", StringComparison.OrdinalIgnoreCase)),
             "Nunca se une nada solo");
 
-        records.Home.DismissDuplicatePatientsNotice();
-        Assert.IsFalse(records.Home.HasDuplicatePatientsNotice);
+        var (restarted, _) = await OpenRecordsAsync(pc);
+        Assert.IsTrue(restarted.Home.HasDuplicatePatientsNotice, "Sigue al cerrar y abrir TPVC");
+        await restarted.Home.DismissDuplicatePatientsNoticeAsync();
+        Assert.IsFalse(restarted.Home.HasDuplicatePatientsNotice);
+        Assert.IsFalse((await OpenRecordsAsync(pc)).Records.Home.HasDuplicatePatientsNotice, "Descartado para siempre en este equipo");
 
         // Un equipo que baja todo por primera vez no avisa lo que ya estaba en la nube
         var laptop = CreateDevice("laptop", seed: false);
         var first = await laptop.Sync.SyncAsync();
         Assert.IsTrue(first.Success, first.ErrorMessage);
         Assert.IsTrue(first.Arrivals.IsEmpty, "En la primera descarga llega todo: no se revisa");
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 4000)
+    {
+        for (int waited = 0; waited < timeoutMs && !condition(); waited += 20) await Task.Delay(20);
+        Assert.IsTrue(condition());
+    }
+
+    [TestMethod]
+    public async Task ArrivalsOfASyncThatFailsAfterApplyingThem_AreRaisedByTheNextOne()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        var a = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Ixchel Hernández Tun", BirthDate = new DateTime(1980, 5, 4) });
+        var b = await pc.Inventory.SavePatientAsync(new PatientRecord { FullName = "Rosalba Quintero Ek", BirthDate = new DateTime(1975, 1, 9) });
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        await tablet.Inventory.SavePatientAsync(new PatientRecord { FullName = "IXCHEL HERNANDEZ TUN", BirthDate = new DateTime(1980, 5, 4) });
+        await tablet.Inventory.SavePatientAsync(new PatientRecord { FullName = "ROSALBA QUINTERO EK", BirthDate = new DateTime(1975, 1, 9) });
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // La PC baja de a un expediente por página: aplica el primero (y su cursor) y la segunda página se cae
+        pc.Sync.PullPageSizeOverride = 1;
+        int pages = 0;
+        _server.FailWhen = sql => sql.Contains("FROM \"Patients\"", StringComparison.Ordinal) && sql.Contains("SyncedAtUtc", StringComparison.Ordinal) && ++pages == 2;
+        var failed = await pc.Sync.SyncAsync();
+        _server.FailWhen = null;
+        Assert.IsFalse(failed.Success, "La sincronización se cortó después de aplicar el primer expediente");
+        Assert.IsTrue((await pc.Inventory.GetSyncNoticesAsync()).IsEmpty, "No alcanzó a revisar");
+
+        var next = await pc.Sync.SyncAsync();
+        Assert.IsTrue(next.Success, next.ErrorMessage);
+        var notices = await pc.Inventory.GetSyncNoticesAsync();
+        Assert.HasCount(2, notices.DuplicatePatients, "Los dos pares avisan: también el del expediente que llegó en la sincronización que se cortó");
+        foreach (var mine in new[] { a.SyncId, b.SyncId })
+        {
+            Assert.IsTrue(notices.DuplicatePatients.Any(p => p.First.SyncId == mine || p.Second.SyncId == mine));
+        }
     }
 
     // ================================================================== sincronización rápida
@@ -370,6 +418,196 @@ public partial class TursoSyncEndToEndTests
         tablet.Settings.SaveSettings(off);
         Assert.AreEqual(QuickSyncOutcome.Off, await tablet.Inventory.QuickSyncAsync());
         Assert.AreEqual(requests, _server.RequestCount);
+    }
+
+    [TestMethod]
+    public async Task ChargingWhileABackgroundSyncIsStuck_WaitsAbout3Seconds_AndTheTicketGetsTheDeviceLetter()
+    {
+        var pc = await CloudWithIdentityAsync();
+        var (checkout, receipt) = await CartWithOneProductAsync(pc);
+        var hold = new TaskCompletionSource();
+        _server.BeforeExecuteAsync = _ => hold.Task;
+        // La sincronización automática tiene el candado y espera a la red
+        var background = pc.Sync.SyncAsync(isBackgroundAutoSync: true);
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            await checkout.ChargeAsync();
+            clock.Stop();
+            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds, "La rápida no alcanzó a correr, y el folio tampoco espera a la nube");
+            Assert.IsTrue(pc.Sync.IsQuickSyncHanging);
+        }
+        finally
+        {
+            hold.TrySetResult();
+            _server.BeforeExecuteAsync = null;
+        }
+
+        Assert.AreEqual($"{FolioFactory.Series(FolioKind.Sale, DateTime.Today)}-P1-0001", receipt()?.Folio);
+        Assert.IsTrue((await background).Success, "La automática termina sola cuando la nube responde");
+        for (int i = 0; i < 100 && pc.Sync.IsQuickSyncHanging; i++) await Task.Delay(50);
+        Assert.IsFalse(pc.Sync.IsQuickSyncHanging);
+    }
+
+    // ================================================================== crear un expediente
+
+    private static void FillNewPatient(PatientFormViewModel form, string first, string last, string birth)
+    {
+        form.FormFirstName = first;
+        form.FormLastName = last;
+        form.FormBirthDateText = birth;
+        form.FormGender = "Femenino";
+        form.SetAllergiesDenied();
+    }
+
+    [TestMethod]
+    public async Task CreatingAPatientOnThePc_SyncsFirst_AndAsksAboutTheOneTheTabletJustCreated()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        var (records, _) = await OpenRecordsAsync(pc);
+        var onTablet = await tablet.Inventory.SavePatientAsync(new PatientRecord { FullName = "Ixchel Hernández Tun", BirthDate = new DateTime(1980, 5, 4) });
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        var questions = new List<string>();
+        var confirm = DialogService.ConfirmHandler;
+        DialogService.ConfirmHandler = (message, _) => { questions.Add(message); return false; };
+        try
+        {
+            await records.NewPatientAsync();
+            FillNewPatient(records.PatientForm, "Ixchel", "Hernández Tun", "04/05/1980");
+            await records.PatientForm.SavePatientModalAsync();
+        }
+        finally
+        {
+            DialogService.ConfirmHandler = confirm;
+        }
+
+        StringAssert.StartsWith(questions.Single(), $"Ya hay un expediente parecido:\n\n• Ixchel Hernández Tun · {onTablet.RecordNumber} · misma fecha de nacimiento");
+        Assert.IsTrue(records.PatientForm.IsPatientModalOpen, "Sin confirmar, el formulario sigue abierto");
+        Assert.AreEqual(1, (await pc.Inventory.GetPatientsAsync()).Count(p => p.FullName.Contains("Ixchel", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public async Task CreatingAPatientWithACloudThatDoesNotAnswer_WaitsAtMost3Seconds()
+    {
+        var pc = await CloudWithIdentityAsync();
+        var (records, _) = await OpenRecordsAsync(pc);
+        await records.NewPatientAsync();
+        FillNewPatient(records.PatientForm, "Teodora", "Salas Ruiz", "03/03/1977");
+        var hold = new TaskCompletionSource();
+        _server.BeforeExecuteAsync = _ => hold.Task;
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            await records.PatientForm.SavePatientModalAsync();
+            clock.Stop();
+            Assert.IsGreaterThanOrEqualTo(2.8, clock.Elapsed.TotalSeconds, "Se esperó a la sincronización rápida");
+            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds, "3 s y no más: el folio no espera otros 2 s");
+        }
+        finally
+        {
+            hold.TrySetResult();
+            _server.BeforeExecuteAsync = null;
+        }
+        Assert.IsFalse(records.PatientForm.IsPatientModalOpen);
+        var created = (await pc.Inventory.GetPatientsAsync()).Single(p => p.FullName == "Teodora Salas Ruiz");
+        StringAssert.Contains(created.RecordNumber, "-P1-", "Sin respuesta de la nube, el folio lleva la letra");
+        for (int i = 0; i < 100 && pc.Sync.IsQuickSyncHanging; i++) await Task.Delay(50);
+    }
+
+    [TestMethod]
+    public async Task CreatingAPatientOffline_DoesNotWait()
+    {
+        var pc = await CloudWithIdentityAsync();
+        var (records, _) = await OpenRecordsAsync(pc);
+        await records.NewPatientAsync();
+        FillNewPatient(records.PatientForm, "Teodora", "Salas Ruiz", "03/03/1977");
+        _server.IsOffline = true;
+
+        var clock = Stopwatch.StartNew();
+        await records.PatientForm.SavePatientModalAsync();
+        clock.Stop();
+
+        Assert.IsLessThan(1.5, clock.Elapsed.TotalSeconds, "Sin red no se espera");
+        StringAssert.Contains((await pc.Inventory.GetPatientsAsync()).Single(p => p.FullName == "Teodora Salas Ruiz").RecordNumber, "-P1-");
+    }
+
+    // ================================================================== el formulario de la agenda y las recargas
+
+    [TestMethod]
+    public async Task TheQuickSyncBeforeScheduling_ReloadsTheOpenAgenda_AndTheFormSurvives()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        var (records, _) = await OpenRecordsAsync(pc);
+        var patients = await pc.Inventory.GetPatientsAsync();
+        var luis = await PatientBySyncIdAsync(tablet, patients[1].SyncId);
+        var day = DateTime.Today.AddDays(2);
+        await ScheduleAsync(tablet, luis, day, "10:30");
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // La agenda abierta: lo que baje la recarga
+        await records.Agenda.OpenAgendaOnDateAsync(day);
+        await records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree && s.TimeText == "10:00"));
+        records.Agenda.AgendaFormPatient = records.Patients.First(p => p.SyncId == patients[0].SyncId);
+        records.Agenda.AgendaFormReason = "Control";
+        records.Agenda.AgendaFormDuration = 60;
+
+        var questions = new List<string>();
+        var confirm = DialogService.ConfirmHandler;
+        DialogService.ConfirmHandler = (message, _) => { questions.Add(message); return false; };
+        try
+        {
+            await records.Agenda.SaveAgendaFormAsync();
+            await WaitUntilAsync(() => records.Agenda.AgendaSlots.Any(s => s.HasAppointment));
+        }
+        finally
+        {
+            DialogService.ConfirmHandler = confirm;
+        }
+
+        StringAssert.StartsWith(questions.Single(), $"Ya hay una cita a las 10:30 con {luis.FullName}.");
+        var open = records.Agenda.AgendaSlots.Single(s => s.IsFormOpen);
+        Assert.AreEqual("10:00", open.TimeText, "La recarga no cerró el formulario: su hueco sigue libre");
+        Assert.AreEqual(patients[0].SyncId, records.Agenda.AgendaFormPatient?.SyncId);
+        Assert.AreEqual("Control", records.Agenda.AgendaFormReason);
+        Assert.AreEqual(60, records.Agenda.AgendaFormDuration);
+    }
+
+    // ================================================================== horas escritas a mano en v1.7–v1.13
+
+    [TestMethod]
+    public async Task HandWrittenAppointmentTimes_AreNormalizedOnce_AndUploadedOnce()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(5);
+        // Como las guardaba la agenda de v1.7–v1.13 (tal cual se escribían), y ya en la nube
+        foreach (var time in new[] { "5 pm", "12 PM", "4.30 pm", "16:30 PM", "7:5", "mediodía" }) await ScheduleAsync(pc, patient, day, time);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+
+        // Al actualizar, la base se abre y se normaliza una sola vez
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            TPVC.Data.DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
+            TPVC.Data.DatabaseInitializer.EnsureSchema(db);
+        }
+        var expected = new[] { "17:00", "12:00", "16:30", "16:30", "07:05", "mediodía" };
+        CollectionAssert.AreEquivalent(expected, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(),
+            "Lo que la regla no lee y el lector de antes sí pasa a HH:mm; lo que ninguno lee se queda");
+
+        var upload = await pc.Sync.SyncAsync();
+        Assert.IsTrue(upload.Success, upload.ErrorMessage);
+        Assert.AreEqual(5, upload.RowsPushed, "Suben como una edición, una vez");
+        Assert.AreEqual(0, (await pc.Sync.SyncAsync()).RowsPushed);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0, AppointmentTimeMigration.Run(db), "Una sola vez por base");
+        }
+
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        CollectionAssert.AreEquivalent(expected, (await tablet.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(),
+            "Los demás equipos quedan con la misma hora");
     }
 
     // ================================================================== MergedIntoSyncId

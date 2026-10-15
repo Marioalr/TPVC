@@ -154,22 +154,21 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     // ================================================================== citas (suscripción del coordinador)
 
     private Action? _onAppointmentsChangedHandler;
-    private Action<SyncArrivals>? _onSyncArrivalsHandler;
+    private Action? _onSyncNoticesChangedHandler;
 
     private void InitializePacientes()
     {
         if (_inventoryService != null)
         {
-            // Paso 8.23: lo que llegó de otro equipo y choca con lo de aquí: el aviso de empalmes (la agenda ya los marca al
-            // recargarse) y el banner de posibles expedientes duplicados en el inicio de Pacientes
-            _onSyncArrivalsHandler = arrivals =>
+            // Paso 8.23: lo que llegó de otro equipo y choca con lo de aquí (citas empalmadas y posibles duplicados): los avisos
+            // del inicio de Pacientes, que se quedan hasta que el médico los descarta
+            _onSyncNoticesChangedHandler = () =>
             {
-                void Show() => ShowSyncArrivals(arrivals);
                 try
                 {
                     if (_ui.IsOffUiThread)
                     {
-                        _ui.InvokeAsync(Show);
+                        _ui.InvokeAsync(async () => await Home.LoadSyncNoticesAsync());
                         return;
                     }
                 }
@@ -177,9 +176,9 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
                 {
                     // Sin WPF (pruebas en Linux)
                 }
-                Show();
+                _ = Home.LoadSyncNoticesAsync();
             };
-            _inventoryService.OnSyncArrivals += _onSyncArrivalsHandler;
+            _inventoryService.OnSyncNoticesChanged += _onSyncNoticesChangedHandler;
 
             _onAppointmentsChangedHandler = () =>
             {
@@ -207,18 +206,19 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         {
             _inventoryService.OnAppointmentsChanged -= _onAppointmentsChangedHandler;
         }
-        if (_inventoryService != null && _onSyncArrivalsHandler != null)
+        if (_inventoryService != null && _onSyncNoticesChangedHandler != null)
         {
-            _inventoryService.OnSyncArrivals -= _onSyncArrivalsHandler;
+            _inventoryService.OnSyncNoticesChanged -= _onSyncNoticesChangedHandler;
         }
     }
 
-    /// <summary>Paso 8.23: el aviso de los empalmes que llegaron y los pares de posibles duplicados en el banner.</summary>
-    public void ShowSyncArrivals(SyncArrivals arrivals)
-    {
-        if (arrivals.DuplicatePatients.Count > 0) Home.AddDuplicatePairs(arrivals.DuplicatePatients);
-        if (arrivals.Overlaps.Count > 0) _feedback.ShowWarning(arrivals.OverlapNotice);
-    }
+    /// <summary>
+    /// Paso 8.23: «Ver en la agenda» del aviso de citas empalmadas: abre la agenda en el día del primer empalme (el aviso se
+    /// queda hasta «Entendido»).
+    /// </summary>
+    [RelayCommand]
+    public Task ShowOverlapsInAgendaAsync() =>
+        Agenda.OpenAgendaOnDateAsync(Home.OverlapPairs.FirstOrDefault()?.First.Date ?? ClinicClock.Today);
 
     // ================================================================== páginas
 

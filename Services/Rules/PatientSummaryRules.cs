@@ -67,30 +67,38 @@ public static class PatientSummaryRules
     /// La hora de una cita para ordenar: <c>H:mm</c> o <c>HH:mm</c>, con segundos opcionales, y opcionalmente seguida de
     /// AM o PM (también <c>a.m.</c>, <c>p. m.</c>, sin distinguir mayúsculas). Lo que no se puede leer cuenta como las 10:00.
     /// </summary>
-    public static TimeSpan TimeOfDay(string? time)
+    public static TimeSpan TimeOfDay(string? time) => TryTimeOfDay(time, out var value) ? value : DefaultTime;
+
+    /// <summary>
+    /// Paso 8.23: lo mismo que <see cref="TimeOfDay"/>, pero dice si la hora se pudo leer (false: vacía o en otro formato, que
+    /// cuenta como las 10:00). Lo usa la normalización única de las horas escritas a mano en v1.7.0–v1.13.0.
+    /// </summary>
+    public static bool TryTimeOfDay(string? time, out TimeSpan value)
     {
-        if (string.IsNullOrWhiteSpace(time)) return DefaultTime;
+        value = DefaultTime;
+        if (string.IsNullOrWhiteSpace(time)) return false;
         var text = time.Trim().ToLowerInvariant().Replace(" ", string.Empty).Replace(".", string.Empty);
         bool? pm = null;
         if (text.EndsWith("am", StringComparison.Ordinal)) { pm = false; text = text[..^2]; }
         else if (text.EndsWith("pm", StringComparison.Ordinal)) { pm = true; text = text[..^2]; }
 
         var parts = text.Split(':');
-        if (parts.Length is < 2 or > 3 || parts.Any(p => p.Length is 0 or > 2 || !p.All(char.IsAsciiDigit))) return DefaultTime;
+        if (parts.Length is < 2 or > 3 || parts.Any(p => p.Length is 0 or > 2 || !p.All(char.IsAsciiDigit))) return false;
         int hours = int.Parse(parts[0], CultureInfo.InvariantCulture);
         int minutes = int.Parse(parts[1], CultureInfo.InvariantCulture);
         int seconds = parts.Length == 3 ? int.Parse(parts[2], CultureInfo.InvariantCulture) : 0;
-        if (parts[1].Length != 2 || (parts.Length == 3 && parts[2].Length != 2) || minutes > 59 || seconds > 59) return DefaultTime;
+        if (parts[1].Length != 2 || (parts.Length == 3 && parts[2].Length != 2) || minutes > 59 || seconds > 59) return false;
         if (pm != null)
         {
-            if (hours is < 1 or > 12) return DefaultTime;
+            if (hours is < 1 or > 12) return false;
             hours = hours % 12 + (pm.Value ? 12 : 0);
         }
         else if (hours > 23)
         {
-            return DefaultTime;
+            return false;
         }
-        return new TimeSpan(hours, minutes, seconds);
+        value = new TimeSpan(hours, minutes, seconds);
+        return true;
     }
 
     /// <summary>Las columnas del resumen, en el orden del contrato.</summary>

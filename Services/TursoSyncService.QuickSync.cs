@@ -35,10 +35,20 @@ public partial class TursoSyncService : IQuickSync
     private readonly object _quickSyncGate = new();
     private Task<TursoSyncResult>? _quickSync;
 
-    // La sincronización rápida que no terminó a tiempo (mientras siga corriendo, la red no responde)
-    private Task<TursoSyncResult>? _lateQuickSync;
+    // La sincronización que no dejó terminar a la rápida a tiempo: la suya, o la que ocupaba el candado (mientras siga
+    // corriendo, la red no responde)
+    private Task? _lateQuickSync;
 
-    /// <summary>Una sincronización rápida no terminó a tiempo y sigue esperando a la nube.</summary>
+    /// <summary>
+    /// La sincronización que tiene el candado ahora (la publica <see cref="RunExclusiveAsync"/> al tomarlo y la termina al
+    /// soltarlo); null si no hay ninguna.
+    /// </summary>
+    private Task? _runInFlight;
+
+    /// <summary>
+    /// Una sincronización rápida no terminó a tiempo y la que la detuvo (la suya o una automática que tenía el candado y
+    /// esperaba a la red) sigue corriendo.
+    /// </summary>
     internal bool IsQuickSyncHanging => Volatile.Read(ref _lateQuickSync) is { IsCompleted: false };
 
     public async Task<QuickSyncOutcome> QuickSyncAsync(CancellationToken ct = default)
@@ -63,23 +73,48 @@ public partial class TursoSyncService : IQuickSync
         var waited = await Task.WhenAny(run, Task.Delay(QuickSyncBudget, ct)).ConfigureAwait(false);
         if (waited != run)
         {
-            Volatile.Write(ref _lateQuickSync, run);
+            MarkLate(run);
             AppLogger.Warn($"Turso: la sincronización rápida no terminó en {QuickSyncBudget.TotalSeconds:0.#} s; sigue en segundo plano y se usan los datos de este equipo.");
             return QuickSyncOutcome.TimedOut;
         }
         var result = await run.ConfigureAwait(false);
-        return result.Success ? QuickSyncOutcome.Synced : QuickSyncOutcome.Failed;
+        if (result.Success) return QuickSyncOutcome.Synced;
+
+        // No consiguió el candado en su tiempo: otra sincronización (la automática) lo tiene y sigue esperando a la red. El
+        // folio tampoco la espera mientras siga corriendo
+        if (Volatile.Read(ref _runInFlight) is { IsCompleted: false })
+        {
+            MarkLate(run);
+            AppLogger.Warn("Turso: otra sincronización tiene ocupada la nube; la rápida no alcanzó a correr y se usan los datos de este equipo.");
+            return QuickSyncOutcome.TimedOut;
+        }
+        return QuickSyncOutcome.Failed;
+    }
+
+    /// <summary>
+    /// La rápida no terminó a tiempo: mientras sigan corriendo ella o la que tiene el candado (la que la detuvo), la red no
+    /// responde. Las dos, porque al vencer la espera la rápida puede soltar su turno un instante después.
+    /// </summary>
+    private void MarkLate(Task run)
+    {
+        var busy = Volatile.Read(ref _runInFlight);
+        Task late = busy is { IsCompleted: false } && !ReferenceEquals(busy, run) ? Task.WhenAll(run, busy) : run;
+        Volatile.Write(ref _lateQuickSync, late);
     }
 
     // =========================================================================
     // LO QUE LLEGÓ DE OTRO EQUIPO
     // =========================================================================
 
-    // Los expedientes y las citas que la bajada de esta sincronización creó o cambió aquí
+    // Los expedientes y las citas que la bajada creó o cambió aquí y que todavía no se revisan: se quedan hasta que una
+    // sincronización llega a revisarlas (si una se corta después de aplicarlas, ya pasaron los cursores y no vuelven a bajar)
     private readonly object _arrivalsGate = new();
     private readonly HashSet<Guid> _arrivedPatients = new();
     private readonly HashSet<Guid> _arrivedAppointments = new();
     private SyncArrivals _arrivals = SyncArrivals.None;
+
+    // Esta sincronización revisa lo que llega (no en la primera descarga de una base: ahí llega todo)
+    private volatile bool _checkingArrivals;
 
     private void ResetArrivals()
     {
@@ -91,20 +126,32 @@ public partial class TursoSyncService : IQuickSync
         }
     }
 
-    /// <summary>Anota las filas que una página de la bajada creó o cambió (solo expedientes y citas).</summary>
+    /// <summary>Lo revisado en la última sincronización buena, para su resultado; se entrega una vez.</summary>
+    private SyncArrivals TakeArrivals()
+    {
+        lock (_arrivalsGate)
+        {
+            var arrivals = _arrivals;
+            _arrivals = SyncArrivals.None;
+            return arrivals;
+        }
+    }
+
+    /// <summary>Anota las filas que una página de la bajada creó o cambió (solo expedientes y citas, y solo si se revisan).</summary>
     private void NoteArrivals(Type type, IReadOnlyCollection<Guid> syncIds)
     {
-        if (syncIds.Count == 0) return;
+        if (syncIds.Count == 0 || !_checkingArrivals) return;
         var target = type == typeof(PatientRecord) ? _arrivedPatients : type == typeof(PatientAppointment) ? _arrivedAppointments : null;
         if (target == null) return;
         lock (_arrivalsGate) target.UnionWith(syncIds);
     }
 
     /// <summary>
-    /// Después de bajar: las citas que llegaron (de hoy en adelante, sin cancelar) contra las de su mismo día, y los expedientes
-    /// que llegaron contra los de este equipo. Solo lee la base local.
+    /// Revisa lo que llegó y lo deja en los avisos de este equipo (<see cref="SyncNotices"/>, se quedan hasta que el médico
+    /// los descarta); solo entonces se olvidan esas filas. Si la sincronización se corta antes, la siguiente que revise las
+    /// incluye.
     /// </summary>
-    private async Task<SyncArrivals> CheckArrivalsAsync(CancellationToken ct)
+    private async Task CheckAndKeepArrivalsAsync(CancellationToken ct)
     {
         HashSet<Guid> patients, appointments;
         lock (_arrivalsGate)
@@ -112,6 +159,22 @@ public partial class TursoSyncService : IQuickSync
             patients = new HashSet<Guid>(_arrivedPatients);
             appointments = new HashSet<Guid>(_arrivedAppointments);
         }
+        var arrivals = await CheckArrivalsAsync(patients, appointments, ct);
+        if (await SyncNotices.AddAsync(_contextFactory, arrivals, ct)) RunOnUiThread(() => _inventoryService?.NotifySyncNoticesChanged());
+        lock (_arrivalsGate)
+        {
+            _arrivedPatients.ExceptWith(patients);
+            _arrivedAppointments.ExceptWith(appointments);
+            _arrivals = arrivals;
+        }
+    }
+
+    /// <summary>
+    /// Después de bajar: las citas que llegaron (de hoy en adelante, sin cancelar) contra las de su mismo día, y los expedientes
+    /// que llegaron contra los de este equipo. Solo lee la base local.
+    /// </summary>
+    private async Task<SyncArrivals> CheckArrivalsAsync(IReadOnlySet<Guid> patients, IReadOnlySet<Guid> appointments, CancellationToken ct)
+    {
         if (patients.Count == 0 && appointments.Count == 0) return SyncArrivals.None;
 
         using var db = _contextFactory.CreateDbContext();

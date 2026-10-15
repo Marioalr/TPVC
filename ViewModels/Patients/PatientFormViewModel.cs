@@ -496,6 +496,7 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public async Task NewPatientAsync()
     {
+        _formSession++;
         FormPatientId = 0;
         FormErrorMessage = null;
 
@@ -562,6 +563,7 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public void EditPatient()
     {
+        _formSession++;
         if (_gate.BlockIfPatientHandedOff(_session.SelectedPatient)) return;
         if (_session.SelectedPatient == null)
         {
@@ -710,12 +712,34 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public void ClosePatientModal()
     {
+        _formSession++;
         IsPatientModalOpen = false;
         FormErrorMessage = null;
     }
 
+    // Paso 8.23: cambia cada vez que se abre o se cierra el formulario; un guardado que esperó a la nube y lo encuentra
+    // distinto (el médico lo cerró o abrió otro mientras tanto) no guarda nada
+    private int _formSession;
+
+    // Mientras se espera a la nube (hasta 3 s) un segundo «Guardar» no crea el expediente dos veces
+    private bool _savingPatient;
+
     [RelayCommand]
     public async Task SavePatientModalAsync()
+    {
+        if (_savingPatient) return;
+        _savingPatient = true;
+        try
+        {
+            await SavePatientModalCoreAsync();
+        }
+        finally
+        {
+            _savingPatient = false;
+        }
+    }
+
+    private async Task SavePatientModalCoreAsync()
     {
         if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
         {
@@ -735,6 +759,16 @@ public partial class PatientFormViewModel : ObservableObject
         }
 
         FormFullName = PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName);
+
+        // Paso 8.23 (decisión del médico, 2026-10-14): al crear un expediente, con la nube activa, la sincronización rápida
+        // (3 s como máximo; sin red o en pausa no espera) antes de revisar folio y duplicados: así se ve el paciente que la
+        // tablet acaba de dar de alta. Editar no la hace. Si el formulario se cerró mientras tanto, no se crea nada
+        if (FormPatientId == 0 && _inventoryService != null)
+        {
+            var session = _formSession;
+            await _inventoryService.QuickSyncAsync();
+            if (session != _formSession || !IsPatientModalOpen) return;
+        }
 
         var normalizedFolio = FormRecordNumber.Trim();
         // El folio probable sin cambiar: el definitivo lo pone el servicio al guardar

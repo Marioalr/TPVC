@@ -144,47 +144,79 @@ public partial class PatientsHomeViewModel : ObservableObject
         }
     }
 
-    // ================================================================== posibles duplicados (paso 8.23)
+    // ================================================================== avisos de lo que llegó de otro equipo (paso 8.23)
 
-    /// <summary>Los pares que bajaron de otro equipo y todavía no se cierran con "Entendido", el más reciente primero.</summary>
-    private readonly List<DuplicatePatientPair> _duplicatePairs = new();
+    // Decisión del médico (2026-10-14): los dos avisos se quedan hasta «Entendido», también al cerrar y abrir TPVC. Viven en
+    // la base de este equipo (SyncNotices); sin base (pruebas de pantalla) solo en memoria
+    private IReadOnlyList<AppointmentOverlap> _overlapPairs = Array.Empty<AppointmentOverlap>();
+    private IReadOnlyList<DuplicatePatientPair> _duplicatePairs = Array.Empty<DuplicatePatientPair>();
 
-    /// <summary>Cuántos pares se muestran en el banner; los demás se cuentan.</summary>
+    /// <summary>Cuántos pares se muestran en cada aviso; los demás se cuentan.</summary>
     public const int MaxDuplicatePairsShown = 3;
 
     [ObservableProperty]
     private string _duplicatePatientsNoticeText = string.Empty;
 
+    [ObservableProperty]
+    private string _overlapNoticeText = string.Empty;
+
     public bool HasDuplicatePatientsNotice => DuplicatePatientsNoticeText.Length > 0;
+    public bool HasOverlapNotice => OverlapNoticeText.Length > 0;
 
     partial void OnDuplicatePatientsNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasDuplicatePatientsNotice));
+    partial void OnOverlapNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasOverlapNotice));
 
-    /// <summary>Los pares de la última revisión, para las pruebas y para quien quiera abrirlos.</summary>
+    /// <summary>Los pares de posibles duplicados que se muestran, el más reciente primero.</summary>
     public IReadOnlyList<DuplicatePatientPair> DuplicatePairs => _duplicatePairs;
 
-    /// <summary>
-    /// Después de bajar: suma al banner los pares de posibles duplicados que llegaron de otro equipo (uno que ya está no se
-    /// repite; si vuelve a llegar, sube al principio).
-    /// </summary>
-    public void AddDuplicatePairs(IEnumerable<DuplicatePatientPair> pairs)
+    /// <summary>Las citas empalmadas que se muestran, la más reciente primero (la primera es la que abre «Ver en la agenda»).</summary>
+    public IReadOnlyList<AppointmentOverlap> OverlapPairs => _overlapPairs;
+
+    /// <summary>Lee los avisos de la base (depurados: lo que ya no aplica se quita) y los muestra.</summary>
+    public async Task LoadSyncNoticesAsync()
     {
-        foreach (var pair in pairs)
+        if (_inventoryService == null) return;
+        try
         {
-            _duplicatePairs.RemoveAll(p => p.Key == pair.Key);
-            _duplicatePairs.Insert(0, pair);
+            ShowSyncNotices(await _inventoryService.GetSyncNoticesAsync());
         }
-        RefreshDuplicatePatientsNotice();
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudieron leer los avisos de lo que llegó de otro equipo", ex);
+        }
     }
 
-    /// <summary>"Entendido": el banner se cierra; un par que vuelva a llegar (otro equipo lo edita) vuelve a avisar.</summary>
-    [RelayCommand]
-    public void DismissDuplicatePatientsNotice()
+    /// <summary>Muestra estos avisos (lo que se lee de la base; sin base, lo que se le da).</summary>
+    public void ShowSyncNotices(SyncArrivals notices)
     {
-        _duplicatePairs.Clear();
-        RefreshDuplicatePatientsNotice();
+        // Sin cambios no se avisa a la pantalla (se lee con cada recarga de pacientes y de citas)
+        if (notices.Overlaps.Select(o => o.Text).SequenceEqual(_overlapPairs.Select(o => o.Text))
+            && notices.DuplicatePatients.Select(d => d.Key + d.Text).SequenceEqual(_duplicatePairs.Select(d => d.Key + d.Text)))
+        {
+            return;
+        }
+        _overlapPairs = notices.Overlaps;
+        _duplicatePairs = notices.DuplicatePatients;
+        RefreshSyncNotices();
     }
 
-    private void RefreshDuplicatePatientsNotice()
+    /// <summary>«Entendido» en el aviso de posibles duplicados: esos pares no vuelven a avisar en este equipo.</summary>
+    [RelayCommand]
+    public async Task DismissDuplicatePatientsNoticeAsync()
+    {
+        if (_inventoryService != null) await _inventoryService.DismissSyncNoticesAsync(SyncNoticeKind.DuplicatePatients);
+        ShowSyncNotices(new SyncArrivals(_overlapPairs, Array.Empty<DuplicatePatientPair>()));
+    }
+
+    /// <summary>«Entendido» en el aviso de citas empalmadas: esos empalmes no vuelven a avisar en este equipo.</summary>
+    [RelayCommand]
+    public async Task DismissOverlapNoticeAsync()
+    {
+        if (_inventoryService != null) await _inventoryService.DismissSyncNoticesAsync(SyncNoticeKind.Overlaps);
+        ShowSyncNotices(new SyncArrivals(Array.Empty<AppointmentOverlap>(), _duplicatePairs));
+    }
+
+    private void RefreshSyncNotices()
     {
         int count = _duplicatePairs.Count;
         DuplicatePatientsNoticeText = count == 0
@@ -193,6 +225,8 @@ public partial class PatientsHomeViewModel : ObservableObject
               string.Join("; ", _duplicatePairs.Take(MaxDuplicatePairsShown).Select(p => p.Text)) +
               (count > MaxDuplicatePairsShown ? $" y {count - MaxDuplicatePairsShown} más" : string.Empty) +
               ". Revise las dos fichas: si son la misma persona, siga con una. TPVC no los une solo.";
+        OverlapNoticeText = new SyncArrivals(_overlapPairs, Array.Empty<DuplicatePatientPair>()).OverlapNotice;
         OnPropertyChanged(nameof(DuplicatePairs));
+        OnPropertyChanged(nameof(OverlapPairs));
     }
 }

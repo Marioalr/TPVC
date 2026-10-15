@@ -123,6 +123,10 @@ public partial class PatientsWorkspace
                 var activeName = _consultationService.CurrentConsultation?.PatientName;
                 Session.SelectedPatient = Session.Patients.FirstOrDefault(p => p.FullName == activeName);
             }
+
+            // Paso 8.23: los avisos de lo que llegó de otro equipo, depurados con los expedientes de ahora (uno dado de baja o
+            // unido a otro ya no avisa)
+            await Home.LoadSyncNoticesAsync();
         }
     }
 
@@ -421,6 +425,8 @@ public partial class PatientsWorkspace
     private async Task RefreshAppointmentViewsAsync()
     {
         await Home.LoadTodayAppointmentsAsync();
+        // Paso 8.23: una cita cancelada o movida ya no avisa de su empalme
+        await Home.LoadSyncNoticesAsync();
         if (Agenda.IsAgendaPanelOpen) await Agenda.LoadAgendaPanelAsync();
         if (Session.SelectedPatient != null) await Chart.LoadPatientAppointmentsAsync(Session.SelectedPatient.Id);
     }
