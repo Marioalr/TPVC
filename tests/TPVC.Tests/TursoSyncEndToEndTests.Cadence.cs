@@ -447,7 +447,7 @@ public partial class TursoSyncEndToEndTests
         Assert.IsNotEmpty(offered, "La revisión siguió con la sincronización colgada");
         Assert.IsLessThanOrEqualTo(SyncScheduler.FastCheckInterval, offered[0] - offeredAt);
         Assert.AreEqual(2, HeartbeatsOf("device-pc") - beatsBefore, "Un latido cada 60 s también con la sincronización colgada");
-        Assert.AreEqual(1, reasons.Count, "Mientras corre no se pide otra");
+        Assert.HasCount(1, reasons, "Mientras corre no se pide otra");
         Assert.IsFalse(cadence.PendingSync.IsCompleted);
 
         // Se suelta: termina bien y trae lo de la tablet
@@ -457,7 +457,7 @@ public partial class TursoSyncEndToEndTests
         Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status, pc.Sync.StatusMessage);
         Assert.AreEqual("Mientras la PC baja", await OccupationAsync(pc, patient.SyncId));
         await driver.RunUntilAsync(driver.Now.AddMinutes(1));
-        Assert.AreEqual(1, reasons.Count, "La marca ya atendida no vuelve a sincronizar");
+        Assert.HasCount(1, reasons, "La marca ya atendida no vuelve a sincronizar");
     }
 
     // ================================================================== revisión 2: la revisión vuelve a su paso
@@ -568,7 +568,7 @@ public partial class TursoSyncEndToEndTests
 
         var gaps = checks.Zip(checks.Skip(1), (a, b) => (b - a).TotalSeconds).Distinct().ToArray();
         CollectionAssert.AreEqual(new double[] { 4 }, gaps, "Una revisión cada 4 s antes, durante y después del cambio de hora");
-        Assert.AreEqual(11 * 15, checks.Count);
+        Assert.HasCount(11 * 15, checks);
         Assert.AreEqual(11, HeartbeatsOf("device-pc"), "Un latido por minuto");
         Assert.AreEqual((start + SyncScheduler.SafetyDownloadInterval, SyncScheduler.ReasonSafety), reasons.Single(),
             "La descarga de seguridad a los 10 min, sin adelantarse ni atrasarse una hora");
