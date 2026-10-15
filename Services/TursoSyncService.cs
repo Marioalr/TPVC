@@ -1186,8 +1186,10 @@ public partial class TursoSyncService
         DbMeta.Remove(db, DbMeta.RestoredWithCloud);
         // La foto del libro de existencias era de lo que había aquí: se vuelve a tomar al terminar de bajar (paso 8.19)
         DbMeta.Remove(db, DbMeta.StockLedgerBaseline);
-        // Paso 8.23: lo que baje puede traer horas de cita escritas a mano: se normalizan después de esta descarga
+        // Paso 8.23: lo que baje puede traer horas de cita escritas a mano: se normalizan después de esta descarga (también si
+        // esta versión ya había fallado al hacerlo con lo de antes)
         DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
+        DbMeta.Remove(db, AppointmentTimeMigration.FailedVersionKey);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);

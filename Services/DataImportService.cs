@@ -233,8 +233,9 @@ public class DataImportService
                 ctx.Database.EnsureCreated();
                 DatabaseInitializer.EnsureSchema(ctx);
 
-                // Paso 8.23: en una base que nunca se ha ligado a una nube, las horas de cita escritas a mano de un respaldo anterior
-                // pasan a "HH:mm" aquí; en una ligada, después de bajar en la siguiente sincronización
+                // Paso 8.23: sin una nube configurada (sin URL), las horas de cita escritas a mano de un respaldo anterior pasan a
+                // "HH:mm" aquí, aunque el respaldo traiga el clinicId de una nube; con URL, después de bajar en la siguiente
+                // sincronización
                 try
                 {
                     AppointmentTimeMigration.RunAtOpen(ctx, _tursoSettingsService?.CurrentSettings);

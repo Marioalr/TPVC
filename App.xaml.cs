@@ -127,8 +127,8 @@ public partial class App : Application
             using var db = factory.CreateDbContext();
             DatabaseInitializer.Initialize(db, seedDemoData: false);
 
-            // Paso 8.23: en una base que nunca se ha ligado a una nube, las horas de cita escritas a mano en v1.7–v1.13 se pasan
-            // a "HH:mm" al abrir; en una ligada (aunque la sincronización esté apagada), la sincronización después de bajar
+            // Paso 8.23: sin una nube configurada (sin URL), las horas de cita escritas a mano en v1.7–v1.13 se pasan a "HH:mm" al
+            // abrir; con URL (aunque la sincronización esté apagada), la sincronización después de bajar
             try
             {
                 AppointmentTimeMigration.RunAtOpen(db, Services.GetRequiredService<TursoSettingsService>().CurrentSettings);

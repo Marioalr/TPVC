@@ -615,8 +615,9 @@ public partial class AgendaPanelViewModel : ObservableObject
     /// La hora de una cita. Paso 8.23: la misma regla que el resumen derivado y los empalmes
     /// (<see cref="PatientSummaryRules.TimeOfDay"/>: <c>H:mm</c>, segundos y AM/PM opcionales; lo demás, las 10:00), así la agenda
     /// dibuja la cita donde la regla la empalma. Antes era <c>DateTime.TryParse</c>, que también leía textos como "3 PM" o "7:5".
-    /// Desde v1.14 la agenda escribe "HH:mm"; las horas escritas a mano en v1.7–v1.13 ("5 pm", "4.30 pm") se pasan a "HH:mm"
-    /// una sola vez al abrir la base (<see cref="AppointmentTimeMigration"/>).
+    /// Desde v1.14 la agenda escribe "HH:mm"; las horas escritas a mano en v1.7–v1.13 ("5 pm", "4.30 pm", "10.30") se pasan a
+    /// "HH:mm" una sola vez (<see cref="AppointmentTimeMigration"/>): al abrir la base si no hay una nube configurada y, si la
+    /// hay, en la sincronización después de bajar.
     /// </summary>
     public static TimeSpan ParseAppointmentTime(string? time) => PatientSummaryRules.TimeOfDay(time);
 

@@ -19,15 +19,19 @@ namespace TPVC.Services;
 /// sube como una edición y todos los equipos quedan con la misma. Lo que ninguno de los dos lee se queda como está (se sigue
 /// viendo el texto tal cual, y la agenda lo pone a las 10:00).
 /// <list type="bullet">
-/// <item><b>Cuándo.</b> Al abrir la base (<see cref="RunAtOpen"/>, desde el arranque y al restaurar un respaldo) solo si la base
-/// nunca se ha ligado a una nube (<see cref="IsBoundToCloud"/>: sin URL configurada, sin <c>clinicId</c> y sin cursores de
-/// bajada; no importa la casilla «Sincronización activada»). Si la base está o estuvo ligada, dentro de la sincronización, con su
-/// candado, <b>después de bajar</b> (también la descarga completa de «Unirse» y «Reemplazar con la nube», que quitan la marca
-/// de hecho): así solo se reescriben filas al día con la nube. Al abrir una base ligada no se toca nada, aunque la casilla
-/// esté apagada: una copia vieja (otro equipo movió o canceló la cita mientras esta PC estaba cerrada o sin sincronizar) con
-/// marca nueva subiría antes de bajar y desharía ese cambio en todos los equipos (las citas son LWW por fila).</item>
-/// <item><b>La marca de hecho</b> (<c>DbMeta</c> "AppointmentTimesNormalized") solo se pone después de una pasada al abrir una
-/// base nunca ligada o después de bajar.</item>
+/// <item><b>Cuándo.</b> Al abrir la base (<see cref="RunAtOpen"/>, desde el arranque y al restaurar un respaldo) solo si no hay
+/// una nube configurada (<see cref="IsCloudConfigured"/>: sin URL, como lo toma la restauración; no importa la casilla
+/// «Sincronización activada»). Sin URL la base no puede sincronizar, aunque guarde el <c>clinicId</c> o los cursores de una nube
+/// (un respaldo de otra PC restaurado en una nueva, o la URL borrada en Nube y dispositivos): si no se normalizara al abrir, no se
+/// normalizaría nunca. Con una URL configurada, dentro de la sincronización, con su candado, <b>después de bajar</b> (también la
+/// descarga completa de «Unirse» y «Reemplazar con la nube», que quitan la marca de hecho): así solo se reescriben filas al día
+/// con la nube. Al abrir con URL no se toca nada, aunque la casilla esté apagada: una copia vieja (otro equipo movió o canceló
+/// la cita mientras esta PC estaba cerrada o sin sincronizar) con marca nueva subiría antes de bajar y desharía ese cambio en
+/// todos los equipos (las citas son LWW por fila). Riesgo aceptado (bajo): una base normalizada al abrir sin URL que después se
+/// vuelve a conectar a la misma nube por un camino que sube antes de bajar («Esta PC ya usaba esta nube») sube esas horas como
+/// cualquier otra edición hecha sin conexión.</item>
+/// <item><b>La marca de hecho</b> (<c>DbMeta</c> "AppointmentTimesNormalized") solo se pone después de una pasada al abrir sin
+/// URL o después de bajar.</item>
 /// <item><b>Nunca detiene la sincronización.</b> Un texto que no se puede leer se deja como está. Si la pasada falla de todos
 /// modos (la base), la sincronización sigue sin ella, no se pone la marca de hecho y esta versión no lo vuelve a intentar
 /// (<c>DbMeta</c> "AppointmentTimesFailedVersion"); una versión nueva sí.</item>
@@ -52,24 +56,20 @@ public static class AppointmentTimeMigration
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
-    /// ¿La base está o estuvo ligada a una nube? Una URL configurada (aunque la casilla «Sincronización activada» esté apagada,
-    /// y como lo toma la restauración), o en la base el <c>clinicId</c> de una nube o algún cursor de bajada. «Desconectar esta
-    /// PC de la nube» quita los tres.
+    /// ¿Hay una nube configurada? Una URL, aunque la casilla «Sincronización activada» esté apagada (lo mismo que toma la
+    /// restauración). Lo que la base guarde de una nube (<c>clinicId</c>, cursores) no cuenta: sin URL no puede sincronizar.
     /// </summary>
-    public static bool IsBoundToCloud(AppDbContext db, TursoSettings? settings) =>
-        !string.IsNullOrWhiteSpace(settings?.DatabaseUrl)
-        || DbMeta.Get(db, DbMeta.ClinicId) != null
-        || DbMeta.AnyWithPrefix(db, DbMeta.PullCursorPrefix);
+    public static bool IsCloudConfigured(TursoSettings? settings) => !string.IsNullOrWhiteSpace(settings?.DatabaseUrl);
 
     /// <summary>
-    /// Al abrir la base (el arranque y al restaurar un respaldo): solo si nunca se ha ligado a una nube. Si lo está o lo estuvo
-    /// no hace nada ni pone la marca de hecho: lo hace la sincronización después de bajar. Regresa cuántas cambió.
+    /// Al abrir la base (el arranque y al restaurar un respaldo): solo sin una nube configurada. Con URL no hace nada ni pone la
+    /// marca de hecho: lo hace la sincronización después de bajar. Regresa cuántas cambió.
     /// </summary>
-    public static int RunAtOpen(AppDbContext db, TursoSettings? settings) => IsBoundToCloud(db, settings) ? 0 : Run(db);
+    public static int RunAtOpen(AppDbContext db, TursoSettings? settings) => IsCloudConfigured(settings) ? 0 : Run(db);
 
     /// <summary>
-    /// Normaliza las horas de las citas si no se ha hecho en esta base y pone la marca de hecho. Solo se llama sin nube activa
-    /// o dentro de la sincronización, después de bajar. Regresa cuántas cambió.
+    /// Normaliza las horas de las citas si no se ha hecho en esta base y pone la marca de hecho. Solo se llama al abrir sin una
+    /// nube configurada o dentro de la sincronización, después de bajar. Regresa cuántas cambió.
     /// </summary>
     internal static int Run(AppDbContext db)
     {

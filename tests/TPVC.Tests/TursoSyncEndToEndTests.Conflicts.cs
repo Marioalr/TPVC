@@ -668,18 +668,47 @@ public partial class TursoSyncEndToEndTests
         await ScheduleAsync(pc, patient, day, "5 pm");
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
-        // Una PC nueva que abrió sin nube: hizo su pasada (no había nada) y se quedó con la marca; luego se une a la nube
+        // Una PC nueva que abrió sin nube: hizo su pasada (no había nada) y se quedó con la marca, y esta versión ya había
+        // fallado una vez al hacerla; luego se une a la nube
         var laptop = CreateDevice("laptop", seed: false);
         using (var db = laptop.Factory.CreateDbContext())
         {
             Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, new TursoSettings()));
+            TPVC.Data.DbMeta.Set(db, AppointmentTimeMigration.FailedVersionKey, TursoSyncService.AppVersionText);
         }
         Assert.IsTrue(TimesNormalized(laptop));
         Assert.IsTrue((await laptop.Sync.JoinCloudAsync()).Ok);
         Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
 
-        Assert.AreEqual("17:00", (await laptop.Inventory.GetAppointmentsByDayAsync(day)).Single().Time, "Lo que bajó al unirse también se normaliza");
+        Assert.AreEqual("17:00", (await laptop.Inventory.GetAppointmentsByDayAsync(day)).Single().Time,
+            "Lo que bajó al unirse también se normaliza (unirse quita la marca de hecho y la del fallo)");
         Assert.IsTrue(TimesNormalized(laptop));
+    }
+
+    [TestMethod]
+    public async Task APcThatLeftTheCloud_IsNormalizedWhenItOpens()
+    {
+        var (pc, _, _) = await PcAndTabletAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(5);
+        await ScheduleAsync(pc, patient, day, "5 pm");
+        await ScheduleAsync(pc, patient, day, "4.30 pm");
+
+        // Se borra la URL de la nube (o un respaldo de esta PC se restaura en una nueva sin nube): la base sigue con el clinicId
+        // y los cursores, pero ya no puede sincronizar. Al abrir con v1.40 se normaliza; si no, se quedaría a las 10:00 para siempre
+        var settings = pc.Settings.CurrentSettings;
+        settings.DatabaseUrl = string.Empty;
+        settings.IsSyncEnabled = false;
+        pc.Settings.SaveSettings(settings);
+        ForgetTimesNormalized(pc);
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.IsNotNull(TPVC.Data.DbMeta.Get(db, TPVC.Data.DbMeta.ClinicId) ?? TPVC.Data.DbMeta.Get(db, TPVC.Data.DbMeta.PullCursorPrefix + "Appointments"),
+                "La base guarda lo de la nube");
+            Assert.AreEqual(2, AppointmentTimeMigration.RunAtOpen(db, pc.Settings.CurrentSettings));
+        }
+        CollectionAssert.AreEquivalent(new[] { "17:00", "16:30" }, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList());
+        Assert.IsTrue(TimesNormalized(pc));
     }
 
     [TestMethod]
