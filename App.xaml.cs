@@ -126,6 +126,17 @@ public partial class App : Application
             var factory = Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
             using var db = factory.CreateDbContext();
             DatabaseInitializer.Initialize(db, seedDemoData: false);
+
+            // Paso 8.23: sin nube activa, las horas de cita escritas a mano en v1.7–v1.13 se pasan a "HH:mm" al abrir; con la
+            // nube, la primera sincronización lo hace después de bajar
+            try
+            {
+                AppointmentTimeMigration.RunWithoutCloud(db, AppointmentTimeMigration.IsCloudActive(Services.GetRequiredService<TursoSettingsService>().CurrentSettings));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn($"No se pudieron normalizar las horas de las citas: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {

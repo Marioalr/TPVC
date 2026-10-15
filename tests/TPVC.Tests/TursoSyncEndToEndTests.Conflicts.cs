@@ -575,39 +575,111 @@ public partial class TursoSyncEndToEndTests
 
     // ================================================================== horas escritas a mano en v1.7–v1.13
 
+    /// <summary>Como al actualizar desde v1.39: la base todavía no normalizó las horas.</summary>
+    private static void ForgetTimesNormalized(Device device)
+    {
+        using var db = device.Factory.CreateDbContext();
+        TPVC.Data.DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
+    }
+
+    private static bool TimesNormalized(Device device)
+    {
+        using var db = device.Factory.CreateDbContext();
+        return TPVC.Data.DbMeta.Get(db, AppointmentTimeMigration.DoneKey) == "1";
+    }
+
     [TestMethod]
-    public async Task HandWrittenAppointmentTimes_AreNormalizedOnce_AndUploadedOnce()
+    public async Task HandWrittenAppointmentTimes_AreNormalizedOnceAfterTheFirstPull_AndUploadedOnce()
     {
         var (pc, tablet, _) = await PcAndTabletAsync();
+        Assert.IsTrue(TimesNormalized(pc), "La primera sincronización ya hizo la pasada (no había nada)");
         var patient = (await pc.Inventory.GetPatientsAsync())[0];
         var day = DateTime.Today.AddDays(5);
         // Como las guardaba la agenda de v1.7–v1.13 (tal cual se escribían), y ya en la nube
-        foreach (var time in new[] { "5 pm", "12 PM", "4.30 pm", "16:30 PM", "7:5", "mediodía" }) await ScheduleAsync(pc, patient, day, time);
+        var written = new[] { "5 pm", "12 PM", "4.30 pm", "16:30 PM", "7:5", "10.30", "9,30", "10 30", "10/30", "10-30", "mediodía" };
+        foreach (var time in written) await ScheduleAsync(pc, patient, day, time);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
 
-        // Al actualizar, la base se abre y se normaliza una sola vez
+        // Se actualiza a v1.40 con la nube activa: al abrir no se toca nada; la sincronización lo hace después de bajar
+        ForgetTimesNormalized(pc);
         using (var db = pc.Factory.CreateDbContext())
         {
-            TPVC.Data.DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
-            TPVC.Data.DatabaseInitializer.EnsureSchema(db);
+            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
         }
-        var expected = new[] { "17:00", "12:00", "16:30", "16:30", "07:05", "mediodía" };
-        CollectionAssert.AreEquivalent(expected, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(),
-            "Lo que la regla no lee y el lector de antes sí pasa a HH:mm; lo que ninguno lee se queda");
+        CollectionAssert.AreEquivalent(written, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(), "Al abrir, con la nube, nada cambia");
+        Assert.IsFalse(TimesNormalized(pc));
 
         var upload = await pc.Sync.SyncAsync();
         Assert.IsTrue(upload.Success, upload.ErrorMessage);
-        Assert.AreEqual(5, upload.RowsPushed, "Suben como una edición, una vez");
-        Assert.AreEqual(0, (await pc.Sync.SyncAsync()).RowsPushed);
-        using (var db = pc.Factory.CreateDbContext())
-        {
-            Assert.AreEqual(0, AppointmentTimeMigration.Run(db), "Una sola vez por base");
-        }
+        var expected = new[] { "17:00", "12:00", "16:30", "16:30", "07:05", "10:30", "09:30", "10:30", "10/30", "10-30", "mediodía" };
+        CollectionAssert.AreEquivalent(expected, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(),
+            "Lo que la regla no lee y se lee sin adivinar pasa a HH:mm; lo que parece fecha o no se lee se queda como está (nunca 00:00)");
+        Assert.AreEqual(8, upload.RowsPushed, "Suben como una edición, en la misma sincronización");
+        Assert.IsTrue(TimesNormalized(pc));
+        Assert.AreEqual(0, (await pc.Sync.SyncAsync()).RowsPushed, "Una sola vez");
 
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
         CollectionAssert.AreEquivalent(expected, (await tablet.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(),
             "Los demás equipos quedan con la misma hora");
+    }
+
+    [TestMethod]
+    public async Task AStaleCopyOnAnotherPc_DoesNotUndoARescheduleWhenItUpdates()
+    {
+        var (pc, laptop, _) = await PcAndTabletAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(3);
+        var appointment = await ScheduleAsync(pc, patient, day, "5 pm");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+
+        // La laptop se cierra con v1.39; mientras, la PC mueve la cita (la agenda escribe HH:mm)
+        appointment.Date = day.AddDays(1);
+        appointment.Time = "18:00";
+        await pc.Inventory.SaveAppointmentAsync(appointment);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // La laptop abre con v1.40 y la nube activa: su copia vieja ("5 pm" el día de antes) no se reescribe al abrir
+        ForgetTimesNormalized(laptop);
+        using (var db = laptop.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
+        }
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        foreach (var device in new[] { pc, laptop })
+        {
+            var moved = (await device.Inventory.GetAppointmentsByDayAsync(day.AddDays(1))).Single(a => a.SyncId == appointment.SyncId);
+            Assert.AreEqual("18:00", moved.Time, "El cambio de la PC se queda en los dos equipos");
+            Assert.IsEmpty((await device.Inventory.GetAppointmentsByDayAsync(day)).Where(a => a.SyncId == appointment.SyncId).ToList());
+        }
+        Assert.IsTrue(TimesNormalized(laptop));
+    }
+
+    [TestMethod]
+    public async Task JoiningACloud_NormalizesTheHandWrittenTimesThatCameDown()
+    {
+        var pc = await CloudWithIdentityAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(4);
+        // Una cita escrita a mano que ya está en la nube (la subió una PC que no había actualizado)
+        await ScheduleAsync(pc, patient, day, "5 pm");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // Una PC nueva sin nube: al abrir hace su pasada (no hay nada) y se queda con la marca; luego se une a la nube
+        var laptop = CreateDevice("laptop", seed: false);
+        using (var db = laptop.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
+        }
+        Assert.IsTrue(TimesNormalized(laptop));
+        Assert.IsTrue((await laptop.Sync.JoinCloudAsync()).Ok);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+
+        Assert.AreEqual("17:00", (await laptop.Inventory.GetAppointmentsByDayAsync(day)).Single().Time, "Lo que bajó al unirse también se normaliza");
+        Assert.IsTrue(TimesNormalized(laptop));
     }
 
     // ================================================================== MergedIntoSyncId

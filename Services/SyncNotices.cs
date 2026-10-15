@@ -239,7 +239,8 @@ public static class SyncNotices
             // Lo descartado de días que ya pasaron ya no puede volver a llegar como aviso
             var todayText = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             int before = state.Dismissed.Count;
-            state.Dismissed.RemoveAll(k => k.StartsWith("empalme:", StringComparison.Ordinal) && k.Split(':') is { Length: 6 } parts
+            // "empalme:<SyncId>:<SyncId>:<fecha>:<HH:mm>:<HH:mm>": la fecha es la cuarta parte (las horas también llevan ':')
+            state.Dismissed.RemoveAll(k => k.StartsWith("empalme:", StringComparison.Ordinal) && k.Split(':', 5) is { Length: 5 } parts
                                            && string.CompareOrdinal(parts[3], todayText) < 0);
             changed |= state.Dismissed.Count != before;
 

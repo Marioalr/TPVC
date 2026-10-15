@@ -471,7 +471,9 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public async Task SavePatientAndStartConsultationAsync()
     {
-        await SavePatientModalAsync();
+        // Paso 8.23: solo si de verdad se guardó. Si el médico cerró el alta mientras se esperaba a la nube, el seleccionado es
+        // el paciente de antes y no se le abre una consulta
+        if (!await TrySavePatientAsync()) return;
         if (!IsPatientModalOpen && FormErrorMessage == null && _session.SelectedPatient != null && !_active.HasActiveConsultation)
         {
             _workflow.StartActiveConsultation();
@@ -725,13 +727,16 @@ public partial class PatientFormViewModel : ObservableObject
     private bool _savingPatient;
 
     [RelayCommand]
-    public async Task SavePatientModalAsync()
+    public Task SavePatientModalAsync() => TrySavePatientAsync();
+
+    /// <summary>true solo si el expediente quedó guardado (un segundo «Guardar» mientras se espera no hace nada).</summary>
+    private async Task<bool> TrySavePatientAsync()
     {
-        if (_savingPatient) return;
+        if (_savingPatient) return false;
         _savingPatient = true;
         try
         {
-            await SavePatientModalCoreAsync();
+            return await SavePatientModalCoreAsync();
         }
         finally
         {
@@ -739,7 +744,8 @@ public partial class PatientFormViewModel : ObservableObject
         }
     }
 
-    private async Task SavePatientModalCoreAsync()
+    /// <summary>Guarda el alta o la edición; true solo si quedó guardado (ni error, ni cancelado, ni cerrado mientras tanto).</summary>
+    private async Task<bool> SavePatientModalCoreAsync()
     {
         if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
         {
@@ -755,7 +761,7 @@ public partial class PatientFormViewModel : ObservableObject
         if (problem != null)
         {
             FormErrorMessage = problem;
-            return;
+            return false;
         }
 
         FormFullName = PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName);
@@ -767,7 +773,7 @@ public partial class PatientFormViewModel : ObservableObject
         {
             var session = _formSession;
             await _inventoryService.QuickSyncAsync();
-            if (session != _formSession || !IsPatientModalOpen) return;
+            if (session != _formSession || !IsPatientModalOpen) return false;
         }
 
         var normalizedFolio = FormRecordNumber.Trim();
@@ -784,7 +790,7 @@ public partial class PatientFormViewModel : ObservableObject
             if (isTaken)
             {
                 FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya está en uso por otro paciente.";
-                return;
+                return false;
             }
         }
         else
@@ -793,7 +799,7 @@ public partial class PatientFormViewModel : ObservableObject
             if (duplicate)
             {
                 FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya existe.";
-                return;
+                return false;
             }
         }
 
@@ -808,7 +814,7 @@ public partial class PatientFormViewModel : ObservableObject
 
         // Paso 8.23 (H3): al crear, un expediente parecido (el mismo nombre y la misma fecha de nacimiento o el mismo teléfono)
         // pide confirmar. Si no se confirma, el formulario sigue abierto con lo capturado
-        if (FormPatientId == 0 && !await ConfirmNotDuplicateAsync(patient)) return;
+        if (FormPatientId == 0 && !await ConfirmNotDuplicateAsync(patient)) return false;
 
         if (_inventoryService != null)
         {
@@ -822,7 +828,7 @@ public partial class PatientFormViewModel : ObservableObject
             catch (Exception ex)
             {
                 FormErrorMessage = $"Error al guardar en base de datos: {ex.Message}";
-                return;
+                return false;
             }
         }
         else
@@ -843,6 +849,7 @@ public partial class PatientFormViewModel : ObservableObject
             ? $"Expediente de {patient.FullName} guardado con el folio {patient.RecordNumber}"
             : $"Expediente de {patient.FullName} guardado");
         _suggestedRecordNumber = null;
+        return true;
     }
 
     /// <summary>Paso 8.23: true si no hay un expediente parecido o si el médico confirma crear el nuevo de todos modos.</summary>

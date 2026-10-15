@@ -483,7 +483,7 @@ public partial class TursoSyncService
                     (ClockWarningText is { } clock ? $" · {clock}" : string.Empty));
             SyncCompleted?.Invoke(result);
 
-            if (pulled > 0)
+            if (pulled > 0 || Interlocked.Exchange(ref _normalizedTimes, 0) > 0)
             {
                 NotifyLocalViews();
                 _labResults?.NotifyChanged();
@@ -668,7 +668,13 @@ public partial class TursoSyncService
             pushed += merged;
             pushReads += mergedReads;
         }
-        // 2c. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados), a los avisos de este
+        // 2c. Paso 8.23: una sola vez por base, después de bajar (las filas ya están al día con la nube), las horas de cita
+        //     escritas a mano en v1.7–v1.13 pasan a "HH:mm" y suben en esta misma sincronización
+        var (normalizedPushed, normalizedReads) = await NormalizeAppointmentTimesAsync(client, settings.DeviceId, ct);
+        pushed += normalizedPushed;
+        pushReads += normalizedReads;
+
+        // 2d. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados), a los avisos de este
         //     equipo, que se quedan hasta que el médico los descarta
         if (checkArrivals) await CheckAndKeepArrivalsAsync(ct);
         if (downloadPending)
@@ -1180,6 +1186,8 @@ public partial class TursoSyncService
         DbMeta.Remove(db, DbMeta.RestoredWithCloud);
         // La foto del libro de existencias era de lo que había aquí: se vuelve a tomar al terminar de bajar (paso 8.19)
         DbMeta.Remove(db, DbMeta.StockLedgerBaseline);
+        // Paso 8.23: lo que baje puede traer horas de cita escritas a mano: se normalizan después de esta descarga
+        DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);

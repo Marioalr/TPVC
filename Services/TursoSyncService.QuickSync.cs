@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using TPVC.Data;
 using TPVC.Models;
 using TPVC.Services.Rules;
 
@@ -100,6 +101,30 @@ public partial class TursoSyncService : IQuickSync
         var busy = Volatile.Read(ref _runInFlight);
         Task late = busy is { IsCompleted: false } && !ReferenceEquals(busy, run) ? Task.WhenAll(run, busy) : run;
         Volatile.Write(ref _lateQuickSync, late);
+    }
+
+    // =========================================================================
+    // HORAS DE CITA ESCRITAS A MANO (v1.7–v1.13)
+    // =========================================================================
+
+    // Citas que la normalización cambió en esta sincronización (las pantallas recargan como después de bajar)
+    private int _normalizedTimes;
+
+    /// <summary>
+    /// Una sola vez por base (<see cref="AppointmentTimeMigration"/>), dentro de la sincronización y después de bajar: las filas
+    /// ya están al día con la nube, así que reescribir una no deshace lo que otro equipo cambió. Lo cambiado sube enseguida.
+    /// </summary>
+    private async Task<(int Pushed, int RowsRead)> NormalizeAppointmentTimesAsync(TursoClient client, string deviceId, CancellationToken ct)
+    {
+        int changed;
+        using (var db = _contextFactory.CreateDbContext())
+        {
+            if (await DbMeta.GetAsync(db, AppointmentTimeMigration.DoneKey, ct) == "1") return (0, 0);
+            changed = AppointmentTimeMigration.Run(db);
+        }
+        if (changed == 0) return (0, 0);
+        Interlocked.Add(ref _normalizedTimes, changed);
+        return await PushLocalChangesAsync(client, deviceId, fullResync: false, ct);
     }
 
     // =========================================================================

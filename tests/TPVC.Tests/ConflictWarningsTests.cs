@@ -526,12 +526,86 @@ public class ConflictWarningsTests
     [TestMethod]
     public void TheOldReader_ReadsTheHandWrittenTimes_ThatTheRuleDoesNot()
     {
-        foreach (var (text, expected) in new[] { ("5 pm", "17:00"), ("12 PM", "12:00"), ("4.30 pm", "16:30"), ("16:30 PM", "16:30"), ("7:5", "07:05") })
+        foreach (var (text, expected) in new[]
+                 {
+                     ("5 pm", "17:00"), ("12 PM", "12:00"), ("4.30 pm", "16:30"), ("16:30 PM", "16:30"), ("7:5", "07:05"),
+                     // Punto, coma o espacio entre hora y minutos: H:mm (antes el lector los tomaba como fecha y daba 00:00)
+                     ("10.30", "10:30"), ("4.30", "04:30"), ("9.15", "09:15"), ("12.30", "12:30"), ("13.12", "13:12"), ("9,30", "09:30"),
+                     ("10 30", "10:30"), ("10.30 am", "10:30"), ("12.30 p. m.", "12:30")
+                 })
         {
             Assert.IsFalse(PatientSummaryRules.TryTimeOfDay(text, out _), $"'{text}': la regla no la lee");
             Assert.AreEqual(expected, AppointmentTimeMigration.LegacyTimeOfDay(text) is { } t ? AppointmentTimeMigration.Format(t) : null, text);
         }
-        Assert.IsNull(AppointmentTimeMigration.LegacyTimeOfDay("mediodía"));
+        // Lo que el lector de antes toma como fecha no es una hora: se deja como está (nunca "00:00")
+        foreach (var text in new[] { "mediodía", "10/30", "10-30", "9.5", "10.75", "25.10" })
+        {
+            Assert.IsNull(AppointmentTimeMigration.LegacyTimeOfDay(text), text);
+        }
         Assert.IsTrue(PatientSummaryRules.TryTimeOfDay("09:15 AM", out var nine) && nine == new TimeSpan(9, 15, 0));
+    }
+
+    [TestMethod]
+    public async Task WithoutTheCloud_TheTimesAreNormalizedWhenTheDatabaseOpens_AndWithTheCloudOnlyAfterAPull()
+    {
+        var patient = (await _service.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(3);
+        foreach (var time in new[] { "5 pm", "10.30", "10/30" })
+        {
+            await _service.SaveAppointmentAsync(new PatientAppointment { PatientRecordId = patient.Id, Date = day, Time = time, Reason = "Control" });
+        }
+        using var db = new AppDbContext(Options());
+        Assert.IsNull(DbMeta.Get(db, AppointmentTimeMigration.DoneKey), "Abrir la base ya no la normaliza por su cuenta");
+
+        // Con la nube activa, al abrir no se toca nada ni se marca como hecho
+        Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
+        Assert.IsNull(DbMeta.Get(db, AppointmentTimeMigration.DoneKey));
+
+        // Sin nube, sí, una sola vez
+        Assert.AreEqual(2, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
+        CollectionAssert.AreEquivalent(new[] { "17:00", "10:30", "10/30" }, (await _service.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList());
+        Assert.AreEqual("1", DbMeta.Get(db, AppointmentTimeMigration.DoneKey));
+        Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
+    }
+
+    [TestMethod]
+    public async Task ADismissedOverlapOfADayThatPassed_IsForgotten_AndADismissedDuplicateIsNot()
+    {
+        var (arrivals, a, _, _, _) = await ConflictsInTheDatabaseAsync();
+        await _service.AddSyncNoticesAsync(arrivals);
+        await _service.DismissSyncNoticesAsync(SyncNoticeKind.Overlaps);
+        await _service.DismissSyncNoticesAsync(SyncNoticeKind.DuplicatePatients);
+        var factory = new AppDbContextFactory(Options());
+        string? Stored()
+        {
+            using var db = factory.CreateDbContext();
+            return DbMeta.Get(db, SyncNotices.MetaKey);
+        }
+        StringAssert.Contains(Stored(), "empalme:");
+
+        // El día del empalme ya pasó: su llave descartada se olvida; la del duplicado se queda
+        await SyncNotices.LoadAsync(factory, a.Date.AddDays(1));
+        Assert.IsFalse(Stored()!.Contains("empalme:", StringComparison.Ordinal), "La llave descartada de un día que pasó se olvida");
+        StringAssert.Contains(Stored(), "duplicado:");
+    }
+
+    [TestMethod]
+    public async Task ClosingTheFormWhileWaiting_OnSaveAndStartConsultation_DoesNotStartAConsultationForThePatientOpenBefore()
+    {
+        var records = await OpenRecordsAsync();
+        records.OpenPatientChart(records.Patients[0]);
+        var held = new HeldQuickSync();
+        _service.QuickSync = held;
+
+        await records.NewPatientAsync();
+        FillNewPatient(records.PatientForm, "Teodoro", "Salas Ruiz", "03/03/1977");
+        var saving = records.PatientForm.SavePatientAndStartConsultationAsync();
+        await held.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        _answer = true; // «¿Salir sin guardar el paciente nuevo?»
+        records.PatientForm.CancelPatientForm();
+        held.Release.SetResult();
+        await saving;
+
+        Assert.IsFalse(records.Active.HasActiveConsultation, "No se guardó nada: no se abre una consulta del paciente que estaba abierto");
     }
 }

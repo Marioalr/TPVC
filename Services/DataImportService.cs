@@ -233,6 +233,17 @@ public class DataImportService
                 ctx.Database.EnsureCreated();
                 DatabaseInitializer.EnsureSchema(ctx);
 
+                // Paso 8.23: sin nube activa, las horas de cita escritas a mano de un respaldo anterior pasan a "HH:mm" aquí; con
+                // la nube, después de bajar en la primera sincronización
+                try
+                {
+                    AppointmentTimeMigration.RunWithoutCloud(ctx, AppointmentTimeMigration.IsCloudActive(_tursoSettingsService?.CurrentSettings));
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn($"No se pudieron normalizar las horas de las citas del respaldo: {ex.Message}");
+                }
+
                 // La base cambió por completo: la siguiente sincronización con Turso debe ser completa (la subida
                 // manda todo una vez; el cursor vive dentro de la base)
                 SyncChangeLog.ResetAfterRestore(ctx);
