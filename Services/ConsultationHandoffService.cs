@@ -43,11 +43,17 @@ public sealed class ConsultationHandoffService
     /// <summary>Un equipo visto en este tiempo cuenta como "en línea".</summary>
     public static readonly TimeSpan OnlineWindow = TimeSpan.FromMinutes(3);
 
-    public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(6);
+    /// <summary>Paso 8.24: "sigo en línea" cada 60 s (antes 30 s), dentro de la revisión.</summary>
+    public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(60);
 
-    /// <summary>Un equipo que no se ve en este tiempo ya no se ofrece para enviarle la consulta.</summary>
-    private static readonly TimeSpan ForgottenDeviceAge = TimeSpan.FromDays(30);
+    /// <summary>La limpieza de renglones terminados y de latidos viejos: cada 6 h, solo la PC.</summary>
+    public static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(6);
+
+    /// <summary>Paso 8.24: la lista de compañeros (quién puede recibir consultas) se vuelve a leer en una revisión cada 10 min.</summary>
+    public static readonly TimeSpan PeerRefreshInterval = TimeSpan.FromMinutes(10);
+
+    /// <summary>Un equipo que no se ve en este tiempo ya no se ofrece para enviarle la consulta (ni cuenta como compañero).</summary>
+    public static readonly TimeSpan ForgottenDeviceAge = TimeSpan.FromDays(30);
 
     /// <summary>
     /// Paso 8.22: una PC con Windows vista en este tiempo con una revisión del contrato anterior a la de las marcas por campo
@@ -59,13 +65,40 @@ public sealed class ConsultationHandoffService
     private const string Columns = "Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, Folio, " +
                                    "Payload, PayloadVersion, State, AcceptToken, CreatedAtUtc";
 
+    /// <summary>
+    /// Paso 8.24 (F2): lo que todavía le importa a quien recibe, una enviada o una aceptada con su copia. Es a la vez el WHERE
+    /// del índice parcial y parte del WHERE de la revisión: SQLite usa el índice parcial solo si la consulta repite este texto.
+    /// </summary>
+    public const string PendingCondition = "State = '" + StateSent + "' OR (State = '" + StateAccepted + "' AND Payload <> '')";
+
+    /// <summary>El índice parcial de F2: la revisión lee ~0 filas en lugar de todas las que se conservan para el equipo.</summary>
+    public const string PendingIndexName = "IX_ConsultationHandoffs_Pending";
+
+    /// <summary>
+    /// La revisión: las consultas dirigidas a este equipo (enviadas, o aceptadas aquí y sin guardar todavía). Literal en
+    /// contracts/hrana/statements.json ("check.incoming"): escrita de otra forma, SQLite no usaría el índice parcial.
+    /// </summary>
+    public const string IncomingSql = "SELECT " + Columns + " FROM ConsultationHandoffs WHERE ToDeviceId = ? AND (" + PendingCondition + ") " +
+                                      "ORDER BY CreatedAtUtc DESC LIMIT 10";
+
+    /// <summary>El estado del envío propio ("check.outgoing"), solo con uno pendiente.</summary>
+    public const string OutgoingStateSql = "SELECT State FROM ConsultationHandoffs WHERE Id = ?";
+
+    /// <summary>
+    /// Paso 8.24 (A5): la marca de cambios. La subida más reciente de los otros equipos (LastPushUtc, con la hora de la
+    /// nube); si es posterior a la última bajada de este, hay algo que bajar ("check.peerPush").
+    /// </summary>
+    public const string PeerPushSql = "SELECT max(LastPushUtc) AS LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ?;";
+
     public static readonly string[] HandoffTableDdl =
     {
         "CREATE TABLE IF NOT EXISTS ConsultationHandoffs (Id TEXT PRIMARY KEY NOT NULL, FromDeviceId TEXT NOT NULL, FromDeviceName TEXT NOT NULL, " +
         "ToDeviceId TEXT NOT NULL, ToDeviceName TEXT NOT NULL, PatientSyncId TEXT NOT NULL, PatientName TEXT NOT NULL, Folio TEXT NOT NULL, " +
         "Payload TEXT NOT NULL, PayloadVersion INTEGER NOT NULL, State TEXT NOT NULL, AcceptToken TEXT, SenderAckAtUtc TEXT, " +
         "CreatedAtUtc TEXT NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
-        "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)"
+        "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)",
+        // Paso 8.24 (F2): aditivo; el de arriba se queda para las PC anteriores
+        $"CREATE INDEX IF NOT EXISTS {PendingIndexName} ON ConsultationHandoffs (ToDeviceId) WHERE {PendingCondition}"
     };
 
     private readonly TursoSyncService _sync;
@@ -73,15 +106,26 @@ public sealed class ConsultationHandoffService
     private string? _ensuredUrl;
     private DateTime _lastHeartbeatUtc = DateTime.MinValue;
     private DateTime _lastCleanupUtc = DateTime.MinValue;
+    private DateTime _lastPeersUtc = DateTime.MinValue;
+    private string? _peersUrl;
 
     public ConsultationHandoffService(TursoSyncService sync, TursoSettingsService settings)
     {
         _sync = sync;
         _settings = settings;
+        Scheduler = new SyncScheduler(sync, this, settings);
     }
 
-    /// <summary>Revisar la tabla sola cada pocos segundos (las pruebas la apagan y revisan a mano).</summary>
+    /// <summary>
+    /// Revisar y sincronizar solos con la cadencia del paso 8.24 (<see cref="SyncScheduler"/>). Las pruebas lo apagan y
+    /// revisan a mano (o llaman <see cref="SyncScheduler.TickAsync"/> con un reloj simulado).
+    /// </summary>
     public bool AutoPoll { get; set; } = true;
+
+    /// <summary>Paso 8.24: la cadencia de la revisión, el latido y las sincronizaciones en segundo plano.</summary>
+    public SyncScheduler Scheduler { get; }
+
+    private DateTime UtcNow => _sync.Clock.GetUtcNow().UtcDateTime;
 
     public TursoSyncService Sync => _sync;
 
@@ -112,35 +156,58 @@ public sealed class ConsultationHandoffService
     // ================================================================== revisión periódica
 
     /// <summary>
-    /// Una sola petición: consultas dirigidas a este equipo (enviadas, o aceptadas
-    /// aquí pero aún no guardadas), el estado del envío propio y, cada 30 s, "sigo en línea".
+    /// La revisión, en una sola petición (paso 8.24, §3.3 del plan): consultas dirigidas a este equipo (enviadas, o aceptadas
+    /// aquí pero aún no guardadas), el estado del envío propio, la marca de cambios de los otros equipos (su LastPushUtc) y,
+    /// cuando toca, "sigo en línea" (cada 60 s), la lista de compañeros (cada 10 min) y la limpieza (cada 6 h, solo la PC).
+    /// Lo que sirve a la cadencia lo recibe <see cref="Scheduler"/>.
     /// </summary>
     public async Task<HandoffPollResult> PollAsync(string? outgoingId, CancellationToken ct = default)
     {
         // Es automática: con la cuota agotada o el freno de consumo activo no se pregunta a la nube
         _sync.ThrowIfAutomaticSyncPaused();
 
+        try
+        {
+            var result = await PollCoreAsync(outgoingId, ct);
+            Scheduler.OnCheckSucceeded(result);
+            return result;
+        }
+        catch (Exception ex) when (IsConnectivityFailure(ex))
+        {
+            Scheduler.OnCheckFailed();
+            throw;
+        }
+    }
+
+    private async Task<HandoffPollResult> PollCoreAsync(string? outgoingId, CancellationToken ct)
+    {
         using var client = CreateClient();
         await EnsureTablesAsync(client, ct);
 
-        var nowUtc = DateTime.UtcNow;
+        var nowUtc = UtcNow;
+        var deviceId = DeviceId;
         var statements = new List<(string Sql, object?[]? Args)>
         {
-            ($"SELECT {Columns} FROM ConsultationHandoffs WHERE ToDeviceId = ? AND (State = '{StateSent}' OR (State = '{StateAccepted}' AND Payload <> '')) " +
-             "ORDER BY CreatedAtUtc DESC LIMIT 10", new object?[] { DeviceId })
+            (IncomingSql, new object?[] { deviceId }),
+            (PeerPushSql, new object?[] { deviceId })
         };
 
         int outgoingIndex = -1;
         if (!string.IsNullOrEmpty(outgoingId))
         {
             outgoingIndex = statements.Count;
-            statements.Add(("SELECT State FROM ConsultationHandoffs WHERE Id = ?", new object?[] { outgoingId }));
+            statements.Add((OutgoingStateSql, new object?[] { outgoingId }));
         }
 
         bool heartbeat = nowUtc - _lastHeartbeatUtc >= HeartbeatInterval;
         int heartbeatIndex = statements.Count;
-        var deviceId = DeviceId;
         if (heartbeat) statements.AddRange(await _sync.HeartbeatStatementsAsync(Settings, afterPush: false, ct));
+
+        // La lista de compañeros: al empezar, al cambiar de nube y cada 10 min (son tablas chicas, se leen completas)
+        var url = Settings.DatabaseUrl;
+        bool peers = _peersUrl != url || nowUtc - _lastPeersUtc >= PeerRefreshInterval;
+        int peersIndex = statements.Count;
+        if (peers) statements.AddRange(PeerListQueries());
 
         bool cleanup = nowUtc - _lastCleanupUtc >= CleanupInterval;
         if (cleanup)
@@ -158,15 +225,55 @@ public sealed class ConsultationHandoffService
         if (cleanup) _lastCleanupUtc = nowUtc;
         if (heartbeat) await _sync.AfterHeartbeatAsync(client, deviceId, results[heartbeatIndex], ct);
 
+        int? peerCount = null;
+        int peerRows = 0;
+        if (peers)
+        {
+            _peersUrl = url;
+            _lastPeersUtc = nowUtc;
+            peerCount = CountPeers(results[peersIndex], results[peersIndex + 1], results[peersIndex + 2], deviceId);
+            peerRows = results[peersIndex + 1].Count + results[peersIndex + 2].Count;
+        }
+
         var incoming = results[0].Select(ToRow).ToList();
-        _sync.AddExternalUsage(rowsRead: 1 + incoming.Count + (outgoingIndex >= 0 ? 1 : 0) + (heartbeat ? 1 : 0), rowsWritten: heartbeat ? 1 : 0);
+        var peerPush = ParseUtc(results[1].FirstOrDefault()?.GetValueOrDefault("LastPushUtc"));
+        _sync.AddExternalUsage(rowsRead: 2 + incoming.Count + (outgoingIndex >= 0 ? 1 : 0) + (heartbeat ? 1 : 0) + peerRows,
+            rowsWritten: heartbeat ? 1 : 0);
 
         return new HandoffPollResult
         {
             Incoming = incoming,
-            OutgoingState = outgoingIndex >= 0 ? results[outgoingIndex].FirstOrDefault()?["State"]?.ToString() ?? string.Empty : null
+            OutgoingState = outgoingIndex >= 0 ? results[outgoingIndex].FirstOrDefault()?["State"]?.ToString() ?? string.Empty : null,
+            PeersLastPushUtc = peerPush,
+            HandoffPeerCount = peerCount,
+            HadOutgoing = outgoingIndex >= 0
         };
     }
+
+    /// <summary>
+    /// Paso 8.24: la lista de compañeros dentro de una revisión: la hora de la nube, los latidos y DeviceRegistry ("check.peers.*"
+    /// en contracts/hrana/statements.json).
+    /// </summary>
+    internal static IEnumerable<(string Sql, object?[]? Args)> PeerListQueries() => TursoSyncService.DeviceListQueries().Take(3);
+
+    /// <summary>
+    /// Compañeros: otros equipos que pueden recibir una consulta (los mismos que ofrece «Enviar a…»): no este, ni el celular,
+    /// ni los quitados o sin aprobar, con una versión que recibe consultas y vistos en los últimos 30 días.
+    /// </summary>
+    private static int CountPeers(IReadOnlyList<Dictionary<string, object?>> serverNowRows, IReadOnlyList<Dictionary<string, object?>> heartbeats,
+        IReadOnlyList<Dictionary<string, object?>> registry, string deviceId)
+    {
+        var serverNow = ParseUtc(serverNowRows.FirstOrDefault()?.GetValueOrDefault("ServerNow")) ?? DateTime.UtcNow;
+        return HandoffTargets(MergeDevices(heartbeats, registry, primaryDeviceId: null, serverNow, deviceId), serverNow).Count();
+    }
+
+    /// <summary>A quién se le puede enviar la consulta (y quién cuenta como compañero para la cadencia).</summary>
+    private static IEnumerable<LinkedDevice> HandoffTargets(IEnumerable<LinkedDevice> devices, DateTime serverNow) =>
+        devices
+            .Where(d => !d.IsThisDevice && !d.IsRevoked && !d.IsPendingApproval)
+            .Where(d => d.Role is not { } role || DevicePermissions.CanTakeConsultations(role))
+            // Con latido reciente: uno registrado cuyo latido ya se limpió no se ve hace más de 60 días
+            .Where(d => d.LastSeenUtc != null && serverNow - d.LastSeenUtc.Value < ForgottenDeviceAge);
 
     // ================================================================== equipos enlazados
 
@@ -181,19 +288,17 @@ public sealed class ConsultationHandoffService
         var deviceId = DeviceId;
         var heartbeat = await _sync.HeartbeatStatementsAsync(Settings, afterPush: false, ct);
         var results = await client.QueryBatchAsync(heartbeat.Concat(TursoSyncService.DeviceListQueries()), ct);
-        _lastHeartbeatUtc = DateTime.UtcNow;
+        _lastHeartbeatUtc = UtcNow;
         await _sync.AfterHeartbeatAsync(client, deviceId, results[0], ct);
 
         var serverNow = ParseUtc(results[2].FirstOrDefault()?["ServerNow"]) ?? DateTime.UtcNow;
-        var devices = MergeDevices(results[3], results[4], results[5].FirstOrDefault()?["Value"]?.ToString(), serverNow, deviceId)
-            .Where(d => !d.IsThisDevice && !d.IsRevoked && !d.IsPendingApproval)
-            .Where(d => d.Role is not { } role || DevicePermissions.CanTakeConsultations(role))
-            // Con latido reciente: uno registrado cuyo latido ya se limpió no se ve hace más de 60 días
-            .Where(d => d.LastSeenUtc != null && serverNow - d.LastSeenUtc.Value < ForgottenDeviceAge)
+        var devices = HandoffTargets(MergeDevices(results[3], results[4], results[5].FirstOrDefault()?["Value"]?.ToString(), serverNow, deviceId), serverNow)
             .OrderByDescending(d => d.IsOnline)
             .ThenByDescending(d => d.LastSeenUtc)
             .ToList();
         _sync.AddExternalUsage(rowsRead: 2 + results[3].Count + results[4].Count, rowsWritten: 1);
+        // Paso 8.24: la lista recién leída también sirve a la cadencia (un equipo recién vinculado acelera la revisión)
+        Scheduler.OnPeersRefreshed(devices.Count);
         return devices;
     }
 
