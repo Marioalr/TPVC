@@ -150,7 +150,7 @@ vuelve a correr `TursoSyncEndToEndTests.Scenarios.cs` con el motor real de la PC
 después de cada uno; con `TPVC_WRITE_GOLDEN=1 dotnet test --filter TursoSyncEndToEndTests.Scenario_` los reescribe. No
 dependen del texto del SQL.
 
-Forma: `{scenario, covers, contract, protocol, notes, devices: [{name, deviceId}], watch: {tabla: [columnas]}, steps}`. Cada
+Forma: `{scenario, covers, contract, protocol, notes, devices: [{name, deviceId, role, engine}], watch: {tabla: [columnas]}, steps}`. Cada
 paso es `{n, device?, op, …datos, result?, expect}`. `expect` tiene la nube (`cloud`: las filas de cada tabla de `watch` por
 `SyncId`, y `tombstones`: `EntityType/SyncId` de esas tablas) y cada equipo (`A`, `B`: sus filas, y `pending` = filas o
 lápidas anotadas que todavía no sube, `parked` = filas apartadas, `saved` = cambios guardados por otra generación). Cada
@@ -161,7 +161,11 @@ quedó), `<id:N>` (un GUID que generó el motor, numerado en el orden nube, A, B
 contenido con esos GUID tapados), `<today>` y `<year>` dentro de un folio (`TKT-<today>`, `EXP-<year>`) y `<code:B>` (el código
 del equipo B en un folio con letra: P2 en la PC, T1 en la tablet).
 
-A es la PC principal: `fullSync` («Sincronización completa») le da la identidad a la nube; B se une (`join`) y baja.
+**Los equipos son siempre los mismos:** A es la PC principal (`role` `WindowsDesktop`, `engine` `pc`: el motor de la PC, también
+en la CI de Kotlin) y B la tablet (`AndroidTablet`, `engine` `kotlin`; en la CI de la PC lo hace otra instancia del motor de la
+PC). `fullSync` («Sincronización completa») de A le da la identidad a la nube; B se une (`join`) y baja. Cada paso de un
+equipo es algo que su papel puede hacer en la app (`DevicePermissions`): B escribe expedientes, notas, hojas, citas y ventas,
+nunca el inventario ni el catálogo; la prueba `Scenario_EachDeviceOnlyDoesWhatItsRoleAllows` lo exige.
 
 | Operación | Quién | Qué hace |
 |---|---|---|
@@ -171,7 +175,7 @@ A es la PC principal: `fullSync` («Sincronización completa») le da la identid
 | `sell`, `cancelSale`, `closeBatch` | equipo | Vender (FEFO, folio del contador), cancelar el ticket por su folio y cerrar un lote (reglas «Existencias»). |
 | `sync` | equipo | Una sincronización. `pushBatchSize` = filas por petición de la subida; `cut` = `{uploadRequest: n, mode: beforeApply}` (la n-ésima petición de la subida no llega) o `lostResponse` (se aplica y su respuesta se pierde). `result` = `{ok, parked}`. |
 | `join`, `reapplySaved` | equipo | «Unirse a una nube existente» y «Volver a aplicar» lo guardado por otra generación. |
-| `rawWrite` | arnés | Escribe los valores con la marca dada (`T0+90s`, `T0+3h`; T0 = la hora al empezar) sin pasar por el guardado ni tocar `FieldStampsJson`: dos equipos con la misma marca, un reloj que saltó, o una PC v1.19–v1.38. Kotlin nunca escribe así: lo hace su prueba en la base local. |
+| `rawWrite` | arnés | Escribe los valores con la marca dada sin pasar por el guardado ni tocar `FieldStampsJson`: dos equipos con la misma marca, un reloj que saltó, o una PC v1.19–v1.38. La marca es relativa a la hora (UTC) de **ese paso**: `now+90s`, `now+3h`. Con `anchor`, la primera escritura con ese nombre calcula su marca y la recuerda, y las siguientes con el mismo nombre usan **ese mismo instante** (el empate de `lww-and-ties`). Así el resultado no depende de lo que tarde el arnés (`Scenario_LwwAndTies_WithASlowHarness…` lo corre con 1.5 s entre pasos). Kotlin nunca escribe así: lo hace su prueba en la base local. |
 | `network`, `serverClock`, `cloudHold`, `cloudRelease` | arnés | Sin red para todos (`online`), la nube con la hora corrida (`offsetSeconds`), y esconder una fila de la nube y regresarla con un `SyncedAtUtc` nuevo. |
 | `fullSync`, `regularizeFolios`, `backup`, `restoreBackup`, `replaceCloud` | PC | Solo la PC principal: la «Sincronización completa», la regularización diaria de folios (8.17) y restaurar un respaldo y reemplazar la nube con él (8.9). |
 
@@ -191,15 +195,29 @@ A es la PC principal: `fullSync` («Sincronización completa») le da la identid
 todavía no se hace (espera que `StockLedger.VerifyAsync` reporte cero diferencias varios días); hasta entonces
 `stock-ledger.json` muestra las existencias como valor y dice qué cambia.
 
-**Cómo los corre Kotlin (K5).** Un arnés JUnit lee cada archivo, crea una base de Room por equipo (`device-a`, `device-b`) y
-los apunta al mismo servidor simulado (`FakeTursoHost`, `TPVC_FAKE_TURSO_SEED=none`), ejecuta cada paso con su motor y,
-después de cada uno, compara con `expect` la nube (leída con las mismas tablas y columnas) y cada base local, convertidas a
-la forma de arriba y con los mismos marcadores. Las operaciones de equipo las hace la app (sus casos de uso, no SQL
-directo); las del arnés son controles del servidor simulado (la red, la hora, esconder una fila; el `FakeTursoHost` de
-hoy no los expone: se agregan en K5) y `rawWrite` en la base local. Las de la PC (`fullSync`, `regularizeFolios`,
-`backup`, `restoreBackup`, `replaceCloud`) las hace la PC: el job de Kotlin corre el motor de la PC para el equipo A (plan
-§7.6), o se salta el escenario hasta tenerlo. Cuántas peticiones hace cada sincronización y cuántas filas sube no está en los archivos (eso es de
-`hrana/`); `pending` cuenta filas y lápidas distintas por `SyncId`, como `PendingCount` del latido.
+**Cómo los corre Kotlin (K5).** Como dice el plan (§7.6), cada escenario corre con **dos motores sobre el mismo servidor
+simulado: el de la PC para A y el de Kotlin para B**. Nunca dos bases de Room: A siempre es la PC.
+
+- **Una nube vacía por escenario.** Cada archivo empieza con la nube sin nada (sin esquema, sin `clinicId`, sin
+  `FolioCounters`): un `FakeTursoHost` nuevo por escenario con `TPVC_FAKE_TURSO_SEED=none`, o una ruta que lo regrese a
+  vacío. B empieza con una base de Room nueva y A con una base de la PC nueva (sin datos demo).
+- **B (Kotlin)** ejecuta sus pasos con los casos de uso de la app (no SQL directo, salvo `rawWrite`) y, después de cada paso,
+  convierte su base a la forma de arriba (con los mismos marcadores) y la compara con `expect.B`, incluidos `pending`,
+  `parked` y `saved`.
+- **A (la PC)** la maneja el arnés por rutas de control solo en `127.0.0.1`, que se agregan en K5 a `FakeTursoHost` (o a un
+  proceso hermano con el motor de la PC): una para **cada paso de A** que aparece en los archivos (`create`, `edit`,
+  `delete`, `rawWrite`, `sheetRow`, `newPatient`, `sell`, `cancelSale`, `closeBatch`, `sync` con su `cut` y `pushBatchSize`,
+  `fullSync`, `regularizeFolios`, `backup`, `restoreBackup`, `replaceCloud`), que regresa su `result`, y una que regresa la
+  **foto de A** (sus filas de `watch` en la forma de arriba, y `pending`, `parked` y `saved`) para compararla con `expect.A`.
+  Es justo lo que hace hoy `TursoSyncEndToEndTests.Scenarios.cs` (`ExecuteStepAsync` y `SnapshotAsync`).
+- **El arnés del servidor:** `network`, `serverClock`, `cloudHold`/`cloudRelease`, el corte de `sync` (la n-ésima petición de
+  la subida de ese equipo no llega o pierde su respuesta) y leer la nube (`expect.cloud`, con las lápidas): rutas de
+  control del simulador (`docs/FAKE_HRANA_SPEC.md`).
+- Los `<id:N>` se numeran con la foto completa (nube, A y B) en el orden descrito arriba; los `<code:B>` y `<today>` los
+  pone el arnés con el código y el día de B.
+
+Cuántas peticiones hace cada sincronización y cuántas filas sube no está en los archivos (eso es de `hrana/`); `pending`
+cuenta filas y lápidas distintas por `SyncId`, como `PendingCount` del latido.
 
 ## Lo que viene
 

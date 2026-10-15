@@ -124,7 +124,8 @@ curl -s http://127.0.0.1:8787/__stop
 simulador: `network` = `IsOffline`, `serverClock` = `Clock` (la hora real más `offsetSeconds`), `cloudHold`/`cloudRelease` =
 sacar una fila de su tabla y regresarla con `SyncedAtUtc` = ahora, y `cut` = `BeforeExecuteAsync` (la n-ésima petición de la
 subida no llega) o `DropResponseAfterExecute` (se aplica y la respuesta se pierde). Hoy solo las pruebas de C# los tienen;
-para el arnés de Kotlin, `FakeTursoHost` necesita exponerlos (K5).
+para el arnés de Kotlin, `FakeTursoHost` necesita exponerlos (K5), junto con una nube vacía por escenario y las rutas que
+hacen los pasos del equipo A con el motor de la PC y regresan su foto (`contracts/README.md`, «Cómo los corre Kotlin»).
 
 El simulador revisa los planes también aquí: una consulta de Kotlin que recorra una tabla sincronizada recibe
 `SCAN_FORBIDDEN`, igual que en las pruebas de la PC.
