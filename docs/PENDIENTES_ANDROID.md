@@ -109,7 +109,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] Con dos PC en la misma nube y la primera en Pacientes: en la segunda, cambiar el teléfono de un paciente. En la primera, sin tocar nada, el cambio aparece en unos 8 segundos (4 s para que la segunda suba y ≤ 4 s para que la primera lo vea); con la primera en el Punto de venta, en menos de 35 segundos.
 - [ ] Con el formulario de ese paciente abierto en la primera mientras llega el cambio: el formulario no cambia; al cerrarlo, la ficha muestra el teléfono nuevo.
 - [ ] Sin otro equipo vinculado (o con solo el celular), en *Nube y dispositivos* el consumo del día baja: la revisión va cada 30 s también en Pacientes.
-- [ ] Desconectar el internet de la primera unos minutos: la barra de estado dice "Sin conexión" y no se llena la bitácora de errores (reintentos a los 30 s, 1, 2 y 5 min). Al reconectar, sincroniza sola en segundos.
+- [ ] Desconectar el internet de la primera unos minutos: la barra de estado dice "Sin conexión" y la bitácora anota un intento a los 30 s, 1 min, 2 min y luego uno cada 5 min (no cada 4 s). Al reconectar, sincroniza sola en segundos.
 - [ ] Cerrar la tapa de la laptop unos minutos y abrirla: sincroniza sola al despertar. Cambiar a otra ventana más de 30 s y volver a TPVC: sincroniza.
 - [ ] Una semana después, en el panel de Turso, las lecturas y escrituras del día siguen en el orden de §2 de `docs/TURSO_SYNC_ARCHITECTURE.md` (decenas de miles de lecturas y un par de miles de escrituras).
 - [ ] Para Kotlin (K5 en la tablet; K2–K4 en el celular), regla «Cadencia» de `contracts/sync/schema.json` y las instrucciones `check.*` de `contracts/hrana/statements.json`:
