@@ -605,7 +605,7 @@ public partial class TursoSyncEndToEndTests
         ForgetTimesNormalized(pc);
         using (var db = pc.Factory.CreateDbContext())
         {
-            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
+            Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, pc.Settings.CurrentSettings));
         }
         CollectionAssert.AreEquivalent(written, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList(), "Al abrir, con la nube, nada cambia");
         Assert.IsFalse(TimesNormalized(pc));
@@ -644,7 +644,7 @@ public partial class TursoSyncEndToEndTests
         ForgetTimesNormalized(laptop);
         using (var db = laptop.Factory.CreateDbContext())
         {
-            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
+            Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, laptop.Settings.CurrentSettings));
         }
         Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
@@ -668,11 +668,11 @@ public partial class TursoSyncEndToEndTests
         await ScheduleAsync(pc, patient, day, "5 pm");
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
 
-        // Una PC nueva sin nube: al abrir hace su pasada (no hay nada) y se queda con la marca; luego se une a la nube
+        // Una PC nueva que abrió sin nube: hizo su pasada (no había nada) y se quedó con la marca; luego se une a la nube
         var laptop = CreateDevice("laptop", seed: false);
         using (var db = laptop.Factory.CreateDbContext())
         {
-            Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
+            Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, new TursoSettings()));
         }
         Assert.IsTrue(TimesNormalized(laptop));
         Assert.IsTrue((await laptop.Sync.JoinCloudAsync()).Ok);
@@ -680,6 +680,86 @@ public partial class TursoSyncEndToEndTests
 
         Assert.AreEqual("17:00", (await laptop.Inventory.GetAppointmentsByDayAsync(day)).Single().Time, "Lo que bajó al unirse también se normaliza");
         Assert.IsTrue(TimesNormalized(laptop));
+    }
+
+    [TestMethod]
+    public async Task APcWithSyncSwitchedOff_DoesNotRewriteItsStaleCopyWhenItOpens()
+    {
+        var (pc, laptop, _) = await PcAndTabletAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(3);
+        var appointment = await ScheduleAsync(pc, patient, day, "5 pm");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+
+        // La laptop apaga «Sincronización activada» (se queda con la URL, el token y sus cursores); la PC cancela la cita
+        var off = laptop.Settings.CurrentSettings;
+        off.IsSyncEnabled = false;
+        laptop.Settings.SaveSettings(off);
+        await pc.Inventory.UpdateAppointmentStatusAsync(appointment.Id, "Cancelada");
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        // La laptop abre con v1.40: sigue ligada a la nube, así que su copia vieja no se reescribe ni se marca como hecho
+        ForgetTimesNormalized(laptop);
+        using (var db = laptop.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, laptop.Settings.CurrentSettings));
+        }
+        Assert.IsFalse(TimesNormalized(laptop));
+
+        // Vuelve a encender la sincronización: baja la cancelación y luego normaliza
+        var on = laptop.Settings.CurrentSettings;
+        on.IsSyncEnabled = true;
+        laptop.Settings.SaveSettings(on);
+        Assert.IsTrue((await laptop.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+
+        foreach (var device in new[] { pc, laptop })
+        {
+            var stored = (await device.Inventory.GetAppointmentsByDayAsync(day)).Single(a => a.SyncId == appointment.SyncId);
+            Assert.AreEqual("Cancelada", stored.Status, "La cancelación de la PC se queda en los dos equipos");
+            Assert.AreEqual("17:00", stored.Time);
+        }
+        Assert.IsTrue(TimesNormalized(laptop));
+    }
+
+    [TestMethod]
+    public async Task AnUnreadableTimeOrAFailingPass_NeverStopsTheSync()
+    {
+        var (pc, _, _) = await PcAndTabletAsync();
+        var patient = (await pc.Inventory.GetPatientsAsync())[0];
+        var day = DateTime.Today.AddDays(6);
+        await ScheduleAsync(pc, patient, day, "１０.３０");
+        await ScheduleAsync(pc, patient, day, "5 pm");
+
+        // Un texto con dígitos de ancho completo se deja como está; lo demás se normaliza y la sincronización termina
+        ForgetTimesNormalized(pc);
+        var sync = await pc.Sync.SyncAsync();
+        Assert.IsTrue(sync.Success, sync.ErrorMessage);
+        CollectionAssert.AreEquivalent(new[] { "１０.３０", "17:00" }, (await pc.Inventory.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList());
+        Assert.IsTrue(TimesNormalized(pc));
+
+        // Si la pasada falla de todos modos, la sincronización sigue, no se marca como hecha y esta versión no la repite
+        ForgetTimesNormalized(pc);
+        int calls = 0;
+        pc.Sync.NormalizeAppointmentTimes = _ => { calls++; throw new InvalidOperationException("Falla simulada de la pasada"); };
+        var before = pc.Settings.CurrentSettings.LastSyncUtc;
+        var failed = await pc.Sync.SyncAsync();
+        Assert.IsTrue(failed.Success, failed.ErrorMessage);
+        Assert.AreNotEqual(before, pc.Settings.CurrentSettings.LastSyncUtc, "La sincronización llegó al final");
+        Assert.IsFalse(TimesNormalized(pc));
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(1, calls, "Esta versión no la vuelve a intentar en cada sincronización");
+
+        // Una versión nueva sí la intenta otra vez
+        using (var db = pc.Factory.CreateDbContext())
+        {
+            Assert.AreEqual(TursoSyncService.AppVersionText, TPVC.Data.DbMeta.Get(db, AppointmentTimeMigration.FailedVersionKey));
+            TPVC.Data.DbMeta.Set(db, AppointmentTimeMigration.FailedVersionKey, "0.0.0-anterior");
+        }
+        pc.Sync.NormalizeAppointmentTimes = AppointmentTimeMigration.Run;
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue(TimesNormalized(pc));
     }
 
     // ================================================================== MergedIntoSyncId

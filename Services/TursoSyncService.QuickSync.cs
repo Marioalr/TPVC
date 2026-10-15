@@ -110,9 +110,14 @@ public partial class TursoSyncService : IQuickSync
     // Citas que la normalización cambió en esta sincronización (las pantallas recargan como después de bajar)
     private int _normalizedTimes;
 
+    /// <summary>Para las pruebas: la pasada de las horas (por omisión, <see cref="AppointmentTimeMigration"/>).</summary>
+    internal Func<AppDbContext, int> NormalizeAppointmentTimes { get; set; } = AppointmentTimeMigration.Run;
+
     /// <summary>
     /// Una sola vez por base (<see cref="AppointmentTimeMigration"/>), dentro de la sincronización y después de bajar: las filas
     /// ya están al día con la nube, así que reescribir una no deshace lo que otro equipo cambió. Lo cambiado sube enseguida.
+    /// Nunca detiene la sincronización: si falla, sigue sin ella, no se marca como hecha y esta versión no la repite (una
+    /// versión nueva sí).
     /// </summary>
     private async Task<(int Pushed, int RowsRead)> NormalizeAppointmentTimesAsync(TursoClient client, string deviceId, CancellationToken ct)
     {
@@ -120,7 +125,24 @@ public partial class TursoSyncService : IQuickSync
         using (var db = _contextFactory.CreateDbContext())
         {
             if (await DbMeta.GetAsync(db, AppointmentTimeMigration.DoneKey, ct) == "1") return (0, 0);
-            changed = AppointmentTimeMigration.Run(db);
+            if (await DbMeta.GetAsync(db, AppointmentTimeMigration.FailedVersionKey, ct) == AppVersionText) return (0, 0);
+            try
+            {
+                changed = NormalizeAppointmentTimes(db);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLogger.Warn($"Turso: no se pudieron normalizar las horas de las citas; la sincronización sigue sin hacerlo y esta versión no lo vuelve a intentar: {ex.Message}");
+                try
+                {
+                    await DbMeta.SetAsync(db, AppointmentTimeMigration.FailedVersionKey, AppVersionText, ct);
+                }
+                catch (Exception metaEx)
+                {
+                    AppLogger.Warn($"Turso: tampoco se pudo anotar el fallo de la normalización: {metaEx.Message}");
+                }
+                return (0, 0);
+            }
         }
         if (changed == 0) return (0, 0);
         Interlocked.Add(ref _normalizedTimes, changed);

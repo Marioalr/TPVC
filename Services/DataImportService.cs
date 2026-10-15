@@ -233,11 +233,11 @@ public class DataImportService
                 ctx.Database.EnsureCreated();
                 DatabaseInitializer.EnsureSchema(ctx);
 
-                // Paso 8.23: sin nube activa, las horas de cita escritas a mano de un respaldo anterior pasan a "HH:mm" aquí; con
-                // la nube, después de bajar en la primera sincronización
+                // Paso 8.23: en una base que nunca se ha ligado a una nube, las horas de cita escritas a mano de un respaldo anterior
+                // pasan a "HH:mm" aquí; en una ligada, después de bajar en la siguiente sincronización
                 try
                 {
-                    AppointmentTimeMigration.RunWithoutCloud(ctx, AppointmentTimeMigration.IsCloudActive(_tursoSettingsService?.CurrentSettings));
+                    AppointmentTimeMigration.RunAtOpen(ctx, _tursoSettingsService?.CurrentSettings);
                 }
                 catch (Exception ex)
                 {

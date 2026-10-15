@@ -19,14 +19,18 @@ namespace TPVC.Services;
 /// sube como una edición y todos los equipos quedan con la misma. Lo que ninguno de los dos lee se queda como está (se sigue
 /// viendo el texto tal cual, y la agenda lo pone a las 10:00).
 /// <list type="bullet">
-/// <item><b>Cuándo.</b> Sin nube activa, al abrir la base (<see cref="RunWithoutCloud"/>, desde el arranque y al restaurar un
-/// respaldo). Con la nube activa, dentro de la sincronización, con su candado, <b>después de bajar</b> (también la descarga
-/// completa de «Unirse» y «Reemplazar con la nube», que quitan la marca de hecho): así solo se reescriben filas al día con la
-/// nube. Al abrir no se toca nada con la nube activa: una copia vieja (otro equipo movió o canceló la cita mientras esta PC
-/// estaba cerrada) con marca nueva subiría antes de bajar y desharía ese cambio en todos los equipos (las citas son LWW por
-/// fila).</item>
-/// <item><b>La marca de hecho</b> (<c>DbMeta</c> "AppointmentTimesNormalized") solo se pone después de una pasada sin nube o
-/// después de bajar.</item>
+/// <item><b>Cuándo.</b> Al abrir la base (<see cref="RunAtOpen"/>, desde el arranque y al restaurar un respaldo) solo si la base
+/// nunca se ha ligado a una nube (<see cref="IsBoundToCloud"/>: sin URL configurada, sin <c>clinicId</c> y sin cursores de
+/// bajada; no importa la casilla «Sincronización activada»). Si la base está o estuvo ligada, dentro de la sincronización, con su
+/// candado, <b>después de bajar</b> (también la descarga completa de «Unirse» y «Reemplazar con la nube», que quitan la marca
+/// de hecho): así solo se reescriben filas al día con la nube. Al abrir una base ligada no se toca nada, aunque la casilla
+/// esté apagada: una copia vieja (otro equipo movió o canceló la cita mientras esta PC estaba cerrada o sin sincronizar) con
+/// marca nueva subiría antes de bajar y desharía ese cambio en todos los equipos (las citas son LWW por fila).</item>
+/// <item><b>La marca de hecho</b> (<c>DbMeta</c> "AppointmentTimesNormalized") solo se pone después de una pasada al abrir una
+/// base nunca ligada o después de bajar.</item>
+/// <item><b>Nunca detiene la sincronización.</b> Un texto que no se puede leer se deja como está. Si la pasada falla de todos
+/// modos (la base), la sincronización sigue sin ella, no se pone la marca de hecho y esta versión no lo vuelve a intentar
+/// (<c>DbMeta</c> "AppointmentTimesFailedVersion"); una versión nueva sí.</item>
 /// </list>
 /// </summary>
 public static class AppointmentTimeMigration
@@ -36,20 +40,32 @@ public static class AppointmentTimeMigration
 
     private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
 
-    /// <summary>"10.30", "9,30", "10 30", con am/pm opcional ("4.30 pm"): hora y minutos con otro separador.</summary>
-    private static readonly Regex SeparatedTime = new(
-        @"^\s*(?<h>\d{1,2})\s*[.,\s]\s*(?<m>\d{2})\s*(?<ampm>[ap]\.?\s*m\.?)?\s*$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    /// <summary>¿Hay nube activa? (la sincronización encendida y con URL, como la pide <c>SyncAsync</c>).</summary>
-    public static bool IsCloudActive(TursoSettings? settings) =>
-        settings != null && settings.IsSyncEnabled && !string.IsNullOrWhiteSpace(settings.DatabaseUrl);
+    /// <summary>La versión de TPVC en que falló la pasada dentro de la sincronización (esa versión ya no la repite).</summary>
+    public const string FailedVersionKey = "AppointmentTimesFailedVersion";
 
     /// <summary>
-    /// Al abrir la base (el arranque y al restaurar un respaldo): solo sin nube activa. Con la nube activa no hace nada: lo
-    /// hace la sincronización después de bajar. Regresa cuántas cambió.
+    /// "10.30", "9,30", "10 30", con am/pm opcional ("4.30 pm"): hora y minutos con otro separador. Solo dígitos ASCII
+    /// (<c>\d</c> aceptaría "１０.３０" y la lectura fallaría).
     /// </summary>
-    public static int RunWithoutCloud(AppDbContext db, bool cloudActive) => cloudActive ? 0 : Run(db);
+    private static readonly Regex SeparatedTime = new(
+        @"^\s*(?<h>[0-9]{1,2})\s*[.,\s]\s*(?<m>[0-9]{2})\s*(?<ampm>[ap]\.?\s*m\.?)?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// ¿La base está o estuvo ligada a una nube? Una URL configurada (aunque la casilla «Sincronización activada» esté apagada,
+    /// y como lo toma la restauración), o en la base el <c>clinicId</c> de una nube o algún cursor de bajada. «Desconectar esta
+    /// PC de la nube» quita los tres.
+    /// </summary>
+    public static bool IsBoundToCloud(AppDbContext db, TursoSettings? settings) =>
+        !string.IsNullOrWhiteSpace(settings?.DatabaseUrl)
+        || DbMeta.Get(db, DbMeta.ClinicId) != null
+        || DbMeta.AnyWithPrefix(db, DbMeta.PullCursorPrefix);
+
+    /// <summary>
+    /// Al abrir la base (el arranque y al restaurar un respaldo): solo si nunca se ha ligado a una nube. Si lo está o lo estuvo
+    /// no hace nada ni pone la marca de hecho: lo hace la sincronización después de bajar. Regresa cuántas cambió.
+    /// </summary>
+    public static int RunAtOpen(AppDbContext db, TursoSettings? settings) => IsBoundToCloud(db, settings) ? 0 : Run(db);
 
     /// <summary>
     /// Normaliza las horas de las citas si no se ha hecho en esta base y pone la marca de hecho. Solo se llama sin nube activa
@@ -68,7 +84,18 @@ public static class AppointmentTimeMigration
             foreach (var row in db.Appointments.AsNoTracking().Where(a => a.Time != null && a.Time != "").Select(a => new { a.Id, a.Time }).ToList())
             {
                 if (PatientSummaryRules.TryTimeOfDay(row.Time, out _)) continue;
-                if (LegacyTimeOfDay(row.Time) is { } time) candidates[row.Id] = (row.Time, Format(time));
+                TimeSpan? time;
+                try
+                {
+                    time = LegacyTimeOfDay(row.Time);
+                }
+                catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException)
+                {
+                    // Un texto raro nunca detiene la pasada: se deja como está
+                    AppLogger.Warn($"Citas: la hora '{row.Time}' no se pudo leer y se deja como está ({ex.Message}).");
+                    continue;
+                }
+                if (time is { } value) candidates[row.Id] = (row.Time, Format(value));
             }
             if (candidates.Count > 0)
             {
@@ -112,9 +139,12 @@ public static class AppointmentTimeMigration
         var match = SeparatedTime.Match(time);
         if (match.Success)
         {
-            int hours = int.Parse(match.Groups["h"].Value, CultureInfo.InvariantCulture);
-            int minutes = int.Parse(match.Groups["m"].Value, CultureInfo.InvariantCulture);
-            if (minutes > 59) return null;
+            if (!int.TryParse(match.Groups["h"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int hours)
+                || !int.TryParse(match.Groups["m"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int minutes)
+                || minutes > 59)
+            {
+                return null;
+            }
             if (match.Groups["ampm"].Success)
             {
                 if (hours is < 1 or > 12) return null;

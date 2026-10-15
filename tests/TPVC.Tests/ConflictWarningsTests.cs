@@ -537,8 +537,9 @@ public class ConflictWarningsTests
             Assert.IsFalse(PatientSummaryRules.TryTimeOfDay(text, out _), $"'{text}': la regla no la lee");
             Assert.AreEqual(expected, AppointmentTimeMigration.LegacyTimeOfDay(text) is { } t ? AppointmentTimeMigration.Format(t) : null, text);
         }
-        // Lo que el lector de antes toma como fecha no es una hora: se deja como está (nunca "00:00")
-        foreach (var text in new[] { "mediodía", "10/30", "10-30", "9.5", "10.75", "25.10" })
+        // Lo que el lector de antes toma como fecha no es una hora: se deja como está (nunca "00:00"). Los dígitos que no son
+        // ASCII (de ancho completo, arábigos) tampoco se leen, y nunca lanzan
+        foreach (var text in new[] { "mediodía", "10/30", "10-30", "9.5", "10.75", "25.10", "１０.３０", "١٠.٣٠", "１０ ３０ pm" })
         {
             Assert.IsNull(AppointmentTimeMigration.LegacyTimeOfDay(text), text);
         }
@@ -546,26 +547,41 @@ public class ConflictWarningsTests
     }
 
     [TestMethod]
-    public async Task WithoutTheCloud_TheTimesAreNormalizedWhenTheDatabaseOpens_AndWithTheCloudOnlyAfterAPull()
+    public async Task ADatabaseNeverBoundToACloud_IsNormalizedWhenItOpens_AndABoundOneOnlyAfterAPull()
     {
         var patient = (await _service.GetPatientsAsync())[0];
         var day = DateTime.Today.AddDays(3);
-        foreach (var time in new[] { "5 pm", "10.30", "10/30" })
+        foreach (var time in new[] { "5 pm", "10.30", "10/30", "１０.３０" })
         {
             await _service.SaveAppointmentAsync(new PatientAppointment { PatientRecordId = patient.Id, Date = day, Time = time, Reason = "Control" });
         }
         using var db = new AppDbContext(Options());
         Assert.IsNull(DbMeta.Get(db, AppointmentTimeMigration.DoneKey), "Abrir la base ya no la normaliza por su cuenta");
 
-        // Con la nube activa, al abrir no se toca nada ni se marca como hecho
-        Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: true));
-        Assert.IsNull(DbMeta.Get(db, AppointmentTimeMigration.DoneKey));
+        // Ligada a una nube (también con la casilla «Sincronización activada» apagada, o solo por lo que guarda la base): al
+        // abrir no se toca nada ni se marca como hecho
+        var url = "https://tpvc-test.turso.io";
+        foreach (var (why, settings, meta) in new (string, TursoSettings, string?)[]
+                 {
+                     ("con la sincronización encendida", new TursoSettings { DatabaseUrl = url, IsSyncEnabled = true }, null),
+                     ("con la casilla apagada pero la URL puesta", new TursoSettings { DatabaseUrl = url, IsSyncEnabled = false }, null),
+                     ("sin URL, con el clinicId de una nube en la base", new TursoSettings(), DbMeta.ClinicId),
+                     ("sin URL, con un cursor de bajada en la base", new TursoSettings(), DbMeta.PullCursorPrefix + "Appointments"),
+                 })
+        {
+            if (meta != null) DbMeta.Set(db, meta, "x");
+            Assert.IsTrue(AppointmentTimeMigration.IsBoundToCloud(db, settings), why);
+            Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, settings), why);
+            Assert.IsNull(DbMeta.Get(db, AppointmentTimeMigration.DoneKey), why);
+            if (meta != null) DbMeta.Remove(db, meta);
+        }
 
-        // Sin nube, sí, una sola vez
-        Assert.AreEqual(2, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
-        CollectionAssert.AreEquivalent(new[] { "17:00", "10:30", "10/30" }, (await _service.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList());
+        // Nunca ligada: sí, una sola vez. Un texto con dígitos que no son ASCII se deja como está y no detiene nada
+        Assert.IsFalse(AppointmentTimeMigration.IsBoundToCloud(db, new TursoSettings()));
+        Assert.AreEqual(2, AppointmentTimeMigration.RunAtOpen(db, new TursoSettings()));
+        CollectionAssert.AreEquivalent(new[] { "17:00", "10:30", "10/30", "１０.３０" }, (await _service.GetAppointmentsByDayAsync(day)).Select(a => a.Time).ToList());
         Assert.AreEqual("1", DbMeta.Get(db, AppointmentTimeMigration.DoneKey));
-        Assert.AreEqual(0, AppointmentTimeMigration.RunWithoutCloud(db, cloudActive: false));
+        Assert.AreEqual(0, AppointmentTimeMigration.RunAtOpen(db, new TursoSettings()));
     }
 
     [TestMethod]

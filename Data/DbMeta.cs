@@ -122,6 +122,11 @@ public static class DbMeta
         return rows.Where(r => r.Value != null).ToDictionary(r => r.Key, r => r.Value!, StringComparer.Ordinal);
     }
 
+    /// <summary>¿Hay alguna clave que empiece con <paramref name="prefix"/>?</summary>
+    public static bool AnyWithPrefix(AppDbContext db, string prefix) =>
+        db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS \"Value\" FROM \"DbMeta\" WHERE substr(\"Key\", 1, {0}) = {1}", prefix.Length, prefix)
+            .AsEnumerable().First() > 0;
+
     public static void RemoveByPrefix(AppDbContext db, string prefix) =>
         db.Database.ExecuteSqlRaw("DELETE FROM \"DbMeta\" WHERE substr(\"Key\", 1, {0}) = {1}", prefix.Length, prefix);
 
