@@ -14,7 +14,9 @@ namespace TPVC.Services.Rules;
 /// (<see cref="CanonicalJson"/>) con <b>todos</b> sus campos conocidos (<see cref="Fields"/>, también los que la PC omite
 /// cuando valen lo de siempre) más los que no conoce, tal cual. No entran los Id locales del equipo que escribió
 /// (<see cref="LocalIdFields"/>: <c>ChargedLineId</c> y <c>ServiceId</c>, que la PC sigue escribiendo para las PC anteriores
-/// y Kotlin no escribe): que cada equipo escriba los suyos no es un cambio. Vectores en
+/// y Kotlin no escribe): que cada equipo escriba los suyos no es un cambio. Desde la revisión 13 un servicio lleva además su
+/// lista de insumos (<c>Supplies</c>, null sin lista), cada insumo con todos sus campos conocidos menos su <c>ChargedLineId</c>:
+/// la lista es parte del renglón, así que cambiarla marca el renglón y la combinación la lleva con él. Vectores en
 /// <c>contracts/golden/canonical-json.json</c>.
 /// </summary>
 public static class PatientSheetCanonical
@@ -47,9 +49,23 @@ public static class PatientSheetCanonical
             nameof(PatientServiceItem.RowId), nameof(PatientServiceItem.ServiceSyncId), nameof(PatientServiceItem.ServiceCode),
             nameof(PatientServiceItem.ServiceName), nameof(PatientServiceItem.Category), nameof(PatientServiceItem.Notes),
             nameof(PatientServiceItem.Price), nameof(PatientServiceItem.Quantity), nameof(PatientServiceItem.ChargedConsultationFolio),
-            nameof(PatientServiceItem.ChargedUnits)
+            nameof(PatientServiceItem.ChargedUnits), nameof(PatientServiceItem.Supplies)
         }
     };
+
+    /// <summary>
+    /// Revisión 13: los campos conocidos de cada insumo de un servicio (<see cref="PatientServiceItem.Supplies"/>), con todos sus
+    /// valores, igual que un renglón; <c>ChargedLineId</c> es su Id local y no entra (<see cref="ServiceSupplyLocalIdFields"/>).
+    /// La lista va en su orden; sin lista es null.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ServiceSupplyFields = new[]
+    {
+        nameof(PatientServiceSupply.SupplyName), nameof(PatientServiceSupply.Quantity), nameof(PatientServiceSupply.UnitPrice),
+        nameof(PatientServiceSupply.ChargedLineKind), nameof(PatientServiceSupply.ChargedLineSyncId)
+    };
+
+    /// <summary>El Id local de cada insumo de un servicio: viaja, pero no es parte de su significado.</summary>
+    public static readonly IReadOnlyList<string> ServiceSupplyLocalIdFields = new[] { nameof(PatientServiceSupply.ChargedLineId) };
 
     /// <summary>Los Id locales del equipo que escribió el renglón: viajan, pero no son parte de su significado.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> LocalIdFields = new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -141,16 +157,34 @@ public static class PatientSheetCanonical
         var obj = new JsonObject();
         foreach (var name in Fields[column])
         {
-            obj[name] = CanonicalJson.FromValue(Property(row.GetType(), name).GetValue(row));
+            var value = Property(row.GetType(), name).GetValue(row);
+            obj[name] = value is IEnumerable<PatientServiceSupply?> supplies
+                ? new JsonArray(supplies.Select(s => (JsonNode?)(s == null ? null : CanonicalServiceSupply(s))).ToArray())
+                : CanonicalJson.FromValue(value);
         }
-        if (row.ExtensionData is { } extra)
-        {
-            foreach (var (key, element) in extra.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            {
-                obj[key] = CanonicalJson.FromElement(element);
-            }
-        }
+        AddExtensionData(obj, row.ExtensionData);
         // Los nodos se reordenan al escribirlos: CanonicalJson.Write ordena las llaves
         return obj;
+    }
+
+    /// <summary>Un insumo de un servicio con todos sus campos conocidos (menos su Id local) y los que no conoce.</summary>
+    public static JsonObject CanonicalServiceSupply(PatientServiceSupply supply)
+    {
+        var obj = new JsonObject();
+        foreach (var name in ServiceSupplyFields)
+        {
+            obj[name] = CanonicalJson.FromValue(Property(typeof(PatientServiceSupply), name).GetValue(supply));
+        }
+        AddExtensionData(obj, supply.ExtensionData);
+        return obj;
+    }
+
+    private static void AddExtensionData(JsonObject obj, Dictionary<string, System.Text.Json.JsonElement>? extra)
+    {
+        if (extra == null) return;
+        foreach (var (key, element) in extra.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            obj[key] = CanonicalJson.FromElement(element);
+        }
     }
 }

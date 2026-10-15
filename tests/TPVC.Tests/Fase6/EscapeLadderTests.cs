@@ -31,6 +31,9 @@ public class EscapeLadderTests
         new("terminar consulta", (vm, c) => { vm.SelectPatient(Mock(vm, 2)); vm.StartActiveConsultation(); FreezeClock(c); vm.Consultation.IsFinishConsultationOpen = true; }, vm => vm.Consultation.IsFinishConsultationOpen),
         new("receta", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Prescription.OpenPrescriptionModal(); }, vm => vm.Prescription.IsPrescriptionModalOpen),
         new("insumos", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.Supplies.OpenSuppliesModal(); }, vm => vm.Supplies.IsSuppliesModalOpen),
+        // Los insumos abiertos de un servicio (2026-10-14) se cierran antes que la hoja de servicios
+        new("insumos del servicio", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); vm.ClinicalServices.SupplyEditorRow = ServiceRow(); },
+            vm => vm.ClinicalServices.IsSupplyEditorOpen),
         new("servicios", (vm, _) => { vm.SelectPatient(Mock(vm, 2)); vm.ClinicalServices.OpenServicesModal(); }, vm => vm.ClinicalServices.IsServicesModalOpen),
         new("cambiar cita", (vm, _) => { Completes(vm.OpenAgendaPanelAsync(), "Agenda"); vm.Agenda.StartMovingAppointment(Appointment()); }, vm => vm.Agenda.IsMovingAppointment),
         new("agenda", (vm, _) => Completes(vm.OpenAgendaPanelAsync(), "Agenda"), vm => vm.Agenda.IsAgendaPanelOpen),
@@ -59,6 +62,8 @@ public class EscapeLadderTests
     }
 
     private static PatientRecord Mock(MedicalRecordsViewModel records, int id) => records.Patients.Single(p => p.Id == id);
+
+    private static PatientServiceItem ServiceRow() => new() { ServiceName = "Curación Menor y Asepsia", Quantity = 1 };
 
     private static PatientAppointment Appointment() =>
         new() { Id = 9, PatientName = "Ana Ruiz", Date = new DateTime(2026, 10, 20), Time = "10:00" };
@@ -106,6 +111,7 @@ public class EscapeLadderTests
         Completes(records.OpenAgendaPanelAsync(), "Agenda");
         records.Agenda.StartMovingAppointment(Appointment());
         records.ClinicalServices.IsServicesModalOpen = true;
+        records.ClinicalServices.SupplyEditorRow = ServiceRow();
         records.Supplies.IsSuppliesModalOpen = true;
         records.Prescription.IsPrescriptionModalOpen = true;
         records.Consultation.IsFinishConsultationOpen = true;

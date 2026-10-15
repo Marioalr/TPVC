@@ -11,6 +11,8 @@
 
     <!-- Servicios y procedimientos de la consulta (inyección, curación, sutura…): se escriben -->
     <!-- (↑↓ y Enter eligen) y se cargan a la cuenta de la consulta con sus insumos.          -->
+    <!-- En la consulta en curso, cada servicio cambia sus unidades con − / + y sus insumos    -->
+    <!-- solo para esta consulta («Ajustar insumos», pedido del 2026-10-14).                   -->
     <Border Style="{StaticResource SheetScrim}">
         <Border Style="{StaticResource SheetCard}" Width="820" MaxHeight="700" Padding="0">
             <Grid>
@@ -124,31 +126,153 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientServiceItem}">
                                         <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,6">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding ServiceName}" />
-                                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Notes}" TextWrapping="Wrap"
-                                                               Visibility="{Binding Notes, Converter={StaticResource BoolToVis}}" />
-                                                    <TextBlock Style="{StaticResource TextCaption}" FontStyle="Italic" Text="De una consulta anterior: no se cobra en esta"
-                                                               Visibility="{Binding IsFromEarlierConsultation, Converter={StaticResource BoolToVis}}" />
-                                                </StackPanel>
-                                                <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0,0,0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding ServiceName}" />
+                                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Notes}" TextWrapping="Wrap"
+                                                                   Visibility="{Binding Notes, Converter={StaticResource BoolToVis}}" />
+                                                        <TextBlock Style="{StaticResource TextCaption}" FontStyle="Italic" Text="De una consulta anterior: no se cobra en esta"
+                                                                   Visibility="{Binding IsFromEarlierConsultation, Converter={StaticResource BoolToVis}}" />
+                                                        <!-- Los insumos que cargó este renglón, en una línea (2026-10-14) -->
+                                                        <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                                   Text="{Binding SuppliesSummary, StringFormat='Insumos: {0}'}"
+                                                                   Visibility="{Binding HasSupplies, Converter={StaticResource BoolToVis}}" />
+                                                        <Button Style="{StaticResource ButtonGhost}" Padding="6,3" Margin="-6,4,0,0" HorizontalAlignment="Left"
+                                                                Visibility="{Binding IsFromEarlierConsultation, Converter={StaticResource InverseBoolToVis}}"
+                                                                ToolTip="Quitar o agregar insumos solo en esta consulta (el servicio no cambia)"
+                                                                AutomationProperties.Name="Ajustar insumos del servicio"
+                                                                Command="{Binding DataContext.ClinicalServices.ToggleServiceSuppliesCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <helpers:Icon Data="{StaticResource IcoEdit}" Width="12" Height="12" Margin="0,0,6,0" />
+                                                                <TextBlock Text="Ajustar insumos" FontSize="12" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    <!-- Unidades: con − / + en lo de esta consulta; lo de una consulta anterior solo se ve -->
+                                                    <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                            Visibility="{Binding IsFromEarlierConsultation, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                                Visibility="{Binding IsFromEarlierConsultation, Converter={StaticResource InverseBoolToVis}}">
+                                                        <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una unidad menos, con sus insumos (en 0 se quita)"
+                                                                AutomationProperties.Name="Una unidad menos del servicio"
+                                                                Command="{Binding DataContext.ClinicalServices.DecreaseServiceUnitsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <TextBlock Text="−" FontSize="16" />
+                                                        </Button>
+                                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" MinWidth="32" TextAlignment="Center" VerticalAlignment="Center"
+                                                                   Text="{Binding Quantity}" AutomationProperties.Name="Unidades del servicio" />
+                                                        <Button Style="{StaticResource ButtonIconSecondary}" Width="30" Height="30" ToolTip="Una unidad más, con sus insumos por defecto"
+                                                                AutomationProperties.Name="Una unidad más del servicio"
+                                                                Command="{Binding DataContext.ClinicalServices.IncreaseServiceUnitsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <TextBlock Text="+" FontSize="16" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" Margin="12,0" VerticalAlignment="Center"
+                                                               Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                    <Button Grid.Column="3" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta, con sus insumos)" AutomationProperties.Name="Quitar servicio"
+                                                            Command="{Binding DataContext.ClinicalServices.RemoveServiceItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                                                    </Button>
+                                                </Grid>
+
+                                                <!-- Insumos de este renglón, solo para esta consulta: − / +, X y agregar con la búsqueda -->
+                                                <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,10,0,0"
+                                                        Visibility="{Binding IsEditingSupplies, Converter={StaticResource BoolToVis}}">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                                                   Text="Solo en esta consulta: lo que cambie se carga o se descuenta de la cuenta, y el servicio sigue con sus insumos de siempre." />
+                                                        <!-- Los del renglón o, en uno sin lista (de una versión anterior), los que descontaría quitarlo -->
+                                                        <ItemsControl ItemsSource="{Binding DataContext.ClinicalServices.SupplyEditorEntries, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate DataType="{x:Type models:PatientServiceSupply}">
+                                                                    <Grid Margin="0,0,0,4">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Style="{StaticResource TextBody}" Text="{Binding SupplyName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center">
+                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza menos (en 0 se quita)"
+                                                                                    AutomationProperties.Name="Una pieza menos del insumo"
+                                                                                    Command="{Binding DataContext.ClinicalServices.DecreaseServiceSupplyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                                    CommandParameter="{Binding}">
+                                                                                <TextBlock Text="−" FontSize="14" />
+                                                                            </Button>
+                                                                            <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" MinWidth="32" TextAlignment="Center" VerticalAlignment="Center"
+                                                                                       Text="{Binding Quantity}" AutomationProperties.Name="Piezas del insumo" />
+                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza más"
+                                                                                    AutomationProperties.Name="Una pieza más del insumo"
+                                                                                    Command="{Binding DataContext.ClinicalServices.IncreaseServiceSupplyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                                    CommandParameter="{Binding}">
+                                                                                <TextBlock Text="+" FontSize="14" />
+                                                                            </Button>
+                                                                        </StackPanel>
+                                                                        <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="26" Height="26" ToolTip="Quitar de este servicio (también de la cuenta)"
+                                                                                AutomationProperties.Name="Quitar insumo del servicio"
+                                                                                Command="{Binding DataContext.ClinicalServices.RemoveServiceSupplyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                                CommandParameter="{Binding}">
+                                                                            <helpers:Icon Data="{StaticResource IcoClose}" Width="12" Height="12" />
+                                                                        </Button>
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBlock Style="{StaticResource TextCaption}" FontStyle="Italic" Text="Sin insumos en esta consulta."
+                                                                   Visibility="{Binding DataContext.ClinicalServices.HasSupplyEditorEntries, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBoolToVis}}" />
+                                                        <TextBox Style="{StaticResource FieldTextBox}" Margin="0,6,0,0"
+                                                                 Text="{Binding DataContext.ClinicalServices.ServiceSupplySearchText, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}"
+                                                                 helpers:Field.Placeholder="Agregar insumo: escriba para buscar"
+                                                                 PreviewKeyDown="ServiceSupplySearch_PreviewKeyDown"
+                                                                 IsVisibleChanged="ServiceSupplySearch_IsVisibleChanged"
+                                                                 AutomationProperties.Name="Agregar insumo al servicio" />
+                                                        <Border Style="{StaticResource Card}" Padding="6" Margin="0,6,0,0"
+                                                                Visibility="{Binding DataContext.ClinicalServices.IsServiceSupplyDropdownOpen, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                                                            <StackPanel>
+                                                                <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega una pieza · Esc cierra los insumos" Margin="10,4,10,4" />
+                                                                <ListBox Style="{StaticResource PlainList}" MaxHeight="180"
+                                                                         ItemsSource="{Binding DataContext.ClinicalServices.ServiceSupplySuggestions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                         SelectedItem="{Binding DataContext.ClinicalServices.SelectedServiceSupplySuggestion, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                                                                         PreviewMouseLeftButtonUp="ServiceSupplySuggestions_PreviewMouseLeftButtonUp"
+                                                                         AutomationProperties.Name="Sugerencias de insumos del servicio">
+                                                                    <ListBox.ItemTemplate>
+                                                                        <DataTemplate DataType="{x:Type models:Product}">
+                                                                            <Grid>
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                    <ColumnDefinition Width="Auto" />
+                                                                                    <ColumnDefinition Width="90" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <StackPanel>
+                                                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Presentation}" />
+                                                                                </StackPanel>
+                                                                                <Border Grid.Column="1" Style="{StaticResource StockBadge}" Margin="12,0" VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding StockBadgeText}" />
+                                                                                </Border>
+                                                                                <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
+                                                                                           Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                                            </Grid>
+                                                                        </DataTemplate>
+                                                                    </ListBox.ItemTemplate>
+                                                                </ListBox>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Border>
-                                                <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" Margin="12,0" VerticalAlignment="Center"
-                                                           Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
-                                                <Button Grid.Column="3" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar (también de la cuenta)" AutomationProperties.Name="Quitar servicio"
-                                                        Command="{Binding DataContext.ClinicalServices.RemoveServiceItemFromPatientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding}">
-                                                    <helpers:Icon Data="{StaticResource IcoClose}" Width="14" Height="14" />
-                                                </Button>
-                                            </Grid>
+                                            </StackPanel>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

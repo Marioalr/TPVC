@@ -252,39 +252,11 @@ public partial class PosViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Productos que coinciden (sin acentos): el código exacto primero (lector de código de barras),
-    /// luego el nombre que empieza así, el genérico que empieza así, una palabra que empieza así y
-    /// al final lo que lo contiene en nombre, genérico, código o ubicación. Dentro de cada grupo,
-    /// los que tienen existencias primero.
+    /// Productos que coinciden (sin acentos), en el orden de la búsqueda del Punto de venta: ver
+    /// <see cref="TextSearch.RankProducts"/> (la hoja de servicios de la consulta usa la misma).
     /// </summary>
-    public static List<Product> RankProducts(IEnumerable<Product> products, string? query, int limit = 8)
-    {
-        var q = TextSearch.Normalize(query);
-        if (q.Length == 0) return new List<Product>();
-
-        return products
-            .Select(p =>
-            {
-                var name = TextSearch.Normalize(p.Name);
-                var generic = TextSearch.Normalize(p.GenericName);
-                var code = TextSearch.Normalize(p.Code);
-                int rank;
-                if (code == q) rank = 0;
-                else if (name.StartsWith(q, StringComparison.Ordinal)) rank = 1;
-                else if (generic.StartsWith(q, StringComparison.Ordinal)) rank = 2;
-                else if ((" " + name).Contains(" " + q, StringComparison.Ordinal) || (" " + generic).Contains(" " + q, StringComparison.Ordinal)) rank = 3;
-                else if (TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Location)) rank = 4;
-                else rank = -1;
-                return (Product: p, Rank: rank);
-            })
-            .Where(x => x.Rank >= 0)
-            .OrderBy(x => x.Rank)
-            .ThenBy(x => x.Product.CurrentStock <= 0)
-            .ThenBy(x => x.Product.Name, StringComparer.CurrentCulture)
-            .Take(limit)
-            .Select(x => x.Product)
-            .ToList();
-    }
+    public static List<Product> RankProducts(IEnumerable<Product> products, string? query, int limit = 8) =>
+        TextSearch.RankProducts(products, query, limit);
 
     private void ApplySearchSuggestions(string? text)
     {

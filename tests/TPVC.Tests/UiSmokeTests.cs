@@ -583,6 +583,28 @@ internal sealed class UiSmokeSession
 
             WaitFor(records.ClinicalServices.OpenServicesModalAsync());
             Capture(host, $"13-servicios-{suffix}");
+
+            // Los insumos de un servicio, solo para esta consulta (2026-10-14): el renglón con sus insumos abiertos y la
+            // búsqueda con sugerencias (contraste en los cuatro temas); después se quita para no cambiar las demás capturas
+            var curacion = records.Catalog.Services.FirstOrDefault(s => s.Code == "SERV-002");
+            if (curacion != null)
+            {
+                WaitFor(records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(curacion));
+                var serviceRow = records.Session.SelectedPatient!.ActiveServices.Last();
+                records.ClinicalServices.ToggleServiceSupplies(serviceRow);
+                records.ClinicalServices.ServiceSupplySearchText = "gu";
+                if (!serviceRow.IsEditingSupplies || serviceRow.Supplies == null)
+                {
+                    _failures.Add($"[13b-{suffix}] «Ajustar insumos» no abrió los insumos de la curación");
+                }
+                Capture(host, $"13b-servicios-insumos-{suffix}");
+                records.ClinicalServices.CloseSupplyEditor();
+                WaitFor(records.ClinicalServices.RemoveServiceItemFromPatientAsync(serviceRow));
+            }
+            else
+            {
+                _failures.Add($"[13b-{suffix}] La base de prueba no tiene la curación (SERV-002)");
+            }
             records.ClinicalServices.CloseServicesModal();
 
             WaitFor(records.Prescription.OpenPrescriptionModalAsync());
@@ -1813,6 +1835,45 @@ internal sealed class UiKeyboardPass
             Check(PumpUntil(() => _records.SelectedPatient!.ActiveServices.Count == before + 1), "Servicios: Enter agrega la sugerencia elegida");
         }
         Settle();
+
+        // Insumos del renglón, solo para esta consulta (2026-10-14): abrirlos, agregar con la búsqueda, + / − y Esc
+        var row = _records.SelectedPatient!.ActiveServices.LastOrDefault(r => !r.IsFromEarlierConsultation);
+        System.Windows.Controls.Control? RowControl(string name, object? context) => context == null ? null : FindDescendant<System.Windows.Controls.Control>(sheet!,
+            c => System.Windows.Automation.AutomationProperties.GetName(c) == name && ReferenceEquals(c.DataContext, context));
+        if (Check(row != null && RowControl("Ajustar insumos del servicio", row) is System.Windows.Controls.Button, "Servicios: no se encontró «Ajustar insumos»"))
+        {
+            var toggle = (System.Windows.Controls.Button)RowControl("Ajustar insumos del servicio", row)!;
+            toggle.Command.Execute(toggle.CommandParameter);
+            Check(PumpUntil(() => row!.IsEditingSupplies), "Servicios: «Ajustar insumos» abre los insumos del renglón");
+            Settle();
+            var search = RowControl("Agregar insumo al servicio", row) as System.Windows.Controls.TextBox;
+            if (Check(search != null && search.IsVisible, "Servicios: no se ve la búsqueda de insumos del renglón"))
+            {
+                var count = row!.Supplies?.Count ?? 0;
+                // Como al teclear: SetCurrentValue conserva el binding
+                search!.SetCurrentValue(System.Windows.Controls.TextBox.TextProperty, "jering");
+                Settle();
+                Check(_records.ClinicalServices.IsServiceSupplyDropdownOpen, "Servicios: escribir en la búsqueda de insumos muestra sugerencias");
+                Check(PressKey(search, System.Windows.Input.Key.Enter), "Servicios: Enter en la búsqueda de insumos se atiende");
+                Check(PumpUntil(() => (row.Supplies?.Count ?? 0) == count + 1 || row.Supplies!.Any(e => e.Quantity > 1)), "Servicios: Enter agrega el insumo al renglón");
+            }
+            Settle();
+            var entry = row!.Supplies?.FirstOrDefault();
+            var plus = RowControl("Una pieza más del insumo", entry) as System.Windows.Controls.Button;
+            var minus = RowControl("Una pieza menos del insumo", entry) as System.Windows.Controls.Button;
+            if (Check(entry != null && plus?.Command != null && minus?.Command != null, "Servicios: + y − de un insumo del renglón sin comando"))
+            {
+                var pieces = entry!.Quantity;
+                minus!.Command.Execute(minus.CommandParameter);
+                Check(PumpUntil(() => entry.Quantity == pieces - 1 || !row.Supplies!.Contains(entry)), "Servicios: − resta una pieza del insumo");
+                if (row.Supplies!.Contains(entry))
+                {
+                    plus!.Command.Execute(plus.CommandParameter);
+                    Check(PumpUntil(() => entry.Quantity == pieces), "Servicios: + la vuelve a sumar");
+                }
+            }
+            Check(PressEscape() && !row.IsEditingSupplies && _records.ClinicalServices.IsServicesModalOpen, "Esc cierra primero los insumos del servicio (la hoja sigue)");
+        }
         Check(PressEscape() && !_records.ClinicalServices.IsServicesModalOpen, "Esc cierra los servicios");
     }
 

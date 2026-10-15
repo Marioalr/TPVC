@@ -24,6 +24,26 @@ public interface IPatientSheetRow
     Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
+/// <summary>
+/// Lo que identifica el renglón de la cuenta con que se cargaron unas piezas (paso 8.18): el insumo de la hoja y, desde
+/// la revisión 13 del contrato, cada insumo de un servicio (<see cref="PatientServiceSupply"/>). Las reglas para
+/// encontrarlo en cualquier equipo, en <see cref="TPVC.Services.Rules.PatientSheetRows.ResolveSupplyLine"/>.
+/// </summary>
+public interface IChargedSupplyLine
+{
+    /// <summary>El nombre del insumo: el cargo libre sale de él y, sin otra pista, se busca el producto por él.</summary>
+    string SupplyName { get; }
+
+    /// <summary>Id local del renglón de la cuenta en el equipo que escribió (un negativo es un cargo libre en cualquier equipo).</summary>
+    int ChargedLineId { get; set; }
+
+    /// <summary><c>producto</c> o <c>libre</c>.</summary>
+    string? ChargedLineKind { get; set; }
+
+    /// <summary>SyncId del producto; null en un cargo libre.</summary>
+    Guid? ChargedLineSyncId { get; set; }
+}
+
 public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow
 {
     /// <summary>
@@ -95,7 +115,7 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
 
-public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow
+public class PatientSupplyItem : System.ComponentModel.INotifyPropertyChanged, IPatientSheetRow, IChargedSupplyLine
 {
     /// <summary>Paso 8.18: identidad del renglón en la hoja (ver <see cref="PatientPrescriptionItem.RowId"/>).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -191,7 +211,20 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, 
     public string Category { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public decimal Price { get; set; } = 0m;
-    public int Quantity { get; set; } = 1;
+
+    private int _quantity = 1;
+
+    /// <summary>Unidades del servicio; en la consulta en curso la hoja la cambia con + / − (y la cuenta con ella).</summary>
+    public int Quantity
+    {
+        get => _quantity;
+        set
+        {
+            if (_quantity == value) return;
+            _quantity = value;
+            Raise(nameof(Quantity));
+        }
+    }
 
     /// <summary>
     /// Consulta (folio) que cargó este servicio a su cuenta, y cuántas unidades (cada una con sus
@@ -204,6 +237,42 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ChargedUnits { get; set; }
 
+    private List<PatientServiceSupply>? _supplies;
+
+    /// <summary>
+    /// Revisión 13 del contrato: los insumos que este renglón cargó a la cuenta de su consulta, con sus piezas. Empieza con los
+    /// insumos por defecto del servicio por sus unidades, y el médico la ajusta solo para esta consulta (la configuración del
+    /// servicio no cambia). Es lo que se descuenta al quitar el renglón. null = renglón sin lista (de una versión anterior, o
+    /// que no se cargó a ninguna cuenta): se descuenta como antes, con los insumos por defecto que tenga el servicio. Reglas
+    /// en <see cref="TPVC.Services.Rules.ServiceRowSupplies"/>; sin lista no se escribe.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<PatientServiceSupply>? Supplies
+    {
+        get => _supplies;
+        set
+        {
+            _supplies = value;
+            NotifySuppliesChanged();
+        }
+    }
+
+    /// <summary>"Gasa ×1 · Jeringa ×1": los insumos de la lista en una línea (vacío sin lista o sin insumos).</summary>
+    [JsonIgnore]
+    public string SuppliesSummary => TPVC.Services.Rules.ServiceRowSupplies.Summary(_supplies);
+
+    /// <summary>La lista tiene algún insumo.</summary>
+    [JsonIgnore]
+    public bool HasSupplies => _supplies is { Count: > 0 };
+
+    /// <summary>Avisa a la pantalla que cambió la lista de insumos o las piezas de alguno.</summary>
+    public void NotifySuppliesChanged()
+    {
+        Raise(nameof(Supplies));
+        Raise(nameof(SuppliesSummary));
+        Raise(nameof(HasSupplies));
+    }
+
     private bool _isFromEarlierConsultation;
 
     /// <summary>La hoja lo marca al abrirse: servicio de otra consulta, que solo se ve o se quita.</summary>
@@ -215,13 +284,77 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, 
         {
             if (_isFromEarlierConsultation == value) return;
             _isFromEarlierConsultation = value;
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsFromEarlierConsultation)));
+            Raise(nameof(IsFromEarlierConsultation));
         }
     }
+
+    private bool _isEditingSupplies;
+
+    /// <summary>La hoja de servicios tiene abiertos los insumos de este renglón (uno a la vez); no se guarda.</summary>
+    [JsonIgnore]
+    public bool IsEditingSupplies
+    {
+        get => _isEditingSupplies;
+        set
+        {
+            if (_isEditingSupplies == value) return;
+            _isEditingSupplies = value;
+            Raise(nameof(IsEditingSupplies));
+        }
+    }
+
+    private void Raise(string name) => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
 
     string IPatientSheetRow.RowName => ServiceName;
 
     /// <summary>Paso 8.18: los campos que este equipo no conoce (de una versión más nueva) se vuelven a escribir tal cual.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+}
+
+/// <summary>
+/// Un insumo que cargó un renglón de servicio a la cuenta de su consulta (<see cref="PatientServiceItem.Supplies"/>, revisión 13
+/// del contrato): sus piezas en total (no por unidad del servicio) y con qué renglón de la cuenta se cargaron, con los mismos
+/// campos y reglas que un insumo de la hoja (paso 8.18): la clase y el SyncId valen en cualquier equipo, y la PC escribe además
+/// su Id local. Los campos que no conoce se vuelven a escribir tal cual.
+/// </summary>
+public class PatientServiceSupply : System.ComponentModel.INotifyPropertyChanged, IChargedSupplyLine
+{
+    /// <summary>El nombre del producto (el de su renglón de la cuenta), o el del cargo libre.</summary>
+    public string SupplyName { get; set; } = string.Empty;
+
+    private int _quantity = 1;
+
+    /// <summary>Piezas que el renglón cargó a la cuenta (todas sus unidades juntas); 1 si falta, como en los demás renglones.</summary>
+    public int Quantity
+    {
+        get => _quantity;
+        set
+        {
+            if (_quantity == value) return;
+            _quantity = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Quantity)));
+        }
+    }
+
+    /// <summary>Precio por pieza al cargarlo (lo usa un cargo libre).</summary>
+    public decimal UnitPrice { get; set; }
+
+    /// <summary>Id local del renglón de la cuenta en el equipo que escribió (ver <see cref="PatientSupplyItem.ChargedLineId"/>).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int ChargedLineId { get; set; }
+
+    /// <summary><c>producto</c> o <c>libre</c>, como en la hoja de insumos.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChargedLineKind { get; set; }
+
+    /// <summary>SyncId del producto; null en un cargo libre.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ChargedLineSyncId { get; set; }
+
+    /// <summary>Los campos que este equipo no conoce (de una versión más nueva) se vuelven a escribir tal cual.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 

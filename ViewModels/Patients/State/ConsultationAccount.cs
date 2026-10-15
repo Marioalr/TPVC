@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -95,7 +96,7 @@ public partial class ConsultationAccount : ObservableObject
     {
         var consultation = _consultationService?.CurrentConsultation;
         var item = consultation?.Items.FirstOrDefault(i => i.ProductId == productId);
-        if (consultation == null || item == null) return;
+        if (consultation == null || item == null || quantity <= 0) return;
 
         if (item.Quantity > quantity) item.Quantity -= quantity;
         else consultation.Items.Remove(item);
@@ -148,29 +149,209 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>
-    /// Carga el servicio recién agregado (todas sus unidades, cada una con sus insumos por defecto, o su
-    /// cargo libre); false si no se pudo (sin consulta, bloqueada o sin precio).
+    /// Carga el servicio recién agregado (todas sus unidades con sus insumos por defecto, o su cargo libre) y le pone al
+    /// renglón su lista de insumos (revisión 13): los insumos por defecto por las unidades, o vacía en un cargo libre. La lista
+    /// es lo que el renglón cargó; la configuración del servicio no cambia. false si no se pudo (sin consulta, bloqueada o sin
+    /// precio).
     /// </summary>
     public bool ChargeService(PatientServiceItem item)
     {
+        int units = Math.Max(1, item.Quantity);
         var service = FindService(item);
         if (service != null)
         {
-            for (int i = 0; i < Math.Max(1, item.Quantity); i++)
+            // Lo que impide cargar una unidad (sin consulta, en otro equipo) impide todas
+            if (!ChargeServiceLine(service, units)) return false;
+            var supplies = new List<PatientServiceSupply>();
+            foreach (var pieces in ServiceRowSupplies.AddUnits(supplies, service.DefaultProducts, units))
             {
-                // Lo que impide cargar una unidad (sin consulta, en otro equipo) impide todas: se ve en la primera
-                if (!TryAddServiceToActiveConsultation(service)) return false;
+                ChargeServiceSupplyUnits(pieces.Entry, pieces.Product, pieces.Count);
             }
+            item.Supplies = supplies;
+            _workflow.SyncActiveConsultation();
             return true;
         }
 
-        if (!ChargeFreeLine(item.ServiceCode, item.ServiceName, $"Servicio Clínico • {item.Category}", "Servicio", item.Price, Math.Max(1, item.Quantity)))
+        if (!ChargeFreeLine(item.ServiceCode, item.ServiceName, $"Servicio Clínico • {item.Category}", "Servicio", item.Price, units))
         {
             _info.InfoModalMessage = $"'{item.ServiceName}' no tiene precio: se registró en el expediente, pero no se cargó a la cuenta.";
             _info.IsInfoModalVisible = true;
             return false;
         }
+        item.Supplies = new List<PatientServiceSupply>();
         return true;
+    }
+
+    /// <summary>
+    /// El renglón del servicio en la cuenta, por sus unidades (sin sus insumos): con los mismos candados que
+    /// <see cref="TryAddServiceToActiveConsultation"/>. No sincroniza: lo hace quien llama al terminar.
+    /// </summary>
+    private bool ChargeServiceLine(ClinicalService service, int units)
+    {
+        if (units <= 0 || _gate.BlockIfConsultationReadOnly() || _gate.BlockIfReceivingHandoff()) return false;
+        if (!_active.HasActiveConsultation) _workflow.StartActiveConsultation();
+        if (_consultationService?.CurrentConsultation == null) return false;
+        return _consultationService.AddCartItemToActiveConsultation(
+            -service.Id, service.Code, service.Name, $"Servicio Clínico • {service.Category}",
+            $"Duración: {service.EstimatedDurationMinutes} min", "Servicio", service.Price, units);
+    }
+
+    /// <summary>
+    /// Carga piezas de un insumo de un servicio: como el producto (con su nombre, como los insumos por defecto) o, sin él, como
+    /// el cargo libre que ya tiene el insumo (<paramref name="freeLineId"/>) o el de su nombre, a su precio. false sin consulta o
+    /// si el cargo libre no tiene precio. No sincroniza.
+    /// </summary>
+    private bool ChargeServiceSupplyUnits(PatientServiceSupply entry, Product? product, int units, int? freeLineId = null)
+    {
+        if (_consultationService?.CurrentConsultation == null || units <= 0) return false;
+        if (product != null) return ChargeServiceProductUnits(product, units);
+        if (entry.UnitPrice <= 0) return false;
+        _consultationService.AddCartItemToActiveConsultation(
+            freeLineId ?? FreeChargeId(entry.SupplyName), "INSUMO", entry.SupplyName, "Material clínico", null, "Piezas", entry.UnitPrice, units);
+        return true;
+    }
+
+    /// <summary>Piezas de un insumo de un servicio cargadas como el producto, con su nombre (como siempre los insumos por defecto). No sincroniza.</summary>
+    private bool ChargeServiceProductUnits(Product product, int units)
+    {
+        if (_consultationService?.CurrentConsultation == null || units <= 0) return false;
+        _consultationService.AddCartItemToActiveConsultation(
+            product.Id, product.Code, product.Name, product.GenericName, product.Presentation, product.Unit, product.Price, units);
+        return true;
+    }
+
+    /// <summary>
+    /// Renglón de la cuenta de un insumo de un servicio: las mismas reglas que un insumo de la hoja (por su SyncId, el cargo
+    /// libre, el Id negativo, el Id viejo con el mismo nombre o por nombre).
+    /// </summary>
+    public PatientSheetRows.SupplyLine ServiceSupplyLine(PatientServiceSupply entry) =>
+        PatientSheetRows.ResolveSupplyLine(entry, _catalog.AvailableProducts, _catalog.ProductRefs);
+
+    /// <summary>
+    /// Carga piezas más de un insumo de la lista de un renglón de servicio (+ o agregar): el producto del inventario con que
+    /// se cargó, o su cargo libre. Lo anota en el insumo (sus piezas y el Id local de su renglón). false si no se pudo.
+    /// </summary>
+    public bool ChargeServiceSupply(PatientServiceSupply entry, Product? product, PatientSheetRows.SupplyLine line, int units)
+    {
+        if (!ChargeServiceSupplyUnits(entry, product, units, line.LineId < 0 ? line.LineId : null)) return false;
+        entry.Quantity += units;
+        PatientSheetRows.RefreshSupplyLine(entry, line);
+        _workflow.SyncActiveConsultation();
+        return true;
+    }
+
+    /// <summary>Descuenta piezas de un insumo de la lista de un renglón de servicio, del mismo renglón con que se cargaron.</summary>
+    public void UnchargeServiceSupply(PatientServiceSupply entry, int units)
+    {
+        units = Math.Min(units, entry.Quantity);
+        if (units <= 0) return;
+        var line = ServiceSupplyLine(entry);
+        Uncharge(line.LineId, units);
+        entry.Quantity -= units;
+        PatientSheetRows.RefreshSupplyLine(entry, line);
+    }
+
+    /// <summary>
+    /// El servicio con que se descuenta un renglón: el de su Id si la cuenta abierta tiene su renglón con su nombre (un renglón
+    /// anterior al paso 8.18 que cargó este equipo, aunque el servicio ya se llame distinto o esté inactivo), o el que
+    /// encuentran las reglas del paso 8.18; null = cargo libre. <paramref name="lineId"/> es el renglón del servicio en la cuenta.
+    /// </summary>
+    private ClinicalService? ServiceForRow(PatientServiceItem item, out int lineId)
+    {
+        var account = _consultationService?.CurrentConsultation?.Items;
+        if (account != null && PatientSheetRows.AccountLegacyServiceId(item, account) is int ownId)
+        {
+            lineId = -ownId;
+            return _catalog.AllServices.FirstOrDefault(s => s.Id == ownId) ?? _catalog.Services.FirstOrDefault(s => s.Id == ownId);
+        }
+        var service = FindService(item);
+        lineId = service != null ? -service.Id : FreeChargeId(item.ServiceName);
+        return service;
+    }
+
+    /// <summary>
+    /// La lista de un renglón de esta consulta que no la tiene (de una versión anterior o de otro equipo que no la conoce): lo
+    /// que descontaría hoy quitarlo, los insumos por defecto del servicio por sus unidades. No carga nada ni toca el renglón.
+    /// </summary>
+    public List<PatientServiceSupply> LegacyServiceSupplies(PatientServiceItem item)
+    {
+        var service = ServiceForRow(item, out _);
+        return ServiceRowSupplies.LegacySupplies(service, Math.Max(0, item.ChargedUnits));
+    }
+
+    /// <summary>
+    /// Cambia las unidades cargadas de un renglón de servicio (+ o −, <paramref name="delta"/> distinto de 0). Con lista: el
+    /// servicio y los insumos por defecto de esas unidades (<see cref="ServiceRowSupplies.AddUnits"/> y
+    /// <see cref="ServiceRowSupplies.RemoveUnits"/>: lo ajustado a mano se queda). Sin lista, como antes: el servicio con sus
+    /// insumos por defecto de hoy por cada unidad. false si no se pudo cargar.
+    /// </summary>
+    public bool ChangeServiceUnits(PatientServiceItem item, int delta)
+    {
+        if (delta == 0) return true;
+        var service = ServiceForRow(item, out int lineId);
+        if (delta > 0)
+        {
+            if (service == null)
+            {
+                return ChargeFreeLine(item.ServiceCode, item.ServiceName, $"Servicio Clínico • {item.Category}", "Servicio", item.Price, delta);
+            }
+            if (!ChargeServiceLine(service, delta)) return false;
+            if (item.Supplies != null)
+            {
+                // Sobre una copia, y el renglón queda con ella: WPF no vuelve a dibujar una lista que se le asigna otra vez
+                var added = new List<PatientServiceSupply>(item.Supplies);
+                foreach (var pieces in ServiceRowSupplies.AddUnits(added, service.DefaultProducts, delta))
+                {
+                    ChargeServiceSupplyUnits(pieces.Entry, pieces.Product, pieces.Count);
+                }
+                item.Supplies = added;
+            }
+            else
+            {
+                foreach (var dp in service.DefaultProducts.Where(dp => dp.Product != null))
+                {
+                    ChargeServiceProductUnits(dp.Product!, ServiceRowSupplies.PiecesPerUnit(dp) * delta);
+                }
+            }
+            _workflow.SyncActiveConsultation();
+            return true;
+        }
+
+        int units = -delta;
+        if (item.Supplies == null)
+        {
+            UnchargeServiceUnits(item, units);
+            return true;
+        }
+        Uncharge(lineId, units);
+        // Sobre una copia (un insumo en 0 sale de ella), y el renglón queda con ella para que la pantalla se vuelva a dibujar
+        var list = new List<PatientServiceSupply>(item.Supplies);
+        foreach (var pieces in ServiceRowSupplies.RemoveUnits(list, service?.DefaultProducts, units))
+        {
+            // Quitar las piezas de la lista ya lo hizo RemoveUnits: aquí solo se descuentan de su renglón de la cuenta
+            Uncharge(ServiceSupplyLine(pieces.Entry).LineId, pieces.Count);
+        }
+        item.Supplies = list;
+        return true;
+    }
+
+    /// <summary>
+    /// Quitar el renglón: descuenta lo que cargó en esta consulta. Con lista, el servicio por sus unidades y cada insumo de la
+    /// lista con sus piezas (lo ajustado a mano incluido); sin lista, como antes (<see cref="UnchargeServiceUnits"/>).
+    /// </summary>
+    public void UnchargeServiceRow(PatientServiceItem item, int units)
+    {
+        if (item.Supplies == null)
+        {
+            UnchargeServiceUnits(item, units);
+            return;
+        }
+        ServiceForRow(item, out int lineId);
+        Uncharge(lineId, units);
+        foreach (var pieces in ServiceRowSupplies.UnchargeAll(item.Supplies))
+        {
+            Uncharge(ServiceSupplyLine(pieces.Entry).LineId, pieces.Count);
+        }
     }
 
     /// <summary>
@@ -224,38 +405,28 @@ public partial class ConsultationAccount : ObservableObject
         _consultationService?.CurrentConsultation?.Items.FirstOrDefault(i => i.ProductId == productId)?.Quantity ?? 0;
 
     /// <summary>
-    /// Descuenta unidades de un servicio de la cuenta tal como se cargaron: por cada una, su renglón y
-    /// sus insumos por defecto (AddServiceToActiveConsultation), o su cargo libre.
+    /// Descuenta unidades de un servicio sin lista de insumos (un renglón de una versión anterior o de otro equipo que no la
+    /// conoce), como siempre: por cada una, su renglón y los insumos por defecto que el servicio tiene hoy
+    /// (AddServiceToActiveConsultation), o su cargo libre.
     /// </summary>
     public void UnchargeServiceUnits(PatientServiceItem item, int units)
     {
         // Un renglón anterior al paso 8.18 que cargó este equipo: su Id tiene en la cuenta un renglón con su nombre,
         // aunque el servicio ya se llame distinto o esté inactivo (con sus insumos por defecto de ese servicio)
-        var account = _consultationService?.CurrentConsultation?.Items;
-        if (account != null && PatientSheetRows.AccountLegacyServiceId(item, account) is int ownId)
+        var service = ServiceForRow(item, out int lineId);
+        Uncharge(lineId, units);
+        foreach (var dp in service?.DefaultProducts ?? Enumerable.Empty<ServiceDefaultProduct>())
         {
-            Uncharge(-ownId, units);
-            var own = _catalog.AllServices.FirstOrDefault(s => s.Id == ownId) ?? _catalog.Services.FirstOrDefault(s => s.Id == ownId);
-            foreach (var dp in own?.DefaultProducts ?? Enumerable.Empty<ServiceDefaultProduct>())
-            {
-                if (dp.Product != null) Uncharge(dp.Product.Id, Math.Max(1, dp.Quantity) * units);
-            }
-            return;
-        }
-
-        var service = FindService(item);
-        if (service == null)
-        {
-            Uncharge(FreeChargeId(item.ServiceName), units);
-            return;
-        }
-
-        Uncharge(-service.Id, units);
-        foreach (var dp in service.DefaultProducts)
-        {
-            if (dp.Product != null) Uncharge(dp.Product.Id, Math.Max(1, dp.Quantity) * units);
+            if (dp.Product != null) Uncharge(dp.Product.Id, ServiceRowSupplies.PiecesPerUnit(dp) * units);
         }
     }
+
+    /// <summary>
+    /// Piezas de un producto que todavía caben en la cuenta (<see cref="ServiceRowSupplies.PiecesThatFit"/>): sus existencias
+    /// menos lo que ya está cargado de él.
+    /// </summary>
+    public int PiecesThatFit(Product product, int requested) =>
+        ServiceRowSupplies.PiecesThatFit(requested, product.CurrentStock, ChargedProductUnits(product.Id));
 
     [RelayCommand]
     public void AddServiceToActiveConsultation(ClinicalService? service) => TryAddServiceToActiveConsultation(service);

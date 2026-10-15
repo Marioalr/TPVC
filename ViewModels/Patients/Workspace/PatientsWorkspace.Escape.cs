@@ -46,6 +46,8 @@ public partial class PatientsWorkspace
         else if (Prescription.IsPrescriptionModalOpen && Prescription.IsPrescriptionDropdownOpen) Prescription.ClosePrescriptionSuggestions();
         else if (Prescription.IsPrescriptionModalOpen) Prescription.ClosePrescriptionModal();
         else if (Supplies.IsSuppliesModalOpen) Supplies.CloseSuppliesModal();
+        // Los insumos abiertos de un servicio se cierran antes que la hoja de servicios
+        else if (ClinicalServices.IsSupplyEditorOpen) ClinicalServices.CloseSupplyEditor();
         else if (ClinicalServices.IsServicesModalOpen) ClinicalServices.CloseServicesModal();
         else if (Agenda.IsMovingAppointment) Agenda.CancelMovingAppointment();
         else if (Agenda.IsAgendaPanelOpen) Agenda.CloseAgendaPanel();

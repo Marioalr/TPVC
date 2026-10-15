@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -14,6 +15,9 @@ namespace TPVC.ViewModels.Patients;
 /// Hoja de servicios y procedimientos clínicos (fase 6, paso 15b): buscar el servicio, agregarlo al
 /// expediente y, durante la consulta, cargarlo a la cuenta. El catálogo completo se abre con el
 /// explorador; lo que se elige ahí vuelve aquí (el coordinador conecta CatalogBrowser.AddService).
+/// Pedido del 2026-10-14: en la consulta en curso, cada servicio muestra sus insumos y el médico los ajusta
+/// (− / +, X y agregar con la búsqueda) solo para esta consulta, y cambia sus unidades con − / +; la cuenta
+/// carga o descuenta solo la diferencia (<see cref="ServiceRowSupplies"/>).
 /// </summary>
 public partial class ClinicalServicesSheetViewModel : ObservableObject
 {
@@ -118,6 +122,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     public void OpenServicesModal()
     {
         if (_gate.BlockIfConsultationReadOnly()) return;
+        CloseSupplyEditor();
         if (_session.SelectedPatient == null)
         {
             _info.InfoModalMessage = "Seleccione o agregue un paciente primero para gestionar los servicios y procedimientos clínicos.";
@@ -153,13 +158,21 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     [RelayCommand]
     public void CloseServicesModal()
     {
+        CloseSupplyEditor();
         IsServicesModalOpen = false;
+    }
+
+    /// <summary>La hoja se cierra por cualquier camino (Esc, Cerrar, el cobro, la consulta enviada): los insumos abiertos también.</summary>
+    partial void OnIsServicesModalOpenChanged(bool value)
+    {
+        if (!value) CloseSupplyEditor();
     }
 
     [RelayCommand]
     public async Task SelectAndAddServiceModalSuggestionAsync(ClinicalService? service)
     {
         if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly()) return;
+        CloseSupplyEditor();
 
         string name;
         decimal price;
@@ -216,7 +229,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
         _session.SelectedPatient.SyncServicesJson();
 
         // Durante la consulta, el servicio realizado se carga de inmediato a la cuenta; el renglón
-        // recuerda qué consulta lo cargó para que la X descuente solo eso
+        // recuerda qué consulta lo cargó y con qué insumos, para que la X descuente solo eso
         if (_active.HasActiveConsultation && _account.ChargeService(newItem))
         {
             newItem.ChargedConsultationFolio = _active.ActiveConsultation?.Folio;
@@ -247,13 +260,14 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     public async Task RemoveServiceItemFromPatientAsync(PatientServiceItem? item)
     {
         if (_session.SelectedPatient == null || item == null || _gate.BlockIfConsultationReadOnly()) return;
+        CloseSupplyEditor();
 
-        // Lo que esta consulta cargó a la cuenta por el renglón deja de cobrarse (lo de una consulta
-        // anterior ya se cobró con ella)
-        var charged = ChargedInThisConsultation(item);
-        if (charged > 0)
+        // Lo que esta consulta cargó a la cuenta por el renglón deja de cobrarse: el servicio por sus unidades y su lista
+        // de insumos tal como quedó (sin lista, como antes); también con 0 unidades, por si su lista cargó algo. Lo de una
+        // consulta anterior ya se cobró con ella
+        if (IsFromThisConsultation(item))
         {
-            _account.UnchargeServiceUnits(item, charged);
+            _account.UnchargeServiceRow(item, Math.Max(0, item.ChargedUnits));
         }
 
         var list = new List<PatientServiceItem>(_session.SelectedPatient.ActiveServices);
@@ -275,10 +289,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
 
     /// <summary>El renglón lo cargó la consulta en curso del paciente (los demás ya se cobraron o se descartaron).</summary>
     private bool IsFromThisConsultation(PatientServiceItem item) =>
-        IsConsultationForSelectedPatient && item.ChargedConsultationFolio == _active.ActiveConsultation?.Folio;
-
-    /// <summary>Unidades del renglón que están en la cuenta de la consulta en curso (0 si las cargó otra).</summary>
-    private int ChargedInThisConsultation(PatientServiceItem item) => IsFromThisConsultation(item) ? item.ChargedUnits : 0;
+        IsConsultationForSelectedPatient && ServiceRowSupplies.IsFromConsultation(item, _active.ActiveConsultation?.Folio);
 
     /// <summary>
     /// La hoja conserva lo hecho en consultas anteriores: esos renglones se ven y se pueden quitar, pero
@@ -297,6 +308,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     public async Task SaveServicesModalAsync()
     {
         if (_gate.BlockIfConsultationReadOnly()) return;
+        CloseSupplyEditor();
         if (_session.SelectedPatient != null)
         {
             _session.SelectedPatient.SyncServicesJson();
@@ -313,5 +325,306 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
 
         IsServicesModalOpen = false;
         _feedback.ShowSuccess($"¡Servicios clínicos guardados correctamente en el expediente de {_session.SelectedPatient?.FullName}!");
+    }
+
+    // ==========================================
+    // INSUMOS DE UN SERVICIO, SOLO PARA ESTA CONSULTA (2026-10-14)
+    // ==========================================
+
+    /// <summary>
+    /// El renglón con sus insumos abiertos (uno a la vez). Solo un renglón cargado por la consulta en curso; los de una
+    /// consulta anterior solo muestran su lista.
+    /// </summary>
+    [ObservableProperty]
+    private PatientServiceItem? _supplyEditorRow;
+
+    public bool IsSupplyEditorOpen => SupplyEditorRow != null;
+
+    partial void OnSupplyEditorRowChanged(PatientServiceItem? oldValue, PatientServiceItem? newValue)
+    {
+        if (oldValue != null)
+        {
+            oldValue.IsEditingSupplies = false;
+            oldValue.PropertyChanged -= EditorRow_PropertyChanged;
+        }
+        if (newValue != null)
+        {
+            newValue.IsEditingSupplies = true;
+            newValue.PropertyChanged += EditorRow_PropertyChanged;
+        }
+        OnPropertyChanged(nameof(IsSupplyEditorOpen));
+        RaiseSupplyEditorEntries();
+    }
+
+    private void EditorRow_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PatientServiceItem.Supplies)) RaiseSupplyEditorEntries();
+    }
+
+    /// <summary>
+    /// Un renglón sin lista (de una versión anterior) muestra al abrirse lo que descontaría hoy quitarlo, pero esa lista vive
+    /// aquí y no en el renglón: pasa al renglón con el primer cambio de verdad (y se guarda con él). Así abrir los insumos, o
+    /// guardar el expediente por otra cosa mientras están abiertos, no cambia el renglón.
+    /// </summary>
+    private List<PatientServiceSupply>? _legacyPreview;
+
+    /// <summary>Los insumos que muestra el editor abierto: la lista del renglón o, en uno sin lista, la de vista previa.</summary>
+    public IReadOnlyList<PatientServiceSupply> SupplyEditorEntries =>
+        (IReadOnlyList<PatientServiceSupply>?)SupplyEditorRow?.Supplies ?? _legacyPreview ?? (IReadOnlyList<PatientServiceSupply>)Array.Empty<PatientServiceSupply>();
+
+    public bool HasSupplyEditorEntries => SupplyEditorEntries.Count > 0;
+
+    private void RaiseSupplyEditorEntries()
+    {
+        OnPropertyChanged(nameof(SupplyEditorEntries));
+        OnPropertyChanged(nameof(HasSupplyEditorEntries));
+    }
+
+    /// <summary>La lista que se cambia en el renglón abierto: la suya, o la de vista previa (que todavía no es suya).</summary>
+    private List<PatientServiceSupply>? EditorList(PatientServiceItem row) =>
+        row.Supplies ?? (ReferenceEquals(row, SupplyEditorRow) ? _legacyPreview : null);
+
+    /// <summary>
+    /// El renglón queda con estos insumos (los que tienen piezas) y la vista previa deja de serlo. Si cambió cuáles son, en
+    /// otra instancia de la lista: WPF no vuelve a dibujar una lista que se le asigna otra vez; si solo cambiaron piezas, la
+    /// misma (cada insumo avisa de sus piezas y el foco se queda donde estaba).
+    /// </summary>
+    private void AdoptList(PatientServiceItem row, IEnumerable<PatientServiceSupply> entries)
+    {
+        var kept = entries.Where(e => e != null && e.Quantity > 0).ToList();
+        if (ReferenceEquals(row, SupplyEditorRow)) _legacyPreview = null;
+        if (row.Supplies != null && row.Supplies.SequenceEqual(kept))
+        {
+            row.NotifySuppliesChanged();
+            return;
+        }
+        row.Supplies = kept;
+    }
+
+    [ObservableProperty]
+    private string _serviceSupplySearchText = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<Product> _serviceSupplySuggestions = new();
+
+    [ObservableProperty]
+    private Product? _selectedServiceSupplySuggestion;
+
+    [ObservableProperty]
+    private bool _isServiceSupplyDropdownOpen;
+
+    partial void OnServiceSupplySearchTextChanged(string value) => ApplyServiceSupplySuggestions(value);
+
+    /// <summary>
+    /// La búsqueda de la consulta y del Punto de venta (<see cref="TextSearch.RankProducts"/>): solo insumos del inventario,
+    /// con existencias primero dentro de cada grupo.
+    /// </summary>
+    public void ApplyServiceSupplySuggestions(string query)
+    {
+        var supplies = _catalog.AvailableProducts.Where(p => p.IsActive && CatalogStore.IsProductSupply(p));
+        ServiceSupplySuggestions = new ObservableCollection<Product>(TextSearch.RankProducts(supplies, query));
+        SelectedServiceSupplySuggestion = ServiceSupplySuggestions.FirstOrDefault();
+        IsServiceSupplyDropdownOpen = ServiceSupplySuggestions.Count > 0;
+    }
+
+    /// <summary>↑ ↓ en la búsqueda de insumos: la sugerencia anterior o la siguiente (da la vuelta).</summary>
+    public void MoveServiceSupplySuggestion(int step)
+    {
+        int count = ServiceSupplySuggestions.Count;
+        if (count == 0) return;
+        int index = SelectedServiceSupplySuggestion == null ? -1 : ServiceSupplySuggestions.IndexOf(SelectedServiceSupplySuggestion);
+        index = ((index + step) % count + count) % count;
+        SelectedServiceSupplySuggestion = ServiceSupplySuggestions[index];
+    }
+
+    /// <summary>El renglón es de la consulta en curso y se puede cambiar aquí (no está en otro equipo).</summary>
+    private bool CanAdjust(PatientServiceItem row) =>
+        _session.SelectedPatient != null && _session.SelectedPatient.ActiveServices.Contains(row) && IsFromThisConsultation(row);
+
+    /// <summary>Abre los insumos de un renglón de esta consulta, o los cierra si ya estaban abiertos.</summary>
+    [RelayCommand]
+    public void ToggleServiceSupplies(PatientServiceItem? row)
+    {
+        if (row == null) return;
+        if (ReferenceEquals(SupplyEditorRow, row))
+        {
+            CloseSupplyEditor();
+            return;
+        }
+        if (_gate.BlockIfConsultationReadOnly() || !CanAdjust(row)) return;
+
+        CloseSupplyEditor();
+        _legacyPreview = row.Supplies == null ? _account.LegacyServiceSupplies(row) : null;
+        ServiceSupplySearchText = string.Empty;
+        IsServiceSupplyDropdownOpen = false;
+        SupplyEditorRow = row;
+    }
+
+    /// <summary>Cierra los insumos abiertos (Esc los cierra antes que la hoja).</summary>
+    [RelayCommand]
+    public void CloseSupplyEditor()
+    {
+        _legacyPreview = null;
+        if (ServiceSupplySearchText.Length > 0) ServiceSupplySearchText = string.Empty;
+        IsServiceSupplyDropdownOpen = false;
+        SupplyEditorRow = null;
+    }
+
+    [RelayCommand]
+    public Task IncreaseServiceSupplyAsync(PatientServiceSupply? entry) =>
+        entry == null ? Task.CompletedTask : SetServiceSupplyQuantityAsync(entry, entry.Quantity + 1);
+
+    [RelayCommand]
+    public Task DecreaseServiceSupplyAsync(PatientServiceSupply? entry) =>
+        entry == null ? Task.CompletedTask : SetServiceSupplyQuantityAsync(entry, entry.Quantity - 1);
+
+    [RelayCommand]
+    public Task RemoveServiceSupplyAsync(PatientServiceSupply? entry) =>
+        entry == null ? Task.CompletedTask : SetServiceSupplyQuantityAsync(entry, 0);
+
+    /// <summary>
+    /// Cambia las piezas de un insumo del renglón abierto (+, − o la X en 0), solo para esta consulta: lo que se suma se carga
+    /// a la cuenta y lo que se resta se descuenta, del mismo renglón de la cuenta con que se cargó. Como en la hoja de insumos
+    /// (v1.18.7), un insumo del inventario no pasa de sus existencias (cuenta todo lo del producto que ya está en la cuenta) y
+    /// se avisa. La configuración del servicio no cambia.
+    /// </summary>
+    public async Task SetServiceSupplyQuantityAsync(PatientServiceSupply entry, int quantity)
+    {
+        var row = SupplyEditorRow;
+        var list = row == null ? null : EditorList(row);
+        if (row == null || list == null || _gate.BlockIfConsultationReadOnly() || !CanAdjust(row) || !list.Contains(entry)) return;
+
+        int difference = Math.Max(0, quantity) - entry.Quantity;
+        if (difference > 0)
+        {
+            var line = _account.ServiceSupplyLine(entry);
+            var product = line.LineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == line.LineId) : null;
+            if (line.LineId > 0 && product == null)
+            {
+                _feedback.ShowWarning($"'{entry.SupplyName}' ya no está en el inventario: no se pueden cargar más piezas.");
+                return;
+            }
+            if (product != null && !FitsInStock(product, ref difference, entry.SupplyName)) return;
+            if (!_account.ChargeServiceSupply(entry, product, line, difference)) return;
+        }
+        else if (difference < 0)
+        {
+            _account.UnchargeServiceSupply(entry, -difference);
+        }
+        else
+        {
+            return;
+        }
+
+        // Un insumo en 0 sale de la lista; la de vista previa pasa al renglón con este primer cambio
+        AdoptList(row, list);
+        await SaveServiceRowAsync(row);
+    }
+
+    /// <summary>
+    /// Agrega un insumo del inventario al renglón abierto (Enter o clic en la búsqueda): una pieza, cargada a la cuenta; si el
+    /// renglón ya lo tiene, le suma una. Con el mismo tope de existencias que + .
+    /// </summary>
+    [RelayCommand]
+    public async Task AddServiceSupplyAsync(Product? product)
+    {
+        var row = SupplyEditorRow;
+        product ??= SelectedServiceSupplySuggestion ?? ServiceSupplySuggestions.FirstOrDefault();
+        if (row == null || product == null || _gate.BlockIfConsultationReadOnly() || !CanAdjust(row)) return;
+        var list = EditorList(row) ?? new List<PatientServiceSupply>();
+
+        var existing = ServiceRowSupplies.Find(list, product);
+        if (existing != null)
+        {
+            ClearServiceSupplySearch();
+            await SetServiceSupplyQuantityAsync(existing, existing.Quantity + 1);
+            return;
+        }
+
+        int one = 1;
+        if (!FitsInStock(product, ref one, product.Name)) return;
+        var entry = ServiceRowSupplies.NewEntry(product, 0);
+        if (!_account.ChargeServiceSupply(entry, product, PatientSheetRows.SupplyLine.ForProduct(product), 1)) return;
+        AdoptList(row, list.Append(entry));
+        ClearServiceSupplySearch();
+        await SaveServiceRowAsync(row);
+    }
+
+    private void ClearServiceSupplySearch()
+    {
+        ServiceSupplySearchText = string.Empty;
+        IsServiceSupplyDropdownOpen = false;
+    }
+
+    /// <summary>
+    /// El tope del Punto de venta: lo que ya está en la cuenta de ese producto (otros renglones, servicios, receta) más lo que
+    /// se carga no pasa de sus existencias. Si no cabe todo, se avisa y se carga lo que quepa; false si no cabe nada.
+    /// </summary>
+    private bool FitsInStock(Product product, ref int pieces, string name)
+    {
+        int fit = _account.PiecesThatFit(product, pieces);
+        if (fit < pieces) _feedback.ShowWarning($"No hay más existencias de '{name}' ({product.CurrentStock}).");
+        pieces = fit;
+        return pieces > 0;
+    }
+
+    [RelayCommand]
+    public Task IncreaseServiceUnitsAsync(PatientServiceItem? row) =>
+        row == null ? Task.CompletedTask : SetServiceUnitsAsync(row, row.Quantity + 1);
+
+    [RelayCommand]
+    public Task DecreaseServiceUnitsAsync(PatientServiceItem? row) =>
+        row == null ? Task.CompletedTask : SetServiceUnitsAsync(row, row.Quantity - 1);
+
+    /// <summary>
+    /// Cambia las unidades de un servicio de esta consulta: una más carga el servicio y los insumos por defecto de una unidad
+    /// (se suman a su lista); una menos descuenta lo mismo, cada insumo hasta lo que tenga la lista. Lo ajustado a mano se
+    /// queda (<see cref="ServiceRowSupplies"/>). En 0 se quita como la X.
+    /// </summary>
+    public async Task SetServiceUnitsAsync(PatientServiceItem row, int units)
+    {
+        if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly() || !CanAdjust(row)) return;
+        if (units <= 0)
+        {
+            await RemoveServiceItemFromPatientAsync(row);
+            return;
+        }
+
+        int delta = units - row.Quantity;
+        if (delta == 0) return;
+        // Un renglón sin lista con sus insumos abiertos: la vista previa es lo que cargó, y con el cambio pasa a ser suya
+        if (row.Supplies == null && EditorList(row) is { } preview)
+        {
+            row.Supplies = preview;
+            if (!_account.ChangeServiceUnits(row, delta))
+            {
+                row.Supplies = null;
+                return;
+            }
+            _legacyPreview = null;
+        }
+        else if (!_account.ChangeServiceUnits(row, delta))
+        {
+            return;
+        }
+        row.Quantity = units;
+        row.ChargedUnits = Math.Max(0, row.ChargedUnits + delta);
+        await SaveServiceRowAsync(row);
+    }
+
+    /// <summary>Guarda la hoja después de un cambio en un renglón.</summary>
+    private async Task SaveServiceRowAsync(PatientServiceItem row)
+    {
+        if (_session.SelectedPatient == null || !_session.SelectedPatient.ActiveServices.Contains(row)) return;
+        _session.SelectedPatient.SyncServicesJson();
+        if (_inventoryService != null)
+        {
+            try
+            {
+                await _inventoryService.SavePatientAsync(_session.SelectedPatient);
+            }
+            catch { }
+        }
+        _session.NotifySelectedPatientMutated();
     }
 }

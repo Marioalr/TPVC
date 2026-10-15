@@ -113,7 +113,7 @@ public static class PatientSheetRows
     /// <param name="products">Los productos de este equipo; solo cuentan los activos.</param>
     /// <param name="allProducts">Todos los productos de este equipo, también los inactivos (Id y SyncId), para encontrar por
     /// su SyncId uno que se desactivó.</param>
-    public static SupplyLine ResolveSupplyLine(PatientSupplyItem row, IEnumerable<Product> products, IEnumerable<CatalogRef>? allProducts = null)
+    public static SupplyLine ResolveSupplyLine(IChargedSupplyLine row, IEnumerable<Product> products, IEnumerable<CatalogRef>? allProducts = null)
     {
         var name = row.SupplyName ?? string.Empty;
         var active = products.Where(p => p.IsActive).ToList();
@@ -146,7 +146,7 @@ public static class PatientSheetRows
     }
 
     /// <summary>Al cargar: anota en el renglón con qué se cargó, la clase y el SyncId (valen en cualquier equipo) y el Id local.</summary>
-    public static void SetSupplyLine(PatientSupplyItem row, SupplyLine line)
+    public static void SetSupplyLine(IChargedSupplyLine row, SupplyLine line)
     {
         row.ChargedLineId = line.LineId;
         row.ChargedLineKind = line.Kind;
@@ -159,7 +159,7 @@ public static class PatientSheetRows
     /// en los demás equipos). Uno viejo recibe la clase y el SyncId, en su siguiente guardado, y conserva su
     /// <c>ChargedLineId</c> si tenía uno: es el de la PC que lo cargó, que lo usa tal cual si la consulta le regresa.
     /// </summary>
-    public static void RefreshSupplyLine(PatientSupplyItem row, SupplyLine line)
+    public static void RefreshSupplyLine(IChargedSupplyLine row, SupplyLine line)
     {
         if (row.ChargedLineKind != null)
         {
@@ -284,7 +284,9 @@ public static class PatientSheetRows
     /// Un renglón viejo (sin <c>ChargedLineKind</c>, o un servicio sin <c>ServiceSyncId</c>) conserva los Id de la PC
     /// anterior que lo escribió, que los usa tal cual si la consulta le regresa, y aquí se resuelve igual al moverlo. La
     /// excepción es un insumo viejo que aquí es un cargo libre que la cuenta recibida sí tiene (el producto no existe en
-    /// este equipo): queda con ese Id negativo, que vale igual en todos los equipos. Devuelve cuántos renglones cambiaron.
+    /// este equipo): queda con ese Id negativo, que vale igual en todos los equipos. Los insumos de un servicio
+    /// (<see cref="PatientServiceItem.Supplies"/>, revisión 13) se traducen igual que un insumo de la hoja, aunque el servicio
+    /// sea un renglón viejo o un cargo libre. Devuelve cuántos renglones o insumos cambiaron.
     /// </summary>
     public static int TranslateReceivedRows(PatientRecord patient, string folio, IEnumerable<ConsultationProductItem> receivedItems,
         IEnumerable<Product> products, IEnumerable<CatalogRef>? allProducts, IEnumerable<ClinicalService> services)
@@ -296,34 +298,43 @@ public static class PatientSheetRows
         var refs = allProducts?.ToList();
         foreach (var row in patient.ActiveSupplies.Where(r => r != null && r.ChargedConsultationFolio == folio))
         {
-            if (row.ChargedLineKind == null)
-            {
-                if (row.ChargedLineId <= 0) continue;
-                var legacy = ResolveSupplyLine(row, productList, refs);
-                if (!legacy.IsFree || legacy.LineId == row.ChargedLineId || !received.Any(i => i.ProductId == legacy.LineId)) continue;
-                row.ChargedLineId = legacy.LineId;
-                changed++;
-                continue;
-            }
-
-            var mapped = row.ChargedLineKind == HandoffPayloadCodec.LineProduct && row.ChargedLineSyncId is { } syncId && syncId != Guid.Empty
-                ? received.FirstOrDefault(i => i.LineKind == HandoffPayloadCodec.LineProduct && i.CatalogSyncId == syncId && i.ProductId != 0)
-                : null;
-            var lineId = mapped?.ProductId ?? ResolveSupplyLine(row, productList, refs).LineId;
-            if (row.ChargedLineId == lineId) continue;
-            row.ChargedLineId = lineId;
-            changed++;
+            if (TranslateReceivedLine(row, received, productList, refs)) changed++;
         }
 
         var serviceList = services.ToList();
-        foreach (var row in patient.ActiveServices.Where(r => r != null && r.ChargedConsultationFolio == folio
-                                                              && r.ServiceSyncId is { } syncId && syncId != Guid.Empty))
+        foreach (var row in patient.ActiveServices.Where(r => r != null && r.ChargedConsultationFolio == folio))
         {
+            foreach (var entry in row.Supplies ?? Enumerable.Empty<PatientServiceSupply>())
+            {
+                if (entry != null && TranslateReceivedLine(entry, received, productList, refs)) changed++;
+            }
+            if (row.ServiceSyncId is not { } syncId || syncId == Guid.Empty) continue;
             var id = ResolveService(row, serviceList)?.Id ?? 0;
             if (row.ServiceId == id) continue;
             row.ServiceId = id;
             changed++;
         }
         return changed;
+    }
+
+    /// <summary>Un insumo cargado por la consulta recibida, con el Id local de este equipo; true si cambió.</summary>
+    private static bool TranslateReceivedLine(IChargedSupplyLine row, List<ConsultationProductItem> received, List<Product> products, List<CatalogRef>? refs)
+    {
+        if (row.ChargedLineKind == null)
+        {
+            if (row.ChargedLineId <= 0) return false;
+            var legacy = ResolveSupplyLine(row, products, refs);
+            if (!legacy.IsFree || legacy.LineId == row.ChargedLineId || !received.Any(i => i.ProductId == legacy.LineId)) return false;
+            row.ChargedLineId = legacy.LineId;
+            return true;
+        }
+
+        var mapped = row.ChargedLineKind == HandoffPayloadCodec.LineProduct && row.ChargedLineSyncId is { } syncId && syncId != Guid.Empty
+            ? received.FirstOrDefault(i => i.LineKind == HandoffPayloadCodec.LineProduct && i.CatalogSyncId == syncId && i.ProductId != 0)
+            : null;
+        var lineId = mapped?.ProductId ?? ResolveSupplyLine(row, products, refs).LineId;
+        if (row.ChargedLineId == lineId) return false;
+        row.ChargedLineId = lineId;
+        return true;
     }
 }
