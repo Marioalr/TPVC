@@ -270,7 +270,7 @@ public sealed class ConsultationHandoffService
         IReadOnlyList<Dictionary<string, object?>> registry, string deviceId)
     {
         var serverNow = ParseUtc(serverNowRows.FirstOrDefault()?.GetValueOrDefault("ServerNow")) ?? DateTime.UtcNow;
-        return HandoffTargets(MergeDevices(heartbeats, registry, primaryDeviceId: null, serverNow, deviceId), serverNow).Count();
+        return HandoffTargets(MergeDevices(heartbeats, registry, primaryDeviceId: null, serverNow, deviceId), serverNow).Count(d => d.IsAvailable);
     }
 
     /// <summary>A quién se le puede enviar la consulta (y quién cuenta como compañero para la cadencia).</summary>
@@ -304,7 +304,7 @@ public sealed class ConsultationHandoffService
             .ToList();
         _sync.AddExternalUsage(rowsRead: 2 + results[3].Count + results[4].Count, rowsWritten: 1);
         // Paso 8.24: la lista recién leída también sirve a la cadencia (un equipo recién vinculado acelera la revisión)
-        Scheduler.OnPeersRefreshed(devices.Count);
+        Scheduler.OnPeersRefreshed(devices.Count(d => d.IsAvailable));
         return devices;
     }
 
