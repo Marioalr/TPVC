@@ -84,6 +84,7 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 ### Cobrar
 * A la derecha: cliente (opcional), total, forma de pago y, en efectivo, lo recibido. *Exacto* y los billetes sugeridos lo llenan de un clic; se muestra el **cambio** o, si no alcanza, **Faltan $X** (no deja cobrar).
 * **Cobrar** (F5 o Ctrl + Enter) descuenta el inventario por FEFO, registra el ticket y muestra su vista previa (con recibido y cambio). *Imprimir* lo manda a la impresora; **Enter** pasa a la siguiente venta.
+* **Con la nube activa** (desde la 1.40.0), antes de cobrar TPVC trae lo último de los demás equipos (por ejemplo, lo que se vendió en la tablet), así las existencias que revisa están al día. Normalmente no se nota; si la nube no responde, espera como máximo 3 segundos y cobra con lo que tiene. **Sin internet se cobra igual**: el ticket sale con el código de esta computadora (`TKT-20261009-P1-0001`). Lo mismo al terminar una consulta.
 
 ### Tickets y corte de caja
 * **Tickets**: los últimos 50 o uno por folio. *Ver / reimprimir* y *Cancelar y devolver al inventario* (con motivo; el ticket queda marcado, no se borra, y cada pieza regresa al lote del que salió).
@@ -97,8 +98,9 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 ## 5. Módulo 3: Pacientes (expedientes, consulta y agenda)
 
 ### Inicio de Pacientes
-* **Citas de hoy** a la izquierda. **Atender** abre la consulta del paciente con el motivo de la cita ya escrito; al cobrar, la cita queda como *Atendida*.
+* **Citas de hoy** a la izquierda. **Atender** abre la consulta del paciente con el motivo de la cita ya escrito; al cobrar, la cita queda como *Atendida*. Dos citas cuyos horarios se cruzan llevan la marca ámbar **Empalme con …** (ver *Agenda*).
 * **Atendidos recientemente** a la derecha: un clic abre la ficha.
+* **Posible expediente duplicado** (desde la 1.40.0, con la nube): si de otro equipo llega un paciente con el mismo nombre (sin importar acentos ni mayúsculas) y la misma fecha de nacimiento o el mismo teléfono que uno de esta computadora, arriba de *Atendidos recientemente* aparece un aviso con los dos folios. Revise las dos fichas: si son la misma persona, siga con una (TPVC no los une solo). **Entendido** lo cierra.
 * **Buscador** siempre arriba: escriba en cualquier momento (no hace falta hacer clic en él) el nombre, folio, teléfono o diagnóstico; no importan acentos ni mayúsculas. **Enter** abre el primer resultado. Si el paciente no existe, **Crear paciente "…"** abre el alta con el nombre ya escrito.
 * **Esc** limpia la búsqueda; desde una ficha regresa al inicio.
 
@@ -119,6 +121,7 @@ Para la venta de mostrador (sin consulta): medicamentos, insumos y servicios.
 * Secciones numeradas a la izquierda; las obligatorias son **Identificación** (nombre, apellido, fecha de nacimiento o edad, sexo) y **Alergias** (escriba cuáles o pulse **Negadas**).
 * Gineco-obstétricos solo para mujeres de 10 años o más; Desarrollo solo para menores de 18.
 * **Guardar y abrir ficha** o **Guardar e iniciar consulta**. Si falta un dato, el formulario abre la sección donde está.
+* **"Ya hay un expediente parecido"** (desde la 1.40.0): al dar de alta, si ya existe un paciente con el mismo nombre (sin importar acentos, mayúsculas ni espacios de más) y la misma fecha de nacimiento o los mismos últimos 10 dígitos del teléfono, TPVC lo dice antes de guardar. Si es el mismo paciente, conteste *No* y búsquelo; con *Sí* se crea el nuevo. Editar un expediente no pregunta.
 * Se **guarda solo**: si el programa se cierra a mitad del alta, al abrirlo se retoma tal cual.
 * **Folio del expediente** (desde la 1.34.0, con la nube): el formulario muestra el siguiente probable. Si no se cambia, al guardar se toma el siguiente de la nube, así dos equipos nunca dan el mismo; si otro equipo usó ese número mientras tanto, el aviso de guardado dice con cuál quedó. Sin internet, el folio lleva el código de esta computadora (`EXP-2026-P1-001`). Los tickets siguen la misma regla (`TKT-20261009-P1-0001` sin internet). Desde la 1.35.0, una vez al día la PC principal les da el número normal y guarda el folio con letra: se puede buscar por cualquiera de los dos, la ficha lo muestra junto al folio ("sin conexión: …") y el ticket reimpreso lleva debajo "FOLIO SIN CONEXIÓN". Lo hace sola después de sincronizar, cuando no hay consulta, venta ni formulario abiertos y ningún equipo tiene cambios sin subir.
 
@@ -144,6 +147,8 @@ Con la nube activada (Configuración › Nube y dispositivos), la consulta puede
 * Botón **Agenda** arriba (o *Agendar cita* en la ficha, que abre en el día siguiente). La semana arriba; abajo las citas del día y los **huecos libres** de 30 minutos (8:00 a 20:00).
 * Pulse un hueco libre, elija paciente, motivo y duración, y **Agendar**.
 * Menú **⋯** de cada cita: atender, confirmar, **cambiar de horario** (después elija el nuevo hueco), recordatorio por WhatsApp, Google Calendar y cancelar.
+* **Citas empalmadas** (desde la 1.40.0): si la cita nueva (o la que cambia de horario) se cruza con otra del mismo día, TPVC pregunta "Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?". Con *No* el formulario sigue abierto para elegir otro horario. Una cita que termina justo cuando empieza la otra no se cruza; una sin duración cuenta como de 30 minutos; las canceladas no cuentan. Con la nube activa, antes de preguntar TPVC trae las citas que se agendaron en los demás equipos (espera como máximo 3 segundos).
+* Las citas que se cruzan llevan la marca ámbar **Empalme con …** en la agenda y en las citas de hoy. Si dos equipos agendaron el mismo horario sin internet, al sincronizar aparece el aviso "Empalme en la agenda (llegó de otro equipo)…". TPVC nunca cancela una cita solo: decida cuál mover o cancelar.
 
 ---
 

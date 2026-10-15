@@ -585,28 +585,22 @@ public partial class GoldenVectorTests
     }
 
     /// <summary>
-    /// Al regenerar schema.json: los cambios de tablas o columnas solo pueden agregar (la app de Kotlin y las PC
-    /// viejas siguen leyendo lo que ya existía) y obligan a subir <see cref="SyncContract.Revision"/>.
+    /// Al regenerar schema.json: los cambios de tablas o columnas solo pueden agregar (la app de Kotlin y las PC viejas siguen
+    /// leyendo lo que ya existía) y obligan a subir <see cref="SyncContract.Revision"/>. Desde el paso 8.23 la revisión 13
+    /// (<see cref="SyncContract.FrozenRevision"/>) es la base de la tablet, y "aditivo" se revisa columna por columna
+    /// (<see cref="NonAdditiveChanges"/>).
     /// </summary>
     private static void RequireAdditiveChangeWithNewRevision(string existing, string generated)
     {
-        var before = JsonNode.Parse(existing)!.AsObject();
-        var after = JsonNode.Parse(generated)!.AsObject();
-
-        var afterColumns = after["tables"]!.AsArray().ToDictionary(
-            t => t!["table"]!.GetValue<string>(),
-            t => t!["columns"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()).ToHashSet());
-        foreach (var table in before["tables"]!.AsArray())
+        var problems = NonAdditiveChanges(existing, generated);
+        if (problems.Count > 0)
         {
-            var name = table!["table"]!.GetValue<string>();
-            Assert.IsTrue(afterColumns.TryGetValue(name, out var columns), $"La tabla {name} desapareció del contrato: solo se admiten cambios aditivos.");
-            foreach (var column in table["columns"]!.AsArray())
-            {
-                var columnName = column!["name"]!.GetValue<string>();
-                Assert.IsTrue(columns.Contains(columnName), $"La columna {name}.{columnName} desapareció del contrato: solo se admiten cambios aditivos.");
-            }
+            Assert.Fail($"El contrato está congelado desde la revisión {SyncContract.FrozenRevision} (base de la tablet): solo se admiten cambios aditivos.\n  " +
+                        string.Join("\n  ", problems));
         }
 
+        var before = JsonNode.Parse(existing)!.AsObject();
+        var after = JsonNode.Parse(generated)!.AsObject();
         static string Core(JsonObject o)
         {
             var copy = (JsonObject)o.DeepClone();
@@ -618,5 +612,88 @@ public partial class GoldenVectorTests
         {
             Assert.Fail($"Cambiaron las tablas del contrato: suba SyncContract.Revision (hoy {SyncContract.Revision}) y vuelva a generar.");
         }
+    }
+
+    /// <summary>
+    /// Paso 8.23, formato congelado: lo que <paramref name="generated"/> cambia de <paramref name="existing"/> sin ser aditivo.
+    /// Se admite: tablas, columnas y referencias nuevas (en la nube todas las columnas aceptan nulo), valores nuevos de un enum,
+    /// una columna que pasa a derivada (un equipo anterior la sigue aplicando como valor, que es lo que hacía; el paso 8.20 lo
+    /// hace con las existencias), un índice local que deja de ser único y otro orden de subida. No se admite: quitar o
+    /// renombrar una tabla, columna o referencia; cambiar en una columna su tipo remoto o de C#, si acepta nulo, su timeKind,
+    /// su papel, su alias o el número de un valor de su enum, o quitarle uno; que una derivada deje de serlo; cambiar el
+    /// principal de una referencia o si es obligatoria; ni agregar un índice único a una tabla que ya existía (un equipo
+    /// anterior pudo guardar filas repetidas).
+    /// </summary>
+    private static List<string> NonAdditiveChanges(string existing, string generated)
+    {
+        var problems = new List<string>();
+        var before = JsonNode.Parse(existing)!["tables"]!.AsArray();
+        var after = JsonNode.Parse(generated)!["tables"]!.AsArray().ToDictionary(t => t!["table"]!.GetValue<string>(), t => t!.AsObject());
+
+        static string? Text(JsonNode? node) => node?.ToJsonString();
+
+        foreach (var oldTable in before.Select(t => t!.AsObject()))
+        {
+            var name = oldTable["table"]!.GetValue<string>();
+            if (!after.TryGetValue(name, out var newTable))
+            {
+                problems.Add($"La tabla {name} desapareció.");
+                continue;
+            }
+            if (Text(oldTable["entityType"]) != Text(newTable["entityType"])) problems.Add($"La tabla {name} cambió de entityType.");
+
+            var newColumns = newTable["columns"]!.AsArray().ToDictionary(c => c!["name"]!.GetValue<string>(), c => c!.AsObject());
+            foreach (var oldColumn in oldTable["columns"]!.AsArray().Select(c => c!.AsObject()))
+            {
+                var column = oldColumn["name"]!.GetValue<string>();
+                if (!newColumns.TryGetValue(column, out var newColumn))
+                {
+                    problems.Add($"La columna {name}.{column} desapareció.");
+                    continue;
+                }
+                foreach (var key in new[] { "role", "remoteType", "clrType", "nullable", "timeKind", "aliasOf", "enumType" })
+                {
+                    if (Text(oldColumn[key]) != Text(newColumn[key]))
+                        problems.Add($"La columna {name}.{column} cambió '{key}' ({Text(oldColumn[key]) ?? "nada"} → {Text(newColumn[key]) ?? "nada"}).");
+                }
+                if (oldColumn["derived"]?.GetValue<bool>() == true && newColumn["derived"]?.GetValue<bool>() != true)
+                    problems.Add($"La columna {name}.{column} dejó de ser derivada.");
+                if (oldColumn["enumValues"] is JsonObject oldValues)
+                {
+                    var newValues = newColumn["enumValues"] as JsonObject;
+                    foreach (var (value, number) in oldValues)
+                    {
+                        if (newValues == null || !newValues.TryGetPropertyValue(value, out var newNumber))
+                            problems.Add($"El valor {value} del enum de {name}.{column} desapareció.");
+                        else if (Text(newNumber) != Text(number))
+                            problems.Add($"El valor {value} del enum de {name}.{column} cambió de número ({Text(number)} → {Text(newNumber)}).");
+                    }
+                }
+            }
+
+            var newReferences = newTable["references"]!.AsArray().ToDictionary(r => r!["column"]!.GetValue<string>(), r => r!.AsObject());
+            foreach (var oldReference in oldTable["references"]!.AsArray().Select(r => r!.AsObject()))
+            {
+                var column = oldReference["column"]!.GetValue<string>();
+                if (!newReferences.TryGetValue(column, out var newReference))
+                {
+                    problems.Add($"La referencia {name}.{column} desapareció.");
+                    continue;
+                }
+                foreach (var key in new[] { "principal", "required" })
+                {
+                    if (Text(oldReference[key]) != Text(newReference[key]))
+                        problems.Add($"La referencia {name}.{column} cambió '{key}' ({Text(oldReference[key])} → {Text(newReference[key])}).");
+                }
+            }
+
+            static string UniqueKey(JsonNode? u) => string.Join(",", u!.AsArray().Select(c => c!.GetValue<string>()).Order(StringComparer.Ordinal));
+            var oldUnique = oldTable["unique"]!.AsArray().Select(UniqueKey).ToHashSet(StringComparer.Ordinal);
+            foreach (var unique in newTable["unique"]!.AsArray().Select(UniqueKey).Where(u => !oldUnique.Contains(u)))
+            {
+                problems.Add($"La tabla {name} ganó un índice único ({unique}).");
+            }
+        }
+        return problems;
     }
 }

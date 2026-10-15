@@ -154,11 +154,33 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     // ================================================================== citas (suscripción del coordinador)
 
     private Action? _onAppointmentsChangedHandler;
+    private Action<SyncArrivals>? _onSyncArrivalsHandler;
 
     private void InitializePacientes()
     {
         if (_inventoryService != null)
         {
+            // Paso 8.23: lo que llegó de otro equipo y choca con lo de aquí: el aviso de empalmes (la agenda ya los marca al
+            // recargarse) y el banner de posibles expedientes duplicados en el inicio de Pacientes
+            _onSyncArrivalsHandler = arrivals =>
+            {
+                void Show() => ShowSyncArrivals(arrivals);
+                try
+                {
+                    if (_ui.IsOffUiThread)
+                    {
+                        _ui.InvokeAsync(Show);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Sin WPF (pruebas en Linux)
+                }
+                Show();
+            };
+            _inventoryService.OnSyncArrivals += _onSyncArrivalsHandler;
+
             _onAppointmentsChangedHandler = () =>
             {
                 try
@@ -185,6 +207,17 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         {
             _inventoryService.OnAppointmentsChanged -= _onAppointmentsChangedHandler;
         }
+        if (_inventoryService != null && _onSyncArrivalsHandler != null)
+        {
+            _inventoryService.OnSyncArrivals -= _onSyncArrivalsHandler;
+        }
+    }
+
+    /// <summary>Paso 8.23: el aviso de los empalmes que llegaron y los pares de posibles duplicados en el banner.</summary>
+    public void ShowSyncArrivals(SyncArrivals arrivals)
+    {
+        if (arrivals.DuplicatePatients.Count > 0) Home.AddDuplicatePairs(arrivals.DuplicatePatients);
+        if (arrivals.Overlaps.Count > 0) _feedback.ShowWarning(arrivals.OverlapNotice);
     }
 
     // ================================================================== páginas

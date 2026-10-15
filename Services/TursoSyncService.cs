@@ -227,6 +227,8 @@ public partial class TursoSyncService
         {
             // Paso 8.16: EXP y TKT toman su número del contador de la nube
             _inventoryService.Folios = this;
+            // Paso 8.23: cobrar y agendar esperan una sincronización rápida (3 s como máximo)
+            _inventoryService.QuickSync = this;
             _inventoryService.OnInventoryChanged += OnLocalDataChanged;
             _inventoryService.OnPatientsChanged += OnLocalDataChanged;
             _inventoryService.OnSalesChanged += OnLocalDataChanged;
@@ -455,6 +457,8 @@ public partial class TursoSyncService
             sw.Stop();
 
             var parkedRows = RefreshParkedCount();
+            SyncArrivals arrivals;
+            lock (_arrivalsGate) arrivals = _arrivals;
             var result = new TursoSyncResult
             {
                 Success = true,
@@ -462,7 +466,8 @@ public partial class TursoSyncService
                 RowsPulled = pulled,
                 ElapsedMilliseconds = sw.ElapsedMilliseconds,
                 ParkedRows = parkedRows,
-                FullSyncReport = report
+                FullSyncReport = report,
+                Arrivals = arrivals
             };
 
             // Turso volvió a aceptar instrucciones: termina la pausa por cuota agotada
@@ -481,6 +486,9 @@ public partial class TursoSyncService
                 NotifyLocalViews();
                 _labResults?.NotifyChanged();
             }
+
+            // Paso 8.23: citas empalmadas y posibles duplicados con lo que llegó (el aviso y el banner de la PC)
+            if (!arrivals.IsEmpty) RunOnUiThread(() => _inventoryService?.NotifySyncArrivals(arrivals));
 
             // Paso 8.12b: los archivos de laboratorio, fuera del candado de la sincronización
             ScheduleLabTransfers();
@@ -585,6 +593,7 @@ public partial class TursoSyncService
         _syncGeneration = null;
         _generationChecked = false;
         Interlocked.Exchange(ref _mergedForUpload, 0);
+        ResetArrivals();
 
         // Paso 8.10: si este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo, se baja todo una vez
         await ApplyRedownloadRequestAsync(settings, ct);
@@ -647,6 +656,14 @@ public partial class TursoSyncService
             var (merged, mergedReads) = await PushLocalChangesAsync(client, settings.DeviceId, fullResync: false, ct);
             pushed += merged;
             pushReads += mergedReads;
+        }
+        // 2c. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados). No en la primera
+        //     descarga de esta base (sin cursores: la primera sincronización, unirse, reemplazar con la nube, otra generación):
+        //     ahí llega todo. En la «Sincronización completa» sí: solo se aplica lo que es más nuevo que lo de aquí
+        if (!downloadPending && (fullResync || !cursors.IsFirstDownload))
+        {
+            var arrivals = await CheckArrivalsAsync(ct);
+            lock (_arrivalsGate) _arrivals = arrivals;
         }
         if (downloadPending)
         {
@@ -2190,6 +2207,9 @@ public partial class TursoSyncService
             .ToDictionary(p => (p.EntityType, p.SyncId));
 
         int applied = 0;
+        // Paso 8.23: los expedientes y las citas que esta página creó o cambió aquí, para revisar duplicados y empalmes al
+        // terminar la bajada («Volver a aplicar» no cuenta; en la bajada de columnas nuevas, solo las filas nuevas aquí)
+        var arrived = new List<Guid>();
         // Paso 8.22: un expediente que ya existe aquí no sigue el LWW por fila: se combina por campo. Lo que queda distinto de la
         // versión de la nube se anota para subir en la misma transacción. «Volver a aplicar» (force) lo escribe tal cual
         bool mergePatients = typeof(T) == typeof(PatientRecord) && !force;
@@ -2222,6 +2242,7 @@ public partial class TursoSyncService
                 if (!merged.DiffersFromLocal && merged.UpdatedAtUtc == patient.UpdatedAtUtc && merged.FieldStampsJson == patient.FieldStampsJson) continue;
                 PatientFieldMerge.Apply(db.Entry(patient), merged, row, map);
                 if (merged.DiffersFromRemote) markForUpload.Add((entityType, syncId));
+                if (newColumns == null) arrived.Add(syncId);
                 applied++;
                 continue;
             }
@@ -2337,11 +2358,13 @@ public partial class TursoSyncService
                 entry.Property(property.Name).CurrentValue = property.PropertyType == typeof(int) ? id ?? 0 : id;
             }
             if (!onlyNewColumns) local.UpdatedAtUtc = remoteUpdated;
+            if (!force && (created || newColumns == null)) arrived.Add(syncId);
             applied++;
         }
 
         await ResolveUniqueConflictsAsync(db, map, ct);
         await SyncChangeLog.SaveRemoteChangesAsync(db, ct, cursor, markForUpload);
+        NoteArrivals(typeof(T), arrived);
         if (markForUpload.Count > 0)
         {
             Interlocked.Add(ref _mergedForUpload, markForUpload.Count);

@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -241,9 +242,11 @@ public partial class AgendaPanelViewModel : ObservableObject
     {
         var dayAppointments = appointments
             .Where(a => a.Date.Date == date.Date && !a.IsCancelled)
-            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: a.DurationMinutes > 0 ? a.DurationMinutes : 30))
+            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: AppointmentRules.Minutes(a.DurationMinutes)))
             .OrderBy(a => a.Start)
             .ToList();
+        // Paso 8.23: las que se empalman llevan la marca "Empalme"
+        MarkOverlaps(dayAppointments.Select(a => a.Appointment));
 
         var slots = dayAppointments.Select(a => new AgendaSlot(a.Start, a.Appointment)).ToList();
 
@@ -290,8 +293,25 @@ public partial class AgendaPanelViewModel : ObservableObject
         AgendaFormError = null;
     }
 
+    // Mientras se revisa la agenda en la nube (hasta 3 s) un segundo clic en "Agendar" no agenda dos veces
+    private bool _savingAppointment;
+
     [RelayCommand]
     public async Task SaveAgendaFormAsync()
+    {
+        if (_savingAppointment) return;
+        _savingAppointment = true;
+        try
+        {
+            await SaveAgendaFormCoreAsync();
+        }
+        finally
+        {
+            _savingAppointment = false;
+        }
+    }
+
+    private async Task SaveAgendaFormCoreAsync()
     {
         var slot = AgendaSlots.FirstOrDefault(s => s.IsFormOpen);
         if (slot == null) return;
@@ -320,6 +340,8 @@ public partial class AgendaPanelViewModel : ObservableObject
             Reason = AgendaFormReason.Trim(),
             Status = "Programada"
         };
+
+        if (!await ConfirmNoOverlapAsync(appointment)) return;
 
         try
         {
@@ -355,20 +377,94 @@ public partial class AgendaPanelViewModel : ObservableObject
             CreatedAt = appointment.CreatedAt
         };
 
+        if (_savingAppointment) return;
+        _savingAppointment = true;
         try
         {
-            if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(moved);
-        }
-        catch (Exception ex)
-        {
-            _info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
-            _info.IsInfoModalVisible = true;
-            return;
-        }
+            // Si no se confirma, sigue eligiendo otro horario
+            if (!await ConfirmNoOverlapAsync(moved)) return;
+            try
+            {
+                if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(moved);
+            }
+            catch (Exception ex)
+            {
+                _info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
+                _info.IsInfoModalVisible = true;
+                return;
+            }
 
-        MovingAppointment = null;
-        _feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
-        await _workflow.RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
+            MovingAppointment = null;
+            _feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
+            await _workflow.RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
+        }
+        finally
+        {
+            _savingAppointment = false;
+        }
+    }
+
+    /// <summary>
+    /// Paso 8.23 (H2): antes de guardar una cita, con la nube activa, la sincronización rápida (3 s como máximo; sin red no
+    /// espera) y luego la revisión con las citas guardadas: si se empalma, "Ya hay una cita a las 10:30 con … ¿Agendar de
+    /// todos modos?". Nunca cambia ni cancela la otra cita.
+    /// </summary>
+    private async Task<bool> ConfirmNoOverlapAsync(PatientAppointment appointment)
+    {
+        List<PatientAppointment> overlapping;
+        if (_inventoryService != null)
+        {
+            await _inventoryService.QuickSyncAsync();
+            try
+            {
+                overlapping = await _inventoryService.FindOverlappingAppointmentsAsync(appointment);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo revisar si la cita se empalma", ex);
+                return true;
+            }
+        }
+        else
+        {
+            var candidate = AppointmentRules.Of(appointment);
+            overlapping = _agendaWeekAppointments
+                .Where(a => !ReferenceEquals(a, appointment) && (appointment.Id == 0 || a.Id != appointment.Id) && AppointmentRules.Overlaps(candidate, AppointmentRules.Of(a)))
+                .OrderBy(a => AppointmentRules.Start(a.Time))
+                .ToList();
+        }
+        return overlapping.Count == 0 || await _dialogs.ConfirmAsync(OverlapQuestion(overlapping), "Cita empalmada");
+    }
+
+    /// <summary>"Ya hay una cita a las 10:30 con Ana López. ¿Agendar de todos modos?" (con varias, todas).</summary>
+    public static string OverlapQuestion(IReadOnlyList<PatientAppointment> overlapping)
+    {
+        var parts = overlapping.Select(a => $"a las {AppointmentRules.TimeText(a.Time)} con {a.PatientName}").ToList();
+        var list = parts.Count == 1 ? parts[0] : string.Join(", ", parts.Take(parts.Count - 1)) + " y " + parts[^1];
+        return (overlapping.Count == 1 ? "Ya hay una cita " : "Ya hay citas ") + list + ".\n\n¿Agendar de todos modos?";
+    }
+
+    /// <summary>
+    /// Paso 8.23: pone "Empalme con Ana López (10:30)" en cada cita de la lista que se empalma con otra de la misma lista
+    /// (<see cref="AppointmentRules.Overlaps"/>), y lo quita en las demás. Con varias, la primera por hora.
+    /// </summary>
+    public static void MarkOverlaps(IEnumerable<PatientAppointment> appointments)
+    {
+        var list = appointments.ToList();
+        foreach (var appointment in list) appointment.OverlapText = string.Empty;
+        var rules = list.Select(a => (Appointment: a, Rule: AppointmentRules.Of(a))).ToList();
+        foreach (var (appointment, rule) in rules)
+        {
+            var other = rules
+                .Where(o => !ReferenceEquals(o.Appointment, appointment) && AppointmentRules.Overlaps(rule, o.Rule))
+                .OrderBy(o => AppointmentRules.Start(o.Appointment.Time))
+                .ThenBy(o => SyncIds.Format(o.Appointment.SyncId), StringComparer.Ordinal)
+                .Select(o => o.Appointment)
+                .ToList();
+            if (other.Count == 0) continue;
+            appointment.OverlapText = $"Empalme con {other[0].PatientName} ({AppointmentRules.TimeText(other[0].Time)})" +
+                                      (other.Count > 1 ? $" y {other.Count - 1} más" : string.Empty);
+        }
     }
 
     [RelayCommand]
@@ -454,15 +550,13 @@ public partial class AgendaPanelViewModel : ObservableObject
 
     // ================================================================== citas
 
-    public static TimeSpan ParseAppointmentTime(string? time)
-    {
-        if (!string.IsNullOrWhiteSpace(time))
-        {
-            if (DateTime.TryParse(time, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var parsed)) return parsed.TimeOfDay;
-            if (DateTime.TryParse(time, Mexican, DateTimeStyles.NoCurrentDateDefault, out parsed)) return parsed.TimeOfDay;
-        }
-        return new TimeSpan(10, 0, 0);
-    }
+    /// <summary>
+    /// La hora de una cita. Paso 8.23: la misma regla que el resumen derivado y los empalmes
+    /// (<see cref="PatientSummaryRules.TimeOfDay"/>: <c>H:mm</c>, segundos y AM/PM opcionales; lo demás, las 10:00), así la agenda
+    /// dibuja la cita donde la regla la empalma. Antes era <c>DateTime.TryParse</c>, que también leía textos como "3 PM" o "7:5"
+    /// (TPVC siempre escribe "HH:mm").
+    /// </summary>
+    public static TimeSpan ParseAppointmentTime(string? time) => PatientSummaryRules.TimeOfDay(time);
 
     public async Task UpdateAppointmentStatusAsync(PatientAppointment? appt, string status)
     {

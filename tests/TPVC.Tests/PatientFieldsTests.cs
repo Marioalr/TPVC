@@ -104,6 +104,8 @@ public class PatientFieldsTests
         if (type == typeof(bool)) return !(bool)value!;
         if (type == typeof(DateTime)) return ((DateTime)value!).AddDays(1);
         if (type == typeof(DateTime?)) return ((DateTime?)value ?? new DateTime(2020, 1, 1)).AddDays(1);
+        // Paso 8.23: MergedIntoSyncId, un GUID que se compara con Equals como los demás valores
+        if (type == typeof(Guid?)) return value is Guid ? null : Guid.NewGuid();
         Assert.Fail($"El campo {field.Name} es de un tipo sin regla en esta prueba ({type.Name}): decida cómo se compara al guardar.");
         return null;
     }

@@ -132,7 +132,7 @@ CREATE TABLE LabBlobChunks (Sha256 TEXT NOT NULL, ChunkIndex INTEGER NOT NULL, D
 - **Contrato:** el SQL de subir, cerrar y bajar va literal en `contracts/hrana/`, con vectores del hash y de los trozos.
 
 **Dónde cabe en el plan:**
-- **La orden** puede entrar en cualquier momento como tabla sincronizada aditiva, de preferencia antes de que 8.23 congele `schema.json`.
+- **La orden** puede entrar en cualquier momento como tabla sincronizada aditiva, de preferencia antes de que 8.23 congele `schema.json` (hecho en v1.40.0: desde la revisión 13 una tabla nueva sigue siendo un cambio aditivo admitido).
 - **Los resultados** cabrían en un paso nuevo, **8.12b**:
   - después de 8.12, porque es el mismo patrón que el membrete (binario por hash, bajado bajo pedido) y comparte la corrección de los BLOB;
   - antes de 8.13, para que el kit de conformidad grabe estos intercambios;

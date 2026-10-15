@@ -133,12 +133,66 @@ public partial class PatientsHomeViewModel : ObservableObject
         try
         {
             var list = await _inventoryService.GetAppointmentsByDayAsync(DateTime.Today);
-            TodayAppointments = new ObservableCollection<PatientAppointment>(
-                list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)));
+            var today = list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)).ToList();
+            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda
+            AgendaPanelViewModel.MarkOverlaps(today);
+            TodayAppointments = new ObservableCollection<PatientAppointment>(today);
         }
         catch (Exception ex)
         {
             AppLogger.Error("No se pudieron cargar las citas de hoy", ex);
         }
+    }
+
+    // ================================================================== posibles duplicados (paso 8.23)
+
+    /// <summary>Los pares que bajaron de otro equipo y todavía no se cierran con "Entendido", el más reciente primero.</summary>
+    private readonly List<DuplicatePatientPair> _duplicatePairs = new();
+
+    /// <summary>Cuántos pares se muestran en el banner; los demás se cuentan.</summary>
+    public const int MaxDuplicatePairsShown = 3;
+
+    [ObservableProperty]
+    private string _duplicatePatientsNoticeText = string.Empty;
+
+    public bool HasDuplicatePatientsNotice => DuplicatePatientsNoticeText.Length > 0;
+
+    partial void OnDuplicatePatientsNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasDuplicatePatientsNotice));
+
+    /// <summary>Los pares de la última revisión, para las pruebas y para quien quiera abrirlos.</summary>
+    public IReadOnlyList<DuplicatePatientPair> DuplicatePairs => _duplicatePairs;
+
+    /// <summary>
+    /// Después de bajar: suma al banner los pares de posibles duplicados que llegaron de otro equipo (uno que ya está no se
+    /// repite; si vuelve a llegar, sube al principio).
+    /// </summary>
+    public void AddDuplicatePairs(IEnumerable<DuplicatePatientPair> pairs)
+    {
+        foreach (var pair in pairs)
+        {
+            _duplicatePairs.RemoveAll(p => p.Key == pair.Key);
+            _duplicatePairs.Insert(0, pair);
+        }
+        RefreshDuplicatePatientsNotice();
+    }
+
+    /// <summary>"Entendido": el banner se cierra; un par que vuelva a llegar (otro equipo lo edita) vuelve a avisar.</summary>
+    [RelayCommand]
+    public void DismissDuplicatePatientsNotice()
+    {
+        _duplicatePairs.Clear();
+        RefreshDuplicatePatientsNotice();
+    }
+
+    private void RefreshDuplicatePatientsNotice()
+    {
+        int count = _duplicatePairs.Count;
+        DuplicatePatientsNoticeText = count == 0
+            ? string.Empty
+            : (count == 1 ? "Posible expediente duplicado" : "Posibles expedientes duplicados") + " con lo que llegó de otro equipo: " +
+              string.Join("; ", _duplicatePairs.Take(MaxDuplicatePairsShown).Select(p => p.Text)) +
+              (count > MaxDuplicatePairsShown ? $" y {count - MaxDuplicatePairsShown} más" : string.Empty) +
+              ". Revise las dos fichas: si son la misma persona, siga con una. TPVC no los une solo.";
+        OnPropertyChanged(nameof(DuplicatePairs));
     }
 }

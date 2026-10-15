@@ -545,6 +545,14 @@ public class PatientRecord : ISyncEntity
     public string NextAppointmentNotes { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Paso 8.23: el SyncId del expediente con que se unió este (la herramienta de unir duplicados es el opcional 8.A; hasta
+    /// entonces nadie la escribe). No es una referencia: el SyncId tal cual, sin llave foránea. Viaja y se combina por campo
+    /// como cualquier otro campo (8.22). null = no se unió a otro; uno con valor no cuenta para los avisos de duplicados.
+    /// </summary>
+    public Guid? MergedIntoSyncId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     /// <summary>

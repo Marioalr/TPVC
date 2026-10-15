@@ -772,6 +772,10 @@ public partial class PatientFormViewModel : ObservableObject
         var baseline = FormPatientId > 0 && ReferenceEquals(patient, _formPatient) ? _formBaseline : patient.StoredSnapshot;
         ApplyFormTo(patient, assignOnSave ? string.Empty : normalizedFolio, FormFullName.Trim(), parsedAge);
 
+        // Paso 8.23 (H3): al crear, un expediente parecido (el mismo nombre y la misma fecha de nacimiento o el mismo teléfono)
+        // pide confirmar. Si no se confirma, el formulario sigue abierto con lo capturado
+        if (FormPatientId == 0 && !await ConfirmNotDuplicateAsync(patient)) return;
+
         if (_inventoryService != null)
         {
             try
@@ -805,5 +809,45 @@ public partial class PatientFormViewModel : ObservableObject
             ? $"Expediente de {patient.FullName} guardado con el folio {patient.RecordNumber}"
             : $"Expediente de {patient.FullName} guardado");
         _suggestedRecordNumber = null;
+    }
+
+    /// <summary>Paso 8.23: true si no hay un expediente parecido o si el médico confirma crear el nuevo de todos modos.</summary>
+    private async Task<bool> ConfirmNotDuplicateAsync(PatientRecord patient)
+    {
+        List<(PatientRecord Patient, DuplicatePatientRules.Match Match)> similar;
+        if (_inventoryService != null)
+        {
+            try
+            {
+                similar = await _inventoryService.FindDuplicatePatientsAsync(patient);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo revisar si el paciente ya tiene expediente", ex);
+                return true;
+            }
+        }
+        else
+        {
+            var rule = DuplicatePatientRules.Of(patient);
+            similar = _session.Patients
+                .Where(p => !ReferenceEquals(p, patient))
+                .Select(p => (Patient: p, Match: DuplicatePatientRules.Compare(rule, DuplicatePatientRules.Of(p))))
+                .Where(x => x.Match != DuplicatePatientRules.Match.None)
+                .ToList();
+        }
+        return similar.Count == 0 || await _dialogs.ConfirmAsync(DuplicateQuestion(similar), "Posible paciente duplicado");
+    }
+
+    /// <summary>"Ya hay un expediente parecido: • Juan Pérez · EXP-2026-004 · misma fecha de nacimiento ¿Crear…?"</summary>
+    public static string DuplicateQuestion(IReadOnlyList<(PatientRecord Patient, DuplicatePatientRules.Match Match)> similar)
+    {
+        var lines = similar.Take(5).Select(x =>
+            "• " + string.Join(" · ", new[] { x.Patient.FullName, x.Patient.RecordNumber, DuplicatePatientRules.Describe(x.Match) }
+                .Where(t => !string.IsNullOrWhiteSpace(t))));
+        return (similar.Count == 1 ? "Ya hay un expediente parecido:" : "Ya hay expedientes parecidos:") + "\n\n" +
+               string.Join("\n", lines) +
+               (similar.Count > 5 ? $"\n• y {similar.Count - 5} más" : string.Empty) +
+               "\n\nSi es el mismo paciente, conteste No y búsquelo en Pacientes. ¿Crear el expediente nuevo de todos modos?";
     }
 }
