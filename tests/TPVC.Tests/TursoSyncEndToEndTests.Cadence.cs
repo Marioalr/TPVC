@@ -43,37 +43,46 @@ public partial class TursoSyncEndToEndTests
 
     /// <summary>
     /// Mueve el reloj de pasada en pasada hasta <paramref name="until"/> (sin incluirlo), con varias cadencias y sucesos a
-    /// cierta hora (guardar, abrir o cerrar un equipo). <paramref name="stop"/> termina antes.
+    /// cierta hora (guardar, abrir o cerrar un equipo). Las horas que recibe son de pared y se pasan al reloj monótono al
+    /// recibirlas (como la vuelta en segundo plano, que espera con el reloj monótono). <paramref name="stop"/> termina antes.
+    /// Por omisión espera cada sincronización que empieza la cadencia antes de seguir (<see cref="AwaitSyncs"/>).
     /// </summary>
     private sealed class CadenceDriver(ManualTimeProvider clock)
     {
-        private readonly Dictionary<SyncScheduler, DateTime> _active = new();
-        private readonly List<(DateTime At, int Order, Func<Task> Run)> _events = new();
+        private readonly Dictionary<SyncScheduler, TimeSpan> _active = new();
+        private readonly List<(TimeSpan At, int Order, Func<Task> Run)> _events = new();
         private int _order;
 
         public DateTime Now => clock.Now.UtcDateTime;
 
+        /// <summary>false: la sincronización que empieza una pasada sigue sola mientras las demás pasadas corren.</summary>
+        public bool AwaitSyncs { get; set; } = true;
+
+        private TimeSpan ToMono(DateTime wall) => clock.Elapsed + (wall - Now);
+
         public void Open(SyncScheduler scheduler)
         {
             scheduler.Begin();
-            _active[scheduler] = Now;
+            _active[scheduler] = clock.Elapsed;
         }
 
         public void Close(SyncScheduler scheduler) => _active.Remove(scheduler);
 
         /// <summary>Lo que hace <see cref="SyncScheduler.Wake"/> con la vuelta en segundo plano: una pasada ya.</summary>
-        public void Wake(SyncScheduler scheduler) => _active[scheduler] = Now;
+        public void Wake(SyncScheduler scheduler) => _active[scheduler] = clock.Elapsed;
 
-        public void At(DateTime at, Func<Task> run) => _events.Add((at, _order++, run));
+        public void At(DateTime at, Func<Task> run) => _events.Add((ToMono(at), _order++, run));
 
         /// <summary>Una pasada o un suceso, lo que toque primero antes de <paramref name="until"/>; false si no hay nada.</summary>
-        public async Task<bool> StepAsync(DateTime until)
+        public Task<bool> StepAsync(DateTime until) => StepMonoAsync(ToMono(until));
+
+        private async Task<bool> StepMonoAsync(TimeSpan until)
         {
-            var nextEvent = _events.Count == 0 ? DateTime.MaxValue : _events.Min(e => e.At);
-            var nextTick = _active.Count == 0 ? DateTime.MaxValue : _active.Values.Min();
+            var nextEvent = _events.Count == 0 ? TimeSpan.MaxValue : _events.Min(e => e.At);
+            var nextTick = _active.Count == 0 ? TimeSpan.MaxValue : _active.Values.Min();
             var next = nextEvent <= nextTick ? nextEvent : nextTick;
             if (next >= until) return false;
-            if (next > Now) clock.Now = new DateTimeOffset(DateTime.SpecifyKind(next, DateTimeKind.Utc));
+            if (next > clock.Elapsed) clock.Advance(next - clock.Elapsed);
 
             if (nextEvent <= nextTick)
             {
@@ -84,19 +93,22 @@ public partial class TursoSyncEndToEndTests
             }
 
             var scheduler = _active.First(kv => kv.Value == nextTick).Key;
-            var wake = await scheduler.TickAsync();
+            var wait = await scheduler.TickAsync();
+            if (AwaitSyncs) await scheduler.PendingSync;
             // Como la vuelta en segundo plano: nunca vuelve antes de 1 s
-            if (_active.ContainsKey(scheduler)) _active[scheduler] = wake > Now ? wake : Now.AddSeconds(1);
+            if (_active.ContainsKey(scheduler))
+                _active[scheduler] = clock.Elapsed + (wait > TimeSpan.Zero ? wait : TimeSpan.FromSeconds(1));
             return true;
         }
 
         public async Task RunUntilAsync(DateTime until, Func<bool>? stop = null)
         {
+            var end = ToMono(until);
             while (stop == null || !stop())
             {
-                if (!await StepAsync(until))
+                if (!await StepMonoAsync(end))
                 {
-                    if (until > Now) clock.Now = new DateTimeOffset(DateTime.SpecifyKind(until, DateTimeKind.Utc));
+                    if (end > clock.Elapsed) clock.Advance(end - clock.Elapsed);
                     return;
                 }
             }
@@ -255,7 +267,8 @@ public partial class TursoSyncEndToEndTests
     {
         var clock = SimulatedClock();
         var (pc, _) = await PcAndTabletOnClockAsync(clock);
-        var cadence = CadenceOf(pc, inPatients: true);
+        // Fuera de Pacientes: la revisión sin red se espacia como los reintentos (en Pacientes con un compañero, no pasa de 30 s)
+        var cadence = CadenceOf(pc, inPatients: false);
         var failures = new List<DateTime>();
         pc.Sync.SyncCompleted += r => { if (!r.Success) failures.Add(clock.Now.UtcDateTime); };
         var checks = new List<DateTime>();
@@ -295,13 +308,13 @@ public partial class TursoSyncEndToEndTests
         if (why == SyncScheduler.ReasonNetworkBack) CollectionAssert.Contains(checks, syncedAt, "En la pasada de la revisión que respondió");
         else Assert.AreEqual(SyncScheduler.ReasonRetry, why);
         Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status);
-        Assert.IsNull(cadence.RetryAtUtc);
+        Assert.IsFalse(cadence.IsRetryPending);
 
         // Otra vez sin red, y una revisión que falla; al volver, la primera revisión que responde sincroniza sin esperar
         _server.IsOffline = true;
         Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
         await driver.RunUntilAsync(driver.Now.AddSeconds(25));
-        Assert.IsNotNull(cadence.RetryAtUtc);
+        Assert.IsTrue(cadence.IsRetryPending);
         _server.IsOffline = false;
         reasons.Clear();
         checks.Clear();

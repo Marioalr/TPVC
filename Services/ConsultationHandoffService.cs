@@ -305,6 +305,7 @@ public sealed class ConsultationHandoffService
         _sync.AddExternalUsage(rowsRead: 2 + results[3].Count + results[4].Count, rowsWritten: 1);
         // Paso 8.24: la lista recién leída también sirve a la cadencia (un equipo recién vinculado acelera la revisión)
         Scheduler.OnPeersRefreshed(devices.Count(d => d.IsAvailable));
+        Scheduler.OnCloudReachable();
         return devices;
     }
 
@@ -502,6 +503,7 @@ public sealed class ConsultationHandoffService
                 marker.PatientSyncId, marker.PatientName, marker.Folio, payloadJson, ProtocolVersion
             }, ct);
         _sync.AddExternalUsage(0, 1);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
     }
 
     /// <summary>
@@ -526,6 +528,7 @@ public sealed class ConsultationHandoffService
             ("SELECT State FROM ConsultationHandoffs WHERE Id = ?", new object?[] { marker.Id })
         }, ct);
         _sync.AddExternalUsage(1, 1);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
 
         return results[1].FirstOrDefault()?["State"]?.ToString() == StateAccepted
             ? HandoffResolution.Accepted
@@ -538,6 +541,7 @@ public sealed class ConsultationHandoffService
         using var client = CreateClient();
         await client.ExecuteAsync($"UPDATE ConsultationHandoffs SET SenderAckAtUtc = {ServerNow} WHERE Id = ?", new object?[] { handoffId }, ct);
         _sync.AddExternalUsage(0, 1);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
     }
 
     // ================================================================== quien recibe
@@ -551,6 +555,7 @@ public sealed class ConsultationHandoffService
             $"WHERE Id = ? AND ToDeviceId = ? AND State = '{StateSent}'",
             new object?[] { acceptToken, handoffId, DeviceId }, ct);
         _sync.AddExternalUsage(1, affected);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
         return affected == 1;
     }
 
@@ -560,6 +565,7 @@ public sealed class ConsultationHandoffService
         using var client = CreateClient();
         var rows = await client.QueryAsync("SELECT State, AcceptToken FROM ConsultationHandoffs WHERE Id = ?", new object?[] { handoffId }, ct);
         _sync.AddExternalUsage(1, 0);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
         var row = rows.FirstOrDefault();
         return (row?["State"]?.ToString(), row?.GetValueOrDefault("AcceptToken")?.ToString());
     }
@@ -572,6 +578,7 @@ public sealed class ConsultationHandoffService
             $"UPDATE ConsultationHandoffs SET Payload = '', UpdatedAtUtc = {ServerNow} WHERE Id = ? AND AcceptToken = ? AND State = '{StateAccepted}'",
             new object?[] { handoffId, acceptToken }, ct);
         _sync.AddExternalUsage(0, 1);
+        Scheduler.OnCloudReachable(); // paso 8.24: la nube responde
     }
 
     // ================================================================== errores

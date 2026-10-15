@@ -9,7 +9,9 @@ namespace TPVC.Services;
 /// <summary>
 /// Paso 8.24 (A5): la cadencia de la PC con la nube activa (§3.3 del plan de la Fase 8). Sin WPF y con el reloj de la
 /// sincronización (<see cref="TursoSyncService.Clock"/>), así las pruebas la mueven con tiempo simulado
-/// (<see cref="TickAsync"/>), sin esperas reales.
+/// (<see cref="TickAsync"/>), sin esperas reales. Los plazos se cuentan con el reloj monótono de ese mismo
+/// <see cref="TimeProvider"/> (<c>GetTimestamp</c>): mover la hora de Windows (hacia atrás o adelante) no los cambia. La hora
+/// de pared solo se compara con marcas de la nube (LastPushUtc contra la última bajada).
 /// <list type="bullet">
 /// <item><b>Revisión</b> (<see cref="ConsultationHandoffService.PollAsync"/>), una sola petición: consultas recibidas, el estado
 /// del envío propio, la marca de cambios (el LastPushUtc de los otros equipos), el latido cada 60 s, la lista de
@@ -22,13 +24,16 @@ namespace TPVC.Services;
 /// LastPushUtc, como una PC anterior a v1.27); al activar la ventana si la última sincronización buena fue hace más de
 /// 30 s; al volver de la suspensión o de un corte de red.</item>
 /// <item><b>Sin red</b>, reintentos a los 30 s, 1 min, 2 min y 5 min (y cada 5 min después); la revisión también se espacia
-/// así. Cualquier sincronización que falle por la red (también la de después de guardar o la rápida) entra aquí.</item>
+/// así, salvo en Pacientes con un compañero o un envío pendiente, donde la revisión no pasa de 30 s. Cualquier sincronización
+/// que falle por la red (también la de después de guardar o la rápida) entra aquí, y cualquier cosa que llegue a la nube
+/// (una sincronización buena, enviar o aceptar una consulta) regresa la revisión a su paso enseguida.</item>
 /// <item><b>Pausas.</b> Con la cuota agotada (BLOCKED, reintento cada hora como siempre), el freno de consumo, el token
 /// rechazado u otra nube no se dispara nada; antes de la primera sincronización buena tampoco (la primera descarga la
 /// empieza el arranque o el médico). Con la nube apagada no corre nada.</item>
 /// </list>
 /// Toda sincronización que pide comparte el candado de las demás (<see cref="TursoSyncService.ScheduledSyncAsync"/>): si
-/// hay otra en curso no espera ni se repite.
+/// hay otra en curso no espera ni se repite. La pide sin esperarla: mientras corre (una bajada larga, otra generación, una red
+/// que no contesta), la revisión y el latido siguen a su paso.
 /// </summary>
 public sealed class SyncScheduler
 {
@@ -68,22 +73,26 @@ public sealed class SyncScheduler
     private readonly ConsultationHandoffService _handoff;
     private readonly TursoSettingsService _settings;
     private readonly object _gate = new();
+    private readonly long _origin;
 
-    // Estado, siempre bajo _gate (lo tocan la vuelta, la revisión y el final de cada sincronización)
+    // Estado, siempre bajo _gate (lo tocan la vuelta, la revisión y el final de cada sincronización). Los plazos son
+    // tiempo monótono desde que se creó (Mono), nunca la hora de pared
     private bool _begun;
-    private DateTime _nextCheckAt;
+    private TimeSpan _nextCheckAt;
     private int _checkFailures;
     private int _syncFailures;
-    private DateTime? _retryAt;
-    private DateTime _lastGoodSyncAt;
-    private DateTime _lastAttemptAt;
-    private DateTime _startupGraceUntil;
+    private TimeSpan? _retryAt;
+    private bool _retryIsNetwork;
+    private TimeSpan _lastGoodSyncAt;
+    private TimeSpan _lastAttemptAt;
+    private TimeSpan _startupGraceUntil;
     private string? _requested;
     private IReadOnlyDictionary<string, DateTime> _peerPushes = new Dictionary<string, DateTime>();
     private readonly Dictionary<string, DateTime> _handledPushes = new(StringComparer.OrdinalIgnoreCase);
     private int? _peerCount;
     private bool _pendingSendSeen;
     private long _completedSyncs;
+    private Task? _syncRun;
 
     private volatile bool _inPatients;
     private CancellationTokenSource? _loopCts;
@@ -94,10 +103,12 @@ public sealed class SyncScheduler
         _sync = sync;
         _handoff = handoff;
         _settings = settings;
+        _origin = sync.Clock.GetTimestamp();
         _sync.SyncCompleted += OnSyncCompleted;
     }
 
-    private DateTime Now => _sync.Clock.GetUtcNow().UtcDateTime;
+    /// <summary>Tiempo monótono (no se mueve con la hora de Windows) del mismo reloj que la sincronización.</summary>
+    private TimeSpan Mono => _sync.Clock.GetElapsedTime(_origin);
 
     /// <summary>La revisión de este equipo (la que avisa a esta cadencia lo que encontró).</summary>
     internal ConsultationHandoffService Handoff => _handoff;
@@ -121,7 +132,7 @@ public sealed class SyncScheduler
             bool entering = value && !_inPatients;
             _inPatients = value;
             if (!entering) return;
-            lock (_gate) _nextCheckAt = Now;
+            lock (_gate) _nextCheckAt = Mono;
             Wake();
         }
     }
@@ -150,11 +161,20 @@ public sealed class SyncScheduler
         get { lock (_gate) return NormalCheckInterval(); }
     }
 
-    /// <summary>El siguiente reintento sin red, si hay uno.</summary>
-    public DateTime? RetryAtUtc
+    /// <summary>Hay un reintento sin red esperando.</summary>
+    public bool IsRetryPending
     {
-        get { lock (_gate) return _retryAt; }
+        get { lock (_gate) return _retryAt != null; }
     }
+
+    /// <summary>Cuánto falta para la siguiente revisión (las pruebas lo usan para ver que la hora de Windows no lo mueve).</summary>
+    public TimeSpan TimeToNextCheck
+    {
+        get { lock (_gate) return _nextCheckAt - Mono; }
+    }
+
+    /// <summary>La sincronización que pidió la cadencia y sigue corriendo (o una ya terminada).</summary>
+    internal Task PendingSync => Volatile.Read(ref _syncRun) ?? Task.CompletedTask;
 
     // ================================================================== la vuelta
 
@@ -169,10 +189,10 @@ public sealed class SyncScheduler
         {
             while (!ct.IsCancellationRequested)
             {
-                DateTime next;
+                TimeSpan delay;
                 try
                 {
-                    next = await TickAsync(ct);
+                    delay = await TickAsync(ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -181,10 +201,9 @@ public sealed class SyncScheduler
                 catch (Exception ex)
                 {
                     AppLogger.Error("Falló la cadencia de la sincronización", ex);
-                    next = Now + IdleCheckInterval;
+                    delay = IdleCheckInterval;
                 }
 
-                var delay = next - Now;
                 if (delay < MinimumWait) delay = MinimumWait;
                 var wake = Volatile.Read(ref _wakeCts);
                 try
@@ -218,7 +237,7 @@ public sealed class SyncScheduler
     {
         lock (_gate)
         {
-            var now = Now;
+            var now = Mono;
             _begun = true;
             _nextCheckAt = now;
             _lastGoodSyncAt = now;
@@ -232,28 +251,29 @@ public sealed class SyncScheduler
     }
 
     /// <summary>
-    /// Una pasada: la revisión si ya toca y la sincronización que toque. Regresa cuándo vuelve a tocar algo. La vuelta en
-    /// segundo plano la llama sin parar; las pruebas, adelantando el reloj.
+    /// Una pasada: la revisión si ya toca y, si toca una sincronización, la empieza sin esperarla (sigue en
+    /// <see cref="PendingSync"/>). Regresa cuánto falta para que vuelva a tocar algo. La vuelta en segundo plano la llama sin
+    /// parar; las pruebas, adelantando el reloj.
     /// </summary>
-    public async Task<DateTime> TickAsync(CancellationToken ct = default)
+    public async Task<TimeSpan> TickAsync(CancellationToken ct = default)
     {
         bool checkDue;
         lock (_gate)
         {
             if (!_begun) Begin();
-            checkDue = Now >= _nextCheckAt;
+            checkDue = Mono >= _nextCheckAt;
         }
 
         bool cloudOn = IsCloudOn;
         if (checkDue)
         {
             await RunCheckAsync(cloudOn, ct);
-            lock (_gate) _nextCheckAt = Now + (cloudOn ? CheckDelay() : IdleCheckInterval);
+            lock (_gate) _nextCheckAt = Mono + (cloudOn ? CheckDelay() : IdleCheckInterval);
         }
 
-        if (cloudOn && TakeDueSync() is { } reason) await RunSyncAsync(reason, ct);
+        if (cloudOn && TakeDueSync() is { } reason) StartSync(reason);
 
-        lock (_gate) return NextWake(cloudOn);
+        lock (_gate) return NextWake(cloudOn) - Mono;
     }
 
     private async Task RunCheckAsync(bool cloudOn, CancellationToken ct)
@@ -273,30 +293,36 @@ public sealed class SyncScheduler
         }
     }
 
-    private TimeSpan NormalCheckInterval()
+    private bool FastMode()
     {
         bool pendingSend = _pendingSendSeen || (HasPendingSend?.Invoke() ?? false);
-        return _inPatients && (_peerCount is not 0 || pendingSend) ? FastCheckInterval : IdleCheckInterval;
+        return _inPatients && (_peerCount is not 0 || pendingSend);
     }
+
+    private TimeSpan NormalCheckInterval() => FastMode() ? FastCheckInterval : IdleCheckInterval;
 
     private TimeSpan CheckDelay()
     {
         var normal = NormalCheckInterval();
         if (_checkFailures == 0) return normal;
         var backoff = RetryDelay(_checkFailures);
+        // Con alguien a quien enviarle o de quien recibir una consulta, la revisión sin red no pasa de 30 s
+        if (FastMode() && backoff > IdleCheckInterval) backoff = IdleCheckInterval;
         return backoff > normal ? backoff : normal;
     }
 
     private static TimeSpan RetryDelay(int failures) => RetryDelays[Math.Clamp(failures - 1, 0, RetryDelays.Count - 1)];
 
+    private bool SyncInFlight => Volatile.Read(ref _syncRun) is { IsCompleted: false };
+
     /// <summary>La sincronización que toca ahora, si alguna (y la quita de pendientes).</summary>
     private string? TakeDueSync()
     {
         // La pausa manda (cuota agotada, freno, token rechazado, otra nube); con una en curso, la siguiente pasada decide
-        if (_sync.IsAutomaticSyncBlocked || _sync.IsSyncRunning) return null;
+        if (_sync.IsAutomaticSyncBlocked || _sync.IsSyncRunning || SyncInFlight) return null;
         lock (_gate)
         {
-            var now = Now;
+            var now = Mono;
             if (_retryAt is { } retryAt) return now >= retryAt ? ReasonRetry : null;
 
             // La primera descarga es larga: la empieza el arranque o el médico, nunca la cadencia
@@ -330,7 +356,8 @@ public sealed class SyncScheduler
         return false;
     }
 
-    private async Task RunSyncAsync(string reason, CancellationToken ct)
+    /// <summary>Empieza la sincronización sin esperarla: la revisión y el latido siguen mientras corre.</summary>
+    private void StartSync(string reason)
     {
         IReadOnlyDictionary<string, DateTime> pushes;
         long before;
@@ -340,40 +367,43 @@ public sealed class SyncScheduler
             before = _completedSyncs;
         }
         SyncRequested?.Invoke(reason);
-        try
+        var run = Task.Run(async () =>
         {
-            await _sync.ScheduledSyncAsync(ct);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Warn($"Turso: la sincronización por {reason} no pudo completarse: {ex.Message}");
-        }
+            try
+            {
+                await _sync.ScheduledSyncAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warn($"Turso: la sincronización por {reason} no pudo completarse: {ex.Message}");
+            }
 
-        // Una sincronización que corrió (buena o no) ya atendió esas marcas de cambios: las mismas no vuelven a disparar otra
-        lock (_gate)
-        {
-            if (_completedSyncs == before) return;
-            foreach (var (deviceId, pushed) in pushes) _handledPushes[deviceId] = pushed;
-        }
+            // Una sincronización que corrió (buena o no) ya atendió esas marcas de cambios: las mismas no vuelven a disparar otra
+            lock (_gate)
+            {
+                if (_completedSyncs != before)
+                    foreach (var (deviceId, pushed) in pushes) _handledPushes[deviceId] = pushed;
+            }
+            // Lo que siga (un reintento, otra marca) se decide en la siguiente pasada
+            Wake();
+        });
+        Volatile.Write(ref _syncRun, run);
     }
 
-    private DateTime NextWake(bool cloudOn)
+    private TimeSpan NextWake(bool cloudOn)
     {
         var next = _nextCheckAt;
-        if (!cloudOn || _sync.IsAutomaticSyncBlocked) return next;
+        // Mientras corre una sincronización (o la pausa manda) solo la revisión: al terminar, la vuelta despierta
+        if (!cloudOn || _sync.IsAutomaticSyncBlocked || SyncInFlight) return next;
         if (_retryAt is { } retryAt) return Earliest(next, retryAt);
         if (_settings.CurrentSettings.LastSyncUtc == null) return next;
         var safety = Latest(_lastGoodSyncAt, _lastAttemptAt) + SafetyDownloadInterval;
-        if (_requested != null) safety = Now;
+        if (_requested != null) safety = Mono;
         return Earliest(next, Latest(safety, _startupGraceUntil));
     }
 
-    private static DateTime Earliest(DateTime a, DateTime b) => a <= b ? a : b;
-    private static DateTime Latest(DateTime a, DateTime b) => a >= b ? a : b;
+    private static TimeSpan Earliest(TimeSpan a, TimeSpan b) => a <= b ? a : b;
+    private static TimeSpan Latest(TimeSpan a, TimeSpan b) => a >= b ? a : b;
 
     // ================================================================== lo que avisan los demás
 
@@ -382,8 +412,9 @@ public sealed class SyncScheduler
     {
         lock (_gate)
         {
-            // Volvió la red después de revisiones fallidas: se sincroniza ya, sin esperar el reintento
-            if (_checkFailures > 0 && (_retryAt != null || _syncFailures > 0))
+            // Volvió la red después de revisiones o sincronizaciones fallidas por la red: se sincroniza ya, sin esperar el
+            // reintento (un error que no es de la red sigue esperando el suyo: no se repite en cada revisión)
+            if ((_checkFailures > 0 && (_retryAt != null || _syncFailures > 0)) || (_retryAt != null && _retryIsNetwork))
             {
                 _retryAt = null;
                 _requested ??= ReasonNetworkBack;
@@ -401,19 +432,41 @@ public sealed class SyncScheduler
         lock (_gate) _checkFailures++;
     }
 
+    /// <summary>
+    /// Algo llegó a la nube fuera de la revisión (enviar, aceptar o recuperar una consulta, la lista de equipos): si la
+    /// revisión estaba espaciada por la red, vuelve a su paso ya.
+    /// </summary>
+    internal void OnCloudReachable()
+    {
+        bool wake;
+        lock (_gate)
+        {
+            wake = _checkFailures > 0;
+            if (!wake) return;
+            _checkFailures = 0;
+            _nextCheckAt = Mono;
+        }
+        Wake();
+    }
+
     /// <summary>La lista de equipos se acaba de leer (al abrir «Enviar a…»).</summary>
     internal void OnPeersRefreshed(int peerCount)
     {
         lock (_gate) _peerCount = peerCount;
     }
 
-    /// <summary>La ventana de TPVC se activó: sincroniza si la última buena fue hace más de 30 s.</summary>
+    /// <summary>
+    /// La ventana de TPVC se activó: revisa enseguida y sincroniza si la última buena fue hace más de 30 s (con un reintento
+    /// por la red esperando, lo adelanta la revisión si responde).
+    /// </summary>
     public void OnWindowActivated()
     {
         lock (_gate)
         {
-            if (!_begun || Now - _lastGoodSyncAt <= ActivationSyncAge) return;
-            _requested ??= ReasonActivated;
+            if (!_begun) return;
+            var now = Mono;
+            _nextCheckAt = now;
+            if (now - _lastGoodSyncAt > ActivationSyncAge) _requested ??= ReasonActivated;
         }
         Wake();
     }
@@ -427,7 +480,7 @@ public sealed class SyncScheduler
             _checkFailures = 0;
             _retryAt = null;
             _requested = resumed ? ReasonResumed : ReasonNetworkBack;
-            _nextCheckAt = Now;
+            _nextCheckAt = Mono;
         }
         Wake();
     }
@@ -435,22 +488,31 @@ public sealed class SyncScheduler
     /// <summary>Al terminar cualquier sincronización (también la de después de guardar, la rápida o la del médico).</summary>
     private void OnSyncCompleted(TursoSyncResult result)
     {
+        bool wake = false;
         lock (_gate)
         {
             _completedSyncs++;
-            var now = Now;
+            var now = Mono;
             _lastAttemptAt = now;
             if (result.Success)
             {
                 _lastGoodSyncAt = now;
                 _syncFailures = 0;
                 _retryAt = null;
+                // La nube responde: si la revisión estaba espaciada por la red, vuelve a su paso ya
+                if (_checkFailures > 0)
+                {
+                    _checkFailures = 0;
+                    _nextCheckAt = now;
+                    wake = true;
+                }
             }
             else if (_sync.Status is TursoSyncStatus.Offline or TursoSyncStatus.Error)
             {
                 // Sin red (o un error de la nube): reintentos crecientes
                 _syncFailures++;
                 _retryAt = now + RetryDelay(_syncFailures);
+                _retryIsNetwork = _sync.Status == TursoSyncStatus.Offline;
             }
             else
             {
@@ -459,5 +521,6 @@ public sealed class SyncScheduler
                 _retryAt = null;
             }
         }
+        if (wake) Wake();
     }
 }
