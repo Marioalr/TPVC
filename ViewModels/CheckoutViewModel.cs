@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels;
 
@@ -39,8 +40,9 @@ public partial class CartItem : ObservableObject
     /// <summary>La cantidad escrita a mano se ajusta a lo posible: mínimo 1 y, en productos, lo que hay.</summary>
     partial void OnQuantityChanged(int value)
     {
-        if (value < 1) Quantity = 1;
-        else if (!IsService && AvailableStock > 0 && value > AvailableStock) Quantity = AvailableStock;
+        // Paso 8.26: CheckoutRules.ClampQuantity
+        var allowed = TPVC.Services.Rules.CheckoutRules.ClampQuantity(value, IsService, AvailableStock);
+        if (allowed != value) Quantity = allowed;
     }
 }
 
@@ -114,20 +116,19 @@ public partial class CheckoutViewModel : ObservableObject
     public int TotalItems => Cart.Sum(c => c.Quantity);
     public decimal TotalAmount => Cart.Sum(c => c.Subtotal);
     public bool HasItems => Cart.Count > 0;
-    public bool IsCash => SelectedPaymentMethod == Cash;
+    // Paso 8.26: las cuentas viven en CheckoutRules (vectores checkout.json)
+    public bool IsCash => CheckoutRules.IsCash(SelectedPaymentMethod);
 
-    public decimal ChangeDue => Math.Max(0m, CashReceived - TotalAmount);
-    public bool HasChange => IsCash && CashReceived >= TotalAmount && TotalAmount > 0;
+    public decimal ChangeDue => CheckoutRules.ChangeDue(CashReceived, TotalAmount);
+    public bool HasChange => CheckoutRules.HasChange(IsCash, CashReceived, TotalAmount);
 
     /// <summary>Lo que falta cuando se escribió un efectivo menor al total (vacío = paga exacto).</summary>
-    public decimal MissingAmount => IsCash && CashReceived > 0 && CashReceived < TotalAmount ? TotalAmount - CashReceived : 0m;
+    public decimal MissingAmount => CheckoutRules.MissingAmount(IsCash, CashReceived, TotalAmount);
     public bool IsCashShort => MissingAmount > 0;
 
-    public bool CanCharge => (HasItems || EmptyChargeText != null) && !IsCashShort;
+    public bool CanCharge => CheckoutRules.CanCharge(HasItems, EmptyChargeText != null, MissingAmount);
 
-    public string ChargeText => HasItems || EmptyChargeText == null
-        ? $"Cobrar {TotalAmount.ToString("C2", Mexican)}{ChargeSuffix}"
-        : EmptyChargeText;
+    public string ChargeText => CheckoutRules.ChargeText(HasItems, TotalAmount, ChargeSuffix, EmptyChargeText);
 
     private string _cashReceivedText = string.Empty;
     private bool _typingCashReceived;
@@ -151,32 +152,16 @@ public partial class CheckoutViewModel : ObservableObject
     /// <summary>Billetes probables por encima del total para escribir el recibido de un clic.</summary>
     public IReadOnlyList<decimal> QuickCashAmounts => SuggestCashAmounts(TotalAmount);
 
-    public static IReadOnlyList<decimal> SuggestCashAmounts(decimal total)
-    {
-        if (total <= 0) return Array.Empty<decimal>();
-        return new[] { 50m, 100m, 200m, 500m, 1000m }
-            .Select(step => Math.Ceiling(total / step) * step)
-            .Where(amount => amount > total)
-            .Distinct()
-            .OrderBy(amount => amount)
-            .Take(3)
-            .ToList();
-    }
+    public static IReadOnlyList<decimal> SuggestCashAmounts(decimal total) => CheckoutRules.SuggestCashAmounts(total);
 
-    public static decimal ParseAmount(string? text)
-    {
-        var clean = new string((text ?? string.Empty).Where(c => char.IsDigit(c) || c == '.').ToArray());
-        return decimal.TryParse(clean, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0
-            ? Math.Round(amount, 2)
-            : 0m;
-    }
+    public static decimal ParseAmount(string? text) => CheckoutRules.ParseAmount(text);
 
     partial void OnSelectedPaymentMethodChanged(string value) => NotifyAmounts();
     partial void OnCashReceivedChanged(decimal value)
     {
         if (!_typingCashReceived)
         {
-            _cashReceivedText = value == 0 ? string.Empty : value.ToString("0.##", CultureInfo.InvariantCulture);
+            _cashReceivedText = CheckoutRules.AmountText(value);
             OnPropertyChanged(nameof(CashReceivedText));
         }
         NotifyAmounts();
@@ -406,7 +391,7 @@ public partial class CheckoutViewModel : ObservableObject
 
             if (IsCashShort)
             {
-                Notify?.Invoke($"Faltan {MissingAmount.ToString("C2", Mexican)} en el efectivo recibido.", false);
+                Notify?.Invoke(CheckoutRules.MissingText(MissingAmount), false);
                 return;
             }
 
@@ -429,7 +414,7 @@ public partial class CheckoutViewModel : ObservableObject
             var sale = await _inventoryService.RegisterSaleAsync(lines, patient, SelectedPaymentMethod, cashier);
 
             var total = TotalAmount;
-            var received = IsCash ? (CashReceived > 0 ? CashReceived : total) : (decimal?)null;
+            var (received, change) = CheckoutRules.ReceiptCash(IsCash, CashReceived, total);
             var receipt = new SaleReceipt
             {
                 Folio = sale?.Folio ?? $"TKT-{DateTime.Now:yyyyMMdd-HHmmss}",
@@ -438,7 +423,7 @@ public partial class CheckoutViewModel : ObservableObject
                 PaymentMethod = SelectedPaymentMethod,
                 Cashier = cashier,
                 CashReceived = received,
-                Change = received.HasValue ? Math.Max(0m, received.Value - total) : null,
+                Change = change,
                 Items = Cart.Select(c => new SaleReceiptItem
                 {
                     Name = c.Name,

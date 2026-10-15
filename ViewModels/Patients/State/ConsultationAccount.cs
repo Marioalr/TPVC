@@ -43,18 +43,12 @@ public partial class ConsultationAccount : ObservableObject
     public int? FeeServiceOverrideId { get; set; }
 
     /// <summary>Servicio de "consulta" del catálogo que se cobra como honorario al terminar.</summary>
-    public ClinicalService? ConsultationFeeService =>
-        // Consulta recibida de otro equipo: el honorario que ya usaba aquel
-        (FeeServiceOverrideId is int feeId ? _catalog.Services.FirstOrDefault(s => s.IsActive && s.Id == feeId) : null)
-        ?? _catalog.Services.FirstOrDefault(s => s.IsActive && s.Code.Equals("SERV-001", StringComparison.OrdinalIgnoreCase))
-        ?? _catalog.Services.FirstOrDefault(s => s.IsActive && s.Category.Equals("Consulta", StringComparison.OrdinalIgnoreCase))
-        ?? _catalog.Services.FirstOrDefault(s => s.IsActive && s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
+    /// <remarks>Consulta recibida de otro equipo: el honorario que ya usaba aquel (paso 8.26: <see cref="ConsultationAccountRules.FeeService"/>).</remarks>
+    public ClinicalService? ConsultationFeeService => ConsultationAccountRules.FeeService(_catalog.Services, FeeServiceOverrideId);
 
-    public string ConsultationFeeName => ConsultationFeeService?.Name ?? "Consulta Médica General";
+    public string ConsultationFeeName => ConsultationAccountRules.FeeName(ConsultationFeeService);
 
-    public decimal ConsultationFeeAmount => ConsultationFeeService?.Price ?? DefaultConsultationFee;
-
-    private const decimal DefaultConsultationFee = 300.00m;
+    public decimal ConsultationFeeAmount => ConsultationAccountRules.FeeAmount(ConsultationFeeService);
 
     /// <summary>Honorario + todo lo cargado durante la consulta (lo que se cobrará al terminar).</summary>
     public decimal ConsultationAccountTotal => ConsultationFeeAmount + _active.ActiveConsultationTotalAmount;
@@ -86,7 +80,7 @@ public partial class ConsultationAccount : ObservableObject
     {
         if (_consultationService?.CurrentConsultation == null || quantity <= 0 || price <= 0) return false;
         _consultationService.AddCartItemToActiveConsultation(
-            lineId ?? FreeChargeId(name), string.IsNullOrWhiteSpace(code) ? "CARGO" : code, name, category, null, unit, price, quantity);
+            lineId ?? FreeChargeId(name), ConsultationAccountRules.FreeChargeCode(code), name, category, null, unit, price, quantity);
         _workflow.SyncActiveConsultation();
         return true;
     }
@@ -95,11 +89,7 @@ public partial class ConsultationAccount : ObservableObject
     private void Uncharge(int productId, int quantity)
     {
         var consultation = _consultationService?.CurrentConsultation;
-        var item = consultation?.Items.FirstOrDefault(i => i.ProductId == productId);
-        if (consultation == null || item == null || quantity <= 0) return;
-
-        if (item.Quantity > quantity) item.Quantity -= quantity;
-        else consultation.Items.Remove(item);
+        if (consultation == null || !ConsultationAccountRules.RemoveLine(consultation.Items, productId, quantity)) return;
 
         consultation.NotifyItemsChanged();
         _workflow.SyncActiveConsultation();
@@ -114,9 +104,8 @@ public partial class ConsultationAccount : ObservableObject
         var product = knownProduct != null && CatalogStore.ProductMatchesName(knownProduct, item.MedicineName)
             ? knownProduct
             : _catalog.FindCatalogProduct(item.MedicineName);
-        var qty = Math.Max(1, item.RecommendedQuantity);
-        if (product == null || product.CurrentStock < qty) return false;
-        return ChargeProduct(product, qty, item.MedicineName);
+        if (ConsultationAccountRules.PrescriptionChargeQuantity(item, product) is not int qty) return false;
+        return ChargeProduct(product!, qty, item.MedicineName);
     }
 
     public void UnchargePrescription(PatientPrescriptionItem item)
@@ -189,8 +178,8 @@ public partial class ConsultationAccount : ObservableObject
         if (!_active.HasActiveConsultation) _workflow.StartActiveConsultation();
         if (_consultationService?.CurrentConsultation == null) return false;
         return _consultationService.AddCartItemToActiveConsultation(
-            -service.Id, service.Code, service.Name, $"Servicio Clínico • {service.Category}",
-            $"Duración: {service.EstimatedDurationMinutes} min", "Servicio", service.Price, units);
+            ConsultationAccountRules.ServiceLineId(service), service.Code, service.Name, ConsultationAccountRules.ServiceLineGeneric(service.Category),
+            ConsultationAccountRules.ServiceLinePresentation(service.EstimatedDurationMinutes), "Servicio", service.Price, units);
     }
 
     /// <summary>
