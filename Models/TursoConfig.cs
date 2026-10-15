@@ -328,6 +328,9 @@ public class TursoSyncResult
 
     /// <summary>El reporte de la «Sincronización completa» (null en las demás).</summary>
     public TursoFullSyncReport? FullSyncReport { get; set; }
+
+    /// <summary>Paso 8.23: citas empalmadas y posibles expedientes duplicados con lo que llegó de otro equipo.</summary>
+    public TPVC.Services.SyncArrivals Arrivals { get; set; } = TPVC.Services.SyncArrivals.None;
 }
 
 /// <summary>Filas de una tabla aquí y en la nube.</summary>

@@ -154,11 +154,32 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
     // ================================================================== citas (suscripción del coordinador)
 
     private Action? _onAppointmentsChangedHandler;
+    private Action? _onSyncNoticesChangedHandler;
 
     private void InitializePacientes()
     {
         if (_inventoryService != null)
         {
+            // Paso 8.23: lo que llegó de otro equipo y choca con lo de aquí (citas empalmadas y posibles duplicados): los avisos
+            // del inicio de Pacientes, que se quedan hasta que el médico los descarta
+            _onSyncNoticesChangedHandler = () =>
+            {
+                try
+                {
+                    if (_ui.IsOffUiThread)
+                    {
+                        _ui.InvokeAsync(async () => await Home.LoadSyncNoticesAsync());
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Sin WPF (pruebas en Linux)
+                }
+                _ = Home.LoadSyncNoticesAsync();
+            };
+            _inventoryService.OnSyncNoticesChanged += _onSyncNoticesChangedHandler;
+
             _onAppointmentsChangedHandler = () =>
             {
                 try
@@ -185,7 +206,19 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         {
             _inventoryService.OnAppointmentsChanged -= _onAppointmentsChangedHandler;
         }
+        if (_inventoryService != null && _onSyncNoticesChangedHandler != null)
+        {
+            _inventoryService.OnSyncNoticesChanged -= _onSyncNoticesChangedHandler;
+        }
     }
+
+    /// <summary>
+    /// Paso 8.23: «Ver en la agenda» del aviso de citas empalmadas: abre la agenda en el día del primer empalme (el aviso se
+    /// queda hasta «Entendido»).
+    /// </summary>
+    [RelayCommand]
+    public Task ShowOverlapsInAgendaAsync() =>
+        Agenda.OpenAgendaOnDateAsync(Home.OverlapPairs.FirstOrDefault()?.First.Date ?? ClinicClock.Today);
 
     // ================================================================== páginas
 

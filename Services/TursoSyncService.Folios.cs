@@ -84,6 +84,14 @@ public partial class TursoSyncService : IFolioSource
         // Cuota agotada, freno de consumo o token rechazado: no se pregunta
         if (PauseReason != Models.TursoSyncPauseReason.None) return null;
 
+        // Paso 8.23: la sincronización rápida de este cobro no terminó en 3 s y sigue esperando a la nube: la red no responde,
+        // y el folio no espera otros 2 s
+        if (IsQuickSyncHanging)
+        {
+            AppLogger.Warn($"Turso: la nube no responde (la sincronización rápida sigue esperando); el folio de {series} sale con la letra del equipo.");
+            return null;
+        }
+
         var settings = _settingsService.CurrentSettings;
         using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
         wait.CancelAfter(FolioWait);

@@ -249,7 +249,9 @@ internal sealed class UiSmokeSession
         {
             (seeded[0], DateTime.Today, "23:00", "Control de presión"),
             (seeded[1], DateTime.Today, "23:30", "Resultados de laboratorio"),
-            (seeded[2], DateTime.Today.AddDays(1), "10:00", "Consulta de seguimiento")
+            (seeded[2], DateTime.Today.AddDays(1), "10:00", "Consulta de seguimiento"),
+            // Paso 8.23: se empalma con la de las 10:00 (la marca "Empalme" de la agenda)
+            (seeded[3], DateTime.Today.AddDays(1), "10:15", "Primera vez")
         })
         {
             WaitFor(inventory.SaveAppointmentAsync(new PatientAppointment
@@ -362,6 +364,19 @@ internal sealed class UiSmokeSession
             Capture(host, $"04-pacientes-busqueda-{suffix}");
             records.Home.HomeSearchText = string.Empty;
 
+            // Paso 8.23: lo que llegó de otro equipo (un empalme de mañana y un posible duplicado): los avisos que se quedan
+            // hasta «Entendido». Después se descartan y se olvida lo descartado, así el siguiente tema los vuelve a mostrar
+            var twin = WaitFor(SmokeTwinAsync(inventory, records.Patients.ToList()));
+            WaitFor(inventory.AddSyncNoticesAsync(WaitFor(SmokeArrivalsAsync(inventory, twin))));
+            WaitFor(records.Home.LoadSyncNoticesAsync());
+            Show(host, main, "Records", $"04b-pacientes-avisos-otro-equipo-{suffix}");
+            if (!records.Home.HasDuplicatePatientsNotice || !records.Home.HasOverlapNotice)
+                _failures.Add($"[04b-{suffix}] No aparecen los avisos de empalme y de posible duplicado");
+            WaitFor(records.Home.DismissOverlapNoticeAsync());
+            WaitFor(records.Home.DismissDuplicatePatientsNoticeAsync());
+            using (var noticesDb = factory.CreateDbContext()) DbMeta.Remove(noticesDb, SyncNotices.MetaKey);
+            WaitFor(inventory.DeletePatientAsync(twin.Id));
+
             records.OpenPatientChart(records.Patients.FirstOrDefault(p => p.Consultations.Count > 0) ?? records.Patients.First());
             Capture(host, $"05-ficha-{suffix}");
 
@@ -426,6 +441,10 @@ internal sealed class UiSmokeSession
             WaitFor(records.Agenda.ScheduleForSelectedPatientAsync());
             WaitFor(records.Agenda.OpenAgendaSlotAsync(records.Agenda.AgendaSlots.First(s => s.IsFree)));
             Capture(host, $"07-agenda-{suffix}");
+            // Paso 8.23: las dos citas de mañana a las 10:00 y 10:15 llevan la marca "Empalme"
+            records.Agenda.CloseAgendaForm();
+            Capture(host, $"07b-agenda-empalme-{suffix}");
+            if (records.Agenda.AgendaSlots.Count(s => s.IsOverlapping) != 2) _failures.Add($"[07b-{suffix}] La agenda no marca las dos citas empalmadas");
             records.Agenda.CloseAgendaPanel();
 
             records.ChartPrimaryAction();
@@ -750,10 +769,43 @@ internal sealed class UiSmokeSession
             CaptureDialog(TPVC.Views.ConfirmDialogKind.Error, "TPVC",
                 "No se pudo imprimir la receta médica: la impresora no respondió.",
                 $"26b-error-{suffix}");
+            // Paso 8.23: las preguntas antes de agendar una cita empalmada y al crear un posible duplicado
+            CaptureDialog(TPVC.Views.ConfirmDialogKind.Confirm, "Cita empalmada",
+                TPVC.ViewModels.Patients.AgendaPanelViewModel.OverlapQuestion(new[] { new PatientAppointment { PatientName = "Ana María López", Time = "10:30" } }),
+                $"26c-confirmacion-empalme-{suffix}");
+            CaptureDialog(TPVC.Views.ConfirmDialogKind.Confirm, "Posible paciente duplicado",
+                TPVC.ViewModels.Patients.PatientFormViewModel.DuplicateQuestion(new[]
+                {
+                    (new PatientRecord { FullName = "Juan Pérez Gómez", RecordNumber = "EXP-2026-004" }, TPVC.Services.Rules.DuplicatePatientRules.Match.BirthDate)
+                }),
+                $"26d-confirmacion-duplicado-{suffix}");
         }
 
         // Después de todas las capturas (cambia datos y muestra la ventana): menús y teclado reales
         new UiKeyboardPass(window, main, _failures, _bindingErrors, Path.Combine(_workDir, "consulta.json")).Run();
+    }
+
+    /// <summary>Paso 8.23: el gemelo de un paciente (mismo nombre en mayúsculas y mismo teléfono), como si llegara de la tablet.</summary>
+    private static Task<PatientRecord> SmokeTwinAsync(InventoryService inventory, List<PatientRecord> patients)
+    {
+        var original = patients.First(p => TPVC.Services.Rules.DuplicatePatientRules.PhoneKey(p.Phone) != null);
+        return inventory.SavePatientAsync(new PatientRecord
+        {
+            FullName = original.FullName.ToUpperInvariant(), Phone = original.Phone, Gender = original.Gender, Age = original.Age
+        });
+    }
+
+    /// <summary>Paso 8.23: el empalme de las citas de mañana a las 10:00 y 10:15 y el posible duplicado, como los deja una bajada.</summary>
+    private static async Task<SyncArrivals> SmokeArrivalsAsync(InventoryService inventory, PatientRecord twin)
+    {
+        var tomorrow = (await inventory.GetAppointmentsByDayAsync(DateTime.Today.AddDays(1))).OrderBy(a => a.Time).ToList();
+        var rule = TPVC.Services.Rules.DuplicatePatientRules.Of(twin);
+        var pairs = (await inventory.GetPatientsAsync())
+            .Select(p => (Patient: p, Match: TPVC.Services.Rules.DuplicatePatientRules.Compare(rule, TPVC.Services.Rules.DuplicatePatientRules.Of(p))))
+            .Where(x => x.Match != TPVC.Services.Rules.DuplicatePatientRules.Match.None)
+            .Select(x => new DuplicatePatientPair(x.Patient, twin, x.Match))
+            .ToList();
+        return new SyncArrivals(new[] { new AppointmentOverlap(tomorrow[0], tomorrow[1]) }, pairs);
     }
 
     // ------------------------------------------------------------------ receta impresa (fase 7.4)

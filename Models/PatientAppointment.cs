@@ -38,6 +38,16 @@ public class PatientAppointment : ISyncEntity
     [NotMapped]
     public bool IsCancelled => Status == "Cancelada";
 
+    /// <summary>
+    /// Paso 8.23: "Empalme con Ana López (10:30)" si se empalma con otra cita de la lista que se cargó (la agenda de la
+    /// semana, las citas de hoy); vacío si no. Lo pone <c>AgendaPanelViewModel.MarkOverlaps</c>; no es columna.
+    /// </summary>
+    [NotMapped]
+    public string OverlapText { get; set; } = string.Empty;
+
+    [NotMapped]
+    public bool IsOverlapping => OverlapText.Length > 0;
+
     public override bool Equals(object? obj) => obj is PatientAppointment other && (ReferenceEquals(this, other) || (Id > 0 && Id == other.Id));
     public override int GetHashCode() => Id > 0 ? Id : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
 }

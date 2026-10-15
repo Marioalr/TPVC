@@ -416,6 +416,11 @@ public partial class CheckoutViewModel : ObservableObject
                 return;
             }
 
+            // Paso 8.23 (H11): con la nube activa, una sincronización rápida antes de revisar las existencias (3 s como máximo;
+            // sin red no espera). Sin conexión se cobra igual: el folio sale con la letra del equipo (8.16)
+            await _inventoryService.QuickSyncAsync();
+            if (Cart.Count == 0) return; // se vació mientras tanto
+
             var patient = string.IsNullOrWhiteSpace(PatientName) ? DefaultClient : PatientName.Trim();
             var cashier = _cashierName();
             var lines = Cart.Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name)).ToList();

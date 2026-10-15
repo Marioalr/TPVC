@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -156,6 +157,9 @@ public partial class AgendaPanelViewModel : ObservableObject
         await LoadAgendaPanelAsync();
     }
 
+    /// <summary>Paso 8.23: la agenda en un día (el de un empalme que llegó de otro equipo).</summary>
+    public Task OpenAgendaOnDateAsync(DateTime date) => ShowAgendaPanelAsync(date);
+
     [RelayCommand]
     public async Task ToggleAgendaPanelAsync()
     {
@@ -226,10 +230,30 @@ public partial class AgendaPanelViewModel : ObservableObject
         BuildAgendaSlots();
     }
 
+    /// <summary>
+    /// Arma los huecos del día. Paso 8.23: si había un formulario abierto (una recarga porque bajó algo, también la de la
+    /// sincronización rápida antes de agendar), se vuelve a abrir en el mismo hueco si sigue libre en el mismo día, con lo que
+    /// ya se había escrito. Si lo ocupó lo que bajó, se cierra y el siguiente hueco que se abra conserva paciente, motivo y
+    /// duración. Cambiar de día lo cierra, como siempre.
+    /// </summary>
     private void BuildAgendaSlots()
     {
-        CloseAgendaForm();
+        var open = AgendaSlots.FirstOrDefault(s => s.IsFormOpen);
+        var sameDay = open != null && _formDate == AgendaPanelDate.Date;
+        CloseFormSlots();
         AgendaSlots = new ObservableCollection<AgendaSlot>(BuildSlots(AgendaPanelDate, _agendaWeekAppointments, DateTime.Now));
+        if (open != null && sameDay)
+        {
+            if (AgendaSlots.FirstOrDefault(s => s.IsFree && s.Time == open.Time) is { } again)
+            {
+                again.IsFormOpen = true;
+            }
+            else
+            {
+                _keepFormValues = true;
+                _feedback.ShowWarning($"El hueco de las {open.TimeText} ya no está libre (llegó una cita de otro equipo). Elija otro: se conservan el paciente, el motivo y la duración.");
+            }
+        }
         OnPropertyChanged(nameof(AgendaDaySummary));
     }
 
@@ -241,9 +265,11 @@ public partial class AgendaPanelViewModel : ObservableObject
     {
         var dayAppointments = appointments
             .Where(a => a.Date.Date == date.Date && !a.IsCancelled)
-            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: a.DurationMinutes > 0 ? a.DurationMinutes : 30))
+            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: AppointmentRules.Minutes(a.DurationMinutes)))
             .OrderBy(a => a.Start)
             .ToList();
+        // Paso 8.23: las que se empalman llevan la marca "Empalme"
+        MarkOverlaps(dayAppointments.Select(a => a.Appointment));
 
         var slots = dayAppointments.Select(a => new AgendaSlot(a.Start, a.Appointment)).ToList();
 
@@ -269,12 +295,38 @@ public partial class AgendaPanelViewModel : ObservableObject
             return;
         }
 
-        CloseAgendaForm();
+        CloseFormSlots();
         slot.IsFormOpen = true;
-        AgendaFormPatient = _session.SelectedPatient;
-        AgendaFormReason = string.Empty;
-        AgendaFormDuration = 30;
+        _formDate = AgendaPanelDate.Date;
+        _formRequest++;
+        // Paso 8.23: si el hueco que tenía abierto lo ocupó lo que bajó, lo escrito pasa a este
+        if (_keepFormValues)
+        {
+            _keepFormValues = false;
+        }
+        else
+        {
+            AgendaFormPatient = _session.SelectedPatient;
+            AgendaFormReason = string.Empty;
+            AgendaFormDuration = 30;
+        }
         AgendaFormError = null;
+    }
+
+    // Paso 8.23: cambia cuando el médico abre o cierra el formulario (no cuando la agenda se recarga): un guardado que
+    // esperó a la nube y lo encuentra distinto no guarda nada
+    private int _formRequest;
+
+    // El día del hueco donde está abierto el formulario
+    private DateTime _formDate;
+
+    // El hueco que tenía abierto lo ocupó lo que bajó: el siguiente que se abra conserva paciente, motivo y duración
+    private bool _keepFormValues;
+
+    /// <summary>Cierra los formularios de los huecos sin cambiar lo escrito (las recargas).</summary>
+    private void CloseFormSlots()
+    {
+        foreach (var s in AgendaSlots) s.IsFormOpen = false;
     }
 
     [RelayCommand]
@@ -286,15 +338,36 @@ public partial class AgendaPanelViewModel : ObservableObject
     [RelayCommand]
     public void CloseAgendaForm()
     {
-        foreach (var s in AgendaSlots) s.IsFormOpen = false;
+        // El médico cierra (o cambia a otra cosa): un guardado que esperaba a la nube ya no guarda
+        _formRequest++;
+        _keepFormValues = false;
+        CloseFormSlots();
         AgendaFormError = null;
     }
+
+    // Mientras se revisa la agenda en la nube (hasta 3 s) un segundo clic en "Agendar" no agenda dos veces
+    private bool _savingAppointment;
 
     [RelayCommand]
     public async Task SaveAgendaFormAsync()
     {
+        if (_savingAppointment) return;
+        _savingAppointment = true;
+        try
+        {
+            await SaveAgendaFormCoreAsync();
+        }
+        finally
+        {
+            _savingAppointment = false;
+        }
+    }
+
+    private async Task SaveAgendaFormCoreAsync()
+    {
         var slot = AgendaSlots.FirstOrDefault(s => s.IsFormOpen);
         if (slot == null) return;
+        var request = _formRequest;
 
         var patient = AgendaFormPatient;
         if (patient == null)
@@ -321,6 +394,9 @@ public partial class AgendaPanelViewModel : ObservableObject
             Status = "Programada"
         };
 
+        // Paso 8.23: si mientras tanto el médico cerró el formulario o la agenda (o abrió otro hueco), no se agenda
+        if (!await ConfirmNoOverlapAsync(appointment, () => request == _formRequest)) return;
+
         try
         {
             if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(appointment);
@@ -332,6 +408,9 @@ public partial class AgendaPanelViewModel : ObservableObject
             return;
         }
 
+        // Agendada: el formulario se cierra (la recarga no lo vuelve a abrir sobre la cita nueva)
+        _keepFormValues = false;
+        CloseFormSlots();
         _feedback.ShowSuccess($"Cita agendada: {patient.FullName}, {appointment.Date.ToString("ddd d MMM", Mexican)} a las {appointment.Time}");
         await _workflow.RefreshAgendaAfterChangeAsync(patient.Id);
     }
@@ -355,20 +434,98 @@ public partial class AgendaPanelViewModel : ObservableObject
             CreatedAt = appointment.CreatedAt
         };
 
+        if (_savingAppointment) return;
+        _savingAppointment = true;
         try
         {
-            if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(moved);
-        }
-        catch (Exception ex)
-        {
-            _info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
-            _info.IsInfoModalVisible = true;
-            return;
-        }
+            // Si no se confirma, sigue eligiendo otro horario. Paso 8.23: si mientras se esperaba a la nube el médico canceló
+            // el cambio (o cerró la agenda), no se mueve
+            if (!await ConfirmNoOverlapAsync(moved, () => ReferenceEquals(MovingAppointment, appointment))) return;
+            try
+            {
+                if (_inventoryService != null) await _inventoryService.SaveAppointmentAsync(moved);
+            }
+            catch (Exception ex)
+            {
+                _info.InfoModalMessage = $"No se pudo cambiar la cita: {ex.Message}";
+                _info.IsInfoModalVisible = true;
+                return;
+            }
 
-        MovingAppointment = null;
-        _feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
-        await _workflow.RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
+            MovingAppointment = null;
+            _feedback.ShowSuccess($"Cita de {moved.PatientName} cambiada al {date.ToString("ddd d MMM", Mexican)} a las {time}");
+            await _workflow.RefreshAgendaAfterChangeAsync(moved.PatientRecordId);
+        }
+        finally
+        {
+            _savingAppointment = false;
+        }
+    }
+
+    /// <summary>
+    /// Paso 8.23 (H2): antes de guardar una cita, con la nube activa, la sincronización rápida (3 s como máximo; sin red no
+    /// espera) y luego la revisión con las citas guardadas: si se empalma, "Ya hay una cita a las 10:30 con … ¿Agendar de
+    /// todos modos?". Nunca cambia ni cancela la otra cita.
+    /// </summary>
+    private async Task<bool> ConfirmNoOverlapAsync(PatientAppointment appointment, Func<bool> stillWanted)
+    {
+        List<PatientAppointment> overlapping;
+        if (_inventoryService != null)
+        {
+            await _inventoryService.QuickSyncAsync();
+            // Lo canceló mientras se esperaba: ni siquiera se pregunta
+            if (!stillWanted()) return false;
+            try
+            {
+                overlapping = await _inventoryService.FindOverlappingAppointmentsAsync(appointment);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo revisar si la cita se empalma", ex);
+                return true;
+            }
+        }
+        else
+        {
+            var candidate = AppointmentRules.Of(appointment);
+            overlapping = _agendaWeekAppointments
+                .Where(a => !ReferenceEquals(a, appointment) && (appointment.Id == 0 || a.Id != appointment.Id) && AppointmentRules.Overlaps(candidate, AppointmentRules.Of(a)))
+                .OrderBy(a => AppointmentRules.Start(a.Time))
+                .ToList();
+        }
+        if (overlapping.Count > 0 && !await _dialogs.ConfirmAsync(OverlapQuestion(overlapping), "Cita empalmada")) return false;
+        return stillWanted();
+    }
+
+    /// <summary>"Ya hay una cita a las 10:30 con Ana López. ¿Agendar de todos modos?" (con varias, todas).</summary>
+    public static string OverlapQuestion(IReadOnlyList<PatientAppointment> overlapping)
+    {
+        var parts = overlapping.Select(a => $"a las {AppointmentRules.TimeText(a.Time)} con {a.PatientName}").ToList();
+        var list = parts.Count == 1 ? parts[0] : string.Join(", ", parts.Take(parts.Count - 1)) + " y " + parts[^1];
+        return (overlapping.Count == 1 ? "Ya hay una cita " : "Ya hay citas ") + list + ".\n\n¿Agendar de todos modos?";
+    }
+
+    /// <summary>
+    /// Paso 8.23: pone "Empalme con Ana López (10:30)" en cada cita de la lista que se empalma con otra de la misma lista
+    /// (<see cref="AppointmentRules.Overlaps"/>), y lo quita en las demás. Con varias, la primera por hora.
+    /// </summary>
+    public static void MarkOverlaps(IEnumerable<PatientAppointment> appointments)
+    {
+        var list = appointments.ToList();
+        foreach (var appointment in list) appointment.OverlapText = string.Empty;
+        var rules = list.Select(a => (Appointment: a, Rule: AppointmentRules.Of(a))).ToList();
+        foreach (var (appointment, rule) in rules)
+        {
+            var other = rules
+                .Where(o => !ReferenceEquals(o.Appointment, appointment) && AppointmentRules.Overlaps(rule, o.Rule))
+                .OrderBy(o => AppointmentRules.Start(o.Appointment.Time))
+                .ThenBy(o => SyncIds.Format(o.Appointment.SyncId), StringComparer.Ordinal)
+                .Select(o => o.Appointment)
+                .ToList();
+            if (other.Count == 0) continue;
+            appointment.OverlapText = $"Empalme con {other[0].PatientName} ({AppointmentRules.TimeText(other[0].Time)})" +
+                                      (other.Count > 1 ? $" y {other.Count - 1} más" : string.Empty);
+        }
     }
 
     [RelayCommand]
@@ -454,15 +611,15 @@ public partial class AgendaPanelViewModel : ObservableObject
 
     // ================================================================== citas
 
-    public static TimeSpan ParseAppointmentTime(string? time)
-    {
-        if (!string.IsNullOrWhiteSpace(time))
-        {
-            if (DateTime.TryParse(time, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var parsed)) return parsed.TimeOfDay;
-            if (DateTime.TryParse(time, Mexican, DateTimeStyles.NoCurrentDateDefault, out parsed)) return parsed.TimeOfDay;
-        }
-        return new TimeSpan(10, 0, 0);
-    }
+    /// <summary>
+    /// La hora de una cita. Paso 8.23: la misma regla que el resumen derivado y los empalmes
+    /// (<see cref="PatientSummaryRules.TimeOfDay"/>: <c>H:mm</c>, segundos y AM/PM opcionales; lo demás, las 10:00), así la agenda
+    /// dibuja la cita donde la regla la empalma. Antes era <c>DateTime.TryParse</c>, que también leía textos como "3 PM" o "7:5".
+    /// Desde v1.14 la agenda escribe "HH:mm"; las horas escritas a mano en v1.7–v1.13 ("5 pm", "4.30 pm", "10.30") se pasan a
+    /// "HH:mm" una sola vez (<see cref="AppointmentTimeMigration"/>): al abrir la base si no hay una nube configurada y, si la
+    /// hay, en la sincronización después de bajar.
+    /// </summary>
+    public static TimeSpan ParseAppointmentTime(string? time) => PatientSummaryRules.TimeOfDay(time);
 
     public async Task UpdateAppointmentStatusAsync(PatientAppointment? appt, string status)
     {

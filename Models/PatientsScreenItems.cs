@@ -134,6 +134,10 @@ public sealed partial class AgendaSlot : ObservableObject
     public bool IsAttended => Appointment?.IsAttended ?? false;
     public bool IsConfirmed => Appointment?.Status == "Confirmada";
 
+    /// <summary>Paso 8.23: la cita se empalma con otra del mismo día (la marca "Empalme" de la agenda).</summary>
+    public bool IsOverlapping => Appointment?.IsOverlapping ?? false;
+    public string OverlapText => Appointment?.OverlapText ?? string.Empty;
+
     /// <summary>El formulario para agendar se abre dentro del propio hueco.</summary>
     [ObservableProperty]
     private bool _isFormOpen;

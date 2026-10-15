@@ -48,7 +48,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
-| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19, 8.21 y 8.22 hechos en la PC (v1.20.0 a v1.39.0); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
+| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19 y 8.21 a 8.23 hechos en la PC (v1.20.0 a v1.40.0); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -343,7 +343,7 @@ cuatro temas):
 | **Aviso de hora** | "La hora de esta computadora difiere N min de la nube", si pasa de 2 min, en el estado y en *Nube y dispositivos* (captura `20d-config-tursosync-identidad`). | 8.7 ✅ v1.20.5 |
 | **"Sincronización pausada: consumo anormal"** y **"Se agotó la cuota mensual de Turso"** | El freno de consumo, con *Reanudar*; la cuota agotada reintenta cada hora. El estado dice el título en una línea (también en la barra de estado: "Turso: En pausa") y el aviso de abajo da el detalle. Capturas en los cuatro temas (`20b-config-tursosync-freno`). | 8.2 ✅ v1.20.0 |
 | Insignia **"−1 · revisar inventario"** | Productos en negativo y también un lote negativo aunque el total sea positivo, con alerta en el resumen. Se corrige con un conteo. | 8.20 |
-| **"Empalme"** en la agenda | Antes de agendar: "Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?"; después de bajar, la marca en la agenda y un aviso. | 8.23 |
-| **Banner de duplicados** y **aviso de folios repetidos** | Pares recientes de pacientes que podrían ser el mismo; folios iguales en filas viejas o tecleados a mano. | 8.23, 8.16 |
+| **"Empalme"** en la agenda | Antes de agendar o cambiar una cita: "Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?" (ventana de confirmación de siempre; captura `26c-confirmacion-empalme`). La marca ámbar "Empalme con Ana López (10:30)" en la agenda y en las citas de hoy del inicio de Pacientes (`07b-agenda-empalme`). Después de bajar, el aviso "Empalme en la agenda con lo que llegó de otro equipo…" en el inicio de Pacientes, con **Ver en la agenda** y **Entendido**, que se queda hasta descartarlo (también al reiniciar). Una recarga no cierra el formulario de un hueco que sigue libre. | 8.23 ✅ v1.40.0 |
+| **Banner de duplicados** y **aviso de folios repetidos** | Pares recientes de pacientes que podrían ser el mismo: banner ámbar arriba de "Atendidos recientemente" con **Entendido**, que se queda hasta descartarlo (`04b-pacientes-avisos-otro-equipo`), y al crear un expediente, después de la sincronización rápida, "Ya hay un expediente parecido…" (`26d-confirmacion-duplicado`); folios iguales en filas viejas o tecleados a mano. | 8.23 ✅ v1.40.0, 8.16 ✅ v1.34.0 |
 | **"Folio sin conexión: …"** | En la ficha, en el detalle del ticket y en la reimpresión, debajo del folio nuevo de un registro que se creó sin internet y que la PC regularizó; buscar por cualquiera de los dos folios lo encuentra. La regularización corre sola en segundo plano, una vez al día, sin consulta ni venta en curso. | 8.17 |
 

@@ -133,12 +133,100 @@ public partial class PatientsHomeViewModel : ObservableObject
         try
         {
             var list = await _inventoryService.GetAppointmentsByDayAsync(DateTime.Today);
-            TodayAppointments = new ObservableCollection<PatientAppointment>(
-                list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)));
+            var today = list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)).ToList();
+            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda
+            AgendaPanelViewModel.MarkOverlaps(today);
+            TodayAppointments = new ObservableCollection<PatientAppointment>(today);
         }
         catch (Exception ex)
         {
             AppLogger.Error("No se pudieron cargar las citas de hoy", ex);
         }
+    }
+
+    // ================================================================== avisos de lo que llegó de otro equipo (paso 8.23)
+
+    // Decisión del médico (2026-10-14): los dos avisos se quedan hasta «Entendido», también al cerrar y abrir TPVC. Viven en
+    // la base de este equipo (SyncNotices); sin base (pruebas de pantalla) solo en memoria
+    private IReadOnlyList<AppointmentOverlap> _overlapPairs = Array.Empty<AppointmentOverlap>();
+    private IReadOnlyList<DuplicatePatientPair> _duplicatePairs = Array.Empty<DuplicatePatientPair>();
+
+    /// <summary>Cuántos pares se muestran en cada aviso; los demás se cuentan.</summary>
+    public const int MaxDuplicatePairsShown = 3;
+
+    [ObservableProperty]
+    private string _duplicatePatientsNoticeText = string.Empty;
+
+    [ObservableProperty]
+    private string _overlapNoticeText = string.Empty;
+
+    public bool HasDuplicatePatientsNotice => DuplicatePatientsNoticeText.Length > 0;
+    public bool HasOverlapNotice => OverlapNoticeText.Length > 0;
+
+    partial void OnDuplicatePatientsNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasDuplicatePatientsNotice));
+    partial void OnOverlapNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasOverlapNotice));
+
+    /// <summary>Los pares de posibles duplicados que se muestran, el más reciente primero.</summary>
+    public IReadOnlyList<DuplicatePatientPair> DuplicatePairs => _duplicatePairs;
+
+    /// <summary>Las citas empalmadas que se muestran, la más reciente primero (la primera es la que abre «Ver en la agenda»).</summary>
+    public IReadOnlyList<AppointmentOverlap> OverlapPairs => _overlapPairs;
+
+    /// <summary>Lee los avisos de la base (depurados: lo que ya no aplica se quita) y los muestra.</summary>
+    public async Task LoadSyncNoticesAsync()
+    {
+        if (_inventoryService == null) return;
+        try
+        {
+            ShowSyncNotices(await _inventoryService.GetSyncNoticesAsync());
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudieron leer los avisos de lo que llegó de otro equipo", ex);
+        }
+    }
+
+    /// <summary>Muestra estos avisos (lo que se lee de la base; sin base, lo que se le da).</summary>
+    public void ShowSyncNotices(SyncArrivals notices)
+    {
+        // Sin cambios no se avisa a la pantalla (se lee con cada recarga de pacientes y de citas)
+        if (notices.Overlaps.Select(o => o.Text).SequenceEqual(_overlapPairs.Select(o => o.Text))
+            && notices.DuplicatePatients.Select(d => d.Key + d.Text).SequenceEqual(_duplicatePairs.Select(d => d.Key + d.Text)))
+        {
+            return;
+        }
+        _overlapPairs = notices.Overlaps;
+        _duplicatePairs = notices.DuplicatePatients;
+        RefreshSyncNotices();
+    }
+
+    /// <summary>«Entendido» en el aviso de posibles duplicados: esos pares no vuelven a avisar en este equipo.</summary>
+    [RelayCommand]
+    public async Task DismissDuplicatePatientsNoticeAsync()
+    {
+        if (_inventoryService != null) await _inventoryService.DismissSyncNoticesAsync(SyncNoticeKind.DuplicatePatients);
+        ShowSyncNotices(new SyncArrivals(_overlapPairs, Array.Empty<DuplicatePatientPair>()));
+    }
+
+    /// <summary>«Entendido» en el aviso de citas empalmadas: esos empalmes no vuelven a avisar en este equipo.</summary>
+    [RelayCommand]
+    public async Task DismissOverlapNoticeAsync()
+    {
+        if (_inventoryService != null) await _inventoryService.DismissSyncNoticesAsync(SyncNoticeKind.Overlaps);
+        ShowSyncNotices(new SyncArrivals(Array.Empty<AppointmentOverlap>(), _duplicatePairs));
+    }
+
+    private void RefreshSyncNotices()
+    {
+        int count = _duplicatePairs.Count;
+        DuplicatePatientsNoticeText = count == 0
+            ? string.Empty
+            : (count == 1 ? "Posible expediente duplicado" : "Posibles expedientes duplicados") + " con lo que llegó de otro equipo: " +
+              string.Join("; ", _duplicatePairs.Take(MaxDuplicatePairsShown).Select(p => p.Text)) +
+              (count > MaxDuplicatePairsShown ? $" y {count - MaxDuplicatePairsShown} más" : string.Empty) +
+              ". Revise las dos fichas: si son la misma persona, siga con una. TPVC no los une solo.";
+        OverlapNoticeText = new SyncArrivals(_overlapPairs, Array.Empty<DuplicatePatientPair>()).OverlapNotice;
+        OnPropertyChanged(nameof(DuplicatePairs));
+        OnPropertyChanged(nameof(OverlapPairs));
     }
 }

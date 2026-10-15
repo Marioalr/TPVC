@@ -38,6 +38,11 @@ public static partial class DatabaseInitializer
             // trigger cuya definición cambió (una columna nueva) se vuelve a crear
             SyncChangeLog.EnsureInstalled(context);
 
+            // Paso 8.23: las horas de cita escritas a mano en v1.7–v1.13 NO se normalizan aquí: con una nube configurada, una
+            // copia vieja reescrita al abrir subiría antes de bajar y desharía lo que otro equipo cambió. Las normaliza el
+            // arranque o la restauración sin URL de la nube (AppointmentTimeMigration.RunAtOpen) o la sincronización después de
+            // bajar
+
             // Paso 8.19: la foto de las diferencias que la base ya traía entre sus existencias y el libro de movimientos,
             // una sola vez (también en un respaldo anterior que se restaura): la verificación solo reporta lo nuevo
             Services.StockLedger.EnsureBaseline(context);

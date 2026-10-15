@@ -227,6 +227,8 @@ public partial class TursoSyncService
         {
             // Paso 8.16: EXP y TKT toman su número del contador de la nube
             _inventoryService.Folios = this;
+            // Paso 8.23: cobrar y agendar esperan una sincronización rápida (3 s como máximo)
+            _inventoryService.QuickSync = this;
             _inventoryService.OnInventoryChanged += OnLocalDataChanged;
             _inventoryService.OnPatientsChanged += OnLocalDataChanged;
             _inventoryService.OnSalesChanged += OnLocalDataChanged;
@@ -445,6 +447,9 @@ public partial class TursoSyncService
             };
         }
 
+        // Paso 8.23: la sincronización que tiene el candado, para que la rápida sepa a quién espera
+        var inFlight = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _runInFlight, inFlight.Task);
         var sw = Stopwatch.StartNew();
         try
         {
@@ -455,6 +460,7 @@ public partial class TursoSyncService
             sw.Stop();
 
             var parkedRows = RefreshParkedCount();
+            var arrivals = TakeArrivals();
             var result = new TursoSyncResult
             {
                 Success = true,
@@ -462,7 +468,8 @@ public partial class TursoSyncService
                 RowsPulled = pulled,
                 ElapsedMilliseconds = sw.ElapsedMilliseconds,
                 ParkedRows = parkedRows,
-                FullSyncReport = report
+                FullSyncReport = report,
+                Arrivals = arrivals
             };
 
             // Turso volvió a aceptar instrucciones: termina la pausa por cuota agotada
@@ -476,7 +483,7 @@ public partial class TursoSyncService
                     (ClockWarningText is { } clock ? $" · {clock}" : string.Empty));
             SyncCompleted?.Invoke(result);
 
-            if (pulled > 0)
+            if (pulled > 0 || Interlocked.Exchange(ref _normalizedTimes, 0) > 0)
             {
                 NotifyLocalViews();
                 _labResults?.NotifyChanged();
@@ -539,6 +546,8 @@ public partial class TursoSyncService
         }
         finally
         {
+            _checkingArrivals = false;
+            inFlight.TrySetResult();
             _syncLock.Release();
             if (Interlocked.Exchange(ref _autoSyncSkipped, 0) == 1) OnLocalDataChanged();
         }
@@ -573,7 +582,9 @@ public partial class TursoSyncService
         catch (GenerationReloadException reload)
         {
             // Otra PC reemplazó la nube con un respaldo y ya terminó: lo que esta no subió quedó guardado; se vacía y se
-            // vuelve a bajar todo, una sola vez
+            // vuelve a bajar todo, una sola vez (lo que había llegado y no se revisó ya no existe)
+            _checkingArrivals = false;
+            ResetArrivals();
             await ReloadNewGenerationAsync(reload.Handshake, ct);
             return await SyncOnceAsync(fullResync: false, ct);
         }
@@ -585,6 +596,7 @@ public partial class TursoSyncService
         _syncGeneration = null;
         _generationChecked = false;
         Interlocked.Exchange(ref _mergedForUpload, 0);
+        lock (_arrivalsGate) _arrivals = SyncArrivals.None;
 
         // Paso 8.10: si este equipo tomó un DeviceId nuevo porque otra instalación usaba el mismo, se baja todo una vez
         await ApplyRedownloadRequestAsync(settings, ct);
@@ -601,6 +613,14 @@ public partial class TursoSyncService
         {
             downloadPending = await DbMeta.GetAsync(db, DbMeta.CloudDownloadPending, ct) == "1";
         }
+
+        // Paso 8.23: lo que llegue se revisa contra lo de aquí (empalmes y posibles duplicados), salvo en la primera descarga
+        // de esta base (sin cursores: la primera sincronización, unirse, reemplazar con la nube, otra generación), donde
+        // llega todo. En la «Sincronización completa» sí: solo se aplica lo que es más nuevo que lo de aquí. Se decide antes
+        // de bajar nada; lo que llegó en una sincronización que se cortó se revisa en la siguiente
+        bool checkArrivals = !downloadPending && (fullResync || !cursors.IsFirstDownload);
+        _checkingArrivals = checkArrivals;
+        if (!checkArrivals) ResetArrivals();
 
         using var client = ClientFactory(settings.DatabaseUrl, settings.AuthToken);
 
@@ -648,6 +668,15 @@ public partial class TursoSyncService
             pushed += merged;
             pushReads += mergedReads;
         }
+        // 2c. Paso 8.23: una sola vez por base, después de bajar (las filas ya están al día con la nube), las horas de cita
+        //     escritas a mano en v1.7–v1.13 pasan a "HH:mm" y suben en esta misma sincronización
+        var (normalizedPushed, normalizedReads) = await NormalizeAppointmentTimesAsync(client, settings.DeviceId, ct);
+        pushed += normalizedPushed;
+        pushReads += normalizedReads;
+
+        // 2d. Paso 8.23: lo que llegó de otro equipo contra lo de aquí (empalmes y posibles duplicados), a los avisos de este
+        //     equipo, que se quedan hasta que el médico los descarta
+        if (checkArrivals) await CheckAndKeepArrivalsAsync(ct);
         if (downloadPending)
         {
             using var db = _contextFactory.CreateDbContext();
@@ -1157,6 +1186,10 @@ public partial class TursoSyncService
         DbMeta.Remove(db, DbMeta.RestoredWithCloud);
         // La foto del libro de existencias era de lo que había aquí: se vuelve a tomar al terminar de bajar (paso 8.19)
         DbMeta.Remove(db, DbMeta.StockLedgerBaseline);
+        // Paso 8.23: lo que baje puede traer horas de cita escritas a mano: se normalizan después de esta descarga (también si
+        // esta versión ya había fallado al hacerlo con lo de antes)
+        DbMeta.Remove(db, AppointmentTimeMigration.DoneKey);
+        DbMeta.Remove(db, AppointmentTimeMigration.FailedVersionKey);
         DbMeta.RemoveByPrefix(db, DbMeta.PullCursorPrefix);
         DbMeta.RemoveByPrefix(db, DbMeta.PullColumnsPrefix);
         if (replace) await DbMeta.SetAsync(db, DbMeta.DbInstanceId, Guid.NewGuid().ToString(), ct);
@@ -2190,6 +2223,9 @@ public partial class TursoSyncService
             .ToDictionary(p => (p.EntityType, p.SyncId));
 
         int applied = 0;
+        // Paso 8.23: los expedientes y las citas que esta página creó o cambió aquí, para revisar duplicados y empalmes al
+        // terminar la bajada («Volver a aplicar» no cuenta; en la bajada de columnas nuevas, solo las filas nuevas aquí)
+        var arrived = new List<Guid>();
         // Paso 8.22: un expediente que ya existe aquí no sigue el LWW por fila: se combina por campo. Lo que queda distinto de la
         // versión de la nube se anota para subir en la misma transacción. «Volver a aplicar» (force) lo escribe tal cual
         bool mergePatients = typeof(T) == typeof(PatientRecord) && !force;
@@ -2222,6 +2258,7 @@ public partial class TursoSyncService
                 if (!merged.DiffersFromLocal && merged.UpdatedAtUtc == patient.UpdatedAtUtc && merged.FieldStampsJson == patient.FieldStampsJson) continue;
                 PatientFieldMerge.Apply(db.Entry(patient), merged, row, map);
                 if (merged.DiffersFromRemote) markForUpload.Add((entityType, syncId));
+                if (newColumns == null) arrived.Add(syncId);
                 applied++;
                 continue;
             }
@@ -2337,11 +2374,13 @@ public partial class TursoSyncService
                 entry.Property(property.Name).CurrentValue = property.PropertyType == typeof(int) ? id ?? 0 : id;
             }
             if (!onlyNewColumns) local.UpdatedAtUtc = remoteUpdated;
+            if (!force && (created || newColumns == null)) arrived.Add(syncId);
             applied++;
         }
 
         await ResolveUniqueConflictsAsync(db, map, ct);
         await SyncChangeLog.SaveRemoteChangesAsync(db, ct, cursor, markForUpload);
+        NoteArrivals(typeof(T), arrived);
         if (markForUpload.Count > 0)
         {
             Interlocked.Add(ref _mergedForUpload, markForUpload.Count);

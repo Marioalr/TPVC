@@ -471,7 +471,9 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public async Task SavePatientAndStartConsultationAsync()
     {
-        await SavePatientModalAsync();
+        // Paso 8.23: solo si de verdad se guardó. Si el médico cerró el alta mientras se esperaba a la nube, el seleccionado es
+        // el paciente de antes y no se le abre una consulta
+        if (!await TrySavePatientAsync()) return;
         if (!IsPatientModalOpen && FormErrorMessage == null && _session.SelectedPatient != null && !_active.HasActiveConsultation)
         {
             _workflow.StartActiveConsultation();
@@ -496,6 +498,7 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public async Task NewPatientAsync()
     {
+        _formSession++;
         FormPatientId = 0;
         FormErrorMessage = null;
 
@@ -562,6 +565,7 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public void EditPatient()
     {
+        _formSession++;
         if (_gate.BlockIfPatientHandedOff(_session.SelectedPatient)) return;
         if (_session.SelectedPatient == null)
         {
@@ -710,12 +714,38 @@ public partial class PatientFormViewModel : ObservableObject
     [RelayCommand]
     public void ClosePatientModal()
     {
+        _formSession++;
         IsPatientModalOpen = false;
         FormErrorMessage = null;
     }
 
+    // Paso 8.23: cambia cada vez que se abre o se cierra el formulario; un guardado que esperó a la nube y lo encuentra
+    // distinto (el médico lo cerró o abrió otro mientras tanto) no guarda nada
+    private int _formSession;
+
+    // Mientras se espera a la nube (hasta 3 s) un segundo «Guardar» no crea el expediente dos veces
+    private bool _savingPatient;
+
     [RelayCommand]
-    public async Task SavePatientModalAsync()
+    public Task SavePatientModalAsync() => TrySavePatientAsync();
+
+    /// <summary>true solo si el expediente quedó guardado (un segundo «Guardar» mientras se espera no hace nada).</summary>
+    private async Task<bool> TrySavePatientAsync()
+    {
+        if (_savingPatient) return false;
+        _savingPatient = true;
+        try
+        {
+            return await SavePatientModalCoreAsync();
+        }
+        finally
+        {
+            _savingPatient = false;
+        }
+    }
+
+    /// <summary>Guarda el alta o la edición; true solo si quedó guardado (ni error, ni cancelado, ni cerrado mientras tanto).</summary>
+    private async Task<bool> SavePatientModalCoreAsync()
     {
         if (string.IsNullOrWhiteSpace(FormFirstName) && !string.IsNullOrWhiteSpace(FormFullName))
         {
@@ -731,10 +761,20 @@ public partial class PatientFormViewModel : ObservableObject
         if (problem != null)
         {
             FormErrorMessage = problem;
-            return;
+            return false;
         }
 
         FormFullName = PatientFormRules.ComposeFullName(FormFirstName, FormLastName, FormMaternalLastName);
+
+        // Paso 8.23 (decisión del médico, 2026-10-14): al crear un expediente, con la nube activa, la sincronización rápida
+        // (3 s como máximo; sin red o en pausa no espera) antes de revisar folio y duplicados: así se ve el paciente que la
+        // tablet acaba de dar de alta. Editar no la hace. Si el formulario se cerró mientras tanto, no se crea nada
+        if (FormPatientId == 0 && _inventoryService != null)
+        {
+            var session = _formSession;
+            await _inventoryService.QuickSyncAsync();
+            if (session != _formSession || !IsPatientModalOpen) return false;
+        }
 
         var normalizedFolio = FormRecordNumber.Trim();
         // El folio probable sin cambiar: el definitivo lo pone el servicio al guardar
@@ -750,7 +790,7 @@ public partial class PatientFormViewModel : ObservableObject
             if (isTaken)
             {
                 FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya está en uso por otro paciente.";
-                return;
+                return false;
             }
         }
         else
@@ -759,7 +799,7 @@ public partial class PatientFormViewModel : ObservableObject
             if (duplicate)
             {
                 FormErrorMessage = $"El folio de expediente '{normalizedFolio}' ya existe.";
-                return;
+                return false;
             }
         }
 
@@ -771,6 +811,10 @@ public partial class PatientFormViewModel : ObservableObject
         // Paso 8.21: la edición se guarda con la foto tomada al abrirla (solo lo que el médico cambió aquí)
         var baseline = FormPatientId > 0 && ReferenceEquals(patient, _formPatient) ? _formBaseline : patient.StoredSnapshot;
         ApplyFormTo(patient, assignOnSave ? string.Empty : normalizedFolio, FormFullName.Trim(), parsedAge);
+
+        // Paso 8.23 (H3): al crear, un expediente parecido (el mismo nombre y la misma fecha de nacimiento o el mismo teléfono)
+        // pide confirmar. Si no se confirma, el formulario sigue abierto con lo capturado
+        if (FormPatientId == 0 && !await ConfirmNotDuplicateAsync(patient)) return false;
 
         if (_inventoryService != null)
         {
@@ -784,7 +828,7 @@ public partial class PatientFormViewModel : ObservableObject
             catch (Exception ex)
             {
                 FormErrorMessage = $"Error al guardar en base de datos: {ex.Message}";
-                return;
+                return false;
             }
         }
         else
@@ -805,5 +849,46 @@ public partial class PatientFormViewModel : ObservableObject
             ? $"Expediente de {patient.FullName} guardado con el folio {patient.RecordNumber}"
             : $"Expediente de {patient.FullName} guardado");
         _suggestedRecordNumber = null;
+        return true;
+    }
+
+    /// <summary>Paso 8.23: true si no hay un expediente parecido o si el médico confirma crear el nuevo de todos modos.</summary>
+    private async Task<bool> ConfirmNotDuplicateAsync(PatientRecord patient)
+    {
+        List<(PatientRecord Patient, DuplicatePatientRules.Match Match)> similar;
+        if (_inventoryService != null)
+        {
+            try
+            {
+                similar = await _inventoryService.FindDuplicatePatientsAsync(patient);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("No se pudo revisar si el paciente ya tiene expediente", ex);
+                return true;
+            }
+        }
+        else
+        {
+            var rule = DuplicatePatientRules.Of(patient);
+            similar = _session.Patients
+                .Where(p => !ReferenceEquals(p, patient))
+                .Select(p => (Patient: p, Match: DuplicatePatientRules.Compare(rule, DuplicatePatientRules.Of(p))))
+                .Where(x => x.Match != DuplicatePatientRules.Match.None)
+                .ToList();
+        }
+        return similar.Count == 0 || await _dialogs.ConfirmAsync(DuplicateQuestion(similar), "Posible paciente duplicado");
+    }
+
+    /// <summary>"Ya hay un expediente parecido: • Juan Pérez · EXP-2026-004 · misma fecha de nacimiento ¿Crear…?"</summary>
+    public static string DuplicateQuestion(IReadOnlyList<(PatientRecord Patient, DuplicatePatientRules.Match Match)> similar)
+    {
+        var lines = similar.Take(5).Select(x =>
+            "• " + string.Join(" · ", new[] { x.Patient.FullName, x.Patient.RecordNumber, DuplicatePatientRules.Describe(x.Match) }
+                .Where(t => !string.IsNullOrWhiteSpace(t))));
+        return (similar.Count == 1 ? "Ya hay un expediente parecido:" : "Ya hay expedientes parecidos:") + "\n\n" +
+               string.Join("\n", lines) +
+               (similar.Count > 5 ? $"\n• y {similar.Count - 5} más" : string.Empty) +
+               "\n\nSi es el mismo paciente, conteste No y búsquelo en Pacientes. ¿Crear el expediente nuevo de todos modos?";
     }
 }

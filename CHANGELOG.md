@@ -2,6 +2,19 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.40.0] - 2026-10-14
+
+### Añadido — Fase 8, paso 8.23: citas empalmadas, expedientes duplicados y sincronización rápida
+* Antes de agendar o cambiar de horario una cita, con red, el programa trae lo último de la nube (espera 3 s como máximo) y avisa si ya hay otra cita en ese horario: "Ya hay una cita a las 10:30 con … ¿Agendar de todos modos?". Nunca cancela una cita solo.
+* La agenda y las citas de hoy marcan "Empalme" en las citas que se cruzan. Una cita sin duración cuenta como 30 minutos.
+* Al crear un expediente, el programa sincroniza primero y avisa si ya hay uno parecido: el mismo nombre (sin importar acentos ni mayúsculas) con la misma fecha de nacimiento o el mismo teléfono.
+* Si de otro equipo llega una cita que se empalma o un expediente que parece duplicado, aparece un aviso en el inicio de Pacientes. Los avisos se quedan hasta pulsar **Entendido**, también al cerrar y abrir TPVC; el de empalmes tiene **Ver en la agenda**. Un aviso descartado no vuelve.
+* Antes de cobrar, con red, también se sincroniza (3 s como máximo). Sin conexión se cobra igual y el ticket sale con la letra del equipo. Con una red que no responde, cobrar tarda unos 3 s.
+* Si se cierra el formulario mientras se espera a la nube, no se agenda, no se mueve la cita ni se crea el expediente.
+* Las horas de las citas escritas a mano en las versiones 1.7 a 1.13 ("5 pm", "4.30 pm", "10.30") se guardan una sola vez como "HH:mm": con la nube configurada, después de bajar lo de la nube; sin ella, al abrir TPVC. Lo que no se puede leer sin adivinar se queda como está.
+* El formulario de la agenda ya no se cierra cuando llega una sincronización.
+* Contrato de sincronización en la revisión 13, congelado como base de la tablet: desde aquí solo admite cambios aditivos. Columna `Patients.MergedIntoSyncId` y vectores `appointment-overlap.json` y `duplicate-patients.json` para la app de Kotlin. 741 pruebas.
+
 ## [1.39.0] - 2026-10-14
 
 ### Añadido — Fase 8, paso 8.22: los cambios de varios equipos en un mismo paciente se combinan
