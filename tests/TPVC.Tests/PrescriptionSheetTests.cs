@@ -301,6 +301,23 @@ public class PrescriptionSheetTests
         vm.OpenPrescriptionPreview();
         vm.LoadFromProfile();
         Assert.IsFalse(vm.IsPrescriptionPreviewOpen);
+
+        // Vista en carta y cerrada: al abrirla otra vez vuelve a media carta, la de siempre
+        vm.OpenPrescriptionPreview();
+        vm.ShowPreviewPaper(PrescriptionPaper.Letter);
+        vm.ClosePrescriptionPreview();
+        vm.OpenPrescriptionPreview();
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, vm.SelectedPreviewPaper.Paper);
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, vm.PreviewSheet!.Paper);
+
+        // Ctrl+clic en el papel elegido lo quitaría de la lista: se queda el que estaba, y la vista previa sigue abriendo
+        vm.ShowPreviewPaper(PrescriptionPaper.Letter);
+        vm.SelectedPreviewPaper = null!;
+        Assert.AreEqual(PrescriptionPaper.Letter, vm.SelectedPreviewPaper.Paper);
+        Assert.AreEqual(PrescriptionPaper.Letter, vm.PreviewSheet!.Paper);
+        vm.ClosePrescriptionPreview();
+        vm.OpenPrescriptionPreview();
+        Assert.IsNotNull(vm.PreviewSheet);
     }
 
     [TestMethod]

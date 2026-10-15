@@ -233,15 +233,26 @@ public partial class ClinicProfileViewModel : ObservableObject
         ? "Paciente y medicamentos de ejemplo. Muestra lo que está en esta pantalla, también los cambios que aún no guarda."
         : "Paciente y medicamentos de ejemplo, con los datos del médico, el membrete y las letras de esta pantalla.";
 
-    partial void OnSelectedPreviewPaperChanged(PrescriptionPaperOption value)
+    partial void OnSelectedPreviewPaperChanged(PrescriptionPaperOption? oldValue, PrescriptionPaperOption newValue)
     {
+        // Ctrl+clic en el papel elegido lo quitaría de la lista (queda sin ninguno): se queda el que estaba
+        if (newValue == null)
+        {
+            SelectedPreviewPaper = oldValue ?? PreviewPaperOptions[0];
+            return;
+        }
         if (IsPrescriptionPreviewOpen) RefreshPrescriptionPreview();
     }
 
-    /// <summary>"Vista previa de la receta": la receta de ejemplo como sale impresa, en media carta (cambia a carta con el selector).</summary>
+    /// <summary>
+    /// "Vista previa de la receta": la receta de ejemplo como sale impresa. Siempre abre en media carta, la de siempre
+    /// (cambia a carta con el selector).
+    /// </summary>
     [RelayCommand]
     public void OpenPrescriptionPreview()
     {
+        // Antes de abrirla: así el cambio de papel no arma la hoja dos veces
+        SelectedPreviewPaper = PreviewPaperOptions[0];
         IsPrescriptionPreviewOpen = true;
         RefreshPrescriptionPreview();
         OnPropertyChanged(nameof(PreviewDataNote));
@@ -261,7 +272,7 @@ public partial class ClinicProfileViewModel : ObservableObject
     public void RefreshPrescriptionPreview()
     {
         PreviewSheet = BuildSamplePrescription(ScreenProfile(), PrescriptionFonts.From(SelectedBodyFont?.Family, SelectedDoctorFont?.Family),
-            new LetterheadImages(CrestImagePath, HeaderImagePath), SelectedPreviewPaper.Paper, DateTime.Now);
+            new LetterheadImages(CrestImagePath, HeaderImagePath), SelectedPreviewPaper?.Paper ?? PrescriptionPaper.HalfLetter, DateTime.Now);
     }
 
     /// <summary>El perfil tal como está en pantalla (lo que se guardaría con "Guardar").</summary>

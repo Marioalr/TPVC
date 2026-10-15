@@ -352,7 +352,8 @@
     <!-- con el papel elegido: papel blanco con cualquier tema.                                      -->
     <Grid Panel.ZIndex="60" Visibility="{Binding IsPrescriptionPreviewOpen, Converter={StaticResource BoolToVis}}">
         <Border Style="{StaticResource SheetScrim}" />
-        <Border Style="{StaticResource SheetCard}" Width="900" MaxHeight="720" Padding="24,18" AutomationProperties.Name="Vista previa de la receta">
+        <!-- Ancho máximo, no fijo: en una ventana angosta la hoja se encoge (y la página con ella) en lugar de cortarse -->
+        <Border Style="{StaticResource SheetCard}" MaxWidth="900" HorizontalAlignment="Stretch" MaxHeight="720" Padding="24,18" AutomationProperties.Name="Vista previa de la receta">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

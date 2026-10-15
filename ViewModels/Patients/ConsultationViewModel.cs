@@ -457,6 +457,9 @@ public partial class ConsultationViewModel : ObservableObject
             return;
         }
 
+        // Una "Cambiar indicación" que quedó abierta se guarda antes de la nota y del cobro (2026-10-14)
+        if (!await _workflow.CommitPendingPrescriptionEditsAsync()) return;
+
         if (_inventoryService == null)
         {
             _info.InfoModalMessage = "El servicio de inventario no está disponible.";

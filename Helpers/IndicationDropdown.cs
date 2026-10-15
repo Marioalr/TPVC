@@ -174,7 +174,10 @@ public static class IndicationDropdown
 
     private static void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (sender is TextBox box && (bool)e.NewValue) FocusAtEnd(box, selectAll: true);
+        // Solo cuando se abre la corrección en un renglón que ya estaba en pantalla. Un renglón que se vuelve a crear
+        // (al agregar o quitar otro medicamento, o al repetir la receta) se muestra antes de su Loaded: ese no se lleva
+        // el cursor, que vuelve al buscador; si se lo llevara, lo que se teclea pisaría la corrección pendiente
+        if (sender is TextBox { IsLoaded: true } box && (bool)e.NewValue) FocusAtEnd(box, selectAll: true);
     }
 
     private static void FocusAtEnd(TextBox box, bool selectAll)

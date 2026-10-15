@@ -333,6 +333,200 @@ public class PrescriptionCaptureTests
         records.Dispose();
     }
 
+    // ================================================================== revisión adversarial de 4214fdf
+
+    [TestMethod]
+    public async Task TypedBrandName_AfterClosingTheList_StillChecksAllergiesByItsGeneric()
+    {
+        var (records, consultations) = Open();
+        var patient = new PatientRecord { Id = 78, FullName = "Luis Pérez", RecordNumber = "EXP-78", Allergies = "Paracetamol", ActivePrescription = new() };
+        records.SelectedPatient = patient;
+        records.StartActiveConsultation();
+        var tempra = new Product { Id = 60, Code = "MED-060", Name = "Tempra 500 mg", GenericName = "Paracetamol", Presentation = "Caja con 20 tabletas", CurrentStock = 10, Price = 50m };
+        records.Catalog.AvailableProducts.Add(tempra);
+        var rx = records.Prescription;
+        rx.OpenPrescriptionModal();
+
+        // Escribe la marca, cierra la lista con Esc y Enter: lo toma tal cual, pero es un producto del inventario
+        rx.PrescriptionSearchText = "Tempra 500 mg";
+        Assert.IsTrue(rx.IsPrescriptionDropdownOpen);
+        rx.ClosePrescriptionSuggestions();
+        Assert.IsTrue(rx.ConfirmPrescriptionSearch());
+        Assert.AreEqual("Tempra 500 mg", rx.PrescriptionSearchText, "Lo escrito se queda");
+        Assert.AreEqual(tempra, rx.ChosenPrescriptionProduct, "Es el producto que se surtirá y se cobrará");
+        StringAssert.StartsWith(rx.ChosenMedicineCaption, "Elegido del inventario");
+
+        rx.PrescriptionDosage = "1 tableta cada 8 horas";
+        await rx.AddPrescriptionAsync();
+        Assert.IsTrue(rx.IsAllergyAlertOpen, "La alergia al paracetamol se revisa por el genérico de la marca");
+        Assert.IsEmpty(patient.ActivePrescription);
+
+        await rx.ConfirmOverrideAllergyPrescriptionAsync();
+        var row = patient.ActivePrescription.Single();
+        Assert.AreEqual("Tempra 500 mg", row.MedicineName, "Con el nombre que se escribió");
+        Assert.AreEqual(tempra.Presentation, row.Presentation);
+        Assert.IsTrue(row.DispenseInClinic);
+        Assert.AreEqual(tempra.Id, consultations.CurrentConsultation!.Items.Single().ProductId);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task PediatricDose_WithTheSuggestionListOpen_AddsThePediatricMedicine_NotTheMarkedSuggestion()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        var rule = new PediatricDoseRule { Id = 1, Medication = "Paracetamol 3.2 g/100 ml", DoseText = "15 mg/kg/dosis", MlPerKg = 15.0 / 32.0, DropsPerMl = 20 };
+        records.Templates.PediatricDoseRules = new ObservableCollection<PediatricDoseRule> { rule };
+
+        // ↓ con el buscador vacío abre la lista con la primera marcada; luego la dosis pediátrica y "Usar"
+        rx.MovePrescriptionSuggestion(1);
+        Assert.IsTrue(rx.IsPrescriptionDropdownOpen);
+        var marked = rx.SelectedPrescriptionProduct!;
+        rx.SelectedPediatricRule = rule;
+        rx.PediatricWeightText = "15";
+        rx.ApplyPediatricDose();
+        Assert.AreEqual(rule.Medication, rx.PrescriptionMedicineName);
+        Assert.IsFalse(rx.IsPrescriptionDropdownOpen, "\"Usar\" cierra la lista: ya no marca otro medicamento");
+
+        // Aunque la lista se vuelva a abrir, Agregar usa el medicamento de la dosis pediátrica
+        rx.MovePrescriptionSuggestion(1);
+        Assert.IsTrue(rx.IsPrescriptionDropdownOpen);
+        await rx.AddPrescriptionAsync();
+        var row = patient.ActivePrescription.Single();
+        Assert.AreEqual(rule.Medication, row.MedicineName);
+        Assert.AreNotEqual(PrescriptionNaming.MedicineLine(marked), row.MedicineName);
+        StringAssert.StartsWith(row.Dosage, "Dar 7 ml (140 gotas) vía oral");
+        Assert.IsFalse(rx.IsPrescriptionDropdownOpen);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task FooterGuardar_AddsTheChosenMedicine_AndSavesAnOpenCorrection_InsteadOfDroppingThem()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        rx.PrescriptionSearchText = "parac";
+        rx.ConfirmPrescriptionSearch();
+        rx.PrescriptionDosage = "1 tableta cada 8 horas";
+        await rx.AddPrescriptionAsync();
+        var row = patient.ActivePrescription.Single();
+
+        // Una corrección abierta y un medicamento elegido con su indicación, sin Enter: "Guardar" del pie
+        rx.SheetIndication.Start(row);
+        rx.SheetIndication.Text = "1 tableta cada 6 horas";
+        rx.PrescriptionSearchText = "ibupro";
+        rx.ConfirmPrescriptionSearch();
+        rx.PrescriptionDosage = "1 tableta cada 12 horas";
+        await rx.SavePrescriptionModalAsync();
+
+        Assert.IsFalse(rx.IsPrescriptionModalOpen);
+        Assert.AreEqual("1 tableta cada 6 horas", row.Dosage, "La corrección abierta se guardó");
+        Assert.IsFalse(rx.SheetIndication.IsEditing);
+        Assert.HasCount(2, patient.ActivePrescription, "El medicamento elegido se agregó");
+        Assert.AreEqual(PrescriptionNaming.MedicineLine(Medicine(records, "MED-003")), patient.ActivePrescription[1].MedicineName);
+        Assert.AreEqual("1 tableta cada 12 horas", patient.ActivePrescription[1].Dosage);
+        Assert.IsFalse(rx.IsMedicineChosen);
+        StringAssert.Contains(records.Info.InfoModalMessage, "guardada");
+
+        // Lo escrito sin elegirlo se queda como en v1.39: no se agrega
+        records.Info.DismissInfoModal();
+        rx.OpenPrescriptionModal();
+        rx.PrescriptionSearchText = "omepra";
+        await rx.SavePrescriptionModalAsync();
+        Assert.HasCount(2, patient.ActivePrescription);
+        Assert.IsFalse(rx.IsPrescriptionModalOpen);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task FooterGuardar_WithAnAllergyOrAReadOnlyConsultation_KeepsTheSheetOpen_AndDoesNotSaySaved()
+    {
+        var (records, _) = Open();
+        var patient = new PatientRecord { Id = 79, FullName = "Ana Ruiz", RecordNumber = "EXP-79", Allergies = "Amoxicilina", ActivePrescription = new() };
+        records.SelectedPatient = patient;
+        records.StartActiveConsultation();
+        var rx = records.Prescription;
+        rx.OpenPrescriptionModal();
+
+        rx.PrescriptionSearchText = "amox";
+        rx.ConfirmPrescriptionSearch();
+        await rx.SavePrescriptionModalAsync();
+        Assert.IsTrue(rx.IsAllergyAlertOpen, "La alerta pide confirmar antes de agregarlo");
+        Assert.IsTrue(rx.IsPrescriptionModalOpen, "La hoja sigue abierta");
+        Assert.IsFalse(records.Info.IsInfoModalVisible, "No dice que se guardó");
+        rx.CancelAllergyPrescription();
+
+        // Consulta enviada a otro equipo: la corrección abierta no se puede guardar y la hoja sigue abierta
+        rx.ClearChosenMedicine();
+        rx.PrescriptionSearchText = "ibupro";
+        rx.ConfirmPrescriptionSearch();
+        await rx.AddPrescriptionAsync();
+        var row = patient.ActivePrescription.Single();
+        rx.SheetIndication.Start(row);
+        rx.SheetIndication.Text = "Otra";
+        records.Handoff.IsConsultationHandedOff = true;
+        records.Info.DismissInfoModal();
+        await rx.SavePrescriptionModalAsync();
+        Assert.IsTrue(rx.IsPrescriptionModalOpen);
+        Assert.IsTrue(rx.SheetIndication.IsEditing);
+        Assert.AreNotEqual("Otra", row.Dosage);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task RemovingTheRowBeingCorrected_ClosesItsCorrection()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        rx.PrescriptionSearchText = "parac";
+        rx.ConfirmPrescriptionSearch();
+        await rx.AddPrescriptionAsync();
+        var row = patient.ActivePrescription.Single();
+
+        rx.SheetIndication.Start(row);
+        await rx.RemovePrescriptionItemFromPatientAsync(row);
+        Assert.IsFalse(rx.SheetIndication.IsEditing);
+        Assert.IsEmpty(patient.ActivePrescription);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task FinishingTheConsultation_SavesAPendingCorrection_AndEndingOrChangingPatientClosesIt()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        rx.PrescriptionSearchText = "parac";
+        rx.ConfirmPrescriptionSearch();
+        rx.PrescriptionDosage = "1 tableta cada 8 horas";
+        await rx.AddPrescriptionAsync();
+        rx.ClosePrescriptionModal();
+        var row = patient.ActivePrescription.Single();
+
+        // "Terminar consulta" (o Ctrl+Enter) con la corrección de la sección 5 abierta: se guarda antes de la nota
+        rx.PlanIndication.Start(row);
+        rx.PlanIndication.Text = "1 tableta cada 6 horas";
+        await records.Consultation.FinalizeConsultationAsync();
+        Assert.AreEqual("1 tableta cada 6 horas", row.Dosage);
+        Assert.IsFalse(rx.PlanIndication.IsEditing);
+        records.Info.DismissInfoModal();
+
+        // Al cambiar de paciente no queda abierta
+        rx.PlanIndication.Start(row);
+        Assert.IsTrue(rx.PlanIndication.IsEditing);
+        records.SelectPatient(records.Patients.First(p => p.Id != patient.Id));
+        Assert.IsFalse(rx.PlanIndication.IsEditing);
+
+        // Ni al terminar la consulta (descartada, cobrada o cerrada desde el Punto de Venta)
+        records.SelectPatient(patient);
+        records.ShowConsultation();
+        rx.PlanIndication.Start(row);
+        Assert.IsTrue(rx.PlanIndication.IsEditing);
+        await records.DiscardActiveConsultationAsync();
+        Assert.IsFalse(records.HasActiveConsultation);
+        Assert.IsFalse(rx.PlanIndication.IsEditing, "La siguiente consulta no hereda una corrección que se queda con la Esc");
+        records.Dispose();
+    }
+
     // ================================================================== indicaciones frecuentes
 
     [TestMethod]

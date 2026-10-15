@@ -143,6 +143,10 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     // Mientras se escribe en el buscador el medicamento elegido, el cambio de texto no es una búsqueda nueva
     private bool _choosingMedicine;
 
+    // Se eligió lo escrito tal cual (Enter con la lista cerrada): el nombre es el texto; el producto, si lo hay, el del
+    // catálogo con ese nombre (alergias por su genérico, "Se surte aquí" y el aviso "Elegido del inventario")
+    private bool _chosenAsTyped;
+
     [ObservableProperty]
     private int _prescriptionQuantity = 1;
 
@@ -273,6 +277,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             _choosingMedicine = false;
         }
         PrescriptionMedicineName = string.Empty;
+        _chosenAsTyped = false;
         ChosenPrescriptionProduct = product;
         IsMedicineChosen = true;
         IsPrescriptionDropdownOpen = false;
@@ -280,8 +285,9 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
     /// <summary>
     /// Enter en el buscador. Con la lista abierta elige la sugerencia marcada; con la lista cerrada (nada coincide, o se
-    /// cerró con Esc) elige lo escrito tal cual, como medicamento escrito a mano; sin nada escrito no hace nada. true si
-    /// ya hay medicamento elegido (el cursor pasa a "Indicación").
+    /// cerró con Esc) elige lo escrito tal cual: si es el nombre de un producto del catálogo (una marca, por ejemplo),
+    /// ese producto cuenta para las alergias y "Se surte aquí"; si no, es un medicamento escrito a mano. Sin nada escrito
+    /// no hace nada. true si ya hay medicamento elegido (el cursor pasa a "Indicación").
     /// </summary>
     public bool ConfirmPrescriptionSearch()
     {
@@ -294,7 +300,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(PrescriptionSearchText)) return false;
 
         PrescriptionMedicineName = string.Empty;
-        ChosenPrescriptionProduct = null;
+        _chosenAsTyped = true;
+        ChosenPrescriptionProduct = _catalog.FindCatalogProduct(PrescriptionSearchText);
         IsMedicineChosen = true;
         IsPrescriptionDropdownOpen = false;
         return true;
@@ -321,11 +328,20 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAddPrescription))]
     public async Task AddPrescriptionAsync()
     {
-        if (!IsMedicineChosen && !ConfirmPrescriptionSearch())
+        // La dosis pediátrica ("Usar") deja su medicamento sin escribirlo en el buscador: con el buscador vacío y nada
+        // elegido, ese es el medicamento (antes que una sugerencia marcada en una lista que quedó abierta)
+        if (!IsMedicineChosen && string.IsNullOrWhiteSpace(PrescriptionSearchText) && !string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
-            // Solo la dosis pediátrica deja un medicamento sin escribirlo en el buscador
-            if (string.IsNullOrWhiteSpace(PrescriptionMedicineName)) return;
-            await SelectAndAddPrescriptionProductAsync(_catalog.FindCatalogProduct(PrescriptionMedicineName));
+            IsPrescriptionDropdownOpen = false;
+            await SelectAndAddPrescriptionProductAsync(null);
+            return;
+        }
+        if (!IsMedicineChosen && !ConfirmPrescriptionSearch()) return;
+
+        // Lo escrito tal cual se agrega con su texto (el producto se busca por ese nombre al agregar)
+        if (_chosenAsTyped)
+        {
+            await SelectAndAddPrescriptionProductAsync(null);
             return;
         }
 
@@ -369,8 +385,10 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         }
 
         // La lista de sugerencias puede dejar preseleccionado otro medicamento cuando el nombre se
-        // escribe a mano: solo cuenta el producto que corresponde a lo recetado (alergias y surtido)
-        if (product != null && !CatalogStore.ProductMatchesName(product, name))
+        // escribe a mano: solo cuenta el producto que corresponde a lo recetado (alergias y surtido). Sin
+        // producto, el del catálogo con ese nombre: una marca escrita a mano ("Tempra 500 mg") se revisa contra
+        // las alergias por su genérico, como el producto que se surtirá y se cobrará
+        if (product == null || !CatalogStore.ProductMatchesName(product, name))
         {
             product = _catalog.FindCatalogProduct(name);
         }
@@ -440,6 +458,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         CaptureIndications.Close();
         PrescriptionSearchText = string.Empty;
         IsMedicineChosen = false;
+        _chosenAsTyped = false;
         ChosenPrescriptionProduct = null;
         PrescriptionMedicineName = string.Empty;
         PrescriptionDosage = string.Empty;
@@ -466,6 +485,9 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         list.Remove(item);
         _session.SelectedPatient.ActivePrescription = list;
         _session.SelectedPatient.SyncPrescriptionJson();
+        // Quitar el renglón que se está corrigiendo cierra su corrección (si no, un campo invisible se quedaría con la Esc)
+        if (ReferenceEquals(SheetIndication.Item, item)) SheetIndication.Cancel();
+        if (ReferenceEquals(PlanIndication.Item, item)) PlanIndication.Cancel();
 
         if (_inventoryService != null)
         {
@@ -548,9 +570,26 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         SheetIndication.Cancel();
     }
 
+    /// <summary>
+    /// "Guardar" del pie de la hoja. Lo pendiente no se pierde: una "Cambiar indicación" abierta se guarda y un medicamento
+    /// ya elegido se agrega con su indicación (con la revisión de alergias de siempre). Si algo de eso no se pudo (la
+    /// consulta está en otro equipo, o la alerta de alergia pide confirmar), la hoja sigue abierta y no dice "guardada".
+    /// Lo escrito sin elegir se queda como antes (no se agrega).
+    /// </summary>
     [RelayCommand]
     public async Task SavePrescriptionModalAsync()
     {
+        if (SheetIndication.IsEditing)
+        {
+            await SheetIndication.SaveAsync();
+            if (SheetIndication.IsEditing) return;
+        }
+        if (IsMedicineChosen)
+        {
+            await AddPrescriptionAsync();
+            if (IsAllergyAlertOpen || IsMedicineChosen) return;
+        }
+
         if (_session.SelectedPatient != null)
         {
             _session.SelectedPatient.SyncPrescriptionJson();
@@ -663,6 +702,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(PrescriptionSearchText) && string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
             PrescriptionMedicineName = rule.Medication;
+            // Una lista de sugerencias abierta con ↓ no debe quedar marcando otro medicamento
+            IsPrescriptionDropdownOpen = false;
         }
     }
 
@@ -716,6 +757,35 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     // ==========================================
     // "CAMBIAR INDICACIÓN" DE UN RENGLÓN (PEDIDO DEL 2026-10-14)
     // ==========================================
+
+    /// <summary>
+    /// La corrección está abierta en un renglón que sigue en la receta que se ve (la escalera de Esc no cierra una
+    /// corrección que ya no se ve, p. ej. de un renglón que se quitó o que cambió con una recarga).
+    /// </summary>
+    public bool IsEditingAShownRow(PrescriptionIndicationEditor editor) =>
+        editor.Item is { } item && _session.SelectedPatient?.ActivePrescription.Contains(item) == true;
+
+    /// <summary>
+    /// Antes de terminar la consulta: una "Cambiar indicación" abierta (en la sección 5 o en la hoja) se guarda. false si
+    /// no se pudo (la consulta está en otro equipo): no se termina con la indicación vieja.
+    /// </summary>
+    public async Task<bool> CommitPendingIndicationEditsAsync()
+    {
+        foreach (var editor in new[] { PlanIndication, SheetIndication })
+        {
+            if (!editor.IsEditing) continue;
+            await editor.SaveAsync();
+            if (editor.IsEditing) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Terminó la consulta o cambió el paciente: ninguna corrección queda abierta para la siguiente.</summary>
+    public void CancelIndicationEdits()
+    {
+        SheetIndication.Cancel();
+        PlanIndication.Cancel();
+    }
 
     /// <summary>
     /// Un renglón se corrige si es de la receta que se ve (el mismo objeto) y la consulta no está en otro equipo (con aviso).

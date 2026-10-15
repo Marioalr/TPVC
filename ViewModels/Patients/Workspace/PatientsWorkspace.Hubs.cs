@@ -13,6 +13,8 @@ public partial class PatientsWorkspace
 {
     void IPatientsHubs.OnSelectedPatientChanged(PatientRecord? oldValue, PatientRecord? newValue)
     {
+        // Una "Cambiar indicación" abierta era de los renglones del paciente anterior
+        Prescription.CancelIndicationEdits();
         // Solo un cambio real de paciente reinicia el estado de guardado de la consulta
         if (oldValue?.Id != newValue?.Id || newValue == null)
         {

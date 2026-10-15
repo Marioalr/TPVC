@@ -255,6 +255,22 @@ public class EscapeLadderTests
     }
 
     [TestMethod]
+    public void ACorrectionWhoseRowIsNoLongerShown_DoesNotSwallowEsc()
+    {
+        var (records, row) = PrescriptionWithARow();
+        var rx = records.Prescription;
+        rx.SheetIndication.Start(row);
+        Assert.IsTrue(rx.SheetIndication.IsEditing);
+
+        // El renglón ya no está en la receta (p. ej. se cambió la lista con una recarga): su corrección no se ve
+        records.SelectedPatient!.ActivePrescription = new List<PatientPrescriptionItem>();
+        Assert.IsTrue(records.TryCloseTopmost());
+        Assert.IsFalse(rx.IsPrescriptionModalOpen, "La primera Esc cierra la hoja, que es lo que se ve");
+        Assert.IsFalse(rx.SheetIndication.IsEditing, "Cerrar la hoja también cierra la corrección");
+        records.Dispose();
+    }
+
+    [TestMethod]
     public void OnTheConsultation_EscClosesTheIndicationListThenTheCorrection_AndNeverLeavesTheConsultation()
     {
         var (records, row) = PrescriptionWithARow();
