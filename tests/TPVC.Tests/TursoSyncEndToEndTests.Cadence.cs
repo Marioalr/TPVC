@@ -61,6 +61,9 @@ public partial class TursoSyncEndToEndTests
 
         public void Close(SyncScheduler scheduler) => _active.Remove(scheduler);
 
+        /// <summary>Lo que hace <see cref="SyncScheduler.Wake"/> con la vuelta en segundo plano: una pasada ya.</summary>
+        public void Wake(SyncScheduler scheduler) => _active[scheduler] = Now;
+
         public void At(DateTime at, Func<Task> run) => _events.Add((at, _order++, run));
 
         /// <summary>Una pasada o un suceso, lo que toque primero antes de <paramref name="until"/>; false si no hay nada.</summary>
@@ -173,6 +176,27 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
+    public async Task AChangeMarkInTheFuture_TriggersOneSync_NotALoop()
+    {
+        var clock = SimulatedClock();
+        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        // Un equipo con una marca rara (en el futuro): cada revisión la vería posterior a la última bajada
+        using (_server.Lock())
+        {
+            using var cmd = _server.Connection.CreateCommand();
+            cmd.CommandText = "UPDATE RegisteredDevices SET LastPushUtc = '2099-01-01 00:00:00.000' WHERE DeviceId = 'device-tablet'";
+            Assert.AreEqual(1, cmd.ExecuteNonQuery());
+        }
+        var cadence = CadenceOf(pc, inPatients: true);
+        var reasons = RecordReasons(cadence, clock);
+        var driver = new CadenceDriver(clock);
+        driver.Open(cadence);
+        await driver.RunUntilAsync(driver.Now.AddMinutes(5));
+        Assert.AreEqual(1, reasons.Count(r => r.Reason == SyncScheduler.ReasonPeerChanges), "La misma marca dispara una sola sincronización");
+        Assert.IsEmpty(reasons.Where(r => r.Reason != SyncScheduler.ReasonPeerChanges));
+    }
+
+    [TestMethod]
     public async Task WithoutPeers_ThePcChecksEveryThirtySeconds_AlsoInPatients()
     {
         var clock = SimulatedClock();
@@ -250,14 +274,69 @@ public partial class TursoSyncEndToEndTests
         var gaps = checks.Zip(checks.Skip(1), (a, b) => (b - a).TotalSeconds).ToArray();
         CollectionAssert.AreEqual(new double[] { 30, 60, 120, 300, 300 }, gaps.Take(5).ToArray(), $"Revisiones: {string.Join(", ", gaps)}");
 
-        // Vuelve la red: la siguiente revisión que responde sincroniza enseguida, sin esperar el reintento
+        // Vuelve la red: sincroniza a más tardar con la primera revisión que responde (o antes, si toca el reintento)
         _server.IsOffline = false;
         reasons.Clear();
         var back = driver.Now;
         await driver.RunUntilAsync(back.AddMinutes(6), () => reasons.Count > 0);
-        Assert.AreEqual(SyncScheduler.ReasonNetworkBack, reasons.Single().Reason);
+        var (syncedAt, why) = reasons.Single();
+        if (why == SyncScheduler.ReasonNetworkBack) CollectionAssert.Contains(checks, syncedAt, "En la pasada de la revisión que respondió");
+        else Assert.AreEqual(SyncScheduler.ReasonRetry, why);
         Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status);
         Assert.IsNull(cadence.RetryAtUtc);
+
+        // Otra vez sin red, y una revisión que falla; al volver, la primera revisión que responde sincroniza sin esperar
+        _server.IsOffline = true;
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(25));
+        Assert.IsNotNull(cadence.RetryAtUtc);
+        _server.IsOffline = false;
+        reasons.Clear();
+        checks.Clear();
+        // El médico vuelve a Pacientes: la revisión va enseguida, antes del reintento
+        cadence.InPatientsSection = false;
+        cadence.InPatientsSection = true;
+        driver.Wake(cadence);
+        var enteredAt = driver.Now;
+        await driver.StepAsync(enteredAt.AddSeconds(1));
+        CollectionAssert.AreEqual(new[] { enteredAt }, checks);
+        Assert.AreEqual((enteredAt, SyncScheduler.ReasonNetworkBack), reasons.Single(), "En la misma pasada de la revisión que respondió");
+
+        // Windows avisa que volvió la red (o que salió de la suspensión): revisa y sincroniza en ese momento
+        _server.IsOffline = true;
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        _server.IsOffline = false;
+        reasons.Clear();
+        cadence.OnConnectivityRestored();
+        driver.Wake(cadence);
+        var restoredAt = driver.Now;
+        await driver.StepAsync(restoredAt.AddMinutes(1));
+        Assert.AreEqual((restoredAt, SyncScheduler.ReasonNetworkBack), reasons.Single());
+        Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status);
+    }
+
+    [TestMethod]
+    public async Task ActivatingTheWindow_SyncsOnlyIfTheLastGoodSyncIsOlderThanThirtySeconds()
+    {
+        var clock = SimulatedClock();
+        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        var cadence = CadenceOf(pc, inPatients: false);
+        var reasons = RecordReasons(cadence, clock);
+        var driver = new CadenceDriver(clock);
+        driver.Open(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(20));
+
+        cadence.OnWindowActivated();
+        driver.Wake(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(1));
+        Assert.IsEmpty(reasons, "La última buena fue hace 20 s");
+
+        await driver.RunUntilAsync(driver.Now.AddSeconds(20));
+        cadence.OnWindowActivated();
+        driver.Wake(cadence);
+        var activatedAt = driver.Now;
+        await driver.RunUntilAsync(activatedAt.AddSeconds(1));
+        Assert.AreEqual((activatedAt, SyncScheduler.ReasonActivated), reasons.Single());
     }
 
     [TestMethod]
