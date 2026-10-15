@@ -1,0 +1,544 @@
+{
+  "rule": "catalog-matching",
+  "culture": "es-MX",
+  "today": null,
+  "now": null,
+  "contract": 15,
+  "notes": [
+    "Qué producto es un renglón y qué es medicamento (Services/Rules/CatalogMatchingRules.cs, antes CatalogStore; PatientSheetRows.FindProductByName; PrescriptionNaming.MedicineLine). Los productos, como en rank-products.json.",
+    "product-matches-name (el medicamento elegido sigue siendo ese renglón al guardar la receta y al cargarlo con «Se surte aquí»): con todo normalizado (text-search.json), el nombre, 'Nombre (Presentación)', el nombre seguido de un espacio y algo más, el genérico (si tiene) o el renglón normado de la receta (si tiene genérico).",
+    "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es, sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase, no normalizada), el nombre, 'Nombre (Presentación)', el genérico o el renglón normado; el primero de la lista; null sin texto o si ninguno. Diferencia con product-matches-name: ver la nota de los acentos y del 'algo más'.",
+    "kind: medicamento si el nombre de la categoría contiene 'Medicamento' o 'Fármaco' (sin distinguir mayúsculas; los acentos cuentan) o el código empieza con 'MED'; insumo si la categoría contiene 'Curación', 'Insumo', 'Antiséptico' o 'Diagnóstico', o el código empieza con CUR, INS, ANT, DIA o MAT; si nada de eso, medicamento. Se revisa en ese orden.",
+    "medicine-line (PrescriptionNaming.MedicineLine, Reglamento de Insumos para la Salud): el genérico, su concentración (del nombre o de la presentación, si el genérico no trae dígitos), su forma farmacéutica (de la presentación o del nombre, si el genérico no la dice) y la marca entre paréntesis si el nombre no es el genérico; sin genérico, el nombre."
+  ],
+  "cases": [
+    {
+      "name": "el renglón es el producto · el nombre",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 2,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas",
+          "stock": 45,
+          "category": "Medicamentos"
+        },
+        "name": "paracetamol 500 MG"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · nombre (presentación)",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 2,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas",
+          "stock": 45,
+          "category": "Medicamentos"
+        },
+        "name": "Paracetamol 500 mg (Caja con 20 tabletas)"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · el nombre y algo más",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 2,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas",
+          "stock": 45,
+          "category": "Medicamentos"
+        },
+        "name": "Paracetamol 500 mg cada 8 horas"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · el nombre pegado a otra palabra no",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 2,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas",
+          "stock": 45,
+          "category": "Medicamentos"
+        },
+        "name": "Paracetamol 500 mgx"
+      },
+      "expected": false
+    },
+    {
+      "name": "el renglón es el producto · el genérico",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 1,
+          "code": "MED-002",
+          "name": "Tempra",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas 500 mg",
+          "stock": 10,
+          "category": "Medicamentos"
+        },
+        "name": "paracetamol"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · el renglón normado de la receta (marca entre paréntesis)",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 1,
+          "code": "MED-002",
+          "name": "Tempra",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas 500 mg",
+          "stock": 10,
+          "category": "Medicamentos"
+        },
+        "name": "Paracetamol 500 mg tabletas (Tempra)"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · sin acentos",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 3,
+          "code": "MED-003",
+          "name": "Ácido fólico 5 mg",
+          "genericName": "Ácido fólico",
+          "presentation": "Caja con 30 tabletas",
+          "stock": 10,
+          "category": "Medicamentos"
+        },
+        "name": "acido folico 5 mg"
+      },
+      "expected": true
+    },
+    {
+      "name": "el renglón es el producto · otro producto",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 3,
+          "code": "MED-003",
+          "name": "Ácido fólico 5 mg",
+          "genericName": "Ácido fólico",
+          "presentation": "Caja con 30 tabletas",
+          "stock": 10,
+          "category": "Medicamentos"
+        },
+        "name": "Ácido acetilsalicílico"
+      },
+      "expected": false
+    },
+    {
+      "name": "el renglón es el producto · vacío",
+      "input": {
+        "check": "product-matches-name",
+        "product": {
+          "id": 4,
+          "code": "INS-001",
+          "name": "Gasa Estéril 10x10 cm",
+          "presentation": "Sobre con 5 piezas",
+          "stock": 120,
+          "category": "Material de curación"
+        },
+        "name": ""
+      },
+      "expected": false
+    },
+    {
+      "name": "producto por nombre · el nombre sin distinguir mayúsculas",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 1,
+            "code": "MED-002",
+            "name": "Tempra",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas 500 mg",
+            "stock": 10,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": " paracetamol 500 MG "
+      },
+      "expected": 2
+    },
+    {
+      "name": "producto por nombre · el genérico: el primero de la lista",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 1,
+            "code": "MED-002",
+            "name": "Tempra",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas 500 mg",
+            "stock": 10,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Paracetamol"
+      },
+      "expected": 1
+    },
+    {
+      "name": "producto por nombre · el renglón normado",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 1,
+            "code": "MED-002",
+            "name": "Tempra",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas 500 mg",
+            "stock": 10,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Paracetamol 500 mg tabletas (Tempra)"
+      },
+      "expected": 1
+    },
+    {
+      "name": "producto por nombre · nombre (presentación)",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 4,
+            "code": "INS-001",
+            "name": "Gasa Estéril 10x10 cm",
+            "presentation": "Sobre con 5 piezas",
+            "stock": 120,
+            "category": "Material de curación"
+          }
+        ],
+        "name": "Gasa Estéril 10x10 cm (Sobre con 5 piezas)"
+      },
+      "expected": 4
+    },
+    {
+      "name": "producto por nombre · los acentos sí cuentan aquí (a diferencia de product-matches-name)",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 3,
+            "code": "MED-003",
+            "name": "Ácido fólico 5 mg",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 10,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Acido folico 5 mg"
+      },
+      "expected": null
+    },
+    {
+      "name": "producto por nombre · el nombre y algo más no",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Paracetamol 500 mg cada 8 horas"
+      },
+      "expected": null
+    },
+    {
+      "name": "producto por nombre · vacío",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "  "
+      },
+      "expected": null
+    },
+    {
+      "name": "medicamento o insumo · categoría Medicamentos",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 10,
+          "code": "X-1",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Medicamentos"
+        }
+      },
+      "expected": "medicamento"
+    },
+    {
+      "name": "medicamento o insumo · categoría con Fármaco",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 11,
+          "code": "CUR-1",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Fármacos controlados"
+        }
+      },
+      "expected": "medicamento"
+    },
+    {
+      "name": "medicamento o insumo · sin acento en Fármaco no cuenta como medicamento por la categoría",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 12,
+          "code": "X-2",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Farmacos"
+        }
+      },
+      "expected": "medicamento"
+    },
+    {
+      "name": "medicamento o insumo · código MED en minúsculas",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 13,
+          "code": "med-77",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Insumos"
+        }
+      },
+      "expected": "medicamento"
+    },
+    {
+      "name": "medicamento o insumo · categoría de curación",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 14,
+          "code": "X-3",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Material de curación"
+        }
+      },
+      "expected": "insumo"
+    },
+    {
+      "name": "medicamento o insumo · categoría de diagnóstico",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 15,
+          "code": "X-4",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Pruebas de diagnóstico"
+        }
+      },
+      "expected": "insumo"
+    },
+    {
+      "name": "medicamento o insumo · código INS sin categoría",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 16,
+          "code": "INS-9",
+          "name": "Algo",
+          "stock": 0
+        }
+      },
+      "expected": "insumo"
+    },
+    {
+      "name": "medicamento o insumo · código MAT",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 17,
+          "code": "MAT-1",
+          "name": "Algo",
+          "stock": 0,
+          "category": "Otros"
+        }
+      },
+      "expected": "insumo"
+    },
+    {
+      "name": "medicamento o insumo · ni categoría ni código conocido: medicamento",
+      "input": {
+        "check": "kind",
+        "product": {
+          "id": 18,
+          "code": "",
+          "name": "Algo",
+          "stock": 0
+        }
+      },
+      "expected": "medicamento"
+    },
+    {
+      "name": "renglón de la receta · genérico, concentración del nombre y forma de la presentación, con la marca",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 1,
+          "code": "MED-002",
+          "name": "Tempra",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas 500 mg",
+          "stock": 10,
+          "category": "Medicamentos"
+        }
+      },
+      "expected": "Paracetamol 500 mg tabletas (Tempra)"
+    },
+    {
+      "name": "renglón de la receta · el genérico ya en el nombre: sin marca",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 2,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol",
+          "presentation": "Caja con 20 tabletas",
+          "stock": 45,
+          "category": "Medicamentos"
+        }
+      },
+      "expected": "Paracetamol 500 mg tabletas"
+    },
+    {
+      "name": "renglón de la receta · con acentos",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 3,
+          "code": "MED-003",
+          "name": "Ácido fólico 5 mg",
+          "genericName": "Ácido fólico",
+          "presentation": "Caja con 30 tabletas",
+          "stock": 10,
+          "category": "Medicamentos"
+        }
+      },
+      "expected": "Ácido fólico 5 mg tabletas"
+    },
+    {
+      "name": "renglón de la receta · sin genérico: el nombre",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 4,
+          "code": "INS-001",
+          "name": "Gasa Estéril 10x10 cm",
+          "presentation": "Sobre con 5 piezas",
+          "stock": 120,
+          "category": "Material de curación"
+        }
+      },
+      "expected": "Gasa Estéril 10x10 cm"
+    },
+    {
+      "name": "renglón de la receta · suspensión con concentración por volumen",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 20,
+          "code": "MED-020",
+          "name": "Amoxil 250 mg/5 ml",
+          "genericName": "Amoxicilina",
+          "presentation": "Frasco con 75 ml suspensión",
+          "stock": 0
+        }
+      },
+      "expected": "Amoxicilina 250 mg/5 ml suspensión (Amoxil)"
+    },
+    {
+      "name": "renglón de la receta · el genérico con su concentración no la repite",
+      "input": {
+        "check": "medicine-line",
+        "product": {
+          "id": 21,
+          "code": "MED-021",
+          "name": "Augmentin 875/125 mg",
+          "genericName": "Amoxicilina/ácido clavulánico 875/125 mg",
+          "presentation": "Caja con 14 tabletas",
+          "stock": 0
+        }
+      },
+      "expected": "Amoxicilina/ácido clavulánico 875/125 mg tabletas (Augmentin)"
+    }
+  ]
+}

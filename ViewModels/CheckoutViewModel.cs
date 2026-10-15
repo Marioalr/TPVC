@@ -56,8 +56,6 @@ public partial class CheckoutViewModel : ObservableObject
     public const string DefaultClient = "Público General";
     public const string Cash = "Efectivo";
 
-    private static readonly CultureInfo Mexican = CultureInfo.GetCultureInfo("es-MX");
-
     private readonly InventoryService? _inventoryService;
     private readonly Func<string> _cashierName;
     private List<CartItem>? _lastClearedCart;
