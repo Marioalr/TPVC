@@ -212,6 +212,10 @@ internal sealed class UiSmokeSession
         using (var db = new AppDbContext(builder.Options))
         {
             DatabaseInitializer.Initialize(db);
+            // Indicaciones frecuentes (la base de demostración no trae las del Excel del consultorio): desde el 2026-10-14
+            // la receta las ofrece dentro del campo "Indicación"
+            db.PrescriptionTemplates.AddRange(SamplePosologies());
+            db.SaveChanges();
         }
         var factory = new AppDbContextFactory(builder.Options);
         var inventory = new InventoryService(factory);
@@ -469,7 +473,20 @@ internal sealed class UiSmokeSession
             records.Consultation.ConsultationSection = 5;
             Capture(host, $"09-consulta-tratamiento-{suffix}");
 
-            // Laboratorio (v1.25.0): la sección 6 con estudios y una búsqueda abierta, y la vista previa de la solicitud
+            // Laboratorio (v1.25.0): la sección 6 con estudios y una búsqueda abierta, y la vista previa de la solicitud.
+            // Desde el 2026-10-14 se llega con "Estudios de laboratorio" de la sección 5
+            if (FindNamed(host, "Estudios de laboratorio") is System.Windows.Controls.Button labButton)
+            {
+                // Como un clic: su Click (traer la sección a la vista) y su comando
+                ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.ButtonAutomationPeer(labButton)
+                    .GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+                Pump();
+                if (records.Consultation.ConsultationSection != 6) _failures.Add($"[09b-{suffix}] «Estudios de laboratorio» no abrió la sección 6");
+            }
+            else
+            {
+                _failures.Add($"[09-{suffix}] La sección 5 no tiene el botón «Estudios de laboratorio»");
+            }
             records.Consultation.ConsultationSection = 6;
             records.Labs.AddPanel(LabCatalog.Panels[0]);
             records.Labs.AppendIndication(LabCatalog.IndicationPresets[0]);
@@ -483,6 +500,18 @@ internal sealed class UiSmokeSession
             }
             Capture(host, $"09c-vista-previa-laboratorio-{suffix}");
             records.Labs.ClosePreview();
+
+            // El pie de la nota, después de Laboratorio: "Agendar próxima cita" y "Terminar consulta"
+            if (FindNamed(host, "Agendar próxima cita") is { } footerSchedule)
+            {
+                Layout(host, Width, Height);
+                footerSchedule.BringIntoView();
+                Capture(host, $"09d-consulta-pie-{suffix}");
+            }
+            else
+            {
+                _failures.Add($"[09d-{suffix}] No se encontró el pie de la nota con «Agendar próxima cita»");
+            }
             records.Consultation.ConsultationSection = 5;
 
             records.ShowChartFromConsultation();
@@ -491,6 +520,18 @@ internal sealed class UiSmokeSession
 
             WaitFor(records.Prescription.OpenPrescriptionModalAsync());
             Capture(host, $"11-receta-{suffix}");
+
+            // Pedido del 2026-10-14: el medicamento elegido (aún sin agregar) y las indicaciones frecuentes dentro del campo
+            records.Prescription.PrescriptionSearchText = "para";
+            Capture(host, $"11e-receta-sugerencias-{suffix}");
+            records.Prescription.ConfirmPrescriptionSearch();
+            if (!records.Prescription.IsMedicineChosen || !records.Prescription.CaptureIndications.Open())
+            {
+                _failures.Add($"[11f-{suffix}] No se eligió el medicamento o no se abrieron las indicaciones frecuentes");
+            }
+            Capture(host, $"11f-receta-elegido-frecuentes-{suffix}");
+            records.Prescription.CaptureIndications.Close();
+            records.Prescription.ClearChosenMedicine();
 
             // El paciente de prueba es alérgico a la penicilina: la amoxicilina debe avisar
             records.Prescription.PrescriptionMedicineName = "Amoxicilina / Ácido Clavulánico 500/125 mg";
@@ -504,6 +545,21 @@ internal sealed class UiSmokeSession
             WaitFor(records.Prescription.RepeatPreviousPrescriptionAsync());
             records.Info.DismissInfoModal();
             Capture(host, $"11c-receta-con-medicamentos-{suffix}");
+
+            // "Cambiar indicación" en un renglón de la hoja, con sus frecuentes abiertas
+            var firstRow = records.Session.SelectedPatient!.ActivePrescription.FirstOrDefault();
+            if (firstRow != null)
+            {
+                records.Prescription.SheetIndication.Start(firstRow);
+                records.Prescription.SheetIndication.Picker.Open();
+                Capture(host, $"11g-receta-cambiar-indicacion-{suffix}");
+                if (!records.Prescription.SheetIndication.IsEditing) _failures.Add($"[11g-{suffix}] «Cambiar indicación» no abrió el campo del renglón");
+                records.Prescription.SheetIndication.Cancel();
+            }
+            else
+            {
+                _failures.Add($"[11c-{suffix}] La receta repetida quedó vacía");
+            }
             records.Preview.OpenPrescriptionPdfPreview();
             Capture(host, $"11d-vista-previa-receta-{suffix}");
             records.Preview.ClosePrescriptionPdfPreview();
@@ -511,6 +567,15 @@ internal sealed class UiSmokeSession
             if (suffix == "claro") CheckPrintedPrescription(records.Session.SelectedPatient!, profile.CurrentProfile, records.Preview.PrescriptionIndications);
             records.Info.DismissInfoModal();
             records.Prescription.ClosePrescriptionModal();
+
+            // "Cambiar indicación" también en la lista de la sección 5 de la consulta
+            if (firstRow != null)
+            {
+                records.Prescription.PlanIndication.Start(firstRow);
+                records.Prescription.PlanIndication.Picker.Open();
+                Capture(host, $"11h-consulta-cambiar-indicacion-{suffix}");
+                records.Prescription.PlanIndication.Cancel();
+            }
 
             WaitFor(records.Supplies.OpenSuppliesModalAsync());
             Capture(host, $"12-insumos-{suffix}");
@@ -551,6 +616,18 @@ internal sealed class UiSmokeSession
             {
                 Show(host, main, sub, $"20-config-{sub.ToLowerInvariant()}-{suffix}");
             }
+
+            // Pedido del 2026-10-14: la receta de ejemplo en "Médico y consultorio", en media carta y en carta (papel blanco
+            // con cualquier tema: las páginas son las del documento que se imprime)
+            main.NavigateTo("ClinicProfile");
+            var clinicProfile = shell.ClinicProfileVM;
+            clinicProfile.OpenPrescriptionPreview();
+            Capture(host, $"20l-config-receta-media-carta-{suffix}");
+            CheckPreviewPages(host, PrescriptionSheet.PageHeight, $"20l-{suffix}");
+            clinicProfile.ShowPreviewPaper(PrescriptionPaper.Letter);
+            Capture(host, $"20m-config-receta-carta-{suffix}");
+            CheckPreviewPages(host, PrescriptionSheet.LetterPageHeight, $"20m-{suffix}");
+            clinicProfile.ClosePrescriptionPreview();
 
             // Paso 8.2: el freno de consumo detiene la sincronización automática y ofrece "Reanudar"
             tursoSettings.RecordUsage(TursoConsumptionBrake.MaxRowsReadPerDay + 1, 0);
@@ -811,6 +888,30 @@ internal sealed class UiSmokeSession
     // ------------------------------------------------------------------ receta impresa (fase 7.4)
 
     /// <summary>El médico y su membrete como quedan al importar su Excel (escudo y trazo de la hoja RECETA).</summary>
+    /// <summary>La vista previa de la receta de "Médico y consultorio" dibujó sus páginas en blanco y con el alto del papel elegido.</summary>
+    private void CheckPreviewPages(System.Windows.FrameworkElement host, double paperHeight, string screen)
+    {
+        var view = FindDescendant<TPVC.Views.ClinicProfileView>(host);
+        var pages = view?.FindName("PreviewPages") as System.Windows.Controls.StackPanel;
+        var first = pages?.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault();
+        if (first == null)
+        {
+            _failures.Add($"[{screen}] La vista previa de la receta no dibujó ninguna página");
+            return;
+        }
+        if (Math.Abs(first.Height - paperHeight) > 0.5) _failures.Add($"[{screen}] La página mide {first.Height} de alto en lugar de {paperHeight}");
+        if ((first.Background as System.Windows.Media.SolidColorBrush)?.Color != System.Windows.Media.Colors.White)
+            _failures.Add($"[{screen}] La página de la vista previa no es blanca");
+    }
+
+    /// <summary>Indicaciones frecuentes de muestra (la base de demostración no trae las del Excel del consultorio).</summary>
+    private static List<PrescriptionTemplate> SamplePosologies() => new()
+    {
+        new() { Kind = PrescriptionTemplateKinds.Posology, Title = "Cada 8", Text = "Tomar 1 tableta vía oral cada 8 horas por 5 días", SortOrder = 1 },
+        new() { Kind = PrescriptionTemplateKinds.Posology, Title = "Cada 12", Text = "Tomar 1 tableta vía oral cada 12 horas por 7 días", SortOrder = 2 },
+        new() { Kind = PrescriptionTemplateKinds.Posology, Title = "Si hay dolor", Text = "Tomar 1 tableta vía oral cada 8 horas solo si hay dolor o fiebre", SortOrder = 3 }
+    };
+
     private static void SeedDoctorLetterhead(ClinicProfileService profile)
     {
         profile.SaveProfile(new ClinicProfile
@@ -1536,20 +1637,70 @@ internal sealed class UiKeyboardPass
         Settle();
         var sheet = PumpUntilFound<TPVC.Views.PrescriptionSheetView>(v => v.IsVisible);
         var box = sheet?.FindName("PrescriptionSearchTextBox") as System.Windows.Controls.TextBox;
-        if (!Check(box != null, "Receta: no se encontró el buscador")) return;
+        var dosageBox = sheet?.FindName("PrescriptionDosageTextBox") as System.Windows.Controls.TextBox;
+        if (!Check(box != null && dosageBox != null, "Receta: no se encontró el buscador o la indicación")) return;
 
-        var suggestions = _records.Prescription.PrescriptionProductSuggestions.ToList();
+        var rx = _records.Prescription;
+        var suggestions = rx.PrescriptionProductSuggestions.ToList();
         var before = _records.SelectedPatient!.ActivePrescription.Count;
         if (Check(suggestions.Count > 1, "Receta: se esperaban al menos dos sugerencias"))
         {
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(_records.Prescription.SelectedPrescriptionProduct, suggestions[1]),
+            // Pedido del 2026-10-14: ↓ abre las sugerencias; Enter elige (no agrega) y el cursor pasa a la indicación
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && rx.IsPrescriptionDropdownOpen && ReferenceEquals(rx.SelectedPrescriptionProduct, suggestions[0]),
+                "Receta: ↓ con el buscador vacío abre las sugerencias");
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(rx.SelectedPrescriptionProduct, suggestions[1]),
                 "Receta: ↓ en el buscador elige la siguiente sugerencia");
             var chosen = suggestions[1];
+            ClearFocus(box!);
             Check(PressKey(box!, System.Windows.Input.Key.Enter), "Receta: Enter en el buscador se atiende");
-            Check(PumpUntil(() => _records.SelectedPatient!.ActivePrescription.Count == before + 1),
-                "Receta: Enter agrega la sugerencia elegida");
-            Check(_records.SelectedPatient!.ActivePrescription.LastOrDefault()?.MedicineName.StartsWith(chosen.Name, StringComparison.Ordinal) == true,
-                $"Receta: se agregó otro medicamento ({_records.SelectedPatient!.ActivePrescription.LastOrDefault()?.MedicineName})");
+            Check(rx.IsMedicineChosen && ReferenceEquals(rx.ChosenPrescriptionProduct, chosen) && _records.SelectedPatient!.ActivePrescription.Count == before,
+                "Receta: Enter en el buscador elige el medicamento sin agregarlo");
+            Check(box!.Text == PrescriptionNaming.MedicineLine(chosen), $"Receta: el buscador muestra el elegido (se ve \"{box.Text}\")");
+            Check(PumpUntil(() => HasFocus(dosageBox!)), "Receta: después de elegir, el cursor pasa a la indicación");
+            Check(_records.Templates.PosologyTemplates.Count >= 2, "Receta: la base de prueba trae indicaciones frecuentes");
+
+            // Las frecuentes dentro del campo: ↓ las abre, Esc solo cierra la lista, Enter escribe la marcada
+            Check(PressKey(dosageBox!, System.Windows.Input.Key.Down) && rx.CaptureIndications.IsOpen, "Receta: ↓ en la indicación abre las frecuentes");
+            Check(PressEscape() && !rx.CaptureIndications.IsOpen && rx.IsPrescriptionModalOpen, "Receta: Esc cierra las frecuentes y la receta sigue abierta");
+            Check(PressKey(dosageBox!, System.Windows.Input.Key.Down) && PressKey(dosageBox!, System.Windows.Input.Key.Down)
+                  && PressKey(dosageBox!, System.Windows.Input.Key.Enter) && !rx.CaptureIndications.IsOpen
+                  && rx.PrescriptionDosage == _records.Templates.PosologyTemplates[1].Text && dosageBox!.Text == rx.PrescriptionDosage,
+                $"Receta: ↓ y Enter escriben la frecuente marcada en la indicación (quedó \"{rx.PrescriptionDosage}\")");
+
+            // La indicación se edita y Enter en el campo agrega el medicamento con ella
+            dosageBox!.SetCurrentValue(System.Windows.Controls.TextBox.TextProperty, "1 tableta cada 8 horas");
+            ClearFocus(dosageBox);
+            Check(PressKey(dosageBox, System.Windows.Input.Key.Enter), "Receta: Enter en la indicación se atiende");
+            Check(PumpUntil(() => _records.SelectedPatient!.ActivePrescription.Count == before + 1), "Receta: Enter en la indicación agrega el medicamento");
+            var added = _records.SelectedPatient!.ActivePrescription.LastOrDefault();
+            Check(added?.MedicineName == PrescriptionNaming.MedicineLine(chosen) && added?.Dosage == "1 tableta cada 8 horas",
+                $"Receta: se agregó otro medicamento o sin su indicación ({added?.MedicineName}: {added?.Dosage})");
+            Check(PumpUntil(() => HasFocus(box)) && box.Text.Length == 0, "Receta: después de agregar, el cursor vuelve al buscador vacío");
+
+            // "Cambiar indicación": el lápiz del renglón abre su campo con el cursor; Esc cierra primero sus frecuentes y Enter guarda
+            var pencil = added == null ? null : PumpUntilFound<System.Windows.Controls.Button>(sheet!,
+                b => System.Windows.Automation.AutomationProperties.GetName(b) == "Cambiar indicación" && ReferenceEquals(b.DataContext, added));
+            if (Check(pencil?.Command != null, "Receta: el renglón no tiene «Cambiar indicación»"))
+            {
+                var rowId = added!.RowId;
+                ClearFocus(pencil!);
+                Invoke(pencil!);
+                var editBox = PumpUntilFound<System.Windows.Controls.TextBox>(sheet!,
+                    t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Nueva indicación");
+                if (Check(editBox != null && PumpUntil(() => HasFocus(editBox)), "Receta: «Cambiar indicación» abre el campo con el cursor"))
+                {
+                    Check(PressKey(editBox!, System.Windows.Input.Key.Down) && rx.SheetIndication.Picker.IsOpen, "Receta: ↓ en el renglón abre las frecuentes");
+                    Check(PressEscape() && !rx.SheetIndication.Picker.IsOpen && rx.SheetIndication.IsEditing && rx.IsPrescriptionModalOpen,
+                        "Receta: Esc cierra primero las frecuentes del renglón");
+                    editBox!.SetCurrentValue(System.Windows.Controls.TextBox.TextProperty, "1 tableta cada 6 horas");
+                    Check(PressKey(editBox, System.Windows.Input.Key.Enter) && PumpUntil(() => !rx.SheetIndication.IsEditing), "Receta: Enter guarda la indicación del renglón");
+                    Check(added.Dosage == "1 tableta cada 6 horas" && added.RowId == rowId && ReferenceEquals(_records.SelectedPatient!.ActivePrescription.LastOrDefault(), added),
+                        $"Receta: la indicación nueva queda en el mismo renglón ({added.Dosage})");
+                }
+                Invoke(pencil!);
+                Check(rx.SheetIndication.IsEditing && PressEscape() && !rx.SheetIndication.IsEditing && rx.IsPrescriptionModalOpen && added.Dosage == "1 tableta cada 6 horas",
+                    "Receta: Esc cancela «Cambiar indicación» sin cerrar la receta");
+            }
         }
 
         // Capas sobre la receta: el aviso, la alerta de alergia, el catálogo y la vista previa
@@ -1568,6 +1719,20 @@ internal sealed class UiKeyboardPass
         Check(PressEscape() && !_records.Preview.IsPrescriptionPdfModalOpen, "Esc cierra la vista previa de la receta");
         Check(PressEscape() && !_records.Prescription.IsPrescriptionModalOpen, "Esc cierra la receta");
     }
+
+    /// <summary>
+    /// Sin foco en ningún lado (ni lógico), como en la prueba de la X del buscador: con la ventana sin activar, Focus() solo
+    /// deja el foco lógico si nadie lo tiene, y así se ve a dónde lo manda la pantalla.
+    /// </summary>
+    private static void ClearFocus(System.Windows.DependencyObject element)
+    {
+        System.Windows.Input.Keyboard.ClearFocus();
+        System.Windows.Input.FocusManager.SetFocusedElement(System.Windows.Input.FocusManager.GetFocusScope(element), null);
+    }
+
+    /// <summary>Con el cursor: el foco del teclado o, con la ventana sin activar (la prueba no la activa), el foco lógico.</summary>
+    private static bool HasFocus(System.Windows.Controls.TextBox box) =>
+        box.IsKeyboardFocused || ReferenceEquals(System.Windows.Input.FocusManager.GetFocusedElement(System.Windows.Input.FocusManager.GetFocusScope(box)), box);
 
     private void SuppliesSheet()
     {

@@ -11,6 +11,11 @@
 
     <!-- Médico y consultorio: los datos que salen en recetas, tickets y cortes de caja, con una -->
     <!-- vista previa del encabezado de la receta. Se editan con "Editar" y se guardan juntos.    -->
+    <!-- "Vista previa de la receta" (2026-10-14) muestra una receta de ejemplo como se imprime,  -->
+    <!-- en media carta o en carta.                                                              -->
+    <UserControl.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding ClosePrescriptionPreviewCommand}" />
+    </UserControl.InputBindings>
     <UserControl.Resources>
         <Style x:Key="ProfileField" TargetType="TextBox" BasedOn="{StaticResource FieldTextBox}">
             <Setter Property="IsReadOnly" Value="{Binding IsEditing, Converter={StaticResource InverseBool}}" />
@@ -18,6 +23,7 @@
         </Style>
     </UserControl.Resources>
 
+    <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="28,24,28,24">
             <Grid.RowDefinitions>
@@ -305,6 +311,16 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- La receta completa con un paciente de ejemplo, como se imprime (media carta o carta) -->
+                    <Button Style="{StaticResource ButtonSecondary}" HorizontalAlignment="Stretch" Margin="0,-6,0,16"
+                            Command="{Binding OpenPrescriptionPreviewCommand}" AutomationProperties.Name="Vista previa de la receta"
+                            ToolTip="Una receta de ejemplo con estos datos, tal como sale impresa en media carta o en carta">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoFile}" Margin="0,0,8,0" />
+                            <TextBlock Text="Vista previa de la receta" />
+                        </StackPanel>
+                    </Button>
+
                     <!-- Lo demás sale en tickets y cortes de caja -->
                     <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="En tickets y cortes de caja" Margin="0,0,0,8" />
                     <Border Style="{StaticResource Card}" Padding="20">
@@ -330,4 +346,52 @@
             </Grid>
         </Grid>
     </ScrollViewer>
+
+    <!-- ======================= HOJA: VISTA PREVIA DE LA RECETA ======================= -->
+    <!-- Las páginas son las del documento que se imprime (PrintingService.BuildPrescriptionDocument) -->
+    <!-- con el papel elegido: papel blanco con cualquier tema.                                      -->
+    <Grid Panel.ZIndex="60" Visibility="{Binding IsPrescriptionPreviewOpen, Converter={StaticResource BoolToVis}}">
+        <Border Style="{StaticResource SheetScrim}" />
+        <Border Style="{StaticResource SheetCard}" Width="900" MaxHeight="720" Padding="24,18" AutomationProperties.Name="Vista previa de la receta">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextHeading}" Text="Vista previa de la receta" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding PreviewDataNote}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource ButtonIcon}" Command="{Binding ClosePrescriptionPreviewCommand}" ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar" VerticalAlignment="Top">
+                        <helpers:Icon Data="{StaticResource IcoClose}" />
+                    </Button>
+                </Grid>
+
+                <!-- El papel: media carta (la de siempre) o carta (cuando la receta no cabe en media carta) -->
+                <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                    <ListBox Style="{StaticResource ChipList}" ItemsSource="{Binding PreviewPaperOptions}" SelectedItem="{Binding SelectedPreviewPaper, Mode=TwoWay}"
+                             DisplayMemberPath="Label" AutomationProperties.Name="Papel de la vista previa" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding PreviewPaperDescription}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" VerticalAlignment="Top">
+                        <StackPanel x:Name="PreviewPages" />
+                    </Viewbox>
+                </ScrollViewer>
+
+                <Button Grid.Row="3" Style="{StaticResource ButtonGhost}" HorizontalAlignment="Left" Margin="0,16,0,0"
+                        Command="{Binding ClosePrescriptionPreviewCommand}" Content="Cerrar" />
+            </Grid>
+        </Border>
+    </Grid>
+    </Grid>
 </UserControl>

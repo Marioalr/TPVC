@@ -11,6 +11,12 @@ namespace TPVC.Models;
 /// </summary>
 public sealed record PrescriptionSheetLine(string Medicine, string Posology, string Detail = "");
 
+/// <summary>
+/// Las imágenes del membrete cuando no son las guardadas en el perfil: la vista previa de "Médico y consultorio" muestra
+/// las que se ven en pantalla, también las recién elegidas o quitadas que aún no se guardan. null = sin esa imagen.
+/// </summary>
+public sealed record LetterheadImages(string? CrestPath, string? HeaderPath);
+
 /// <summary>El papel de la receta: media carta horizontal (la del Excel) o carta vertical cuando no cabe en una media carta.</summary>
 public enum PrescriptionPaper
 {
@@ -111,7 +117,8 @@ public sealed class PrescriptionSheet
         string? generalNotes,
         DateTime date,
         PrescriptionFonts? fonts = null,
-        string? vitalSigns = null)
+        string? vitalSigns = null,
+        LetterheadImages? letterhead = null)
     {
         profile ??= new ClinicProfile();
         fonts ??= PrescriptionFonts.Default;
@@ -141,8 +148,8 @@ public sealed class PrescriptionSheet
             GeneralMeasures = string.IsNullOrWhiteSpace(generalNotes) ? PrescriptionDefaults.Indications : generalNotes.Trim(),
             Phone = (profile.Phone ?? string.Empty).Trim(),
             Address = (profile.Address ?? string.Empty).Trim(),
-            CrestImagePath = profile.CrestImagePath,
-            HeaderImagePath = profile.HeaderImagePath,
+            CrestImagePath = letterhead != null ? letterhead.CrestPath : profile.CrestImagePath,
+            HeaderImagePath = letterhead != null ? letterhead.HeaderPath : profile.HeaderImagePath,
             BodyFont = fonts.Body,
             DoctorFont = fonts.Doctor
         };

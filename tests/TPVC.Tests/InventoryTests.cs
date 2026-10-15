@@ -2675,11 +2675,19 @@ public class InventoryTests
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.Count > 0);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductMedication), "El catálogo debe mostrar únicamente fármacos/medicamentos");
 
-        // Agregar medicamento desde catálogo
+        // Elegir el medicamento en el catálogo (desde el 2026-10-14 solo lo elige: la indicación se escribe en la receta)
+        Assert.AreEqual("Elegir", vm.CatalogBrowser.CatalogBrowserActionText);
         var chosenMed = vm.CatalogBrowser.CatalogBrowserFilteredProducts.First();
         await vm.CatalogBrowser.AddProductFromCatalogBrowserAsync(chosenMed);
-        Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras agregar");
+        Assert.IsFalse(vm.CatalogBrowser.IsCatalogBrowserModalOpen, "Debe cerrarse la ventana de catálogo tras elegir");
+        Assert.IsEmpty(patient.ActivePrescription, "Elegir no lo agrega");
+        Assert.IsTrue(vm.Prescription.IsMedicineChosen);
+        Assert.AreSame(chosenMed, vm.Prescription.ChosenPrescriptionProduct);
+        Assert.AreEqual(PrescriptionNaming.MedicineLine(chosenMed), vm.Prescription.PrescriptionSearchText, "El buscador muestra el elegido");
+        vm.Prescription.PrescriptionDosage = "1 tableta cada 8 horas";
+        await vm.Prescription.AddPrescriptionAsync();
         Assert.AreEqual(1, patient.ActivePrescription.Count);
+        Assert.AreEqual("1 tableta cada 8 horas", patient.ActivePrescription[0].Dosage, "Con la indicación escrita después de elegirlo");
         Assert.AreEqual(PrescriptionNaming.MedicineLine(chosenMed), patient.ActivePrescription[0].MedicineName, "En el orden normado");
         Assert.AreEqual(string.IsNullOrWhiteSpace(chosenMed.Presentation) ? null : chosenMed.Presentation, patient.ActivePrescription[0].Presentation);
 
@@ -2687,6 +2695,7 @@ public class InventoryTests
         await vm.Supplies.OpenSupplyCatalogAsync();
         Assert.IsTrue(vm.CatalogBrowser.IsCatalogBrowserModalOpen);
         Assert.AreEqual("Supplies", vm.CatalogBrowser.CatalogBrowserMode);
+        Assert.AreEqual("Agregar", vm.CatalogBrowser.CatalogBrowserActionText);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserTitle.Contains("Insumos"));
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.Count > 0);
         Assert.IsTrue(vm.CatalogBrowser.CatalogBrowserFilteredProducts.All(CatalogStore.IsProductSupply), "El catálogo debe mostrar únicamente insumos y material de curación");

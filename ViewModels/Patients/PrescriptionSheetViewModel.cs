@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -17,6 +18,14 @@ namespace TPVC.ViewModels.Patients;
 /// anterior y "Se surte aquí" (lo que se surte en el consultorio se carga a la cuenta). Cada cambio a la
 /// receta le pide al coordinador que avise a la ficha, a la hoja y a la vista previa. El peso de la
 /// consulta en curso llega por currentWeight (sugerencia de la dosis pediátrica).
+/// <para>
+/// Desde los pedidos del consultorio del 2026-10-14: elegir el medicamento (Enter o clic en las sugerencias, o el
+/// catálogo) solo lo escoge y el cursor pasa a "Indicación"; se agrega con Enter en "Indicación" o "Cantidad" o con
+/// "Agregar" (<see cref="AddPrescriptionAsync"/>). Las sugerencias ponen primero lo que hay en existencia
+/// (<see cref="MedicineSearchRules"/>), el campo "Indicación" trae las indicaciones frecuentes
+/// (<see cref="CaptureIndications"/>) y cada renglón se puede corregir con "Cambiar indicación"
+/// (<see cref="SheetIndication"/> en la hoja y <see cref="PlanIndication"/> en la sección 5 de la consulta).
+/// </para>
 /// </summary>
 public partial class PrescriptionSheetViewModel : ObservableObject
 {
@@ -32,7 +41,6 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     private readonly CatalogBrowserViewModel _catalogBrowser;
     private readonly IConsultationGate _gate;
     private readonly IPatientsWorkflow _workflow;
-    private readonly IUiThread _ui;
     private readonly Func<string> _currentWeight;
 
     public PrescriptionSheetViewModel(
@@ -48,7 +56,6 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         CatalogBrowserViewModel catalogBrowser,
         IConsultationGate gate,
         IPatientsWorkflow workflow,
-        IUiThread ui,
         Func<string> currentWeight)
     {
         _inventoryService = inventoryService;
@@ -63,14 +70,33 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         _catalogBrowser = catalogBrowser;
         _gate = gate;
         _workflow = workflow;
-        _ui = ui;
         _currentWeight = currentWeight;
+
+        CaptureIndications = new FrequentIndicationsPicker(templates, () => PrescriptionDosage, text => PrescriptionDosage = text);
+        SheetIndication = new PrescriptionIndicationEditor(templates, CanChangeIndication, SaveIndicationAsync);
+        PlanIndication = new PrescriptionIndicationEditor(templates, CanChangeIndication, SaveIndicationAsync);
     }
+
+    /// <summary>Indicaciones frecuentes del campo "Indicación" de la captura.</summary>
+    public FrequentIndicationsPicker CaptureIndications { get; }
+
+    /// <summary>"Cambiar indicación" en la lista de la hoja de receta.</summary>
+    public PrescriptionIndicationEditor SheetIndication { get; }
+
+    /// <summary>"Cambiar indicación" en la lista de la sección 5 (Plan y receta) de la consulta.</summary>
+    public PrescriptionIndicationEditor PlanIndication { get; }
+
+    /// <summary>La indicación cuando el médico no escribió ninguna.</summary>
+    public const string DefaultDosage = "Según indicación médica";
+
+    /// <summary>Se agregó un medicamento: el cursor vuelve al buscador para el siguiente.</summary>
+    public event Action? FocusSearchRequested;
 
     // ==========================================
     // CAPTURA INTERACTIVA DE RECETA MÉDICA (MEDICAMENTOS E INSUMOS)
     // ==========================================
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddPrescriptionCommand))]
     private string _prescriptionSearchText = string.Empty;
 
     [ObservableProperty]
@@ -82,11 +108,40 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     [ObservableProperty]
     private Product? _selectedPrescriptionProduct;
 
+    /// <summary>
+    /// Nombre del medicamento que no se escribe en el buscador: lo pone la dosis pediátrica ("Usar") cuando el buscador
+    /// está vacío. Elegir un medicamento lo borra.
+    /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddPrescriptionCommand))]
     private string _prescriptionMedicineName = string.Empty;
 
     [ObservableProperty]
     private string _prescriptionDosage = string.Empty;
+
+    /// <summary>
+    /// Ya se eligió el medicamento (pedido del 2026-10-14): el buscador lo muestra, las sugerencias se cierran y falta la
+    /// indicación. Del catálogo (<see cref="ChosenPrescriptionProduct"/>) o escrito a mano (sin producto). Escribir otra
+    /// vez en el buscador, o la X del buscador, deshacen la elección.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChosenMedicineCaption))]
+    private bool _isMedicineChosen;
+
+    /// <summary>El producto del catálogo que se eligió; null si se eligió lo escrito a mano.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ChosenMedicineCaption))]
+    private Product? _chosenPrescriptionProduct;
+
+    /// <summary>Debajo del buscador, qué se eligió: del inventario (con sus existencias) o escrito a mano.</summary>
+    public string ChosenMedicineCaption => !IsMedicineChosen
+        ? string.Empty
+        : ChosenPrescriptionProduct is { } product
+            ? $"Elegido del inventario · {product.StockBadgeText}"
+            : "Escrito a mano (no se eligió del inventario)";
+
+    // Mientras se escribe en el buscador el medicamento elegido, el cambio de texto no es una búsqueda nueva
+    private bool _choosingMedicine;
 
     [ObservableProperty]
     private int _prescriptionQuantity = 1;
@@ -149,32 +204,150 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
     partial void OnPrescriptionSearchTextChanged(string value)
     {
+        if (_choosingMedicine) return;
+        // Escribir otra vez en el buscador es buscar otro medicamento: la elección anterior ya no cuenta
+        if (IsMedicineChosen)
+        {
+            IsMedicineChosen = false;
+            ChosenPrescriptionProduct = null;
+        }
         ApplyPrescriptionSuggestions(value);
     }
 
+    partial void OnPrescriptionDosageChanged(string value) => CaptureIndications.Filter(value);
+
+    /// <summary>
+    /// Las sugerencias del buscador: los medicamentos del catálogo que coinciden, con existencias primero y por qué tan bien
+    /// coinciden (<see cref="MedicineSearchRules.Rank"/>), hasta 20; sin texto, los primeros 20 en ese orden. La primera queda
+    /// marcada. La lista se abre al escribir algo que coincide (con el medicamento ya elegido, no).
+    /// </summary>
     public void ApplyPrescriptionSuggestions(string query)
     {
-        var matches = string.IsNullOrWhiteSpace(query)
-            ? _catalog.AvailableProducts.Where(CatalogStore.IsProductMedication).Take(20).ToList()
-            : _catalog.AvailableProducts
-                .Where(CatalogStore.IsProductMedication)
-                .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
-                .Take(20)
-                .ToList();
+        var matches = MedicineSearchRules.Rank(_catalog.AvailableProducts.Where(CatalogStore.IsProductMedication), query);
 
         PrescriptionProductSuggestions = new ObservableCollection<Product>(matches);
         SelectedPrescriptionProduct = PrescriptionProductSuggestions.FirstOrDefault();
-        IsPrescriptionDropdownOpen = !string.IsNullOrWhiteSpace(query) && PrescriptionProductSuggestions.Count > 0;
+        IsPrescriptionDropdownOpen = !IsMedicineChosen && !string.IsNullOrWhiteSpace(query) && PrescriptionProductSuggestions.Count > 0;
+    }
+
+    /// <summary>
+    /// ↑ ↓ en el buscador: con la lista cerrada, ↓ la abre (también sin texto: los que hay en existencia primero); abierta,
+    /// cambian la sugerencia marcada (de la última se vuelve a la primera). Con el medicamento ya elegido no hacen nada.
+    /// </summary>
+    public void MovePrescriptionSuggestion(int delta)
+    {
+        var list = PrescriptionProductSuggestions;
+        if (list.Count == 0 || IsMedicineChosen || delta == 0) return;
+        if (!IsPrescriptionDropdownOpen)
+        {
+            if (delta < 0) return;
+            SelectedPrescriptionProduct ??= list[0];
+            IsPrescriptionDropdownOpen = true;
+            return;
+        }
+
+        var index = SelectedPrescriptionProduct == null ? -1 : list.IndexOf(SelectedPrescriptionProduct);
+        index = delta > 0
+            ? (index < 0 || index >= list.Count - 1 ? 0 : index + 1)
+            : (index <= 0 || index >= list.Count ? list.Count - 1 : index - 1);
+        SelectedPrescriptionProduct = list[index];
+    }
+
+    /// <summary>Esc con las sugerencias abiertas: solo se cierra la lista (lo escrito se queda).</summary>
+    public void ClosePrescriptionSuggestions() => IsPrescriptionDropdownOpen = false;
+
+    /// <summary>
+    /// Elegir un medicamento del catálogo (Enter o clic en las sugerencias, o el catálogo): el buscador lo muestra en el
+    /// orden normado, las sugerencias se cierran y falta escribir la indicación. No lo agrega.
+    /// </summary>
+    public void ChoosePrescriptionProduct(Product? product)
+    {
+        if (product == null) return;
+        _choosingMedicine = true;
+        try
+        {
+            PrescriptionSearchText = PrescriptionNaming.MedicineLine(product);
+        }
+        finally
+        {
+            _choosingMedicine = false;
+        }
+        PrescriptionMedicineName = string.Empty;
+        ChosenPrescriptionProduct = product;
+        IsMedicineChosen = true;
+        IsPrescriptionDropdownOpen = false;
+    }
+
+    /// <summary>
+    /// Enter en el buscador. Con la lista abierta elige la sugerencia marcada; con la lista cerrada (nada coincide, o se
+    /// cerró con Esc) elige lo escrito tal cual, como medicamento escrito a mano; sin nada escrito no hace nada. true si
+    /// ya hay medicamento elegido (el cursor pasa a "Indicación").
+    /// </summary>
+    public bool ConfirmPrescriptionSearch()
+    {
+        if (IsMedicineChosen) return true;
+        if (IsPrescriptionDropdownOpen && SelectedPrescriptionProduct != null)
+        {
+            ChoosePrescriptionProduct(SelectedPrescriptionProduct);
+            return true;
+        }
+        if (string.IsNullOrWhiteSpace(PrescriptionSearchText)) return false;
+
+        PrescriptionMedicineName = string.Empty;
+        ChosenPrescriptionProduct = null;
+        IsMedicineChosen = true;
+        IsPrescriptionDropdownOpen = false;
+        return true;
+    }
+
+    /// <summary>La X del buscador: deshace la elección y deja el buscador vacío.</summary>
+    [RelayCommand]
+    public void ClearChosenMedicine()
+    {
+        PrescriptionSearchText = string.Empty;
+        IsMedicineChosen = false;
+        ChosenPrescriptionProduct = null;
+        IsPrescriptionDropdownOpen = false;
+    }
+
+    private bool CanAddPrescription() =>
+        !string.IsNullOrWhiteSpace(PrescriptionSearchText) || !string.IsNullOrWhiteSpace(PrescriptionMedicineName);
+
+    /// <summary>
+    /// "Agregar" (también Enter en "Indicación" o "Cantidad"): agrega el medicamento elegido con la indicación y la cantidad
+    /// escritas. Si se escribió el medicamento y se pasó directo a la indicación sin elegirlo, primero se elige como con Enter
+    /// en el buscador. Sin medicamento no hace nada.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddPrescription))]
+    public async Task AddPrescriptionAsync()
+    {
+        if (!IsMedicineChosen && !ConfirmPrescriptionSearch())
+        {
+            // Solo la dosis pediátrica deja un medicamento sin escribirlo en el buscador
+            if (string.IsNullOrWhiteSpace(PrescriptionMedicineName)) return;
+            await SelectAndAddPrescriptionProductAsync(_catalog.FindCatalogProduct(PrescriptionMedicineName));
+            return;
+        }
+
+        // El catálogo pudo volver a leerse desde que se eligió: las existencias de ahora
+        var chosen = ChosenPrescriptionProduct;
+        if (chosen is { Id: > 0 }) chosen = _catalog.AvailableProducts.FirstOrDefault(p => p.Id == chosen.Id) ?? chosen;
+        await SelectAndAddPrescriptionProductAsync(chosen);
     }
 
     // ==========================================
     // OPERACIONES DE RECETA MÉDICA (NOM-004-SSA3)
     // ==========================================
 
+    /// <summary>
+    /// Agrega a la receta el medicamento (el producto del catálogo o lo escrito) con la indicación y la cantidad capturadas:
+    /// revisa alergias (la alerta pide confirmar), marca "Se surte aquí" si hay existencias y lo carga a la cuenta. Desde el
+    /// 2026-10-14 la hoja lo llama solo al confirmar (<see cref="AddPrescriptionAsync"/>); elegir el medicamento ya no agrega.
+    /// </summary>
     [RelayCommand]
     public async Task SelectAndAddPrescriptionProductAsync(Product? product)
     {
-        if (_session.SelectedPatient == null) return;
+        if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly()) return;
 
         string name;
         if (!string.IsNullOrWhiteSpace(PrescriptionMedicineName))
@@ -203,7 +376,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         }
 
         var dosage = string.IsNullOrWhiteSpace(PrescriptionDosage)
-            ? "Según indicación médica"
+            ? DefaultDosage
             : PrescriptionDosage.Trim();
 
         var qty = PrescriptionQuantity > 0 ? PrescriptionQuantity : 1;
@@ -264,7 +437,10 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             catch { }
         }
 
+        CaptureIndications.Close();
         PrescriptionSearchText = string.Empty;
+        IsMedicineChosen = false;
+        ChosenPrescriptionProduct = null;
         PrescriptionMedicineName = string.Empty;
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
@@ -273,6 +449,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
         _session.NotifySelectedPatientMutated();
         _workflow.NotifyPrescriptionStateChanged();
+        FocusSearchRequested?.Invoke();
     }
 
     [RelayCommand]
@@ -328,11 +505,17 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         }
 
         PrescriptionSearchText = string.Empty;
+        IsMedicineChosen = false;
+        ChosenPrescriptionProduct = null;
         PrescriptionMedicineName = string.Empty;
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
         ApplyPrescriptionSuggestions(string.Empty);
         IsPrescriptionDropdownOpen = false;
+        CaptureIndications.Close();
+        // La hoja tapa la lista de la consulta: una corrección abierta allá no queda a medias debajo
+        PlanIndication.Cancel();
+        SheetIndication.Cancel();
         IsPrescriptionModalOpen = true;
 
         // Plantillas recién importadas del Excel (o llegadas por sincronización)
@@ -351,7 +534,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         }
         _catalogBrowser.CatalogBrowserMode = "Medications";
         _catalogBrowser.CatalogBrowserTitle = "Catálogo de Medicamentos";
-        _catalogBrowser.CatalogBrowserSubtitle = "Explore todos los fármacos registrados y agregue el medicamento a la receta médica del paciente.";
+        _catalogBrowser.CatalogBrowserSubtitle = "Los que hay en existencia van primero. Elija el medicamento y luego escriba su indicación en la receta.";
         _catalogBrowser.CatalogBrowserSearchText = string.Empty;
         _catalogBrowser.ApplyCatalogBrowserFilter();
         _catalogBrowser.IsCatalogBrowserModalOpen = true;
@@ -361,6 +544,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     public void ClosePrescriptionModal()
     {
         IsPrescriptionModalOpen = false;
+        CaptureIndications.Close();
+        SheetIndication.Cancel();
     }
 
     [RelayCommand]
@@ -387,11 +572,9 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     }
 
     // ==========================================
-    // POSOLOGÍA Y DOSIS PEDIÁTRICA (PLANTILLAS DEL EXCEL DEL CONSULTORIO)
+    // DOSIS PEDIÁTRICA (PLANTILLAS DEL EXCEL DEL CONSULTORIO)
+    // La posología frecuente se elige dentro del campo "Indicación" (CaptureIndications)
     // ==========================================
-    [ObservableProperty]
-    private PrescriptionTemplate? _selectedPosologyTemplate;
-
     [ObservableProperty]
     private PediatricDoseRule? _selectedPediatricRule;
 
@@ -406,20 +589,6 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
     /// <summary>Cambió el paciente o llegaron las reglas de dosis pediátrica (coordinador).</summary>
     public void RaiseShowsPediatricDose() => OnPropertyChanged(nameof(ShowsPediatricDose));
-
-    /// <summary>Elegir una posología la copia al campo de indicaciones del medicamento que se captura.</summary>
-    partial void OnSelectedPosologyTemplateChanged(PrescriptionTemplate? value)
-    {
-        if (value == null) return;
-        ApplyPosologyTemplate(value);
-        _ui.ResetSelectionLater(() => SelectedPosologyTemplate = null);
-    }
-
-    public void ApplyPosologyTemplate(PrescriptionTemplate? template)
-    {
-        if (template == null) return;
-        PrescriptionDosage = template.Text;
-    }
 
     partial void OnSelectedPediatricRuleChanged(PediatricDoseRule? value)
     {
@@ -542,6 +711,47 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             _info.InfoModalMessage = $"No se repitió {string.Join(", ", skipped)}: coincide con las alergias registradas del paciente. Si de todos modos debe recetarse, agréguelo a mano para confirmar la alerta.";
             _info.IsInfoModalVisible = true;
         }
+    }
+
+    // ==========================================
+    // "CAMBIAR INDICACIÓN" DE UN RENGLÓN (PEDIDO DEL 2026-10-14)
+    // ==========================================
+
+    /// <summary>
+    /// Un renglón se corrige si es de la receta que se ve (el mismo objeto) y la consulta no está en otro equipo (con aviso).
+    /// </summary>
+    private bool CanChangeIndication(PatientPrescriptionItem item)
+    {
+        if (_session.SelectedPatient?.ActivePrescription.Contains(item) != true) return false;
+        return !_gate.BlockIfConsultationReadOnly();
+    }
+
+    /// <summary>
+    /// Guarda la indicación nueva en el mismo renglón: no se rehace el objeto, así conserva su RowId, lo que trae de otro
+    /// equipo (ExtensionData), la presentación, la cantidad y "Se surte aquí" (la cuenta no cambia). Se guarda como las demás
+    /// ediciones de la receta; desde el paso 8.22 el guardado escribe solo los renglones que cambiaron. Sin texto queda
+    /// "Según indicación médica", como al agregar. false si la consulta está en otro equipo (el campo sigue abierto).
+    /// </summary>
+    private async Task<bool> SaveIndicationAsync(PatientPrescriptionItem item, string text)
+    {
+        var patient = _session.SelectedPatient;
+        // El renglón ya no está (se quitó o cambió el paciente): no hay nada que guardar
+        if (patient == null || !patient.ActivePrescription.Contains(item)) return true;
+        if (_gate.BlockIfConsultationReadOnly()) return false;
+
+        var dosage = string.IsNullOrWhiteSpace(text) ? DefaultDosage : text.Trim();
+        if (dosage == item.Dosage) return true;
+
+        item.Dosage = dosage;
+        patient.SyncPrescriptionJson();
+        _session.NotifySelectedPatientMutated();
+        _workflow.NotifyPrescriptionStateChanged();
+        if (_inventoryService != null)
+        {
+            try { await _inventoryService.SavePatientAsync(patient); }
+            catch (Exception ex) { AppLogger.Error("No se pudo guardar la indicación de la receta", ex); }
+        }
+        return true;
     }
 
     /// <summary>Casilla "Se surte aquí" de cada medicamento de la receta.</summary>

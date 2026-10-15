@@ -35,7 +35,24 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
     public Guid? RowId { get; set; }
 
     public string MedicineName { get; set; } = string.Empty;
-    public string Dosage { get; set; } = string.Empty;
+
+    private string _dosage = string.Empty;
+
+    /// <summary>
+    /// La indicación (dosis, vía, frecuencia y duración). Avisa al cambiar: "Cambiar indicación" (2026-10-14) la corrige en
+    /// el mismo renglón y las listas de la receta la muestran sin rehacerse.
+    /// </summary>
+    public string Dosage
+    {
+        get => _dosage;
+        set
+        {
+            if (_dosage == value) return;
+            _dosage = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Dosage)));
+        }
+    }
+
     public int RecommendedQuantity { get; set; } = 1;
 
     /// <summary>

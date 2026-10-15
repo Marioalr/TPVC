@@ -1,9 +1,5 @@
 using System.ComponentModel;
-using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
-using System.Windows.Media;
 using TPVC.Models;
 using TPVC.Services;
 using TPVC.ViewModels;
@@ -41,29 +37,14 @@ public partial class LabOrderPreviewSheetView : UserControl
     /// <summary>Las páginas de la solicitud (una, o más si no cabe ni en carta) sobre papel blanco.</summary>
     private void Render(LabOrderSheet? sheet)
     {
-        Pages.Children.Clear();
-        if (sheet == null) return;
+        if (sheet == null)
+        {
+            Pages.Children.Clear();
+            return;
+        }
 
         double width = PrescriptionSheet.PageWidth;
         double height = sheet.PaperHeight;
-        var doc = PrintingService.BuildLabOrderDocument(sheet, width, height);
-        var paginator = ((IDocumentPaginatorSource)doc).DocumentPaginator;
-        paginator.PageSize = new Size(width, height);
-        paginator.ComputePageCount();
-
-        for (int i = 0; i < paginator.PageCount; i++)
-        {
-            var page = new Border
-            {
-                Width = width,
-                Height = height,
-                Background = Brushes.White,
-                BorderThickness = new Thickness(1),
-                Margin = new Thickness(0, i == 0 ? 0 : 12, 0, 0),
-                Child = new DocumentPageView { DocumentPaginator = paginator, PageNumber = i }
-            };
-            page.SetResourceReference(Border.BorderBrushProperty, "ThemeBorder");
-            Pages.Children.Add(page);
-        }
+        Helpers.PaperPages.Render(Pages, PrintingService.BuildLabOrderDocument(sheet, width, height), width, height);
     }
 }

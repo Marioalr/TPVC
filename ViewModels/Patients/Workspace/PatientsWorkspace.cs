@@ -396,10 +396,11 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
         // Lo elegido en el catálogo se agrega con la hoja que lo abrió (las hojas se crean después:
-        // usan el explorador para abrir el catálogo)
+        // usan el explorador para abrir el catálogo). El medicamento solo se elige: la indicación se escribe en
+        // la hoja de receta y ahí se agrega (pedido del 2026-10-14)
         _catalogBrowser = new CatalogBrowserViewModel(_catalog)
         {
-            AddMedication = product => Prescription.SelectAndAddPrescriptionProductAsync(product),
+            ChooseMedication = product => Prescription.ChoosePrescriptionProduct(product),
             AddSupply = product => Supplies.SelectAndAddSupplyProductAsync(product),
             AddService = service => ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service)
         };
@@ -416,7 +417,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _clinicalServices = new ClinicalServicesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
         // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso (se lee al momento)
         _prescription = new PrescriptionSheetViewModel(_inventoryService, _catalog, _templates, _session, _active, _record, _account, _info, _feedback,
-            _catalogBrowser, this, this, _ui, () => Consultation.ConsultationWeight);
+            _catalogBrowser, this, this, () => Consultation.ConsultationWeight);
         // La orden de laboratorio se guarda con la nota y viaja en el borrador; la hoja lleva el diagnóstico que se
         // escribe en la consulta (se lee al momento)
         _labOrder = new ConsultationLabOrder();

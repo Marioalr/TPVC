@@ -242,6 +242,114 @@ public class PrescriptionSheetTests
         Assert.IsNull(vm.HeaderImagePath);
     }
 
+    // ------------------------------------------------------------------ vista previa en Médico y consultorio (2026-10-14)
+
+    [TestMethod]
+    public void SamplePrescription_IsBuiltForEachPaper_WithSampleMedicinesAndTheirIndications()
+    {
+        var profile = new ClinicProfile { DoctorName = DoctorName, ProfessionalLicense = "15632243", University = University };
+        var date = new DateTime(2026, 10, 14);
+
+        var half = ClinicProfileViewModel.BuildSamplePrescription(profile, PrescriptionFonts.Default, null, PrescriptionPaper.HalfLetter, date);
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, half.Paper);
+        Assert.AreEqual(PrescriptionSheet.PageHeight, half.PaperHeight, "Media carta: 528 px de alto");
+
+        var letter = ClinicProfileViewModel.BuildSamplePrescription(profile, PrescriptionFonts.Default, null, PrescriptionPaper.Letter, date);
+        Assert.AreEqual(PrescriptionPaper.Letter, letter.Paper, "El papel lo decide el selector, no la medida");
+        Assert.AreEqual(PrescriptionSheet.LetterPageHeight, letter.PaperHeight, "Carta: 1056 px de alto");
+
+        foreach (var sheet in new[] { half, letter })
+        {
+            Assert.IsGreaterThanOrEqualTo(2, sheet.Medicines.Count);
+            Assert.IsLessThanOrEqualTo(3, sheet.Medicines.Count);
+            Assert.IsTrue(sheet.Medicines.All(m => m.Posology.Length > 0 && m.Detail.StartsWith(" · ", StringComparison.Ordinal)), "Cada uno con su indicación y su presentación");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(sheet.PatientName));
+            Assert.AreEqual("14/10/2026", sheet.Date);
+            Assert.AreEqual(PrescriptionDefaults.Indications, sheet.GeneralMeasures);
+            Assert.IsFalse(string.IsNullOrEmpty(sheet.BloodPressure), "Con signos vitales de ejemplo");
+        }
+    }
+
+    [TestMethod]
+    public void ClinicProfilePreview_OpensInHalfLetter_AndTheSwitchChangesThePaper()
+    {
+        var service = new ClinicProfileService(Path.Combine(_dir, "clinic_profile.json"));
+        service.SaveProfile(new ClinicProfile { DoctorName = DoctorName, IsConfigured = true });
+        var vm = new ClinicProfileViewModel(service, (_, _) => null);
+
+        Assert.IsFalse(vm.IsPrescriptionPreviewOpen);
+        vm.OpenPrescriptionPreviewCommand.Execute(null);
+        Assert.IsTrue(vm.IsPrescriptionPreviewOpen);
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, vm.SelectedPreviewPaper.Paper, "Abre en media carta, la de siempre");
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, vm.PreviewSheet!.Paper);
+        StringAssert.StartsWith(vm.PreviewPaperDescription, "Media carta");
+        CollectionAssert.AreEqual(new[] { "Media carta", "Carta" }, vm.PreviewPaperOptions.Select(o => o.Label).ToList());
+
+        // El selector: carta y de vuelta a media carta
+        var first = vm.PreviewSheet;
+        vm.SelectedPreviewPaper = vm.PreviewPaperOptions.Single(o => o.Paper == PrescriptionPaper.Letter);
+        Assert.AreEqual(PrescriptionPaper.Letter, vm.PreviewSheet!.Paper);
+        Assert.AreNotSame(first, vm.PreviewSheet, "Se vuelve a armar");
+        StringAssert.StartsWith(vm.PreviewPaperDescription, "Carta");
+        vm.ShowPreviewPaper(PrescriptionPaper.HalfLetter);
+        Assert.AreEqual(PrescriptionPaper.HalfLetter, vm.PreviewSheet!.Paper);
+
+        // Cerrar (también Esc) la quita; al volver a la sección no queda abierta
+        vm.ClosePrescriptionPreviewCommand.Execute(null);
+        Assert.IsFalse(vm.IsPrescriptionPreviewOpen);
+        Assert.IsNull(vm.PreviewSheet);
+        vm.OpenPrescriptionPreview();
+        vm.LoadFromProfile();
+        Assert.IsFalse(vm.IsPrescriptionPreviewOpen);
+    }
+
+    [TestMethod]
+    public void ClinicProfilePreview_ShowsTheProfileOnScreen_FontsAndLetterhead_EvenBeforeSaving()
+    {
+        var service = DoctorProfileWithLetterhead();
+        var preferences = new LocalPreferencesStore(Path.Combine(_dir, "preferencias.json"));
+        preferences.Current.PrescriptionBodyFont = "Georgia";
+        preferences.Current.PrescriptionDoctorFont = "Brush Script MT";
+        preferences.Save();
+        var newCrest = Path.Combine(_dir, "escudo-nuevo.png");
+        File.WriteAllBytes(newCrest, PrescriptionSheet.LocationIconPng);
+        var vm = new ClinicProfileViewModel(service, (_, _) => newCrest, preferences);
+
+        // Lo guardado: médico, cédula, universidad, teléfono, domicilio, membrete y las letras de este equipo
+        vm.OpenPrescriptionPreview();
+        var sheet = vm.PreviewSheet!;
+        Assert.AreEqual(DoctorName, sheet.DoctorName);
+        Assert.AreEqual("Cédula Profesional 15632243", sheet.LicenseLine);
+        Assert.AreEqual(University, sheet.University);
+        Assert.AreEqual("2481592448", sheet.Phone);
+        Assert.AreEqual(Address, sheet.Address);
+        Assert.AreEqual(service.CurrentProfile.CrestImagePath, sheet.CrestImagePath);
+        Assert.AreEqual(service.CurrentProfile.HeaderImagePath, sheet.HeaderImagePath);
+        Assert.IsNotNull(sheet.CrestImagePath);
+        StringAssert.StartsWith(sheet.BodyFont, "Georgia");
+        StringAssert.StartsWith(sheet.DoctorFont, "Brush Script MT");
+        StringAssert.Contains(vm.PreviewDataNote, "datos del médico");
+        vm.ClosePrescriptionPreview();
+
+        // Editando sin guardar: la vista previa muestra lo de la pantalla (y lo dice)
+        vm.ToggleEditOrSaveCommand.Execute(null);
+        Assert.IsTrue(vm.IsEditing);
+        vm.DoctorName = "Dr. Nombre Sin Guardar";
+        vm.ProfessionalLicense = "99999999";
+        vm.ChooseCrestImageCommand.Execute(null);
+        vm.ClearHeaderImageCommand.Execute(null);
+        vm.SelectedDoctorFont = FontChoice.For("Segoe Print");
+        vm.OpenPrescriptionPreview();
+        sheet = vm.PreviewSheet!;
+        Assert.AreEqual("Dr. Nombre Sin Guardar", sheet.DoctorName);
+        Assert.AreEqual("Cédula Profesional 99999999", sheet.LicenseLine);
+        Assert.AreEqual(newCrest, sheet.CrestImagePath, "El escudo recién elegido");
+        Assert.IsNull(sheet.HeaderImagePath, "La imagen quitada ya no sale");
+        StringAssert.StartsWith(sheet.DoctorFont, "Segoe Print");
+        StringAssert.Contains(vm.PreviewDataNote, "aún no guarda");
+        Assert.AreEqual(DoctorName, service.CurrentProfile.DoctorName, "Ver la vista previa no guarda nada");
+    }
+
     // ------------------------------------------------------------------ HTML / PDF
 
     private ClinicProfileService DoctorProfileWithLetterhead()

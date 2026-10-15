@@ -49,6 +49,15 @@ public partial class ConsultationWorkspaceView : UserControl
         }, DispatcherPriority.Loaded);
     }
 
+    /// <summary>
+    /// "Estudios de laboratorio" (sección 5): el comando abre la sección 6 y aquí se trae a la vista desde su encabezado
+    /// (después el cursor queda en la búsqueda de estudios, como al cambiar de sección).
+    /// </summary>
+    private void LabStudiesButton_Click(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.InvokeAsync(() => LabSection?.BringIntoView(), DispatcherPriority.Loaded);
+    }
+
     private static T? FindFirstVisible<T>(DependencyObject? root) where T : UIElement
     {
         if (root == null) return null;
