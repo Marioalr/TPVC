@@ -38,11 +38,20 @@ public partial class PatientsWorkspace
         else if (Labs.HasSuggestions) Labs.StudySearchText = string.Empty;
         // Esc en "Terminar consulta" = volver a la consulta (no cobra ni la cierra)
         else if (Consultation.IsFinishConsultationOpen) Consultation.CloseFinishConsultation();
+        // Dentro de la receta (2026-10-14), Esc cierra primero la lista abierta (indicaciones frecuentes o sugerencias de
+        // medicamentos) y la corrección de una indicación; la hoja se cierra con la siguiente Esc
+        else if (Prescription.IsPrescriptionModalOpen && Prescription.CaptureIndications.IsOpen) Prescription.CaptureIndications.Close();
+        else if (Prescription.IsPrescriptionModalOpen && Prescription.SheetIndication.Picker.IsOpen) Prescription.SheetIndication.Picker.Close();
+        else if (Prescription.IsPrescriptionModalOpen && Prescription.IsEditingAShownRow(Prescription.SheetIndication)) Prescription.SheetIndication.Cancel();
+        else if (Prescription.IsPrescriptionModalOpen && Prescription.IsPrescriptionDropdownOpen) Prescription.ClosePrescriptionSuggestions();
         else if (Prescription.IsPrescriptionModalOpen) Prescription.ClosePrescriptionModal();
         else if (Supplies.IsSuppliesModalOpen) Supplies.CloseSuppliesModal();
         else if (ClinicalServices.IsServicesModalOpen) ClinicalServices.CloseServicesModal();
         else if (Agenda.IsMovingAppointment) Agenda.CancelMovingAppointment();
         else if (Agenda.IsAgendaPanelOpen) Agenda.CloseAgendaPanel();
+        // "Cambiar indicación" en la sección 5 de la consulta: primero la lista, luego la corrección
+        else if (Navigation.IsConsultationPage && Prescription.PlanIndication.Picker.IsOpen) Prescription.PlanIndication.Picker.Close();
+        else if (Navigation.IsConsultationPage && Prescription.IsEditingAShownRow(Prescription.PlanIndication)) Prescription.PlanIndication.Cancel();
         else if (Navigation.IsHomePage && Home.HasHomeQuery) Home.HomeSearchText = string.Empty;
         else if (Navigation.IsChartPage) Navigation.GoToPatientsHome();
         else return false;

@@ -49,6 +49,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
 | 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19 y 8.21 a 8.23 hechos en la PC (v1.20.0 a v1.40.0); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
+| 9 | Pedidos del consultorio (2026-10-14) | ✅ Hecho (v1.41.0) |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -347,3 +348,23 @@ cuatro temas):
 | **Banner de duplicados** y **aviso de folios repetidos** | Pares recientes de pacientes que podrían ser el mismo: banner ámbar arriba de "Atendidos recientemente" con **Entendido**, que se queda hasta descartarlo (`04b-pacientes-avisos-otro-equipo`), y al crear un expediente, después de la sincronización rápida, "Ya hay un expediente parecido…" (`26d-confirmacion-duplicado`); folios iguales en filas viejas o tecleados a mano. | 8.23 ✅ v1.40.0, 8.16 ✅ v1.34.0 |
 | **"Folio sin conexión: …"** | En la ficha, en el detalle del ticket y en la reimpresión, debajo del folio nuevo de un registro que se creó sin internet y que la PC regularizó; buscar por cualquiera de los dos folios lo encuentra. La regularización corre sola en segundo plano, una vez al día, sin consulta ni venta en curso. | 8.17 |
 
+### Fase 9 · Pedidos del consultorio (2026-10-14)
+
+Pedidos del médico tras usar la receta y la consulta de v1.39.0. Van juntos porque tocan la misma hoja de receta y
+la misma sección 5 de la consulta; no cambian datos ni sincronización (la receta se guarda igual, renglón por
+renglón desde el paso 8.22). Las reglas de siempre se quedan: la consulta nunca manda al POS, *Se surte aquí* viene
+marcado cuando hay existencias y no existe "terminar sin cobrar".
+
+| # | Pedido | Detalle | Cuándo |
+|---|---|---|---|
+| 9.1 | **Elegir el medicamento no lo agrega** | Enter o clic en las sugerencias, o el catálogo, solo **eligen**: el cuadro lo muestra (con una X para deshacerlo) y el cursor pasa a *Indicación*. Se agrega con Enter en *Indicación* o *Cantidad*, o con **Agregar** (botón principal del renglón). Enter con un texto que no coincide con nada (o con la lista cerrada con Esc) lo toma tal cual, como medicamento escrito a mano; Enter con el cuadro vacío no hace nada (antes agregaba el primero del catálogo). Siguen igual la alerta de alergia (una marca escrita tal cual se revisa por el genérico de su producto), *Se surte aquí* y su cargo a la cuenta, la dosis pediátrica (su medicamento va antes que una sugerencia marcada), lo escrito a mano, la guarda de solo lectura (ahora también al agregar), repetir la receta anterior y la cantidad de 1. El "Guardar" del pie agrega lo ya elegido y guarda una corrección abierta en lugar de perderlos. | ✅ |
+| 9.2 | **Indicaciones frecuentes dentro del campo** | Una flecha a la derecha de *Indicación* (o ↓) abre las posologías del Excel del consultorio en una lista con el mismo aspecto que las sugerencias; ↑ ↓ se mueven, Enter o clic la escriben (se puede seguir editando), Esc solo cierra la lista (escalera de Esc: la lista antes que la hoja) y lo que se escribe la filtra sin acentos. Reemplaza al selector aparte "Posología frecuente", que se quitó. | ✅ |
+| 9.3 | **Cambiar indicación** | Un lápiz en cada renglón de la receta, en la hoja y en la lista de la sección 5, abre su indicación con las mismas frecuentes; Enter o Guardar guardan solo ese renglón (el mismo objeto: conserva su `RowId`, lo que trae de otro equipo y *Se surte aquí*), Esc o Cancelar la dejan. Respeta la consulta en solo lectura. Una corrección abierta se guarda por un solo camino (`CommitPendingPrescriptionEditsAsync`) antes de cada salida: terminar la consulta, enviarla a otro equipo, "+ Medicamento", la vista previa y el "Guardar" de la hoja (que además agrega el medicamento elegido o el de la dosis pediátrica); quitar el renglón, terminar la consulta o cambiar de paciente la cierran. | ✅ |
+| 9.4 | **Con existencias primero** | Las sugerencias de la receta y el catálogo de medicamentos ordenan con `MedicineSearchRules` (`Services/Rules`): con existencias primero, luego qué tan bien coincide (como `PosViewModel.RankProducts`) y un desempate estable; después se toman las 20. Antes un medicamento con existencias podía quedar fuera de las 20. | ✅ |
+| 9.5 | **Laboratorio a la vista** | La sección 5 termina con **Estudios de laboratorio**, que abre la sección 6 y la trae a la vista. *Agendar próxima cita* y *Terminar consulta* pasan a un pie después de Laboratorio (el de la barra de arriba se queda). | ✅ |
+| 9.6 | **Vista previa de la receta en Médico y consultorio** | Una receta de ejemplo (paciente y tres medicamentos con su indicación) con el médico, la cédula, la universidad, el membrete y las letras de este equipo, dibujada con el mismo documento que se imprime; un selector cambia entre **media carta** y **carta**. Muestra lo que está en pantalla, también lo que aún no se guarda (y lo dice). Papel blanco con cualquier tema. | ✅ |
+
+Capturas nuevas en `UiSmokeTests` (cuatro temas): `09d-consulta-pie`, `11e-receta-sugerencias`,
+`11f-receta-elegido-frecuentes`, `11g-receta-cambiar-indicacion`, `11h-consulta-cambiar-indicacion`,
+`20l-config-receta-media-carta` y `20m-config-receta-carta`; el recorrido con teclado prueba elegir, las frecuentes,
+Enter para agregar, "Cambiar indicación" y Esc.

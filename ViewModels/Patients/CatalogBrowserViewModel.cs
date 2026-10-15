@@ -6,13 +6,16 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
 /// <summary>
 /// Explorador del catálogo (fase 6, paso 12): medicamentos, insumos o servicios para agregar a la
 /// receta o al expediente. Lo abren las hojas de receta, insumos y servicios; lo elegido se agrega con
-/// la hoja que lo abrió (el coordinador conecta AddMedication, AddSupply y AddService).
+/// la hoja que lo abrió (el coordinador conecta ChooseMedication, AddSupply y AddService). Desde el
+/// 2026-10-14 el medicamento solo se elige (la indicación se escribe después en la hoja de receta) y los
+/// medicamentos van con existencias primero (<see cref="MedicineSearchRules"/>, como las sugerencias de la hoja).
 /// </summary>
 public partial class CatalogBrowserViewModel : ObservableObject
 {
@@ -23,8 +26,8 @@ public partial class CatalogBrowserViewModel : ObservableObject
         _catalog = catalog;
     }
 
-    /// <summary>Agrega el medicamento elegido a la receta (hoja de receta).</summary>
-    public required Func<Product?, Task> AddMedication { get; init; }
+    /// <summary>Elige el medicamento en la hoja de receta (no lo agrega: falta su indicación).</summary>
+    public required Action<Product?> ChooseMedication { get; init; }
 
     /// <summary>Agrega el insumo elegido al expediente (hoja de insumos).</summary>
     public required Func<Product?, Task> AddSupply { get; init; }
@@ -67,12 +70,11 @@ public partial class CatalogBrowserViewModel : ObservableObject
 
         if (CatalogBrowserMode == "Medications")
         {
+            // Con existencias primero y por qué tan bien coinciden, como las sugerencias de la hoja de receta (aquí todos,
+            // y también por presentación)
             var list = _catalog.AvailableProducts.Where(CatalogStore.IsProductMedication);
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
-            }
-            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(
+                MedicineSearchRules.Rank(list, q, limit: int.MaxValue, includePresentation: true));
         }
         else if (CatalogBrowserMode == "Supplies")
         {
@@ -107,7 +109,7 @@ public partial class CatalogBrowserViewModel : ObservableObject
 
         if (CatalogBrowserMode == "Medications")
         {
-            await AddMedication(product);
+            ChooseMedication(product);
             IsCatalogBrowserModalOpen = false;
         }
         else if (CatalogBrowserMode == "Supplies")
@@ -117,7 +119,7 @@ public partial class CatalogBrowserViewModel : ObservableObject
         }
     }
 
-    /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
+    /// <summary>Enter en el buscador del catálogo: toma el primero de la lista (el medicamento solo se elige).</summary>
     [RelayCommand]
     public async Task AddFirstFromCatalogBrowserAsync()
     {
@@ -137,6 +139,14 @@ public partial class CatalogBrowserViewModel : ObservableObject
 
     public bool IsCatalogBrowserServicesMode => CatalogBrowserMode == "Services";
 
+    /// <summary>El botón de cada renglón: un medicamento se elige (su indicación se escribe en la receta); lo demás se agrega.</summary>
+    public string CatalogBrowserActionText => CatalogBrowserMode == "Medications" ? "Elegir" : "Agregar";
+
+    /// <summary>La ayuda del pie del catálogo.</summary>
+    public string CatalogBrowserHint => CatalogBrowserMode == "Medications"
+        ? "Con existencias primero · Enter elige el primero · Elegir lo pasa a la receta para escribir su indicación · Esc cierra"
+        : "Enter agrega el primero · Agregar lo pone en la consulta · Esc cierra";
+
     public string CatalogBrowserSummary => IsCatalogBrowserServicesMode
         ? (CatalogBrowserFilteredServices.Count == 1 ? "1 servicio" : $"{CatalogBrowserFilteredServices.Count} servicios")
         : (CatalogBrowserFilteredProducts.Count == 1 ? "1 producto" : $"{CatalogBrowserFilteredProducts.Count} productos");
@@ -148,6 +158,8 @@ public partial class CatalogBrowserViewModel : ObservableObject
     partial void OnCatalogBrowserModeChanged(string value)
     {
         OnPropertyChanged(nameof(IsCatalogBrowserServicesMode));
+        OnPropertyChanged(nameof(CatalogBrowserActionText));
+        OnPropertyChanged(nameof(CatalogBrowserHint));
         NotifyCatalogBrowserResults();
     }
 

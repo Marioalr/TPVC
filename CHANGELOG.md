@@ -2,6 +2,19 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.41.0] - 2026-10-15
+
+### Cambiado — Pedidos del consultorio: receta, laboratorio y vista previa
+* En la receta, elegir el medicamento ya no lo agrega: primero se elige, después se escribe la indicación y se agrega con Enter o **Agregar**.
+* Las indicaciones frecuentes se abren dentro del campo Indicación, con la flecha de la derecha o con la flecha abajo.
+* Cada medicamento agregado tiene **Cambiar indicación**. Lo que se está cambiando se guarda antes de terminar la consulta, enviarla a otro equipo, agregar otro medicamento, ver la vista previa o guardar la receta.
+* Al buscar medicamentos, primero aparecen los que tienen existencias.
+* La revisión de alergias usa el genérico del medicamento del inventario también cuando se escribe la marca (por ejemplo, Tempra con alergia al paracetamol).
+* La dosis pediátrica agrega el medicamento de la dosis, no la sugerencia marcada en la lista.
+* El botón para indicar estudios de laboratorio se ve en la consulta activa, junto a la receta, sin bajar hasta el final.
+* En Configuración › Médico y consultorio, **Vista previa de la receta** muestra cómo sale en media carta o en carta.
+* 777 pruebas.
+
 ## [1.40.0] - 2026-10-14
 
 ### Añadido — Fase 8, paso 8.23: citas empalmadas, expedientes duplicados y sincronización rápida

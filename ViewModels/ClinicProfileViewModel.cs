@@ -22,6 +22,12 @@ public sealed record FontChoice(string? Family, string Label)
     public override string ToString() => Label;
 }
 
+/// <summary>Un papel del selector de la vista previa de la receta ("Media carta" o "Carta").</summary>
+public sealed record PrescriptionPaperOption(PrescriptionPaper Paper, string Label)
+{
+    public override string ToString() => Label;
+}
+
 public partial class ClinicProfileViewModel : ObservableObject
 {
     private readonly ClinicProfileService _profileService;
@@ -129,6 +135,7 @@ public partial class ClinicProfileViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ClearCrestImageCommand))]
     [NotifyCanExecuteChangedFor(nameof(ChooseHeaderImageCommand))]
     [NotifyCanExecuteChangedFor(nameof(ClearHeaderImageCommand))]
+    [NotifyPropertyChangedFor(nameof(PreviewDataNote))]
     private bool _isEditing;
 
     // ==========================================
@@ -195,6 +202,123 @@ public partial class ClinicProfileViewModel : ObservableObject
         OnPropertyChanged(nameof(HasClinicName));
     }
 
+    // ================================================================== vista previa de la receta (pedido del 2026-10-14)
+
+    /// <summary>Los dos papeles de la receta: la media carta de siempre y la carta, cuando la receta no cabe.</summary>
+    public IReadOnlyList<PrescriptionPaperOption> PreviewPaperOptions { get; } = new[]
+    {
+        new PrescriptionPaperOption(PrescriptionPaper.HalfLetter, "Media carta"),
+        new PrescriptionPaperOption(PrescriptionPaper.Letter, "Carta")
+    };
+
+    /// <summary>La vista previa de la receta de ejemplo está abierta.</summary>
+    [ObservableProperty]
+    private bool _isPrescriptionPreviewOpen;
+
+    /// <summary>El papel que se ve en la vista previa (el selector Media carta / Carta).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewPaperDescription))]
+    private PrescriptionPaperOption _selectedPreviewPaper = null!;
+
+    /// <summary>La receta de ejemplo con los datos de esta pantalla, en el papel elegido; la dibuja la vista con el documento que se imprime.</summary>
+    [ObservableProperty]
+    private PrescriptionSheet? _previewSheet;
+
+    public string PreviewPaperDescription => SelectedPreviewPaper?.Paper == PrescriptionPaper.Letter
+        ? "Carta vertical (8.5 × 11 in): así sale cuando la receta no cabe en una media carta (muchos medicamentos o indicaciones largas)."
+        : "Media carta horizontal (5.5 × 8.5 in): así sale normalmente, con el formato de su receta de Excel.";
+
+    /// <summary>Qué datos muestra: los de la pantalla, también lo que aún no se guarda (se dice para que no sorprenda).</summary>
+    public string PreviewDataNote => IsEditing
+        ? "Paciente y medicamentos de ejemplo. Muestra lo que está en esta pantalla, también los cambios que aún no guarda."
+        : "Paciente y medicamentos de ejemplo, con los datos del médico, el membrete y las letras de esta pantalla.";
+
+    partial void OnSelectedPreviewPaperChanged(PrescriptionPaperOption? oldValue, PrescriptionPaperOption newValue)
+    {
+        // Ctrl+clic en el papel elegido lo quitaría de la lista (queda sin ninguno): se queda el que estaba
+        if (newValue == null)
+        {
+            SelectedPreviewPaper = oldValue ?? PreviewPaperOptions[0];
+            return;
+        }
+        if (IsPrescriptionPreviewOpen) RefreshPrescriptionPreview();
+    }
+
+    /// <summary>
+    /// "Vista previa de la receta": la receta de ejemplo como sale impresa. Siempre abre en media carta, la de siempre
+    /// (cambia a carta con el selector).
+    /// </summary>
+    [RelayCommand]
+    public void OpenPrescriptionPreview()
+    {
+        // Antes de abrirla: así el cambio de papel no arma la hoja dos veces
+        SelectedPreviewPaper = PreviewPaperOptions[0];
+        IsPrescriptionPreviewOpen = true;
+        RefreshPrescriptionPreview();
+        OnPropertyChanged(nameof(PreviewDataNote));
+    }
+
+    [RelayCommand]
+    public void ClosePrescriptionPreview()
+    {
+        IsPrescriptionPreviewOpen = false;
+        PreviewSheet = null;
+    }
+
+    /// <summary>El selector de papel (también para las pruebas).</summary>
+    public void ShowPreviewPaper(PrescriptionPaper paper) => SelectedPreviewPaper = PreviewPaperOptions.First(o => o.Paper == paper);
+
+    /// <summary>Vuelve a armar la receta de ejemplo con lo que hay en pantalla y el papel elegido.</summary>
+    public void RefreshPrescriptionPreview()
+    {
+        PreviewSheet = BuildSamplePrescription(ScreenProfile(), PrescriptionFonts.From(SelectedBodyFont?.Family, SelectedDoctorFont?.Family),
+            new LetterheadImages(CrestImagePath, HeaderImagePath), SelectedPreviewPaper?.Paper ?? PrescriptionPaper.HalfLetter, DateTime.Now);
+    }
+
+    /// <summary>El perfil tal como está en pantalla (lo que se guardaría con "Guardar").</summary>
+    private ClinicProfile ScreenProfile() => new()
+    {
+        DoctorName = DoctorName.Trim(),
+        ProfessionalLicense = ProfessionalLicense.Trim(),
+        Specialty = Specialty.Trim(),
+        University = University.Trim(),
+        ClinicName = ClinicName.Trim(),
+        Address = Address.Trim(),
+        Phone = Phone.Trim(),
+        Email = Email.Trim(),
+        TaxId = TaxId.Trim(),
+        AdditionalNotes = AdditionalNotes.Trim()
+    };
+
+    /// <summary>
+    /// La receta de ejemplo de la vista previa: un paciente y tres medicamentos inventados con sus indicaciones, con el
+    /// médico, el membrete y las letras que se le pasan, en el papel elegido (sin medirlo: el selector decide). La misma
+    /// hoja que arma la impresión (<see cref="PrescriptionSheet.Create"/>).
+    /// </summary>
+    public static PrescriptionSheet BuildSamplePrescription(ClinicProfile profile, PrescriptionFonts fonts, LetterheadImages? letterhead,
+        PrescriptionPaper paper, DateTime date)
+    {
+        var patient = new PatientRecord
+        {
+            FullName = "Paciente de Ejemplo Pérez",
+            Age = 34,
+            Allergies = "Sulfas",
+            VitalSigns = "TA: 118/76 mmHg | Temp: 36.6 °C | Peso: 62 kg | Talla: 1.62 m | SpO2: 98 %"
+        };
+        var items = new List<PatientPrescriptionItem>
+        {
+            new() { MedicineName = "Paracetamol 500 mg tabletas", Presentation = "Caja con 20 tabletas",
+                    Dosage = "Tomar 1 tableta vía oral cada 8 horas por 3 días, solo si hay fiebre o dolor" },
+            new() { MedicineName = "Loratadina 10 mg tabletas", Presentation = "Caja con 10 tabletas",
+                    Dosage = "Tomar 1 tableta vía oral cada 24 horas por 5 días" },
+            new() { MedicineName = "Ambroxol 30 mg/5 ml jarabe", Presentation = "Frasco con 120 ml",
+                    Dosage = "Tomar 5 ml vía oral cada 8 horas por 5 días" }
+        };
+        var sheet = PrescriptionSheet.Create(patient, items, profile, generalNotes: null, date, fonts, letterhead: letterhead);
+        sheet.Paper = paper;
+        return sheet;
+    }
+
     /// <param name="pickImageFile">Selector de archivo (filtro, título); por defecto el diálogo de Windows.</param>
     /// <param name="preferences">Preferencias de este equipo: las letras de la receta (desde v1.23.0).</param>
     public ClinicProfileViewModel(ClinicProfileService profileService, Func<string, string, string?>? pickImageFile = null, LocalPreferencesStore? preferences = null)
@@ -204,11 +328,14 @@ public partial class ClinicProfileViewModel : ObservableObject
         _selectedBodyFont = FontChoice.For(preferences?.Current.PrescriptionBodyFont);
         _selectedDoctorFont = FontChoice.For(preferences?.Current.PrescriptionDoctorFont);
         _pickImageFile = pickImageFile ?? ((filter, title) => DialogService.ShowOpenFileDialog(filter, title));
+        _selectedPreviewPaper = PreviewPaperOptions[0];
         LoadFromProfile();
     }
 
     public void LoadFromProfile()
     {
+        // Al volver a la sección la vista previa no queda abierta con datos de antes
+        ClosePrescriptionPreview();
         var p = _profileService.CurrentProfile;
         DoctorName = p.DoctorName ?? string.Empty;
         ProfessionalLicense = p.ProfessionalLicense ?? string.Empty;

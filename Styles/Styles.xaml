@@ -13,6 +13,9 @@
     <conv:ComparisonToBoolConverter x:Key="ComparisonToBool" />
     <conv:ComparisonToVisibilityConverter x:Key="ComparisonToVis" />
     <conv:ComparisonToVisibilityConverter x:Key="InverseComparisonToVis" Invert="True" />
+    <!-- "Cambiar indicación": el renglón que se corrige muestra el campo en lugar del texto -->
+    <conv:SameItemToVisibilityConverter x:Key="SameItemToVis" />
+    <conv:SameItemToVisibilityConverter x:Key="InverseSameItemToVis" Invert="True" />
     <helpers:ResourceLookupConverter x:Key="ResourceLookup" />
     <!-- Receta: imágenes del membrete (ruta → imagen) y signos vitales con unidades, como al imprimir -->
     <helpers:ImageFileConverter x:Key="ImageFile" />

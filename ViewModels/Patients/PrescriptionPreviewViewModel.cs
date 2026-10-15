@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
@@ -21,7 +22,12 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
     private readonly ClinicProfileService? _clinicProfileService;
     private readonly IPrescriptionOutput? _printingService;
     private readonly Func<string> _currentTreatmentPlan;
+    private readonly Func<Task<bool>>? _commitPendingEdits;
 
+    /// <param name="commitPendingEdits">
+    /// Lo pendiente de la receta (una "Cambiar indicación" abierta) se guarda antes de la vista previa, así la vista previa y
+    /// la impresión la llevan; false si no se pudo (no se abre).
+    /// </param>
     public PrescriptionPreviewViewModel(
         PatientSession session,
         ActiveConsultationSession active,
@@ -29,7 +35,8 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
         InfoDialogState info,
         ClinicProfileService? clinicProfileService,
         IPrescriptionOutput? printingService,
-        Func<string> currentTreatmentPlan)
+        Func<string> currentTreatmentPlan,
+        Func<Task<bool>>? commitPendingEdits = null)
     {
         _session = session;
         _active = active;
@@ -38,6 +45,7 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
         _clinicProfileService = clinicProfileService;
         _printingService = printingService;
         _currentTreatmentPlan = currentTreatmentPlan;
+        _commitPendingEdits = commitPendingEdits;
     }
 
     [ObservableProperty]
@@ -112,7 +120,14 @@ public partial class PrescriptionPreviewViewModel : ObservableObject
     /// <summary>Cambió el plan de la consulta, el historial o la consulta en curso: las indicaciones se vuelven a leer.</summary>
     public void RaisePrescriptionIndications() => OnPropertyChanged(nameof(PrescriptionIndications));
 
+    /// <summary>"Vista previa" (sección 5, hoja de receta, ficha y cobro): primero lo pendiente de la receta, luego la vista previa.</summary>
     [RelayCommand]
+    public async Task OpenPrescriptionPdfPreviewAsync()
+    {
+        if (_commitPendingEdits != null && !await _commitPendingEdits()) return;
+        OpenPrescriptionPdfPreview();
+    }
+
     public void OpenPrescriptionPdfPreview()
     {
         if (_session.SelectedPatient == null)

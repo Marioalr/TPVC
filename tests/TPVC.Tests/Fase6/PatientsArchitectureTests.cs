@@ -29,6 +29,8 @@ public class PatientsArchitectureTests
         ["InfoDialogState"] = 2, ["PatientsFeedback"] = 2, ["PatientsNavigation"] = 2, ["ClinicInfo"] = 2, ["CatalogStore"] = 2,
         ["PrescriptionTemplateStore"] = 2, ["PatientSession"] = 2, ["ActiveConsultationSession"] = 2, ["ConsultationLabOrder"] = 2,
         ["ConsultationRecordState"] = 3, ["ConsultationAccount"] = 3,
+        // Pedidos del 2026-10-14: las indicaciones frecuentes y "Cambiar indicación" (piezas de la hoja de receta)
+        ["FrequentIndicationsPicker"] = 3, ["PrescriptionIndicationEditor"] = 3,
         ["VitalSignsChartViewModel"] = 4, ["CatalogBrowserViewModel"] = 4, ["PrescriptionPreviewViewModel"] = 4,
         ["AgendaPanelViewModel"] = 5, ["PatientFormViewModel"] = 5, ["PatientsHomeViewModel"] = 5, ["PatientChartViewModel"] = 5, ["ConsultationDetailViewModel"] = 5,
         ["SuppliesSheetViewModel"] = 5, ["ClinicalServicesSheetViewModel"] = 5, ["PrescriptionSheetViewModel"] = 5, ["LabOrderViewModel"] = 5, ["ConsultationViewModel"] = 5,

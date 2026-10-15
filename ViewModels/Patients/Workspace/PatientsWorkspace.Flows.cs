@@ -201,6 +201,8 @@ public partial class PatientsWorkspace
             Account.FeeServiceOverrideId = null;
             Handoff.ReceivedHandoffId = null;
             Handoff.ReceivedHandoffToken = null;
+            // Cobrada, descartada o cerrada desde el Punto de Venta: ninguna "Cambiar indicación" queda abierta
+            Prescription.CancelIndicationEdits();
             // Cualquier otro cierre (p. ej. cobrada desde el Punto de Venta) también cierra su receta
             if (Record.Patient != null) _ = Record.EndConsultationOnRecordAsync(discarded: false);
             _ = ReloadIfReleasedAsync();
@@ -564,6 +566,7 @@ public partial class PatientsWorkspace
 
     private void CloseConsultationSheets()
     {
+        Prescription.CancelIndicationEdits();
         Prescription.IsPrescriptionModalOpen = false;
         Supplies.IsSuppliesModalOpen = false;
         ClinicalServices.IsServicesModalOpen = false;

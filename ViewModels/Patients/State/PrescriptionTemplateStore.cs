@@ -23,7 +23,9 @@ public partial class PrescriptionTemplateStore : ObservableObject
         _hubs = hubs;
     }
 
+    /// <summary>Las posologías frecuentes: desde el 2026-10-14 se eligen dentro del campo "Indicación" de la receta.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPosologyTemplates))]
     private ObservableCollection<PrescriptionTemplate> _posologyTemplates = new();
 
     [ObservableProperty]

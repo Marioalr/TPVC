@@ -514,9 +514,11 @@ public class DataLayerTests
         var records = new MedicalRecordsViewModel(_service, new ConsultationService(seedDemoPatients: false));
         await records.LoadInitialDataAsync();
 
-        records.Prescription.SelectedPosologyTemplate = records.Templates.PosologyTemplates.Single();
+        // Desde el 2026-10-14 la posología frecuente se elige dentro del campo "Indicación" (sin selector aparte)
+        Assert.IsTrue(records.Prescription.CaptureIndications.Open());
+        Assert.IsTrue(records.Prescription.CaptureIndications.Accept());
         Assert.AreEqual("Tomar 1 tableta vía oral cada 8 hrs por 5 días", records.Prescription.PrescriptionDosage);
-        Assert.IsNull(records.Prescription.SelectedPosologyTemplate, "El selector se limpia para reutilizar la plantilla");
+        Assert.IsFalse(records.Prescription.CaptureIndications.IsOpen, "La lista se cierra para seguir escribiendo");
 
         records.Consultation.ConsultationTreatmentPlan = string.Empty;
         records.Consultation.SelectedGeneralMeasureTemplate = records.Templates.GeneralMeasureTemplates.Single();

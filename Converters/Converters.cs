@@ -115,3 +115,22 @@ public class ComparisonToVisibilityConverter : IValueConverter
     }
 }
 
+
+/// <summary>
+/// Visible cuando los dos valores son el mismo objeto (el renglón de la lista y el que se está corrigiendo, en
+/// "Cambiar indicación"); con <see cref="Invert"/>, al revés.
+/// </summary>
+public class SameItemToVisibilityConverter : IMultiValueConverter
+{
+    public bool Invert { get; set; }
+
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        bool same = values.Length >= 2 && values[0] != null && ReferenceEquals(values[0], values[1]);
+        if (Invert) same = !same;
+        return same ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}

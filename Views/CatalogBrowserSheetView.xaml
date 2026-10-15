@@ -10,7 +10,8 @@
              d:DataContext="{d:DesignInstance Type=vm:MedicalRecordsViewModel}">
 
     <!-- Catálogo de la consulta (medicamentos, insumos o servicios): el mismo aspecto que el -->
-    <!-- catálogo del Punto de Venta. Enter agrega el primero de la lista.                    -->
+    <!-- catálogo del Punto de Venta. Enter toma el primero de la lista. Un medicamento solo  -->
+    <!-- se elige (con existencias primero): su indicación se escribe en la receta.           -->
     <Border Style="{StaticResource SheetScrim}">
         <Border Style="{StaticResource SheetCard}" Width="900" Height="660" Padding="0">
             <Grid>
@@ -41,7 +42,7 @@
                 <Grid Grid.Row="1" Margin="24,12,24,10">
                     <TextBox x:Name="CatalogBrowserSearchTextBox" Style="{StaticResource FieldTextBox}" Height="44" Padding="40,7,12,7"
                              Text="{Binding CatalogBrowser.CatalogBrowserSearchText, UpdateSourceTrigger=PropertyChanged}"
-                             helpers:Field.Placeholder="Nombre, genérico, código o descripción · Enter agrega el primero"
+                             helpers:Field.Placeholder="Nombre, genérico, código o descripción · Enter toma el primero"
                              AutomationProperties.Name="Buscar en el catálogo">
                         <TextBox.InputBindings>
                             <KeyBinding Key="Enter" Command="{Binding CatalogBrowser.AddFirstFromCatalogBrowserCommand}" />
@@ -88,7 +89,7 @@
                                             CommandParameter="{Binding}">
                                         <StackPanel Orientation="Horizontal">
                                             <helpers:Icon Data="{StaticResource IcoPlus}" Width="14" Height="14" Margin="0,0,6,0" />
-                                            <TextBlock Text="Agregar" />
+                                            <TextBlock Text="{Binding DataContext.CatalogBrowser.CatalogBrowserActionText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                         </StackPanel>
                                     </Button>
                                 </Grid>
@@ -141,7 +142,7 @@
                 </Grid>
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="24,12">
-                    <TextBlock Style="{StaticResource TextCaption}" Text="Enter agrega el primero · Agregar lo pone en la consulta · Esc cierra" />
+                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding CatalogBrowser.CatalogBrowserHint}" />
                 </Border>
             </Grid>
         </Border>

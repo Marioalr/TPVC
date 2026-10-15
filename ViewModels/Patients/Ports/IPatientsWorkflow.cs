@@ -60,4 +60,11 @@ public interface IPatientsWorkflow
 
     /// <summary>Cierra las hojas de la consulta y el panel de agenda (al enviarla, soltarla o recibir una).</summary>
     void CloseConsultationSheets();
+
+    /// <summary>
+    /// Antes de terminar la consulta o enviarla a otro equipo: una "Cambiar indicación" que quedó abierta se guarda
+    /// (2026-10-14, <c>PrescriptionSheetViewModel.CommitPendingPrescriptionEditsAsync</c>). false si no se pudo: no se
+    /// sigue con la indicación vieja y la corrección no se pierde.
+    /// </summary>
+    Task<bool> CommitPendingPrescriptionEditsAsync();
 }

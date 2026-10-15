@@ -10,8 +10,16 @@ using TPVC.ViewModels.Patients;
 
 namespace TPVC.Views;
 
+/// <summary>
+/// Teclas y foco de la hoja de receta. Desde el 2026-10-14 elegir el medicamento (Enter o clic en las sugerencias, o el
+/// catálogo) solo lo elige y el cursor pasa a "Indicación"; Enter ahí (o en "Cantidad") y "Agregar" lo agregan, y el
+/// cursor vuelve al buscador. Las teclas del campo "Indicación" (indicaciones frecuentes) son de
+/// <see cref="Helpers.IndicationDropdown"/>; qué se elige y qué se agrega, de <see cref="PrescriptionSheetViewModel"/>.
+/// </summary>
 public partial class PrescriptionSheetView : UserControl
 {
+    private MedicalRecordsViewModel? _subscribed;
+
     public PrescriptionSheetView()
     {
         InitializeComponent();
@@ -21,107 +29,62 @@ public partial class PrescriptionSheetView : UserControl
             if ((bool)e.NewValue) FocusSearch();
         };
         Loaded += (_, _) => FocusSearch();
-        DataContextChanged += (_, e) =>
-        {
-            if (e.OldValue is MedicalRecordsViewModel oldVm) oldVm.CatalogBrowser.PropertyChanged -= ViewModel_PropertyChanged;
-            if (e.NewValue is MedicalRecordsViewModel newVm) newVm.CatalogBrowser.PropertyChanged += ViewModel_PropertyChanged;
-        };
+        DataContextChanged += (_, e) => Attach(e.NewValue as MedicalRecordsViewModel);
     }
 
-    private async void PrescriptionSearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void Attach(MedicalRecordsViewModel? viewModel)
     {
-        if (DataContext is not MedicalRecordsViewModel vm) return;
-
-        if (e.Key == Key.Down)
+        if (_subscribed != null)
         {
-            if (PrescriptionSuggestionsListBox?.Items.Count > 0)
-            {
-                var cur = PrescriptionSuggestionsListBox.SelectedIndex;
-                var nextIndex = cur + 1;
-                if (nextIndex >= PrescriptionSuggestionsListBox.Items.Count || nextIndex < 0)
-                    nextIndex = 0;
-                PrescriptionSuggestionsListBox.SelectedIndex = nextIndex;
-                var item = PrescriptionSuggestionsListBox.Items[nextIndex];
-                PrescriptionSuggestionsListBox.ScrollIntoView(item);
-                if (item is Product p)
-                {
-                    vm.Prescription.SelectedPrescriptionProduct = p;
-                }
-            }
-            e.Handled = true;
+            _subscribed.CatalogBrowser.PropertyChanged -= CatalogBrowser_PropertyChanged;
+            _subscribed.Prescription.FocusSearchRequested -= FocusSearch;
         }
-        else if (e.Key == Key.Up)
+        _subscribed = viewModel;
+        if (_subscribed != null)
         {
-            if (PrescriptionSuggestionsListBox?.Items.Count > 0)
-            {
-                var cur = PrescriptionSuggestionsListBox.SelectedIndex;
-                var prevIndex = cur - 1;
-                if (prevIndex < 0 || prevIndex >= PrescriptionSuggestionsListBox.Items.Count)
-                    prevIndex = PrescriptionSuggestionsListBox.Items.Count - 1;
-                PrescriptionSuggestionsListBox.SelectedIndex = prevIndex;
-                var item = PrescriptionSuggestionsListBox.Items[prevIndex];
-                PrescriptionSuggestionsListBox.ScrollIntoView(item);
-                if (item is Product p)
-                {
-                    vm.Prescription.SelectedPrescriptionProduct = p;
-                }
-            }
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter)
-        {
-            var product = PrescriptionSuggestionsListBox?.SelectedItem as Product;
-            await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
-            PrescriptionSearchTextBox?.Focus();
-            e.Handled = true;
+            _subscribed.CatalogBrowser.PropertyChanged += CatalogBrowser_PropertyChanged;
+            _subscribed.Prescription.FocusSearchRequested += FocusSearch;
         }
     }
 
-    private async void PrescriptionAuxInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    /// <summary>
+    /// Buscador: ↓ abre las sugerencias (con existencias primero) y ↑ ↓ las recorren; Enter elige la marcada, o lo escrito
+    /// si la lista está cerrada, y pasa a "Indicación". Esc (lista primero) lo atiende la escalera de Esc de Pacientes.
+    /// </summary>
+    private void PrescriptionSearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (DataContext is not MedicalRecordsViewModel vm) return;
+        if (DataContext is not MedicalRecordsViewModel vm || Keyboard.Modifiers != ModifierKeys.None) return;
+        var prescription = vm.Prescription;
 
-        if (e.Key == Key.Down || e.Key == Key.Up)
+        switch (e.Key)
         {
-            PrescriptionSearchTextBox_PreviewKeyDown(sender, e);
-            return;
-        }
-
-        if (e.Key == Key.Enter)
-        {
-            var product = PrescriptionSuggestionsListBox?.SelectedItem as Product;
-            await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
-            PrescriptionSearchTextBox?.Focus();
-            e.Handled = true;
-        }
-    }
-
-    private async void PrescriptionSuggestionsListBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (DataContext is not MedicalRecordsViewModel vm) return;
-
-        if (e.Key == Key.Enter)
-        {
-            if (PrescriptionSuggestionsListBox?.SelectedItem is Product product)
-            {
-                await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
-                PrescriptionSearchTextBox?.Focus();
+            case Key.Down:
+            case Key.Up:
+                prescription.MovePrescriptionSuggestion(e.Key == Key.Down ? 1 : -1);
+                if (prescription.SelectedPrescriptionProduct is { } selected) PrescriptionSuggestionsListBox?.ScrollIntoView(selected);
                 e.Handled = true;
-            }
-        }
-        else if (e.Key == Key.Down || e.Key == Key.Up)
-        {
-            _ = Dispatcher.InvokeAsync(() =>
-            {
-                if (PrescriptionSuggestionsListBox?.SelectedItem is Product p)
-                {
-                    vm.Prescription.SelectedPrescriptionProduct = p;
-                }
-            }, DispatcherPriority.Input);
+                break;
+            case Key.Enter:
+                if (prescription.ConfirmPrescriptionSearch()) FocusIndication();
+                e.Handled = true;
+                break;
         }
     }
 
-    private async void PrescriptionSuggestionsListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    /// <summary>Con el foco en la lista de sugerencias, Enter elige la marcada.</summary>
+    private void PrescriptionSuggestionsListBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm || e.Key != Key.Enter) return;
+        if (PrescriptionSuggestionsListBox?.SelectedItem is Product product)
+        {
+            vm.Prescription.ChoosePrescriptionProduct(product);
+            FocusIndication();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Clic en una sugerencia: la elige (no la agrega) y pasa a "Indicación".</summary>
+    private void PrescriptionSuggestionsListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         var dep = e.OriginalSource as DependencyObject;
         while (dep != null && dep is not ListBoxItem && dep != sender)
@@ -129,24 +92,23 @@ public partial class PrescriptionSheetView : UserControl
             dep = VisualTreeHelper.GetParent(dep);
         }
 
-        if (dep is ListBoxItem item && item.DataContext is Product product)
+        if (dep is ListBoxItem item && item.DataContext is Product product && DataContext is MedicalRecordsViewModel vm)
         {
-            if (DataContext is MedicalRecordsViewModel vm)
-            {
-                await vm.Prescription.SelectAndAddPrescriptionProductAsync(product);
-                PrescriptionSearchTextBox?.Focus();
-                e.Handled = true;
-            }
+            vm.Prescription.ChoosePrescriptionProduct(product);
+            FocusIndication();
+            e.Handled = true;
         }
     }
 
-    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    /// <summary>Al cerrar el catálogo: con un medicamento elegido, a escribir su indicación; si no, al buscador.</summary>
+    private void CatalogBrowser_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(CatalogBrowserViewModel.IsCatalogBrowserModalOpen)
             && sender is CatalogBrowserViewModel { IsCatalogBrowserModalOpen: false }
             && IsVisible)
         {
-            FocusSearch();
+            if (_subscribed?.Prescription.IsMedicineChosen == true) FocusIndication();
+            else FocusSearch();
         }
     }
 
@@ -157,6 +119,17 @@ public partial class PrescriptionSheetView : UserControl
         {
             PrescriptionSearchTextBox?.Focus();
             PrescriptionSearchTextBox?.SelectAll();
+        }, DispatcherPriority.Input);
+    }
+
+    private void FocusIndication()
+    {
+        if (!IsVisible) return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (PrescriptionDosageTextBox == null) return;
+            PrescriptionDosageTextBox.Focus();
+            PrescriptionDosageTextBox.CaretIndex = PrescriptionDosageTextBox.Text.Length;
         }, DispatcherPriority.Input);
     }
 }

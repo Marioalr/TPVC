@@ -191,6 +191,115 @@ public class EscapeLadderTests
         consultation.Dispose();
     }
 
+    // ================================================================== dentro de la receta (2026-10-14)
+
+    /// <summary>La receta de una consulta en curso con un medicamento ya agregado (para corregir su indicación).</summary>
+    private static (MedicalRecordsViewModel Records, PatientPrescriptionItem Row) PrescriptionWithARow()
+    {
+        var (records, consultations) = Open();
+        records.SelectPatient(Mock(records, 2));
+        records.StartActiveConsultation();
+        FreezeClock(consultations);
+        records.Prescription.OpenPrescriptionModal();
+        records.Prescription.PrescriptionSearchText = "parac";
+        Assert.IsTrue(records.Prescription.ConfirmPrescriptionSearch());
+        records.Prescription.PrescriptionDosage = "1 tableta cada 8 horas";
+        Completes(records.Prescription.AddPrescriptionAsync(), "Agregar");
+        records.Templates.PosologyTemplates = new System.Collections.ObjectModel.ObservableCollection<PrescriptionTemplate>
+        {
+            new() { Id = 1, Title = "Cada 8", Text = "1 tableta cada 8 horas por 5 días" },
+            new() { Id = 2, Title = "Cada 12", Text = "1 tableta cada 12 horas por 7 días" }
+        };
+        return (records, records.SelectedPatient!.ActivePrescription.Single());
+    }
+
+    [TestMethod]
+    public void InsideThePrescription_EscClosesTheListsAndTheCorrectionFirst_ThenTheSheet()
+    {
+        var (records, row) = PrescriptionWithARow();
+        var rx = records.Prescription;
+
+        // Todo abierto a la vez: sugerencias de medicamentos, la corrección de un renglón con su lista y la lista de la captura
+        rx.PrescriptionSearchText = "ibu";
+        rx.SheetIndication.Start(row);
+        Assert.IsTrue(rx.SheetIndication.Picker.Open());
+        Assert.IsTrue(rx.CaptureIndications.Open());
+        Assert.IsTrue(rx.IsPrescriptionDropdownOpen && rx.SheetIndication.IsEditing);
+
+        string State() => string.Join(", ", new[]
+        {
+            rx.CaptureIndications.IsOpen ? "frecuentes" : null,
+            rx.SheetIndication.Picker.IsOpen ? "frecuentes del renglón" : null,
+            rx.SheetIndication.IsEditing ? "cambiar indicación" : null,
+            rx.IsPrescriptionDropdownOpen ? "sugerencias" : null,
+            rx.IsPrescriptionModalOpen ? "receta" : null
+        }.Where(n => n != null));
+
+        var expected = new[]
+        {
+            "frecuentes del renglón, cambiar indicación, sugerencias, receta",
+            "cambiar indicación, sugerencias, receta",
+            "sugerencias, receta",
+            "receta",
+            string.Empty
+        };
+        foreach (var after in expected)
+        {
+            Assert.IsTrue(records.TryCloseTopmost(), $"Esc se atiende ({State()})");
+            Assert.AreEqual(after, State(), "Esc cierra solo lo de más arriba");
+        }
+        Assert.AreEqual("ibu", rx.PrescriptionSearchText, "Cerrar las sugerencias no borra lo escrito");
+        Assert.AreEqual("1 tableta cada 8 horas", row.Dosage, "Esc en la corrección deja la indicación que tenía");
+        Assert.IsTrue(records.HasActiveConsultation);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public void ACorrectionWhoseRowIsNoLongerShown_DoesNotSwallowEsc()
+    {
+        var (records, row) = PrescriptionWithARow();
+        var rx = records.Prescription;
+        rx.SheetIndication.Start(row);
+        Assert.IsTrue(rx.SheetIndication.IsEditing);
+
+        // El renglón ya no está en la receta (p. ej. se cambió la lista con una recarga): su corrección no se ve
+        records.SelectedPatient!.ActivePrescription = new List<PatientPrescriptionItem>();
+        Assert.IsTrue(records.TryCloseTopmost());
+        Assert.IsFalse(rx.IsPrescriptionModalOpen, "La primera Esc cierra la hoja, que es lo que se ve");
+        Assert.IsFalse(rx.SheetIndication.IsEditing, "Cerrar la hoja también cierra la corrección");
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public void OnTheConsultation_EscClosesTheIndicationListThenTheCorrection_AndNeverLeavesTheConsultation()
+    {
+        var (records, row) = PrescriptionWithARow();
+        var plan = records.Prescription.PlanIndication;
+        records.Prescription.ClosePrescriptionModal();
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
+
+        plan.Start(row);
+        Assert.IsTrue(plan.Picker.Open());
+        Completes(records.OpenAgendaPanelAsync(), "Agenda");
+
+        Assert.IsTrue(records.TryCloseTopmost());
+        Assert.IsFalse(records.Agenda.IsAgendaPanelOpen, "Primero la agenda, que está encima");
+        Assert.IsTrue(plan.Picker.IsOpen);
+        Assert.IsTrue(records.TryCloseTopmost());
+        Assert.IsFalse(plan.Picker.IsOpen, "Luego la lista de frecuentes");
+        Assert.IsTrue(plan.IsEditing);
+        Assert.IsTrue(records.TryCloseTopmost());
+        Assert.IsFalse(plan.IsEditing, "Luego la corrección");
+        Assert.IsFalse(records.TryCloseTopmost(), "La consulta no se deja con Esc");
+        Assert.IsTrue(records.Navigation.IsConsultationPage);
+
+        // Abrir la hoja de receta cancela una corrección que quedó abierta en la consulta (la hoja la taparía)
+        plan.Start(row);
+        records.Prescription.OpenPrescriptionModal();
+        Assert.IsFalse(plan.IsEditing);
+        records.Dispose();
+    }
+
     // ================================================================== escribir para buscar
 
     [TestMethod]
