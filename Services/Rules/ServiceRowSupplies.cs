@@ -7,7 +7,7 @@ using TPVC.Models;
 namespace TPVC.Services.Rules;
 
 /// <summary>
-/// Los insumos de un renglón de servicio en la consulta (pedido del médico del 2026-10-14, revisión 13 del contrato): cada
+/// Los insumos de un renglón de servicio en la consulta (pedido del médico del 2026-10-14, revisión 14 del contrato): cada
 /// renglón de la hoja de servicios que se cargó a la cuenta lleva su propia lista (<see cref="PatientServiceItem.Supplies"/>)
 /// con lo que cargó, y el médico la ajusta solo para esa consulta. La configuración del servicio
 /// (<see cref="ClinicalService.DefaultProducts"/>) nunca cambia: el siguiente renglón del mismo servicio vuelve a empezar con
@@ -128,7 +128,7 @@ public static class ServiceRowSupplies
         Math.Max(0, Math.Min(requested, stock - alreadyInAccount));
 
     /// <summary>
-    /// Un renglón sin lista (de la revisión 12 o anterior) cargó el servicio y sus insumos por defecto por sus unidades, así que
+    /// Un renglón sin lista (de la revisión 13 o anterior) cargó el servicio y sus insumos por defecto por sus unidades, así que
     /// eso es lo que descuenta al quitarlo, con los insumos por defecto que el servicio tiene hoy: los mismos insumos con que
     /// empezaría hoy un renglón nuevo con esas unidades.
     /// </summary>

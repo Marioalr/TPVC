@@ -200,7 +200,7 @@ TPVC/
 │   └── ThemeSettings.cs         # Modelo de configuración visual
 ├── Services/
 │   ├── Documents/               # (paso 8.11, v1.28.0) Generadores sin WPF: receta y solicitud de laboratorio en HTML (PrescriptionHtmlBuilder, LabOrderHtmlBuilder, LetterheadHtml/Layout), ticket en texto de 42 columnas y en HTML (TicketText, TicketHtml)
-│   ├── Rules/                   # (paso 8.11, v1.28.0) Reglas sin WPF ni base: CashCutRules, StockAlertRules, SuggestedPurchaseRules, VitalSignsRules, PatientFormRules, HandoffPayloadCodec; (8.18, v1.36.0) PatientSheetRows; (8.19, v1.37.0) KardexRows; (8.22, v1.39.0) CanonicalJson, PatientFieldStamps, PatientSheetCanonical, PatientMerge y PatientSummaryRules; (2026-10-14, contrato revisión 13) ServiceRowSupplies
+│   ├── Rules/                   # (paso 8.11, v1.28.0) Reglas sin WPF ni base: CashCutRules, StockAlertRules, SuggestedPurchaseRules, VitalSignsRules, PatientFormRules, HandoffPayloadCodec; (8.18, v1.36.0) PatientSheetRows; (8.19, v1.37.0) KardexRows; (8.22, v1.39.0) CanonicalJson, PatientFieldStamps, PatientSheetCanonical, PatientMerge y PatientSummaryRules; (2026-10-14, contrato revisión 14) ServiceRowSupplies
 │   ├── Pairing/                 # (paso 8.14, v1.32.0) DeviceLinkCode: el texto y el QR con la URL y el token para la tablet y el celular (sin red local, decisión del 2026-10-11)
 │   ├── Folios/                  # (paso 8.16, v1.34.0) FolioFactory (cómo se arma cada folio, sin base ni red), OfflineFolioStore (folios.json) e IFolioSource (el contador de la nube, en TursoSyncService.Folios.cs); (8.17, v1.35.0) FolioRegularizationService
 │   ├── InventoryService.cs      # Lógica de inventario, FEFO y RegisterSaleAsync

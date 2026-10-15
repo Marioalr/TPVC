@@ -26,7 +26,7 @@ public interface IPatientSheetRow
 
 /// <summary>
 /// Lo que identifica el renglón de la cuenta con que se cargaron unas piezas (paso 8.18): el insumo de la hoja y, desde
-/// la revisión 13 del contrato, cada insumo de un servicio (<see cref="PatientServiceSupply"/>). Las reglas para
+/// la revisión 14 del contrato, cada insumo de un servicio (<see cref="PatientServiceSupply"/>). Las reglas para
 /// encontrarlo en cualquier equipo, en <see cref="TPVC.Services.Rules.PatientSheetRows.ResolveSupplyLine"/>.
 /// </summary>
 public interface IChargedSupplyLine
@@ -240,7 +240,7 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, 
     private List<PatientServiceSupply>? _supplies;
 
     /// <summary>
-    /// Revisión 13 del contrato: los insumos que este renglón cargó a la cuenta de su consulta, con sus piezas. Empieza con los
+    /// Revisión 14 del contrato: los insumos que este renglón cargó a la cuenta de su consulta, con sus piezas. Empieza con los
     /// insumos por defecto del servicio por sus unidades, y el médico la ajusta solo para esta consulta (la configuración del
     /// servicio no cambia). Es lo que se descuenta al quitar el renglón. null = renglón sin lista (de una versión anterior, o
     /// que no se cargó a ninguna cuenta): se descuenta como antes, con los insumos por defecto que tenga el servicio. Reglas
@@ -315,7 +315,7 @@ public class PatientServiceItem : System.ComponentModel.INotifyPropertyChanged, 
 }
 
 /// <summary>
-/// Un insumo que cargó un renglón de servicio a la cuenta de su consulta (<see cref="PatientServiceItem.Supplies"/>, revisión 13
+/// Un insumo que cargó un renglón de servicio a la cuenta de su consulta (<see cref="PatientServiceItem.Supplies"/>, revisión 14
 /// del contrato): sus piezas en total (no por unidad del servicio) y con qué renglón de la cuenta se cargaron, con los mismos
 /// campos y reglas que un insumo de la hoja (paso 8.18): la clase y el SyncId valen en cualquier equipo, y la PC escribe además
 /// su Id local. Los campos que no conoce se vuelven a escribir tal cual.

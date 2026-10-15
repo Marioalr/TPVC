@@ -150,7 +150,7 @@ public partial class ConsultationAccount : ObservableObject
 
     /// <summary>
     /// Carga el servicio recién agregado (todas sus unidades con sus insumos por defecto, o su cargo libre) y le pone al
-    /// renglón su lista de insumos (revisión 13): los insumos por defecto por las unidades, o vacía en un cargo libre. La lista
+    /// renglón su lista de insumos (revisión 14): los insumos por defecto por las unidades, o vacía en un cargo libre. La lista
     /// es lo que el renglón cargó; la configuración del servicio no cambia. false si no se pudo (sin consulta, bloqueada o sin
     /// precio).
     /// </summary>

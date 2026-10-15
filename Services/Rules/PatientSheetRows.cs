@@ -285,7 +285,7 @@ public static class PatientSheetRows
     /// anterior que lo escribió, que los usa tal cual si la consulta le regresa, y aquí se resuelve igual al moverlo. La
     /// excepción es un insumo viejo que aquí es un cargo libre que la cuenta recibida sí tiene (el producto no existe en
     /// este equipo): queda con ese Id negativo, que vale igual en todos los equipos. Los insumos de un servicio
-    /// (<see cref="PatientServiceItem.Supplies"/>, revisión 13) se traducen igual que un insumo de la hoja, aunque el servicio
+    /// (<see cref="PatientServiceItem.Supplies"/>, revisión 14) se traducen igual que un insumo de la hoja, aunque el servicio
     /// sea un renglón viejo o un cargo libre. Devuelve cuántos renglones o insumos cambiaron.
     /// </summary>
     public static int TranslateReceivedRows(PatientRecord patient, string folio, IEnumerable<ConsultationProductItem> receivedItems,

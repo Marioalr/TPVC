@@ -16,7 +16,7 @@ using TPVC.ViewModels;
 namespace TPVC.Tests;
 
 /// <summary>
-/// Pedido del médico del 2026-10-14 (revisión 13 del contrato): en la consulta en curso, los insumos de un servicio se ajustan
+/// Pedido del médico del 2026-10-14 (revisión 14 del contrato): en la consulta en curso, los insumos de un servicio se ajustan
 /// solo para esa consulta. Cada renglón de la hoja de servicios lleva la lista de lo que cargó; + / −, la X y agregar mueven
 /// solo la diferencia en la cuenta, quitar el renglón descuenta exactamente su lista, y la configuración del servicio nunca
 /// cambia. Un renglón sin lista (de la v1.39 u otra PC) y uno de una consulta anterior siguen como antes.

@@ -14,7 +14,7 @@ namespace TPVC.Services.Rules;
 /// (<see cref="CanonicalJson"/>) con <b>todos</b> sus campos conocidos (<see cref="Fields"/>, también los que la PC omite
 /// cuando valen lo de siempre) más los que no conoce, tal cual. No entran los Id locales del equipo que escribió
 /// (<see cref="LocalIdFields"/>: <c>ChargedLineId</c> y <c>ServiceId</c>, que la PC sigue escribiendo para las PC anteriores
-/// y Kotlin no escribe): que cada equipo escriba los suyos no es un cambio. Desde la revisión 13 un servicio lleva además su
+/// y Kotlin no escribe): que cada equipo escriba los suyos no es un cambio. Desde la revisión 14 un servicio lleva además su
 /// lista de insumos (<c>Supplies</c>, null sin lista), cada insumo con todos sus campos conocidos menos su <c>ChargedLineId</c>:
 /// la lista es parte del renglón, así que cambiarla marca el renglón y la combinación la lleva con él. Vectores en
 /// <c>contracts/golden/canonical-json.json</c>.
