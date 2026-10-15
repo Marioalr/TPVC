@@ -2,6 +2,18 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.42.0] - 2026-10-15
+
+### Añadido — Insumos de un servicio solo para esta consulta
+* En la consulta activa, cada servicio muestra sus insumos ("Insumos: Gasa ×1 · Jeringa ×1"). Con **Ajustar insumos** se suman o quitan piezas, se quita un insumo o se agrega otro con el buscador (con existencias primero; ↑ ↓ y Enter).
+* El ajuste vale solo para esa consulta: la configuración del servicio no cambia. Si una curación se cambia a dos gasas, la próxima curación vuelve a empezar con una.
+* Lo que se suma o se quita se cobra o se descuenta en la cuenta de la consulta; quitar el servicio quita también sus insumos.
+* Los servicios tienen − y + para las unidades: cada unidad suma o quita los insumos de siempre, sin perder los ajustes.
+* Los servicios de consultas anteriores muestran sus insumos sin poder cambiarlos. Esc cierra primero los insumos abiertos.
+* Al enviar la consulta a un equipo con una versión anterior aparece un aviso: ese equipo no conoce los insumos ajustados.
+* Notas para la app del celular: ver expedientes (solo consulta), reportes del negocio e inventario; editar pacientes desde el celular queda para el futuro.
+* Contrato de sincronización en la revisión 14 (aditiva sobre la 13): lista `Supplies` en cada renglón de `ActiveServicesJson`, con sus vectores. 795 pruebas.
+
 ## [1.41.0] - 2026-10-15
 
 ### Cambiado — Pedidos del consultorio: receta, laboratorio y vista previa
