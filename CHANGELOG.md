@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.43.0] - 2026-10-15
+
+### Añadido — Fase 8, paso 8.24: sincronización periódica y marca de cambios
+* La PC ve lo que cambian los otros equipos aunque ella no cambie nada: revisa la nube cada 4 s en Pacientes (si hay otro equipo que recibe consultas o un envío pendiente) y cada 30 s en lo demás. Solo sincroniza cuando otro equipo subió algo nuevo.
+* Descarga de seguridad cada 10 minutos, al volver a la ventana (si la última sincronización tiene más de 30 s), al despertar el equipo y al volver la red.
+* Sin red, los reintentos se espacian (30 s, 1 min, 2 min y luego cada 5 min); en Pacientes con otro equipo la revisión nunca espera más de 30 s, y en cuanto la nube responde vuelve a su paso.
+* Una sincronización larga ya no detiene la revisión de consultas enviadas ni la señal de "en línea", y cambiar la hora de Windows no frena la cadencia.
+* La señal de "en línea" se escribe cada 60 s (antes 30 s). Con la nube apagada o en pausa no se hace ninguna petición.
+* Contrato de sincronización en la revisión 15: índice parcial para la revisión de consultas, regla «Cadencia» y las consultas literales de la revisión para la app de Kotlin. Un día normal simulado de tres equipos usa ~57 mil lecturas y ~1.5 mil escrituras. 811 pruebas.
+
 ## [1.42.0] - 2026-10-15
 
 ### Añadido — Insumos de un servicio solo para esta consulta

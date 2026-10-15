@@ -198,6 +198,16 @@ public sealed class HandoffPollResult
 
     /// <summary>Estado del envío propio: "enviada", "aceptada", "cancelada" o "" si ya no existe.</summary>
     public string? OutgoingState { get; init; }
+
+    /// <summary>Paso 8.24: la última subida de cada uno de los otros equipos (LastPushUtc, hora de la nube), por DeviceId.</summary>
+    public System.Collections.Generic.IReadOnlyDictionary<string, DateTime> PeerPushes { get; init; } =
+        new System.Collections.Generic.Dictionary<string, DateTime>();
+
+    /// <summary>Paso 8.24: cuántos compañeros pueden recibir consultas, si esta revisión leyó la lista (cada 10 min); si no, null.</summary>
+    public int? HandoffPeerCount { get; init; }
+
+    /// <summary>La revisión preguntó por un envío propio pendiente.</summary>
+    public bool HadOutgoing { get; init; }
 }
 
 /// <summary>Cómo terminó un envío al resolverlo contra la nube.</summary>

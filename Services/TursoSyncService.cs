@@ -434,12 +434,57 @@ public partial class TursoSyncService
         return RunExclusiveAsync(isBackgroundAutoSync: false, fullResync: true, ct);
     }
 
-    private async Task<TursoSyncResult> RunExclusiveAsync(bool isBackgroundAutoSync, bool fullResync, CancellationToken ct, TimeSpan? lockWait = null)
+    /// <summary>
+    /// Paso 8.24: la sincronización que pide <see cref="SyncScheduler"/> (cambios de otro equipo, descarga de seguridad,
+    /// reintento). Es automática, con las mismas pausas que la de después de guardar, y comparte el candado; si hay otra en
+    /// curso no espera ni se repite al terminar esa (la otra ya baja lo mismo, y la marca de cambios la vuelve a pedir si
+    /// hiciera falta).
+    /// </summary>
+    internal Task<TursoSyncResult> ScheduledSyncAsync(CancellationToken ct = default)
+    {
+        var settings = _settingsService.CurrentSettings;
+        if (!settings.IsSyncEnabled || string.IsNullOrWhiteSpace(settings.DatabaseUrl))
+            return Task.FromResult(new TursoSyncResult { Success = false, ErrorMessage = "La sincronización no está habilitada." });
+        if (PauseReason != TursoSyncPauseReason.None)
+            return Task.FromResult(new TursoSyncResult { Success = false, ErrorMessage = PauseMessage });
+        if (IdentityConflict is { } conflict && _identityConflictUrl == settings.DatabaseUrl)
+            return Task.FromResult(new TursoSyncResult { Success = false, ErrorMessage = IdentityConflictMessage(conflict) });
+        return RunExclusiveAsync(isBackgroundAutoSync: true, fullResync: false, ct, TimeSpan.Zero, rerunWhenBusy: false);
+    }
+
+    /// <summary>Paso 8.24: lo automático está detenido (cuota agotada, freno, token rechazado u otra nube en esta URL).</summary>
+    internal bool IsAutomaticSyncBlocked =>
+        PauseReason != TursoSyncPauseReason.None
+        || (IdentityConflict != null && _identityConflictUrl == _settingsService.CurrentSettings.DatabaseUrl);
+
+    /// <summary>Paso 8.24: hay una sincronización con el candado en este momento.</summary>
+    internal bool IsSyncRunning => Volatile.Read(ref _runInFlight) is { IsCompleted: false };
+
+    /// <summary>
+    /// Paso 8.24: la hora de la nube de la última bajada buena (la marca de agua guardada más sus 5 s de traslape); null si
+    /// esta base todavía no baja de esta nube. Una subida de otro equipo con LastPushUtc posterior todavía no se bajó.
+    /// </summary>
+    internal DateTime? LastPullServerUtc
+    {
+        get
+        {
+            var watermark = _settingsService.CurrentSettings.LastPulledServerWatermark;
+            if (string.IsNullOrWhiteSpace(watermark)) return null;
+            var parsed = ParseDate(watermark);
+            return parsed == DateTime.MinValue ? null : DateTime.SpecifyKind(parsed, DateTimeKind.Utc) + PullWatermarkLag;
+        }
+    }
+
+    /// <summary>La marca de agua de la bajada va 5 s antes de la hora de la nube (<see cref="HandshakeSql"/>).</summary>
+    private static readonly TimeSpan PullWatermarkLag = TimeSpan.FromSeconds(5);
+
+    private async Task<TursoSyncResult> RunExclusiveAsync(bool isBackgroundAutoSync, bool fullResync, CancellationToken ct, TimeSpan? lockWait = null,
+        bool rerunWhenBusy = true)
     {
         var wait = lockWait ?? (isBackgroundAutoSync ? TimeSpan.Zero : TimeSpan.FromSeconds(5));
         if (!await _syncLock.WaitAsync(wait, ct))
         {
-            if (isBackgroundAutoSync) Interlocked.Exchange(ref _autoSyncSkipped, 1);
+            if (isBackgroundAutoSync && rerunWhenBusy) Interlocked.Exchange(ref _autoSyncSkipped, 1);
             return new TursoSyncResult
             {
                 Success = false,

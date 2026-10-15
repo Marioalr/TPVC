@@ -1,5 +1,5 @@
 {
-  "contract": 14,
+  "contract": 15,
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.HranaStatements.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [
@@ -341,6 +341,48 @@
         "Piso (integer)"
       ],
       "when": "Paso 8.16: al guardar un expediente o un ticket, con 2 s de espera; el piso es el mayor número de esa serie en la base del equipo (los folios con letra no cuentan). Sin respuesta, el folio lleva la letra del equipo (golden/folios.json)."
+    },
+    {
+      "name": "check.incoming",
+      "sql": "SELECT Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, Folio, Payload, PayloadVersion, State, AcceptToken, CreatedAtUtc FROM ConsultationHandoffs WHERE ToDeviceId = ? AND (State = 'enviada' OR (State = 'aceptada' AND Payload <> '')) ORDER BY CreatedAtUtc DESC LIMIT 10",
+      "args": [
+        "DeviceId de este equipo"
+      ],
+      "when": "Paso 8.24: la revisión, cada 4 s en pacientes y consulta con un compañero o un envío pendiente (si no, 30 s): las consultas dirigidas a este equipo, enviadas o aceptadas aquí con su copia. Con este WHERE exacto SQLite usa el índice parcial IX_ConsultationHandoffs_Pending."
+    },
+    {
+      "name": "check.outgoing",
+      "sql": "SELECT State FROM ConsultationHandoffs WHERE Id = ?",
+      "args": [
+        "Id del envío pendiente"
+      ],
+      "when": "Paso 8.24: en la misma petición de la revisión, solo si este equipo tiene un envío pendiente: su estado."
+    },
+    {
+      "name": "check.peerPush",
+      "sql": "SELECT DeviceId, LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ? AND LastPushUtc IS NOT NULL;",
+      "args": [
+        "DeviceId de este equipo"
+      ],
+      "when": "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la última subida de cada uno de los otros equipos. Si alguna es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza; cada valor dispara a lo más una sincronización."
+    },
+    {
+      "name": "check.peers.serverNow",
+      "sql": "SELECT strftime('%Y-%m-%d %H:%M:%f','now') AS ServerNow;",
+      "args": [],
+      "when": "Paso 8.24: cada 10 min, en la misma petición de la revisión, la lista de compañeros: la hora de la nube…"
+    },
+    {
+      "name": "check.peers.devices",
+      "sql": "SELECT DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, Platform, HandoffProtocol, ContractRevision, PendingCount, OldestPendingUtc FROM RegisteredDevices;",
+      "args": [],
+      "when": "…los latidos (un compañero puede recibir consultas: HandoffProtocol >= 1, visto en los últimos 30 días)…"
+    },
+    {
+      "name": "check.peers.registry",
+      "sql": "SELECT DeviceId, DeviceCode, Role, DisplayName, RevokedAtUtc, RevokedReason FROM DeviceRegistry;",
+      "args": [],
+      "when": "…y DeviceRegistry (rol, aprobado y sin quitar). Sin compañeros ni envío pendiente, la revisión va cada 30 s también en pacientes."
     },
     {
       "name": "folio.raise",

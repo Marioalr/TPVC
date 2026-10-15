@@ -88,8 +88,7 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     // anterior ya no se aplica
     private long _handoffEpoch;
 
-    private CancellationTokenSource? _handoffLoopCts;
-    private CancellationTokenSource _handoffWakeCts = new();
+    private bool _handoffPollingStarted;
     private volatile bool _inPatientsSection;
     private readonly HashSet<string> _dismissedIncoming = new();
     private readonly HashSet<string> _announcedIncoming = new();
@@ -102,12 +101,6 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     public string? ReceivedHandoffId { get; set; }
     public string? ReceivedHandoffToken { get; set; }
     private readonly HashSet<string> _finalizedReceived = new();
-
-    /// <summary>Cada cuánto se revisa la nube estando en Pacientes.</summary>
-    public TimeSpan HandoffPollInterval { get; set; } = TimeSpan.FromSeconds(4);
-
-    /// <summary>Fuera de Pacientes: solo "sigo en línea" y avisos.</summary>
-    public TimeSpan HandoffIdlePollInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Cuánto esperar a que termine otra sincronización antes de enviar o recibir.</summary>
     public TimeSpan HandoffSyncLockWait { get; set; } = TimeSpan.FromSeconds(20);
@@ -303,63 +296,42 @@ public partial class ConsultationHandoffViewModel : ObservableObject
 
     // ================================================================== revisión periódica
 
-    /// <summary>Revisión en segundo plano (la inicia la ventana principal; las pruebas revisan a mano).</summary>
+    /// <summary>
+    /// Revisión en segundo plano (la inicia la ventana principal; las pruebas revisan a mano). Paso 8.24: la vuelta y su
+    /// cadencia viven en <see cref="SyncScheduler"/> (4 s en Pacientes con un compañero o un envío pendiente, si no 30 s;
+    /// latido cada 60 s y la marca de cambios de los otros equipos); aquí solo se le da la revisión de esta pantalla.
+    /// </summary>
     public void StartHandoffPolling()
     {
-        if (_handoff == null || _handoffLoopCts != null) return;
-        _handoffLoopCts = new CancellationTokenSource();
-        var ct = _handoffLoopCts.Token;
-        _ = Task.Run(async () =>
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                try
-                {
-                    if (_handoff.AutoPoll) await PollHandoffsOnceAsync(ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    AppLogger.Error("Falló la revisión de consultas entre equipos", ex);
-                }
-
-                var wake = Volatile.Read(ref _handoffWakeCts);
-                try
-                {
-                    using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, wake.Token);
-                    await Task.Delay(_inPatientsSection ? HandoffPollInterval : HandoffIdlePollInterval, linked.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    if (ct.IsCancellationRequested) break;
-                }
-            }
-        }, ct);
+        if (_handoff == null || _handoffPollingStarted) return;
+        _handoffPollingStarted = true;
+        var scheduler = _handoff.Scheduler;
+        scheduler.CheckRunner = PollHandoffsOnceAsync;
+        scheduler.HasPendingSend = () => _outgoingHandoff != null;
+        scheduler.InPatientsSection = _inPatientsSection;
+        scheduler.Start();
     }
 
     public void StopHandoffPolling()
     {
-        _handoffLoopCts?.Cancel();
-        _handoffLoopCts = null;
-    }
-
-    private void WakeHandoffPolling()
-    {
-        var previous = Interlocked.Exchange(ref _handoffWakeCts, new CancellationTokenSource());
-        try { previous.Cancel(); } catch (ObjectDisposedException) { }
+        if (!_handoffPollingStarted || _handoff == null) return;
+        _handoffPollingStarted = false;
+        _handoff.Scheduler.Stop();
     }
 
     /// <summary>Fuera de Pacientes se revisa con menos frecuencia.</summary>
-    public void LeavePatientsSection() => _inPatientsSection = false;
+    public void LeavePatientsSection()
+    {
+        _inPatientsSection = false;
+        if (_handoff != null) _handoff.Scheduler.InPatientsSection = false;
+    }
 
     public void OnEnterPatientsSectionForHandoff()
     {
         _inPatientsSection = true;
         _dismissedIncoming.Clear();
-        WakeHandoffPolling();
+        // Al entrar se revisa enseguida
+        if (_handoff != null) _handoff.Scheduler.InPatientsSection = true;
     }
 
     /// <summary>Una revisión: avisos de consultas recibidas, estado del envío propio y conexión.</summary>

@@ -1,10 +1,12 @@
 using System;
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 using TPVC.Data;
 using TPVC.Helpers;
 using TPVC.Services;
@@ -43,6 +45,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        DetachSyncCadenceEvents();
         FlushConsultationDraft();
         _singleInstance?.Dispose();
         base.OnExit(e);
@@ -164,6 +167,7 @@ public partial class App : Application
         TitleBar.Follow(mainWindow, themeService);
         mainWindow.ContentRendered += LogStartupTime;
         mainWindow.Show();
+        AttachSyncCadenceEvents(mainWindow);
 
         // Respaldo diario y limpieza de bitácoras en segundo plano (no retrasa el arranque)
         var backupService = Services.GetRequiredService<BackupService>();
@@ -195,6 +199,42 @@ public partial class App : Application
                 AppLogger.Error("No se pudo revisar el libro de existencias", ex);
             }
         });
+    }
+
+    private SyncScheduler? _syncScheduler;
+
+    /// <summary>
+    /// Paso 8.24: la cadencia de la sincronización (<see cref="SyncScheduler"/>, sin WPF) se entera aquí de lo que solo ve
+    /// Windows: la ventana que se activa (sincroniza si la última buena fue hace más de 30 s), la vuelta de la suspensión y
+    /// la red que regresa (revisa y sincroniza sin esperar el reintento).
+    /// </summary>
+    private void AttachSyncCadenceEvents(Window window)
+    {
+        _syncScheduler = Services.GetRequiredService<ConsultationHandoffService>().Scheduler;
+        window.Activated += OnMainWindowActivated;
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+    }
+
+    private void DetachSyncCadenceEvents()
+    {
+        if (_syncScheduler == null) return;
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+        _syncScheduler.Stop();
+        _syncScheduler = null;
+    }
+
+    private void OnMainWindowActivated(object? sender, EventArgs e) => _syncScheduler?.OnWindowActivated();
+
+    private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume) _syncScheduler?.OnConnectivityRestored(resumed: true);
+    }
+
+    private void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs e)
+    {
+        if (e.IsAvailable) _syncScheduler?.OnConnectivityRestored();
     }
 
     /// <summary>
