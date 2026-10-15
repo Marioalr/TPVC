@@ -105,15 +105,18 @@ public sealed class ConsultationHandoffService
     private readonly TursoSyncService _sync;
     private readonly TursoSettingsService _settings;
     private string? _ensuredUrl;
-    private DateTime _lastHeartbeatUtc = DateTime.MinValue;
-    private DateTime _lastCleanupUtc = DateTime.MinValue;
-    private DateTime _lastPeersUtc = DateTime.MinValue;
+    // Paso 8.24: los plazos del latido, la lista de compañeros y la limpieza con el reloj monótono (null = todavía no)
+    private TimeSpan? _lastHeartbeat;
+    private TimeSpan? _lastCleanup;
+    private TimeSpan? _lastPeers;
+    private readonly long _origin;
     private string? _peersUrl;
 
     public ConsultationHandoffService(TursoSyncService sync, TursoSettingsService settings)
     {
         _sync = sync;
         _settings = settings;
+        _origin = sync.Clock.GetTimestamp();
         Scheduler = new SyncScheduler(sync, this, settings);
     }
 
@@ -126,7 +129,10 @@ public sealed class ConsultationHandoffService
     /// <summary>Paso 8.24: la cadencia de la revisión, el latido y las sincronizaciones en segundo plano.</summary>
     public SyncScheduler Scheduler { get; }
 
-    private DateTime UtcNow => _sync.Clock.GetUtcNow().UtcDateTime;
+    /// <summary>Tiempo monótono del reloj de la sincronización: mover la hora de Windows no cambia los plazos.</summary>
+    private TimeSpan Mono => _sync.Clock.GetElapsedTime(_origin);
+
+    private static bool Due(TimeSpan? last, TimeSpan now, TimeSpan interval) => last is not { } at || now - at >= interval;
 
     public TursoSyncService Sync => _sync;
 
@@ -185,7 +191,7 @@ public sealed class ConsultationHandoffService
         using var client = CreateClient();
         await EnsureTablesAsync(client, ct);
 
-        var nowUtc = UtcNow;
+        var now = Mono;
         var deviceId = DeviceId;
         var statements = new List<(string Sql, object?[]? Args)>
         {
@@ -200,17 +206,17 @@ public sealed class ConsultationHandoffService
             statements.Add((OutgoingStateSql, new object?[] { outgoingId }));
         }
 
-        bool heartbeat = nowUtc - _lastHeartbeatUtc >= HeartbeatInterval;
+        bool heartbeat = Due(_lastHeartbeat, now, HeartbeatInterval);
         int heartbeatIndex = statements.Count;
         if (heartbeat) statements.AddRange(await _sync.HeartbeatStatementsAsync(Settings, afterPush: false, ct));
 
         // La lista de compañeros: al empezar, al cambiar de nube y cada 10 min (son tablas chicas, se leen completas)
         var url = Settings.DatabaseUrl;
-        bool peers = _peersUrl != url || nowUtc - _lastPeersUtc >= PeerRefreshInterval;
+        bool peers = _peersUrl != url || Due(_lastPeers, now, PeerRefreshInterval);
         int peersIndex = statements.Count;
         if (peers) statements.AddRange(PeerListQueries());
 
-        bool cleanup = nowUtc - _lastCleanupUtc >= CleanupInterval;
+        bool cleanup = Due(_lastCleanup, now, CleanupInterval);
         if (cleanup)
         {
             // Solo renglones terminados, sin copia y que quien envió ya vio (o muy viejos)
@@ -222,8 +228,8 @@ public sealed class ConsultationHandoffService
         }
 
         var results = await client.QueryBatchAsync(statements, ct);
-        if (heartbeat) _lastHeartbeatUtc = nowUtc;
-        if (cleanup) _lastCleanupUtc = nowUtc;
+        if (heartbeat) _lastHeartbeat = now;
+        if (cleanup) _lastCleanup = now;
         if (heartbeat) await _sync.AfterHeartbeatAsync(client, deviceId, results[heartbeatIndex], ct);
 
         int? peerCount = null;
@@ -231,7 +237,7 @@ public sealed class ConsultationHandoffService
         if (peers)
         {
             _peersUrl = url;
-            _lastPeersUtc = nowUtc;
+            _lastPeers = now;
             peerCount = CountPeers(results[peersIndex], results[peersIndex + 1], results[peersIndex + 2], deviceId);
             peerRows = results[peersIndex + 1].Count + results[peersIndex + 2].Count;
         }
@@ -294,7 +300,7 @@ public sealed class ConsultationHandoffService
         var deviceId = DeviceId;
         var heartbeat = await _sync.HeartbeatStatementsAsync(Settings, afterPush: false, ct);
         var results = await client.QueryBatchAsync(heartbeat.Concat(TursoSyncService.DeviceListQueries()), ct);
-        _lastHeartbeatUtc = UtcNow;
+        _lastHeartbeat = Mono;
         await _sync.AfterHeartbeatAsync(client, deviceId, results[0], ct);
 
         var serverNow = ParseUtc(results[2].FirstOrDefault()?["ServerNow"]) ?? DateTime.UtcNow;

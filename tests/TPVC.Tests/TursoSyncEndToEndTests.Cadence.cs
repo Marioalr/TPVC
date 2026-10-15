@@ -391,6 +391,189 @@ public partial class TursoSyncEndToEndTests
         Assert.IsEmpty(reasons);
     }
 
+    // ================================================================== revisión 1: la sincronización no detiene la revisión
+
+    private void OfferConsultationToPcInTheCloud(string id)
+    {
+        using var held = _server.Lock();
+        using var cmd = _server.Connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO ConsultationHandoffs (Id, FromDeviceId, FromDeviceName, ToDeviceId, ToDeviceName, PatientSyncId, PatientName, " +
+                          "Folio, Payload, PayloadVersion, State, CreatedAtUtc, UpdatedAtUtc) VALUES ($id, 'device-tablet', 'tablet', 'device-pc', 'pc', " +
+                          "'p', 'Paciente', 'CNS-1', '{}', 1, 'enviada', strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'))";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    private int HeartbeatsOf(string deviceId)
+    {
+        var heartbeat = TursoSyncService.HeartbeatSql(afterPush: false);
+        return _server.Requests.SelectMany(r => r.Statements)
+            .Count(st => st.Sql == heartbeat && st.Args[0]!["value"]!.GetValue<string>() == deviceId);
+    }
+
+    [TestMethod]
+    public async Task ASlowScheduledSync_DoesNotStopTheChecksNorTheHeartbeat()
+    {
+        var clock = SimulatedClock();
+        var (pc, tablet) = await PcAndTabletOnClockAsync(clock);
+        var cadence = CadenceOf(pc, inPatients: true);
+        var offered = new List<DateTime>();
+        cadence.CheckRunner = async ct =>
+        {
+            var result = await cadence.Handoff.PollAsync(null, ct);
+            if (result.Incoming.Any(r => r.Id == "oferta-1")) offered.Add(clock.Now.UtcDateTime);
+        };
+        var reasons = RecordReasons(cadence, clock);
+        var driver = new CadenceDriver(clock) { AwaitSyncs = false };
+        driver.Open(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(5));
+
+        // La tablet sube; la bajada de la PC se queda colgada (una red que no contesta, una bajada de muchas páginas)
+        var patient = (await tablet.Inventory.GetPatientsAsync()).First();
+        patient.Occupation = "Mientras la PC baja";
+        await tablet.Inventory.SavePatientAsync(patient);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _server.BeforeExecuteAsync = sql => sql.Contains("\"SyncedAtUtc\" >= ?", StringComparison.Ordinal) ? release.Task : Task.CompletedTask;
+        await driver.RunUntilAsync(driver.Now.AddSeconds(10), () => reasons.Count > 0);
+        Assert.AreEqual(SyncScheduler.ReasonPeerChanges, reasons.Single().Reason);
+        Assert.IsFalse(cadence.PendingSync.IsCompleted, "La sincronización sigue colgada");
+
+        // Dos minutos con la sincronización colgada: la tablet ofrece una consulta y la PC la ve en ≤ 4 s, y el latido sigue
+        var beatsBefore = HeartbeatsOf("device-pc");
+        var offeredAt = driver.Now;
+        OfferConsultationToPcInTheCloud("oferta-1");
+        await driver.RunUntilAsync(offeredAt.AddMinutes(2));
+        Assert.IsNotEmpty(offered, "La revisión siguió con la sincronización colgada");
+        Assert.IsLessThanOrEqualTo(SyncScheduler.FastCheckInterval, offered[0] - offeredAt);
+        Assert.AreEqual(2, HeartbeatsOf("device-pc") - beatsBefore, "Un latido cada 60 s también con la sincronización colgada");
+        Assert.AreEqual(1, reasons.Count, "Mientras corre no se pide otra");
+        Assert.IsFalse(cadence.PendingSync.IsCompleted);
+
+        // Se suelta: termina bien y trae lo de la tablet
+        _server.BeforeExecuteAsync = null;
+        release.SetResult();
+        await cadence.PendingSync;
+        Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status, pc.Sync.StatusMessage);
+        Assert.AreEqual("Mientras la PC baja", await OccupationAsync(pc, patient.SyncId));
+        await driver.RunUntilAsync(driver.Now.AddMinutes(1));
+        Assert.AreEqual(1, reasons.Count, "La marca ya atendida no vuelve a sincronizar");
+    }
+
+    // ================================================================== revisión 2: la revisión vuelve a su paso
+
+    [TestMethod]
+    public async Task WithoutNetworkInPatientsWithAPeer_TheCheckNeverWaitsMoreThanThirtySeconds()
+    {
+        var clock = SimulatedClock();
+        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        var cadence = CadenceOf(pc, inPatients: true);
+        var checks = new List<DateTime>();
+        cadence.CheckRunner = async ct =>
+        {
+            checks.Add(clock.Now.UtcDateTime);
+            await cadence.Handoff.PollAsync(null, ct);
+        };
+        var driver = new CadenceDriver(clock);
+        driver.Open(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(5));
+        Assert.IsTrue(cadence.HasPeer);
+
+        _server.IsOffline = true;
+        checks.Clear();
+        await driver.RunUntilAsync(driver.Now.AddMinutes(10));
+        var gaps = checks.Zip(checks.Skip(1), (a, b) => (b - a).TotalSeconds).ToArray();
+        Assert.IsTrue(gaps.Length >= 15 && gaps.All(g => g == 30), $"Revisiones: {string.Join(", ", gaps)}");
+    }
+
+    [TestMethod]
+    public async Task AfterAnOutageWithoutWindowsNotice_ASuccessfulSyncOrHandoffRequestOrActivation_BringsTheCheckBack()
+    {
+        var clock = SimulatedClock();
+        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        var cadence = CadenceOf(pc, inPatients: false);
+        var driver = new CadenceDriver(clock);
+        driver.Open(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(5));
+
+        async Task OutageAsync()
+        {
+            // ~4 min sin internet, sin aviso de Windows: la revisión llega a esperar 2–5 min
+            _server.IsOffline = true;
+            await driver.RunUntilAsync(driver.Now.AddMinutes(4));
+            _server.IsOffline = false;
+            Assert.IsGreaterThan(TimeSpan.FromSeconds(30), cadence.TimeToNextCheck, "La revisión quedó espaciada");
+        }
+
+        // Una sincronización buena (después de guardar, o la rápida)
+        await OutageAsync();
+        Assert.IsTrue((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success);
+        Assert.IsLessThanOrEqualTo(TimeSpan.Zero, cadence.TimeToNextCheck, "Revisa enseguida");
+        driver.Wake(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(31));
+        Assert.AreEqual(SyncScheduler.IdleCheckInterval, cadence.CheckInterval);
+        Assert.IsLessThanOrEqualTo(SyncScheduler.IdleCheckInterval, cadence.TimeToNextCheck, "De vuelta a su paso");
+
+        // Una petición de la consulta entre equipos que llega a la nube
+        await OutageAsync();
+        await cadence.Handoff.GetAcceptStateAsync("no-existe");
+        Assert.IsLessThanOrEqualTo(TimeSpan.Zero, cadence.TimeToNextCheck);
+
+        // Activar la ventana (también con un reintento esperando)
+        driver.Wake(cadence);
+        await driver.RunUntilAsync(driver.Now.AddSeconds(1));
+        await OutageAsync();
+        _server.IsOffline = true;
+        Assert.IsFalse((await pc.Sync.SyncAsync(isBackgroundAutoSync: true)).Success, "Sin red, falla");
+        Assert.IsTrue(cadence.IsRetryPending);
+        _server.IsOffline = false;
+        cadence.OnWindowActivated();
+        Assert.IsLessThanOrEqualTo(TimeSpan.Zero, cadence.TimeToNextCheck);
+        // La revisión responde y la sincronización no espera el reintento
+        driver.Wake(cadence);
+        await driver.StepAsync(driver.Now.AddSeconds(1));
+        Assert.IsFalse(cadence.IsRetryPending);
+        Assert.AreEqual(TursoSyncStatus.Success, pc.Sync.Status, pc.Sync.StatusMessage);
+    }
+
+    // ================================================================== revisión 3: la hora de Windows no mueve la cadencia
+
+    [TestMethod]
+    public async Task StepTheWallClockBackAndForwardAnHour_TheCadenceDoesNotChange()
+    {
+        var clock = SimulatedClock();
+        // La hora de la nube no es la de la PC: sigue al reloj monótono
+        var serverStart = clock.Now.UtcDateTime;
+        _server.Clock = () => serverStart + clock.Elapsed;
+        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        var cadence = CadenceOf(pc, inPatients: true);
+        var checks = new List<TimeSpan>();
+        cadence.CheckRunner = async ct =>
+        {
+            checks.Add(clock.Elapsed);
+            await cadence.Handoff.PollAsync(null, ct);
+        };
+        var reasons = new List<(TimeSpan At, string Reason)>();
+        cadence.SyncRequested += reason => reasons.Add((clock.Elapsed, reason));
+        _server.ClearRecording();
+        var driver = new CadenceDriver(clock);
+        var start = clock.Elapsed;
+        driver.Open(cadence);
+
+        await driver.RunUntilAsync(driver.Now.AddMinutes(3));
+        clock.StepWallClock(TimeSpan.FromHours(-1));
+        await driver.RunUntilAsync(driver.Now.AddMinutes(4));
+        clock.StepWallClock(TimeSpan.FromHours(1));
+        await driver.RunUntilAsync(driver.Now.AddMinutes(4));
+
+        var gaps = checks.Zip(checks.Skip(1), (a, b) => (b - a).TotalSeconds).Distinct().ToArray();
+        CollectionAssert.AreEqual(new double[] { 4 }, gaps, "Una revisión cada 4 s antes, durante y después del cambio de hora");
+        Assert.AreEqual(11 * 15, checks.Count);
+        Assert.AreEqual(11, HeartbeatsOf("device-pc"), "Un latido por minuto");
+        Assert.AreEqual((start + SyncScheduler.SafetyDownloadInterval, SyncScheduler.ReasonSafety), reasons.Single(),
+            "La descarga de seguridad a los 10 min, sin adelantarse ni atrasarse una hora");
+    }
+
     // ================================================================== latido e índice parcial
 
     [TestMethod]
