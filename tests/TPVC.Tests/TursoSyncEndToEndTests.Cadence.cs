@@ -176,16 +176,17 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
-    public async Task AChangeMarkInTheFuture_TriggersOneSync_NotALoop()
+    public async Task AChangeMarkInTheFuture_TriggersOneSync_NotALoop_AndDoesNotHideTheOthers()
     {
         var clock = SimulatedClock();
-        var (pc, _) = await PcAndTabletOnClockAsync(clock);
+        var (pc, tablet) = await PcAndTabletOnClockAsync(clock);
         // Un equipo con una marca rara (en el futuro): cada revisión la vería posterior a la última bajada
         using (_server.Lock())
         {
             using var cmd = _server.Connection.CreateCommand();
-            cmd.CommandText = "UPDATE RegisteredDevices SET LastPushUtc = '2099-01-01 00:00:00.000' WHERE DeviceId = 'device-tablet'";
-            Assert.AreEqual(1, cmd.ExecuteNonQuery());
+            cmd.CommandText = "INSERT INTO RegisteredDevices (DeviceId, DeviceName, DeviceRole, AppVersion, LastSeenUtc, LastPushUtc) " +
+                              "VALUES ('device-futuro', 'Equipo con el reloj roto', 'WindowsDesktop', '1.43.0', '2099-01-01 00:00:00.000', '2099-01-01 00:00:00.000')";
+            cmd.ExecuteNonQuery();
         }
         var cadence = CadenceOf(pc, inPatients: true);
         var reasons = RecordReasons(cadence, clock);
@@ -194,6 +195,17 @@ public partial class TursoSyncEndToEndTests
         await driver.RunUntilAsync(driver.Now.AddMinutes(5));
         Assert.AreEqual(1, reasons.Count(r => r.Reason == SyncScheduler.ReasonPeerChanges), "La misma marca dispara una sola sincronización");
         Assert.IsEmpty(reasons.Where(r => r.Reason != SyncScheduler.ReasonPeerChanges));
+
+        // La marca rara no esconde lo que sube la tablet
+        reasons.Clear();
+        var patient = (await tablet.Inventory.GetPatientsAsync()).First();
+        patient.Occupation = "Después de la marca rara";
+        await tablet.Inventory.SavePatientAsync(patient);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        var pushedAt = driver.Now;
+        await driver.RunUntilAsync(pushedAt.AddSeconds(5));
+        Assert.AreEqual(SyncScheduler.ReasonPeerChanges, reasons.Single().Reason);
+        Assert.AreEqual("Después de la marca rara", await OccupationAsync(pc, patient.SyncId));
     }
 
     [TestMethod]

@@ -15,9 +15,9 @@ namespace TPVC.Services;
 /// del envío propio, la marca de cambios (el LastPushUtc de los otros equipos), el latido cada 60 s, la lista de
 /// compañeros cada 10 min y la limpieza cada 6 h (solo la PC). Cada 4 s en Pacientes si hay un compañero (un equipo que
 /// puede recibir consultas, visto en los últimos 30 días) o un envío pendiente; si no, cada 30 s.</item>
-/// <item><b>Marca de cambios.</b> Si la subida más reciente de otro equipo es posterior a la última bajada de este (las dos con
-/// la hora de la nube), se sincroniza en ese momento. Cada valor de LastPushUtc dispara a lo más una sincronización que
-/// termina: una marca rara (en el futuro) no hace un ciclo.</item>
+/// <item><b>Marca de cambios.</b> Si la última subida de otro equipo (su LastPushUtc) es posterior a la última bajada de este
+/// (las dos con la hora de la nube), se sincroniza en ese momento. Cada valor de LastPushUtc de cada equipo dispara a lo más
+/// una sincronización que corre: una marca rara (en el futuro) no hace un ciclo ni esconde las subidas de los demás.</item>
 /// <item><b>Descarga de seguridad</b> cada 10 min desde el último intento (atrapa lo que suba un equipo que no escribe
 /// LastPushUtc, como una PC anterior a v1.27); al activar la ventana si la última sincronización buena fue hace más de
 /// 30 s; al volver de la suspensión o de un corte de red.</item>
@@ -79,8 +79,8 @@ public sealed class SyncScheduler
     private DateTime _lastAttemptAt;
     private DateTime _startupGraceUntil;
     private string? _requested;
-    private DateTime? _peersLastPushUtc;
-    private DateTime? _handledPeerPush;
+    private IReadOnlyDictionary<string, DateTime> _peerPushes = new Dictionary<string, DateTime>();
+    private readonly Dictionary<string, DateTime> _handledPushes = new(StringComparer.OrdinalIgnoreCase);
     private int? _peerCount;
     private bool _pendingSendSeen;
     private long _completedSyncs;
@@ -308,20 +308,35 @@ public sealed class SyncScheduler
                 _requested = null;
                 return requested;
             }
-            if (_peersLastPushUtc is { } push && push != _handledPeerPush && (_sync.LastPullServerUtc is not { } pulled || push > pulled))
-                return ReasonPeerChanges;
+            if (HasUnseenPush()) return ReasonPeerChanges;
             if (now - Latest(_lastGoodSyncAt, _lastAttemptAt) >= SafetyDownloadInterval) return ReasonSafety;
             return null;
         }
     }
 
+    /// <summary>
+    /// Algún equipo subió después de la última bajada de este (las dos marcas con la hora de la nube) y esa subida no la
+    /// atendió ya una sincronización que corrió.
+    /// </summary>
+    private bool HasUnseenPush()
+    {
+        var pulled = _sync.LastPullServerUtc;
+        foreach (var (deviceId, pushed) in _peerPushes)
+        {
+            if (pulled is { } p && pushed <= p) continue;
+            if (_handledPushes.TryGetValue(deviceId, out var handled) && handled == pushed) continue;
+            return true;
+        }
+        return false;
+    }
+
     private async Task RunSyncAsync(string reason, CancellationToken ct)
     {
-        DateTime? push;
+        IReadOnlyDictionary<string, DateTime> pushes;
         long before;
         lock (_gate)
         {
-            push = _peersLastPushUtc;
+            pushes = _peerPushes;
             before = _completedSyncs;
         }
         SyncRequested?.Invoke(reason);
@@ -338,10 +353,11 @@ public sealed class SyncScheduler
             AppLogger.Warn($"Turso: la sincronización por {reason} no pudo completarse: {ex.Message}");
         }
 
-        // Una sincronización que corrió (buena o no) ya atendió esa marca de cambios: la misma no vuelve a disparar otra
+        // Una sincronización que corrió (buena o no) ya atendió esas marcas de cambios: las mismas no vuelven a disparar otra
         lock (_gate)
         {
-            if (_completedSyncs != before && push != null) _handledPeerPush = push;
+            if (_completedSyncs == before) return;
+            foreach (var (deviceId, pushed) in pushes) _handledPushes[deviceId] = pushed;
         }
     }
 
@@ -373,7 +389,7 @@ public sealed class SyncScheduler
                 _requested ??= ReasonNetworkBack;
             }
             _checkFailures = 0;
-            _peersLastPushUtc = result.PeersLastPushUtc;
+            _peerPushes = result.PeerPushes;
             if (result.HandoffPeerCount is { } peers) _peerCount = peers;
             _pendingSendSeen = result.HadOutgoing;
         }

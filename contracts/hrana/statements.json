@@ -360,11 +360,11 @@
     },
     {
       "name": "check.peerPush",
-      "sql": "SELECT max(LastPushUtc) AS LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ?;",
+      "sql": "SELECT DeviceId, LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ? AND LastPushUtc IS NOT NULL;",
       "args": [
         "DeviceId de este equipo"
       ],
-      "when": "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la subida más reciente de los otros equipos. Si es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza."
+      "when": "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la última subida de cada uno de los otros equipos. Si alguna es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza; cada valor dispara a lo más una sincronización."
     },
     {
       "name": "check.peers.serverNow",

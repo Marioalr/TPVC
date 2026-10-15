@@ -85,7 +85,7 @@ public partial class TursoSyncEndToEndTests
         statements.Add(Statement("check.outgoing", ConsultationHandoffService.OutgoingStateSql, Texts("Id del envío pendiente"),
             "Paso 8.24: en la misma petición de la revisión, solo si este equipo tiene un envío pendiente: su estado."));
         statements.Add(Statement("check.peerPush", ConsultationHandoffService.PeerPushSql, Texts("DeviceId de este equipo"),
-            "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la subida más reciente de los otros equipos. Si es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza."));
+            "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la última subida de cada uno de los otros equipos. Si alguna es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza; cada valor dispara a lo más una sincronización."));
         var peers = ConsultationHandoffService.PeerListQueries().ToList();
         statements.Add(Statement("check.peers.serverNow", peers[0].Sql, new JsonArray(),
             "Paso 8.24: cada 10 min, en la misma petición de la revisión, la lista de compañeros: la hora de la nube…"));

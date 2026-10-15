@@ -85,10 +85,11 @@ public sealed class ConsultationHandoffService
     public const string OutgoingStateSql = "SELECT State FROM ConsultationHandoffs WHERE Id = ?";
 
     /// <summary>
-    /// Paso 8.24 (A5): la marca de cambios. La subida más reciente de los otros equipos (LastPushUtc, con la hora de la
-    /// nube); si es posterior a la última bajada de este, hay algo que bajar ("check.peerPush").
+    /// Paso 8.24 (A5): la marca de cambios. La última subida de cada uno de los otros equipos (LastPushUtc, con la hora de la
+    /// nube); si alguna es posterior a la última bajada de este, hay algo que bajar ("check.peerPush"). Por equipo y no el
+    /// máximo: una marca rara (en el futuro) de uno no esconde las subidas de los demás.
     /// </summary>
-    public const string PeerPushSql = "SELECT max(LastPushUtc) AS LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ?;";
+    public const string PeerPushSql = "SELECT DeviceId, LastPushUtc FROM RegisteredDevices WHERE DeviceId <> ? AND LastPushUtc IS NOT NULL;";
 
     public static readonly string[] HandoffTableDdl =
     {
@@ -236,15 +237,20 @@ public sealed class ConsultationHandoffService
         }
 
         var incoming = results[0].Select(ToRow).ToList();
-        var peerPush = ParseUtc(results[1].FirstOrDefault()?.GetValueOrDefault("LastPushUtc"));
-        _sync.AddExternalUsage(rowsRead: 2 + incoming.Count + (outgoingIndex >= 0 ? 1 : 0) + (heartbeat ? 1 : 0) + peerRows,
+        var peerPushes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in results[1])
+        {
+            if (row.GetValueOrDefault("DeviceId")?.ToString() is { Length: > 0 } id && ParseUtc(row.GetValueOrDefault("LastPushUtc")) is { } pushed)
+                peerPushes[id] = pushed;
+        }
+        _sync.AddExternalUsage(rowsRead: 1 + Math.Max(1, peerPushes.Count) + incoming.Count + (outgoingIndex >= 0 ? 1 : 0) + (heartbeat ? 1 : 0) + peerRows,
             rowsWritten: heartbeat ? 1 : 0);
 
         return new HandoffPollResult
         {
             Incoming = incoming,
             OutgoingState = outgoingIndex >= 0 ? results[outgoingIndex].FirstOrDefault()?["State"]?.ToString() ?? string.Empty : null,
-            PeersLastPushUtc = peerPush,
+            PeerPushes = peerPushes,
             HandoffPeerCount = peerCount,
             HadOutgoing = outgoingIndex >= 0
         };
