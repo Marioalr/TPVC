@@ -7,7 +7,7 @@
   "notes": [
     "La agenda (Services/Rules/AgendaRules.cs, antes en AgendaPanelViewModel y PatientsHomeViewModel). Cada cita: syncId, patientName, date (yyyy-MM-dd), time (texto; se lee como en patient-summary.json, lo que no se lee son las 10:00), durationMinutes, status y reason. 'now' es la hora local del consultorio.",
     "slots (BuildSlots): las citas del día que no están 'Cancelada', cada una en su hora, más los huecos libres de 30 minutos que empiezan de las 08:00 a las 19:30. Un hueco [t, t+30) no se ofrece si alguna cita del día [inicio, inicio + duración) se cruza con él (duración 0 o negativa = 30); el día de hoy (la fecha de 'now') no se ofrece un hueco cuyo inicio ya pasó. Orden por hora, la cita antes que el hueco libre a la misma hora; citas a la misma hora en su orden de entrada. title: el paciente o 'Libre'; subtitle: 'motivo · N min' (la duración guardada, aunque sea 0) o '+ Agendar aquí'. overlap: la marca 'Empalme con {paciente} ({HH:mm})' y ' y N más' si hay varias (la primera por hora y luego por SyncId), con AppointmentRules.Overlaps (appointment-overlap.json). summary: 'N citas · M huecos libres' (singular con 1).",
-    "week: los 7 días desde el lunes de la semana de 'date', con sus citas sin las canceladas; countText 'libre', '1 cita' o 'N citas'. today (las citas de hoy del inicio): sin canceladas, por hora y con la marca de empalme. next (la próxima cita de la ficha): la primera por fecha y hora de las que no están 'Cancelada' ni 'Atendida' con fecha de hoy en adelante; null si no hay. overlap-question: la pregunta al agendar encima de otras ('a las HH:mm con nombre', unidas con ', ' y ' y ' antes de la última).",
+    "week: los 7 días desde el lunes de la semana de 'date', con sus citas sin las canceladas; countText 'libre', '1 cita' o 'N citas'. today (las citas de hoy del inicio; la entrada ya son las del día): sin canceladas, por hora y con la marca de empalme. next (la próxima cita de la ficha): la primera por fecha y hora de las que no están 'Cancelada' ni 'Atendida' con fecha de hoy en adelante; null si no hay. overlap-question: la pregunta al agendar encima de otras ('a las HH:mm con nombre', unidas con ', ' y ' y ' antes de la última).",
     "titles: panelTitle 'dddd d de MMMM' de es-MX con la primera letra en mayúscula; weekTitle 'd – d de MMMM yyyy' si la semana no cambia de mes (si cambia usa meses abreviados, que dependen de los datos de la cultura del sistema: no van en el vector); weekStart, el lunes."
   ],
   "cases": [
@@ -1235,33 +1235,6 @@
             "durationMinutes": 30,
             "status": "Programada",
             "reason": "Consulta de seguimiento"
-          },
-          {
-            "syncId": "10000000-0000-4000-8000-000000000009",
-            "patientName": "Otro Día",
-            "date": "2026-10-16",
-            "time": "09:00",
-            "durationMinutes": 30,
-            "status": "Programada",
-            "reason": "Consulta de seguimiento"
-          },
-          {
-            "syncId": "10000000-0000-4000-8000-000000000010",
-            "patientName": "Domingo Ruiz",
-            "date": "2026-10-18",
-            "time": "11:00",
-            "durationMinutes": 30,
-            "status": "Programada",
-            "reason": "Consulta de seguimiento"
-          },
-          {
-            "syncId": "10000000-0000-4000-8000-000000000011",
-            "patientName": "Semana Pasada",
-            "date": "2026-10-11",
-            "time": "11:00",
-            "durationMinutes": 30,
-            "status": "Programada",
-            "reason": "Consulta de seguimiento"
           }
         ]
       },
@@ -1269,11 +1242,6 @@
         {
           "patientName": "Temprano Pérez",
           "time": "07:30",
-          "overlap": ""
-        },
-        {
-          "patientName": "Otro Día",
-          "time": "09:00",
           "overlap": ""
         },
         {
@@ -1295,16 +1263,6 @@
           "patientName": "Ángel Díaz",
           "time": "10:30",
           "overlap": "Empalme con Ana López (10:15) y 1 más"
-        },
-        {
-          "patientName": "Domingo Ruiz",
-          "time": "11:00",
-          "overlap": ""
-        },
-        {
-          "patientName": "Semana Pasada",
-          "time": "11:00",
-          "overlap": ""
         },
         {
           "patientName": "Eva Peña",

@@ -241,7 +241,7 @@
       }
     },
     {
-      "name": "el IMC calculado redondea a 2 decimales al par",
+      "name": "el IMC calculado redondea a 2 decimales al par (25.125 → 25.12) y el peso F1 hacia arriba (64.25 → 64.3)",
       "input": {
         "consultations": [
           {
@@ -249,7 +249,15 @@
             "folio": "A",
             "diagnosis": "",
             "chiefComplaint": "",
-            "vitalSigns": "Peso: 61.25 kg | Talla: 1.75 m",
+            "vitalSigns": "Peso: 64.32 kg | Talla: 1.60 m",
+            "treatmentPlan": ""
+          },
+          {
+            "date": "2026-07-02 09:00",
+            "folio": "B",
+            "diagnosis": "",
+            "chiefComplaint": "",
+            "vitalSigns": "Peso: 64.25 kg",
             "treatmentPlan": ""
           }
         ]
@@ -258,25 +266,40 @@
         "points": [
           {
             "date": "2026-07-01 09:00",
-            "weight": "61.25",
+            "weight": "64.32",
             "systolic": null,
             "diastolic": null,
             "glucose": null,
             "heartRate": null,
             "temperature": null,
-            "bmi": "20",
+            "bmi": "25.12",
             "dateText": "01/07/26",
-            "weightText": "61.3 kg",
+            "weightText": "64.3 kg",
+            "bloodPressureText": "--",
+            "glucoseText": "--",
+            "temperatureText": "--"
+          },
+          {
+            "date": "2026-07-02 09:00",
+            "weight": "64.25",
+            "systolic": null,
+            "diastolic": null,
+            "glucose": null,
+            "heartRate": null,
+            "temperature": null,
+            "bmi": null,
+            "dateText": "02/07/26",
+            "weightText": "64.3 kg",
             "bloodPressureText": "--",
             "glucoseText": "--",
             "temperatureText": "--"
           }
         ],
         "latest": {
-          "weight": "61.3 kg",
+          "weight": "64.3 kg",
           "bloodPressure": "--",
           "glucose": "--",
-          "bmi": "20.0"
+          "bmi": "--"
         }
       }
     },

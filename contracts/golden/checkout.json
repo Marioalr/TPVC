@@ -1,0 +1,924 @@
+{
+  "rule": "checkout",
+  "culture": "es-MX",
+  "today": null,
+  "now": null,
+  "contract": 15,
+  "notes": [
+    "El cobro del Punto de venta y de «Terminar consulta» (Services/Rules/CheckoutRules.cs y ViewModels/CheckoutViewModel.cs corrido tal cual, sin base). Importes como texto decimal invariante.",
+    "parse-amount (lo que se escribe en Recibido): solo los dígitos y el punto; decimal invariante; Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). La coma se quita (es separador de miles): '1,5' es 15. suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
+    "checkout: add-product agrega un producto con existencias (si ya está suma, sin pasar de sus existencias; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas sin tope); increase (+) no pasa de las existencias de un producto; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1; un producto con existencias no pasa de ellas); cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
+    "Cuentas: total = Σ cantidad × precio; changeDue = max(0, recibido − total) con cualquier forma de pago; hasChange = efectivo, recibido ≥ total y total > 0; missingAmount = total − recibido si es efectivo y 0 < recibido < total; canCharge = (hay renglones o se permite la cuenta vacía) y no falta efectivo; chargeText = 'Cobrar {total con moneda de es-MX, $1,234.50}{complemento}' o el texto de la cuenta vacía. El recibo en efectivo lleva lo recibido (el total si no se escribió) y el cambio; con otra forma, nada."
+  ],
+  "cases": [
+    {
+      "name": "recibido escrito · «500»",
+      "input": {
+        "check": "parse-amount",
+        "text": "500"
+      },
+      "expected": "500"
+    },
+    {
+      "name": "recibido escrito · «$1,000»",
+      "input": {
+        "check": "parse-amount",
+        "text": "$1,000"
+      },
+      "expected": "1000"
+    },
+    {
+      "name": "recibido escrito · «250.5»",
+      "input": {
+        "check": "parse-amount",
+        "text": "250.5"
+      },
+      "expected": "250.5"
+    },
+    {
+      "name": "recibido escrito · «250.»",
+      "input": {
+        "check": "parse-amount",
+        "text": "250."
+      },
+      "expected": "250"
+    },
+    {
+      "name": "recibido escrito · «99.999»",
+      "input": {
+        "check": "parse-amount",
+        "text": "99.999"
+      },
+      "expected": "100.00"
+    },
+    {
+      "name": "recibido escrito · «1,5»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,5"
+      },
+      "expected": "15"
+    },
+    {
+      "name": "recibido escrito · «abc»",
+      "input": {
+        "check": "parse-amount",
+        "text": "abc"
+      },
+      "expected": "0"
+    },
+    {
+      "name": "recibido escrito · «»",
+      "input": {
+        "check": "parse-amount",
+        "text": ""
+      },
+      "expected": "0"
+    },
+    {
+      "name": "recibido escrito · «0»",
+      "input": {
+        "check": "parse-amount",
+        "text": "0"
+      },
+      "expected": "0"
+    },
+    {
+      "name": "recibido escrito · «1.2.3»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1.2.3"
+      },
+      "expected": "0"
+    },
+    {
+      "name": "billetes sugeridos · 0",
+      "input": {
+        "check": "suggest-cash",
+        "total": "0"
+      },
+      "expected": []
+    },
+    {
+      "name": "billetes sugeridos · 35.50",
+      "input": {
+        "check": "suggest-cash",
+        "total": "35.50"
+      },
+      "expected": [
+        "50",
+        "100",
+        "200"
+      ]
+    },
+    {
+      "name": "billetes sugeridos · 50",
+      "input": {
+        "check": "suggest-cash",
+        "total": "50"
+      },
+      "expected": [
+        "100",
+        "200",
+        "500"
+      ]
+    },
+    {
+      "name": "billetes sugeridos · 180",
+      "input": {
+        "check": "suggest-cash",
+        "total": "180"
+      },
+      "expected": [
+        "200",
+        "500",
+        "1000"
+      ]
+    },
+    {
+      "name": "billetes sugeridos · 260",
+      "input": {
+        "check": "suggest-cash",
+        "total": "260"
+      },
+      "expected": [
+        "300",
+        "400",
+        "500"
+      ]
+    },
+    {
+      "name": "billetes sugeridos · 999.99",
+      "input": {
+        "check": "suggest-cash",
+        "total": "999.99"
+      },
+      "expected": [
+        "1000"
+      ]
+    },
+    {
+      "name": "billetes sugeridos · 1200",
+      "input": {
+        "check": "suggest-cash",
+        "total": "1200"
+      },
+      "expected": [
+        "1500",
+        "2000"
+      ]
+    },
+    {
+      "name": "cobro · venta en efectivo con cambio",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Paracetamol 500 mg",
+              "stock": 10,
+              "price": "45.00"
+            },
+            "quantity": 2
+          },
+          {
+            "op": "add-product",
+            "product": {
+              "id": 2,
+              "code": "P-2",
+              "name": "Gasa",
+              "stock": 50,
+              "price": "18.50"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "cash-text",
+            "value": "$200"
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Paracetamol 500 mg",
+            "quantity": 2,
+            "subtotal": "90.00",
+            "stockText": "Existencias: 10"
+          },
+          {
+            "name": "Gasa",
+            "quantity": 1,
+            "subtotal": "18.50",
+            "stockText": "Existencias: 50"
+          }
+        ],
+        "totalItems": 3,
+        "total": "108.50",
+        "isCash": true,
+        "cashReceived": "200",
+        "cashReceivedText": "$200",
+        "changeDue": "91.50",
+        "hasChange": true,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $108.50",
+        "quickCash": [
+          "150",
+          "200",
+          "500"
+        ],
+        "receipt": {
+          "cashReceived": "200",
+          "change": "91.50"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Paracetamol 500 mg agregado (2)",
+            "ok": true
+          },
+          {
+            "text": "Gasa agregado (1)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · efectivo de menos: falta y no se puede cobrar",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Paracetamol 500 mg",
+              "stock": 10,
+              "price": "45.00"
+            },
+            "quantity": 3
+          },
+          {
+            "op": "cash-text",
+            "value": "100"
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Paracetamol 500 mg",
+            "quantity": 3,
+            "subtotal": "135.00",
+            "stockText": "Existencias: 10"
+          }
+        ],
+        "totalItems": 3,
+        "total": "135.00",
+        "isCash": true,
+        "cashReceived": "100",
+        "cashReceivedText": "100",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "35.00",
+        "canCharge": false,
+        "chargeText": "Cobrar $135.00",
+        "quickCash": [
+          "150",
+          "200",
+          "500"
+        ],
+        "receipt": {
+          "cashReceived": "100",
+          "change": "0"
+        },
+        "missingText": "Faltan $35.00 en el efectivo recibido.",
+        "notices": [
+          {
+            "text": "Paracetamol 500 mg agregado (3)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · sin recibido escrito paga exacto",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Paracetamol 500 mg",
+              "stock": 10,
+              "price": "45.00"
+            },
+            "quantity": 1
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Paracetamol 500 mg",
+            "quantity": 1,
+            "subtotal": "45.00",
+            "stockText": "Existencias: 10"
+          }
+        ],
+        "totalItems": 1,
+        "total": "45.00",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $45.00",
+        "quickCash": [
+          "50",
+          "100",
+          "200"
+        ],
+        "receipt": {
+          "cashReceived": "45.00",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Paracetamol 500 mg agregado (1)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · con tarjeta no hay cambio aunque se escriba",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Paracetamol 500 mg",
+              "stock": 10,
+              "price": "45.00"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "cash-text",
+            "value": "500"
+          },
+          {
+            "op": "payment",
+            "value": "Tarjeta Débito/Crédito"
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Paracetamol 500 mg",
+            "quantity": 1,
+            "subtotal": "45.00",
+            "stockText": "Existencias: 10"
+          }
+        ],
+        "totalItems": 1,
+        "total": "45.00",
+        "isCash": false,
+        "cashReceived": "500",
+        "cashReceivedText": "500",
+        "changeDue": "455.00",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $45.00",
+        "quickCash": [
+          "50",
+          "100",
+          "200"
+        ],
+        "receipt": {
+          "cashReceived": null,
+          "change": null
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Paracetamol 500 mg agregado (1)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · las existencias topan lo que se agrega",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 3,
+              "price": "89.90"
+            },
+            "quantity": 5
+          },
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 3,
+              "price": "89.90"
+            },
+            "quantity": 1
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 3,
+            "subtotal": "269.70",
+            "stockText": "Existencias: 3"
+          }
+        ],
+        "totalItems": 3,
+        "total": "269.70",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $269.70",
+        "quickCash": [
+          "300",
+          "400",
+          "500"
+        ],
+        "receipt": {
+          "cashReceived": "269.70",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Solo hay 3 de 'Tempra': se agregaron 3.",
+            "ok": false
+          },
+          {
+            "text": "No hay más existencias de 'Tempra' (3).",
+            "ok": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · sin existencias no se agrega",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 0,
+              "price": "89.90"
+            },
+            "quantity": 1
+          }
+        ]
+      },
+      "expected": {
+        "cart": [],
+        "totalItems": 0,
+        "total": "0",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": false,
+        "chargeText": "Cobrar $0.00",
+        "quickCash": [],
+        "receipt": {
+          "cashReceived": "0",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "'Tempra' no tiene existencias.",
+            "ok": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · + y − con el tope; − en 1 quita el renglón",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 2,
+              "price": "89.90"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "increase",
+            "value": 0
+          },
+          {
+            "op": "increase",
+            "value": 0
+          },
+          {
+            "op": "add-product",
+            "product": {
+              "id": 2,
+              "code": "P-2",
+              "name": "Gasa",
+              "stock": 5,
+              "price": "18.00"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "decrease",
+            "value": 1
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 2,
+            "subtotal": "179.80",
+            "stockText": "Existencias: 2"
+          }
+        ],
+        "totalItems": 2,
+        "total": "179.80",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $179.80",
+        "quickCash": [
+          "200",
+          "500",
+          "1000"
+        ],
+        "receipt": {
+          "cashReceived": "179.80",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Tempra agregado (1)",
+            "ok": true
+          },
+          {
+            "text": "No hay más existencias de 'Tempra' (2).",
+            "ok": false
+          },
+          {
+            "text": "Gasa agregado (1)",
+            "ok": true
+          },
+          {
+            "text": "Gasa quitado de la cuenta",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · la cantidad escrita: mínimo 1 y no más de lo que hay; un servicio no tiene tope",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 4,
+              "price": "89.90"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "set-quantity-0",
+            "value": 9
+          },
+          {
+            "op": "add-line",
+            "productId": -21,
+            "code": "SERV-002",
+            "name": "Curación",
+            "unitPrice": "250.00",
+            "quantity": 1,
+            "isService": true
+          },
+          {
+            "op": "set-quantity-1",
+            "value": 0
+          },
+          {
+            "op": "set-quantity-1",
+            "value": 7
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 4,
+            "subtotal": "359.60",
+            "stockText": "Existencias: 4"
+          },
+          {
+            "name": "Curación",
+            "quantity": 7,
+            "subtotal": "1750.00",
+            "stockText": "Servicio"
+          }
+        ],
+        "totalItems": 11,
+        "total": "2109.60",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $2,109.60",
+        "quickCash": [
+          "2150",
+          "2200",
+          "2500"
+        ],
+        "receipt": {
+          "cashReceived": "2109.60",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Tempra agregado (1)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · terminar la consulta: el honorario y los cargos como renglones; el mismo renglón suma",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": " y terminar",
+        "ops": [
+          {
+            "op": "add-line",
+            "productId": -1,
+            "code": "SERV-001",
+            "name": "Consulta Médica General",
+            "unitPrice": "350.00",
+            "quantity": 1,
+            "isService": true
+          },
+          {
+            "op": "add-line",
+            "productId": 11,
+            "code": "CUR-001",
+            "name": "Gasa",
+            "unitPrice": "18.00",
+            "quantity": 2,
+            "isService": false
+          },
+          {
+            "op": "add-line",
+            "productId": 11,
+            "code": "CUR-001",
+            "name": "Gasa",
+            "unitPrice": "18.00",
+            "quantity": 1,
+            "isService": false
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Consulta Médica General",
+            "quantity": 1,
+            "subtotal": "350.00",
+            "stockText": "Servicio"
+          },
+          {
+            "name": "Gasa",
+            "quantity": 3,
+            "subtotal": "54.00",
+            "stockText": "Existencias: 0"
+          }
+        ],
+        "totalItems": 4,
+        "total": "404.00",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $404.00 y terminar",
+        "quickCash": [
+          "450",
+          "500",
+          "600"
+        ],
+        "receipt": {
+          "cashReceived": "404.00",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": []
+      }
+    },
+    {
+      "name": "cobro · cuenta vacía al terminar la consulta: se permite con su texto",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": "Terminar sin cargos",
+        "chargeSuffix": " y terminar",
+        "ops": []
+      },
+      "expected": {
+        "cart": [],
+        "totalItems": 0,
+        "total": "0",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Terminar sin cargos",
+        "quickCash": [],
+        "receipt": {
+          "cashReceived": "0",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": []
+      }
+    },
+    {
+      "name": "cobro · cuenta vacía en el mostrador: no se cobra",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": []
+      },
+      "expected": {
+        "cart": [],
+        "totalItems": 0,
+        "total": "0",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": false,
+        "chargeText": "Cobrar $0.00",
+        "quickCash": [],
+        "receipt": {
+          "cashReceived": "0",
+          "change": "0"
+        },
+        "missingText": null,
+        "notices": []
+      }
+    },
+    {
+      "name": "cobro · el botón de un billete sugerido y el texto del recibido",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": 5,
+              "price": "89.90"
+            },
+            "quantity": 2
+          },
+          {
+            "op": "set-cash",
+            "value": "200.5"
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 2,
+            "subtotal": "179.80",
+            "stockText": "Existencias: 5"
+          }
+        ],
+        "totalItems": 2,
+        "total": "179.80",
+        "isCash": true,
+        "cashReceived": "200.5",
+        "cashReceivedText": "200.5",
+        "changeDue": "20.70",
+        "hasChange": true,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $179.80",
+        "quickCash": [
+          "200",
+          "500",
+          "1000"
+        ],
+        "receipt": {
+          "cashReceived": "200.5",
+          "change": "20.70"
+        },
+        "missingText": null,
+        "notices": [
+          {
+            "text": "Tempra agregado (2)",
+            "ok": true
+          }
+        ]
+      }
+    }
+  ]
+}

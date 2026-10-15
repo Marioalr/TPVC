@@ -30,9 +30,7 @@ public class DashboardMetrics
     public int StockedProductsWithoutCost { get; set; }
 
     /// <summary>Para la tarjeta: "al costo", o cuántos productos con existencias no tienen costo todavía.</summary>
-    public string InventoryValueDetail => StockedProductsWithoutCost == 0
-        ? "al costo"
-        : $"{StockedProductsWithoutCost} sin costo";
+    public string InventoryValueDetail => TPVC.Services.Rules.InventoryValueRules.Detail(StockedProductsWithoutCost);
 }
 
 public class SystemAlertsSummary
@@ -1113,11 +1111,13 @@ public partial class InventoryService
         var stocked = await activeProducts.Where(p => p.CurrentStock > 0)
             .Select(p => new Product { CurrentStock = p.CurrentStock, UnitCost = p.UnitCost, CostExcludesVat = p.CostExcludesVat })
             .ToListAsync();
+        // Paso 8.26: la suma es InventoryValueRules.Summarize (los proyectados quedan activos, como los que se leyeron)
+        var (inventoryValue, stockedWithoutCost) = TPVC.Services.Rules.InventoryValueRules.Summarize(stocked);
 
         return new DashboardMetrics
         {
-            InventoryValue = stocked.Sum(p => p.InventoryValue),
-            StockedProductsWithoutCost = stocked.Count(p => !p.HasCost),
+            InventoryValue = inventoryValue,
+            StockedProductsWithoutCost = stockedWithoutCost,
             TotalProducts = await activeProducts.CountAsync(),
             LowStockCount = await activeProducts.CountAsync(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock),
             ExpiringSoonCount = await activeBatches.CountAsync(b => b.ExpirationDate >= today && b.ExpirationDate < expiringLimit),
