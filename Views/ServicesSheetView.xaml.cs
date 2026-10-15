@@ -169,6 +169,15 @@ public partial class ServicesSheetView : UserControl
         }
     }
 
+    /// <summary>
+    /// ↑ ↓ en la búsqueda cambian la sugerencia elegida (en el ViewModel): la lista la muestra, así Enter nunca carga un
+    /// insumo que no se ve (como en las demás listas de sugerencias).
+    /// </summary>
+    private void ServiceSupplySuggestions_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox list && list.SelectedItem != null && list.IsVisible) list.ScrollIntoView(list.SelectedItem);
+    }
+
     private async void ServiceSupplySuggestions_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         var dep = e.OriginalSource as DependencyObject;

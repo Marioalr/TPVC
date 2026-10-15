@@ -1849,6 +1849,27 @@ internal sealed class UiKeyboardPass
             var search = RowControl("Agregar insumo al servicio", row) as System.Windows.Controls.TextBox;
             if (Check(search != null && search.IsVisible, "Servicios: no se ve la búsqueda de insumos del renglón"))
             {
+                // ↓ cuatro veces: la sugerencia elegida se ve en la lista (Enter nunca carga una que no se ve)
+                search!.SetCurrentValue(System.Windows.Controls.TextBox.TextProperty, "a");
+                Settle();
+                var many = _records.ClinicalServices.ServiceSupplySuggestions.ToList();
+                if (Check(many.Count > 4, $"Servicios: se esperaban más de 4 sugerencias de insumos con «a» ({many.Count})"))
+                {
+                    for (int i = 0; i < 4; i++) PressKey(search, System.Windows.Input.Key.Down);
+                    Settle();
+                    Check(ReferenceEquals(_records.ClinicalServices.SelectedServiceSupplySuggestion, many[4]), "Servicios: ↓ ×4 elige la quinta sugerencia de insumos");
+                    var list = FindDescendant<System.Windows.Controls.ListBox>(sheet!, l =>
+                        System.Windows.Automation.AutomationProperties.GetName(l) == "Sugerencias de insumos del servicio" && l.IsVisible);
+                    var viewer = list == null ? null : FindDescendant<System.Windows.Controls.ScrollViewer>(list, _ => true);
+                    var item = list?.ItemContainerGenerator.ContainerFromItem(many[4]) as System.Windows.FrameworkElement;
+                    bool visible = false;
+                    if (viewer != null && item != null && item.IsVisible)
+                    {
+                        var bounds = item.TransformToAncestor(viewer).TransformBounds(new System.Windows.Rect(item.RenderSize));
+                        visible = bounds.Top >= -0.5 && bounds.Bottom <= viewer.ViewportHeight + 0.5;
+                    }
+                    Check(visible, "Servicios: la sugerencia de insumos elegida con ↓ se ve en la lista");
+                }
                 var count = row!.Supplies?.Count ?? 0;
                 // Como al teclear: SetCurrentValue conserva el binding
                 search!.SetCurrentValue(System.Windows.Controls.TextBox.TextProperty, "jering");

@@ -569,6 +569,110 @@ public class ServiceSuppliesTests
         pcRecords.Dispose();
     }
 
+    private static void SetProductActive(Fase6Clinic clinic, string name, bool active)
+    {
+        using var db = new AppDbContext(clinic.Options);
+        db.Products.Single(p => p.Name == name).IsActive = active;
+        db.SaveChanges();
+    }
+
+    [TestMethod]
+    public async Task AReceivedDefaultProductThatIsInactiveHere_UnitsPlusChargesItsFreeLine_AndRemovingTheRowLeavesNothing()
+    {
+        // La venda, insumo por defecto de la curación, está desactivada: la tablet cobra lo recibido como cargo libre
+        using var pc = new Fase6Clinic();
+        SetDefaultQuantity(pc, "SERV-002", GauzeName, 1);
+        SetProductActive(pc, BandageName, false);
+        await pc.ConnectCloudAsync();
+        using var tablet = new Fase6Clinic(seed: false);
+        ShiftLocalIds(tablet);
+        await tablet.ConnectCloudAsync(pc.Cloud, "device-tablet-sala", "Tablet de la sala");
+        Assert.IsTrue((await pc.Sync!.SyncAsync()).Success);
+
+        var pcConsultations = new ConsultationService(seedDemoPatients: false);
+        var pcRecords = await pc.OpenAsync(pcConsultations);
+        var tabletConsultations = new ConsultationService(seedDemoPatients: false);
+        var tabletRecords = await tablet.OpenAsync(tabletConsultations);
+
+        pcRecords.OpenPatientChart(Fase6Scenarios.ScriptedPatient(pcRecords));
+        pcRecords.ChartPrimaryAction();
+        var pcCuracion = pcRecords.Catalog.Services.Single(s => s.Code == "SERV-002");
+        var pcRow = await AddServiceAsync(pcRecords, pcCuracion);
+        Assert.IsTrue(pcRow.Supplies!.Any(e => e.SupplyName == BandageName), "La venda desactivada sigue siendo insumo por defecto");
+
+        await Task.Delay(200);
+        pcRecords.Autosave.SaveConsultationDraftNow();
+        await pcRecords.Handoff.OpenSendConsultationSheetAsync();
+        pcRecords.Handoff.SelectedHandoffDevice = pcRecords.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
+        await pcRecords.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(pcRecords.Handoff.IsConsultationHandedOff, pcRecords.Handoff.HandoffSheetError ?? pcRecords.Info.InfoModalMessage);
+        await tabletRecords.Handoff.PollHandoffsOnceAsync();
+        await tabletRecords.Handoff.AcceptIncomingHandoffAsync();
+        Assert.IsTrue(tabletConsultations.HasActiveConsultation, tabletRecords.Info.InfoModalMessage);
+
+        int tabletBandageId;
+        using (var db = new AppDbContext(tablet.Options)) tabletBandageId = db.Products.Single(p => p.Name == BandageName).Id;
+        var freeBandage = HandoffPayloadCodec.FreeChargeId(BandageName);
+        var row = tabletRecords.SelectedPatient!.ActiveServices.Single(r => r.RowId == pcRow.RowId);
+        var bandageEntry = row.Supplies!.Single(e => e.SupplyName == BandageName);
+        Assert.AreEqual(freeBandage, bandageEntry.ChargedLineId, "La venda se tradujo al cargo libre de la cuenta recibida");
+        Assert.AreEqual(1, Charged(tabletConsultations, freeBandage));
+
+        tabletRecords.ClinicalServices.OpenServicesModal();
+        await tabletRecords.ClinicalServices.IncreaseServiceUnitsAsync(row);
+        Assert.AreEqual(2, Charged(tabletConsultations, freeBandage), "Una unidad más carga la venda en su cargo libre");
+        Assert.AreEqual(0, Charged(tabletConsultations, tabletBandageId), "No en el producto");
+        Assert.AreEqual(2, row.Supplies!.Single(e => e.SupplyName == BandageName).Quantity);
+
+        await tabletRecords.ClinicalServices.DecreaseServiceUnitsAsync(row);
+        Assert.AreEqual(1, Charged(tabletConsultations, freeBandage), "Una menos la descuenta del mismo renglón");
+        Assert.AreEqual(0, Charged(tabletConsultations, tabletBandageId));
+
+        await tabletRecords.ClinicalServices.IncreaseServiceUnitsAsync(row);
+        await tabletRecords.ClinicalServices.RemoveServiceItemFromPatientAsync(row);
+        Assert.IsEmpty(tabletConsultations.CurrentConsultation!.Items, "Quitar el renglón no deja ninguna venda cobrada");
+
+        tabletRecords.Dispose();
+        pcRecords.Dispose();
+    }
+
+    private static Dictionary<string, object?> Heartbeat(string id, string platform, string role, int? contractRevision, int handoffProtocol = 1) => new()
+    {
+        ["DeviceId"] = id, ["DeviceName"] = id, ["DeviceRole"] = role, ["AppVersion"] = "1.39.0", ["Platform"] = platform,
+        ["LastSeenUtc"] = TursoSyncService.FormatDate(DateTime.UtcNow.AddMinutes(-1)), ["HandoffProtocol"] = (long)handoffProtocol,
+        ["ContractRevision"] = contractRevision is int r ? (long)r : null
+    };
+
+    [TestMethod]
+    public void ADeviceWithAnOlderContract_IsOfferedWithTheServiceSuppliesWarning()
+    {
+        var registry = new[] { "tablet-vieja", "tablet-al-dia" }.Select(id => new Dictionary<string, object?>
+        {
+            ["DeviceId"] = id, ["DisplayName"] = id, ["Role"] = nameof(DeviceRole.AndroidTablet), ["DeviceCode"] = "T1"
+        });
+        var devices = ConsultationHandoffService.MergeDevices(new[]
+        {
+            Heartbeat("pc-v139", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ServiceSuppliesRevision - 1),
+            Heartbeat("pc-al-dia", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ServiceSuppliesRevision),
+            Heartbeat("pc-sin-revision", "Windows", nameof(DeviceRole.WindowsDesktop), null),
+            Heartbeat("tablet-vieja", "Android", nameof(DeviceRole.AndroidTablet), SyncContract.ServiceSuppliesRevision - 1),
+            Heartbeat("tablet-al-dia", "Android", nameof(DeviceRole.AndroidTablet), SyncContract.Revision),
+            Heartbeat("sin-consultas", "Windows", nameof(DeviceRole.WindowsDesktop), 1, handoffProtocol: 0),
+            Heartbeat("esta-pc", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ServiceSuppliesRevision - 1),
+        }, registry, primaryDeviceId: "esta-pc", DateTime.UtcNow, thisDeviceId: "esta-pc");
+        LinkedDevice Device(string id) => devices.Single(d => d.DeviceId == id);
+
+        Assert.IsTrue(Device("pc-v139").IgnoresServiceSupplies);
+        StringAssert.Contains(Device("pc-v139").ServiceSuppliesText, "insumos ajustados");
+        Assert.IsTrue(Device("pc-sin-revision").IgnoresServiceSupplies, "Sin revisión: una versión anterior");
+        Assert.IsTrue(Device("tablet-vieja").IgnoresServiceSupplies, "También una tablet que recibe consultas");
+        Assert.IsFalse(Device("pc-al-dia").IgnoresServiceSupplies);
+        Assert.IsFalse(Device("tablet-al-dia").IgnoresServiceSupplies);
+        Assert.IsFalse(Device("sin-consultas").IgnoresServiceSupplies, "No se le puede enviar la consulta");
+        Assert.IsFalse(Device("esta-pc").IgnoresServiceSupplies, "Este equipo no");
+        Assert.AreEqual(string.Empty, Device("pc-al-dia").ServiceSuppliesText);
+    }
+
     [TestMethod]
     public void TranslateReceivedRows_TranslatesTheList_AlsoOfALegacyOrFreeServiceRow()
     {

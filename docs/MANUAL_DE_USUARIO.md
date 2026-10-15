@@ -156,6 +156,7 @@ Con la nube activada (Configuración › Nube y dispositivos), la consulta puede
 * En el otro equipo aparece en Pacientes **"… te envió una consulta"** con **Continuar aquí** (o *Más tarde*). Quien la termina, la cobra. Si ese equipo tiene otra consulta abierta, primero hay que terminarla.
 * Nunca dos equipos editan la misma consulta. Sin conexión, "Enviar a…" se desactiva y dice por qué; si no se puede confirmar un envío, la consulta sigue en solo lectura hasta resolverlo, y **Liberar este equipo** deja de esperarla aquí (la copia se aparta en un archivo).
 * Mientras la consulta está en el otro equipo, el expediente de ese paciente se edita allá.
+* Si el otro equipo tiene una versión anterior de TPVC, «Enviar a…» lo dice: no conoce los insumos ajustados de un servicio (vería cada servicio con sus insumos de siempre). Conviene actualizarlo antes de enviarle una consulta con insumos ajustados.
 
 ### Agenda (panel lateral)
 * Botón **Agenda** arriba (o *Agendar cita* en la ficha, que abre en el día siguiente). La semana arriba; abajo las citas del día y los **huecos libres** de 30 minutos (8:00 a 20:00).

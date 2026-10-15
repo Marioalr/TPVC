@@ -245,6 +245,7 @@
                                                                 <ListBox Style="{StaticResource PlainList}" MaxHeight="180"
                                                                          ItemsSource="{Binding DataContext.ClinicalServices.ServiceSupplySuggestions, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                          SelectedItem="{Binding DataContext.ClinicalServices.SelectedServiceSupplySuggestion, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                                                                         SelectionChanged="ServiceSupplySuggestions_SelectionChanged"
                                                                          PreviewMouseLeftButtonUp="ServiceSupplySuggestions_PreviewMouseLeftButtonUp"
                                                                          AutomationProperties.Name="Sugerencias de insumos del servicio">
                                                                     <ListBox.ItemTemplate>

@@ -163,10 +163,7 @@ public partial class ConsultationAccount : ObservableObject
             // Lo que impide cargar una unidad (sin consulta, en otro equipo) impide todas
             if (!ChargeServiceLine(service, units)) return false;
             var supplies = new List<PatientServiceSupply>();
-            foreach (var pieces in ServiceRowSupplies.AddUnits(supplies, service.DefaultProducts, units))
-            {
-                ChargeServiceSupplyUnits(pieces.Entry, pieces.Product, pieces.Count);
-            }
+            ChargeAddedPieces(supplies, ServiceRowSupplies.AddUnits(supplies, service.DefaultProducts, units));
             item.Supplies = supplies;
             _workflow.SyncActiveConsultation();
             return true;
@@ -209,6 +206,49 @@ public partial class ConsultationAccount : ObservableObject
         _consultationService.AddCartItemToActiveConsultation(
             freeLineId ?? FreeChargeId(entry.SupplyName), "INSUMO", entry.SupplyName, "Material clínico", null, "Piezas", entry.UnitPrice, units);
         return true;
+    }
+
+    /// <summary>
+    /// Carga lo que <see cref="ServiceRowSupplies.AddUnits"/> sumó a la lista, cada insumo en el renglón de la cuenta con que
+    /// se cobra (<see cref="ChargeServiceSupplyOnItsLine"/>): en un equipo que recibió la consulta, un producto que aquí no está
+    /// activo se cobra como el cargo libre al que se tradujo, no como el producto. Lo que no se pudo cargar sale de la lista.
+    /// No sincroniza.
+    /// </summary>
+    private void ChargeAddedPieces(List<PatientServiceSupply> list, IEnumerable<ServiceRowSupplies.Pieces> added)
+    {
+        foreach (var pieces in added)
+        {
+            if (!ChargeServiceSupplyOnItsLine(pieces.Entry, pieces.Product, pieces.Count)) pieces.Entry.Quantity -= pieces.Count;
+        }
+        list.RemoveAll(e => e == null || e.Quantity <= 0);
+    }
+
+    /// <summary>
+    /// Carga piezas de un insumo de la lista en su renglón de la cuenta, el mismo que encuentran + / − y la X
+    /// (<see cref="ServiceSupplyLine"/>): un cargo libre (Id negativo) a su precio; un producto como ese producto (el que se
+    /// pasa si es el del renglón, o el del inventario con ese Id); y si este equipo ya no lo tiene activo, en ese mismo
+    /// renglón con el nombre y el precio del insumo. Anota el Id local en el insumo. No sincroniza.
+    /// </summary>
+    private bool ChargeServiceSupplyOnItsLine(PatientServiceSupply entry, Product? product, int units)
+    {
+        if (_consultationService?.CurrentConsultation == null || units <= 0) return false;
+        var line = ServiceSupplyLine(entry);
+        bool charged;
+        if (line.LineId <= 0)
+        {
+            charged = ChargeServiceSupplyUnits(entry, null, units, line.LineId < 0 ? line.LineId : null);
+        }
+        else if ((product?.Id == line.LineId ? product : _catalog.AvailableProducts.FirstOrDefault(p => p.Id == line.LineId)) is { } lineProduct)
+        {
+            charged = ChargeServiceProductUnits(lineProduct, units);
+        }
+        else
+        {
+            charged = _consultationService.AddCartItemToActiveConsultation(
+                line.LineId, "INSUMO", entry.SupplyName, null, null, "Piezas", entry.UnitPrice, units);
+        }
+        if (charged) PatientSheetRows.RefreshSupplyLine(entry, line);
+        return charged;
     }
 
     /// <summary>Piezas de un insumo de un servicio cargadas como el producto, con su nombre (como siempre los insumos por defecto). No sincroniza.</summary>
@@ -298,12 +338,10 @@ public partial class ConsultationAccount : ObservableObject
             if (!ChargeServiceLine(service, delta)) return false;
             if (item.Supplies != null)
             {
-                // Sobre una copia, y el renglón queda con ella: WPF no vuelve a dibujar una lista que se le asigna otra vez
+                // Sobre una copia, y el renglón queda con ella: WPF no vuelve a dibujar una lista que se le asigna otra vez.
+                // Cada insumo en su renglón de la cuenta: el mismo que descuentan una unidad menos, la X y quitar el renglón
                 var added = new List<PatientServiceSupply>(item.Supplies);
-                foreach (var pieces in ServiceRowSupplies.AddUnits(added, service.DefaultProducts, delta))
-                {
-                    ChargeServiceSupplyUnits(pieces.Entry, pieces.Product, pieces.Count);
-                }
+                ChargeAddedPieces(added, ServiceRowSupplies.AddUnits(added, service.DefaultProducts, delta));
                 item.Supplies = added;
             }
             else

@@ -127,6 +127,10 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
+                                        <!-- 2026-10-14: su versión no conoce los insumos ajustados de un servicio -->
+                                        <TextBlock Text="{Binding ServiceSuppliesText}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                   Foreground="{DynamicResource ThemeWarningText}"
+                                                   Visibility="{Binding IgnoresServiceSupplies, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
