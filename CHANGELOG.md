@@ -2,6 +2,15 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.44.0] - 2026-10-15
+
+### Añadido — Fase 8, paso 8.25: kit de conformidad de escritura para la app de Android
+* Sin cambios para el médico: esta versión agrega las pruebas que la app de Android tendrá que pasar para sincronizar igual que la PC.
+* Nueve escenarios de varios equipos en `contracts/scenarios/`: gana el cambio más nuevo y empates, borrados, filas apartadas, reloj adelantado o que salta, subida cortada a la mitad, cambio de nube, folios, existencias por lote y combinación por campo de pacientes. La PC siempre es el equipo A y la tablet el B, y cada equipo solo hace lo que su papel permite.
+* Ocho grabaciones de lo que se manda a Turso al escribir (subida, empate, borrado contra edición, cerca de generación, contador de folios y envío, aceptación, respuesta perdida y recuperación de una consulta).
+* Vectores de la consulta entre equipos: la copia de trabajo con las fechas tal cual, la traducción del catálogo y la lista de equipos vinculados.
+* Contrato de sincronización sin cambios (revisión 15). 833 pruebas.
+
 ## [1.43.0] - 2026-10-15
 
 ### Añadido — Fase 8, paso 8.24: sincronización periódica y marca de cambios
