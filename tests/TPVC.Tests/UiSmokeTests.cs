@@ -1646,9 +1646,12 @@ internal sealed class UiKeyboardPass
         if (Check(suggestions.Count > 1, "Receta: se esperaban al menos dos sugerencias"))
         {
             // Pedido del 2026-10-14: ↓ abre las sugerencias; Enter elige (no agrega) y el cursor pasa a la indicación
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && rx.IsPrescriptionDropdownOpen && ReferenceEquals(rx.SelectedPrescriptionProduct, suggestions[0]),
-                "Receta: ↓ con el buscador vacío abre las sugerencias");
-            Check(PressKey(box!, System.Windows.Input.Key.Down) && ReferenceEquals(rx.SelectedPrescriptionProduct, suggestions[1]),
+            var downHandled = PressKey(box!, System.Windows.Input.Key.Down);
+            Check(downHandled && rx.IsPrescriptionDropdownOpen && rx.SelectedPrescriptionProduct?.Id == suggestions[0].Id,
+                $"Receta: ↓ con el buscador vacío abre las sugerencias (atendida={downHandled}, abierta={rx.IsPrescriptionDropdownOpen}, " +
+                $"elegido={rx.IsMedicineChosen}, marcada={rx.SelectedPrescriptionProduct?.Name ?? "(ninguna)"}, primera={suggestions[0].Name}, " +
+                $"foco={System.Windows.Input.Keyboard.FocusedElement?.GetType().Name ?? "(nada)"})");
+            Check(PressKey(box!, System.Windows.Input.Key.Down) && rx.SelectedPrescriptionProduct?.Id == suggestions[1].Id,
                 "Receta: ↓ en el buscador elige la siguiente sugerencia");
             var chosen = suggestions[1];
             ClearFocus(box!);
