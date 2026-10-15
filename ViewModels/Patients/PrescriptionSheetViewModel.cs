@@ -637,75 +637,27 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
     partial void OnPediatricWeightTextChanged(string value) => RecalculatePediatricDose();
 
-    private string SuggestPatientWeight()
-    {
-        if (_active.HasActiveConsultation && TryParseNumber(_currentWeight(), out var current) && current > 0 && current < 70)
-        {
-            return current.ToString("0.#", CultureInfo.InvariantCulture);
-        }
+    // Paso 8.26: las reglas de la calculadora viven en PediatricDoseRules (vectores pediatric-dose.json)
+    private string SuggestPatientWeight() =>
+        PediatricDoseRules.SuggestWeight(_active.HasActiveConsultation, _active.HasActiveConsultation ? _currentWeight() : null, _session.SelectedPatient?.Consultations);
 
-        var last = _session.SelectedPatient?.Consultations
-            .Where(c => c.Weight.HasValue && c.Weight > 0)
-            .OrderByDescending(c => c.Date)
-            .FirstOrDefault();
-        return last?.Weight?.ToString("0.#", CultureInfo.InvariantCulture) ?? string.Empty;
-    }
-
-    private void RecalculatePediatricDose()
-    {
-        var rule = SelectedPediatricRule;
-        if (rule == null)
-        {
-            PediatricDoseResult = string.Empty;
-            return;
-        }
-
-        if (!rule.CanCalculate)
-        {
-            PediatricDoseResult = "Esta regla no tiene fórmula de ml por kg en el Excel.";
-            return;
-        }
-
-        if (!TryParseNumber(PediatricWeightText, out var weight) || weight <= 0)
-        {
-            PediatricDoseResult = "Capture el peso del paciente (kg).";
-            return;
-        }
-
-        var ml = rule.CalculateMl(weight)!.Value;
-        var drops = rule.CalculateDrops(weight);
-        PediatricDoseResult = drops.HasValue
-            ? $"{ml.ToString("0.#", CultureInfo.InvariantCulture)} ml ({drops.Value:0} gotas) por dosis"
-            : $"{ml.ToString("0.#", CultureInfo.InvariantCulture)} ml por dosis";
-    }
+    private void RecalculatePediatricDose() => PediatricDoseResult = PediatricDoseRules.ResultText(SelectedPediatricRule, PediatricWeightText);
 
     /// <summary>Copia la dosis calculada a las indicaciones del medicamento ("Dar 7 ml vía oral ...").</summary>
     [RelayCommand]
     public void ApplyPediatricDose()
     {
         var rule = SelectedPediatricRule;
-        if (rule == null || !TryParseNumber(PediatricWeightText, out var weight)) return;
-
-        var ml = rule.CalculateMl(weight);
-        if (ml == null) return;
-
-        var drops = rule.CalculateDrops(weight);
-        var amount = drops.HasValue
-            ? $"{ml.Value.ToString("0.#", CultureInfo.InvariantCulture)} ml ({drops.Value:0} gotas)"
-            : $"{ml.Value.ToString("0.#", CultureInfo.InvariantCulture)} ml";
-        var text = $"Dar {amount} vía oral cada ___ hrs por ___ días";
+        if (PediatricDoseRules.DosageText(rule, PediatricWeightText) is not { } text) return;
 
         PrescriptionDosage = text;
         if (string.IsNullOrWhiteSpace(PrescriptionSearchText) && string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
-            PrescriptionMedicineName = rule.Medication;
+            PrescriptionMedicineName = rule!.Medication;
             // Una lista de sugerencias abierta con ↓ no debe quedar marcando otro medicamento
             IsPrescriptionDropdownOpen = false;
         }
     }
-
-    private static bool TryParseNumber(string? text, out double value) =>
-        double.TryParse((text ?? string.Empty).Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
 
     // ==========================================
     // RECETA ANTERIOR Y "SE SURTE AQUÍ"

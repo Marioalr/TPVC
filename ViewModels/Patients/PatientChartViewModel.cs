@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
 using TPVC.Services;
+using TPVC.Services.Rules;
 
 namespace TPVC.ViewModels.Patients;
 
@@ -121,10 +122,7 @@ public partial class PatientChartViewModel : ObservableObject
     {
         get
         {
-            var next = PatientAppointmentsHistory
-                .Where(a => a.IsUpcoming)
-                .OrderBy(a => a.Date.Date + AgendaPanelViewModel.ParseAppointmentTime(a.Time))
-                .FirstOrDefault();
+            var next = AgendaRules.NextAppointment(PatientAppointmentsHistory, ClinicClock.Today);
             return next == null ? string.Empty : $"Próxima cita: {next.Date.ToString("ddd d MMM", Mexican)}, {next.Time}";
         }
     }
@@ -189,16 +187,7 @@ public partial class PatientChartViewModel : ObservableObject
     private void RefreshTimeline()
     {
         var all = BuildTimeline(_session.ConsultationsHistory, PatientAppointmentsHistory);
-        var kind = TimelineFilter switch
-        {
-            "Consultas" => TimelineKind.Consultation,
-            "Citas" => TimelineKind.Appointment,
-            _ => (TimelineKind?)null
-        };
-        var query = TextSearch.Normalize(TimelineSearchText);
-        Timeline = new ObservableCollection<TimelineEntry>(all
-            .Where(e => kind == null || e.Kind == kind)
-            .Where(e => TextSearch.Matches(query, e.Title, e.Detail)));
+        Timeline = new ObservableCollection<TimelineEntry>(PatientChartRules.FilterTimeline(all, TimelineFilter, TimelineSearchText));
         OnPropertyChanged(nameof(HasTimeline));
         _workflow.RaisePrescriptionIndications();
         OnPropertyChanged(nameof(NextAppointmentText));
@@ -214,164 +203,15 @@ public partial class PatientChartViewModel : ObservableObject
         section.IsOpen = open;
     }
 
-    public static List<AntecedentSection> BuildAntecedentSections(PatientRecord p)
-    {
-        static string Join(IEnumerable<string?> parts) => string.Join(" · ", parts.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
-        static string? Item(string label, string? value) => string.IsNullOrWhiteSpace(value) ? null : $"{label}: {value.Trim()}";
+    /// <summary>Paso 8.26: la regla vive en <see cref="PatientChartRules.BuildAntecedentSections"/> (vectores <c>chart-antecedents.json</c>).</summary>
+    public static List<AntecedentSection> BuildAntecedentSections(PatientRecord p) => PatientChartRules.BuildAntecedentSections(p);
 
-        AntecedentSection Make(string key, string title, params string?[] items)
-        {
-            var filled = items.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            var detail = string.Join("\n", filled);
-            var summary = filled.Count == 0 ? "Sin registrar" : Join(filled.Take(2).Select(x => x!.Contains(": ") ? x.Split(": ", 2)[1] : x));
-            return new AntecedentSection(key, title, summary, detail);
-        }
+    /// <summary>Paso 8.26: la regla vive en <see cref="PatientChartRules.BuildTimeline"/> (vectores <c>chart-timeline.json</c>).</summary>
+    public static List<TimelineEntry> BuildTimeline(IEnumerable<PatientConsultation> consultations, IEnumerable<PatientAppointment> appointments) =>
+        PatientChartRules.BuildTimeline(consultations, appointments);
 
-        var sections = new List<AntecedentSection>
-        {
-            Make("Heredofamiliares", "Heredofamiliares", p.FamilyHistory),
-            Make("Patologicos", "Personales patológicos",
-                Item("Alergias", p.AllergySummary),
-                Item("Enfermedades crónicas", p.ChronicDiseases),
-                Item("Cirugías", p.Surgeries),
-                Item("Hospitalizaciones", p.Hospitalizations),
-                Item("Transfusiones", p.Transfusions),
-                p.IsPediatric ? null : Item("Vacunación", p.ImmunizationSchedule))
-        };
-
-        if (p.ShowsGynecoObstetric)
-        {
-            var formula = p.PregnanciesCount + p.CesareansCount + p.AbortionsCount > 0
-                ? $"G{p.PregnanciesCount} C{p.CesareansCount} A{p.AbortionsCount}"
-                : null;
-            sections.Add(Make("Gineco", "Gineco-obstétricos",
-                Item("Gestas / cesáreas / abortos", formula),
-                Item("Menarca", string.IsNullOrWhiteSpace(p.MenarcheAge) ? null : $"{p.MenarcheAge} años"),
-                Item("Ciclo", p.PeriodDuration),
-                Item("Papanicolaou", p.PapSmear),
-                Item("Inicio de vida sexual", p.SexualOnsetAge),
-                p.IsCurrentlyPregnant ? $"Embarazo actual{(string.IsNullOrWhiteSpace(p.GestationalWeeks) ? string.Empty : $": {p.GestationalWeeks} semanas")}" : null));
-        }
-
-        if (p.IsPediatric)
-        {
-            sections.Add(Make("Desarrollo", "Desarrollo y vacunas",
-                Item("Desarrollo", p.DevelopmentalMilestones),
-                Item("Vacunación", p.ImmunizationSchedule)));
-        }
-
-        sections.Add(Make("NoPatologicos", "No patológicos",
-            Item("Ocupación", p.Occupation),
-            Item("Alimentación", p.Diet),
-            Item("Vivienda", p.HousingConditions),
-            Item("Animales", p.Zoonosis),
-            Item("Religión", p.Religion)));
-
-        sections.Add(Make("Contacto", "Contacto y emergencia",
-            Item("Teléfono", p.FormattedPhone),
-            Item("Correo", p.Email),
-            Item("Domicilio", p.Address),
-            string.IsNullOrWhiteSpace(p.EmergencyContactName) ? null : $"Emergencia: {p.EmergencyContactName.Trim()} {p.FormattedEmergencyContactPhone}".Trim()));
-
-        return sections;
-    }
-
-    /// <summary>
-    /// Historial de la ficha, del más reciente al más antiguo: una tarjeta por consulta, con su fecha y el resumen de
-    /// sus datos (motivo, signos, receta y plan), y las citas. El detalle por datos se ve al abrir la consulta.
-    /// </summary>
-    public static List<TimelineEntry> BuildTimeline(IEnumerable<PatientConsultation> consultations, IEnumerable<PatientAppointment> appointments)
-    {
-        var entries = new List<(TimelineEntry Entry, int Order)>();
-        foreach (var c in consultations)
-        {
-            var title = !string.IsNullOrWhiteSpace(c.Diagnosis) ? c.Diagnosis.Trim() : (string.IsNullOrWhiteSpace(c.ChiefComplaint) ? "Consulta" : c.ChiefComplaint.Trim());
-            var prescriptions = c.Prescriptions;
-            var labOrder = c.LabOrder;
-            var lines = new List<TimelineLine>();
-            void Add(string label, string? value)
-            {
-                if (!string.IsNullOrWhiteSpace(value)) lines.Add(new TimelineLine(label, FirstLine(value)));
-            }
-            // Con diagnóstico el título lo dice; el motivo va abajo
-            if (!string.IsNullOrWhiteSpace(c.Diagnosis)) Add("Motivo", c.ChiefComplaint);
-            Add("Signos", c.VitalSigns?.Replace(" | ", " · "));
-            Add("Receta", string.Join(" · ", prescriptions.Select(r => r.MedicineName.Trim()).Where(n => n.Length > 0)));
-            Add("Laboratorio", string.Join(" · ", labOrder.Studies.Select(s => s.Name)));
-            Add("Plan", c.TreatmentPlan);
-
-            // La búsqueda revisa todo lo de la consulta, también lo que no se ve en la tarjeta
-            var searchText = string.Join("\n", new[]
-            {
-                c.ChiefComplaint, c.SystemsReview, c.PhysicalExamination, c.VitalSigns, c.TreatmentPlan, c.Notes,
-                string.Join("\n", prescriptions.Select(r => $"{r.MedicineName} {r.Presentation} {r.Dosage}")),
-                string.Join("\n", labOrder.Studies.Select(s => s.Name)), labOrder.Indications
-            }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
-            entries.Add((new TimelineEntry(TimelineKind.Consultation, c.Date, title, searchText, c.Folio, c, lines), 0));
-        }
-
-        foreach (var a in appointments)
-        {
-            var when = a.Date.Date + AgendaPanelViewModel.ParseAppointmentTime(a.Time);
-            entries.Add((new TimelineEntry(TimelineKind.Appointment, when,
-                string.IsNullOrWhiteSpace(a.Reason) ? "Cita" : a.Reason.Trim(),
-                $"{a.Time} · {a.Status}"), 1));
-        }
-
-        return entries
-            .OrderByDescending(x => x.Entry.Date.Date)
-            .ThenBy(x => x.Order)
-            .ThenByDescending(x => x.Entry.Date)
-            .Select(x => x.Entry)
-            .ToList();
-    }
-
-    /// <summary>El primer renglón de un texto, para la tarjeta (el resto se ve al abrir la consulta).</summary>
-    private static string FirstLine(string text)
-    {
-        var line = text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? string.Empty;
-        return line.Length > 160 ? line[..157].TrimEnd() + "…" : line;
-    }
-
-    public static IReadOnlyList<VitalSummary> BuildLatestVitals(IEnumerable<VitalSignsEvolutionPoint>? points)
-    {
-        var list = points?.ToList() ?? new List<VitalSignsEvolutionPoint>();
-        if (list.Count == 0) return Array.Empty<VitalSummary>();
-
-        VitalSummary? Summary(string label, Func<VitalSignsEvolutionPoint, decimal?> value, Func<decimal, string> format, string unit)
-        {
-            var withValue = list.Where(p => value(p).HasValue).ToList();
-            if (withValue.Count == 0) return null;
-            var latest = value(withValue[^1])!.Value;
-            string trend = string.Empty;
-            bool up = false;
-            if (withValue.Count > 1)
-            {
-                var previous = value(withValue[^2])!.Value;
-                var diff = latest - previous;
-                if (diff > 0) { up = true; trend = $"↑ {format(diff)}"; }
-                else if (diff < 0) trend = $"↓ {format(-diff)}";
-                else trend = "sin cambio";
-            }
-            return new VitalSummary($"{label}{unit}", format(latest), trend, up);
-        }
-
-        var result = new List<VitalSummary>();
-        var last = list.LastOrDefault(p => p.Systolic.HasValue && p.Diastolic.HasValue);
-        if (last != null)
-        {
-            var prev = list.Where(p => p.Systolic.HasValue && p.Diastolic.HasValue && p != last).LastOrDefault();
-            bool up = prev != null && last.Systolic > prev.Systolic, down = prev != null && last.Systolic < prev.Systolic;
-            // La flecha dice si subió o bajó sin depender del color (en oscuro el ámbar se confunde con el texto)
-            var trend = prev == null ? string.Empty : $"{(up ? "↑ " : down ? "↓ " : string.Empty)}antes {prev.BloodPressureText}";
-            result.Add(new VitalSummary("T/A (mmHg)", last.BloodPressureText, trend, up));
-        }
-        if (Summary("Peso", p => p.Weight, v => v.ToString("0.0", CultureInfo.InvariantCulture), " (kg)") is { } weight) result.Add(weight);
-        if (Summary("IMC", p => p.BMI, v => v.ToString("0.0", CultureInfo.InvariantCulture), string.Empty) is { } bmi) result.Add(bmi);
-        if (Summary("Glucosa", p => p.Glucose, v => v.ToString("0", CultureInfo.InvariantCulture), " (mg/dL)") is { } glucose) result.Add(glucose);
-        return result;
-    }
+    /// <summary>Paso 8.26: la regla vive en <see cref="PatientChartRules.BuildLatestVitals"/> (vectores <c>latest-vitals.json</c>).</summary>
+    public static IReadOnlyList<VitalSummary> BuildLatestVitals(IEnumerable<VitalSignsEvolutionPoint>? points) => PatientChartRules.BuildLatestVitals(points);
 
     /// <summary>Cambió la serie de signos de la gráfica: "Lo esencial" se arma con ella (antes del aviso de la serie).</summary>
     public void OnVitalSignsEvolutionPointsChanged(ObservableCollection<VitalSignsEvolutionPoint> value)

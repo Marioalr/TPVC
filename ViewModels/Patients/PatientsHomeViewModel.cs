@@ -108,9 +108,8 @@ public partial class PatientsHomeViewModel : ObservableObject
         try
         {
             var list = await _inventoryService.GetAppointmentsByDayAsync(DateTime.Today);
-            var today = list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)).ToList();
-            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda
-            AgendaPanelViewModel.MarkOverlaps(today);
+            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda (AgendaRules.TodayAppointments)
+            var today = TPVC.Services.Rules.AgendaRules.TodayAppointments(list);
             TodayAppointments = new ObservableCollection<PatientAppointment>(today);
         }
         catch (Exception ex)

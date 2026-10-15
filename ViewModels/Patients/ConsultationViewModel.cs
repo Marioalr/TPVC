@@ -297,21 +297,10 @@ public partial class ConsultationViewModel : ObservableObject
         var active = _consultationService?.CurrentConsultation;
         var start = active?.StartedAt ?? DateTime.Now;
 
-        var cleanConsultationTA = (ConsultationTA ?? string.Empty).Trim().TrimEnd('/');
-        var vitalsParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(cleanConsultationTA)) vitalsParts.Add($"TA: {cleanConsultationTA} mmHg");
-        if (!string.IsNullOrWhiteSpace(ConsultationFC)) vitalsParts.Add($"FC: {ConsultationFC.Trim()} lpm");
-        if (!string.IsNullOrWhiteSpace(ConsultationFR)) vitalsParts.Add($"FR: {ConsultationFR.Trim()} rpm");
-        if (!string.IsNullOrWhiteSpace(ConsultationTemp)) vitalsParts.Add($"Temp: {ConsultationTemp.Trim()} °C");
-        if (!string.IsNullOrWhiteSpace(ConsultationWeight)) vitalsParts.Add($"Peso: {ConsultationWeight.Trim()} kg");
-        if (!string.IsNullOrWhiteSpace(ConsultationHeight)) vitalsParts.Add($"Talla: {ConsultationHeight.Trim()} m");
-        if (!string.IsNullOrWhiteSpace(ConsultationGlucose)) vitalsParts.Add($"Glucosa: {ConsultationGlucose.Trim()} mg/dL");
-        if (!string.IsNullOrWhiteSpace(ConsultationSpO2)) vitalsParts.Add($"SpO2: {ConsultationSpO2.Trim().TrimEnd('%')}%");
-        if (!string.IsNullOrWhiteSpace(ConsultationIMC) && !ConsultationIMC.Contains("no disponibles")) vitalsParts.Add($"IMC: {ConsultationIMC.Trim()}");
-
         // Sin signos capturados la nota queda sin signos: copiar los del expediente los haría
-        // pasar por medidos en esta consulta (y duplicaría puntos en la gráfica de evolución)
-        var vitalSignsFormatted = string.Join(" | ", vitalsParts);
+        // pasar por medidos en esta consulta (y duplicaría puntos en la gráfica de evolución). Paso 8.26: VitalSignsRules.Format
+        var vitalSignsFormatted = VitalSignsRules.Format(ConsultationTA, ConsultationFC, ConsultationFR, ConsultationTemp, ConsultationWeight,
+            ConsultationHeight, ConsultationGlucose, ConsultationSpO2, ConsultationIMC);
 
         var chiefComplaint = !string.IsNullOrWhiteSpace(ConsultationChiefComplaint)
             ? ConsultationChiefComplaint.Trim()

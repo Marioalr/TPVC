@@ -108,21 +108,12 @@ public partial class VitalSignsChartViewModel : ObservableObject
         var points = pat.GetVitalSignsEvolution();
         VitalSignsEvolutionPoints = new ObservableCollection<VitalSignsEvolutionPoint>(points);
 
-        var latest = points.LastOrDefault();
-        if (latest != null)
-        {
-            LatestWeightFormatted = latest.Weight.HasValue ? $"{latest.Weight.Value:F1} kg" : "--";
-            LatestBPFormatted = (latest.Systolic.HasValue && latest.Diastolic.HasValue) ? $"{latest.Systolic.Value}/{latest.Diastolic.Value} mmHg" : "--";
-            LatestGlucoseFormatted = latest.Glucose.HasValue ? $"{latest.Glucose.Value:F0} mg/dL" : "--";
-            LatestIMCFormatted = latest.BMI.HasValue ? $"{latest.BMI.Value:F1}" : "--";
-        }
-        else
-        {
-            LatestWeightFormatted = "--";
-            LatestBPFormatted = "--";
-            LatestGlucoseFormatted = "--";
-            LatestIMCFormatted = "--";
-        }
+        // Paso 8.26: los textos salen de PatientChartRules.LatestTexts (vectores vitals-evolution.json)
+        var latest = TPVC.Services.Rules.PatientChartRules.LatestTexts(points);
+        LatestWeightFormatted = latest.Weight;
+        LatestBPFormatted = latest.BloodPressure;
+        LatestGlucoseFormatted = latest.Glucose;
+        LatestIMCFormatted = latest.Bmi;
 
         RecalculateChartPoints();
     }
