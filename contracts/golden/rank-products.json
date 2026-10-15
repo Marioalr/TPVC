@@ -825,7 +825,7 @@
       }
     },
     {
-      "name": "Punto de venta · desempate es-MX con acentos (Ábatelenguas, Ácido, Agua…)",
+      "name": "Punto de venta · desempate es-MX con acentos (Abatelenguas, Ácido bórico, Agua inyectable; en orden ordinal Á iría al final)",
       "input": {
         "check": "pos",
         "products": [
@@ -2060,7 +2060,7 @@
       ]
     },
     {
-      "name": "insumos de un servicio · con existencias primero dentro del grupo",
+      "name": "insumos de un servicio · con existencias primero dentro del grupo (la jeringa sin piezas al final)",
       "input": {
         "check": "service-supplies",
         "products": [
@@ -2166,9 +2166,13 @@
             "price": "52.00"
           }
         ],
-        "text": "j"
+        "text": "s"
       },
       "expected": [
+        7,
+        6,
+        4,
+        9,
         5
       ]
     },

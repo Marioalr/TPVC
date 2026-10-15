@@ -352,18 +352,18 @@
       "expected": "medicamento"
     },
     {
-      "name": "medicamento o insumo · sin acento en Fármaco no cuenta como medicamento por la categoría",
+      "name": "medicamento o insumo · «Farmacos» sin acento no cuenta: el código INS lo hace insumo",
       "input": {
         "check": "kind",
         "product": {
           "id": 12,
-          "code": "X-2",
+          "code": "INS-2",
           "name": "Algo",
           "stock": 0,
           "category": "Farmacos"
         }
       },
-      "expected": "medicamento"
+      "expected": "insumo"
     },
     {
       "name": "medicamento o insumo · código MED en minúsculas",

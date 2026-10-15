@@ -604,7 +604,7 @@
       "expected": []
     },
     {
-      "name": "el teléfono con su formato no coincide: solo cuentan sus dígitos contra los de la consulta",
+      "name": "con guion: solo cuentan los dígitos de la consulta contra los del teléfono",
       "input": {
         "patients": [
           {

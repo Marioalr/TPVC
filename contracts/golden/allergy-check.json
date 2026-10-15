@@ -1,0 +1,371 @@
+{
+  "rule": "allergy-check",
+  "culture": "es-MX",
+  "today": null,
+  "now": null,
+  "contract": 15,
+  "notes": [
+    "Services/Rules/AllergyRules.cs (antes InventoryService.CheckMedicationAllergy): el aviso de alergia al recetar y al cargar «Se surte aquí». 'medicineName' es lo escrito en la receta (si es nulo, el nombre del producto); 'product' es el producto elegido (su genérico entra a la comparación).",
+    "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si med contiene la alergia, o si la alergia tiene 4 caracteres o más y contiene a med; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia es de la familia si contiene la llave o un miembro, y avisa si med también contiene la llave o un miembro. 'contiene' es comparación ordinal de subcadenas.",
+    "Familias (llave: miembros), en este orden: penicilina: penicilina, amoxicilina, ampicilina, dicloxacilina, bencilpenicilina, clavulonato, clavulanico, clavulánico, augmentin; betalactamico: penicilina, amoxicilina, ampicilina, cefalexina, ceftriaxona, cefotaxima, cefuroxima; cefalosporina: cefalexina, ceftriaxona, cefotaxima, cefuroxima, cefixima, cefazolina; aines: aspirina, acido acetilsalicilico, ácido acetilsalicílico, ibuprofeno, naproxeno, ketorolaco, diclofenaco, meloxicam, piroxicam, indometacina, clonixinato; aspirina: aspirina, acido acetilsalicilico, ácido acetilsalicílico, aas; ibuprofeno: ibuprofeno, motrin, advil; sulfa: sulfa, sulfas, sulfametoxazol, trimetoprima, bactrim, sulfadiazina, sulfasalazina; macrolido: azitromicina, claritromicina, eritromicina; quinolona: ciprofloxacino, levofloxacino, moxifloxacino. Los miembros con acento nunca coinciden porque se comparan con texto sin acentos.",
+    "Textos: directo \"El paciente registra alergia a '{alergia}'. El medicamento recetado contiene '{medicineName o nombre}'.\"; familia \"Riesgo de hipersensibilidad: El paciente registra alergia a '{alergia}' (grupo {LLAVE EN MAYÚSCULAS}). El medicamento recetado '{nombre}' pertenece o presenta reactividad cruzada con esta familia farmacológica.\" La alergia va como se escribió (sin espacios a los lados).",
+    "summary (PatientRecord): niegan las respuestas que normalizadas y sin punto final son: ninguna, ninguna conocida, ningunas, negadas, negada, niega, niega alergias, no, sin alergias, no conocidas, no conocida, negativas, nada. allergySummary: las alergias sin espacios a los lados, 'No interrogadas' (vacías) o 'Negadas'; allergyBadge: 'ALERGIAS: …', 'Alergias sin interrogar' o 'Alergias negadas'. Crónicos: niegan las mismas respuestas o lo que empieza con 'ningun', 'niega' o 'negad', o es 'sin enfermedades', 'sin enfermedades cronicas', 'sin antecedentes' o 'sin cronicos'; chronicBadge 'Crónicos: …' o vacío.",
+    "Lo que la regla no hace (no se corrige aquí, está en el reporte del paso 8.26): no conoce marcas (una alergia escrita con la marca no avisa con el genérico), y 'sulfa' dentro de otra palabra ('Sulfato ferroso') hace a la alergia de la familia sulfa."
+  ],
+  "cases": [
+    {
+      "name": "marca → genérico: alergia a Paracetamol y se receta Tempra (el producto lleva su genérico)",
+      "input": {
+        "check": "medication",
+        "allergies": "Paracetamol",
+        "medicineName": "Tempra",
+        "product": {
+          "name": "Tempra",
+          "genericName": "Paracetamol"
+        }
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Paracetamol",
+        "warning": "El paciente registra alergia a 'Paracetamol'. El medicamento recetado contiene 'Tempra'."
+      }
+    },
+    {
+      "name": "marca → genérico: el renglón normado de la receta",
+      "input": {
+        "check": "medication",
+        "allergies": "paracetamol",
+        "medicineName": "Paracetamol 500 mg tabletas (Tempra)",
+        "product": {
+          "name": "Tempra",
+          "genericName": "Paracetamol"
+        }
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "paracetamol",
+        "warning": "El paciente registra alergia a 'paracetamol'. El medicamento recetado contiene 'Paracetamol 500 mg tabletas (Tempra)'."
+      }
+    },
+    {
+      "name": "genérico → marca: alergia a «Tempra» y se receta Paracetamol: no avisa (la regla no conoce las marcas)",
+      "input": {
+        "check": "medication",
+        "allergies": "Tempra",
+        "medicineName": "Paracetamol 500 mg",
+        "product": {
+          "name": "Paracetamol 500 mg",
+          "genericName": "Paracetamol"
+        }
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "texto libre sin producto: solo lo escrito",
+      "input": {
+        "check": "medication",
+        "allergies": "Paracetamol",
+        "medicineName": "Tempra gotas"
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "familia: penicilina y amoxicilina",
+      "input": {
+        "check": "medication",
+        "allergies": "Penicilina",
+        "medicineName": "Amoxicilina 500 mg",
+        "product": {
+          "name": "Amoxicilina 500 mg",
+          "genericName": "Amoxicilina"
+        }
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Penicilina",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Penicilina' (grupo PENICILINA). El medicamento recetado 'Amoxicilina 500 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "familia con acento: clavulánico y Augmentin",
+      "input": {
+        "check": "medication",
+        "allergies": "Ácido clavulánico",
+        "medicineName": "Augmentin 875/125 mg"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Ácido clavulánico",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Ácido clavulánico' (grupo PENICILINA). El medicamento recetado 'Augmentin 875/125 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "familia AINES por su nombre",
+      "input": {
+        "check": "medication",
+        "allergies": "AINEs",
+        "medicineName": "Ibuprofeno 400 mg"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "AINEs",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'AINEs' (grupo AINES). El medicamento recetado 'Ibuprofeno 400 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "ácido acetilsalicílico es de los AINES (la primera familia que coincide)",
+      "input": {
+        "check": "medication",
+        "allergies": "Ácido acetilsalicílico",
+        "medicineName": "Aspirina Protect 100 mg"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Ácido acetilsalicílico",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Ácido acetilsalicílico' (grupo AINES). El medicamento recetado 'Aspirina Protect 100 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "AAS solo es de la familia aspirina",
+      "input": {
+        "check": "medication",
+        "allergies": "AAS",
+        "medicineName": "Aspirina 500 mg"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "AAS",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'AAS' (grupo ASPIRINA). El medicamento recetado 'Aspirina 500 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "varias alergias en renglones: la segunda avisa con su familia (ibuprofeno → Advil)",
+      "input": {
+        "check": "medication",
+        "allergies": "Penicilina\r\nIbuprofeno",
+        "medicineName": "Advil 200 mg"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Ibuprofeno",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Ibuprofeno' (grupo IBUPROFENO). El medicamento recetado 'Advil 200 mg' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "separadas por coma, punto y coma o diagonal; «Ninguna» no cuenta",
+      "input": {
+        "check": "medication",
+        "allergies": "Ninguna, látex; Sulfas / polen",
+        "medicineName": "Bactrim F",
+        "product": {
+          "name": "Bactrim F",
+          "genericName": "Sulfametoxazol/Trimetoprima"
+        }
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Sulfas",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Sulfas' (grupo SULFA). El medicamento recetado 'Bactrim F' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "falso positivo que la regla tiene hoy: «Sulfato ferroso» entra en la familia sulfa",
+      "input": {
+        "check": "medication",
+        "allergies": "Sulfato ferroso",
+        "medicineName": "Bactrim"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Sulfato ferroso",
+        "warning": "Riesgo de hipersensibilidad: El paciente registra alergia a 'Sulfato ferroso' (grupo SULFA). El medicamento recetado 'Bactrim' pertenece o presenta reactividad cruzada con esta familia farmacológica."
+      }
+    },
+    {
+      "name": "la alergia contiene al medicamento (4 letras o más)",
+      "input": {
+        "check": "medication",
+        "allergies": "Amoxicilina con clavulanato",
+        "medicineName": "amoxicilina"
+      },
+      "expected": {
+        "conflict": true,
+        "matchedAllergy": "Amoxicilina con clavulanato",
+        "warning": "El paciente registra alergia a 'Amoxicilina con clavulanato'. El medicamento recetado contiene 'amoxicilina'."
+      }
+    },
+    {
+      "name": "sin coincidencia",
+      "input": {
+        "check": "medication",
+        "allergies": "Mariscos, polen",
+        "medicineName": "Loratadina 10 mg",
+        "product": {
+          "name": "Loratadina 10 mg",
+          "genericName": "Loratadina"
+        }
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "alergias negadas",
+      "input": {
+        "check": "medication",
+        "allergies": "Negadas",
+        "medicineName": "Penicilina benzatínica"
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "negadas con punto y mayúsculas",
+      "input": {
+        "check": "medication",
+        "allergies": "NIEGA ALERGIAS.",
+        "medicineName": "Penicilina"
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "no interrogadas (vacío)",
+      "input": {
+        "check": "medication",
+        "allergies": "",
+        "medicineName": "Penicilina"
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "sin medicamento ni producto",
+      "input": {
+        "check": "medication",
+        "allergies": "Penicilina",
+        "medicineName": "  "
+      },
+      "expected": {
+        "conflict": false,
+        "matchedAllergy": "",
+        "warning": ""
+      }
+    },
+    {
+      "name": "resumen · alergias y crónicos",
+      "input": {
+        "check": "summary",
+        "allergies": "  Penicilina, látex ",
+        "chronicDiseases": "Diabetes tipo 2"
+      },
+      "expected": {
+        "hasAllergies": true,
+        "allergiesNotAsked": false,
+        "allergySummary": "Penicilina, látex",
+        "allergyBadge": "ALERGIAS: Penicilina, látex",
+        "hasChronicDiseases": true,
+        "chronicBadge": "Crónicos: Diabetes tipo 2"
+      }
+    },
+    {
+      "name": "resumen · negadas y ninguna crónica",
+      "input": {
+        "check": "summary",
+        "allergies": "Negadas",
+        "chronicDiseases": "Ninguna relevante"
+      },
+      "expected": {
+        "hasAllergies": false,
+        "allergiesNotAsked": false,
+        "allergySummary": "Negadas",
+        "allergyBadge": "Alergias negadas",
+        "hasChronicDiseases": false,
+        "chronicBadge": ""
+      }
+    },
+    {
+      "name": "resumen · sin interrogar",
+      "input": {
+        "check": "summary",
+        "allergies": "   ",
+        "chronicDiseases": ""
+      },
+      "expected": {
+        "hasAllergies": false,
+        "allergiesNotAsked": true,
+        "allergySummary": "No interrogadas",
+        "allergyBadge": "Alergias sin interrogar",
+        "hasChronicDiseases": false,
+        "chronicBadge": ""
+      }
+    },
+    {
+      "name": "resumen · respuestas que niegan (con acentos y punto)",
+      "input": {
+        "check": "summary",
+        "allergies": "Ninguna conocida.",
+        "chronicDiseases": "Niega"
+      },
+      "expected": {
+        "hasAllergies": false,
+        "allergiesNotAsked": false,
+        "allergySummary": "Negadas",
+        "allergyBadge": "Alergias negadas",
+        "hasChronicDiseases": false,
+        "chronicBadge": ""
+      }
+    },
+    {
+      "name": "resumen · «No» niega; «No sé» no",
+      "input": {
+        "check": "summary",
+        "allergies": "No",
+        "chronicDiseases": "No sé"
+      },
+      "expected": {
+        "hasAllergies": false,
+        "allergiesNotAsked": false,
+        "allergySummary": "Negadas",
+        "allergyBadge": "Alergias negadas",
+        "hasChronicDiseases": true,
+        "chronicBadge": "Crónicos: No sé"
+      }
+    },
+    {
+      "name": "resumen · crónicos que niegan con otras palabras",
+      "input": {
+        "check": "summary",
+        "allergies": "Sin alergias",
+        "chronicDiseases": "Sin enfermedades crónicas"
+      },
+      "expected": {
+        "hasAllergies": false,
+        "allergiesNotAsked": false,
+        "allergySummary": "Negadas",
+        "allergyBadge": "Alergias negadas",
+        "hasChronicDiseases": false,
+        "chronicBadge": ""
+      }
+    }
+  ]
+}

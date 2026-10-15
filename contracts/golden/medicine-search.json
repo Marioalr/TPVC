@@ -105,6 +105,15 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "para"
@@ -211,6 +220,15 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "amoxicilina"
@@ -316,12 +334,22 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "acido"
       },
       "expected": [
         4,
+        11,
         3
       ]
     },
@@ -419,6 +447,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -524,6 +561,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -631,11 +677,21 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "olico"
       },
       "expected": [
+        11,
         3
       ]
     },
@@ -733,6 +789,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -834,6 +899,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -939,12 +1013,22 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": ""
       },
       "expected": [
         4,
+        11,
         3,
         7,
         8,
@@ -1051,6 +1135,15 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "a",
@@ -1058,7 +1151,7 @@
       },
       "expected": [
         4,
-        3
+        11
       ]
     },
     {
@@ -1155,6 +1248,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -1258,6 +1360,15 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "xyz"
@@ -1358,6 +1469,15 @@
             "genericName": "Ibuprofeno",
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
             "category": "Medicamentos"
           }
         ],
@@ -1463,12 +1583,22 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": null
       },
       "expected": [
         4,
+        11,
         3,
         7,
         8,
@@ -1574,12 +1704,22 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "tabletas"
       },
       "expected": [
         4,
+        11,
         3,
         8,
         10,
@@ -1681,12 +1821,22 @@
             "presentation": "Caja con 10 tabletas",
             "stock": 20,
             "category": "Medicamentos"
+          },
+          {
+            "id": 11,
+            "code": "MED-011",
+            "name": "ACIDO FOLICO 5 MG",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
           }
         ],
         "text": "ÁCIDO"
       },
       "expected": [
         4,
+        11,
         3
       ]
     }
