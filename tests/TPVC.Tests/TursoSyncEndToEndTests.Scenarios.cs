@@ -301,9 +301,12 @@ public partial class TursoSyncEndToEndTests
         return LocalId(db, table, syncId);
     }
 
-    private static int LocalId(AppDbContext db, string table, Guid syncId) =>
-        db.Database.SqlQueryRaw<int>($"SELECT \"Id\" AS \"Value\" FROM \"{table}\" WHERE upper(\"SyncId\") = upper({{0}})", SyncIds.Format(syncId))
-            .AsEnumerable().Single();
+    private static int LocalId(AppDbContext db, string table, Guid syncId)
+    {
+        // La tabla sale del mapa de sincronización, nunca de un texto de afuera
+        var sql = $"SELECT \"Id\" AS \"Value\" FROM \"{table}\" WHERE upper(\"SyncId\") = upper({{0}})";
+        return db.Database.SqlQueryRaw<int>(sql, SyncIds.Format(syncId)).AsEnumerable().Single();
+    }
 
     /// <summary>Un valor en la forma de la nube (texto) puesto en la entidad: una columna o una referencia por SyncId.</summary>
     private static void SetRemoteValue(AppDbContext db, TableMap map, object entity, string column, JsonNode? value)
@@ -392,8 +395,8 @@ public partial class TursoSyncEndToEndTests
         assignments.Add($"\"UpdatedAtUtc\" = {{{args.Count}}}");
         args.Add(TursoSyncService.FormatDate(at));
         args.Add(SyncIds.Format(syncId));
-        Assert.AreEqual(1, db.Database.ExecuteSqlRaw(
-            $"UPDATE \"{table}\" SET {string.Join(", ", assignments)} WHERE upper(\"SyncId\") = upper({{{args.Count - 1}}})", args.ToArray()!));
+        var sql = $"UPDATE \"{table}\" SET {string.Join(", ", assignments)} WHERE upper(\"SyncId\") = upper({{{args.Count - 1}}})";
+        Assert.AreEqual(1, db.Database.ExecuteSqlRaw(sql, args.ToArray()!));
     }
 
     /// <summary>Agregar, quitar o cambiar un renglón de la hoja de insumos, por el guardado de siempre.</summary>
