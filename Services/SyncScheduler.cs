@@ -99,6 +99,9 @@ public sealed class SyncScheduler
 
     private DateTime Now => _sync.Clock.GetUtcNow().UtcDateTime;
 
+    /// <summary>La revisión de este equipo (la que avisa a esta cadencia lo que encontró).</summary>
+    internal ConsultationHandoffService Handoff => _handoff;
+
     /// <summary>La nube está activada con URL y token. Si no, no se pregunta nada a Turso.</summary>
     public bool IsCloudOn
     {
