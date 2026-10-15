@@ -167,7 +167,7 @@ public partial class GoldenVectorTests
                 {
                     ["name"] = i.Name,
                     ["lineKind"] = i.LineKind,
-                    ["productId"] = i.ProductId,
+                    ["productId"] = i.ProductId <= -1_000_000 ? null : i.ProductId,
                     ["freeCharge"] = i.ProductId <= -1_000_000
                 }).ToArray()),
                 ["freeLines"] = new JsonArray(freeLines.Select(l => (JsonNode?)JsonValue.Create(l)).ToArray())
@@ -220,7 +220,7 @@ public partial class GoldenVectorTests
                 "La consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5; Services/Rules/HandoffPayloadCodec.cs). La copia de trabajo es el borrador de la consulta como lo guarda la PC (ConsultationDraftStore, consulta-en-curso.json), con un reloj fijo: las fechas van tal cual (TestAssets/fase6/handoff-payload.golden.json las cambia por marcadores).",
                 "prepare-*: PrepareForSending con savedAt fijo. Quita los Id locales (PatientId 0, AttendingAppointmentId null, cada ProductId 0) y las marcas del envío (Handoff, ReceivedHandoffId, ReceivedHandoffToken); pone PatientSyncId, PatientUpdatedAtUtc, PatientFieldStamps (el estado normalizado de FieldStampsJson con '#piso', sin 'UpdatedAtUtc', golden/field-stamps.json; el objeto vacío si no hay marcas), ProgressNoteSyncId y su ProgressNoteUpdatedAtUtc (solo con nota), AttendingAppointmentSyncId y FeeServiceSyncId (el servicio del honorario por su Id local). Cada cargo: ProductId > 0 = producto, -1 a -999999 = servicio (-Id), lo demás o lo que no está en el catálogo = 'libre'; LineKind y CatalogSyncId. La copia viaja como el texto JSON de payload (ConsultationHandoffs.Payload, PayloadVersion 1).",
                 "Las fechas del borrador van como las escribe System.Text.Json (ISO 8601, sin zona: hora del consultorio; PatientUpdatedAtUtc, ProgressNoteUpdatedAtUtc y PatientFieldStamps son UTC sin 'Z'). Kotlin compara por significado (los valores), no el texto.",
-                "receive-*: MapReceivedItems. 'producto' y 'servicio' se buscan con FindCatalogRef en el catálogo de quien recibe (productId = Id del producto o -Id del servicio); lo que no se encuentra y lo 'libre' se cobra como cargo libre: productId = FreeChargeId(nombre), un Id local que solo vale en ese equipo (-1000000 a -1999999), y los productos y servicios que no se encontraron van en freeLines (el aviso).",
+                "receive-*: MapReceivedItems. 'producto' y 'servicio' se buscan con FindCatalogRef en el catálogo de quien recibe (productId = Id del producto o -Id del servicio); lo que no se encuentra y lo 'libre' se cobra como cargo libre (freeCharge true, productId null): la PC le da un Id local que sale del nombre (FreeChargeId, -1000000 a -1999999) y solo vale en ese equipo, así que el vector no lo fija y Kotlin usa el suyo; los productos y servicios que no se encontraron van en freeLines (el aviso).",
                 "find-*: FindCatalogRef: primero el SyncId (de la misma clase y activo); si no, el mismo código (sin importar mayúsculas) y el mismo nombre normalizado (TextSearch.Normalize: sin acentos, minúsculas), activo. matchId = el Id del renglón de refs, o null.",
                 "can-read-*: CanRead: la copia se entiende si PayloadVersion <= 1 (el protocolo de la consulta entre equipos) y la Version del borrador <= 1."
             }.Select(n => (JsonNode?)JsonValue.Create(n)).ToArray()),
@@ -252,7 +252,7 @@ public partial class GoldenVectorTests
                 {
                     ["items"] = new JsonArray(payload.Items.Select(i => (JsonNode?)new JsonObject
                     {
-                        ["name"] = i.Name, ["lineKind"] = i.LineKind, ["productId"] = i.ProductId, ["freeCharge"] = i.ProductId <= -1_000_000
+                        ["name"] = i.Name, ["lineKind"] = i.LineKind, ["productId"] = i.ProductId <= -1_000_000 ? null : i.ProductId, ["freeCharge"] = i.ProductId <= -1_000_000
                     }).ToArray()),
                     ["freeLines"] = new JsonArray(freeLines.Select(l => (JsonNode?)JsonValue.Create(l)).ToArray())
                 };

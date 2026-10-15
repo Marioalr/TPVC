@@ -11,17 +11,21 @@
     "Por campo (pasos 5 a 9): B cambia las alergias y A, después, el teléfono, sin bajar nada entre una y otra. La nube se queda con la fila de A (LWW por fila); B la combina al bajar (golden/patient-merge.json), sube el resultado una vez y A lo baja: los dos cambios sobreviven en los dos equipos.",
     "Por renglón (pasos 10 a 15): cada equipo agrega un insumo a la misma hoja sin bajar el del otro. A sube primero; la fila de B es más nueva y la nube se queda con ella (LWW por fila), y B no la combina porque es la suya. A la baja, combina por renglón (los dos insumos: el orden de la hoja ganadora y al final el que solo tenía A) y sube el resultado en esa misma sincronización; B lo baja en la siguiente.",
     "Quitar contra editar (pasos 16 a 21): A quita un renglón y B, después, cambia su cantidad: la marca del renglón de B es más nueva que la de quitado, así que el renglón sigue vivo con la cantidad de B; la marca de quitado se queda en FieldStampsJson.",
-    "Escritura sin marcas (pasos 22 a 29): A escribe la fila completa sin tocar FieldStampsJson (rawWrite, como una PC v1.19–v1.38) con una marca posterior a la edición de B. Su UpdatedAtUtc es mayor que su llave 'UpdatedAtUtc': es una escritura sin marcas y ese UpdatedAtUtc es su piso, que le gana a todo lo marcado antes (el teléfono de B). B la toma tal cual (la combinación da lo mismo que la nube). Cuando B vuelve a editar (paso 27), el piso queda guardado en '#piso' y solo se marca lo que B cambió.",
+    "Escritura sin marcas (pasos 22 a 29): A escribe la fila completa sin tocar FieldStampsJson (rawWrite con now+90s, como una PC v1.19–v1.38) con una marca posterior a la edición de B. Su UpdatedAtUtc es mayor que su llave 'UpdatedAtUtc': es una escritura sin marcas y ese UpdatedAtUtc es su piso, que le gana a todo lo marcado antes (el teléfono de B). B la toma tal cual (la combinación da lo mismo que la nube). Cuando B vuelve a editar (paso 27), el piso queda guardado en '#piso' y solo se marca lo que B cambió.",
     "ActiveSuppliesJson va en su forma canónica (golden/canonical-json.json) y FieldStampsJson en forma canónica con las horas como <time>: las llaves dicen qué campos y renglones tienen marca."
   ],
   "devices": [
     {
       "name": "A",
-      "deviceId": "device-a"
+      "deviceId": "device-a",
+      "role": "WindowsDesktop",
+      "engine": "pc"
     },
     {
       "name": "B",
-      "deviceId": "device-b"
+      "deviceId": "device-b",
+      "role": "AndroidTablet",
+      "engine": "kotlin"
     }
   ],
   "watch": {
@@ -1196,7 +1200,7 @@
       "op": "rawWrite",
       "table": "Patients",
       "syncId": "10000000-0000-4000-8000-000000000901",
-      "stamp": "T0+90s",
+      "stamp": "now+90s",
       "set": {
         "Phone": "5533333333"
       },

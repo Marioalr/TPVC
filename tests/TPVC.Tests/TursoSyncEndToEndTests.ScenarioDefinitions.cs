@@ -1,6 +1,8 @@
+using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using TPVC.Models;
 using TPVC.Services;
 
 namespace TPVC.Tests;
@@ -44,6 +46,21 @@ public partial class TursoSyncEndToEndTests
     private static JsonObject RawWrite(string device, string table, int id, string stamp, params (string Column, string? Value)[] values) =>
         Step(device, "rawWrite", new JsonObject { ["table"] = table, ["syncId"] = Fx(id), ["stamp"] = stamp, ["set"] = Values(values) });
 
+    /// <summary>rawWrite con una marca con nombre: la primera la calcula con la hora de su paso y las demás repiten ese instante.</summary>
+    private static JsonObject AnchoredRawWrite(string device, string table, int id, string stamp, string anchor, params (string Column, string? Value)[] values) =>
+        Step(device, "rawWrite", new JsonObject
+        {
+            ["table"] = table, ["syncId"] = Fx(id), ["stamp"] = stamp, ["anchor"] = anchor, ["set"] = Values(values)
+        });
+
+    /// <summary>Un expediente con una nota, de A: una tabla que la tablet sí escribe (la nota es LWW por fila).</summary>
+    private static JsonObject[] PatientWithNote(int patient, int note, string recordNumber, string diagnosis) => new[]
+    {
+        Create("A", "Patients", ("SyncId", Fx(patient)), ("RecordNumber", recordNumber), ("FullName", "Ana Pérez Núñez"), ("Gender", "Femenino")),
+        Create("A", "PatientConsultations", ("SyncId", Fx(note)), ("PatientRecordSyncId", Fx(patient)), ("Folio", "CNS-20200115-" + recordNumber[^3..]),
+            ("ChiefComplaint", "Dolor de garganta"), ("Diagnosis", diagnosis))
+    };
+
     private static JsonObject Sync(string device, JsonObject? options = null) => Step(device, "sync", options);
 
     private static JsonObject Watch(params (string Table, string[] Columns)[] tables)
@@ -72,26 +89,26 @@ public partial class TursoSyncEndToEndTests
         new[] { "8.5", "8.6" },
         new[]
         {
-            "Una edición en un equipo llega al otro; dos ediciones de la misma fila: gana la marca más nueva (LWW por fila, la nube con el upsert condicional).",
-            "Empate (pasos 14 a 18): los dos equipos escriben la misma fila con la misma marca (rawWrite, T0+90s). La nube se queda con la primera que sube; a la segunda no la acepta (afecta 0 filas), el equipo vuelve a leer la fila de la nube y la aplica aunque las marcas empaten (SyncRules.ServerRowAppliesAfterReject, golden/lww.json), y no vuelve a subir nada.",
+            "Una edición en un equipo llega al otro; dos ediciones de la misma fila: gana la marca más nueva (LWW por fila, la nube con el upsert condicional). La fila es una nota de consulta: la tablet sí la escribe.",
+            "Empate (pasos 14 a 18): los dos equipos escriben la misma fila con la misma marca (rawWrite con la marca 'empate': now+90s en el primero, el mismo instante en el segundo). La nube se queda con la primera que sube; a la segunda no la acepta (afecta 0 filas), el equipo vuelve a leer la fila de la nube y la aplica aunque las marcas empaten (SyncRules.ServerRowAppliesAfterReject, golden/lww.json), y no vuelve a subir nada.",
             "pending: cambios anotados sin subir; parked: filas apartadas; saved: cambios guardados por otra generación."
         },
         new[] { "A", "B" },
-        Watch(("Categories", new[] { "Name" }), ("Products", new[] { "Code", "Name", "Price", "CategorySyncId" })),
-        Steps(CategoryAndProduct(101, 102, "35.5")
+        Watch(("PatientConsultations", new[] { "PatientRecordSyncId", "Folio", "Diagnosis" })),
+        Steps(PatientWithNote(101, 102, "EXP-2020-010", "Faringitis aguda (J02.9)")
             .Concat(CloudOfAJoinedByB())
             .Concat(new[]
             {
-                Edit("B", "Products", 102, ("Price", "40")),
+                Edit("B", "PatientConsultations", 102, ("Diagnosis", "Faringitis estreptocócica (J02.0)")),
                 Sync("B"),
                 Sync("A"),
-                Edit("A", "Products", 102, ("Price", "41")),
-                Edit("B", "Products", 102, ("Price", "42")),
+                Edit("A", "PatientConsultations", 102, ("Diagnosis", "Faringitis aguda por otros microorganismos (J02.8)")),
+                Edit("B", "PatientConsultations", 102, ("Diagnosis", "Amigdalitis aguda (J03.9)")),
                 Sync("A"),
                 Sync("B"),
                 Sync("A"),
-                RawWrite("A", "Products", 102, "T0+90s", ("Price", "111.5")),
-                RawWrite("B", "Products", 102, "T0+90s", ("Price", "222.5")),
+                AnchoredRawWrite("A", "PatientConsultations", 102, "now+90s", "empate", ("Diagnosis", "Diagnóstico escrito en A")),
+                AnchoredRawWrite("B", "PatientConsultations", 102, "now+90s", "empate", ("Diagnosis", "Diagnóstico escrito en B")),
                 Sync("B"),
                 Sync("A"),
                 Sync("A")
@@ -169,26 +186,26 @@ public partial class TursoSyncEndToEndTests
         new[] { "8.5", "8.7" },
         new[]
         {
-            "Desfase (pasos 5 a 12): la nube va 10 min adelante de los dos equipos (serverClock). Cada sincronización mide el desfase y desde ahí cada equipo marca con su hora más el desfase (golden/stamping.json): la edición más reciente en el tiempo (la de B) gana aunque los relojes de los equipos estén atrasados.",
-            "Salto de reloj (pasos 13 a 17): el reloj de B salta 3 h adelante sin conexión y marca una edición así (rawWrite, T0+3h). Antes de subir, B repara las marcas más de 2 min adelante de la hora de la nube; si no, esa edición le ganaría a todas las de después. La de A, posterior, gana."
+            "Desfase (pasos 6 a 13): la nube va 10 min adelante de los dos equipos (serverClock). Cada sincronización mide el desfase y desde ahí cada equipo marca con su hora más el desfase (golden/stamping.json): la edición más reciente en el tiempo (la de B) gana aunque los relojes de los equipos estén atrasados.",
+            "Salto de reloj (pasos 14 a 18): el reloj de B salta 3 h adelante sin conexión y marca una edición así (rawWrite, now+3h). Antes de subir, B repara las marcas más de 2 min adelante de la hora de la nube; si no, esa edición le ganaría a todas las de después. La de A, posterior, gana."
         },
         new[] { "A", "B" },
-        Watch(("Products", new[] { "Price" })),
-        Steps(CategoryAndProduct(401, 402, "35.5")
+        Watch(("PatientConsultations", new[] { "Diagnosis" })),
+        Steps(PatientWithNote(401, 402, "EXP-2020-011", "Faringitis aguda (J02.9)")
             .Concat(CloudOfAJoinedByB())
             .Concat(new[]
             {
                 Step(null, "serverClock", new JsonObject { ["offsetSeconds"] = 600 }),
                 Sync("A"),
                 Sync("B"),
-                Edit("A", "Products", 402, ("Price", "50")),
-                Edit("B", "Products", 402, ("Price", "60")),
+                Edit("A", "PatientConsultations", 402, ("Diagnosis", "Diagnóstico de A")),
+                Edit("B", "PatientConsultations", 402, ("Diagnosis", "Diagnóstico de B, después")),
                 Sync("B"),
                 Sync("A"),
                 Sync("B"),
-                RawWrite("B", "Products", 402, "T0+3h", ("Price", "70")),
+                RawWrite("B", "PatientConsultations", 402, "now+3h", ("Diagnosis", "Diagnóstico de B con el reloj adelantado")),
                 Sync("B"),
-                Edit("A", "Products", 402, ("Price", "80")),
+                Edit("A", "PatientConsultations", 402, ("Diagnosis", "Diagnóstico de A, al final")),
                 Sync("A"),
                 Sync("B")
             }).ToArray()));
@@ -225,7 +242,7 @@ public partial class TursoSyncEndToEndTests
         {
             "A guarda un respaldo (paso 7); después B registra un paciente y lo sube, A cambia un precio y lo sube, y B registra otro paciente que no alcanza a subir.",
             "A restaura el respaldo y reemplaza la nube con él (pcOnly): generación nueva, la nube queda igual al respaldo (sin el paciente de B ni el precio nuevo).",
-            "B ve otra generación en la primera instrucción: guarda lo que no había subido (saved 1), se vacía y baja la nube nueva una sola vez. «Volver a aplicar» (reapplySaved) escribe lo guardado como una edición nueva (pending 1) que sube en la siguiente sincronización. Lo que B ya había subido antes del reemplazo se perdió con él (A lo guardó en su archivo de lo perdido; no está en este escenario)."
+            "B ve otra generación en la primera instrucción: guarda lo que no había subido (saved 1), se vacía y baja la nube nueva una sola vez. «Volver a aplicar» (reapplySaved) escribe lo guardado como una edición nueva (pending 1) que sube en la siguiente sincronización. Lo que B ya había subido antes del reemplazo (su primer paciente) se perdió con él, igual que el precio nuevo de A: A los guarda al reemplazar (su archivo de lo perdido y saved 2 desde el paso 14, para «Volver a aplicar» si el médico quiere); este escenario no los vuelve a aplicar."
         },
         new[] { "A", "B" },
         Watch(("Patients", new[] { "RecordNumber", "FullName" }), ("Products", new[] { "Price" })),
@@ -325,7 +342,7 @@ public partial class TursoSyncEndToEndTests
             "Por campo (pasos 5 a 9): B cambia las alergias y A, después, el teléfono, sin bajar nada entre una y otra. La nube se queda con la fila de A (LWW por fila); B la combina al bajar (golden/patient-merge.json), sube el resultado una vez y A lo baja: los dos cambios sobreviven en los dos equipos.",
             "Por renglón (pasos 10 a 15): cada equipo agrega un insumo a la misma hoja sin bajar el del otro. A sube primero; la fila de B es más nueva y la nube se queda con ella (LWW por fila), y B no la combina porque es la suya. A la baja, combina por renglón (los dos insumos: el orden de la hoja ganadora y al final el que solo tenía A) y sube el resultado en esa misma sincronización; B lo baja en la siguiente.",
             "Quitar contra editar (pasos 16 a 21): A quita un renglón y B, después, cambia su cantidad: la marca del renglón de B es más nueva que la de quitado, así que el renglón sigue vivo con la cantidad de B; la marca de quitado se queda en FieldStampsJson.",
-            "Escritura sin marcas (pasos 22 a 29): A escribe la fila completa sin tocar FieldStampsJson (rawWrite, como una PC v1.19–v1.38) con una marca posterior a la edición de B. Su UpdatedAtUtc es mayor que su llave 'UpdatedAtUtc': es una escritura sin marcas y ese UpdatedAtUtc es su piso, que le gana a todo lo marcado antes (el teléfono de B). B la toma tal cual (la combinación da lo mismo que la nube). Cuando B vuelve a editar (paso 27), el piso queda guardado en '#piso' y solo se marca lo que B cambió.",
+            "Escritura sin marcas (pasos 22 a 29): A escribe la fila completa sin tocar FieldStampsJson (rawWrite con now+90s, como una PC v1.19–v1.38) con una marca posterior a la edición de B. Su UpdatedAtUtc es mayor que su llave 'UpdatedAtUtc': es una escritura sin marcas y ese UpdatedAtUtc es su piso, que le gana a todo lo marcado antes (el teléfono de B). B la toma tal cual (la combinación da lo mismo que la nube). Cuando B vuelve a editar (paso 27), el piso queda guardado en '#piso' y solo se marca lo que B cambió.",
             "ActiveSuppliesJson va en su forma canónica (golden/canonical-json.json) y FieldStampsJson en forma canónica con las horas como <time>: las llaves dicen qué campos y renglones tienen marca."
         },
         new[] { "A", "B" },
@@ -353,7 +370,7 @@ public partial class TursoSyncEndToEndTests
                 Sync("B"),
                 Edit("B", "Patients", 901, ("Phone", "5522222222")),
                 Sync("B"),
-                RawWrite("A", "Patients", 901, "T0+90s", ("Phone", "5533333333")),
+                RawWrite("A", "Patients", 901, "now+90s", ("Phone", "5533333333")),
                 Sync("A"),
                 Sync("B"),
                 Edit("B", "Patients", 901, ("Allergies", "Penicilina y sulfas")),
@@ -390,12 +407,60 @@ public partial class TursoSyncEndToEndTests
     [TestMethod]
     public Task Scenario_PatientMerge() => RunScenarioAsync(PatientMergeScenario());
 
+    private static ScenarioDefinition[] AllScenarios() => new[]
+    {
+        LwwAndTies(), Tombstones(), ParkedRows(), ClockSkew(), UploadCut(), GenerationFence(), Folios(), StockLedgerScenario(), PatientMergeScenario()
+    };
+
+    /// <summary>
+    /// Cada paso de un equipo es algo que su papel puede hacer en la app (A la PC principal, B la tablet): si no, Kotlin no podría
+    /// reproducirlo sin SQL directo.
+    /// </summary>
+    [TestMethod]
+    public void Scenario_EachDeviceOnlyDoesWhatItsRoleAllows()
+    {
+        foreach (var definition in AllScenarios())
+        {
+            foreach (var node in definition.Steps)
+            {
+                var step = node!.AsObject();
+                if (step["device"]?.GetValue<string>() is not { } device) continue;
+                Assert.IsTrue(ScenarioRoles.ContainsKey(device), $"{definition.Name}: equipo desconocido {device}");
+                Assert.IsTrue(ScenarioStepAllowed(ScenarioRoles[device], step),
+                    $"{definition.Name}: {device} ({ScenarioRoles[device]}) no puede hacer {step.ToJsonString()}");
+            }
+        }
+        // La regla misma: la tablet no cambia precios ni cierra lotes; la PC sí
+        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Edit("B", "Products", 1, ("Price", "1"))));
+        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", "closeBatch")));
+        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", "fullSync")));
+        Assert.IsTrue(ScenarioStepAllowed(DeviceRole.WindowsDesktop, Edit("A", "Products", 1, ("Price", "1"))));
+    }
+
+    /// <summary>
+    /// Un arnés lento (Kotlin, una CI ocupada) da lo mismo: las marcas forzadas son relativas a su propio paso, no al inicio.
+    /// Se corre el empate con una pausa de 1.5 s entre pasos y se compara con el mismo archivo.
+    /// </summary>
+    [TestMethod]
+    public async Task Scenario_LwwAndTies_WithASlowHarness_GivesTheSameRows()
+    {
+        if (GoldenVectorTests.WriteGolden) return;
+        _scenarioStepDelay = TimeSpan.FromSeconds(1.5);
+        try
+        {
+            await RunScenarioAsync(LwwAndTies());
+        }
+        finally
+        {
+            _scenarioStepDelay = TimeSpan.Zero;
+        }
+    }
+
     /// <summary>Cada archivo de contracts/scenarios tiene su definición (uno que sobra no lo correría nadie).</summary>
     [TestMethod]
     public void Scenario_EveryFileHasItsDefinition()
     {
-        var names = new[] { LwwAndTies(), Tombstones(), ParkedRows(), ClockSkew(), UploadCut(), GenerationFence(), Folios(), StockLedgerScenario(), PatientMergeScenario() }
-            .Select(d => d.Name + ".json").ToHashSet();
+        var names = AllScenarios().Select(d => d.Name + ".json").ToHashSet();
         var dir = GoldenVectorTests.RepoPath("contracts/scenarios");
         if (!System.IO.Directory.Exists(dir)) return;
         foreach (var file in System.IO.Directory.GetFiles(dir, "*.json"))

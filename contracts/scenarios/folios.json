@@ -16,11 +16,15 @@
   "devices": [
     {
       "name": "A",
-      "deviceId": "device-a"
+      "deviceId": "device-a",
+      "role": "WindowsDesktop",
+      "engine": "pc"
     },
     {
       "name": "B",
-      "deviceId": "device-b"
+      "deviceId": "device-b",
+      "role": "AndroidTablet",
+      "engine": "kotlin"
     }
   ],
   "watch": {

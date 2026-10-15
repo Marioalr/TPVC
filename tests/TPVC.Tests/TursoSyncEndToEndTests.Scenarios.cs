@@ -34,7 +34,7 @@ public partial class TursoSyncEndToEndTests
     private sealed record ScenarioDefinition(string Name, string[] Covers, string[] Notes, string[] Devices, JsonObject Watch, JsonArray Steps);
 
     private static readonly Regex ScenarioTimestamp = new(@"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,7})?", RegexOptions.Compiled);
-    private static readonly Regex ScenarioStamp = new(@"^T0(?:\+(\d+)([smh]))?$", RegexOptions.Compiled);
+    private static readonly Regex ScenarioStamp = new(@"^now(?:\+(\d+)([smh]))?$", RegexOptions.Compiled);
 
     /// <summary>Lo que se recuerda mientras corre un escenario.</summary>
     private sealed class ScenarioRun
@@ -42,8 +42,11 @@ public partial class TursoSyncEndToEndTests
         public required Dictionary<string, Device> Devices { get; init; }
         public required JsonObject Watch { get; init; }
 
-        /// <summary>La hora de la nube al empezar: las marcas forzadas (rawWrite) se escriben relativas a ella.</summary>
-        public required DateTime T0 { get; init; }
+        /// <summary>
+        /// Marcas con nombre de rawWrite ("anchor"): la primera que la usa la calcula con la hora de ese paso y las demás repiten
+        /// el mismo instante (dos equipos que guardan con la misma marca).
+        /// </summary>
+        public Dictionary<string, DateTime> Anchors { get; } = new(StringComparer.Ordinal);
 
         /// <summary>GUID que generó el motor → &lt;id:N&gt;, en el orden en que aparecen (estable: ver <see cref="NumberNewIds"/>).</summary>
         public Dictionary<string, string> Ids { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -51,9 +54,54 @@ public partial class TursoSyncEndToEndTests
         public Dictionary<string, string> Backups { get; } = new(StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// El papel de cada equipo de los escenarios: A es siempre la PC principal (el motor de la PC, también en la CI de Kotlin) y
+    /// B la tablet (el motor de Kotlin; en la PC, otra computadora que hace sus pasos).
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, DeviceRole> ScenarioRoles = new Dictionary<string, DeviceRole>(StringComparer.Ordinal)
+    {
+        ["A"] = DeviceRole.WindowsDesktop,
+        ["B"] = DeviceRole.AndroidTablet
+    };
+
+    /// <summary>
+    /// Si un equipo con ese papel puede hacer ese paso, con los permisos de la app (<see cref="DevicePermissions"/>): una tablet que
+    /// cambia un precio no se podría reproducir en Kotlin sin SQL directo. Los pasos del arnés (sin equipo) siempre.
+    /// </summary>
+    private static bool ScenarioStepAllowed(DeviceRole role, JsonObject step)
+    {
+        var op = step["op"]!.GetValue<string>();
+        string? table = step["table"]?.GetValue<string>();
+        bool Write(string t) => t switch
+        {
+            "Patients" or "PatientConsultations" or "LabResults" => DevicePermissions.CanManageClinicalRecords(role),
+            "Appointments" => DevicePermissions.CanScheduleAppointments(role),
+            "Sales" or "SaleItems" => DevicePermissions.CanProcessSales(role),
+            "ProductBatches" or "InventoryMovements" => DevicePermissions.CanManageInventory(role)
+                                                       || op == "create" && DevicePermissions.CanRegisterStockEntries(role),
+            "Categories" or "Products" or "ClinicalServices" or "ServiceDefaultProducts" => DevicePermissions.CanManageInventory(role),
+            "PediatricDoseRules" or "PrescriptionTemplates" => DevicePermissions.CanConfigureSystem(role),
+            _ => false
+        };
+        return op switch
+        {
+            "create" or "edit" or "delete" or "rawWrite" => Write(table!),
+            "sheetRow" or "newPatient" => DevicePermissions.CanManageClinicalRecords(role),
+            "sell" or "cancelSale" => DevicePermissions.CanProcessSales(role),
+            "closeBatch" => DevicePermissions.CanManageInventory(role),
+            // Solo la PC principal
+            "fullSync" or "regularizeFolios" or "backup" or "restoreBackup" or "replaceCloud" => DevicePermissions.CanConfigureSystem(role),
+            "sync" or "join" or "reapplySaved" => true,
+            _ => false
+        };
+    }
+
     private static bool IsFixedId(string text) => text.StartsWith("10000000-0000-4000-8000-", StringComparison.OrdinalIgnoreCase);
 
     // ================================================================== ejecutar y comparar
+
+    /// <summary>Espera extra entre pasos (la prueba de un arnés lento: el resultado no depende de lo que tarde).</summary>
+    private TimeSpan _scenarioStepDelay = TimeSpan.Zero;
 
     private async Task RunScenarioAsync(ScenarioDefinition definition)
     {
@@ -82,7 +130,9 @@ public partial class TursoSyncEndToEndTests
             ["devices"] = new JsonArray(definition.Devices.Select(d => (JsonNode?)new JsonObject
             {
                 ["name"] = d,
-                ["deviceId"] = $"device-{d.ToLowerInvariant()}"
+                ["deviceId"] = $"device-{d.ToLowerInvariant()}",
+                ["role"] = ScenarioRoles[d].ToString(),
+                ["engine"] = ScenarioRoles[d] == DeviceRole.WindowsDesktop ? "pc" : "kotlin"
             }).ToArray()),
             ["watch"] = definition.Watch.DeepClone(),
             ["steps"] = recorded
@@ -106,8 +156,7 @@ public partial class TursoSyncEndToEndTests
         var run = new ScenarioRun
         {
             Devices = definition.Devices.ToDictionary(d => d, d => CreateDevice(d.ToLowerInvariant(), seed: false), StringComparer.Ordinal),
-            Watch = definition.Watch,
-            T0 = DateTime.UtcNow
+            Watch = definition.Watch
         };
 
         var recorded = new JsonArray();
@@ -122,7 +171,7 @@ public partial class TursoSyncEndToEndTests
             output["expect"] = await SnapshotAsync(run);
             recorded.Add(output);
             // Cada paso con su propia hora: dos equipos nunca marcan en el mismo instante por casualidad
-            await Task.Delay(5);
+            await Task.Delay(TimeSpan.FromMilliseconds(5) + _scenarioStepDelay);
         }
 
         _server.IsOffline = false;
@@ -181,7 +230,7 @@ public partial class TursoSyncEndToEndTests
                 await DeleteRowAsync(D(), S("table"), Guid.Parse(S("syncId")));
                 return null;
             case "rawWrite":
-                RawWrite(run, D(), S("table"), Guid.Parse(S("syncId")), step["set"]!.AsObject(), S("stamp"));
+                RawWrite(run, D(), S("table"), Guid.Parse(S("syncId")), step["set"]!.AsObject(), S("stamp"), step["anchor"]?.GetValue<string>());
                 return null;
             case "sheetRow":
                 await SheetRowAsync(D(), Guid.Parse(S("syncId")), S("action"), step["row"]!.AsObject());
@@ -372,16 +421,27 @@ public partial class TursoSyncEndToEndTests
     /// <summary>
     /// Una escritura que no pasa por el guardado: los valores y la marca dada, sin tocar FieldStampsJson (como una PC
     /// v1.19–v1.38, un reloj que saltó o dos equipos que guardan en el mismo instante). Kotlin nunca escribe así: es del arnés.
+    /// La marca es relativa a la hora de este paso ("now+90s", "now+3h"); con "anchor", la primera vez se calcula y se recuerda
+    /// con ese nombre, y las siguientes con el mismo nombre repiten ese instante. Así nada depende de lo que tarde el arnés.
     /// </summary>
-    private static void RawWrite(ScenarioRun run, Device device, string table, Guid syncId, JsonObject set, string stamp)
+    private static void RawWrite(ScenarioRun run, Device device, string table, Guid syncId, JsonObject set, string stamp, string? anchor)
     {
         var match = ScenarioStamp.Match(stamp);
         Assert.IsTrue(match.Success, $"Marca desconocida: {stamp}");
-        var at = run.T0;
-        if (match.Groups[1].Success)
+        DateTime at;
+        if (anchor != null && run.Anchors.TryGetValue(anchor, out var remembered))
         {
-            var amount = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            at += match.Groups[2].Value switch { "s" => TimeSpan.FromSeconds(amount), "m" => TimeSpan.FromMinutes(amount), _ => TimeSpan.FromHours(amount) };
+            at = remembered;
+        }
+        else
+        {
+            at = DateTime.UtcNow;
+            if (match.Groups[1].Success)
+            {
+                var amount = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                at += match.Groups[2].Value switch { "s" => TimeSpan.FromSeconds(amount), "m" => TimeSpan.FromMinutes(amount), _ => TimeSpan.FromHours(amount) };
+            }
+            if (anchor != null) run.Anchors[anchor] = at;
         }
 
         using var db = device.Factory.CreateDbContext();

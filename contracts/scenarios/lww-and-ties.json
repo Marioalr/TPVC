@@ -8,29 +8,29 @@
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.Scenarios.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [
-    "Una edición en un equipo llega al otro; dos ediciones de la misma fila: gana la marca más nueva (LWW por fila, la nube con el upsert condicional).",
-    "Empate (pasos 14 a 18): los dos equipos escriben la misma fila con la misma marca (rawWrite, T0+90s). La nube se queda con la primera que sube; a la segunda no la acepta (afecta 0 filas), el equipo vuelve a leer la fila de la nube y la aplica aunque las marcas empaten (SyncRules.ServerRowAppliesAfterReject, golden/lww.json), y no vuelve a subir nada.",
+    "Una edición en un equipo llega al otro; dos ediciones de la misma fila: gana la marca más nueva (LWW por fila, la nube con el upsert condicional). La fila es una nota de consulta: la tablet sí la escribe.",
+    "Empate (pasos 14 a 18): los dos equipos escriben la misma fila con la misma marca (rawWrite con la marca 'empate': now+90s en el primero, el mismo instante en el segundo). La nube se queda con la primera que sube; a la segunda no la acepta (afecta 0 filas), el equipo vuelve a leer la fila de la nube y la aplica aunque las marcas empaten (SyncRules.ServerRowAppliesAfterReject, golden/lww.json), y no vuelve a subir nada.",
     "pending: cambios anotados sin subir; parked: filas apartadas; saved: cambios guardados por otra generación."
   ],
   "devices": [
     {
       "name": "A",
-      "deviceId": "device-a"
+      "deviceId": "device-a",
+      "role": "WindowsDesktop",
+      "engine": "pc"
     },
     {
       "name": "B",
-      "deviceId": "device-b"
+      "deviceId": "device-b",
+      "role": "AndroidTablet",
+      "engine": "kotlin"
     }
   ],
   "watch": {
-    "Categories": [
-      "Name"
-    ],
-    "Products": [
-      "Code",
-      "Name",
-      "Price",
-      "CategorySyncId"
+    "PatientConsultations": [
+      "PatientRecordSyncId",
+      "Folio",
+      "Diagnosis"
     ]
   },
   "steps": [
@@ -38,32 +38,26 @@
       "n": 1,
       "device": "A",
       "op": "create",
-      "table": "Categories",
+      "table": "Patients",
       "row": {
         "SyncId": "10000000-0000-4000-8000-000000000101",
-        "Name": "Analgésicos",
-        "Icon": "Pill"
+        "RecordNumber": "EXP-2020-010",
+        "FullName": "Ana Pérez Núñez",
+        "Gender": "Femenino"
       },
       "expect": {
         "cloud": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 1,
           "parked": 0,
           "saved": 0
         },
         "B": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -74,33 +68,25 @@
       "n": 2,
       "device": "A",
       "op": "create",
-      "table": "Products",
+      "table": "PatientConsultations",
       "row": {
         "SyncId": "10000000-0000-4000-8000-000000000102",
-        "Code": "PARA-500",
-        "Name": "Paracetamol 500 mg",
-        "CategorySyncId": "10000000-0000-4000-8000-000000000101",
-        "Price": "35.5",
-        "CurrentStock": "12"
+        "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+        "Folio": "CNS-20200115-010",
+        "ChiefComplaint": "Dolor de garganta",
+        "Diagnosis": "Faringitis aguda (J02.9)"
       },
       "expect": {
         "cloud": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 2,
@@ -108,8 +94,7 @@
           "saved": 0
         },
         "B": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -126,33 +111,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -160,8 +133,7 @@
           "saved": 0
         },
         "B": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -177,33 +149,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -211,8 +171,7 @@
           "saved": 0
         },
         "B": {
-          "Categories": {},
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -229,33 +188,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -263,17 +210,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -286,40 +227,28 @@
       "n": 6,
       "device": "B",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000102",
       "set": {
-        "Price": "40"
+        "Diagnosis": "Faringitis estreptocócica (J02.0)"
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -327,17 +256,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "pending": 1,
@@ -356,33 +279,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "35.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -390,17 +301,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "pending": 0,
@@ -419,33 +324,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "pending": 0,
@@ -453,17 +346,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "pending": 0,
@@ -476,40 +363,28 @@
       "n": 9,
       "device": "A",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000102",
       "set": {
-        "Price": "41"
+        "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "41",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
             }
           },
           "pending": 1,
@@ -517,17 +392,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "pending": 0,
@@ -540,40 +409,28 @@
       "n": 10,
       "device": "B",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000102",
       "set": {
-        "Price": "42"
+        "Diagnosis": "Amigdalitis aguda (J03.9)"
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "40",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis estreptocócica (J02.0)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "41",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
             }
           },
           "pending": 1,
@@ -581,17 +438,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 1,
@@ -610,33 +461,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "41",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "41",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
             }
           },
           "pending": 0,
@@ -644,17 +483,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 1,
@@ -673,33 +506,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "41",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Faringitis aguda por otros microorganismos (J02.8)"
             }
           },
           "pending": 0,
@@ -707,17 +528,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 0,
@@ -736,33 +551,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 0,
@@ -770,17 +573,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 0,
@@ -793,41 +590,30 @@
       "n": 14,
       "device": "A",
       "op": "rawWrite",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000102",
-      "stamp": "T0+90s",
+      "stamp": "now+90s",
+      "anchor": "empate",
       "set": {
-        "Price": "111.5"
+        "Diagnosis": "Diagnóstico escrito en A"
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "111.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en A"
             }
           },
           "pending": 1,
@@ -835,17 +621,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "pending": 0,
@@ -858,41 +638,30 @@
       "n": 15,
       "device": "B",
       "op": "rawWrite",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000102",
-      "stamp": "T0+90s",
+      "stamp": "now+90s",
+      "anchor": "empate",
       "set": {
-        "Price": "222.5"
+        "Diagnosis": "Diagnóstico escrito en B"
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "42",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Amigdalitis aguda (J03.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "111.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en A"
             }
           },
           "pending": 1,
@@ -900,17 +669,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 1,
@@ -929,33 +692,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "111.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en A"
             }
           },
           "pending": 1,
@@ -963,17 +714,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 0,
@@ -992,33 +737,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 0,
@@ -1026,17 +759,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 0,
@@ -1055,33 +782,21 @@
       },
       "expect": {
         "cloud": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 0,
@@ -1089,17 +804,11 @@
           "saved": 0
         },
         "B": {
-          "Categories": {
-            "10000000-0000-4000-8000-000000000101": {
-              "Name": "Analgésicos"
-            }
-          },
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000102": {
-              "Code": "PARA-500",
-              "Name": "Paracetamol 500 mg",
-              "Price": "222.5",
-              "CategorySyncId": "10000000-0000-4000-8000-000000000101"
+              "PatientRecordSyncId": "10000000-0000-4000-8000-000000000101",
+              "Folio": "CNS-20200115-010",
+              "Diagnosis": "Diagnóstico escrito en B"
             }
           },
           "pending": 0,

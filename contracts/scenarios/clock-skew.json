@@ -8,22 +8,26 @@
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.Scenarios.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [
-    "Desfase (pasos 5 a 12): la nube va 10 min adelante de los dos equipos (serverClock). Cada sincronización mide el desfase y desde ahí cada equipo marca con su hora más el desfase (golden/stamping.json): la edición más reciente en el tiempo (la de B) gana aunque los relojes de los equipos estén atrasados.",
-    "Salto de reloj (pasos 13 a 17): el reloj de B salta 3 h adelante sin conexión y marca una edición así (rawWrite, T0+3h). Antes de subir, B repara las marcas más de 2 min adelante de la hora de la nube; si no, esa edición le ganaría a todas las de después. La de A, posterior, gana."
+    "Desfase (pasos 6 a 13): la nube va 10 min adelante de los dos equipos (serverClock). Cada sincronización mide el desfase y desde ahí cada equipo marca con su hora más el desfase (golden/stamping.json): la edición más reciente en el tiempo (la de B) gana aunque los relojes de los equipos estén atrasados.",
+    "Salto de reloj (pasos 14 a 18): el reloj de B salta 3 h adelante sin conexión y marca una edición así (rawWrite, now+3h). Antes de subir, B repara las marcas más de 2 min adelante de la hora de la nube; si no, esa edición le ganaría a todas las de después. La de A, posterior, gana."
   ],
   "devices": [
     {
       "name": "A",
-      "deviceId": "device-a"
+      "deviceId": "device-a",
+      "role": "WindowsDesktop",
+      "engine": "pc"
     },
     {
       "name": "B",
-      "deviceId": "device-b"
+      "deviceId": "device-b",
+      "role": "AndroidTablet",
+      "engine": "kotlin"
     }
   ],
   "watch": {
-    "Products": [
-      "Price"
+    "PatientConsultations": [
+      "Diagnosis"
     ]
   },
   "steps": [
@@ -31,25 +35,26 @@
       "n": 1,
       "device": "A",
       "op": "create",
-      "table": "Categories",
+      "table": "Patients",
       "row": {
         "SyncId": "10000000-0000-4000-8000-000000000401",
-        "Name": "Analgésicos",
-        "Icon": "Pill"
+        "RecordNumber": "EXP-2020-011",
+        "FullName": "Ana Pérez Núñez",
+        "Gender": "Femenino"
       },
       "expect": {
         "cloud": {
-          "Products": {},
+          "PatientConsultations": {},
           "tombstones": []
         },
         "A": {
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 1,
           "parked": 0,
           "saved": 0
         },
         "B": {
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -60,24 +65,23 @@
       "n": 2,
       "device": "A",
       "op": "create",
-      "table": "Products",
+      "table": "PatientConsultations",
       "row": {
         "SyncId": "10000000-0000-4000-8000-000000000402",
-        "Code": "PARA-500",
-        "Name": "Paracetamol 500 mg",
-        "CategorySyncId": "10000000-0000-4000-8000-000000000401",
-        "Price": "35.5",
-        "CurrentStock": "12"
+        "PatientRecordSyncId": "10000000-0000-4000-8000-000000000401",
+        "Folio": "CNS-20200115-011",
+        "ChiefComplaint": "Dolor de garganta",
+        "Diagnosis": "Faringitis aguda (J02.9)"
       },
       "expect": {
         "cloud": {
-          "Products": {},
+          "PatientConsultations": {},
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 2,
@@ -85,7 +89,7 @@
           "saved": 0
         },
         "B": {
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -102,17 +106,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -120,7 +124,7 @@
           "saved": 0
         },
         "B": {
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -136,17 +140,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -154,7 +158,7 @@
           "saved": 0
         },
         "B": {
-          "Products": {},
+          "PatientConsultations": {},
           "pending": 0,
           "parked": 0,
           "saved": 0
@@ -171,17 +175,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -189,9 +193,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -206,17 +210,17 @@
       "offsetSeconds": 600,
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -224,9 +228,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -245,17 +249,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -263,9 +267,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -284,17 +288,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -302,9 +306,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -317,24 +321,24 @@
       "n": 9,
       "device": "A",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000402",
       "set": {
-        "Price": "50"
+        "Diagnosis": "Diagnóstico de A"
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "50"
+              "Diagnosis": "Diagnóstico de A"
             }
           },
           "pending": 1,
@@ -342,9 +346,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "pending": 0,
@@ -357,24 +361,24 @@
       "n": 10,
       "device": "B",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000402",
       "set": {
-        "Price": "60"
+        "Diagnosis": "Diagnóstico de B, después"
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "35.5"
+              "Diagnosis": "Faringitis aguda (J02.9)"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "50"
+              "Diagnosis": "Diagnóstico de A"
             }
           },
           "pending": 1,
@@ -382,9 +386,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 1,
@@ -403,17 +407,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "50"
+              "Diagnosis": "Diagnóstico de A"
             }
           },
           "pending": 1,
@@ -421,9 +425,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -442,17 +446,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -460,9 +464,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -481,17 +485,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -499,9 +503,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -514,25 +518,25 @@
       "n": 14,
       "device": "B",
       "op": "rawWrite",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000402",
-      "stamp": "T0+3h",
+      "stamp": "now+3h",
       "set": {
-        "Price": "70"
+        "Diagnosis": "Diagnóstico de B con el reloj adelantado"
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -540,9 +544,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "pending": 1,
@@ -561,17 +565,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "60"
+              "Diagnosis": "Diagnóstico de B, después"
             }
           },
           "pending": 0,
@@ -579,9 +583,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "pending": 0,
@@ -594,24 +598,24 @@
       "n": 16,
       "device": "A",
       "op": "edit",
-      "table": "Products",
+      "table": "PatientConsultations",
       "syncId": "10000000-0000-4000-8000-000000000402",
       "set": {
-        "Price": "80"
+        "Diagnosis": "Diagnóstico de A, al final"
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "pending": 1,
@@ -619,9 +623,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "pending": 0,
@@ -640,17 +644,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "pending": 0,
@@ -658,9 +662,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "70"
+              "Diagnosis": "Diagnóstico de B con el reloj adelantado"
             }
           },
           "pending": 0,
@@ -679,17 +683,17 @@
       },
       "expect": {
         "cloud": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "tombstones": []
         },
         "A": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "pending": 0,
@@ -697,9 +701,9 @@
           "saved": 0
         },
         "B": {
-          "Products": {
+          "PatientConsultations": {
             "10000000-0000-4000-8000-000000000402": {
-              "Price": "80"
+              "Diagnosis": "Diagnóstico de A, al final"
             }
           },
           "pending": 0,
