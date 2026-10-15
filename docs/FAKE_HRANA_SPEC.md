@@ -82,7 +82,7 @@ Lines: un renglón de encabezado (`scenario`, `contract`, `protocol`, `notes`) y
 | `generation-change.jsonl` | Otra PC reemplaza la nube: el equipo espera mientras `generationReady` no es la nueva y luego vuelve a bajar todo. |
 | `blocked.jsonl` | Cuota agotada, en las dos formas que simula el servidor. |
 | `unauthorized.jsonl` | Un token anulado: HTTP 401 y no se borra nada. |
-| `statements.json` | Cada instrucción de lectura, literal y con sus argumentos (la identidad, la generación, el perfil, la página de cada tabla, el latido, el registro y el membrete). La prueba las corre en el simulador y ninguna recorre una tabla completa. |
+| `statements.json` | Cada instrucción de lectura, literal y con sus argumentos (la identidad, la generación, el perfil, la página de cada tabla, el latido, el registro, el membrete y, desde v1.43.0, la revisión de la cadencia: `check.*`). La prueba las corre en el simulador y ninguna recorre una tabla completa. |
 
 ## Por HTTP para la CI de Kotlin (`FakeTursoHost`)
 
