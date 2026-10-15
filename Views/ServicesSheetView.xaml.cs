@@ -140,6 +140,59 @@ public partial class ServicesSheetView : UserControl
         }
     }
 
+    // ------------------------------------------------------------------ insumos de un servicio (2026-10-14)
+
+    /// <summary>En la búsqueda de insumos de un servicio: ↑ ↓ eligen la sugerencia y Enter agrega una pieza (Esc lo atiende la escalera).</summary>
+    private async void ServiceSupplySearch_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MedicalRecordsViewModel vm) return;
+        var sheet = vm.ClinicalServices;
+        if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            sheet.MoveServiceSupplySuggestion(e.Key == Key.Down ? 1 : -1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            if (sheet.IsServiceSupplyDropdownOpen) await sheet.AddServiceSupplyAsync(sheet.SelectedServiceSupplySuggestion);
+            (sender as TextBox)?.Focus();
+        }
+    }
+
+    /// <summary>Al abrir los insumos de un servicio, el cursor queda en su búsqueda.</summary>
+    private void ServiceSupplySearch_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is TextBox box && (bool)e.NewValue)
+        {
+            Dispatcher.InvokeAsync(() => box.Focus(), DispatcherPriority.Input);
+        }
+    }
+
+    /// <summary>
+    /// ↑ ↓ en la búsqueda cambian la sugerencia elegida (en el ViewModel): la lista la muestra, así Enter nunca carga un
+    /// insumo que no se ve (como en las demás listas de sugerencias).
+    /// </summary>
+    private void ServiceSupplySuggestions_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox list && list.SelectedItem != null && list.IsVisible) list.ScrollIntoView(list.SelectedItem);
+    }
+
+    private async void ServiceSupplySuggestions_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var dep = e.OriginalSource as DependencyObject;
+        while (dep != null && dep is not ListBoxItem && dep != sender)
+        {
+            dep = VisualTreeHelper.GetParent(dep);
+        }
+
+        if (dep is ListBoxItem item && item.DataContext is Product product && DataContext is MedicalRecordsViewModel vm)
+        {
+            e.Handled = true;
+            await vm.ClinicalServices.AddServiceSupplyAsync(product);
+        }
+    }
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(CatalogBrowserViewModel.IsCatalogBrowserModalOpen)

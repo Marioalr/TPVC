@@ -146,6 +146,18 @@ public sealed record LinkedDevice(
           "reciente). Actualícela a TPVC 1.39.0 o posterior para que se combine campo por campo."
         : string.Empty;
 
+    /// <summary>
+    /// Otro equipo que recibe consultas, con una revisión del contrato anterior a <see cref="TPVC.Services.SyncContract.ServiceSuppliesRevision"/>
+    /// (o sin ella): no conoce los insumos ajustados de un servicio en la consulta (pedido del 2026-10-14).
+    /// </summary>
+    public bool IgnoresServiceSupplies { get; init; }
+
+    public string ServiceSuppliesText => IgnoresServiceSupplies
+        ? $"Tiene una versión anterior de TPVC{(string.IsNullOrWhiteSpace(AppVersion) ? string.Empty : $" ({AppVersion})")}: no conoce los insumos " +
+          "ajustados de un servicio. Si recibe una consulta con insumos ajustados, ve cada servicio con sus insumos de siempre y, al " +
+          "quitarlo, descuenta esos en lugar de los que se cargaron (revise la cuenta antes de cobrar). Actualícela a la versión más reciente."
+        : string.Empty;
+
     public string NewTokenText => TokensRotatedAtUtc is { } at
         ? (Role is DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin
               ? "Pegue el token nuevo en este equipo o lea con él el QR de esta PC"

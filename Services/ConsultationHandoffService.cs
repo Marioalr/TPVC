@@ -241,6 +241,7 @@ public sealed class ConsultationHandoffService
                 IsPrimary = primaryDeviceId != null && string.Equals(primaryDeviceId, id, StringComparison.OrdinalIgnoreCase),
                 IsThisDevice = thisDevice,
                 MergesAsWholeRow = device.MergesAsWholeRow && !thisDevice,
+                IgnoresServiceSupplies = device.IgnoresServiceSupplies && !thisDevice,
                 // Paso 8.15: no se ha conectado desde que se anularon los tokens (sin latido, tampoco)
                 TokensRotatedAtUtc = !thisDevice && !device.IsRevoked && !device.IsPendingApproval
                                      && rotatedAt is { } at && (device.LastSeenUtc == null || device.LastSeenUtc < at)
@@ -305,6 +306,10 @@ public sealed class ConsultationHandoffService
             : string.Equals(platform, TursoSyncService.WindowsPlatform, StringComparison.OrdinalIgnoreCase);
         bool mergesAsWholeRow = windows && revokedAt == null && lastSeen != null && serverNowUtc - lastSeen.Value < OldPcWarningWindow
                                 && (contractRevision ?? 0) < SyncContract.FieldStampsRevision;
+        // Pedido del 2026-10-14: un equipo al que se le puede enviar la consulta, con una versión que no conoce los insumos
+        // ajustados de un servicio (los ignora y, al quitar el servicio, descuenta los de siempre)
+        bool ignoresServiceSupplies = compatible && revokedAt == null && !pendingApproval
+                                      && (contractRevision ?? 0) < SyncContract.ServiceSuppliesRevision;
 
         return new LinkedDevice(
             row.GetValueOrDefault("DeviceId")?.ToString() ?? string.Empty,
@@ -319,6 +324,7 @@ public sealed class ConsultationHandoffService
             Platform = platform,
             ContractRevision = contractRevision,
             MergesAsWholeRow = mergesAsWholeRow,
+            IgnoresServiceSupplies = ignoresServiceSupplies,
             DeviceCode = registry?.GetValueOrDefault("DeviceCode")?.ToString(),
             IsRevoked = revokedAt != null,
             IsPendingApproval = pendingApproval,

@@ -49,7 +49,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
 | 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19 y 8.21 a 8.23 hechos en la PC (v1.20.0 a v1.40.0); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
-| 9 | Pedidos del consultorio (2026-10-14) | ✅ Hecho (v1.41.0) |
+| 9 | Pedidos del consultorio (2026-10-14) | ✅ Hecho (v1.41.0: receta y consulta; v1.42.0: insumos de un servicio) · notas del celular en la documentación |
 
 ### Fase 1 · Fundamentos comunes
 
@@ -353,7 +353,8 @@ cuatro temas):
 Pedidos del médico tras usar la receta y la consulta de v1.39.0. Van juntos porque tocan la misma hoja de receta y
 la misma sección 5 de la consulta; no cambian datos ni sincronización (la receta se guarda igual, renglón por
 renglón desde el paso 8.22). Las reglas de siempre se quedan: la consulta nunca manda al POS, *Se surte aquí* viene
-marcado cuando hay existencias y no existe "terminar sin cobrar".
+marcado cuando hay existencias y no existe "terminar sin cobrar". Los insumos de un servicio (9.7) llegan después, en v1.42.0, y sí
+cambian el formato de la hoja de servicios (contrato revisión 14); 9.8 son notas para el celular, solo en la documentación.
 
 | # | Pedido | Detalle | Cuándo |
 |---|---|---|---|
@@ -363,8 +364,11 @@ marcado cuando hay existencias y no existe "terminar sin cobrar".
 | 9.4 | **Con existencias primero** | Las sugerencias de la receta y el catálogo de medicamentos ordenan con `MedicineSearchRules` (`Services/Rules`): con existencias primero, luego qué tan bien coincide (como `PosViewModel.RankProducts`) y un desempate estable; después se toman las 20. Antes un medicamento con existencias podía quedar fuera de las 20. | ✅ |
 | 9.5 | **Laboratorio a la vista** | La sección 5 termina con **Estudios de laboratorio**, que abre la sección 6 y la trae a la vista. *Agendar próxima cita* y *Terminar consulta* pasan a un pie después de Laboratorio (el de la barra de arriba se queda). | ✅ |
 | 9.6 | **Vista previa de la receta en Médico y consultorio** | Una receta de ejemplo (paciente y tres medicamentos con su indicación) con el médico, la cédula, la universidad, el membrete y las letras de este equipo, dibujada con el mismo documento que se imprime; un selector cambia entre **media carta** y **carta**. Muestra lo que está en pantalla, también lo que aún no se guarda (y lo dice). Papel blanco con cualquier tema. | ✅ |
+| 9.7 | **Ajustar los insumos de un servicio solo para esta consulta** | En la hoja de servicios de la consulta en curso, cada servicio muestra sus insumos en una línea ("Insumos: Gasa ×1 · Jeringa ×1") y *Ajustar insumos* los abre dentro del mismo renglón: − / + y la X en cada uno, y *Agregar insumo* con la búsqueda de la consulta y del Punto de venta (solo insumos, con existencias primero). La cuenta carga o descuenta solo la diferencia, con el tope de existencias de la hoja de insumos (v1.18.7). El servicio no cambia: si una curación lleva una gasa y en esta se usaron dos, la siguiente curación vuelve a empezar con una. Las unidades del servicio también se cambian con − / + (una unidad más carga sus insumos de siempre; lo ajustado se queda). Lo de una consulta anterior solo se ve; con la consulta enviada a otro equipo no se cambia nada; Esc cierra los insumos antes que la hoja. Cada renglón guarda su lista en `ActiveServicesJson` (contrato revisión 14), así que quitarlo descuenta exactamente lo que cargó, también en otro equipo. La prueba de pantallas captura los insumos abiertos en los cuatro temas (`13b-servicios-insumos`). | ✅ v1.42.0 |
+| 9.8 | **Notas para la versión del celular** | Administración del negocio (reporte de compras, utilidad, consumo de insumos, más el resumen, el corte, el valor del inventario y la compra sugerida que ya tiene la PC), consulta del inventario de medicamentos e insumos (existencias, lotes y caducidades) y los pacientes y sus citas. Los pacientes en el celular son **solo de consulta** por ahora (respuesta del médico del mismo día); editarlos desde el celular queda para el futuro, después de una propuesta de interfaz. El reporte de compras y el de utilidad todavía no existen en la PC: se harán primero en la PC, con sus vectores. Detalle en `docs/PENDIENTES_ANDROID.md` y en el plan de la Fase 8 (§1, §4.6, §7.4 y §7.5). | 📝 Documentado |
 
 Capturas nuevas en `UiSmokeTests` (cuatro temas): `09d-consulta-pie`, `11e-receta-sugerencias`,
 `11f-receta-elegido-frecuentes`, `11g-receta-cambiar-indicacion`, `11h-consulta-cambiar-indicacion`,
 `20l-config-receta-media-carta` y `20m-config-receta-carta`; el recorrido con teclado prueba elegir, las frecuentes,
-Enter para agregar, "Cambiar indicación" y Esc.
+Enter para agregar, "Cambiar indicación" y Esc. Con 9.7: `13b-servicios-insumos` y, en el recorrido, abrir los insumos de
+un servicio, ↓ en sus sugerencias, agregar con Enter, − / + y Esc.
