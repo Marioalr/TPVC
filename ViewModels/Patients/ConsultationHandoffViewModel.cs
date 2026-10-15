@@ -605,6 +605,14 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         if (_handoff == null || _inventoryService == null || _consultationService?.CurrentConsultation == null) return;
         if (device == null || !device.IsAvailable || IsSendingHandoff || !IsConsultationEditable) return;
 
+        // 0. Una "Cambiar indicación" abierta se guarda antes de subir el expediente y armar la copia (después la consulta
+        //    queda en solo lectura aquí y se cierran las hojas): el otro equipo recibe la indicación nueva
+        if (!await _workflow.CommitPendingPrescriptionEditsAsync())
+        {
+            HandoffSheetError = "No se pudo guardar la indicación que está cambiando. Guárdela o cancélela antes de enviar.";
+            return;
+        }
+
         if (!await _handoffGate.WaitAsync(TimeSpan.FromSeconds(10)))
         {
             HandoffSheetError = "Se está revisando la nube. Intente de nuevo en un momento.";

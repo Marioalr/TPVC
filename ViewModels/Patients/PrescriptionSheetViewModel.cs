@@ -504,9 +504,14 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         _workflow.NotifyPrescriptionStateChanged();
     }
 
+    /// <summary>
+    /// "+ Medicamento": una "Cambiar indicación" abierta en la sección 5 se guarda antes de abrir la hoja, que la taparía
+    /// (si no se puede, la hoja no se abre y la corrección sigue ahí).
+    /// </summary>
     [RelayCommand]
     public async Task OpenPrescriptionModalAsync()
     {
+        if (!await CommitPendingPrescriptionEditsAsync()) return;
         OpenPrescriptionModal();
         if (_catalog.AvailableProducts.Count == 0 && _inventoryService != null)
         {
@@ -535,7 +540,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         ApplyPrescriptionSuggestions(string.Empty);
         IsPrescriptionDropdownOpen = false;
         CaptureIndications.Close();
-        // La hoja tapa la lista de la consulta: una corrección abierta allá no queda a medias debajo
+        // "+ Medicamento" ya guardó la corrección abierta en la sección 5; aquí solo queda cerrar la de un renglón que ya no
+        // está (o la de quien abre la hoja directamente)
         PlanIndication.Cancel();
         SheetIndication.Cancel();
         IsPrescriptionModalOpen = true;
@@ -571,24 +577,15 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     }
 
     /// <summary>
-    /// "Guardar" del pie de la hoja. Lo pendiente no se pierde: una "Cambiar indicación" abierta se guarda y un medicamento
-    /// ya elegido se agrega con su indicación (con la revisión de alergias de siempre). Si algo de eso no se pudo (la
-    /// consulta está en otro equipo, o la alerta de alergia pide confirmar), la hoja sigue abierta y no dice "guardada".
-    /// Lo escrito sin elegir se queda como antes (no se agrega).
+    /// "Guardar" del pie de la hoja. Lo pendiente no se pierde (<see cref="CommitPendingPrescriptionEditsAsync"/>): una
+    /// "Cambiar indicación" abierta se guarda y el medicamento elegido (o el de la dosis pediátrica) se agrega con su
+    /// indicación. Si algo de eso no se pudo (la consulta está en otro equipo, o la alerta de alergia pide confirmar), la
+    /// hoja sigue abierta y no dice "guardada". Lo escrito sin elegir se queda como antes (no se agrega).
     /// </summary>
     [RelayCommand]
     public async Task SavePrescriptionModalAsync()
     {
-        if (SheetIndication.IsEditing)
-        {
-            await SheetIndication.SaveAsync();
-            if (SheetIndication.IsEditing) return;
-        }
-        if (IsMedicineChosen)
-        {
-            await AddPrescriptionAsync();
-            if (IsAllergyAlertOpen || IsMedicineChosen) return;
-        }
+        if (!await CommitPendingPrescriptionEditsAsync(addPendingMedicine: true)) return;
 
         if (_session.SelectedPatient != null)
         {
@@ -766,10 +763,15 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         editor.Item is { } item && _session.SelectedPatient?.ActivePrescription.Contains(item) == true;
 
     /// <summary>
-    /// Antes de terminar la consulta: una "Cambiar indicación" abierta (en la sección 5 o en la hoja) se guarda. false si
-    /// no se pudo (la consulta está en otro equipo): no se termina con la indicación vieja.
+    /// Lo pendiente de la receta antes de cualquier salida que la usa o la tapa: terminar la consulta, enviarla a otro
+    /// equipo, "+ Medicamento", la vista previa y el "Guardar" de la hoja. Un solo camino para todas, así una salida nueva
+    /// no lo olvida. Una "Cambiar indicación" abierta (sección 5 u hoja) se guarda; si su renglón ya no está, solo se
+    /// cierra. Con <paramref name="addPendingMedicine"/> (el "Guardar" de la hoja) también se agrega el medicamento listo
+    /// para agregar: el elegido, o el de la dosis pediátrica con el buscador vacío, con la revisión de alergias y la
+    /// guarda de solo lectura de siempre. false si algo quedó pendiente (la consulta está en otro equipo, o la alerta de
+    /// alergia pide confirmar): la salida no sigue y nada se pierde.
     /// </summary>
-    public async Task<bool> CommitPendingIndicationEditsAsync()
+    public async Task<bool> CommitPendingPrescriptionEditsAsync(bool addPendingMedicine = false)
     {
         foreach (var editor in new[] { PlanIndication, SheetIndication })
         {
@@ -777,8 +779,20 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             await editor.SaveAsync();
             if (editor.IsEditing) return false;
         }
+        if (addPendingMedicine && HasPendingMedicine())
+        {
+            await AddPrescriptionAsync();
+            if (IsAllergyAlertOpen || HasPendingMedicine()) return false;
+        }
         return true;
     }
+
+    /// <summary>
+    /// Un medicamento listo para agregar que aún no se agrega: el elegido, o el que dejó la dosis pediátrica ("Usar") con el
+    /// buscador vacío. Lo escrito sin elegir no cuenta (como en v1.39).
+    /// </summary>
+    private bool HasPendingMedicine() =>
+        IsMedicineChosen || (string.IsNullOrWhiteSpace(PrescriptionSearchText) && !string.IsNullOrWhiteSpace(PrescriptionMedicineName));
 
     /// <summary>Terminó la consulta o cambió el paciente: ninguna corrección queda abierta para la siguiente.</summary>
     public void CancelIndicationEdits()

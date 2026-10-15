@@ -527,6 +527,138 @@ public class PrescriptionCaptureTests
         records.Dispose();
     }
 
+    // ================================================================== lo pendiente antes de cada salida (revisión de 3c35f26)
+
+    /// <summary>Consulta con un medicamento agregado, la hoja cerrada y la corrección de la sección 5 abierta con texto nuevo.</summary>
+    private static async Task<(MedicalRecordsViewModel Records, PatientPrescriptionItem Row)> PendingPlanCorrectionAsync()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        rx.PrescriptionSearchText = "parac";
+        rx.ConfirmPrescriptionSearch();
+        rx.PrescriptionDosage = "1 tableta cada 8 horas";
+        await rx.AddPrescriptionAsync();
+        rx.ClosePrescriptionModal();
+        var row = patient.ActivePrescription.Single();
+        rx.PlanIndication.Start(row);
+        rx.PlanIndication.Text = "1 tableta cada 6 horas";
+        return (records, row);
+    }
+
+    [TestMethod]
+    public async Task PlusMedicamento_SavesAnOpenSection5Correction_BeforeOpeningTheSheet()
+    {
+        var (records, row) = await PendingPlanCorrectionAsync();
+        await records.Prescription.OpenPrescriptionModalAsync();
+        Assert.IsTrue(records.Prescription.IsPrescriptionModalOpen);
+        Assert.AreEqual("1 tableta cada 6 horas", row.Dosage, "La corrección se guardó en lugar de perderse");
+        Assert.IsFalse(records.Prescription.PlanIndication.IsEditing);
+        records.Dispose();
+
+        // Si no se puede guardar (consulta en otro equipo) la hoja no se abre y la corrección sigue abierta
+        (records, row) = await PendingPlanCorrectionAsync();
+        records.Handoff.IsConsultationHandedOff = true;
+        await records.Prescription.OpenPrescriptionModalAsync();
+        Assert.IsFalse(records.Prescription.IsPrescriptionModalOpen);
+        Assert.IsTrue(records.Prescription.PlanIndication.IsEditing);
+        Assert.AreEqual("1 tableta cada 6 horas", records.Prescription.PlanIndication.Text);
+        Assert.AreEqual("1 tableta cada 8 horas", row.Dosage);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task VistaPrevia_SavesAnOpenCorrection_SoThePreviewAndPrintCarryIt()
+    {
+        var (records, row) = await PendingPlanCorrectionAsync();
+        await records.Preview.OpenPrescriptionPdfPreviewCommand.ExecuteAsync(null);
+        Assert.IsTrue(records.Preview.IsPrescriptionPdfModalOpen);
+        Assert.AreEqual("1 tableta cada 6 horas", row.Dosage);
+        Assert.IsFalse(records.Prescription.PlanIndication.IsEditing);
+        records.Preview.ClosePrescriptionPdfPreview();
+
+        // También la de la hoja (su "Vista previa" del pie); un medicamento elegido no se agrega por ver la vista previa
+        var rx = records.Prescription;
+        await rx.OpenPrescriptionModalAsync();
+        rx.SheetIndication.Start(row);
+        rx.SheetIndication.Text = "1 tableta cada 4 horas";
+        rx.PrescriptionSearchText = "ibupro";
+        rx.ConfirmPrescriptionSearch();
+        await records.Preview.OpenPrescriptionPdfPreviewCommand.ExecuteAsync(null);
+        Assert.AreEqual("1 tableta cada 4 horas", row.Dosage);
+        Assert.IsTrue(rx.IsMedicineChosen, "La vista previa no agrega el medicamento elegido");
+        Assert.HasCount(1, records.SelectedPatient!.ActivePrescription);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task FooterGuardar_AddsAPendingPediatricMedicine_WithTheUsualGuards()
+    {
+        var (records, _, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        var rule = new PediatricDoseRule { Id = 1, Medication = "Paracetamol 3.2 g/100 ml", DoseText = "15 mg/kg/dosis", MlPerKg = 15.0 / 32.0, DropsPerMl = 20 };
+        records.Templates.PediatricDoseRules = new ObservableCollection<PediatricDoseRule> { rule };
+        rx.SelectedPediatricRule = rule;
+        rx.PediatricWeightText = "15";
+        rx.ApplyPediatricDose();
+
+        await rx.SavePrescriptionModalAsync();
+        var row = patient.ActivePrescription.Single();
+        Assert.AreEqual(rule.Medication, row.MedicineName, "La dosis pediátrica pendiente se agregó en lugar de perderse");
+        StringAssert.StartsWith(row.Dosage, "Dar 7 ml");
+        Assert.IsFalse(rx.IsPrescriptionModalOpen);
+        records.Dispose();
+
+        // Con la consulta en otro equipo no se agrega y la hoja sigue abierta (sin "guardada")
+        (records, _, patient) = OpenConsultation();
+        rx = records.Prescription;
+        records.Templates.PediatricDoseRules = new ObservableCollection<PediatricDoseRule> { rule };
+        rx.SelectedPediatricRule = rule;
+        rx.PediatricWeightText = "15";
+        rx.ApplyPediatricDose();
+        records.Handoff.IsConsultationHandedOff = true;
+        await rx.SavePrescriptionModalAsync();
+        Assert.IsEmpty(patient.ActivePrescription);
+        Assert.IsTrue(rx.IsPrescriptionModalOpen);
+        Assert.AreEqual(rule.Medication, rx.PrescriptionMedicineName, "Lo pendiente se queda");
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task SendingToAnotherDevice_SavesAnOpenSection5Correction_BeforeTheCopyIsBuilt()
+    {
+        using var clinic = new Fase6Clinic();
+        await clinic.ConnectCloudAsync();
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await clinic.OpenAsync(consultations);
+        var patient = Fase6Scenarios.ScriptedPatient(records);
+        records.OpenPatientChart(patient);
+        records.ChartPrimaryAction();
+        patient = records.SelectedPatient!;
+        var rx = records.Prescription;
+        await rx.OpenPrescriptionModalAsync();
+        rx.PrescriptionSearchText = "Paracetamol";
+        Assert.IsTrue(rx.ConfirmPrescriptionSearch());
+        rx.PrescriptionDosage = "1 tableta cada 8 horas";
+        await rx.AddPrescriptionAsync();
+        rx.ClosePrescriptionModal();
+        var row = patient.ActivePrescription.Single();
+        rx.PlanIndication.Start(row);
+        rx.PlanIndication.Text = "1 tableta cada 6 horas";
+
+        await records.Handoff.OpenSendConsultationSheetAsync();
+        records.Handoff.SelectedHandoffDevice = records.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet");
+        await records.Handoff.SendConsultationToSelectedDeviceAsync();
+        Assert.IsTrue(records.Handoff.IsConsultationHandedOff, records.Handoff.HandoffSheetError ?? records.Info.InfoModalMessage);
+
+        Assert.AreEqual("1 tableta cada 6 horas", row.Dosage, "Se guardó antes de enviar");
+        Assert.IsFalse(rx.PlanIndication.IsEditing);
+        var draft = ConsultationDraftStore.Deserialize(clinic.CloudScalar("SELECT Payload FROM ConsultationHandoffs"));
+        Assert.AreEqual("1 tableta cada 6 horas", draft!.Prescriptions.Single().Dosage, "El otro equipo recibe la indicación nueva");
+        var stored = (await clinic.Inventory.GetPatientsAsync()).Single(p => p.Id == patient.Id);
+        Assert.AreEqual("1 tableta cada 6 horas", stored.ActivePrescription.Single().Dosage);
+        records.Dispose();
+    }
+
     // ================================================================== indicaciones frecuentes
 
     [TestMethod]

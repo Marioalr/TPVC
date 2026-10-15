@@ -62,8 +62,9 @@ public interface IPatientsWorkflow
     void CloseConsultationSheets();
 
     /// <summary>
-    /// Antes de terminar la consulta: una "Cambiar indicación" que quedó abierta se guarda (2026-10-14). false si no se
-    /// pudo: la consulta no se termina con la indicación vieja.
+    /// Antes de terminar la consulta o enviarla a otro equipo: una "Cambiar indicación" que quedó abierta se guarda
+    /// (2026-10-14, <c>PrescriptionSheetViewModel.CommitPendingPrescriptionEditsAsync</c>). false si no se pudo: no se
+    /// sigue con la indicación vieja y la corrección no se pierde.
     /// </summary>
     Task<bool> CommitPendingPrescriptionEditsAsync();
 }

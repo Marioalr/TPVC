@@ -405,8 +405,10 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
             AddService = service => ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service)
         };
         // Las indicaciones de la receta leen el plan que escribe el médico en la consulta (Consultation se
-        // crea después: se lee al momento)
-        _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => Consultation.ConsultationTreatmentPlan);
+        // crea después: se lee al momento). Antes de la vista previa se guarda lo pendiente de la receta (una
+        // "Cambiar indicación" abierta, 2026-10-14; Prescription también se crea después)
+        _preview = new PrescriptionPreviewViewModel(_session, _active, _clinic, _info, clinicProfileService, printingService, () => Consultation.ConsultationTreatmentPlan,
+            () => Prescription.CommitPendingPrescriptionEditsAsync());
         _consultationDetail = new ConsultationDetailViewModel(_inventoryService, _session, _active, _catalog, _clinic, _info, _feedback, clinicProfileService, printingService);
         _agenda = new AgendaPanelViewModel(_inventoryService, _session, _info, _feedback, _clinic, _dialogs, _urls, this);
         _patientForm = new PatientFormViewModel(_inventoryService, _consultationService, consultationDraftStore, _session, _navigation, _active,

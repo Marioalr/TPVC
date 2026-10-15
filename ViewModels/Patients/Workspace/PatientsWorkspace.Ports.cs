@@ -38,7 +38,7 @@ public partial class PatientsWorkspace
 
     void IPatientsWorkflow.OpenPatientChart(PatientRecord? patient) => OpenPatientChart(patient);
 
-    Task<bool> IPatientsWorkflow.CommitPendingPrescriptionEditsAsync() => Prescription.CommitPendingIndicationEditsAsync();
+    Task<bool> IPatientsWorkflow.CommitPendingPrescriptionEditsAsync() => Prescription.CommitPendingPrescriptionEditsAsync();
 
     Task IPatientsWorkflow.InitialLoad => InitialLoad;
 
