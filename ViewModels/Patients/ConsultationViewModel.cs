@@ -212,14 +212,8 @@ public partial class ConsultationViewModel : ObservableObject
     partial void OnConsultationDiagnosisChanged(string value)
     {
         if (_isSelectingCie10) return;
-        if (string.IsNullOrWhiteSpace(value) || value.Trim().Length < 2)
-        {
-            Cie10Suggestions = new ObservableCollection<Cie10Diagnosis>();
-            IsCie10DropdownOpen = false;
-            return;
-        }
-
-        var matches = Cie10Diagnosis.Search(value.Trim(), 20);
+        // Paso 8.26: menos de 2 letras no sugiere nada (CatalogSearchRules.Cie10Suggestions)
+        var matches = CatalogSearchRules.Cie10Suggestions(value);
         Cie10Suggestions = new ObservableCollection<Cie10Diagnosis>(matches);
         IsCie10DropdownOpen = Cie10Suggestions.Count > 0;
     }

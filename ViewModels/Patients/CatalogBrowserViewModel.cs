@@ -72,18 +72,11 @@ public partial class CatalogBrowserViewModel : ObservableObject
         {
             // Con existencias primero y por qué tan bien coinciden, como las sugerencias de la hoja de receta (aquí todos,
             // y también por presentación)
-            var list = _catalog.AvailableProducts.Where(CatalogStore.IsProductMedication);
-            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(
-                MedicineSearchRules.Rank(list, q, limit: int.MaxValue, includePresentation: true));
+            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(CatalogSearchRules.BrowserMedications(_catalog.AvailableProducts, q));
         }
         else if (CatalogBrowserMode == "Supplies")
         {
-            var list = _catalog.AvailableProducts.Where(CatalogStore.IsProductSupply);
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                list = list.Where(p => TextSearch.Matches(q, p.Name, p.GenericName, p.Code, p.Presentation));
-            }
-            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(list.OrderBy(p => p.Name));
+            CatalogBrowserFilteredProducts = new ObservableCollection<Product>(CatalogSearchRules.BrowserSupplies(_catalog.AvailableProducts, q));
         }
         else if (CatalogBrowserMode == "Services")
         {

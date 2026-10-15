@@ -88,13 +88,7 @@ public partial class SuppliesSheetViewModel : ObservableObject
 
     public void ApplySupplySuggestions(string query)
     {
-        var matches = string.IsNullOrWhiteSpace(query)
-            ? _catalog.AvailableProducts.Where(CatalogStore.IsProductSupply).Take(20).ToList()
-            : _catalog.AvailableProducts
-                .Where(CatalogStore.IsProductSupply)
-                .Where(p => TextSearch.Matches(TextSearch.Normalize(query), p.Name, p.GenericName, p.Code))
-                .Take(20)
-                .ToList();
+        var matches = TPVC.Services.Rules.CatalogSearchRules.SupplySuggestions(_catalog.AvailableProducts, query);
 
         SupplyProductSuggestions = new ObservableCollection<Product>(matches);
         SelectedSupplyProduct = SupplyProductSuggestions.FirstOrDefault();

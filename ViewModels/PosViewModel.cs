@@ -21,8 +21,6 @@ namespace TPVC.ViewModels;
 /// </summary>
 public partial class PosViewModel : ObservableObject, IDisposable
 {
-    private static readonly Regex QuantityPrefix = new(@"^\s*(\d{1,3})\s*\*\s*(.*)$", RegexOptions.Compiled);
-
     private readonly InventoryService _inventoryService;
     private readonly ConsultationService _consultationService;
     private readonly ClinicProfileService? _clinicProfileService;
@@ -242,14 +240,9 @@ public partial class PosViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasSearchText));
     }
 
-    /// <summary>"3*para" → (3, "para"); sin asterisco la cantidad es 1.</summary>
-    public static (int Quantity, string Query) ParseQuantityPrefix(string? text)
-    {
-        var match = QuantityPrefix.Match(text ?? string.Empty);
-        if (!match.Success) return (1, text ?? string.Empty);
-        int quantity = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-        return (Math.Max(1, quantity), match.Groups[2].Value);
-    }
+    /// <summary>"3*para" → (3, "para"); sin asterisco la cantidad es 1 (paso 8.26: <see cref="TPVC.Services.Rules.CatalogSearchRules.ParseQuantityPrefix"/>).</summary>
+    public static (int Quantity, string Query) ParseQuantityPrefix(string? text) =>
+        TPVC.Services.Rules.CatalogSearchRules.ParseQuantityPrefix(text);
 
     /// <summary>
     /// Productos que coinciden (sin acentos), en el orden de la búsqueda del Punto de venta: ver
@@ -351,15 +344,8 @@ public partial class PosViewModel : ObservableObject, IDisposable
 
     private void ApplyCatalogFilters()
     {
-        var list = Products.AsEnumerable();
-        if (CatalogSelectedCategory != null && CatalogSelectedCategory.Id > 0)
-        {
-            list = list.Where(p => p.CategoryId == CatalogSelectedCategory.Id);
-        }
-
-        CatalogFilteredProducts = new ObservableCollection<Product>(string.IsNullOrWhiteSpace(CatalogSearchText)
-            ? list.OrderBy(p => p.Name, StringComparer.CurrentCulture)
-            : RankProducts(list, CatalogSearchText, limit: int.MaxValue));
+        CatalogFilteredProducts = new ObservableCollection<Product>(
+            TPVC.Services.Rules.CatalogSearchRules.PosCatalog(Products, CatalogSelectedCategory?.Id, CatalogSearchText));
         OnPropertyChanged(nameof(CatalogSummary));
     }
 

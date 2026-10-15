@@ -227,7 +227,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     /// </summary>
     public void ApplyPrescriptionSuggestions(string query)
     {
-        var matches = MedicineSearchRules.Rank(_catalog.AvailableProducts.Where(CatalogStore.IsProductMedication), query);
+        var matches = CatalogSearchRules.PrescriptionSuggestions(_catalog.AvailableProducts, query);
 
         PrescriptionProductSuggestions = new ObservableCollection<Product>(matches);
         SelectedPrescriptionProduct = PrescriptionProductSuggestions.FirstOrDefault();
@@ -402,7 +402,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
         if (_session.SelectedPatient != null)
         {
-            var allergyCheck = InventoryService.CheckMedicationAllergy(_session.SelectedPatient, product, name);
+            var allergyCheck = AllergyRules.CheckMedication(_session.SelectedPatient, product, name);
             if (allergyCheck.HasConflict)
             {
                 _pendingAllergyProduct = product;
@@ -735,7 +735,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         foreach (var item in _record.PendingPreviousPrescription)
         {
             var product = _catalog.FindCatalogProduct(item.MedicineName);
-            if (InventoryService.CheckMedicationAllergy(_session.SelectedPatient, product, item.MedicineName).HasConflict)
+            if (AllergyRules.CheckMedication(_session.SelectedPatient, product, item.MedicineName).HasConflict)
             {
                 skipped.Add(item.MedicineName);
                 continue;
