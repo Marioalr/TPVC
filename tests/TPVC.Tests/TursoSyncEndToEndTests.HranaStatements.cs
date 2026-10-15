@@ -79,6 +79,20 @@ public partial class TursoSyncEndToEndTests
             "Cada trozo, cuatro por petición; se revisan el tamaño y el SHA-256."));
         statements.Add(Statement("folio.take", TursoSyncService.TakeFolioSql, Texts("Series ('EXP-2026' o 'TKT-20261009')", "Piso (integer)", "Piso (integer)"),
             "Paso 8.16: al guardar un expediente o un ticket, con 2 s de espera; el piso es el mayor número de esa serie en la base del equipo (los folios con letra no cuentan). Sin respuesta, el folio lleva la letra del equipo (golden/folios.json)."));
+        // Paso 8.24: la revisión (cadencia y marca de cambios), literal: SQLite usa el índice parcial solo con este WHERE
+        statements.Add(Statement("check.incoming", ConsultationHandoffService.IncomingSql, Texts("DeviceId de este equipo"),
+            "Paso 8.24: la revisión, cada 4 s en pacientes y consulta con un compañero o un envío pendiente (si no, 30 s): las consultas dirigidas a este equipo, enviadas o aceptadas aquí con su copia. Con este WHERE exacto SQLite usa el índice parcial IX_ConsultationHandoffs_Pending."));
+        statements.Add(Statement("check.outgoing", ConsultationHandoffService.OutgoingStateSql, Texts("Id del envío pendiente"),
+            "Paso 8.24: en la misma petición de la revisión, solo si este equipo tiene un envío pendiente: su estado."));
+        statements.Add(Statement("check.peerPush", ConsultationHandoffService.PeerPushSql, Texts("DeviceId de este equipo"),
+            "Paso 8.24: en la misma petición de la revisión, la marca de cambios: la subida más reciente de los otros equipos. Si es posterior a la hora de la nube de la última bajada (marca de agua + 5 s), se sincroniza."));
+        var peers = ConsultationHandoffService.PeerListQueries().ToList();
+        statements.Add(Statement("check.peers.serverNow", peers[0].Sql, new JsonArray(),
+            "Paso 8.24: cada 10 min, en la misma petición de la revisión, la lista de compañeros: la hora de la nube…"));
+        statements.Add(Statement("check.peers.devices", peers[1].Sql, new JsonArray(),
+            "…los latidos (un compañero puede recibir consultas: HandoffProtocol >= 1, visto en los últimos 30 días)…"));
+        statements.Add(Statement("check.peers.registry", peers[2].Sql, new JsonArray(),
+            "…y DeviceRegistry (rol, aprobado y sin quitar). Sin compañeros ni envío pendiente, la revisión va cada 30 s también en pacientes."));
         statements.Add(Statement("folio.raise", TursoSyncService.RaiseFolioSql, Texts("Series", "Número (integer)"),
             "Paso 8.16: un folio tecleado a mano mayor que el contador lo sube. La PC principal además siembra el año y el día al empezar cada sesión; la tablet y el celular no."));
 
