@@ -16,7 +16,8 @@ namespace TPVC.Tests;
 /// </summary>
 public partial class TursoSyncEndToEndTests
 {
-    private static string ExpSeries => FolioFactory.Series(FolioKind.Patient, DateTime.Today);
+    // El día del consultorio (ClinicClock), el mismo que usan los marcadores de los escenarios
+    private static string ExpSeries => FolioFactory.Series(FolioKind.Patient, ClinicClock.Today);
 
     private long? CloudCounter(string series) => CloudScalar($"SELECT LastNumber FROM FolioCounters WHERE Series = '{series}'") as long?;
 

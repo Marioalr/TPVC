@@ -94,7 +94,9 @@ van con el formato del protocolo (`yyyy-MM-dd HH:mm:ss.fffffff`); `notes` explic
 | `field-stamps.json` | Desde v1.39.0 (paso 8.22): las marcas por campo de `Patients.FieldStampsJson` (`Services/Rules/PatientFieldStamps.cs`): qué marca un guardado (campos, renglones agregados, cambiados y quitados, el orden de la hoja), la purga de los quitados a los 90 días, cuándo una fila es una escritura sin marcas y la marca efectiva. |
 | `patient-merge.json` | Desde v1.39.0 (paso 8.22): la combinación al bajar un expediente que ya existe (`Services/Rules/PatientMerge.cs`): por campo, escritura sin marcas, desempate, hojas por renglón y su orden, llaves desconocidas, purga, y si el resultado sube (con qué marca) o se queda la fila de la nube. |
 | `patient-summary.json` | Desde v1.39.0 (paso 8.22): el resumen derivado del expediente (`Services/Rules/PatientSummaryRules.cs`): la próxima cita en orden clínico (en UTC y en America/Mexico_City), la última visita y cómo se lee la hora de una cita. |
-| `handoff-accept.json` | Desde v1.39.0 (paso 8.22): qué le falta a un equipo para tomar una consulta recibida (`HandoffPayloadCodec.CheckArrival`): la versión del expediente, sus marcas por campo y la nota. |
+| `handoff-accept.json` | Desde v1.39.0 (paso 8.22): qué le falta a un equipo para tomar una consulta recibida (`HandoffPayloadCodec.CheckArrival`): la versión del expediente, sus marcas por campo y la nota. Con `handoff-payload.json` y `linked-device.json` (paso 8.25) es el kit de la consulta entre equipos de K8. |
+| `handoff-payload.json` | Desde v1.44.0 (paso 8.25): la copia de la consulta entre equipos (`Services/Rules/HandoffPayloadCodec.cs`, §4.5 de `docs/TURSO_SYNC_ARCHITECTURE.md`). La copia de trabajo (el borrador como lo guarda la PC) con un reloj fijo y las fechas tal cual, y lo que viaja después de `PrepareForSending` (sin Id locales; cada cargo con `LineKind` y `CatalogSyncId`; el expediente, la nota, la cita y el honorario por su SyncId; las marcas por campo); cómo se traduce al recibir (`MapReceivedItems`: el Id del producto o servicio de quien recibe o el cargo libre, y el aviso de lo que no se encontró), cómo se busca cada cargo (`FindCatalogRef`: SyncId activo; si no, mismo código y mismo nombre normalizado) y qué versión de la copia se entiende (`CanRead`). |
+| `linked-device.json` | Desde v1.44.0 (paso 8.25): los equipos vinculados vistos desde un equipo (`ConsultationHandoffService.MergeDevices`, `ToDevice` y `HandoffTargets`), a partir de las filas de `RegisteredDevices` y `DeviceRegistry` que leen las instrucciones `check.peers.*`: rol, código, en línea (3 min), si recibe consultas, quitado, esperando aprobación, si es la principal, los avisos de una PC anterior (`mergesAsWholeRow`, `ignoresServiceSupplies`), los tokens anulados y a quién se le ofrece «Enviar a…» (y quién cuenta como compañero para la cadencia). |
 | `appointment-overlap.json` | Desde v1.40.0 (paso 8.23): citas empalmadas (`Services/Rules/AppointmentRules.cs`): si dos citas se empalman (misma fecha, ninguna "Cancelada", [inicio, fin) que se cruzan; tocarse no), el horario de una cita en segundos (la hora con la regla de `patient-summary.json`, 30 minutos sin duración, el fin puede pasar de la medianoche y sigue en su día) y los pares de una lista en que está alguna de las citas que acaban de bajar. |
 | `duplicate-patients.json` | Desde v1.40.0 (paso 8.23): posibles expedientes duplicados (`Services/Rules/DuplicatePatientRules.cs`): el nombre normalizado (como la búsqueda, con los espacios seguidos como uno), los últimos 10 dígitos del teléfono, por qué se parecen dos expedientes (`None`, `BirthDate`, `Phone` o `BirthDateAndPhone`; solo activos sin `MergedIntoSyncId`) y los pares en que está alguno de los que acaban de bajar. |
 | `lab-files.json` | Desde v1.30.0 (paso 8.12b): cómo se parte un archivo de laboratorio en trozos (con el SHA-256 de cada uno, para un contenido que Kotlin genera igual), el SQL literal de registrar, subir un trozo, cerrar, bajar, medir, archivar, desalojar y limpiar huérfanos (`TursoSyncService.LabFiles.cs`) y los topes: 2 GB en la nube, aviso en 1.6, desalojo hasta 1.8, 10 MB por archivo, fotos de 2000 px en JPEG de calidad 80 y el freno de bytes de Android (300 MB de bajada y 150 de subida al día). |
@@ -120,8 +122,104 @@ archivo, los marcadores (`<time>`, `<id:N>`, `<nonce:N>`, `<appVersion>`) y cóm
 de Kotlin: `docs/FAKE_HRANA_SPEC.md`. Se regeneran con `TPVC_WRITE_GOLDEN=1`, igual que `golden/`; la huella del esquema
 aparece literal, así que cambian con cada revisión del contrato.
 
+Desde v1.44.0 (paso 8.25, kit de conformidad de escritura), los de un equipo que **escribe**, con el mismo formato y los
+mismos marcadores (`TursoSyncEndToEndTests.HranaWrites.cs`):
+
+| Archivo | Qué muestra |
+|---|---|
+| `push.jsonl` | La subida: la petición de la hora y las claves (con algo que subir va sola), un `batch` con `BEGIN`/`COMMIT` con el upsert de cada fila (lápida igual o más nueva y cerca de generación en el `WHERE`), cada lápida con su `DELETE` y el `SELECT` de la generación al final; después el latido con `LastPushUtc` y la bajada. |
+| `tie-conflict.jsonl` | Empate: la nube no acepta la fila (`affected_row_count` 0), el equipo relee esa fila y su lápida en una petición y aplica la de la nube aunque las marcas empaten. |
+| `tombstone-vs-edit.jsonl` | Una edición más vieja que la lápida que ya está en la nube: no entra, se relee y se aplica el borrado. |
+| `generation-fence.jsonl` | Otra PC cambia la generación entre el saludo y la subida: la cerca no deja escribir nada, el `SELECT` final regresa la generación nueva y el equipo se detiene sin avanzar su cursor. |
+| `folio-counter.jsonl` | `folio.take` con conexión en dos equipos (1 y 2 sin sincronizar entre ellos); sin red no hay petición y el folio lleva la letra. La serie va como `EXP-<year>`. |
+| `handoff-send-accept.jsonl` | La consulta entre equipos: enviar (INSERT 'enviada'), la revisión de quien recibe, tomarla con una ficha (UPDATE condicional), borrar la copia, la revisión de quien envió ('aceptada') y su acuse. |
+| `handoff-lost-response.jsonl` | Se pierde la respuesta del envío (se resuelve con el INSERT-o-cancela y `SELECT State`) y la de tomarla (se pregunta `State, AcceptToken`). |
+| `handoff-recover.jsonl` | «Recuperar» antes de que la tomen (se cancela; tomarla ya no afecta nada) y después (regresa 'aceptada' y se queda allá). |
+
+Las instrucciones de escritura no van en `statements.json`: Kotlin puede escribirlas con otro texto si hace lo mismo (las
+reglas de `golden/lww.json` y de `schema.json`), salvo `folio.take` y `folio.raise`, que son literales. Kotlin compara sus
+peticiones con estas por significado (qué instrucciones, en qué orden y con qué argumentos), no byte por byte. Lo que
+aparece de la PC (el DDL, la sonda del esquema, el registro en `DeviceRegistry`, la limpieza de la revisión) lo dicen las
+notas de cada archivo: Kotlin no lo hace.
+
+## `scenarios/`
+
+Desde v1.44.0 (paso 8.25): escenarios de varios equipos sobre el servidor simulado, uno por archivo. Los genera y los
+vuelve a correr `TursoSyncEndToEndTests.Scenarios.cs` con el motor real de la PC (las definiciones de los pasos están en
+`TursoSyncEndToEndTests.ScenarioDefinitions.cs`): al comparar ejecuta los pasos **del archivo** y exige las mismas filas
+después de cada uno; con `TPVC_WRITE_GOLDEN=1 dotnet test --filter TursoSyncEndToEndTests.Scenario_` los reescribe. No
+dependen del texto del SQL.
+
+Forma: `{scenario, covers, contract, protocol, notes, devices: [{name, deviceId, role, engine}], watch: {tabla: [columnas]}, steps}`. Cada
+paso es `{n, device?, op, …datos, result?, expect}`. `expect` tiene la nube (`cloud`: las filas de cada tabla de `watch` por
+`SyncId`, y `tombstones`: `EntityType/SyncId` de esas tablas) y cada equipo (`A`, `B`: sus filas, y `pending` = filas o
+lápidas anotadas que todavía no sube, `parked` = filas apartadas, `saved` = cambios guardados por otra generación). Cada
+valor va en la forma de la nube, como texto: las referencias como el `SyncId` del principal, decimales sin ceros de más,
+booleanos `1`/`0`, enums con su número, las hojas del paciente en su forma canónica (`golden/canonical-json.json`) y
+`FieldStampsJson` en forma canónica. Marcadores: `<time>` (una hora: los escenarios no comparan marcas, solo qué versión
+quedó), `<id:N>` (un GUID que generó el motor, numerado en el orden nube, A, B; tablas en el orden de subida; filas por su
+contenido con esos GUID tapados), `<today>` y `<year>` dentro de un folio (`TKT-<today>`, `EXP-<year>`) y `<code:B>` (el código
+del equipo B en un folio con letra: P2 en la PC, T1 en la tablet).
+
+**Los equipos son siempre los mismos:** A es la PC principal (`role` `WindowsDesktop`, `engine` `pc`: el motor de la PC, también
+en la CI de Kotlin) y B la tablet (`AndroidTablet`, `engine` `kotlin`; en la CI de la PC lo hace otra instancia del motor de la
+PC). `fullSync` («Sincronización completa») de A le da la identidad a la nube; B se une (`join`) y baja. Cada paso de un
+equipo es algo que su papel puede hacer en la app (`DevicePermissions`): B escribe expedientes, notas, hojas, citas y ventas,
+nunca el inventario ni el catálogo; la prueba `Scenario_EachDeviceOnlyDoesWhatItsRoleAllows` lo exige.
+
+| Operación | Quién | Qué hace |
+|---|---|---|
+| `create`, `edit`, `delete` | equipo | Escribir una fila por el guardado normal (marca nueva con el desfase, registro para subir; un expediente por el guardado de siempre, con sus marcas por campo). `row`/`set` en la forma de la nube. |
+| `sheetRow` | equipo | Agregar (`add`), quitar (`remove`) o cambiar la cantidad (`setQuantity`) de un renglón de `ActiveSuppliesJson`, por el guardado del expediente. |
+| `newPatient` | equipo | Un expediente nuevo con el folio del contador (o con la letra sin red). |
+| `sell`, `cancelSale`, `closeBatch` | equipo | Vender (FEFO, folio del contador), cancelar el ticket por su folio y cerrar un lote (reglas «Existencias»). |
+| `sync` | equipo | Una sincronización. `pushBatchSize` = filas por petición de la subida; `cut` = `{uploadRequest: n, mode: beforeApply}` (la n-ésima petición de la subida no llega) o `lostResponse` (se aplica y su respuesta se pierde). `result` = `{ok, parked}`. |
+| `join`, `reapplySaved` | equipo | «Unirse a una nube existente» y «Volver a aplicar» lo guardado por otra generación. |
+| `rawWrite` | arnés | Escribe los valores con la marca dada sin pasar por el guardado ni tocar `FieldStampsJson`: dos equipos con la misma marca, un reloj que saltó, o una PC v1.19–v1.38. La marca es relativa a la hora (UTC) de **ese paso**: `now+90s`, `now+3h`. Con `anchor`, la primera escritura con ese nombre calcula su marca y la recuerda, y las siguientes con el mismo nombre usan **ese mismo instante** (el empate de `lww-and-ties`). Así el resultado no depende de lo que tarde el arnés (`Scenario_LwwAndTies_WithASlowHarness…` lo corre con 1.5 s entre pasos). Kotlin nunca escribe así: lo hace su prueba en la base local. |
+| `network`, `serverClock`, `cloudHold`, `cloudRelease` | arnés | Sin red para todos (`online`), la nube con la hora corrida (`offsetSeconds`), y esconder una fila de la nube y regresarla con un `SyncedAtUtc` nuevo. |
+| `fullSync`, `regularizeFolios`, `backup`, `restoreBackup`, `replaceCloud` | PC | Solo la PC principal: la «Sincronización completa», la regularización diaria de folios (8.17) y restaurar un respaldo y reemplazar la nube con él (8.9). |
+
+| Archivo | Cubre |
+|---|---|
+| `lww-and-ties.json` | 8.5, 8.6: una edición llega al otro equipo; dos ediciones de la misma fila (gana la marca más nueva); el empate con la misma marca (la nube se queda con la primera, el otro la relee y la aplica, y no vuelve a subir). |
+| `tombstones.json` | 8.5: borrar después de editar (gana la lápida); editar después de borrar (la fila vuelve a existir, la lápida se queda); el borrado en cascada deja la lápida de cada fila hija. |
+| `parked-rows.json` | 8.4: la nota sin su expediente y el movimiento con un lote que no llegó se apartan y se aplican cuando llegan. |
+| `clock-skew.json` | 8.5, 8.7: la nube 10 min adelante (las marcas siguen a la nube y gana la edición más reciente) y un reloj que salta 3 h (la marca se repara antes de subir). |
+| `upload-cut.json` | 8.5, 8.6: la red se cae a media subida (lo que llegó queda completo; se vuelve a mandar lo demás sin duplicar) y una respuesta perdida (se vuelve a mandar y se relee). |
+| `generation-fence.json` | 8.9: la PC reemplaza la nube con un respaldo; B guarda lo que no subió, baja la nube nueva y lo vuelve a aplicar. |
+| `folios.json` | 8.16, 8.17, 8.22: el contador con conexión en dos equipos, el folio con letra sin red y la regularización mientras B edita al paciente (quedan el folio y la edición). |
+| `stock-ledger.json` | 8.19: cancelar el mismo ticket en dos equipos deja una devolución; cerrar un lote mientras el otro vende de él (con las existencias como valor, hasta el 8.20). |
+| `patient-merge.json` | 8.21, 8.22: por campo, por renglón, quitar contra editar un renglón y la escritura sin marcas con su piso. |
+
+**Los escenarios del 8.20** (existencias derivadas del libro, conteos, negativos, saldos iniciales) llegan con ese paso, que
+todavía no se hace (espera que `StockLedger.VerifyAsync` reporte cero diferencias varios días); hasta entonces
+`stock-ledger.json` muestra las existencias como valor y dice qué cambia.
+
+**Cómo los corre Kotlin (K5).** Como dice el plan (§7.6), cada escenario corre con **dos motores sobre el mismo servidor
+simulado: el de la PC para A y el de Kotlin para B**. Nunca dos bases de Room: A siempre es la PC.
+
+- **Una nube vacía por escenario.** Cada archivo empieza con la nube sin nada (sin esquema, sin `clinicId`, sin
+  `FolioCounters`): un `FakeTursoHost` nuevo por escenario con `TPVC_FAKE_TURSO_SEED=none`, o una ruta que lo regrese a
+  vacío. B empieza con una base de Room nueva y A con una base de la PC nueva (sin datos demo).
+- **B (Kotlin)** ejecuta sus pasos con los casos de uso de la app (no SQL directo, salvo `rawWrite`) y, después de cada paso,
+  convierte su base a la forma de arriba (con los mismos marcadores) y la compara con `expect.B`, incluidos `pending`,
+  `parked` y `saved`.
+- **A (la PC)** la maneja el arnés por rutas de control solo en `127.0.0.1`, que se agregan en K5 a `FakeTursoHost` (o a un
+  proceso hermano con el motor de la PC): una para **cada paso de A** que aparece en los archivos (`create`, `edit`,
+  `delete`, `rawWrite`, `sheetRow`, `newPatient`, `sell`, `cancelSale`, `closeBatch`, `sync` con su `cut` y `pushBatchSize`,
+  `fullSync`, `regularizeFolios`, `backup`, `restoreBackup`, `replaceCloud`), que regresa su `result`, y una que regresa la
+  **foto de A** (sus filas de `watch` en la forma de arriba, y `pending`, `parked` y `saved`) para compararla con `expect.A`.
+  Es justo lo que hace hoy `TursoSyncEndToEndTests.Scenarios.cs` (`ExecuteStepAsync` y `SnapshotAsync`).
+- **El arnés del servidor:** `network`, `serverClock`, `cloudHold`/`cloudRelease`, el corte de `sync` (la n-ésima petición de
+  la subida de ese equipo no llega o pierde su respuesta) y leer la nube (`expect.cloud`, con las lápidas): rutas de
+  control del simulador (`docs/FAKE_HRANA_SPEC.md`).
+- Los `<id:N>` se numeran con la foto completa (nube, A y B) en el orden descrito arriba; los `<code:B>` y `<today>` los
+  pone el arnés con el código y el día de B.
+
+Cuántas peticiones hace cada sincronización y cuántas filas sube no está en los archivos (eso es de `hrana/`); `pending`
+cuenta filas y lápidas distintas por `SyncId`, como `PendingCount` del latido.
+
 ## Lo que viene
 
 - `golden/` de las reglas del negocio que faltan (8.26).
-- `hrana/` de escritura: los intercambios de la subida (8.25).
-- `scenarios/`: escenarios de varios equipos (8.25).
+- `scenarios/` del 8.20 (existencias derivadas del libro), con ese paso.

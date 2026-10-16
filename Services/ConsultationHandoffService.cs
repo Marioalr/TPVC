@@ -280,7 +280,7 @@ public sealed class ConsultationHandoffService
     }
 
     /// <summary>A quién se le puede enviar la consulta (y quién cuenta como compañero para la cadencia).</summary>
-    private static IEnumerable<LinkedDevice> HandoffTargets(IEnumerable<LinkedDevice> devices, DateTime serverNow) =>
+    internal static IEnumerable<LinkedDevice> HandoffTargets(IEnumerable<LinkedDevice> devices, DateTime serverNow) =>
         devices
             .Where(d => !d.IsThisDevice && !d.IsRevoked && !d.IsPendingApproval)
             .Where(d => d.Role is not { } role || DevicePermissions.CanTakeConsultations(role))

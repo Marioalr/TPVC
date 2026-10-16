@@ -67,12 +67,12 @@ y, desde v1.31.0, también por HTTP en `127.0.0.1` (`FakeTursoHost`). Vive en el
 
 ## `contracts/hrana/`
 
-Grabaciones de un equipo que **lee** la nube (el motor de la PC hace lo que hará Kotlin), una por archivo, en JSON
-Lines: un renglón de encabezado (`scenario`, `contract`, `protocol`, `notes`) y uno por intercambio
+Grabaciones de un equipo que **lee** la nube (paso 8.13) y, desde v1.44.0 (paso 8.25), de uno que **escribe** (el motor
+de la PC hace lo que hará Kotlin), una por archivo, en JSON Lines: un renglón de encabezado (`scenario`, `contract`, `protocol`, `notes`) y uno por intercambio
 (`{"n","request","status","response"}`). Lo que cambia en cada corrida va como marcador: `<time>` (una hora), `<id:N>`
 (un GUID al azar: `clinicId`, generación), `<nonce:N>` (el `InstanceNonce`) y `<appVersion>`. Los `SyncId`
 `10000000-0000-4000-8000-…` son de los datos de ejemplo. Se regeneran con `TPVC_WRITE_GOLDEN=1`
-(`TursoSyncEndToEndTests.Hrana.cs`).
+(`TursoSyncEndToEndTests.Hrana.cs` y, las de escritura, `TursoSyncEndToEndTests.HranaWrites.cs`).
 
 | Archivo | Qué muestra |
 |---|---|
@@ -82,6 +82,12 @@ Lines: un renglón de encabezado (`scenario`, `contract`, `protocol`, `notes`) y
 | `generation-change.jsonl` | Otra PC reemplaza la nube: el equipo espera mientras `generationReady` no es la nueva y luego vuelve a bajar todo. |
 | `blocked.jsonl` | Cuota agotada, en las dos formas que simula el servidor. |
 | `unauthorized.jsonl` | Un token anulado: HTTP 401 y no se borra nada. |
+| `push.jsonl` | (8.25) La subida: hora y claves, el `batch` atómico con los upserts, la lápida con su `DELETE` y la generación al final; el latido con `LastPushUtc` y la bajada. |
+| `tie-conflict.jsonl` | (8.25) Dos equipos con la misma marca: la nube no acepta la segunda, que se relee y se aplica. |
+| `tombstone-vs-edit.jsonl` | (8.25) Una edición más vieja que una lápida de la nube: no entra y se aplica el borrado. |
+| `generation-fence.jsonl` | (8.25) La generación cambia entre el saludo y la subida: la cerca no deja escribir nada y el equipo se detiene. |
+| `folio-counter.jsonl` | (8.25) `folio.take` en dos equipos; sin red, sin petición. |
+| `handoff-send-accept.jsonl`, `handoff-lost-response.jsonl`, `handoff-recover.jsonl` | (8.25) La consulta entre equipos: enviar, revisar, tomarla, borrar la copia y el acuse; las respuestas perdidas del envío y de tomarla; «Recuperar» antes y después de que la tomen. |
 | `statements.json` | Cada instrucción de lectura, literal y con sus argumentos (la identidad, la generación, el perfil, la página de cada tabla, el latido, el registro, el membrete y, desde v1.43.0, la revisión de la cadencia: `check.*`). La prueba las corre en el simulador y ninguna recorre una tabla completa. |
 
 ## Por HTTP para la CI de Kotlin (`FakeTursoHost`)
@@ -113,6 +119,13 @@ for i in $(seq 1 120); do [ -f "$RUNNER_TEMP/turso.url" ] && break; sleep 1; don
 ./gradlew :sync:test -Pturso.url="$(cat "$RUNNER_TEMP/turso.url")" -Pturso.token=kotlin-ci
 curl -s http://127.0.0.1:8787/__stop
 ```
+
+**Escenarios de varios equipos (`contracts/scenarios/`, paso 8.25).** Sus pasos del arnés son controles de este
+simulador: `network` = `IsOffline`, `serverClock` = `Clock` (la hora real más `offsetSeconds`), `cloudHold`/`cloudRelease` =
+sacar una fila de su tabla y regresarla con `SyncedAtUtc` = ahora, y `cut` = `BeforeExecuteAsync` (la n-ésima petición de la
+subida no llega) o `DropResponseAfterExecute` (se aplica y la respuesta se pierde). Hoy solo las pruebas de C# los tienen;
+para el arnés de Kotlin, `FakeTursoHost` necesita exponerlos (K5), junto con una nube vacía por escenario y las rutas que
+hacen los pasos del equipo A con el motor de la PC y regresan su foto (`contracts/README.md`, «Cómo los corre Kotlin»).
 
 El simulador revisa los planes también aquí: una consulta de Kotlin que recorra una tabla sincronizada recibe
 `SCAN_FORBIDDEN`, igual que en las pruebas de la PC.
