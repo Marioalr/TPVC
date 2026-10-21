@@ -51,8 +51,12 @@ public sealed class ConsultationRecordState
         }
     }
 
+    // El mismo medicamento con o sin el principio activo entre paréntesis (2026-10-21) también es el mismo
     private static bool SameMedicine(PatientPrescriptionItem a, PatientPrescriptionItem b) =>
-        string.Equals(a.MedicineName?.Trim(), b.MedicineName?.Trim(), StringComparison.OrdinalIgnoreCase);
+        string.Equals(WithoutActiveIngredient(a), WithoutActiveIngredient(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string WithoutActiveIngredient(PatientPrescriptionItem item) =>
+        TPVC.Services.PrescriptionNaming.WithActiveIngredient(item.MedicineName, item.ActiveIngredient, show: false);
 
     /// <summary>Al iniciar una consulta nueva: foto del expediente y receta vacía.</summary>
     public void BeginConsultationOnRecord(PatientRecord patient)
@@ -175,6 +179,8 @@ public sealed class ConsultationRecordState
         Dosage = item.Dosage,
         RecommendedQuantity = item.RecommendedQuantity,
         Presentation = item.Presentation,
-        DispenseInClinic = item.DispenseInClinic
+        DispenseInClinic = item.DispenseInClinic,
+        ActiveIngredient = item.ActiveIngredient,
+        ShowActiveIngredient = item.ShowActiveIngredient
     };
 }

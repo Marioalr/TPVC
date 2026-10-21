@@ -331,7 +331,8 @@ public partial class ConsultationDetailViewModel : ObservableObject
             {
                 patient.ActivePrescription = items.Select(i => new PatientPrescriptionItem
                 {
-                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
+                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation,
+                    ActiveIngredient = i.ActiveIngredient, ShowActiveIngredient = i.ShowActiveIngredient
                 }).ToList();
             }
             _session.NotifySelectedPatientMutated();

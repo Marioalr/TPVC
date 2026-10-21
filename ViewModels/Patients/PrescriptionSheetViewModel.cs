@@ -902,6 +902,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     /// <summary>Mostrar u ocultar el principio activo de un renglón, como la casilla. false si no se pudo (sigue como estaba).</summary>
     public Task<bool> SetActiveIngredientShownAsync(PatientPrescriptionItem item, bool show)
     {
+        // Un renglón sin principio activo (de antes, genérico o escrito a mano) no tiene casilla ni cambia
+        if (!item.HasActiveIngredient) return Task.FromResult(false);
         item.ShowsActiveIngredient = show;
         return ApplyActiveIngredientAsync(item, show);
     }
