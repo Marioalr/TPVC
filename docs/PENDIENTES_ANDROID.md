@@ -104,7 +104,7 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
-### v1.46.0 (unidades por paquete: consumo parcial de paquetes en servicios; contrato revisión 17)
+### v1.47.0 (unidades por paquete: consumo parcial de paquetes en servicios; contrato revisión 17)
 
 - [ ] En Productos, a una caja de 10 ampolletas ponerle **Contenido por paquete** 10: debajo dice el precio por pieza. Cargar en una consulta un servicio que usa 3 ampolletas: la cuenta lleva «Piezas ind.» con 3 al precio por pieza; al cobrar, las existencias bajan 1 caja y el distintivo dice «(+7/10)». Otro servicio con 3: las existencias no bajan y queda «(+4/10)».
 - [ ] Cancelar el primer ticket (el que abrió la caja) con el segundo vigente: las existencias se quedan y el distintivo dice «(+7/10)» (regresan sus 3 piezas). Cancelar también el segundo: el paquete abierto se completa y vuelve a ser una caja (las existencias suben 1, sin paquete abierto) y en el Kardex aparece su devolución en el lote de la caja.
