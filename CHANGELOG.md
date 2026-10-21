@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.47.0] - 2026-10-21
+
+### Añadido — Piezas sueltas de un paquete, y borrar servicios y pacientes
+* Cada producto puede decir cuántas piezas trae su paquete («Contenido por paquete»). Los servicios consumen piezas sueltas: se abre un paquete y las piezas que sobran quedan para la siguiente vez, con su precio y su costo por pieza. Las existencias muestran el paquete abierto («Existencias: 4 (+7/10)»).
+* El renglón del ticket guarda si vendió piezas o paquetes. Cancelar una venta devuelve exactamente las piezas que usó y, al juntarse un paquete completo, vuelve a ser un paquete. Los tickets anteriores se cancelan como antes.
+* Al recibir un lote o un pedido con menos piezas por paquete, el paquete abierto se ajusta.
+* No se envía a un equipo con una versión anterior una consulta cuya cuenta tiene piezas sueltas: el programa avisa y la consulta se queda en este equipo.
+* Se puede borrar un servicio clínico (en el catálogo de servicios y en la hoja de servicios del punto de venta) y un paciente (desde Pacientes).
+* Contrato de sincronización en la revisión 17: `Products.UnitsPerPackage`, `Products.OpenedUnitsRemaining` y `SaleItems.IsIndividualUnits`. El paquete abierto todavía se sincroniza como valor (gana el último); se vuelve exacto entre equipos con el paso 8.20. 891 pruebas.
+
 ## [1.46.0] - 2026-10-21
 
 ### Cambiado — Receta: la marca afuera y el principio activo entre paréntesis
