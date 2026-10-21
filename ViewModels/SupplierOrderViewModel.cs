@@ -34,6 +34,7 @@ public partial class SupplierOrderLineViewModel : ObservableObject
         _quantity = suggestion.Line.Quantity;
         _unitCost = suggestion.Line.UnitCost;
         _selectedProduct = choice;
+        _unitsPerPackageText = suggestion.Product is { UnitsPerPackage: > 1 } p ? p.UnitsPerPackage.ToString() : string.Empty;
     }
 
     public string Description { get; }
@@ -57,6 +58,10 @@ public partial class SupplierOrderLineViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Error))]
     private string _expirationText = string.Empty;
+
+    /// <summary>Piezas individuales por paquete (ampolletas, piezas, etc.); vacío asume 1 pieza.</summary>
+    [ObservableProperty]
+    private string _unitsPerPackageText = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewProduct), nameof(MatchText), nameof(NeedsReview))]
@@ -114,7 +119,8 @@ public partial class SupplierOrderLineViewModel : ObservableObject
         Quantity = Quantity,
         UnitCost = UnitCost,
         BatchNumber = string.IsNullOrWhiteSpace(BatchNumber) ? null : BatchNumber.Trim(),
-        ExpirationDate = string.IsNullOrWhiteSpace(BatchNumber) ? null : Expiration
+        ExpirationDate = string.IsNullOrWhiteSpace(BatchNumber) ? null : Expiration,
+        UnitsPerPackage = int.TryParse(UnitsPerPackageText?.Trim(), out int u) && u > 1 ? u : 1
     };
 }
 

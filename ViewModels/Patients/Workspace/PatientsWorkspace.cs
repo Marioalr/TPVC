@@ -390,7 +390,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _clinic = new ClinicInfo(clinicProfileService);
         _catalog = new CatalogStore(_inventoryService, this);
         _templates = new PrescriptionTemplateStore(_inventoryService, this);
-        _session = new PatientSession(this);
+        _session = new PatientSession(this, _consultationService);
         _active = new ActiveConsultationSession(_consultationService, _ui, this);
         _record = new ConsultationRecordState(_session, _inventoryService, this, name => _catalog.FindCatalogProduct(name));
         _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);

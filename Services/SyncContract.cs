@@ -44,8 +44,9 @@ public static class SyncContract
     /// de cada renglón de marca (<c>ActiveIngredient</c>) y si va entre paréntesis (<c>ShowActiveIngredient</c>); ninguna tabla ni
     /// columna cambia. Un equipo anterior no reconoce el producto de esos renglones: no se le envía una consulta que los tiene
     /// (<see cref="ActiveIngredientRevision"/>).
+    /// 17: consumo parcial de paquetes en servicios: <c>Products.UnitsPerPackage</c> y <c>Products.OpenedUnitsRemaining</c>.
     /// </summary>
-    public const int Revision = 16;
+    public const int Revision = 17;
 
     /// <summary>
     /// Paso 8.23: la revisión de <c>contracts/sync/schema.json</c> que es la base de la tablet. Desde ella solo se admiten cambios
@@ -132,6 +133,10 @@ public static class SyncContract
     {
         [(typeof(Product), nameof(Product.CurrentStock))] =
             "Existencias del producto. Hoy viaja como valor y se aplica al bajar; quien registra una venta o un movimiento la actualiza en la misma escritura. Pasa a derivada en el paso 8.20.",
+        [(typeof(Product), nameof(Product.UnitsPerPackage))] =
+            "Piezas individuales por paquete o caja (desde la revisión 17). <= 1 cuenta como 1 pieza por unidad de inventario.",
+        [(typeof(Product), nameof(Product.OpenedUnitsRemaining))] =
+            "Piezas individuales sobrantes del paquete actualmente abierto para consumo en servicios (desde la revisión 17).",
         [(typeof(InventoryMovement), nameof(InventoryMovement.Delta))] =
             "Lo que el movimiento suma al libro de existencias, con signo: positivo entra, negativo sale (desde la revisión 11). Quantity es |Delta|. 0 = fila anterior a la revisión 11: cuenta +Quantity si MovementType es EntradaCompra, EntradaAjuste o EntradaDevolucion, o AjusteInventario con StockAfter >= StockBefore, y si no −Quantity. Un movimiento nuevo nunca lleva 0 (regla «Existencias»).",
         [(typeof(InventoryMovement), nameof(InventoryMovement.MovementType))] =

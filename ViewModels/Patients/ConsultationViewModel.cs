@@ -596,6 +596,10 @@ public partial class ConsultationViewModel : ObservableObject
         foreach (var item in _consultationService?.CurrentConsultation?.Items ?? Enumerable.Empty<ConsultationProductItem>())
         {
             var product = item.ProductId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == item.ProductId) : null;
+            bool isIndividual = item.IsIndividualUnits;
+            int availableStock = product == null
+                ? 999
+                : (isIndividual ? product.AvailableIndividualUnits : product.CurrentStock);
             Checkout.Cart.Add(new CartItem
             {
                 ProductId = item.ProductId,
@@ -604,11 +608,12 @@ public partial class ConsultationViewModel : ObservableObject
                 GenericName = item.GenericName,
                 Presentation = item.Presentation,
                 Unit = item.Unit,
-                AvailableStock = product?.CurrentStock ?? 999,
+                AvailableStock = availableStock,
                 UnitPrice = item.UnitPrice,
                 Quantity = item.Quantity,
                 RequiresRefrigeration = product?.RequiresRefrigeration ?? false,
-                IsService = item.ProductId <= 0
+                IsService = item.ProductId <= 0,
+                IsIndividualUnits = isIndividual
             });
         }
 

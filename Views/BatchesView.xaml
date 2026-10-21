@@ -144,6 +144,13 @@
                                 <TextBox Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center" Text="{Binding NewBatchQuantity, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </Grid>
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Contenido por paquete (ampolletas, piezas, etc.)" />
+                            <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"
+                                     Text="{Binding NewBatchUnitsPerPackageText, UpdateSourceTrigger=PropertyChanged}"
+                                     helpers:Field.Placeholder="1 (si no se ingresa se asume 1 sola pieza)"
+                                     AutomationProperties.Name="Contenido por paquete" />
+                        </StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Text="Caducidad *" />
                         <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding NewBatchExpirationText, UpdateSourceTrigger=PropertyChanged}"
                                  helpers:Field.Placeholder="dd/mm/aaaa o mm/aaaa" AutomationProperties.Name="Caducidad" />

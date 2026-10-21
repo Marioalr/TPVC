@@ -403,6 +403,8 @@ public partial class PatientFormViewModel : ObservableObject
 
     public bool IsFormNew => FormPatientId == 0;
 
+    public bool IsEditingExistingPatient => FormPatientId > 0;
+
     public string FormPageTitle
     {
         get
@@ -489,6 +491,44 @@ public partial class PatientFormViewModel : ObservableObject
             return;
         }
         ClosePatientModal();
+    }
+
+    [RelayCommand]
+    public async Task DeleteEditingPatientAsync()
+    {
+        var target = _formPatient
+                     ?? (_session.SelectedPatient?.Id == FormPatientId ? _session.SelectedPatient : null)
+                     ?? _session.Patients.FirstOrDefault(p => p.Id == FormPatientId);
+        if (target == null || _gate.BlockIfPatientHandedOff(target)) return;
+        if (_active.HasActiveConsultation &&
+            ((target.Id > 0 && _active.ActiveConsultation?.PatientId == target.Id) ||
+             string.Equals(_active.ActiveConsultationPatientName, target.FullName, StringComparison.OrdinalIgnoreCase)))
+        {
+            _info.InfoModalMessage = "Termine o descarte la consulta en curso antes de eliminar el expediente.";
+            _info.IsInfoModalVisible = true;
+            return;
+        }
+        if (!await _dialogs.ConfirmAsync($"¿Eliminar el expediente de {target.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Eliminar expediente")) return;
+
+        try
+        {
+            if (_inventoryService != null && target.Id > 0) await _inventoryService.DeletePatientAsync(target.Id);
+        }
+        catch (Exception ex)
+        {
+            _info.InfoModalMessage = $"No se pudo eliminar el expediente: {ex.Message}";
+            _info.IsInfoModalVisible = true;
+            return;
+        }
+
+        _session.RemovePatient(target);
+        if (_inventoryService != null)
+        {
+            await _workflow.LoadPatientsAsync();
+        }
+        ClosePatientModal();
+        _feedback.ShowSuccess($"Expediente de {target.FullName} eliminado");
+        _nav.GoToPatientsHome();
     }
 
     // ==========================================

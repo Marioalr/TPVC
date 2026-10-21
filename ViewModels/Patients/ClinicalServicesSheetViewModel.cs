@@ -562,7 +562,13 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     private bool FitsInStock(Product product, ref int pieces, string name)
     {
         int fit = _account.PiecesThatFit(product, pieces);
-        if (fit < pieces) _feedback.ShowWarning($"No hay más existencias de '{name}' ({product.CurrentStock}).");
+        if (fit < pieces)
+        {
+            string stockInfo = product.HasMultipleUnitsPerPackage
+                ? $"{product.AvailableIndividualUnits} pzas individuales"
+                : $"{product.CurrentStock}";
+            _feedback.ShowWarning($"No hay más existencias de '{name}' ({stockInfo}).");
+        }
         pieces = fit;
         return pieces > 0;
     }

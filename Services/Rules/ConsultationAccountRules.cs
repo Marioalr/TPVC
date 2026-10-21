@@ -70,13 +70,14 @@ public static class ConsultationAccountRules
 
     /// <summary>
     /// Suma <paramref name="quantity"/> piezas a la cuenta: al renglón que ya tiene ese Id (solo cambia su cantidad; el nombre y
-    /// el precio se quedan como estaban) o en uno nuevo al final. false con cantidad 0 o negativa.
+    /// el precio se quedan como estaban) o en uno nuevo al final. false con cantidad 0 o negativa. Las piezas sueltas de un paquete
+    /// (<paramref name="isIndividualUnits"/>) van en su propio renglón, aparte de los paquetes completos del mismo producto.
     /// </summary>
     public static bool AddLine(IList<ConsultationProductItem> items, int productId, string code, string name, string? genericName,
-        string? presentation, string unit, decimal unitPrice, int quantity, DateTime addedAt)
+        string? presentation, string unit, decimal unitPrice, int quantity, DateTime addedAt, bool isIndividualUnits = false)
     {
         if (quantity <= 0) return false;
-        var existing = items.FirstOrDefault(i => i.ProductId == productId);
+        var existing = items.FirstOrDefault(i => i.ProductId == productId && i.IsIndividualUnits == isIndividualUnits);
         if (existing != null)
         {
             existing.Quantity += quantity;
@@ -93,6 +94,7 @@ public static class ConsultationAccountRules
                 Unit = unit,
                 UnitPrice = unitPrice,
                 Quantity = quantity,
+                IsIndividualUnits = isIndividualUnits,
                 AddedAt = addedAt
             });
         }
@@ -101,11 +103,13 @@ public static class ConsultationAccountRules
 
     /// <summary>
     /// Quita <paramref name="quantity"/> piezas del renglón con ese Id: si tiene más se reduce y si no sale de la cuenta.
-    /// false si no hay renglón o la cantidad no es positiva (nada cambia).
+    /// false si no hay renglón o la cantidad no es positiva (nada cambia). Con <paramref name="isIndividualUnits"/> se prefiere el
+    /// renglón de ese modo (piezas sueltas o paquetes) y, si no hay, cualquiera con ese Id.
     /// </summary>
-    public static bool RemoveLine(IList<ConsultationProductItem> items, int productId, int quantity)
+    public static bool RemoveLine(IList<ConsultationProductItem> items, int productId, int quantity, bool? isIndividualUnits = null)
     {
-        var item = items.FirstOrDefault(i => i.ProductId == productId);
+        var item = items.FirstOrDefault(i => i.ProductId == productId && (isIndividualUnits == null || i.IsIndividualUnits == isIndividualUnits.Value))
+                   ?? items.FirstOrDefault(i => i.ProductId == productId);
         if (item == null || quantity <= 0) return false;
         if (item.Quantity > quantity) item.Quantity -= quantity;
         else items.Remove(item);

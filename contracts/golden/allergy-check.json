@@ -3,7 +3,7 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 16,
+  "contract": 17,
   "notes": [
     "Services/Rules/AllergyRules.cs (antes InventoryService.CheckMedicationAllergy): el aviso de alergia al recetar y al cargar «Se surte aquí». 'medicineName' es lo escrito en la receta (si es nulo, el nombre del producto); 'product' es el producto elegido (su genérico entra a la comparación).",
     "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados, y + ' ' + activeIngredient (revisión 16: el principio activo guardado en el renglón; sin espacios a los lados) si lo hay y medicineName normalizado no lo contiene normalizado; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si med contiene la alergia, o si la alergia tiene 4 caracteres o más y contiene a med; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia es de la familia si contiene la llave o un miembro, y avisa si med también contiene la llave o un miembro. 'contiene' es comparación ordinal de subcadenas.",

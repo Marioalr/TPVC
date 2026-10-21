@@ -2912,6 +2912,143 @@ public class InventoryTests
         Assert.IsFalse(hubVm.IsSuggestedPurchasesOpen);
     }
 
+    [TestMethod]
+    public async Task DeleteClinicalService_RemovesFromCatalogAndPos()
+    {
+        var catalogVm = new ServicesCatalogViewModel(_inventoryService);
+        await catalogVm.LoadAsync();
+
+        await catalogVm.NewServiceAsync();
+        catalogVm.EditCode = "SRV-DEL-01";
+        catalogVm.EditName = "Servicio Temporal";
+        catalogVm.EditCategory = "Procedimientos";
+        catalogVm.EditPriceText = "250";
+        await catalogVm.SaveServiceAsync();
+
+        var created = catalogVm.FilteredServices.FirstOrDefault(s => s.Code == "SRV-DEL-01");
+        Assert.IsNotNull(created);
+
+        await catalogVm.DeleteServiceAsync(created);
+
+        Assert.IsFalse(catalogVm.FilteredServices.Any(s => s.Id == created.Id), "El servicio eliminado no debe aparecer en el catálogo");
+        var activeInDb = await _inventoryService.GetClinicalServicesAsync();
+        Assert.IsFalse(activeInDb.Any(s => s.Id == created.Id), "El servicio debe quedar inactivo en la base de datos");
+
+        // También probar eliminación desde el modal de edición y desde PosViewModel
+        await catalogVm.NewServiceAsync();
+        catalogVm.EditCode = "SRV-DEL-02";
+        catalogVm.EditName = "Servicio Temporal 2";
+        catalogVm.EditCategory = "Curaciones";
+        catalogVm.EditPriceText = "180";
+        await catalogVm.SaveServiceAsync();
+
+        var created2 = catalogVm.FilteredServices.First(s => s.Code == "SRV-DEL-02");
+        await catalogVm.EditServiceAsync(created2);
+        Assert.IsTrue(catalogVm.IsEditingExisting);
+        await catalogVm.DeleteEditingServiceAsync();
+        Assert.IsFalse(catalogVm.IsEditorOpen);
+        Assert.IsFalse(catalogVm.FilteredServices.Any(s => s.Id == created2.Id));
+
+        // Y desde PosViewModel
+        var posVm = new PosViewModel(_inventoryService, new ConsultationService());
+        await posVm.InitializeAsync();
+        await posVm.OpenServicesModalAsync();
+        var targetPosService = posVm.Services.First();
+        await posVm.DeleteServiceAsync(targetPosService);
+        Assert.IsFalse(posVm.Services.Any(s => s.Id == targetPosService.Id));
+    }
+
+    [TestMethod]
+    public async Task Product_UnitsPerPackage_SupportsPartialPackageConsumptionAndCancellation()
+    {
+        var categories = await _inventoryService.GetCategoriesAsync();
+        var catId = categories.First().Id;
+
+        // 1. Producto sin especificar piezas por paquete -> asume 1 pieza
+        var singleUnitProd = new Product
+        {
+            Code = "MED-SINGLE-01",
+            Name = "Venda elástica individual",
+            CategoryId = catId,
+            Price = 40m
+        };
+        await _inventoryService.SaveProductAsync(singleUnitProd);
+        Assert.AreEqual(1, singleUnitProd.EffectiveUnitsPerPackage);
+        Assert.IsFalse(singleUnitProd.HasMultipleUnitsPerPackage);
+        Assert.AreEqual(40m, singleUnitProd.IndividualUnitPrice);
+
+        // 2. Producto con 5 ampolletas por caja y 2 cajas en stock (10 piezas individuales en total)
+        var boxProd = new Product
+        {
+            Code = "MED-BOX-05",
+            Name = "Dexametasona 8mg/2ml Caja c/5 ampolletas",
+            CategoryId = catId,
+            Price = 150m,
+            UnitsPerPackage = 5
+        };
+        await _inventoryService.SaveProductAsync(boxProd);
+        await _inventoryService.ReceiveBatchAsync(
+            new ProductBatch
+            {
+                ProductId = boxProd.Id,
+                BatchNumber = "LOT-DEX-01",
+                ExpirationDate = DateTime.Today.AddYears(1),
+                Quantity = 2
+            },
+            unitsPerPackage: 5);
+
+        var loaded = (await _inventoryService.GetProductsAsync()).Single(p => p.Id == boxProd.Id);
+        Assert.AreEqual(5, loaded.UnitsPerPackage);
+        Assert.AreEqual(30m, loaded.IndividualUnitPrice);
+        Assert.AreEqual(2, loaded.CurrentStock);
+        Assert.AreEqual(0, loaded.OpenedUnitsRemaining);
+        Assert.AreEqual(10, loaded.AvailableIndividualUnits);
+
+        // Consumir 2 ampolletas individuales en un servicio -> abre 1 caja (queda 1 caja cerrada + 3 piezas abiertas)
+        var sale1 = await _inventoryService.RegisterSaleAsync(
+            new[] { new SaleLineRequest(loaded.Id, 2, loaded.IndividualUnitPrice, IsIndividualUnits: true) },
+            "Público General",
+            "Efectivo");
+        Assert.IsNotNull(sale1);
+
+        loaded = (await _inventoryService.GetProductsAsync()).Single(p => p.Id == boxProd.Id);
+        Assert.AreEqual(1, loaded.CurrentStock, "Se debió abrir 1 caja del stock de paquetes");
+        Assert.AreEqual(3, loaded.OpenedUnitsRemaining, "Deben quedar 3 ampolletas del paquete abierto");
+        Assert.AreEqual(8, loaded.AvailableIndividualUnits);
+
+        // Consumir otras 2 ampolletas -> se descuentan del paquete ya abierto sin descontar otra caja
+        var sale2 = await _inventoryService.RegisterSaleAsync(
+            new[] { new SaleLineRequest(loaded.Id, 2, loaded.IndividualUnitPrice, IsIndividualUnits: true) },
+            "Público General",
+            "Efectivo");
+        Assert.IsNotNull(sale2);
+
+        loaded = (await _inventoryService.GetProductsAsync()).Single(p => p.Id == boxProd.Id);
+        Assert.AreEqual(1, loaded.CurrentStock, "No debe abrir otra caja mientras alcancen las piezas abiertas");
+        Assert.AreEqual(1, loaded.OpenedUnitsRemaining, "Debe quedar 1 ampolleta abierta");
+        Assert.AreEqual(6, loaded.AvailableIndividualUnits);
+
+        // Consumir 2 ampolletas más -> usa la 1 abierta + abre la segunda caja (0 cajas cerradas, 4 abiertas)
+        var sale3 = await _inventoryService.RegisterSaleAsync(
+            new[] { new SaleLineRequest(loaded.Id, 2, loaded.IndividualUnitPrice, IsIndividualUnits: true) },
+            "Público General",
+            "Efectivo");
+        Assert.IsNotNull(sale3);
+
+        loaded = (await _inventoryService.GetProductsAsync()).Single(p => p.Id == boxProd.Id);
+        Assert.AreEqual(0, loaded.CurrentStock);
+        Assert.AreEqual(4, loaded.OpenedUnitsRemaining);
+        Assert.AreEqual(4, loaded.AvailableIndividualUnits);
+        Assert.IsFalse(loaded.IsOutOfStock, "Sigue habiendo piezas individuales del paquete abierto");
+
+        // Cancelar la tercera venta -> devuelve 2 ampolletas (4 + 2 = 6 -> 1 caja cerrada + 1 pieza abierta)
+        await _inventoryService.CancelSaleAsync(sale3.Id, "Prueba de reversión parcial");
+
+        loaded = (await _inventoryService.GetProductsAsync()).Single(p => p.Id == boxProd.Id);
+        Assert.AreEqual(1, loaded.CurrentStock);
+        Assert.AreEqual(1, loaded.OpenedUnitsRemaining);
+        Assert.AreEqual(6, loaded.AvailableIndividualUnits);
+    }
 }
 
 

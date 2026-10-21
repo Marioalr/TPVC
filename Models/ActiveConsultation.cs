@@ -31,6 +31,10 @@ public partial class ConsultationProductItem : ObservableObject
 
     /// <summary>Copia enviada a otro equipo: "producto", "servicio" o "libre" (ProductId va en 0).</summary>
     public string? LineKind { get; set; }
+
+    /// <summary>True cuando la línea representa piezas individuales consumidas en un servicio clínico de un paquete multipieza.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsIndividualUnits { get; set; }
 }
 
 public partial class ActiveConsultation : ObservableObject

@@ -120,6 +120,9 @@ public partial class InventoryViewModel : ObservableObject
     [ObservableProperty]
     private string _quickActionNotes = string.Empty;
 
+    [ObservableProperty]
+    private string _quickEntryUnitsPerPackageText = string.Empty;
+
     private readonly NotificationService? _notifications;
     private readonly LocalPreferencesStore? _preferences;
 
@@ -223,6 +226,7 @@ public partial class InventoryViewModel : ObservableObject
         IsQuickConsumptionMode = false;
         QuickActionQuantity = 5;
         QuickActionNotes = "Adquisición de insumos";
+        QuickEntryUnitsPerPackageText = target.UnitsPerPackage > 1 ? target.UnitsPerPackage.ToString() : string.Empty;
         IsQuickActionOpen = true;
     }
 
@@ -249,6 +253,15 @@ public partial class InventoryViewModel : ObservableObject
             }
             else
             {
+                int unitsPerPkg = int.TryParse(QuickEntryUnitsPerPackageText?.Trim(), out int parsedUnits) && parsedUnits > 1
+                    ? parsedUnits
+                    : 1;
+                if (SelectedProduct.UnitsPerPackage != unitsPerPkg)
+                {
+                    SelectedProduct.UnitsPerPackage = unitsPerPkg;
+                    await _inventoryService.SaveProductAsync(SelectedProduct, SelectedProduct.CurrentStock);
+                }
+
                 await _inventoryService.RegisterMovementAsync(new InventoryMovement
                 {
                     ProductId = SelectedProduct.Id,

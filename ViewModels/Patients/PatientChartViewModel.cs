@@ -261,34 +261,50 @@ public partial class PatientChartViewModel : ObservableObject
         }
     }
 
-    /// <summary>Baja lógica: deja de aparecer en búsquedas; sus consultas y recetas se conservan.</summary>
+    /// <summary>Eliminación (baja lógica): deja de aparecer en búsquedas; sus consultas y recetas se conservan.</summary>
     [RelayCommand]
-    public async Task DeactivateSelectedPatientAsync()
+    public async Task DeletePatientAsync(PatientRecord? patient = null)
     {
-        var patient = _session.SelectedPatient;
-        if (patient == null || _gate.BlockIfPatientHandedOff(patient)) return;
-        if (_active.HasActiveConsultation && _active.ActiveConsultation?.PatientId == patient.Id)
+        var target = patient ?? _session.SelectedPatient;
+        if (target == null || _gate.BlockIfPatientHandedOff(target)) return;
+        if (_active.HasActiveConsultation &&
+            ((target.Id > 0 && _active.ActiveConsultation?.PatientId == target.Id) ||
+             string.Equals(_active.ActiveConsultationPatientName, target.FullName, StringComparison.OrdinalIgnoreCase)))
         {
-            _info.InfoModalMessage = "Termine o descarte la consulta en curso antes de dar de baja el expediente.";
+            _info.InfoModalMessage = "Termine o descarte la consulta en curso antes de eliminar el expediente.";
             _info.IsInfoModalVisible = true;
             return;
         }
-        if (!await _dialogs.ConfirmAsync($"¿Dar de baja el expediente de {patient.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Dar de baja expediente")) return;
+        if (!await _dialogs.ConfirmAsync($"¿Eliminar el expediente de {target.FullName}?\n\nDejará de aparecer en la búsqueda. Sus consultas y recetas se conservan.", "Eliminar expediente")) return;
+
+        bool wasSelected = _session.SelectedPatient != null &&
+                           (ReferenceEquals(_session.SelectedPatient, target) ||
+                            (target.Id > 0 && _session.SelectedPatient.Id == target.Id));
 
         try
         {
-            if (_inventoryService != null) await _inventoryService.DeletePatientAsync(patient.Id);
+            if (_inventoryService != null && target.Id > 0) await _inventoryService.DeletePatientAsync(target.Id);
         }
         catch (Exception ex)
         {
-            _info.InfoModalMessage = $"No se pudo dar de baja el expediente: {ex.Message}";
+            _info.InfoModalMessage = $"No se pudo eliminar el expediente: {ex.Message}";
             _info.IsInfoModalVisible = true;
             return;
         }
 
-        _session.SelectedPatient = null;
-        await _workflow.LoadPatientsAsync();
-        _feedback.ShowSuccess($"Expediente de {patient.FullName} dado de baja");
-        _nav.GoToPatientsHome();
+        _session.RemovePatient(target);
+        if (_inventoryService != null)
+        {
+            await _workflow.LoadPatientsAsync();
+        }
+        _feedback.ShowSuccess($"Expediente de {target.FullName} eliminado");
+        if (wasSelected || _session.SelectedPatient == null)
+        {
+            _nav.GoToPatientsHome();
+        }
     }
+
+    /// <summary>Baja lógica: deja de aparecer en búsquedas; sus consultas y recetas se conservan.</summary>
+    [RelayCommand]
+    public Task DeactivateSelectedPatientAsync() => DeletePatientAsync(_session.SelectedPatient);
 }

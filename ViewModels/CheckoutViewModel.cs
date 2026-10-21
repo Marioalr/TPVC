@@ -27,6 +27,7 @@ public partial class CartItem : ObservableObject
     public decimal UnitPrice { get; set; }
     public bool RequiresRefrigeration { get; set; }
     public bool IsService { get; set; }
+    public bool IsIndividualUnits { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Subtotal))]
@@ -34,8 +35,8 @@ public partial class CartItem : ObservableObject
 
     public decimal Subtotal => Quantity * UnitPrice;
 
-    /// <summary>"Existencias: 12" o "Servicio".</summary>
-    public string StockText => IsService ? "Servicio" : $"Existencias: {AvailableStock}";
+    /// <summary>"Existencias: 12", "Piezas disp.: 12" o "Servicio".</summary>
+    public string StockText => IsService ? "Servicio" : IsIndividualUnits ? $"Piezas disp.: {AvailableStock}" : $"Existencias: {AvailableStock}";
 
     /// <summary>La cantidad escrita a mano se ajusta a lo posible: mínimo 1 y, en productos, lo que hay.</summary>
     partial void OnQuantityChanged(int value)
@@ -218,7 +219,7 @@ public partial class CheckoutViewModel : ObservableObject
         }
 
         int requested = Math.Max(1, quantity);
-        var existing = Cart.FirstOrDefault(c => c.ProductId == product.Id);
+        var existing = Cart.FirstOrDefault(c => c.ProductId == product.Id && !c.IsIndividualUnits);
         if (existing != null)
         {
             existing.AvailableStock = product.CurrentStock;
@@ -263,7 +264,11 @@ public partial class CheckoutViewModel : ObservableObject
     /// <summary>Agrega un renglón ya armado (servicio, cargo de la consulta); si ya existe, suma la cantidad.</summary>
     public void AddLine(CartItem line)
     {
-        var existing = Cart.FirstOrDefault(c => c.ProductId == line.ProductId && c.Code == line.Code && c.IsService == line.IsService);
+        var existing = Cart.FirstOrDefault(c =>
+            c.ProductId == line.ProductId &&
+            c.Code == line.Code &&
+            c.IsService == line.IsService &&
+            c.IsIndividualUnits == line.IsIndividualUnits);
         if (existing != null)
         {
             existing.Quantity += Math.Max(1, line.Quantity);
@@ -406,7 +411,7 @@ public partial class CheckoutViewModel : ObservableObject
 
             var patient = string.IsNullOrWhiteSpace(PatientName) ? DefaultClient : PatientName.Trim();
             var cashier = _cashierName();
-            var lines = Cart.Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name)).ToList();
+            var lines = Cart.Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name, c.IsIndividualUnits)).ToList();
 
             // Se registra primero: si falta stock no se genera recibo ni se vacía la cuenta
             var sale = await _inventoryService.RegisterSaleAsync(lines, patient, SelectedPaymentMethod, cashier);

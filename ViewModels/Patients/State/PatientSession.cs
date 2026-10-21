@@ -16,10 +16,12 @@ namespace TPVC.ViewModels.Patients;
 public partial class PatientSession : ObservableObject
 {
     private readonly IPatientsHubs _hubs;
+    private readonly TPVC.Services.ConsultationService? _consultationService;
 
-    public PatientSession(IPatientsHubs hubs)
+    public PatientSession(IPatientsHubs hubs, TPVC.Services.ConsultationService? consultationService = null)
     {
         _hubs = hubs;
+        _consultationService = consultationService;
     }
 
     [ObservableProperty]
@@ -188,5 +190,32 @@ public partial class PatientSession : ObservableObject
         {
             SelectedPatient = patient;
         }
+    }
+
+    public void RemovePatient(PatientRecord? patient)
+    {
+        if (patient == null) return;
+
+        _consultationService?.RemovePatient(patient);
+
+        var existing = Patients.FirstOrDefault(p =>
+            ReferenceEquals(p, patient) ||
+            (patient.Id > 0 && p.Id == patient.Id) ||
+            (!string.IsNullOrWhiteSpace(patient.RecordNumber) && string.Equals(p.RecordNumber, patient.RecordNumber, StringComparison.OrdinalIgnoreCase)));
+
+        if (existing != null)
+        {
+            Patients.Remove(existing);
+        }
+
+        if (SelectedPatient != null &&
+            (ReferenceEquals(SelectedPatient, patient) ||
+             ReferenceEquals(SelectedPatient, existing) ||
+             (patient.Id > 0 && SelectedPatient.Id == patient.Id)))
+        {
+            SelectedPatient = null;
+        }
+
+        _hubs.OnPatientsChanged();
     }
 }

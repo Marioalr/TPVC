@@ -145,11 +145,13 @@ public partial class ServicesCatalogViewModel : ObservableObject
     private string? _editorError;
 
     public bool IsNewService => EditId == 0;
+    public bool IsEditingExisting => EditId > 0;
     public string EditorTitle => IsNewService ? "Nuevo servicio" : "Editar servicio";
 
     partial void OnEditIdChanged(int value)
     {
         OnPropertyChanged(nameof(IsNewService));
+        OnPropertyChanged(nameof(IsEditingExisting));
         OnPropertyChanged(nameof(EditorTitle));
     }
 
@@ -337,5 +339,43 @@ public partial class ServicesCatalogViewModel : ObservableObject
             AppLogger.Error("Error al activar/desactivar servicio", ex);
             _notifications?.Warning($"No se pudo cambiar el servicio: {ex.Message}");
         }
+    }
+
+    /// <summary>Elimina definitivamente un servicio del catálogo.</summary>
+    [RelayCommand]
+    public async Task DeleteServiceAsync(ClinicalService? service)
+    {
+        if (service == null) return;
+        if (!DialogService.Confirm(
+                $"¿Eliminar definitivamente el servicio «{service.Name}» ({service.Code})?\n\nLos tickets ya cobrados se conservan.",
+                "Eliminar servicio"))
+        {
+            return;
+        }
+
+        try
+        {
+            await _inventoryService.DeleteClinicalServiceAsync(service.Id);
+            if (IsEditorOpen && EditId == service.Id)
+            {
+                IsEditorOpen = false;
+                EditorError = null;
+            }
+            await LoadAsync();
+            _notifications?.Info($"Servicio eliminado: {service.Name}");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Error al eliminar servicio", ex);
+            _notifications?.Warning($"No se pudo eliminar el servicio: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    public async Task DeleteEditingServiceAsync()
+    {
+        if (EditId <= 0) return;
+        var current = _all.FirstOrDefault(s => s.Id == EditId) ?? new ClinicalService { Id = EditId, Code = EditCode, Name = EditName };
+        await DeleteServiceAsync(current);
     }
 }
