@@ -104,6 +104,19 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.46.0 (unidades por paquete: consumo parcial de paquetes en servicios; contrato revisión 17)
+
+- [ ] En Productos, a una caja de 10 ampolletas ponerle **Contenido por paquete** 10: debajo dice el precio por pieza. Cargar en una consulta un servicio que usa 3 ampolletas: la cuenta lleva «Piezas ind.» con 3 al precio por pieza; al cobrar, las existencias bajan 1 caja y el distintivo dice «(+7/10)». Otro servicio con 3: las existencias no bajan y queda «(+4/10)».
+- [ ] Cancelar el último ticket: las 3 piezas regresan al paquete abierto («(+7/10)»).
+- [ ] El mismo producto vendido por caja en el Punto de Venta sigue saliendo por caja, a su precio de siempre, y una caja y unas piezas sueltas del mismo producto van en renglones distintos de la cuenta.
+- [ ] Registrar un lote y un pedido del proveedor con «Pzas/paq.»: el producto toma ese contenido.
+- [ ] Para Kotlin (K7; las `note` de `Products.UnitsPerPackage` y `Products.OpenedUnitsRemaining` en `contracts/sync/schema.json`):
+  - **Las dos columnas** son enteras y aditivas: `UnitsPerPackage` `<= 1` (también el 0 de una fila de antes o de un nulo) cuenta como 1 pieza por paquete; `OpenedUnitsRemaining` son las piezas sueltas del paquete abierto, de 0 a `UnitsPerPackage − 1` (0 si el producto no tiene varias piezas). `CurrentStock` sigue contando paquetes cerrados; las piezas disponibles son `CurrentStock × UnitsPerPackage + OpenedUnitsRemaining`.
+  - **El consumo parcial** (`InventoryService.ConsumeIndividualUnitsFromPackage` y `PackagesNeededFor`): un renglón de piezas sueltas toma primero de `OpenedUnitsRemaining`; si no alcanza, abre `ceil(faltan / UnitsPerPackage)` paquetes, que salen de `CurrentStock` y de los lotes (FEFO) con sus movimientos como cualquier venta, y lo que sobra queda en `OpenedUnitsRemaining`. Tomar piezas del paquete abierto no escribe movimiento. Solo los insumos de los servicios (en la consulta y en el Punto de Venta) se cargan como piezas sueltas, al precio por pieza (`Price / UnitsPerPackage`, a 2 decimales); el producto vendido solo sigue saliendo por paquete.
+  - **Cancelar** un ticket con piezas sueltas regresa al paquete abierto las piezas del renglón menos las de los paquetes que se devolvieron.
+  - **En la consulta entre equipos**, un renglón de la cuenta con piezas sueltas lleva `IsIndividualUnits: true` en la copia (no se escribe si es falso); quien la recibe lo conserva para cobrarlo como piezas. Todavía no está en `golden/handoff-payload.json`.
+  - Hoy `OpenedUnitsRemaining` viaja como valor (LWW por fila), igual que `CurrentStock` antes del paso 8.20: dos equipos que gastan piezas del mismo paquete sin conexión se pisan.
+
 ### v1.46.0 (pedido del médico del 2026-10-21: la marca afuera y el principio activo entre paréntesis; contrato revisión 16)
 
 - [ ] En una consulta, elegir de la receta un medicamento de marca (con su genérico capturado): el cuadro dice *Tempra 500 mg tabletas (Paracetamol)* y debajo de *Indicación* aparece **Mostrar (Paracetamol)**, marcada la primera vez. Desmarcarla: el cuadro dice *Tempra 500 mg tabletas*; agregarlo: el renglón queda así y *Se surte aquí* lo cobra bien.
