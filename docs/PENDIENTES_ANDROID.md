@@ -104,6 +104,22 @@ En el consultorio, con la PC, la tablet y el celular sincronizando por Turso.
 - [ ] K5 · TPVC excluido de la suspensión y de la optimización de batería en la tablet Samsung: la descarga periódica corre con la app en segundo plano.
 - [ ] K8 · Un día completo de consulta con la tablet (citas, consultas, recetas, cobros y envíos entre la PC y la tablet): al final, notas, tickets, folios y existencias cuadran en los tres equipos.
 
+### v1.46.0 (pedido del médico del 2026-10-21: la marca afuera y el principio activo entre paréntesis; contrato revisión 16)
+
+- [ ] En una consulta, elegir de la receta un medicamento de marca (con su genérico capturado): el cuadro dice *Tempra 500 mg tabletas (Paracetamol)* y debajo de *Indicación* aparece **Mostrar (Paracetamol)**, marcada la primera vez. Desmarcarla: el cuadro dice *Tempra 500 mg tabletas*; agregarlo: el renglón queda así y *Se surte aquí* lo cobra bien.
+- [ ] Elegir otro medicamento de marca: la casilla empieza desmarcada (la última elección de esta computadora). Cerrar y abrir TPVC: sigue desmarcada. En otra PC de la misma nube empieza con la suya.
+- [ ] Un genérico (*Paracetamol 500 mg*) y uno escrito a mano no tienen la casilla y salen sin paréntesis.
+- [ ] En un renglón agregado, en la hoja de receta y en la sección 5, marcar y desmarcar **Mostrar (…)**: el renglón cambia al momento, la indicación y *Se surte aquí* se quedan, y la vista previa, la impresión y el PDF lo muestran igual. Con la consulta enviada a otro equipo, la casilla avisa y regresa.
+- [ ] Un paciente con una receta de antes (*Paracetamol 500 mg tabletas (Tempra)*): el renglón no cambia ni tiene la casilla; *Repetir* lo copia igual y lo sigue cobrando; con alergia al paracetamol, la alerta sale.
+- [ ] Con otra PC de una versión anterior en la misma nube: cambiar ahí la indicación de un renglón que se ocultó aquí; al volver, el renglón conserva su casilla y su estado.
+- [ ] Revisar la hoja de receta con un medicamento de marca elegido y la sección 5 con renglones de marca en los cuatro temas (captura `11i-receta-principio-activo`).
+- [ ] Para Kotlin (K6, K7; `contracts/golden/catalog-matching.json`, la `note` de `Patients.ActivePrescriptionJson` y la regla «Hojas del paciente» de `contracts/sync/schema.json`):
+  - **El renglón** (`PrescriptionNaming.medicineLine` y `parts`): sin genérico, el nombre; si el nombre es el genérico, el genérico con su concentración y forma, sin paréntesis; si es de marca, la marca (las palabras del nombre antes de la concentración; en mayúsculas, en tipo título), la concentración (del nombre, la presentación o el genérico), la forma (si el genérico no la dice) y, entre paréntesis, el genérico sin su concentración. Los casos «renglón de la receta» y «partes del renglón».
+  - **Al recetar** un producto de marca, el renglón guarda `ActiveIngredient` (lo de adentro del paréntesis) y `ShowActiveIngredient` (si `MedicineName` lo trae); en uno genérico, escrito a mano o repetido de antes no se escriben. `MedicineName` es siempre lo que se imprime. La casilla del medicamento elegido empieza con la última elección del equipo (preferencia local, no se sincroniza; la primera vez, marcada).
+  - **Mostrar u ocultar** en un renglón (`withActiveIngredient`, casos «mostrar el principio activo»): cambia `MedicineName` y `ShowActiveIngredient` en el mismo renglón (mismo `RowId`), con la guarda de solo lectura; entra a la forma canónica del renglón, así que marca el renglón en `FieldStampsJson` (`canonical-json.json`).
+  - **Reconocer el producto** de un renglón (cobrar, *Se surte aquí*, alergias, repetir): el renglón de hoy con o sin el paréntesis y el de antes de v1.46 (el genérico afuera y la marca entre paréntesis), casos «el renglón es el producto» y «producto por nombre». Nunca reescribir un renglón de antes.
+  - **Conservar** `ActiveIngredient` y `ShowActiveIngredient` al reescribir la hoja aunque la versión de la tablet todavía no los use (`synced-json-columns.json`, «leer y volver a escribir · receta (revisión 16)»).
+
 ### v1.45.0 (paso 8.26: vectores de reglas del negocio; contrato sin cambios, revisión 15)
 
 En la PC no cambia nada que se vea: las reglas salieron de las pantallas a `Services/Rules` sin cambiar lo que hacen, y llegaron
