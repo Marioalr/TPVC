@@ -28,12 +28,19 @@ public partial class EditablePrescriptionLine : ObservableObject
 
     public int RecommendedQuantity { get; init; } = 1;
 
+    /// <summary>Revisión 16: el principio activo entre paréntesis del renglón y si se muestra (ver <see cref="PatientPrescriptionItem.ActiveIngredient"/>).</summary>
+    public string? ActiveIngredient { get; init; }
+
+    public bool? ShowActiveIngredient { get; init; }
+
     public static EditablePrescriptionLine From(PatientPrescriptionItem item) => new()
     {
         MedicineName = item.MedicineName,
         Presentation = item.Presentation ?? string.Empty,
         Dosage = item.Dosage,
-        RecommendedQuantity = item.RecommendedQuantity
+        RecommendedQuantity = item.RecommendedQuantity,
+        ActiveIngredient = item.ActiveIngredient,
+        ShowActiveIngredient = item.ShowActiveIngredient
     };
 
     public PatientPrescriptionItem ToItem() => new()
@@ -41,7 +48,9 @@ public partial class EditablePrescriptionLine : ObservableObject
         MedicineName = MedicineName.Trim(),
         Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
         Dosage = Dosage.Trim(),
-        RecommendedQuantity = RecommendedQuantity
+        RecommendedQuantity = RecommendedQuantity,
+        ActiveIngredient = ActiveIngredient,
+        ShowActiveIngredient = ActiveIngredient == null ? null : ShowActiveIngredient
     };
 }
 
@@ -243,15 +252,21 @@ public partial class ConsultationDetailViewModel : ObservableObject
         EditLines.Clear();
     }
 
-    /// <summary>Agrega un medicamento del catálogo, en el orden normado y con su presentación.</summary>
+    /// <summary>
+    /// Agrega un medicamento del catálogo con su presentación: la marca con su concentración y forma y el principio activo
+    /// entre paréntesis (aquí siempre se muestra; el renglón lo guarda por si después se oculta).
+    /// </summary>
     [RelayCommand]
     public void AddSuggestedMedicine(Product? product)
     {
         if (product == null) return;
+        var parts = PrescriptionNaming.Parts(product);
         EditLines.Add(new EditablePrescriptionLine
         {
-            MedicineName = PrescriptionNaming.MedicineLine(product),
-            Presentation = PrescriptionNaming.Presentation(product)
+            MedicineName = parts.Compose(true),
+            Presentation = PrescriptionNaming.Presentation(product),
+            ActiveIngredient = parts.ActiveIngredient,
+            ShowActiveIngredient = parts.ActiveIngredient == null ? null : true
         });
         NewMedicineText = string.Empty;
     }

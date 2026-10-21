@@ -7,11 +7,13 @@ using TPVC.Models;
 namespace TPVC.Services;
 
 /// <summary>
-/// El renglón de un medicamento en la receta, en el orden que pide el Reglamento de Insumos para la Salud: primero la
-/// denominación genérica (el principio activo, obligatoria, art. 31) con su concentración y forma farmacéutica, y la
-/// denominación distintiva (la marca) entre paréntesis solo si el producto es de marca. La presentación va aparte
-/// (art. 30: dosis, presentación, vía, frecuencia y duración; las demás las escribe el médico en la posología).
-/// Ej.: "Paracetamol 500 mg tabletas (Tempra)" · "Caja con 20 tabletas".
+/// El renglón de un medicamento en la receta. Desde el pedido del médico del 2026-10-21: la marca (el nombre comercial del
+/// producto) va afuera con su concentración y forma farmacéutica, y el principio activo (la denominación genérica) entre
+/// paréntesis; un producto genérico no lleva paréntesis. Ej.: "Tempra 500 mg tabletas (Paracetamol)" · "Paracetamol 500 mg
+/// tabletas". El paréntesis se puede ocultar por medicamento al recetar (<see cref="WithActiveIngredient"/>). De v1.23.0 a
+/// v1.45 el orden era el contrario, genérico afuera y la marca entre paréntesis (<see cref="LegacyMedicineLine"/>): esos
+/// renglones se quedan como se guardaron y se siguen reconociendo. La presentación va aparte (art. 30 del Reglamento de
+/// Insumos para la Salud: dosis, presentación, vía, frecuencia y duración; las demás las escribe el médico en la posología).
 /// </summary>
 public static class PrescriptionNaming
 {
@@ -44,13 +46,81 @@ public static class PrescriptionNaming
         (@"\b(aerosol|spray|inhalador)\b", "aerosol"),
     };
 
-    /// <summary>El renglón del medicamento en el orden normado; el nombre tal cual si el producto no tiene genérico.</summary>
-    public static string MedicineLine(Product product)
+    /// <summary>
+    /// Las partes del renglón: <see cref="Line"/> es lo que va afuera (la marca, o el genérico en un producto genérico, con
+    /// su concentración y forma) y <see cref="ActiveIngredient"/> lo que va entre paréntesis (el principio activo de un
+    /// producto de marca; null si no lleva paréntesis).
+    /// </summary>
+    public sealed record MedicineLineParts(string Line, string? ActiveIngredient)
+    {
+        /// <summary>El renglón con el paréntesis o sin él.</summary>
+        public string Compose(bool showActiveIngredient) =>
+            showActiveIngredient && !string.IsNullOrEmpty(ActiveIngredient) ? $"{Line} ({ActiveIngredient})" : Line;
+    }
+
+    /// <summary>
+    /// El renglón del medicamento: la marca, su concentración y forma, y el principio activo entre paréntesis (si
+    /// <paramref name="showActiveIngredient"/>); un genérico sin paréntesis; el nombre tal cual si el producto no tiene genérico.
+    /// </summary>
+    public static string MedicineLine(Product product, bool showActiveIngredient = true) => Parts(product).Compose(showActiveIngredient);
+
+    /// <summary>
+    /// Las partes del renglón (<see cref="MedicineLineParts"/>). La concentración y la forma se buscan como siempre: la
+    /// concentración en el nombre o en la presentación (y en el genérico, si solo él la trae), la forma en la presentación o en
+    /// el nombre. Nada se repite: la concentración que traiga el genérico sale del paréntesis y va afuera, y la forma no se
+    /// agrega si el genérico ya la dice. La marca, con <see cref="BrandOf"/> (un nombre en mayúsculas se escribe "Valclan").
+    /// </summary>
+    public static MedicineLineParts Parts(Product product)
+    {
+        var name = (product.Name ?? string.Empty).Trim();
+        var generic = (product.GenericName ?? string.Empty).Trim();
+        if (generic.Length == 0) return new MedicineLineParts(name, null);
+
+        var brand = BrandOf(name, generic);
+        if (brand == null) return new MedicineLineParts(GenericLine(product, name, generic), null);
+
+        var strength = Strength(name) ?? Strength(product.Presentation) ?? Strength(generic);
+        var ingredient = WithoutStrength(generic);
+        var parts = new System.Collections.Generic.List<string> { brand };
+        if (strength != null) parts.Add(strength);
+        if ((Form(product.Presentation) ?? Form(name)) is { } form
+            && !TextSearch.Normalize(ingredient).Contains(TextSearch.Normalize(form), StringComparison.Ordinal))
+        {
+            parts.Add(form);
+        }
+        return new MedicineLineParts(string.Join(" ", parts), ingredient);
+    }
+
+    /// <summary>
+    /// El renglón como lo escribían v1.23.0 a v1.45: el genérico con su concentración y forma, y la marca entre paréntesis.
+    /// Solo para reconocer los renglones que se guardaron así (<see cref="Rules.CatalogMatchingRules.ProductMatchesName"/>).
+    /// </summary>
+    public static string LegacyMedicineLine(Product product)
     {
         var name = (product.Name ?? string.Empty).Trim();
         var generic = (product.GenericName ?? string.Empty).Trim();
         if (generic.Length == 0) return name;
+        var line = GenericLine(product, name, generic);
+        return BrandOf(name, generic) is { } brand ? $"{line} ({brand})" : line;
+    }
 
+    /// <summary>
+    /// El renglón guardado <paramref name="medicineName"/> con el principio activo entre paréntesis al final, o sin él: quita
+    /// " (principio activo)" si lo trae y lo vuelve a poner si <paramref name="show"/>. Lo demás del texto no cambia.
+    /// </summary>
+    public static string WithActiveIngredient(string? medicineName, string? activeIngredient, bool show)
+    {
+        var line = (medicineName ?? string.Empty).Trim();
+        var ingredient = (activeIngredient ?? string.Empty).Trim();
+        if (ingredient.Length == 0) return line;
+        var suffix = $" ({ingredient})";
+        if (line.EndsWith(suffix, StringComparison.Ordinal)) line = line[..^suffix.Length].TrimEnd();
+        return show ? line + suffix : line;
+    }
+
+    // El genérico, su concentración (si el genérico no trae dígitos) y su forma (si el genérico no la dice)
+    private static string GenericLine(Product product, string name, string generic)
+    {
         var parts = new System.Collections.Generic.List<string> { generic };
         // El genérico puede traer ya su concentración ("Paracetamol 500 mg"): no se repite
         if (!generic.Any(char.IsDigit) && (Strength(name) ?? Strength(product.Presentation)) is { } strength) parts.Add(strength);
@@ -58,9 +128,15 @@ public static class PrescriptionNaming
         {
             if (!TextSearch.Normalize(generic).Contains(TextSearch.Normalize(form), StringComparison.Ordinal)) parts.Add(form);
         }
+        return string.Join(" ", parts);
+    }
 
-        var line = string.Join(" ", parts);
-        return BrandOf(name, generic) is { } brand ? $"{line} ({brand})" : line;
+    // El genérico sin su concentración ("Amoxicilina/ácido clavulánico 875/125 mg" → "Amoxicilina/ácido clavulánico"): la
+    // concentración va afuera. Si no queda nada, el genérico tal cual.
+    private static string WithoutStrength(string generic)
+    {
+        var stripped = Regex.Replace(StrengthRegex.Replace(generic, " ", 1), @"\s+", " ").Trim().TrimEnd(',', '-', '/').Trim();
+        return stripped.Length > 0 ? stripped : generic;
     }
 
     /// <summary>La presentación que se surte ("Caja con 20 tabletas"); vacía si el producto no la tiene.</summary>

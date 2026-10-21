@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using TPVC.Models;
 
 namespace TPVC.Services.Rules;
@@ -12,8 +13,8 @@ public static class CatalogMatchingRules
 {
     /// <summary>
     /// El renglón <paramref name="name"/> es este producto (sin acentos ni mayúsculas): su nombre, "Nombre (Presentación)", su
-    /// nombre seguido de algo más ("Paracetamol 500 mg cada 8 horas"), su genérico o su renglón en el orden normado
-    /// (<see cref="PrescriptionNaming.MedicineLine"/>, desde v1.23.0).
+    /// nombre seguido de algo más ("Paracetamol 500 mg cada 8 horas"), su genérico o su renglón de la receta
+    /// (<see cref="MedicineLineMatches"/>: el de hoy con o sin el principio activo entre paréntesis, o el de v1.23 a v1.45).
     /// </summary>
     public static bool ProductMatchesName(Product product, string name)
     {
@@ -23,7 +24,29 @@ public static class CatalogMatchingRules
                || n == TextSearch.Normalize($"{product.Name} ({product.Presentation})")
                || n.StartsWith(productName + " ", StringComparison.Ordinal)
                || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName))
-               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(PrescriptionNaming.MedicineLine(product)));
+               || MedicineLineMatches(product, name, normalized: true);
+    }
+
+    /// <summary>
+    /// El texto es un renglón de la receta de este producto (con genérico): el de hoy con el principio activo entre paréntesis
+    /// ("Tempra 500 mg tabletas (Paracetamol)") o sin él ("Tempra 500 mg tabletas"), o el que escribían v1.23.0 a v1.45
+    /// ("Paracetamol 500 mg tabletas (Tempra)", <see cref="PrescriptionNaming.LegacyMedicineLine"/>), así los renglones de
+    /// antes siguen encontrando su producto para cobrar y para la alerta de alergias. <paramref name="normalized"/>: sin
+    /// acentos ni mayúsculas (<see cref="TextSearch.Normalize"/>); si no, sin distinguir mayúsculas pero con acentos
+    /// (<see cref="PatientSheetRows.FindProductByName"/>).
+    /// </summary>
+    public static bool MedicineLineMatches(Product product, string? text, bool normalized)
+    {
+        if (string.IsNullOrEmpty(product.GenericName) || string.IsNullOrWhiteSpace(text)) return false;
+        var parts = PrescriptionNaming.Parts(product);
+        var candidates = new[] { parts.Compose(true), parts.Compose(false), PrescriptionNaming.LegacyMedicineLine(product) };
+        if (normalized)
+        {
+            var n = TextSearch.Normalize(text);
+            return candidates.Any(c => TextSearch.Normalize(c) == n);
+        }
+        var clean = text.Trim();
+        return candidates.Any(c => c.Equals(clean, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

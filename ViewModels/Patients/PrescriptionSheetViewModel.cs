@@ -26,6 +26,12 @@ namespace TPVC.ViewModels.Patients;
 /// (<see cref="CaptureIndications"/>) y cada renglón se puede corregir con "Cambiar indicación"
 /// (<see cref="SheetIndication"/> en la hoja y <see cref="PlanIndication"/> en la sección 5 de la consulta).
 /// </para>
+/// <para>
+/// Pedido del médico del 2026-10-21: el renglón lleva la marca afuera y el principio activo entre paréntesis
+/// (<see cref="PrescriptionNaming.MedicineLine"/>), y la casilla «Mostrar (Paracetamol)» decide si el paréntesis va: junto a
+/// "Indicación" para el medicamento elegido (<see cref="ShowChosenActiveIngredient"/>, empieza con la última elección de este
+/// equipo) y en cada renglón agregado (<see cref="ToggleActiveIngredientCommand"/>).
+/// </para>
 /// </summary>
 public partial class PrescriptionSheetViewModel : ObservableObject
 {
@@ -42,6 +48,10 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     private readonly IConsultationGate _gate;
     private readonly IPatientsWorkflow _workflow;
     private readonly Func<string> _currentWeight;
+    private readonly LocalPreferencesStore? _preferences;
+
+    // La última elección de «Mostrar (…)» en este equipo (LocalPreferences; sin preferencias, solo mientras dura la pantalla)
+    private bool _showActiveIngredientByDefault;
 
     public PrescriptionSheetViewModel(
         InventoryService? inventoryService,
@@ -56,7 +66,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         CatalogBrowserViewModel catalogBrowser,
         IConsultationGate gate,
         IPatientsWorkflow workflow,
-        Func<string> currentWeight)
+        Func<string> currentWeight,
+        LocalPreferencesStore? preferences = null)
     {
         _inventoryService = inventoryService;
         _catalog = catalog;
@@ -71,10 +82,13 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         _gate = gate;
         _workflow = workflow;
         _currentWeight = currentWeight;
+        _preferences = preferences;
+        _showActiveIngredientByDefault = preferences?.Current.HidePrescriptionActiveIngredient != true;
 
         CaptureIndications = new FrequentIndicationsPicker(templates, () => PrescriptionDosage, text => PrescriptionDosage = text);
         SheetIndication = new PrescriptionIndicationEditor(templates, CanChangeIndication, SaveIndicationAsync);
         PlanIndication = new PrescriptionIndicationEditor(templates, CanChangeIndication, SaveIndicationAsync);
+        ResetChosenActiveIngredient();
     }
 
     /// <summary>Indicaciones frecuentes del campo "Indicación" de la captura.</summary>
@@ -126,11 +140,15 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChosenMedicineCaption))]
+    [NotifyPropertyChangedFor(nameof(HasChosenActiveIngredient))]
+    [NotifyPropertyChangedFor(nameof(ChosenActiveIngredientToggleText))]
     private bool _isMedicineChosen;
 
     /// <summary>El producto del catálogo que se eligió; null si se eligió lo escrito a mano.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChosenMedicineCaption))]
+    [NotifyPropertyChangedFor(nameof(HasChosenActiveIngredient))]
+    [NotifyPropertyChangedFor(nameof(ChosenActiveIngredientToggleText))]
     private Product? _chosenPrescriptionProduct;
 
     /// <summary>Debajo del buscador, qué se eligió: del inventario (con sus existencias) o escrito a mano.</summary>
@@ -142,6 +160,56 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
     // Mientras se escribe en el buscador el medicamento elegido, el cambio de texto no es una búsqueda nueva
     private bool _choosingMedicine;
+
+    /// <summary>
+    /// «Mostrar (Paracetamol)» junto a "Indicación" (pedido del 2026-10-21): el medicamento elegido se agrega con el principio
+    /// activo entre paréntesis o sin él, y el buscador lo muestra así. Empieza con la última elección de este equipo
+    /// (<see cref="LocalPreferences.HidePrescriptionActiveIngredient"/>; la primera vez, marcada).
+    /// </summary>
+    [ObservableProperty]
+    private bool _showChosenActiveIngredient;
+
+    // Al volver a la última elección (elegir otro medicamento, agregar, abrir la hoja) la casilla no es una elección nueva
+    private bool _resettingActiveIngredient;
+
+    /// <summary>Las partes del renglón del medicamento elegido del catálogo; null si se eligió lo escrito a mano.</summary>
+    private PrescriptionNaming.MedicineLineParts? ChosenMedicineParts =>
+        IsMedicineChosen && !_chosenAsTyped && ChosenPrescriptionProduct is { } product ? PrescriptionNaming.Parts(product) : null;
+
+    /// <summary>La casilla «Mostrar (…)» se ve: el medicamento elegido es de marca (tiene algo entre paréntesis).</summary>
+    public bool HasChosenActiveIngredient => !string.IsNullOrEmpty(ChosenMedicineParts?.ActiveIngredient);
+
+    /// <summary>«Mostrar (Paracetamol)», con el texto que va entre paréntesis.</summary>
+    public string ChosenActiveIngredientToggleText => ChosenMedicineParts?.ActiveIngredient is { Length: > 0 } ingredient ? $"Mostrar ({ingredient})" : string.Empty;
+
+    partial void OnShowChosenActiveIngredientChanged(bool value)
+    {
+        if (!_resettingActiveIngredient) RememberActiveIngredientChoice(value);
+        // El buscador muestra el renglón como se va a agregar
+        if (ChosenMedicineParts is { ActiveIngredient.Length: > 0 } parts)
+        {
+            _choosingMedicine = true;
+            try { PrescriptionSearchText = parts.Compose(value); }
+            finally { _choosingMedicine = false; }
+        }
+    }
+
+    /// <summary>La casilla del medicamento elegido vuelve a la última elección de este equipo.</summary>
+    private void ResetChosenActiveIngredient()
+    {
+        _resettingActiveIngredient = true;
+        try { ShowChosenActiveIngredient = _showActiveIngredientByDefault; }
+        finally { _resettingActiveIngredient = false; }
+    }
+
+    /// <summary>La elección queda para el siguiente medicamento en este equipo (no se sincroniza).</summary>
+    private void RememberActiveIngredientChoice(bool show)
+    {
+        _showActiveIngredientByDefault = show;
+        if (_preferences == null || _preferences.Current.HidePrescriptionActiveIngredient == !show) return;
+        _preferences.Current.HidePrescriptionActiveIngredient = !show;
+        _preferences.Save();
+    }
 
     // Se eligió lo escrito tal cual (Enter con la lista cerrada): el nombre es el texto; el producto, si lo hay, el del
     // catálogo con ese nombre (alergias por su genérico, "Se surte aquí" y el aviso "Elegido del inventario")
@@ -173,6 +241,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     private string _pendingAllergyDosage = string.Empty;
     private int _pendingAllergyQty = 1;
     private string? _pendingAllergyPresentation;
+    private string? _pendingAllergyActiveIngredient;
+    private bool? _pendingAllergyShowActiveIngredient;
 
     [RelayCommand]
     public void CancelAllergyPrescription()
@@ -193,7 +263,11 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         var dosage = _pendingAllergyDosage;
         var qty = _pendingAllergyQty;
         var presentation = _pendingAllergyPresentation;
+        var activeIngredient = _pendingAllergyActiveIngredient;
+        var showActiveIngredient = _pendingAllergyShowActiveIngredient;
         _pendingAllergyPresentation = null;
+        _pendingAllergyActiveIngredient = null;
+        _pendingAllergyShowActiveIngredient = null;
 
         _pendingAllergyProduct = null;
         _pendingAllergyMedName = string.Empty;
@@ -202,7 +276,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
         if (!string.IsNullOrWhiteSpace(name))
         {
-            await AddPrescriptionItemInternalAsync(prod, name, dosage, qty, presentation);
+            await AddPrescriptionItemInternalAsync(prod, name, dosage, qty, presentation, activeIngredient, showActiveIngredient);
         }
     }
 
@@ -261,16 +335,18 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     public void ClosePrescriptionSuggestions() => IsPrescriptionDropdownOpen = false;
 
     /// <summary>
-    /// Elegir un medicamento del catálogo (Enter o clic en las sugerencias, o el catálogo): el buscador lo muestra en el
-    /// orden normado, las sugerencias se cierran y falta escribir la indicación. No lo agrega.
+    /// Elegir un medicamento del catálogo (Enter o clic en las sugerencias, o el catálogo): el buscador lo muestra como se va a
+    /// escribir en la receta (con el principio activo entre paréntesis según «Mostrar (…)», que vuelve a la última elección),
+    /// las sugerencias se cierran y falta escribir la indicación. No lo agrega.
     /// </summary>
     public void ChoosePrescriptionProduct(Product? product)
     {
         if (product == null) return;
+        ResetChosenActiveIngredient();
         _choosingMedicine = true;
         try
         {
-            PrescriptionSearchText = PrescriptionNaming.MedicineLine(product);
+            PrescriptionSearchText = PrescriptionNaming.MedicineLine(product, ShowChosenActiveIngredient);
         }
         finally
         {
@@ -366,14 +442,23 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         if (_session.SelectedPatient == null || _gate.BlockIfConsultationReadOnly()) return;
 
         string name;
+        string? activeIngredient = null;
+        bool? showActiveIngredient = null;
         if (!string.IsNullOrWhiteSpace(PrescriptionMedicineName))
         {
             name = PrescriptionMedicineName.Trim();
         }
         else if (product != null)
         {
-            // En el orden normado: genérico, concentración y forma, y la marca entre paréntesis; la presentación aparte
-            name = PrescriptionNaming.MedicineLine(product);
+            // La marca con su concentración y forma, y el principio activo entre paréntesis si «Mostrar (…)» está marcada; la
+            // presentación aparte. El renglón guarda el principio activo para poder quitarlo o ponerlo después
+            var parts = PrescriptionNaming.Parts(product);
+            name = parts.Compose(ShowChosenActiveIngredient);
+            if (!string.IsNullOrEmpty(parts.ActiveIngredient))
+            {
+                activeIngredient = parts.ActiveIngredient;
+                showActiveIngredient = ShowChosenActiveIngredient;
+            }
         }
         else if (!string.IsNullOrWhiteSpace(PrescriptionSearchText))
         {
@@ -410,6 +495,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
                 _pendingAllergyDosage = dosage;
                 _pendingAllergyQty = qty;
                 _pendingAllergyPresentation = presentation;
+                _pendingAllergyActiveIngredient = activeIngredient;
+                _pendingAllergyShowActiveIngredient = showActiveIngredient;
                 AllergyAlertTitle = "Alerta de alergia a medicamento";
                 AllergyAlertMessage = allergyCheck.WarningDetails;
                 AllergyPatientAllergies = _session.SelectedPatient.Allergies ?? "Sin alergias declaradas";
@@ -418,10 +505,11 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             }
         }
 
-        await AddPrescriptionItemInternalAsync(product, name, dosage, qty, presentation);
+        await AddPrescriptionItemInternalAsync(product, name, dosage, qty, presentation, activeIngredient, showActiveIngredient);
     }
 
-    private async Task AddPrescriptionItemInternalAsync(Product? product, string name, string dosage, int qty, string? presentation = null)
+    private async Task AddPrescriptionItemInternalAsync(Product? product, string name, string dosage, int qty, string? presentation = null,
+        string? activeIngredient = null, bool? showActiveIngredient = null)
     {
         if (_session.SelectedPatient == null) return;
 
@@ -430,7 +518,9 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             MedicineName = name,
             Dosage = dosage,
             RecommendedQuantity = qty,
-            Presentation = presentation
+            Presentation = presentation,
+            ActiveIngredient = string.IsNullOrWhiteSpace(activeIngredient) ? null : activeIngredient,
+            ShowActiveIngredient = string.IsNullOrWhiteSpace(activeIngredient) ? null : showActiveIngredient ?? true
         };
 
         // "Se surte aquí" marcado por defecto cuando hay existencias: se carga solo a la cuenta.
@@ -464,6 +554,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
         SelectedPrescriptionProduct = null;
+        ResetChosenActiveIngredient();
         ApplyPrescriptionSuggestions(string.Empty);
 
         _session.NotifySelectedPatientMutated();
@@ -537,6 +628,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         PrescriptionMedicineName = string.Empty;
         PrescriptionDosage = string.Empty;
         PrescriptionQuantity = 1;
+        ResetChosenActiveIngredient();
         ApplyPrescriptionSuggestions(string.Empty);
         IsPrescriptionDropdownOpen = false;
         CaptureIndications.Close();
@@ -692,7 +784,9 @@ public partial class PrescriptionSheetViewModel : ObservableObject
                 skipped.Add(item.MedicineName);
                 continue;
             }
-            await AddPrescriptionItemInternalAsync(product, item.MedicineName, item.Dosage, Math.Max(1, item.RecommendedQuantity), item.Presentation);
+            // Tal como se recetó: con su principio activo mostrado u oculto (un renglón de antes, sin él, queda igual)
+            await AddPrescriptionItemInternalAsync(product, item.MedicineName, item.Dosage, Math.Max(1, item.RecommendedQuantity), item.Presentation,
+                item.ActiveIngredient, item.ShowActiveIngredient);
         }
 
         _workflow.NotifyPrescriptionStateChanged();
@@ -786,6 +880,61 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         {
             try { await _inventoryService.SavePatientAsync(patient); }
             catch (Exception ex) { AppLogger.Error("No se pudo guardar la indicación de la receta", ex); }
+        }
+        return true;
+    }
+
+    // ==========================================
+    // «MOSTRAR (PRINCIPIO ACTIVO)» DE UN RENGLÓN (PEDIDO DEL 2026-10-21)
+    // ==========================================
+
+    /// <summary>
+    /// La casilla «Mostrar (…)» de un renglón (hoja de receta y sección 5): la casilla ya cambió
+    /// <see cref="PatientPrescriptionItem.ShowsActiveIngredient"/>; aquí se quita o se pone el paréntesis y se guarda.
+    /// </summary>
+    [RelayCommand]
+    public async Task ToggleActiveIngredientAsync(PatientPrescriptionItem? item)
+    {
+        if (item == null) return;
+        await ApplyActiveIngredientAsync(item, item.ShowsActiveIngredient);
+    }
+
+    /// <summary>Mostrar u ocultar el principio activo de un renglón, como la casilla. false si no se pudo (sigue como estaba).</summary>
+    public Task<bool> SetActiveIngredientShownAsync(PatientPrescriptionItem item, bool show)
+    {
+        item.ShowsActiveIngredient = show;
+        return ApplyActiveIngredientAsync(item, show);
+    }
+
+    /// <summary>
+    /// El mismo renglón cambia su texto (no se rehace: conserva su RowId, lo que trae de otro equipo, la indicación, la cantidad
+    /// y "Se surte aquí"; la cuenta no cambia) y se guarda como las demás ediciones de la receta, con la marca del renglón del
+    /// paso 8.22. Solo un renglón de la receta que se ve y que tiene principio activo; con la consulta en otro equipo, avisa y la
+    /// casilla regresa. La elección queda como la de este equipo para el siguiente medicamento.
+    /// </summary>
+    private async Task<bool> ApplyActiveIngredientAsync(PatientPrescriptionItem item, bool show)
+    {
+        var patient = _session.SelectedPatient;
+        var ingredient = item.ActiveIngredient;
+        var suffix = $" ({ingredient?.Trim()})";
+        bool shownNow = item.MedicineName.TrimEnd().EndsWith(suffix, StringComparison.Ordinal);
+        if (patient == null || !item.HasActiveIngredient || !patient.ActivePrescription.Contains(item) || _gate.BlockIfConsultationReadOnly())
+        {
+            // La casilla regresa a lo que dice el renglón
+            if (item.HasActiveIngredient) item.ShowActiveIngredient = shownNow;
+            return false;
+        }
+
+        item.ShowActiveIngredient = show;
+        RememberActiveIngredientChoice(show);
+        item.MedicineName = PrescriptionNaming.WithActiveIngredient(item.MedicineName, ingredient, show);
+        patient.SyncPrescriptionJson();
+        _session.NotifySelectedPatientMutated();
+        _workflow.NotifyPrescriptionStateChanged();
+        if (_inventoryService != null)
+        {
+            try { await _inventoryService.SavePatientAsync(patient); }
+            catch (Exception ex) { AppLogger.Error("No se pudo guardar el renglón de la receta", ex); }
         }
         return true;
     }

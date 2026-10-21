@@ -73,6 +73,12 @@ public sealed class LocalPreferences
     public string? PrescriptionDoctorFont { get; set; }
 
     /// <summary>
+    /// La última elección de «Mostrar (principio activo)» al recetar en este equipo (pedido del 2026-10-21): true = el médico la
+    /// desmarcó, y el siguiente medicamento empieza sin el paréntesis. Falso (lo de siempre) = se muestra.
+    /// </summary>
+    public bool HidePrescriptionActiveIngredient { get; set; }
+
+    /// <summary>
     /// La carpeta del respaldo externo de los resultados de laboratorio (una USB o una carpeta de OneDrive; paso 8.12b).
     /// Sin ella la nube no desaloja nada al llegar a su tope.
     /// </summary>

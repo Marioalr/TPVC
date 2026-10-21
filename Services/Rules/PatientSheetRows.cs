@@ -225,8 +225,9 @@ public static class PatientSheetRows
     }
 
     /// <summary>
-    /// Producto por nombre exacto (sin distinguir mayúsculas), "Nombre (Presentación)", genérico o el renglón normado de la
-    /// receta (desde v1.23.0: "Paracetamol 500 mg tabletas (Tempra)"); el primero de la lista.
+    /// Producto por nombre exacto (sin distinguir mayúsculas), "Nombre (Presentación)", genérico o el renglón de la receta
+    /// (<see cref="CatalogMatchingRules.MedicineLineMatches"/>: "Tempra 500 mg tabletas (Paracetamol)", sin el paréntesis, o el de
+    /// v1.23 a v1.45 "Paracetamol 500 mg tabletas (Tempra)"); el primero de la lista.
     /// </summary>
     public static Product? FindProductByName(IEnumerable<Product> products, string? name)
     {
@@ -236,7 +237,7 @@ public static class PatientSheetRows
             p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
             $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
             (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)) ||
-            (!string.IsNullOrEmpty(p.GenericName) && PrescriptionNaming.MedicineLine(p).Equals(clean, StringComparison.OrdinalIgnoreCase)));
+            CatalogMatchingRules.MedicineLineMatches(p, clean, normalized: false));
     }
 
     // ================================================================== servicios
