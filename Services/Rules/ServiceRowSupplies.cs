@@ -34,10 +34,10 @@ public static class ServiceRowSupplies
     /// <summary>Piezas que se cargan o descuentan de un insumo de la lista; <see cref="Product"/> es el producto si se conoce.</summary>
     public readonly record struct Pieces(PatientServiceSupply Entry, Product? Product, int Count);
 
-    /// <summary>Un insumo nuevo de la lista, cargado como el producto (su nombre, su precio, su clase y su SyncId).</summary>
+    /// <summary>Un insumo nuevo de la lista, cargado como el producto (su nombre, su precio individual, su clase y su SyncId).</summary>
     public static PatientServiceSupply NewEntry(Product product, int pieces)
     {
-        var entry = new PatientServiceSupply { SupplyName = product.Name, Quantity = pieces, UnitPrice = product.Price };
+        var entry = new PatientServiceSupply { SupplyName = product.Name, Quantity = pieces, UnitPrice = product.IndividualUnitPrice };
         PatientSheetRows.SetSupplyLine(entry, PatientSheetRows.SupplyLine.ForProduct(product));
         return entry;
     }

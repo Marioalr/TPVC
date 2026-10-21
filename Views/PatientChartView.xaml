@@ -53,6 +53,13 @@
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource ButtonPrimary}" Command="{Binding ChartPrimaryActionCommand}" Padding="18,7" Margin="0,0,8,0" Content="{Binding Chart.ChartPrimaryActionText}" />
+                    <Button Style="{StaticResource ButtonDangerGhost}" Command="{Binding Chart.DeletePatientCommand}" Margin="0,0,8,0"
+                            ToolTip="Eliminar este expediente clínico" AutomationProperties.Name="Eliminar expediente">
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoTrash}" Width="14" Height="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Eliminar" />
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource ButtonIconSecondary}" helpers:MenuOnClick.IsEnabled="True"
                             Tag="{Binding}" ToolTip="Más acciones" AutomationProperties.Name="Más acciones">
                         <helpers:Icon Data="{StaticResource IcoMore}" StrokeThickness="3" />
@@ -60,7 +67,7 @@
                             <ContextMenu Style="{StaticResource DsContextMenu}">
                                 <MenuItem Header="Editar expediente" Command="{Binding PatientForm.EditPatientCommand}" />
                                 <MenuItem Header="Ver receta" Command="{Binding Preview.OpenPrescriptionPdfPreviewCommand}" />
-                                <MenuItem Header="Dar de baja el expediente" Command="{Binding Chart.DeactivateSelectedPatientCommand}" />
+                                <MenuItem Header="Eliminar expediente" Command="{Binding Chart.DeletePatientCommand}" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>

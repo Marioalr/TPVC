@@ -135,6 +135,10 @@
                                         <TextBlock Text="{Binding ActiveIngredientText}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                                                    Foreground="{DynamicResource ThemeWarningText}"
                                                    Visibility="{Binding IgnoresActiveIngredient, Converter={StaticResource BoolToVis}}" />
+                                        <!-- Revisión 17: su versión no conoce las piezas sueltas de un paquete -->
+                                        <TextBlock Text="{Binding IndividualUnitsText}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                   Foreground="{DynamicResource ThemeWarningText}"
+                                                   Visibility="{Binding IgnoresIndividualUnits, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>

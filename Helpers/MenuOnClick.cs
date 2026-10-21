@@ -22,7 +22,19 @@ public static class MenuOnClick
     {
         if (d is not ButtonBase button) return;
         button.Click -= OpenMenu;
-        if ((bool)e.NewValue) button.Click += OpenMenu;
+        button.ContextMenuOpening -= OnContextMenuOpening;
+        if ((bool)e.NewValue)
+        {
+            button.Click += OpenMenu;
+            button.ContextMenuOpening += OnContextMenuOpening;
+        }
+    }
+
+    private static void OnContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = element;
+        menu.DataContext = element.DataContext;
     }
 
     private static void OpenMenu(object sender, RoutedEventArgs e)

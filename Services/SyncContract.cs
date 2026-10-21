@@ -44,8 +44,12 @@ public static class SyncContract
     /// de cada renglón de marca (<c>ActiveIngredient</c>) y si va entre paréntesis (<c>ShowActiveIngredient</c>); ninguna tabla ni
     /// columna cambia. Un equipo anterior no reconoce el producto de esos renglones: no se le envía una consulta que los tiene
     /// (<see cref="ActiveIngredientRevision"/>).
+    /// 17: consumo parcial de paquetes en servicios: <c>Products.UnitsPerPackage</c> y <c>Products.OpenedUnitsRemaining</c>.
+    /// También <c>SaleItems.IsIndividualUnits</c> (el renglón vendió piezas sueltas) y, en la consulta entre equipos, el
+    /// <c>IsIndividualUnits</c> de cada cargo de la copia. Un equipo anterior no lo conoce y cobraría esas piezas como paquetes
+    /// completos: no se le envía una consulta cuya cuenta las tiene (<see cref="IndividualUnitsRevision"/>).
     /// </summary>
-    public const int Revision = 16;
+    public const int Revision = 17;
 
     /// <summary>
     /// Paso 8.23: la revisión de <c>contracts/sync/schema.json</c> que es la base de la tablet. Desde ella solo se admiten cambios
@@ -71,6 +75,14 @@ public static class SyncContract
     /// receta los tiene y lo dice.
     /// </summary>
     public const int ActiveIngredientRevision = 16;
+
+    /// <summary>
+    /// La revisión desde la que un equipo conoce las piezas sueltas de un paquete (<c>IsIndividualUnits</c> en cada cargo de la
+    /// copia de la consulta, <c>Products.UnitsPerPackage</c> y <c>OpenedUnitsRemaining</c>). Uno anterior ignora la marca y
+    /// cobraría esas piezas como paquetes completos (descontando un paquete por pieza): «Enviar a…» no le manda una consulta
+    /// cuya cuenta las tiene y lo dice.
+    /// </summary>
+    public const int IndividualUnitsRevision = 17;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -132,6 +144,12 @@ public static class SyncContract
     {
         [(typeof(Product), nameof(Product.CurrentStock))] =
             "Existencias del producto. Hoy viaja como valor y se aplica al bajar; quien registra una venta o un movimiento la actualiza en la misma escritura. Pasa a derivada en el paso 8.20.",
+        [(typeof(Product), nameof(Product.UnitsPerPackage))] =
+            "Piezas individuales por paquete o caja (desde la revisión 17). <= 1 cuenta como 1 pieza por unidad de inventario.",
+        [(typeof(Product), nameof(Product.OpenedUnitsRemaining))] =
+            "Piezas individuales sobrantes del paquete actualmente abierto para consumo en servicios (desde la revisión 17).",
+        [(typeof(SaleItem), nameof(SaleItem.IsIndividualUnits))] =
+            "Desde la revisión 17: 1 si el renglón vendió piezas sueltas de un paquete (Quantity son piezas; sus salidas son los paquetes que abrió), 0 si vendió paquetes completos. Nulo = renglón de antes: al cancelarlo cuenta como piezas sueltas si el producto tiene UnitsPerPackage > 1 y UnitPrice es menor que su Price de hoy. Al cancelar un renglón de piezas, las piezas vuelven a OpenedUnitsRemaining y cada paquete que se completa vuelve a CurrentStock con su devolución (EntradaDevolucion): a los lotes de las salidas del renglón con su SyncId de siempre y lo que pase de ellas con uuid5('return:pieces:' + SyncId del renglón).",
         [(typeof(InventoryMovement), nameof(InventoryMovement.Delta))] =
             "Lo que el movimiento suma al libro de existencias, con signo: positivo entra, negativo sale (desde la revisión 11). Quantity es |Delta|. 0 = fila anterior a la revisión 11: cuenta +Quantity si MovementType es EntradaCompra, EntradaAjuste o EntradaDevolucion, o AjusteInventario con StockAfter >= StockBefore, y si no −Quantity. Un movimiento nuevo nunca lleva 0 (regla «Existencias»).",
         [(typeof(InventoryMovement), nameof(InventoryMovement.MovementType))] =
@@ -257,7 +275,7 @@ public static class SyncContract
                     SyncSchema.DeviceRegistryStatements),
                 OtherTable(SyncSchema.FolioCountersTable, "Un consecutivo por serie de folios (paso 8.16): 'EXP-2026' (año) y 'TKT-20261009' (día). La crea la PC; la PC y la tablet toman el siguiente número con una sola instrucción ('folio.take' de hrana/statements.json). No se replica y reemplazar la nube con un respaldo no la toca.",
                     SyncSchema.FolioCountersStatement),
-                OtherTable("ConsultationHandoffs", "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'.",
+                OtherTable("ConsultationHandoffs", "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'. Desde la revisión 17 cada cargo de la copia (Payload) que son piezas sueltas de un paquete lleva IsIndividualUnits: true (no se escribe si es falso) y quien la recibe lo conserva (golden/handoff-payload.json, «Piezas sueltas»). A un equipo con ContractRevision menor que 17 (IndividualUnitsRevision), que cobraría esas piezas como paquetes completos, «Enviar a…» no le manda una consulta cuya cuenta tiene alguno, y lo dice.",
                     ConsultationHandoffService.HandoffTableDdl)),
             ["ddl"] = new JsonArray(schema.Statements.Select(s => (JsonNode)JsonValue.Create(s)!).ToArray())
         };

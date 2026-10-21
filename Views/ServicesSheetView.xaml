@@ -192,7 +192,7 @@
                                                         Visibility="{Binding IsEditingSupplies, Converter={StaticResource BoolToVis}}">
                                                     <StackPanel>
                                                         <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,0,0,6"
-                                                                   Text="Solo en esta consulta: lo que cambie se carga o se descuenta de la cuenta, y el servicio sigue con sus insumos de siempre." />
+                                                                   Text="Solo en esta consulta: ajuste cuántas piezas individuales (ampolletas, piezas, etc.) se consumen. Si el paquete trae varias piezas, solo se consume esa parte." />
                                                         <!-- Los del renglón o, en uno sin lista (de una versión anterior), los que descontaría quitarlo -->
                                                         <ItemsControl ItemsSource="{Binding DataContext.ClinicalServices.SupplyEditorEntries, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                                             <ItemsControl.ItemTemplate>
@@ -205,7 +205,7 @@
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Style="{StaticResource TextBody}" Text="{Binding SupplyName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                                                         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center">
-                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza menos (en 0 se quita)"
+                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza individual menos (en 0 se quita)"
                                                                                     AutomationProperties.Name="Una pieza menos del insumo"
                                                                                     Command="{Binding DataContext.ClinicalServices.DecreaseServiceSupplyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                                     CommandParameter="{Binding}">
@@ -213,7 +213,7 @@
                                                                             </Button>
                                                                             <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" MinWidth="32" TextAlignment="Center" VerticalAlignment="Center"
                                                                                        Text="{Binding Quantity}" AutomationProperties.Name="Piezas del insumo" />
-                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza más"
+                                                                            <Button Style="{StaticResource ButtonIconSecondary}" Width="26" Height="26" ToolTip="Una pieza individual más"
                                                                                     AutomationProperties.Name="Una pieza más del insumo"
                                                                                     Command="{Binding DataContext.ClinicalServices.IncreaseServiceSupplyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                                     CommandParameter="{Binding}">
@@ -234,14 +234,14 @@
                                                                    Visibility="{Binding DataContext.ClinicalServices.HasSupplyEditorEntries, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBoolToVis}}" />
                                                         <TextBox Style="{StaticResource FieldTextBox}" Margin="0,6,0,0"
                                                                  Text="{Binding DataContext.ClinicalServices.ServiceSupplySearchText, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}"
-                                                                 helpers:Field.Placeholder="Agregar insumo: escriba para buscar"
+                                                                 helpers:Field.Placeholder="Agregar insumo (por piezas individuales): escriba para buscar"
                                                                  PreviewKeyDown="ServiceSupplySearch_PreviewKeyDown"
                                                                  IsVisibleChanged="ServiceSupplySearch_IsVisibleChanged"
                                                                  AutomationProperties.Name="Agregar insumo al servicio" />
                                                         <Border Style="{StaticResource Card}" Padding="6" Margin="0,6,0,0"
                                                                 Visibility="{Binding DataContext.ClinicalServices.IsServiceSupplyDropdownOpen, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
                                                             <StackPanel>
-                                                                <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega una pieza · Esc cierra los insumos" Margin="10,4,10,4" />
+                                                                <TextBlock Style="{StaticResource TextCaption}" Text="↑ ↓ para elegir · Enter o clic agrega una pieza individual · Esc cierra los insumos" Margin="10,4,10,4" />
                                                                 <ListBox Style="{StaticResource PlainList}" MaxHeight="180"
                                                                          ItemsSource="{Binding DataContext.ClinicalServices.ServiceSupplySuggestions, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                          SelectedItem="{Binding DataContext.ClinicalServices.SelectedServiceSupplySuggestion, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
@@ -257,14 +257,19 @@
                                                                                     <ColumnDefinition Width="90" />
                                                                                 </Grid.ColumnDefinitions>
                                                                                 <StackPanel>
-                                                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                                                    <StackPanel Orientation="Horizontal">
+                                                                                        <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                                                        <Border Style="{StaticResource Badge}" Margin="6,0,0,0" Visibility="{Binding HasMultipleUnitsPerPackage, Converter={StaticResource BoolToVis}}">
+                                                                                            <TextBlock Text="{Binding PackageContentText}" />
+                                                                                        </Border>
+                                                                                    </StackPanel>
                                                                                     <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Presentation}" />
                                                                                 </StackPanel>
                                                                                 <Border Grid.Column="1" Style="{StaticResource StockBadge}" Margin="12,0" VerticalAlignment="Center">
                                                                                     <TextBlock Text="{Binding StockBadgeText}" />
                                                                                 </Border>
                                                                                 <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
-                                                                                           Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                                                           Text="{Binding IndividualUnitPrice, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
                                                                             </Grid>
                                                                         </DataTemplate>
                                                                     </ListBox.ItemTemplate>

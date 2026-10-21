@@ -579,6 +579,18 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Por qué no se envía la consulta a <paramref name="device"/>: su versión no conoce las piezas sueltas de un paquete
+    /// (<see cref="LinkedDevice.IgnoresIndividualUnits"/>) y la cuenta tiene algún cargo por pieza; null si se puede.
+    /// </summary>
+    public static string? IndividualUnitsBlock(LinkedDevice device, IEnumerable<ConsultationProductItem>? items)
+    {
+        if (!device.IgnoresIndividualUnits || items == null || !items.Any(i => i.IsIndividualUnits)) return null;
+        return $"No se puede enviar a {device.DeviceName}: tiene una versión anterior de TPVC que no conoce las piezas sueltas de un " +
+               "paquete de esta cuenta (cobraría cada pieza como un paquete completo). Actualícela a la versión más reciente, o envíe " +
+               "la consulta a otro equipo.";
+    }
+
+    /// <summary>
     /// Sube lo pendiente del expediente, deja la consulta en solo lectura (con la marca guardada en
     /// disco) y publica la copia para el otro equipo.
     /// </summary>
@@ -596,6 +608,13 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         if (ActiveIngredientBlock(device, prescription) is { } blocked)
         {
             HandoffSheetError = blocked;
+            return;
+        }
+
+        // Revisión 17: un equipo anterior ignora IsIndividualUnits y cobraría las piezas sueltas como paquetes completos
+        if (IndividualUnitsBlock(device, _consultationService.CurrentConsultation.Items) is { } piecesBlocked)
+        {
+            HandoffSheetError = piecesBlocked;
             return;
         }
 

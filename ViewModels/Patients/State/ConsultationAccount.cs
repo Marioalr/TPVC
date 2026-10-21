@@ -86,10 +86,10 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>Quita (o reduce) un cargo de la cuenta de la consulta.</summary>
-    private void Uncharge(int productId, int quantity)
+    private void Uncharge(int productId, int quantity, bool? isIndividualUnits = null)
     {
         var consultation = _consultationService?.CurrentConsultation;
-        if (consultation == null || !ConsultationAccountRules.RemoveLine(consultation.Items, productId, quantity)) return;
+        if (consultation == null || !ConsultationAccountRules.RemoveLine(consultation.Items, productId, quantity, isIndividualUnits)) return;
 
         consultation.NotifyItemsChanged();
         _workflow.SyncActiveConsultation();
@@ -244,8 +244,10 @@ public partial class ConsultationAccount : ObservableObject
     private bool ChargeServiceProductUnits(Product product, int units)
     {
         if (_consultationService?.CurrentConsultation == null || units <= 0) return false;
+        bool isIndividual = product.HasMultipleUnitsPerPackage;
         _consultationService.AddCartItemToActiveConsultation(
-            product.Id, product.Code, product.Name, product.GenericName, product.Presentation, product.Unit, product.Price, units);
+            product.Id, product.Code, product.Name, product.GenericName, product.Presentation,
+            isIndividual ? "Piezas ind." : product.Unit, product.IndividualUnitPrice, units, isIndividualUnits: isIndividual);
         return true;
     }
 
@@ -275,7 +277,8 @@ public partial class ConsultationAccount : ObservableObject
         units = Math.Min(units, entry.Quantity);
         if (units <= 0) return;
         var line = ServiceSupplyLine(entry);
-        Uncharge(line.LineId, units);
+        var lineProduct = line.LineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == line.LineId) : null;
+        Uncharge(line.LineId, units, lineProduct?.HasMultipleUnitsPerPackage);
         entry.Quantity -= units;
         PatientSheetRows.RefreshSupplyLine(entry, line);
     }
@@ -356,7 +359,9 @@ public partial class ConsultationAccount : ObservableObject
         foreach (var pieces in ServiceRowSupplies.RemoveUnits(list, service?.DefaultProducts, units))
         {
             // Quitar las piezas de la lista ya lo hizo RemoveUnits: aquí solo se descuentan de su renglón de la cuenta
-            Uncharge(ServiceSupplyLine(pieces.Entry).LineId, pieces.Count);
+            var supplyLineId = ServiceSupplyLine(pieces.Entry).LineId;
+            var supplyProduct = supplyLineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == supplyLineId) : null;
+            Uncharge(supplyLineId, pieces.Count, supplyProduct?.HasMultipleUnitsPerPackage);
         }
         item.Supplies = list;
         return true;
@@ -377,7 +382,9 @@ public partial class ConsultationAccount : ObservableObject
         Uncharge(lineId, units);
         foreach (var pieces in ServiceRowSupplies.UnchargeAll(item.Supplies))
         {
-            Uncharge(ServiceSupplyLine(pieces.Entry).LineId, pieces.Count);
+            var supplyLineId = ServiceSupplyLine(pieces.Entry).LineId;
+            var supplyProduct = supplyLineId > 0 ? _catalog.AvailableProducts.FirstOrDefault(p => p.Id == supplyLineId) : null;
+            Uncharge(supplyLineId, pieces.Count, supplyProduct?.HasMultipleUnitsPerPackage);
         }
     }
 
@@ -444,7 +451,7 @@ public partial class ConsultationAccount : ObservableObject
         Uncharge(lineId, units);
         foreach (var dp in service?.DefaultProducts ?? Enumerable.Empty<ServiceDefaultProduct>())
         {
-            if (dp.Product != null) Uncharge(dp.Product.Id, ServiceRowSupplies.PiecesPerUnit(dp) * units);
+            if (dp.Product != null) Uncharge(dp.Product.Id, ServiceRowSupplies.PiecesPerUnit(dp) * units, dp.Product.HasMultipleUnitsPerPackage);
         }
     }
 
@@ -452,8 +459,19 @@ public partial class ConsultationAccount : ObservableObject
     /// Piezas de un producto que todavía caben en la cuenta (<see cref="ServiceRowSupplies.PiecesThatFit"/>): sus existencias
     /// menos lo que ya está cargado de él.
     /// </summary>
-    public int PiecesThatFit(Product product, int requested) =>
-        ServiceRowSupplies.PiecesThatFit(requested, product.CurrentStock, ChargedProductUnits(product.Id));
+    public int PiecesThatFit(Product product, int requested)
+    {
+        var items = _consultationService?.CurrentConsultation?.Items;
+        if (product.HasMultipleUnitsPerPackage)
+        {
+            int wholePackagesInCart = items?.Where(i => i.ProductId == product.Id && !i.IsIndividualUnits).Sum(i => i.Quantity) ?? 0;
+            int individualUnitsInCart = items?.Where(i => i.ProductId == product.Id && i.IsIndividualUnits).Sum(i => i.Quantity) ?? 0;
+            int totalAvailableIndividual = (Math.Max(0, product.CurrentStock - wholePackagesInCart) * product.EffectiveUnitsPerPackage)
+                                           + Math.Max(0, product.OpenedUnitsRemaining);
+            return ServiceRowSupplies.PiecesThatFit(requested, totalAvailableIndividual, individualUnitsInCart);
+        }
+        return ServiceRowSupplies.PiecesThatFit(requested, product.CurrentStock, ChargedProductUnits(product.Id));
+    }
 
     [RelayCommand]
     public void AddServiceToActiveConsultation(ClinicalService? service) => TryAddServiceToActiveConsultation(service);
@@ -486,15 +504,17 @@ public partial class ConsultationAccount : ObservableObject
             {
                 if (dp.Product != null)
                 {
+                    bool isIndividual = dp.Product.HasMultipleUnitsPerPackage;
                     _consultationService.AddCartItemToActiveConsultation(
                         dp.Product.Id,
                         dp.Product.Code,
                         dp.Product.Name,
                         dp.Product.GenericName,
                         dp.Product.Presentation,
-                        dp.Product.Unit,
-                        dp.Product.Price,
-                        Math.Max(1, dp.Quantity)
+                        isIndividual ? "Piezas ind." : dp.Product.Unit,
+                        dp.Product.IndividualUnitPrice,
+                        Math.Max(1, dp.Quantity),
+                        isIndividualUnits: isIndividual
                     );
                 }
             }

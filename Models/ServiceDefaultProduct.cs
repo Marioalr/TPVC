@@ -15,4 +15,10 @@ public class ServiceDefaultProduct : ISyncEntity
     
     public int Quantity { get; set; } = 1;
     public string? Instructions { get; set; }
+
+    public decimal EffectiveUnitPrice => Product?.IndividualUnitPrice ?? 0m;
+    public decimal Subtotal => Quantity * EffectiveUnitPrice;
+    public string PackageSummary => Product is { HasMultipleUnitsPerPackage: true } p
+        ? $"{Quantity} de {p.EffectiveUnitsPerPackage} pzas/paq ({EffectiveUnitPrice:C}/pza)"
+        : $"{Quantity} pza(s)";
 }

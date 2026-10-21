@@ -36,7 +36,7 @@ public partial class ProductDialogViewModel : ObservableObject
     private string _unit = "Piezas";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ProfitText))]
+    [NotifyPropertyChangedFor(nameof(ProfitText), nameof(IndividualUnitPriceSummary))]
     private decimal _price = 0.0m;
 
     /// <summary>Costo por unidad (lo que se paga al proveedor).</summary>
@@ -63,6 +63,23 @@ public partial class ProductDialogViewModel : ObservableObject
 
     [ObservableProperty]
     private int _optimalStock = 20;
+
+    /// <summary>
+    /// Cuántos individuales contiene el paquete (ampolletas, piezas, etc.). Si no se ingresa, se asume 1 sola pieza.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveUnitsPerPackage), nameof(IndividualUnitPriceSummary))]
+    private string _unitsPerPackageText = string.Empty;
+
+    public int EffectiveUnitsPerPackage =>
+        int.TryParse(UnitsPerPackageText?.Trim(), out int parsed) && parsed > 1 ? parsed : 1;
+
+    public string IndividualUnitPriceSummary =>
+        EffectiveUnitsPerPackage > 1 && Price > 0
+            ? $"Contiene {EffectiveUnitsPerPackage} piezas individuales · {Math.Round(Price / EffectiveUnitsPerPackage, 2, MidpointRounding.AwayFromZero).ToString("C2", Mexican)} c/u en servicios"
+            : EffectiveUnitsPerPackage > 1
+                ? $"Contiene {EffectiveUnitsPerPackage} piezas individuales por paquete"
+                : "Si se deja vacío se asume 1 sola pieza individual";
 
     [ObservableProperty]
     private string _location = string.Empty;
@@ -162,6 +179,7 @@ public partial class ProductDialogViewModel : ObservableObject
             OriginalStock = existing.CurrentStock;
             MinStock = existing.MinStock;
             OptimalStock = existing.OptimalStock;
+            UnitsPerPackageText = existing.UnitsPerPackage > 1 ? existing.UnitsPerPackage.ToString() : string.Empty;
             Location = existing.Location ?? string.Empty;
             SupplierCode = existing.SupplierCode ?? string.Empty;
             RequiresRefrigeration = existing.RequiresRefrigeration;
@@ -185,6 +203,7 @@ public partial class ProductDialogViewModel : ObservableObject
         OriginalStock = null;
         MinStock = 5;
         OptimalStock = 20;
+        UnitsPerPackageText = string.Empty;
         Location = string.Empty;
         SupplierCode = string.Empty;
         RequiresRefrigeration = false;
@@ -250,6 +269,7 @@ public partial class ProductDialogViewModel : ObservableObject
                 CurrentStock = CurrentStock,
                 MinStock = MinStock,
                 OptimalStock = OptimalStock,
+                UnitsPerPackage = EffectiveUnitsPerPackage,
                 Location = string.IsNullOrWhiteSpace(Location) ? null : Location.Trim(),
                 SupplierCode = string.IsNullOrWhiteSpace(SupplierCode) ? null : SupplierCode.Trim(),
                 RequiresRefrigeration = RequiresRefrigeration,

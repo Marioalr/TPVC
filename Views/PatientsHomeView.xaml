@@ -190,8 +190,15 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:PatientRecord}">
                                     <Button Style="{StaticResource PatientButton}" Margin="0,0,10,10"
+                                            Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Style="{StaticResource DsContextMenu}">
+                                                <MenuItem Header="Abrir expediente" Command="{Binding PlacementTarget.Tag.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                <MenuItem Header="Eliminar expediente" Command="{Binding PlacementTarget.Tag.Chart.DeletePatientCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -245,8 +252,15 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:PatientRecord}">
                                         <Button x:Name="Row" Style="{StaticResource PatientResultRow}" Margin="0,0,0,4" Padding="9,10,12,10"
+                                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 Command="{Binding DataContext.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}">
+                                            <Button.ContextMenu>
+                                                <ContextMenu Style="{StaticResource DsContextMenu}">
+                                                    <MenuItem Header="Abrir expediente" Command="{Binding PlacementTarget.Tag.OpenPatientChartCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Eliminar expediente" Command="{Binding PlacementTarget.Tag.Chart.DeletePatientCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" />

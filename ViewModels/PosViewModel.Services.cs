@@ -145,17 +145,19 @@ public partial class PosViewModel
             {
                 var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
                 if (prod == null) continue;
-                if (prod.CurrentStock <= 0)
+                bool isIndividual = prod.HasMultipleUnitsPerPackage;
+                int availableUnits = isIndividual ? prod.AvailableIndividualUnits : prod.CurrentStock;
+                if (availableUnits <= 0)
                 {
                     withoutStock++;
                     continue;
                 }
 
-                var existing = Cart.FirstOrDefault(c => c.ProductId == prod.Id);
+                var existing = Cart.FirstOrDefault(c => c.ProductId == prod.Id && c.IsIndividualUnits == isIndividual);
                 if (existing != null)
                 {
-                    existing.AvailableStock = prod.CurrentStock;
-                    existing.Quantity = Math.Min(existing.Quantity + dp.Quantity, prod.CurrentStock);
+                    existing.AvailableStock = availableUnits;
+                    existing.Quantity = Math.Min(existing.Quantity + dp.Quantity, availableUnits);
                 }
                 else
                 {
@@ -166,11 +168,12 @@ public partial class PosViewModel
                         Name = prod.Name,
                         GenericName = prod.GenericName,
                         Presentation = prod.Presentation,
-                        Unit = prod.Unit,
-                        AvailableStock = prod.CurrentStock,
-                        UnitPrice = prod.Price,
+                        Unit = isIndividual ? "Piezas ind." : prod.Unit,
+                        AvailableStock = availableUnits,
+                        UnitPrice = prod.IndividualUnitPrice,
                         RequiresRefrigeration = prod.RequiresRefrigeration,
-                        Quantity = Math.Min(dp.Quantity, prod.CurrentStock)
+                        IsIndividualUnits = isIndividual,
+                        Quantity = Math.Min(dp.Quantity, availableUnits)
                     });
                 }
                 added++;
@@ -218,13 +221,52 @@ public partial class PosViewModel
         {
             var prod = Products.FirstOrDefault(p => p.Id == dp.ProductId) ?? dp.Product;
             if (prod == null) continue;
-            _consultationService.AddCartItemToActiveConsultation(prod.Id, prod.Code, prod.Name, prod.GenericName, prod.Presentation, prod.Unit, prod.Price, dp.Quantity);
+            bool isIndividual = prod.HasMultipleUnitsPerPackage;
+            _consultationService.AddCartItemToActiveConsultation(
+                prod.Id,
+                prod.Code,
+                prod.Name,
+                prod.GenericName,
+                prod.Presentation,
+                isIndividual ? "Piezas ind." : prod.Unit,
+                prod.IndividualUnitPrice,
+                dp.Quantity,
+                isIndividualUnits: isIndividual);
             addedSupplies++;
         }
 
         ShowAlert($"{service.Name} ({addedSupplies} insumo(s)) agregado a la consulta de {_consultationService.CurrentConsultation?.PatientName}", true, toast: true);
         IsServicesModalOpen = false;
         SyncActiveConsultation();
+    }
+
+    [RelayCommand]
+    public async Task DeleteServiceAsync(ClinicalService? service)
+    {
+        service ??= SelectedService;
+        if (service == null) return;
+
+        if (!DialogService.Confirm(
+                $"¿Eliminar el servicio '{service.Name}' ({service.Code}) del catálogo?\n\nLos tickets ya cobrados se conservan.",
+                "Eliminar servicio"))
+        {
+            return;
+        }
+
+        try
+        {
+            if (service.Id > 0)
+            {
+                await _inventoryService.DeleteClinicalServiceAsync(service.Id);
+            }
+            Services.Remove(service);
+            ApplyServicesFilter();
+            ShowAlert($"Servicio '{service.Name}' eliminado.", true, toast: true);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"No se pudo eliminar el servicio: {ex.Message}", false);
+        }
     }
 
     // ================================================================== alta de servicio

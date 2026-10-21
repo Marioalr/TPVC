@@ -963,4 +963,101 @@ public class PacientesTests
         var stored = db.Patients.Single(p => p.Id == patient.Id);
         Assert.IsFalse(stored.IsActive, "Baja lógica: el expediente se conserva");
     }
+
+    [TestMethod]
+    public async Task DeletePatient_WorksFromHomeListAndEditModalAndInMemorySession()
+    {
+        var (records, _, consultations) = await CreateRecordsAsync();
+        var firstPatient = records.Patients.First();
+
+        // 1. Eliminar directamente pasando el paciente como parámetro (como desde la lista de inicio)
+        await records.Chart.DeletePatientAsync(firstPatient);
+        Assert.IsFalse(records.Patients.Any(p => p.Id == firstPatient.Id));
+        Assert.IsFalse(consultations.Patients.Any(p => p.Id == firstPatient.Id));
+
+        // 2. Eliminar desde el modal de edición de paciente
+        var secondPatient = records.Patients.First();
+        records.SelectedPatient = secondPatient;
+        records.PatientForm.EditPatient();
+        Assert.IsTrue(records.PatientForm.IsPatientModalOpen);
+        Assert.IsTrue(records.PatientForm.IsEditingExistingPatient);
+
+        await records.PatientForm.DeleteEditingPatientAsync();
+        Assert.IsFalse(records.PatientForm.IsPatientModalOpen);
+        Assert.IsFalse(records.Patients.Any(p => p.Id == secondPatient.Id));
+
+        // 3. Modo sin base de datos (en memoria)
+        var inMemoryConsult = new ConsultationService();
+        var inMemoryVm = new MedicalRecordsViewModel(null, inMemoryConsult);
+        var memPatient = inMemoryVm.Patients.First();
+        await inMemoryVm.Chart.DeletePatientAsync(memPatient);
+        Assert.IsFalse(inMemoryVm.Patients.Any(p => p.RecordNumber == memPatient.RecordNumber));
+        Assert.IsFalse(inMemoryConsult.Patients.Any(p => p.RecordNumber == memPatient.RecordNumber));
+    }
+
+    [TestMethod]
+    public async Task ConsultationService_ConsumesIndividualUnitsFromPackage_AndChargesProportionalPrice()
+    {
+        var (records, checkout, _) = await CreateRecordsAsync();
+        var categories = await _service.GetCategoriesAsync();
+        var boxProduct = new Product
+        {
+            Code = "INS-AMP-10",
+            Name = "Lidocaína Caja c/10 ampolletas",
+            CategoryId = categories.First().Id,
+            Price = 200m,
+            UnitsPerPackage = 10
+        };
+        await _service.SaveProductAsync(boxProduct);
+        await _service.ReceiveBatchAsync(
+            new ProductBatch
+            {
+                ProductId = boxProduct.Id,
+                BatchNumber = "LOT-LID-01",
+                ExpirationDate = DateTime.Today.AddYears(1),
+                Quantity = 1
+            },
+            unitsPerPackage: 10);
+
+        await records.LoadPatientsAsync();
+        await records.LoadServicesAsync();
+        var patient = records.Patients.First();
+        records.OpenPatientChart(patient);
+        records.StartActiveConsultation();
+
+        var service = records.Catalog.Services.First(s => s.DefaultProducts.Count == 0);
+        await records.ClinicalServices.SelectAndAddServiceModalSuggestionAsync(service);
+        var serviceRow = patient.ActiveServices.Last();
+        records.ClinicalServices.ToggleServiceSupplies(serviceRow);
+
+        var loadedProd = records.Catalog.AvailableProducts.Single(p => p.Id == boxProduct.Id);
+        Assert.AreEqual(10, loadedProd.UnitsPerPackage);
+        Assert.AreEqual(20m, loadedProd.IndividualUnitPrice);
+
+        // Agregar 3 piezas individuales al servicio en consulta
+        await records.ClinicalServices.AddServiceSupplyAsync(loadedProd);
+        var supplyRow = TPVC.Services.Rules.ServiceRowSupplies.Find(serviceRow.Supplies, loadedProd)!;
+        Assert.IsNotNull(supplyRow);
+        Assert.AreEqual(20m, supplyRow.UnitPrice, "Debe cobrar el precio proporcional por pieza individual");
+        await records.ClinicalServices.IncreaseServiceSupplyAsync(supplyRow);
+        await records.ClinicalServices.IncreaseServiceSupplyAsync(supplyRow);
+        Assert.AreEqual(3, supplyRow.Quantity);
+
+        records.Consultation.ConsultationDiagnosis = "Z00 Examen general";
+        await records.Consultation.FinalizeConsultationAsync();
+
+        var checkoutSupplyLine = checkout.Cart.Single(c => c.ProductId == loadedProd.Id);
+        Assert.IsTrue(checkoutSupplyLine.IsIndividualUnits);
+        Assert.AreEqual(3, checkoutSupplyLine.Quantity);
+        Assert.AreEqual(20m, checkoutSupplyLine.UnitPrice);
+
+        checkout.SelectedPaymentMethod = "Efectivo";
+        checkout.CashReceived = 5000m;
+        await checkout.ChargeAsync();
+
+        var afterProduct = (await _service.GetProductsAsync()).Single(p => p.Id == boxProduct.Id);
+        Assert.AreEqual(0, afterProduct.CurrentStock, "Se abrió la única caja disponible");
+        Assert.AreEqual(7, afterProduct.OpenedUnitsRemaining, "Quedan 7 ampolletas individuales del paquete abierto");
+        Assert.AreEqual(7, afterProduct.AvailableIndividualUnits);
+    }
 }

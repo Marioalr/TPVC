@@ -71,4 +71,12 @@ public partial class PatientsWorkspace
     /// <summary>Handoff.StartHandoffPolling.</summary>
     [NotForBinding]
     public void StartHandoffPolling() => Handoff.StartHandoffPolling();
+
+    /// <summary>Chart.DeletePatientAsync.</summary>
+    [NotForBinding]
+    public Task DeletePatientAsync(PatientRecord? patient = null) => Chart.DeletePatientAsync(patient);
+
+    /// <summary>Chart.DeactivateSelectedPatientAsync.</summary>
+    [NotForBinding]
+    public Task DeactivateSelectedPatientAsync() => Chart.DeactivateSelectedPatientAsync();
 }

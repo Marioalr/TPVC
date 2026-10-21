@@ -66,10 +66,19 @@ public class SaleItem : ISyncEntity
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Subtotal { get; set; }
+
+    /// <summary>
+    /// Revisión 17: true si el renglón vendió piezas sueltas de un paquete (<see cref="Quantity"/> son piezas, no paquetes),
+    /// false si vendió paquetes completos. null = renglón de antes, que al cancelarse se reconoce con la regla vieja
+    /// (<see cref="Services.InventoryService.SoldIndividualUnits"/>).
+    /// </summary>
+    public bool? IsIndividualUnits { get; set; }
 }
 
 /// <summary>
 /// Línea solicitada al registrar una venta. Un ProductId &lt;= 0 representa un servicio
 /// clínico (convención del carrito del POS: -Id del servicio).
+/// Cuando <paramref name="IsIndividualUnits"/> es true, <paramref name="Quantity"/> indica piezas individuales
+/// de un paquete multipieza consumidas en un servicio clínico.
 /// </summary>
-public record SaleLineRequest(int ProductId, int Quantity, decimal UnitPrice, string? Code = null, string? Description = null);
+public record SaleLineRequest(int ProductId, int Quantity, decimal UnitPrice, string? Code = null, string? Description = null, bool IsIndividualUnits = false);

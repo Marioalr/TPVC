@@ -122,7 +122,7 @@
                             </StackPanel>
 
                             <StackPanel Grid.Row="1">
-                                <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Insumos incluidos" Margin="0,0,0,6" />
+                                <TextBlock Style="{StaticResource TextLabel}" Foreground="{DynamicResource ThemeTextSecondary}" Text="Insumos incluidos (piezas individuales)" Margin="0,0,0,6" />
                                 <ItemsControl ItemsSource="{Binding DefaultProducts}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type models:ServiceDefaultProduct}">
@@ -131,8 +131,12 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Product.Name}" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding Quantity, StringFormat='× {0}'}" Margin="12,0,0,0" />
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource TextBody}" Text="{Binding Product.Name}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding PackageSummary}"
+                                                               Visibility="{Binding PackageSummary, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Style="{StaticResource TextMono}" Text="{Binding Quantity, StringFormat='× {0} pza(s)'}" Margin="12,0,0,0" VerticalAlignment="Center" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -160,6 +164,15 @@
                                         ToolTip="Se cobra al terminar la consulta">
                                     <TextBlock Text="{Binding DataContext.ActiveConsultationPatientName, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat='Agregar a la consulta de {0}'}"
                                                TextTrimming="CharacterEllipsis" />
+                                </Button>
+                                <Button Style="{StaticResource ButtonDangerGhost}" Margin="0,8,0,0"
+                                        Command="{Binding DataContext.DeleteServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip="Eliminar este servicio del catálogo" AutomationProperties.Name="Eliminar servicio">
+                                    <StackPanel Orientation="Horizontal">
+                                        <helpers:Icon Data="{StaticResource IcoTrash}" Width="14" Height="14" Margin="0,0,6,0" />
+                                        <TextBlock Text="Eliminar servicio" />
+                                    </StackPanel>
                                 </Button>
                             </StackPanel>
                         </Grid>

@@ -86,6 +86,9 @@
                                             <Border Style="{StaticResource BadgeInfo}" Margin="8,0,0,0" Visibility="{Binding RequiresRefrigeration, Converter={StaticResource BoolToVis}}">
                                                 <TextBlock Text="Refrigerar" />
                                             </Border>
+                                            <Border Style="{StaticResource Badge}" Margin="6,0,0,0" Visibility="{Binding HasMultipleUnitsPerPackage, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding PackageContentText}" />
+                                            </Border>
                                         </StackPanel>
                                         <TextBlock Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis">
                                             <TextBlock.Text>
@@ -106,14 +109,7 @@
                                         <!-- Bajo el mínimo o agotado: además del color, el icono de aviso -->
                                         <helpers:Icon Data="{StaticResource IcoAlert}" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center"
                                                       Visibility="{Binding IsLowStock, Converter={StaticResource BoolToVis}}" />
-                                        <TextBlock>
-                                            <TextBlock.Text>
-                                                <MultiBinding StringFormat="{}{0} {1}">
-                                                    <Binding Path="CurrentStock" />
-                                                    <Binding Path="Unit" />
-                                                </MultiBinding>
-                                            </TextBlock.Text>
-                                        </TextBlock>
+                                        <TextBlock Text="{Binding StockBadgeText}" />
                                         </StackPanel>
                                     </Border>
                                     <StackPanel Grid.Column="3" VerticalAlignment="Center">
@@ -227,6 +223,17 @@
                                 <ComboBox Style="{StaticResource FieldComboBox}" ItemsSource="{Binding CommonUnits}" SelectedItem="{Binding Unit}" />
                             </StackPanel>
                         </Grid>
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Contenido por paquete (ampolletas, piezas, etc.)" />
+                            <TextBox Style="{StaticResource FieldTextBox}" FontFamily="{StaticResource FontFamilyMono}"
+                                     Text="{Binding UnitsPerPackageText, UpdateSourceTrigger=PropertyChanged}"
+                                     helpers:Field.Placeholder="1 (si no se ingresa se asume 1 sola pieza)"
+                                     AutomationProperties.Name="Contenido por paquete"
+                                     ToolTip="Cuántas piezas individuales (ampolletas, tabletas, sobres, etc.) contiene cada paquete para poder consumir solo una parte en servicios." />
+                            <TextBlock Style="{StaticResource FieldHint}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Text="{Binding IndividualUnitPriceSummary}"
+                                       Visibility="{Binding IndividualUnitPriceSummary, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -348,6 +355,13 @@
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Cantidad" />
                     <TextBox Style="{StaticResource FieldTextBox}" FontSize="18" Height="44" HorizontalContentAlignment="Center"
                              Text="{Binding QuickActionQuantity, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" AutomationProperties.Name="Cantidad" />
+                    <StackPanel Margin="0,0,0,12" Visibility="{Binding IsQuickConsumptionMode, Converter={StaticResource InverseBoolToVis}}">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Contenido por paquete (ampolletas, piezas, etc.)" />
+                        <TextBox Style="{StaticResource FieldTextBox}"
+                                 Text="{Binding QuickEntryUnitsPerPackageText, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="1 (si no se ingresa se conserva o asume 1)"
+                                 AutomationProperties.Name="Contenido por paquete" />
+                    </StackPanel>
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Motivo" />
                     <TextBox Style="{StaticResource FieldTextBox}" Text="{Binding QuickActionNotes, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Motivo" />
                     <TextBlock Style="{StaticResource FieldHint}" Margin="0,8,0,0" TextWrapping="Wrap"
@@ -444,21 +458,23 @@
                         <!-- Encabezados de la tabla -->
                         <Grid Grid.Row="1" Margin="8,0,8,6">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2.1*" />
                                 <ColumnDefinition Width="2.2*" />
-                                <ColumnDefinition Width="2.4*" />
-                                <ColumnDefinition Width="64" />
-                                <ColumnDefinition Width="96" />
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="116" />
-                                <ColumnDefinition Width="96" />
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="108" />
+                                <ColumnDefinition Width="88" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource TextCaption}" Text="En el correo" />
                             <TextBlock Grid.Column="1" Style="{StaticResource TextCaption}" Text="Producto en TPVC" Margin="8,0,0,0" />
                             <TextBlock Grid.Column="2" Style="{StaticResource TextCaption}" Text="Cant." Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="3" Style="{StaticResource TextCaption}" Text="Costo u." Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="4" Style="{StaticResource TextCaption}" Text="Lote (opcional)" Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="5" Style="{StaticResource TextCaption}" Text="Caducidad" Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="6" Style="{StaticResource TextCaption}" Text="Total" TextAlignment="Right" />
+                            <TextBlock Grid.Column="3" Style="{StaticResource TextCaption}" Text="Pzas/paq." Margin="8,0,0,0" ToolTip="Piezas individuales por paquete (ampolletas, piezas, etc.; vacío = 1)" />
+                            <TextBlock Grid.Column="4" Style="{StaticResource TextCaption}" Text="Costo u." Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="5" Style="{StaticResource TextCaption}" Text="Lote (opcional)" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="6" Style="{StaticResource TextCaption}" Text="Caducidad" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="7" Style="{StaticResource TextCaption}" Text="Total" TextAlignment="Right" />
                         </Grid>
 
                         <Border Grid.Row="2" Style="{StaticResource CardSubtle}" Padding="0">
@@ -470,13 +486,14 @@
                                                 <StackPanel>
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="2.1*" />
                                                             <ColumnDefinition Width="2.2*" />
-                                                            <ColumnDefinition Width="2.4*" />
-                                                            <ColumnDefinition Width="64" />
-                                                            <ColumnDefinition Width="96" />
-                                                            <ColumnDefinition Width="120" />
-                                                            <ColumnDefinition Width="116" />
-                                                            <ColumnDefinition Width="96" />
+                                                            <ColumnDefinition Width="58" />
+                                                            <ColumnDefinition Width="72" />
+                                                            <ColumnDefinition Width="90" />
+                                                            <ColumnDefinition Width="110" />
+                                                            <ColumnDefinition Width="108" />
+                                                            <ColumnDefinition Width="88" />
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel VerticalAlignment="Center">
                                                             <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Description}" TextWrapping="Wrap" />
@@ -507,14 +524,18 @@
                                                         </StackPanel>
                                                         <TextBox Grid.Column="2" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" HorizontalContentAlignment="Center"
                                                                  Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cantidad" />
-                                                        <TextBox Grid.Column="3" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" FontFamily="{StaticResource FontFamilyMono}"
+                                                        <TextBox Grid.Column="3" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" HorizontalContentAlignment="Center"
+                                                                 Text="{Binding UnitsPerPackageText, UpdateSourceTrigger=PropertyChanged}" helpers:Field.Placeholder="1"
+                                                                 AutomationProperties.Name="Contenido por paquete"
+                                                                 ToolTip="Cuántas piezas o ampolletas contiene cada paquete (vacío = 1)" />
+                                                        <TextBox Grid.Column="4" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top" FontFamily="{StaticResource FontFamilyMono}"
                                                                  Text="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Costo por unidad"
                                                                  ToolTip="Total del renglón entre la cantidad; se puede corregir" />
-                                                        <TextBox Grid.Column="4" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top"
-                                                                 Text="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Lote" helpers:Field.Placeholder="Sin lote" />
                                                         <TextBox Grid.Column="5" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                                 Text="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Lote" helpers:Field.Placeholder="Sin lote" />
+                                                        <TextBox Grid.Column="6" Style="{StaticResource FieldTextBox}" Margin="8,0,0,0" VerticalAlignment="Top"
                                                                  Text="{Binding ExpirationText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Caducidad" helpers:Field.Placeholder="mm/aaaa" />
-                                                        <TextBlock Grid.Column="6" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Top" Margin="0,10,0,0"
+                                                        <TextBlock Grid.Column="7" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Top" Margin="0,10,0,0"
                                                                    Text="{Binding LineTotalText}" />
                                                     </Grid>
                                                     <TextBlock Text="{Binding Error}" Margin="0,4,0,0" Foreground="{DynamicResource ThemeDangerText}" FontSize="12" TextWrapping="Wrap"

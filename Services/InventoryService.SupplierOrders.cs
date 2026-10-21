@@ -43,6 +43,9 @@ public sealed class SupplierReceiptLine
     /// <summary>Lote y caducidad, los dos o ninguno: con ellos la entrada es un lote (cuenta para lo que vence primero).</summary>
     public string? BatchNumber { get; init; }
     public DateTime? ExpirationDate { get; init; }
+
+    /// <summary>Piezas individuales por paquete (ampolletas, piezas, etc.); null o &lt;= 1 asume 1 pieza.</summary>
+    public int? UnitsPerPackage { get; init; }
 }
 
 /// <summary>El pedido que se confirma.</summary>
@@ -217,6 +220,7 @@ public partial class InventoryService
                     Unit = presentation != null ? "Cajas" : "Piezas",
                     Price = 0m,
                     CurrentStock = 0,
+                    UnitsPerPackage = line.UnitsPerPackage is > 1 ? line.UnitsPerPackage.Value : 1,
                     // Sin control de existencias hasta que se configure (como los medicamentos importados del catálogo)
                     MinStock = 0,
                     OptimalStock = 0,
@@ -229,6 +233,7 @@ public partial class InventoryService
                 created.Add(product.Name);
             }
 
+            if (line.UnitsPerPackage is > 0) product.SetUnitsPerPackage(line.UnitsPerPackage.Value);
             product.SupplierCode = line.Sku;
             product.UnitCost = line.UnitCost;
             product.IsActive = true;

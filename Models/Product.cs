@@ -43,6 +43,17 @@ public class Product : ISyncEntity
     public int MinStock { get; set; } = 5;
     public int OptimalStock { get; set; } = 20;
 
+    /// <summary>
+    /// Piezas individuales que contiene cada paquete o unidad de inventario (ampolletas, piezas, etc.).
+    /// Si no se especifica o es menor o igual a 1, se asume 1 sola pieza por paquete.
+    /// </summary>
+    public int UnitsPerPackage { get; set; } = 1;
+
+    /// <summary>
+    /// Piezas individuales sobrantes del paquete actualmente abierto para consumo en servicios.
+    /// </summary>
+    public int OpenedUnitsRemaining { get; set; }
+
     public string? Location { get; set; } // ej. Botiquín 1, Vitrina A, Refrigerador
     public bool RequiresRefrigeration { get; set; }
     public string? Notes { get; set; }
@@ -55,12 +66,41 @@ public class Product : ISyncEntity
     public ICollection<InventoryMovement> Movements { get; set; } = new List<InventoryMovement>();
 
     // Helpers
+    public int EffectiveUnitsPerPackage => UnitsPerPackage > 1 ? UnitsPerPackage : 1;
+
+    /// <summary>
+    /// Cambia las piezas por paquete (<= 1 queda en 1) y ajusta el paquete abierto como el diálogo del producto: entre 0 y
+    /// las piezas por paquete − 1, o 0 si el producto ya no tiene varias piezas.
+    /// </summary>
+    public void SetUnitsPerPackage(int unitsPerPackage)
+    {
+        UnitsPerPackage = unitsPerPackage > 1 ? unitsPerPackage : 1;
+        OpenedUnitsRemaining = UnitsPerPackage > 1 ? Math.Clamp(OpenedUnitsRemaining, 0, UnitsPerPackage - 1) : 0;
+    }
+    public bool HasMultipleUnitsPerPackage => EffectiveUnitsPerPackage > 1;
+    public decimal IndividualUnitPrice => HasMultipleUnitsPerPackage
+        ? Math.Round(Price / EffectiveUnitsPerPackage, 2, MidpointRounding.AwayFromZero)
+        : Price;
+    public decimal IndividualUnitCost => HasMultipleUnitsPerPackage
+        ? Math.Round(EffectiveUnitCost / EffectiveUnitsPerPackage, 2, MidpointRounding.AwayFromZero)
+        : EffectiveUnitCost;
+    public int AvailableIndividualUnits => (Math.Max(0, CurrentStock) * EffectiveUnitsPerPackage) + Math.Max(0, OpenedUnitsRemaining);
+    public string PackageContentText => HasMultipleUnitsPerPackage ? $"{EffectiveUnitsPerPackage} pzas/paq" : "1 pza";
+
     // Mínimo 0 = medicamento de catálogo sin control de existencias (no genera alertas)
     public bool IsLowStock => MinStock > 0 && CurrentStock <= MinStock;
-    public bool IsOutOfStock => CurrentStock <= 0;
+    public bool IsOutOfStock => CurrentStock <= 0 && OpenedUnitsRemaining <= 0;
     public bool HasStock => CurrentStock > 0;
+    public bool HasServiceUnitsAvailable => AvailableIndividualUnits > 0;
     // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo)
-    public string StockBadgeText => IsOutOfStock ? "Sin existencias" : IsLowStock ? $"Stock bajo: {CurrentStock}" : $"Existencias: {CurrentStock}";
+    public string StockBadgeText =>
+        OpenedUnitsRemaining > 0 && HasMultipleUnitsPerPackage
+            ? (CurrentStock <= 0
+                ? $"Abierto: {OpenedUnitsRemaining}/{EffectiveUnitsPerPackage} pzas"
+                : IsLowStock
+                    ? $"Stock bajo: {CurrentStock} (+{OpenedUnitsRemaining}/{EffectiveUnitsPerPackage})"
+                    : $"Existencias: {CurrentStock} (+{OpenedUnitsRemaining}/{EffectiveUnitsPerPackage})")
+            : (CurrentStock <= 0 ? "Sin existencias" : IsLowStock ? $"Stock bajo: {CurrentStock}" : $"Existencias: {CurrentStock}");
 
     /// <summary>IVA que se suma al costo cuando <see cref="CostExcludesVat"/>.</summary>
     public const decimal VatRate = 0.16m;

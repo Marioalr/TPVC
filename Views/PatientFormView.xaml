@@ -58,6 +58,22 @@
                     </TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Command="{Binding DeleteEditingPatientCommand}" Margin="0,0,8,0"
+                            ToolTip="Eliminar este expediente clínico" AutomationProperties.Name="Eliminar expediente">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ButtonDangerGhost}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FormPatientId}" Value="0">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <helpers:Icon Data="{StaticResource IcoTrash}" Width="14" Height="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Eliminar expediente" />
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource ButtonGhost}" Command="{Binding CancelPatientFormCommand}" Content="Cancelar" Margin="0,0,8,0" />
                     <Button Style="{StaticResource ButtonSecondary}" Command="{Binding SavePatientModalCommand}" Content="Guardar y abrir ficha" Margin="0,0,8,0" />
                     <Button Style="{StaticResource ButtonPrimary}" Command="{Binding SavePatientAndStartConsultationCommand}" Content="Guardar e iniciar consulta" />

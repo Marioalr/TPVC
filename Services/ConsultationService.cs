@@ -60,6 +60,17 @@ public class ConsultationService
         PatientsChanged?.Invoke();
     }
 
+    public bool RemovePatient(PatientRecord patient)
+    {
+        var existing = Patients.FirstOrDefault(p =>
+            ReferenceEquals(p, patient)
+            || (p.Id > 0 && p.Id == patient.Id)
+            || (!string.IsNullOrWhiteSpace(p.RecordNumber) && p.RecordNumber.Equals(patient.RecordNumber, StringComparison.OrdinalIgnoreCase)));
+        if (existing == null || !Patients.Remove(existing)) return false;
+        PatientsChanged?.Invoke();
+        return true;
+    }
+
     private void InitializeDefaultPatients()
     {
         Patients.Add(new PatientRecord
@@ -165,15 +176,24 @@ public class ConsultationService
         return _currentConsultation;
     }
 
-    public bool AddCartItemToActiveConsultation(int productId, string code, string name, string? genericName, string? presentation, string unit, decimal unitPrice, int quantity)
+    public bool AddCartItemToActiveConsultation(
+        int productId,
+        string code,
+        string name,
+        string? genericName,
+        string? presentation,
+        string unit,
+        decimal unitPrice,
+        int quantity,
+        bool isIndividualUnits = false)
     {
         // Una consulta enviada a otro equipo se edita solo allá
         if (_currentConsultation == null || quantity <= 0 || _currentConsultation.IsHandedOff)
             return false;
 
-        // Paso 8.26: el mismo Id suma piezas a su renglón (ConsultationAccountRules.AddLine)
+        // Paso 8.26: el mismo Id (y el mismo modo, paquete o piezas sueltas) suma piezas a su renglón (ConsultationAccountRules.AddLine)
         TPVC.Services.Rules.ConsultationAccountRules.AddLine(_currentConsultation.Items, productId, code, name, genericName, presentation,
-            unit, unitPrice, quantity, DateTime.Now);
+            unit, unitPrice, quantity, DateTime.Now, isIndividualUnits);
 
         _currentConsultation.NotifyItemsChanged();
         OnActiveConsultationChanged?.Invoke();

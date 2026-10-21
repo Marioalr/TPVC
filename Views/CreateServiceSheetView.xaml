@@ -86,13 +86,14 @@
 
                         <Border Style="{StaticResource CardSubtle}" Padding="14">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource TextSection}" Text="Insumos que usa" />
-                                <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,10" Text="Opcional. Al cargar el servicio se agregan a la cuenta y se descuentan del inventario." />
+                                <TextBlock Style="{StaticResource TextSection}" Text="Insumos que usa (piezas individuales)" />
+                                <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,10" TextWrapping="Wrap"
+                                           Text="Opcional. Ingrese cuántas piezas individuales (ampolletas, piezas, etc.) consume el servicio; si el paquete trae varias, solo se consume esa parte." />
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="84" />
                                         <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
@@ -100,7 +101,8 @@
                                               DisplayMemberPath="Name" helpers:TypeAhead.IsEnabled="True" AutomationProperties.Name="Insumo"
                                               ToolTip="Despliegue y escriba el nombre para ir directo a él" />
                                     <TextBox Grid.Column="2" Style="{StaticResource FieldTextBox}" HorizontalContentAlignment="Center"
-                                             Text="{Binding NewProductQuantity, UpdateSourceTrigger=PropertyChanged}" ToolTip="Cantidad" AutomationProperties.Name="Cantidad" />
+                                             Text="{Binding NewProductQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Piezas individuales que consume el servicio" AutomationProperties.Name="Cantidad" />
                                     <Button Grid.Column="4" Style="{StaticResource ButtonSecondary}" Command="{Binding AddProductToNewServiceCommand}">
                                         <StackPanel Orientation="Horizontal">
                                             <helpers:Icon Data="{StaticResource IcoPlus}" Margin="0,0,6,0" />
@@ -121,9 +123,11 @@
                                                     <StackPanel VerticalAlignment="Center">
                                                         <TextBlock Style="{StaticResource TextBody}" Text="{Binding Product.Name}" />
                                                         <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Product.Presentation}" />
+                                                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding PackageSummary}"
+                                                                   Visibility="{Binding PackageSummary, Converter={StaticResource BoolToVis}}" />
                                                     </StackPanel>
                                                     <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="12,0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Quantity, StringFormat='× {0}'}" />
+                                                        <TextBlock Text="{Binding Quantity, StringFormat='× {0} pza(s)'}" />
                                                     </Border>
                                                     <Button Grid.Column="2" Style="{StaticResource ButtonIcon}" Width="30" Height="30" ToolTip="Quitar" AutomationProperties.Name="Quitar insumo"
                                                             Command="{Binding DataContext.RemoveProductFromNewServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"

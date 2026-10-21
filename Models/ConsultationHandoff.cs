@@ -171,6 +171,19 @@ public sealed record LinkedDevice(
           "actualícela a la versión más reciente."
         : string.Empty;
 
+    /// <summary>
+    /// Otro equipo que recibe consultas, con una revisión del contrato anterior a <see cref="TPVC.Services.SyncContract.IndividualUnitsRevision"/>
+    /// (o sin ella): no conoce las piezas sueltas de un paquete (revisión 17) y las cobraría como paquetes completos, así que no
+    /// se le envía una consulta cuya cuenta tiene alguna.
+    /// </summary>
+    public bool IgnoresIndividualUnits { get; init; }
+
+    public string IndividualUnitsText => IgnoresIndividualUnits
+        ? $"Tiene una versión anterior de TPVC{(string.IsNullOrWhiteSpace(AppVersion) ? string.Empty : $" ({AppVersion})")}: no conoce las " +
+          "piezas sueltas de un paquete. No se le puede enviar una consulta cuya cuenta tiene insumos por pieza; actualícela a la " +
+          "versión más reciente."
+        : string.Empty;
+
     public string NewTokenText => TokensRotatedAtUtc is { } at
         ? (Role is DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin
               ? "Pegue el token nuevo en este equipo o lea con él el QR de esta PC"

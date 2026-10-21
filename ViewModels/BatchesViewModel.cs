@@ -117,6 +117,10 @@ public partial class BatchesViewModel : ObservableObject
     [ObservableProperty]
     private int _newBatchQuantity = 10;
 
+    /// <summary>Piezas individuales que contiene cada paquete del lote recibido (si se deja vacío se asume 1 pieza).</summary>
+    [ObservableProperty]
+    private string _newBatchUnitsPerPackageText = string.Empty;
+
     [ObservableProperty]
     private string _newBatchNotes = string.Empty;
 
@@ -128,6 +132,14 @@ public partial class BatchesViewModel : ObservableObject
 
     [ObservableProperty]
     private string _expirationWarningMessage = string.Empty;
+
+    partial void OnNewBatchSelectedProductChanged(Product? value)
+    {
+        if (value != null)
+        {
+            NewBatchUnitsPerPackageText = value.UnitsPerPackage > 1 ? value.UnitsPerPackage.ToString() : string.Empty;
+        }
+    }
 
     public BatchesViewModel(InventoryService inventoryService)
     {
@@ -233,6 +245,7 @@ public partial class BatchesViewModel : ObservableObject
         NewBatchExpirationText = NewBatchExpirationDate.ToString("dd/MM/yyyy", Mexican);
         ValidateExpirationDate(NewBatchExpirationDate);
         NewBatchQuantity = 10;
+        NewBatchUnitsPerPackageText = NewBatchSelectedProduct is { UnitsPerPackage: > 1 } p ? p.UnitsPerPackage.ToString() : string.Empty;
         NewBatchNotes = string.Empty;
         IsNewBatchModalOpen = true;
     }
@@ -268,10 +281,14 @@ public partial class BatchesViewModel : ObservableObject
             Notes = NewBatchNotes
         };
 
+        int unitsPerPackage = int.TryParse(NewBatchUnitsPerPackageText?.Trim(), out int parsedUnits) && parsedUnits > 1
+            ? parsedUnits
+            : 1;
+
         try
         {
             // Lote + suma de existencias + Kardex en una sola transacción
-            await _inventoryService.ReceiveBatchAsync(batch);
+            await _inventoryService.ReceiveBatchAsync(batch, unitsPerPackage: unitsPerPackage);
             IsNewBatchModalOpen = false;
             await LoadBatchesAsync();
         }
