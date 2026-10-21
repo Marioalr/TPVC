@@ -191,6 +191,17 @@ internal sealed class UiSmokeSession
         }
         return null;
     }
+    // Las capturas por tema se dibujan fuera de pantalla (sin PresentationSource), así que IsVisible siempre es false: se ve si ella y
+    // todos sus contenedores están en Visible y ocupa lugar
+    private static bool IsShown(System.Windows.FrameworkElement element)
+    {
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0) return false;
+        for (System.Windows.DependencyObject? node = element; node != null; node = System.Windows.Media.VisualTreeHelper.GetParent(node))
+        {
+            if (node is System.Windows.UIElement { Visibility: not System.Windows.Visibility.Visible }) return false;
+        }
+        return true;
+    }
     // Varias casillas comparten el nombre (la de "Indicación", la de cada renglón de la hoja y la de la sección 5): basta con que una se vea
     private static System.Collections.Generic.IEnumerable<System.Windows.FrameworkElement> FindAllNamed(System.Windows.DependencyObject root, string name)
     {
@@ -576,12 +587,12 @@ internal sealed class UiSmokeSession
             Capture(host, $"11i-receta-principio-activo-{suffix}");
             if (brandRow?.MedicineName != "Tempra 500 mg tabletas (Paracetamol)" || !brandRow.HasActiveIngredient
                 || !records.Prescription.HasChosenActiveIngredient
-                || !FindAllNamed(host, "Mostrar el principio activo").Any(e => e is System.Windows.Controls.CheckBox { IsVisible: true }))
+                || !FindAllNamed(host, "Mostrar el principio activo").Any(e => e is System.Windows.Controls.CheckBox && IsShown(e)))
             {
                 var boxes = FindAllNamed(host, "Mostrar el principio activo").ToList();
                 _failures.Add($"[11i-{suffix}] No se ve «Mostrar (…)» o el renglón de marca no salió con el principio activo ({brandRow?.MedicineName}; " +
                     $"activo en el renglón={brandRow?.HasActiveIngredient}, en el elegido={records.Prescription.HasChosenActiveIngredient}, " +
-                    $"casillas={boxes.Count}, visibles={boxes.Count(b => b.IsVisible)})");
+                    $"casillas={boxes.Count}, visibles={boxes.Count(IsShown)})");
             }
             records.Prescription.ClearChosenMedicine();
             if (brandRow != null) WaitFor(records.Prescription.RemovePrescriptionItemFromPatientAsync(brandRow));
