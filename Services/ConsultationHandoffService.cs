@@ -360,6 +360,7 @@ public sealed class ConsultationHandoffService
                 IsThisDevice = thisDevice,
                 MergesAsWholeRow = device.MergesAsWholeRow && !thisDevice,
                 IgnoresServiceSupplies = device.IgnoresServiceSupplies && !thisDevice,
+                IgnoresActiveIngredient = device.IgnoresActiveIngredient && !thisDevice,
                 // Paso 8.15: no se ha conectado desde que se anularon los tokens (sin latido, tampoco)
                 TokensRotatedAtUtc = !thisDevice && !device.IsRevoked && !device.IsPendingApproval
                                      && rotatedAt is { } at && (device.LastSeenUtc == null || device.LastSeenUtc < at)
@@ -428,6 +429,9 @@ public sealed class ConsultationHandoffService
         // ajustados de un servicio (los ignora y, al quitar el servicio, descuenta los de siempre)
         bool ignoresServiceSupplies = compatible && revokedAt == null && !pendingApproval
                                       && (contractRevision ?? 0) < SyncContract.ServiceSuppliesRevision;
+        // 2026-10-21: no reconoce el producto de un renglón de receta con el principio activo entre paréntesis
+        bool ignoresActiveIngredient = compatible && revokedAt == null && !pendingApproval
+                                       && (contractRevision ?? 0) < SyncContract.ActiveIngredientRevision;
 
         return new LinkedDevice(
             row.GetValueOrDefault("DeviceId")?.ToString() ?? string.Empty,
@@ -443,6 +447,7 @@ public sealed class ConsultationHandoffService
             ContractRevision = contractRevision,
             MergesAsWholeRow = mergesAsWholeRow,
             IgnoresServiceSupplies = ignoresServiceSupplies,
+            IgnoresActiveIngredient = ignoresActiveIngredient,
             DeviceCode = registry?.GetValueOrDefault("DeviceCode")?.ToString(),
             IsRevoked = revokedAt != null,
             IsPendingApproval = pendingApproval,

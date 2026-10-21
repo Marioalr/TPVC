@@ -595,4 +595,79 @@ public class PrescriptionActiveIngredientTests
         Assert.AreEqual("Navontec 8 mg (Ondansetron) solución inyectable", PrescriptionNaming.WithActiveIngredient("Navontec 8 mg (Ondansetron) solución inyectable", "Ondansetrón", true));
         Assert.AreEqual("Tempra 500 mg tabletas", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas (PARACETAMOL)", "Paracetamol", false));
     }
+
+    [TestMethod]
+    public void AnOlderDevice_IsMarked_AndAConsultationWithActiveIngredientRowsIsNotSentToIt()
+    {
+        static Dictionary<string, object?> Heartbeat(string id, string platform, string role, int? revision) => new()
+        {
+            ["DeviceId"] = id, ["DeviceName"] = id, ["DeviceRole"] = role, ["AppVersion"] = "1.45.0", ["Platform"] = platform,
+            ["LastSeenUtc"] = TursoSyncService.FormatDate(DateTime.UtcNow.AddMinutes(-1)), ["HandoffProtocol"] = 1L,
+            ["ContractRevision"] = revision is int r ? (long)r : null
+        };
+        var devices = ConsultationHandoffService.MergeDevices(new[]
+        {
+            Heartbeat("pc-v145", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ActiveIngredientRevision - 1),
+            Heartbeat("pc-al-dia", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ActiveIngredientRevision),
+            Heartbeat("pc-sin-revision", "Windows", nameof(DeviceRole.WindowsDesktop), null),
+            Heartbeat("esta-pc", "Windows", nameof(DeviceRole.WindowsDesktop), SyncContract.ActiveIngredientRevision - 1),
+        }, Array.Empty<Dictionary<string, object?>>(), primaryDeviceId: "esta-pc", DateTime.UtcNow, thisDeviceId: "esta-pc");
+        LinkedDevice Device(string id) => devices.Single(d => d.DeviceId == id);
+
+        Assert.IsTrue(Device("pc-v145").IgnoresActiveIngredient, "Revisión 15: anterior a ActiveIngredientRevision");
+        StringAssert.Contains(Device("pc-v145").ActiveIngredientText, "principio activo entre paréntesis");
+        Assert.IsTrue(Device("pc-sin-revision").IgnoresActiveIngredient, "Sin revisión: una versión anterior");
+        Assert.IsFalse(Device("pc-al-dia").IgnoresActiveIngredient);
+        Assert.IsFalse(Device("esta-pc").IgnoresActiveIngredient, "Este equipo no");
+
+        var brandRow = new PatientPrescriptionItem { MedicineName = "Tempra 500 mg tabletas", ActiveIngredient = "Paracetamol", ShowActiveIngredient = false };
+        var legacyRow = new PatientPrescriptionItem { MedicineName = "Paracetamol 500 mg tabletas (Tempra)" };
+        StringAssert.Contains(ViewModels.Patients.ConsultationHandoffViewModel.ActiveIngredientBlock(Device("pc-v145"), new[] { legacyRow, brandRow }), "No se puede enviar a pc-v145");
+        Assert.IsNull(ViewModels.Patients.ConsultationHandoffViewModel.ActiveIngredientBlock(Device("pc-v145"), new[] { legacyRow }), "Sin renglones nuevos, sí se envía");
+        Assert.IsNull(ViewModels.Patients.ConsultationHandoffViewModel.ActiveIngredientBlock(Device("pc-al-dia"), new[] { brandRow }));
+    }
+
+    [TestMethod]
+    public async Task SendingToAnOlderDevice_WithABrandRowInTheReceta_IsBlocked_AndTheConsultationStaysHere()
+    {
+        using var pc = new Fase6Clinic();
+        await pc.ConnectCloudAsync();
+        using var tablet = new Fase6Clinic(seed: false);
+        await tablet.ConnectCloudAsync(pc.Cloud, "device-tablet-sala", "Tablet de la sala");
+        // La tablet todavía tiene una versión de la revisión 15
+        using (pc.Cloud!.Lock())
+        using (var cmd = pc.Cloud.Connection.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE RegisteredDevices SET ContractRevision = 15 WHERE DeviceId = 'device-tablet-sala'";
+            Assert.AreEqual(1, cmd.ExecuteNonQuery());
+        }
+        Assert.IsTrue((await pc.Sync!.SyncAsync()).Success);
+
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = await pc.OpenAsync(consultations);
+        records.Catalog.AvailableProducts.Add(Tempra());
+        records.OpenPatientChart(Fase6Scenarios.ScriptedPatient(records));
+        records.ChartPrimaryAction();
+        records.Prescription.OpenPrescriptionModal();
+        await PrescribeAsync(records, records.Catalog.AvailableProducts.First(p => p.Code == "MED-060"));
+        records.Prescription.ClosePrescriptionModal();
+
+        await records.Handoff.OpenSendConsultationSheetAsync();
+        var target = records.Handoff.HandoffDevices.Single(d => d.DeviceId == "device-tablet-sala");
+        Assert.IsTrue(target.IsAvailable, target.StatusText);
+        Assert.IsTrue(target.IgnoresActiveIngredient, "La hoja lo avisa junto al equipo");
+        records.Handoff.SelectedHandoffDevice = target;
+        await records.Handoff.SendConsultationToSelectedDeviceAsync();
+
+        Assert.IsFalse(records.Handoff.IsConsultationHandedOff, "No se envió");
+        Assert.IsTrue(records.Handoff.IsConsultationEditable);
+        StringAssert.Contains(records.Handoff.HandoffSheetError, "versión anterior");
+        using (pc.Cloud.Lock())
+        using (var cmd = pc.Cloud.Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM ConsultationHandoffs";
+            Assert.AreEqual(0L, Convert.ToInt64(cmd.ExecuteScalar()));
+        }
+        records.Dispose();
+    }
 }

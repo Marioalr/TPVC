@@ -131,6 +131,10 @@
                                         <TextBlock Text="{Binding ServiceSuppliesText}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                                                    Foreground="{DynamicResource ThemeWarningText}"
                                                    Visibility="{Binding IgnoresServiceSupplies, Converter={StaticResource BoolToVis}}" />
+                                        <!-- 2026-10-21: su versión no reconoce los renglones de marca con el principio activo -->
+                                        <TextBlock Text="{Binding ActiveIngredientText}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                   Foreground="{DynamicResource ThemeWarningText}"
+                                                   Visibility="{Binding IgnoresActiveIngredient, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
