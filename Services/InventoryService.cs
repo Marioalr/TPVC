@@ -361,11 +361,7 @@ public partial class InventoryService
 
         int stockBefore = product.CurrentStock;
         product.CurrentStock += batch.Quantity;
-        if (unitsPerPackage is > 0)
-        {
-            product.UnitsPerPackage = unitsPerPackage.Value > 1 ? unitsPerPackage.Value : 1;
-            if (product.UnitsPerPackage <= 1) product.OpenedUnitsRemaining = 0;
-        }
+        if (unitsPerPackage is > 0) product.SetUnitsPerPackage(unitsPerPackage.Value);
         product.UpdatedAt = DateTime.Now;
 
         db.InventoryMovements.Add(new InventoryMovement
@@ -695,11 +691,12 @@ public partial class InventoryService
                     Description = line.Description ?? product.Name,
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
-                    Subtotal = line.Quantity * line.UnitPrice
+                    Subtotal = line.Quantity * line.UnitPrice,
+                    IsIndividualUnits = line.IsIndividualUnits && product.HasMultipleUnitsPerPackage
                 };
                 sale.Items.Add(item);
 
-                int packagesToDeduct = line.IsIndividualUnits && product.HasMultipleUnitsPerPackage
+                int packagesToDeduct = item.IsIndividualUnits == true
                     ? ConsumeIndividualUnitsFromPackage(product, line.Quantity)
                     : line.Quantity;
 
@@ -871,29 +868,28 @@ public partial class InventoryService
             .Where(p => productIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id);
 
-        foreach (var planned in pending)
+        void AddReturn(Product product, Guid syncId, int? batchId, int? saleItemId, int quantity)
         {
-            if (!products.TryGetValue(planned.ProductId, out var product)) continue;
             int stockBefore = product.CurrentStock;
-            product.CurrentStock = stockBefore + planned.Quantity;
+            product.CurrentStock = stockBefore + quantity;
             product.UpdatedAt = now;
 
             // A su propio lote. Un lote agotado vuelve a contar para FEFO; uno cerrado se queda cerrado
-            if (planned.BatchId is int batchId && product.Batches.FirstOrDefault(b => b.Id == batchId) is { } batch)
+            if (batchId is int id && product.Batches.FirstOrDefault(b => b.Id == id) is { } batch)
             {
-                batch.Quantity += planned.Quantity;
+                batch.Quantity += quantity;
                 if (!batch.IsClosed && batch.Quantity > 0) batch.IsDepleted = false;
             }
 
             db.InventoryMovements.Add(new InventoryMovement
             {
-                SyncId = planned.SyncId,
+                SyncId = syncId,
                 ProductId = product.Id,
-                BatchId = planned.BatchId,
-                SaleItemId = planned.SaleItemId,
+                BatchId = batchId,
+                SaleItemId = saleItemId,
                 MovementType = MovementType.EntradaDevolucion,
-                Quantity = planned.Quantity,
-                Delta = planned.Quantity,
+                Quantity = quantity,
+                Delta = quantity,
                 StockBefore = stockBefore,
                 StockAfter = product.CurrentStock,
                 Date = now,
@@ -902,16 +898,54 @@ public partial class InventoryService
             });
         }
 
-        // Si el renglón vendió piezas individuales de un paquete multipieza, restaurar las piezas del paquete abierto
-        foreach (var item in sale.Items.Where(i => !i.IsService && i.ProductId.HasValue && i.Quantity > 0))
-        {
-            if (!products.TryGetValue(item.ProductId!.Value, out var product) || !product.HasMultipleUnitsPerPackage) continue;
-            if (item.UnitPrice >= product.Price) continue;
+        // Los renglones de piezas sueltas se devuelven por piezas (abajo), no por los paquetes que abrieron
+        var pieceItems = sale.Items
+            .Where(i => !i.IsService && i.ProductId.HasValue && i.Quantity > 0
+                        && products.TryGetValue(i.ProductId.Value, out var p) && p.HasMultipleUnitsPerPackage && SoldIndividualUnits(i, p))
+            .ToList();
+        var pieceItemIds = pieceItems.Select(i => i.Id).ToHashSet();
 
-            int packagesReturned = returns.Where(r => r.SaleItemId == item.Id).Sum(r => r.Quantity);
-            int restoredOpened = product.OpenedUnitsRemaining + item.Quantity - (packagesReturned * product.EffectiveUnitsPerPackage);
-            product.OpenedUnitsRemaining = Math.Max(0, restoredOpened);
+        foreach (var planned in pending.Where(r => r.SaleItemId is not int id || !pieceItemIds.Contains(id)))
+        {
+            if (!products.TryGetValue(planned.ProductId, out var product)) continue;
+            AddReturn(product, planned.SyncId, planned.BatchId, planned.SaleItemId, planned.Quantity);
+        }
+
+        // Piezas sueltas: regresan exactamente las piezas del renglón al paquete abierto, y cada paquete que se completa vuelve a
+        // las existencias (CurrentStock + 1, paquete abierto − sus piezas) con su devolución: primero a los lotes de las salidas
+        // del propio renglón (con su SyncId de siempre), y lo que pase de ellas al lote de la última salida del producto (el
+        // paquete abierto salió de ahí) con uuid5("return:pieces:" + SyncId del renglón). Si otros tickets ya gastaron piezas del
+        // paquete que abrió este, vuelven menos paquetes y más piezas sueltas: el total de piezas queda igual que sin este ticket
+        foreach (var item in pieceItems)
+        {
+            var product = products[item.ProductId!.Value];
+            var itemReturns = returns.Where(r => r.SaleItemId == item.Id).ToList();
+            // Ya cancelado en otro equipo: su devolución y su producto (con el paquete abierto) llegan por la sincronización
+            if (itemReturns.Any(r => alreadyReturned.Contains(r.SyncId))) continue;
+
+            int u = product.EffectiveUnitsPerPackage;
+            int opened = Math.Max(0, product.OpenedUnitsRemaining) + item.Quantity;
+            int packages = opened / u;
+            product.OpenedUnitsRemaining = opened % u;
             product.UpdatedAt = now;
+
+            foreach (var planned in itemReturns)
+            {
+                if (packages == 0) break;
+                int quantity = Math.Min(packages, planned.Quantity);
+                AddReturn(product, planned.SyncId, planned.BatchId, item.Id, quantity);
+                packages -= quantity;
+            }
+            if (packages > 0)
+            {
+                var lastBatchId = await db.InventoryMovements.AsNoTracking()
+                    .Where(m => m.ProductId == product.Id && m.BatchId != null && m.Delta < 0)
+                    .OrderByDescending(m => m.Date).ThenByDescending(m => m.Id)
+                    .Select(m => m.BatchId)
+                    .FirstOrDefaultAsync();
+                int? batchId = lastBatchId is int id && product.Batches.Any(b => b.Id == id && !b.IsClosed) ? id : null;
+                AddReturn(product, StockLedger.PieceReturnSyncId(item.SyncId), batchId, item.Id, packages);
+            }
         }
 
         await db.SaveChangesAsync();
@@ -921,6 +955,14 @@ public partial class InventoryService
         NotifySalesChanged();
         return true;
     }
+
+    /// <summary>
+    /// Si un renglón del ticket vendió piezas sueltas: lo que se guardó al vender (<see cref="SaleItem.IsIndividualUnits"/>,
+    /// revisión 17). Un renglón de antes (null) usa la regla vieja: el producto tiene varias piezas por paquete y el renglón
+    /// se cobró a menos del precio del paquete de hoy (un descuento o un cambio de precio lo pueden confundir).
+    /// </summary>
+    public static bool SoldIndividualUnits(SaleItem item, Product? product) =>
+        item.IsIndividualUnits ?? (product is { HasMultipleUnitsPerPackage: true } && item.UnitPrice < product.Price);
 
     /// <summary>Una devolución por escribir al cancelar un ticket: su SyncId determinista, adónde regresa y cuántas piezas.</summary>
     private sealed record PlannedReturn(Guid SyncId, int ProductId, int? BatchId, int? SaleItemId, int Quantity);
@@ -955,7 +997,7 @@ public partial class InventoryService
             {
                 int exitedPackages = exits.Where(m => m.SaleItemId == item.Id).Sum(m => Math.Abs(m.Delta));
                 productsById.TryGetValue(item.ProductId!.Value, out var prod);
-                bool isPartialUnitLine = prod is { HasMultipleUnitsPerPackage: true } && item.UnitPrice < prod.Price;
+                bool isPartialUnitLine = prod is { HasMultipleUnitsPerPackage: true } && SoldIndividualUnits(item, prod);
                 if (!isPartialUnitLine && exitedPackages != item.Quantity)
                 {
                     throw new InvalidOperationException(

@@ -107,6 +107,12 @@ public static class StockLedger
     /// </summary>
     public static Guid LegacyReturnSyncId(Guid saleSyncId, Guid productSyncId) => SyncIds.Derived(ReturnPrefix, saleSyncId, productSyncId);
 
+    /// <summary>
+    /// Revisión 17: SyncId de la devolución de los paquetes que se completan al cancelar un renglón de piezas sueltas, más
+    /// allá de los que abrió el propio renglón: uuid5(tpvc, "return:pieces:" + SyncId del renglón del ticket).
+    /// </summary>
+    public static Guid PieceReturnSyncId(Guid saleItemSyncId) => SyncIds.Derived(ReturnPrefix + "pieces:", saleItemSyncId);
+
     /// <summary>Prefijos de los SyncId de los movimientos que cierran un lote: la parte con su lote y la parte sin lote.</summary>
     public const string ClosePrefix = "close:";
     public const string CloseRestPrefix = "close-rest:";

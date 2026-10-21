@@ -1,7 +1,7 @@
 {
   "contract": 17,
   "protocol": 2,
-  "fingerprint": "EA7A1E4AB1585BA9",
+  "fingerprint": "33A0564F4DC5F693",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
@@ -2445,6 +2445,15 @@
           }
         },
         {
+          "name": "IsIndividualUnits",
+          "role": "data",
+          "remoteType": "INTEGER",
+          "nullable": true,
+          "clrType": "bool",
+          "derived": false,
+          "note": "Desde la revisión 17: 1 si el renglón vendió piezas sueltas de un paquete (Quantity son piezas; sus salidas son los paquetes que abrió), 0 si vendió paquetes completos. Nulo = renglón de antes: al cancelarlo cuenta como piezas sueltas si el producto tiene UnitsPerPackage > 1 y UnitPrice es menor que su Price de hoy. Al cancelar un renglón de piezas, las piezas vuelven a OpenedUnitsRemaining y cada paquete que se completa vuelve a CurrentStock con su devolución (EntradaDevolucion): a los lotes de las salidas del renglón con su SyncId de siempre y lo que pase de ellas con uuid5('return:pieces:' + SyncId del renglón)."
+        },
+        {
           "name": "IsService",
           "role": "data",
           "remoteType": "INTEGER",
@@ -2555,7 +2564,7 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2975,7 +2984,7 @@
     {
       "table": "ConsultationHandoffs",
       "replicated": false,
-      "purpose": "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'.",
+      "purpose": "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'. Desde la revisión 17 cada cargo de la copia (Payload) que son piezas sueltas de un paquete lleva IsIndividualUnits: true (no se escribe si es falso) y quien la recibe lo conserva (golden/handoff-payload.json, «Piezas sueltas»).",
       "ddl": [
         "CREATE TABLE IF NOT EXISTS ConsultationHandoffs (Id TEXT PRIMARY KEY NOT NULL, FromDeviceId TEXT NOT NULL, FromDeviceName TEXT NOT NULL, ToDeviceId TEXT NOT NULL, ToDeviceName TEXT NOT NULL, PatientSyncId TEXT NOT NULL, PatientName TEXT NOT NULL, Folio TEXT NOT NULL, Payload TEXT NOT NULL, PayloadVersion INTEGER NOT NULL, State TEXT NOT NULL, AcceptToken TEXT, SenderAckAtUtc TEXT, CreatedAtUtc TEXT NOT NULL, UpdatedAtUtc TEXT NOT NULL)",
         "CREATE INDEX IF NOT EXISTS IX_ConsultationHandoffs_To ON ConsultationHandoffs (ToDeviceId, State)",
@@ -3007,7 +3016,7 @@
     "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"LedgerVersion\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",

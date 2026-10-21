@@ -10,6 +10,7 @@
     "prepare-*: PrepareForSending con savedAt fijo. Quita los Id locales (PatientId 0, AttendingAppointmentId null, cada ProductId 0) y las marcas del envío (Handoff, ReceivedHandoffId, ReceivedHandoffToken); pone PatientSyncId, PatientUpdatedAtUtc, PatientFieldStamps (el estado normalizado de FieldStampsJson con '#piso', sin 'UpdatedAtUtc', golden/field-stamps.json; el objeto vacío si no hay marcas), ProgressNoteSyncId y su ProgressNoteUpdatedAtUtc (solo con nota), AttendingAppointmentSyncId y FeeServiceSyncId (el servicio del honorario por su Id local). Cada cargo: ProductId > 0 = producto, -1 a -999999 = servicio (-Id), lo demás o lo que no está en el catálogo = 'libre'; LineKind y CatalogSyncId. La copia viaja como el texto JSON de payload (ConsultationHandoffs.Payload, PayloadVersion 1).",
     "Las fechas del borrador van como las escribe System.Text.Json (ISO 8601, sin zona: hora del consultorio; PatientUpdatedAtUtc, ProgressNoteUpdatedAtUtc y PatientFieldStamps son UTC sin 'Z'). Kotlin compara por significado (los valores), no el texto.",
     "receive-*: MapReceivedItems. 'producto' y 'servicio' se buscan con FindCatalogRef en el catálogo de quien recibe (productId = Id del producto o -Id del servicio); lo que no se encuentra y lo 'libre' se cobra como cargo libre (freeCharge true, productId null): la PC le da un Id local que sale del nombre (FreeChargeId, -1000000 a -1999999) y solo vale en ese equipo, así que el vector no lo fija y Kotlin usa el suyo; los productos y servicios que no se encontraron van en freeLines (el aviso).",
+    "Piezas sueltas (revisión 17; prepare-individual-units y receive-individual-units): un cargo de piezas sueltas de un producto de varias piezas por paquete (los insumos de un servicio, a su precio por pieza) lleva IsIndividualUnits: true en la copia; en uno de paquetes completos no se escribe (falso). El mismo producto puede ir en dos cargos, uno de cada clase, y quien recibe los deja separados. Al recibir, el cargo conserva IsIndividualUnits (isIndividualUnits en receive-*) y se cobra como piezas: SaleItems.IsIndividualUnits.",
     "find-*: FindCatalogRef: primero el SyncId (de la misma clase y activo); si no, el mismo código (sin importar mayúsculas) y el mismo nombre normalizado (TextSearch.Normalize: sin acentos, minúsculas), activo. matchId = el Id del renglón de refs, o null.",
     "can-read-*: CanRead: la copia se entiende si PayloadVersion <= 1 (el protocolo de la consulta entre equipos) y la Version del borrador <= 1."
   ],
@@ -1023,6 +1024,256 @@
       }
     },
     {
+      "name": "prepare-individual-units",
+      "input": {
+        "workingCopy": {
+          "Version": 1,
+          "SavedAt": "2026-01-15T10:52:41",
+          "PatientId": 7,
+          "PatientName": "Ana Pérez Núñez",
+          "Folio": "CNS-20260115-103000",
+          "StartedAt": "2026-01-15T10:30:00",
+          "ChiefComplaintLabel": "Consulta Médica General",
+          "ChiefComplaint": "Control mensual de glucosa",
+          "SystemsReview": "",
+          "PhysicalExam": "",
+          "Diagnosis": "E11.9 Diabetes mellitus tipo 2 sin complicaciones",
+          "TreatmentPlan": "Continuar metformina 850 mg cada 12 horas",
+          "Notes": "",
+          "GeneralIndications": "",
+          "TA": "135/85",
+          "FC": "",
+          "FR": "",
+          "Temp": "",
+          "Weight": "",
+          "Height": "",
+          "SpO2": "",
+          "Glucose": "142",
+          "Section": 4,
+          "SavedToRecord": true,
+          "Items": [
+            {
+              "ProductId": 15,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 35,
+              "Subtotal": 35,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": null,
+              "LineKind": null,
+              "Quantity": 1
+            },
+            {
+              "ProductId": 15,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas ind.",
+              "UnitPrice": 3.50,
+              "Subtotal": 10.50,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": null,
+              "LineKind": null,
+              "IsIndividualUnits": true,
+              "Quantity": 3
+            },
+            {
+              "ProductId": -4,
+              "Code": "SERV-004",
+              "Name": "Monitoreo de Glucemia Capilar",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 80,
+              "Subtotal": 80,
+              "ProductName": "Monitoreo de Glucemia Capilar",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": null,
+              "LineKind": null,
+              "Quantity": 1
+            }
+          ],
+          "Prescriptions": [
+            {
+              "RowId": "10000000-0000-4000-8000-000000000962",
+              "MedicineName": "Metformina 850 mg",
+              "Dosage": "1 tableta cada 12 horas por 30 días",
+              "RecommendedQuantity": 2,
+              "DispenseInClinic": false
+            }
+          ],
+          "PreviousPrescriptions": null,
+          "PatientBefore": null,
+          "AttendingAppointmentId": 31,
+          "PatientSyncId": null,
+          "PatientUpdatedAtUtc": null,
+          "ProgressNoteSyncId": null,
+          "AttendingAppointmentSyncId": null,
+          "FeeServiceSyncId": null,
+          "ReceivedHandoffId": null,
+          "ReceivedHandoffToken": null,
+          "Handoff": null
+        },
+        "senderRefs": [
+          {
+            "kind": "Product",
+            "id": 12,
+            "syncId": "10000000-0000-4000-8000-000000000970",
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg tabletas",
+            "isActive": true
+          },
+          {
+            "kind": "Product",
+            "id": 15,
+            "syncId": "10000000-0000-4000-8000-000000000971",
+            "code": "CUR-001",
+            "name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+            "isActive": true
+          },
+          {
+            "kind": "Product",
+            "id": 18,
+            "syncId": "10000000-0000-4000-8000-000000000972",
+            "code": "ANT-001",
+            "name": "Alcohol Etílico Desnaturalizado 70%",
+            "isActive": true
+          },
+          {
+            "kind": "Service",
+            "id": 4,
+            "syncId": "10000000-0000-4000-8000-000000000980",
+            "code": "SERV-004",
+            "name": "Monitoreo de Glucemia Capilar",
+            "isActive": true
+          },
+          {
+            "kind": "Service",
+            "id": 1,
+            "syncId": "10000000-0000-4000-8000-000000000981",
+            "code": "SERV-001",
+            "name": "Consulta Médica General",
+            "isActive": true
+          }
+        ],
+        "patientSyncId": "10000000-0000-4000-8000-000000000003",
+        "patientUpdatedAtUtc": "2026-01-15 16:51:02.1230000",
+        "patientFieldStampsJson": "{\"ActiveSuppliesJson\":\"2026-01-15 16:40:00.0000000\",\"Allergies\":\"2026-01-10 09:00:00.0000000\",\"UpdatedAtUtc\":\"2026-01-15 16:51:02.1230000\"}",
+        "progressNoteSyncId": "10000000-0000-4000-8000-000000000960",
+        "progressNoteUpdatedAtUtc": "2026-01-15 16:50:07.4560000",
+        "attendingAppointmentSyncId": "10000000-0000-4000-8000-000000000961",
+        "feeServiceId": 1,
+        "savedAt": "2026-01-15 10:52:41.0000000"
+      },
+      "expected": {
+        "payload": {
+          "Version": 1,
+          "SavedAt": "2026-01-15T10:52:41",
+          "PatientId": 0,
+          "PatientName": "Ana Pérez Núñez",
+          "Folio": "CNS-20260115-103000",
+          "StartedAt": "2026-01-15T10:30:00",
+          "ChiefComplaintLabel": "Consulta Médica General",
+          "ChiefComplaint": "Control mensual de glucosa",
+          "SystemsReview": "",
+          "PhysicalExam": "",
+          "Diagnosis": "E11.9 Diabetes mellitus tipo 2 sin complicaciones",
+          "TreatmentPlan": "Continuar metformina 850 mg cada 12 horas",
+          "Notes": "",
+          "GeneralIndications": "",
+          "TA": "135/85",
+          "FC": "",
+          "FR": "",
+          "Temp": "",
+          "Weight": "",
+          "Height": "",
+          "SpO2": "",
+          "Glucose": "142",
+          "Section": 4,
+          "SavedToRecord": true,
+          "Items": [
+            {
+              "ProductId": 0,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 35,
+              "Subtotal": 35,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000971",
+              "LineKind": "producto",
+              "Quantity": 1
+            },
+            {
+              "ProductId": 0,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas ind.",
+              "UnitPrice": 3.50,
+              "Subtotal": 10.50,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000971",
+              "LineKind": "producto",
+              "IsIndividualUnits": true,
+              "Quantity": 3
+            },
+            {
+              "ProductId": 0,
+              "Code": "SERV-004",
+              "Name": "Monitoreo de Glucemia Capilar",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 80,
+              "Subtotal": 80,
+              "ProductName": "Monitoreo de Glucemia Capilar",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000980",
+              "LineKind": "servicio",
+              "Quantity": 1
+            }
+          ],
+          "Prescriptions": [
+            {
+              "RowId": "10000000-0000-4000-8000-000000000962",
+              "MedicineName": "Metformina 850 mg",
+              "Dosage": "1 tableta cada 12 horas por 30 días",
+              "RecommendedQuantity": 2,
+              "DispenseInClinic": false
+            }
+          ],
+          "PreviousPrescriptions": null,
+          "PatientBefore": null,
+          "AttendingAppointmentId": null,
+          "PatientSyncId": "10000000-0000-4000-8000-000000000003",
+          "PatientUpdatedAtUtc": "2026-01-15T16:51:02.123",
+          "PatientFieldStamps": {
+            "ActiveSuppliesJson": "2026-01-15T16:40:00",
+            "Allergies": "2026-01-10T09:00:00"
+          },
+          "ProgressNoteSyncId": "10000000-0000-4000-8000-000000000960",
+          "ProgressNoteUpdatedAtUtc": "2026-01-15T16:50:07.456",
+          "AttendingAppointmentSyncId": "10000000-0000-4000-8000-000000000961",
+          "FeeServiceSyncId": "10000000-0000-4000-8000-000000000981",
+          "ReceivedHandoffId": null,
+          "ReceivedHandoffToken": null,
+          "Handoff": null
+        }
+      }
+    },
+    {
       "name": "receive-translates-to-local-ids",
       "input": {
         "payload": {
@@ -1217,37 +1468,43 @@
             "name": "Paracetamol 500 mg tabletas",
             "lineKind": "producto",
             "productId": 5001,
-            "freeCharge": false
+            "freeCharge": false,
+            "isIndividualUnits": false
           },
           {
             "name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
             "lineKind": "producto",
             "productId": 5002,
-            "freeCharge": false
+            "freeCharge": false,
+            "isIndividualUnits": false
           },
           {
             "name": "Alcohol Etílico Desnaturalizado 70%",
             "lineKind": "producto",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Monitoreo de Glucemia Capilar",
             "lineKind": "servicio",
             "productId": -7004,
-            "freeCharge": false
+            "freeCharge": false,
+            "isIndividualUnits": false
           },
           {
             "name": "Curación menor",
             "lineKind": "libre",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Venda elástica 10 cm",
             "lineKind": "libre",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           }
         ],
         "freeLines": [
@@ -1409,37 +1666,43 @@
             "name": "Paracetamol 500 mg tabletas",
             "lineKind": "producto",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
             "lineKind": "producto",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Alcohol Etílico Desnaturalizado 70%",
             "lineKind": "producto",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Monitoreo de Glucemia Capilar",
             "lineKind": "servicio",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Curación menor",
             "lineKind": "libre",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           },
           {
             "name": "Venda elástica 10 cm",
             "lineKind": "libre",
             "productId": null,
-            "freeCharge": true
+            "freeCharge": true,
+            "isIndividualUnits": false
           }
         ],
         "freeLines": [
@@ -1448,6 +1711,178 @@
           "Alcohol Etílico Desnaturalizado 70%",
           "Monitoreo de Glucemia Capilar"
         ]
+      }
+    },
+    {
+      "name": "receive-individual-units",
+      "input": {
+        "payload": {
+          "Version": 1,
+          "SavedAt": "2026-01-15T10:52:41",
+          "PatientId": 0,
+          "PatientName": "Ana Pérez Núñez",
+          "Folio": "CNS-20260115-103000",
+          "StartedAt": "2026-01-15T10:30:00",
+          "ChiefComplaintLabel": "Consulta Médica General",
+          "ChiefComplaint": "Control mensual de glucosa",
+          "SystemsReview": "",
+          "PhysicalExam": "",
+          "Diagnosis": "E11.9 Diabetes mellitus tipo 2 sin complicaciones",
+          "TreatmentPlan": "Continuar metformina 850 mg cada 12 horas",
+          "Notes": "",
+          "GeneralIndications": "",
+          "TA": "135/85",
+          "FC": "",
+          "FR": "",
+          "Temp": "",
+          "Weight": "",
+          "Height": "",
+          "SpO2": "",
+          "Glucose": "142",
+          "Section": 4,
+          "SavedToRecord": true,
+          "Items": [
+            {
+              "ProductId": 0,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 35,
+              "Subtotal": 35,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000971",
+              "LineKind": "producto",
+              "Quantity": 1
+            },
+            {
+              "ProductId": 0,
+              "Code": "CUR-001",
+              "Name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas ind.",
+              "UnitPrice": 3.50,
+              "Subtotal": 10.50,
+              "ProductName": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000971",
+              "LineKind": "producto",
+              "IsIndividualUnits": true,
+              "Quantity": 3
+            },
+            {
+              "ProductId": 0,
+              "Code": "SERV-004",
+              "Name": "Monitoreo de Glucemia Capilar",
+              "GenericName": null,
+              "Presentation": null,
+              "Unit": "Piezas",
+              "UnitPrice": 80,
+              "Subtotal": 80,
+              "ProductName": "Monitoreo de Glucemia Capilar",
+              "AddedAt": "2026-01-15T10:42:00",
+              "CatalogSyncId": "10000000-0000-4000-8000-000000000980",
+              "LineKind": "servicio",
+              "Quantity": 1
+            }
+          ],
+          "Prescriptions": [
+            {
+              "RowId": "10000000-0000-4000-8000-000000000962",
+              "MedicineName": "Metformina 850 mg",
+              "Dosage": "1 tableta cada 12 horas por 30 días",
+              "RecommendedQuantity": 2,
+              "DispenseInClinic": false
+            }
+          ],
+          "PreviousPrescriptions": null,
+          "PatientBefore": null,
+          "AttendingAppointmentId": null,
+          "PatientSyncId": "10000000-0000-4000-8000-000000000003",
+          "PatientUpdatedAtUtc": "2026-01-15T16:51:02.123",
+          "PatientFieldStamps": {
+            "ActiveSuppliesJson": "2026-01-15T16:40:00",
+            "Allergies": "2026-01-10T09:00:00"
+          },
+          "ProgressNoteSyncId": "10000000-0000-4000-8000-000000000960",
+          "ProgressNoteUpdatedAtUtc": "2026-01-15T16:50:07.456",
+          "AttendingAppointmentSyncId": "10000000-0000-4000-8000-000000000961",
+          "FeeServiceSyncId": "10000000-0000-4000-8000-000000000981",
+          "ReceivedHandoffId": null,
+          "ReceivedHandoffToken": null,
+          "Handoff": null
+        },
+        "receiverRefs": [
+          {
+            "kind": "Product",
+            "id": 5001,
+            "syncId": "10000000-0000-4000-8000-000000000970",
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg tabletas",
+            "isActive": true
+          },
+          {
+            "kind": "Product",
+            "id": 5002,
+            "syncId": "10000000-0000-4000-8000-000000000990",
+            "code": "CUR-001",
+            "name": "Gasa estéril 10x10 cm (paquete con 10 piezas)",
+            "isActive": true
+          },
+          {
+            "kind": "Product",
+            "id": 5003,
+            "syncId": "10000000-0000-4000-8000-000000000972",
+            "code": "ANT-001",
+            "name": "Alcohol Etílico Desnaturalizado 70%",
+            "isActive": false
+          },
+          {
+            "kind": "Service",
+            "id": 7004,
+            "syncId": "10000000-0000-4000-8000-000000000980",
+            "code": "SERV-004",
+            "name": "Monitoreo de Glucemia Capilar",
+            "isActive": true
+          },
+          {
+            "kind": "Service",
+            "id": 7001,
+            "syncId": "10000000-0000-4000-8000-000000000981",
+            "code": "SERV-001",
+            "name": "Consulta Médica General",
+            "isActive": true
+          }
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+            "lineKind": "producto",
+            "productId": 5002,
+            "freeCharge": false,
+            "isIndividualUnits": false
+          },
+          {
+            "name": "Gasa Estéril 10x10 cm (Paquete con 10 piezas)",
+            "lineKind": "producto",
+            "productId": 5002,
+            "freeCharge": false,
+            "isIndividualUnits": true
+          },
+          {
+            "name": "Monitoreo de Glucemia Capilar",
+            "lineKind": "servicio",
+            "productId": -7004,
+            "freeCharge": false,
+            "isIndividualUnits": false
+          }
+        ],
+        "freeLines": []
       }
     },
     {

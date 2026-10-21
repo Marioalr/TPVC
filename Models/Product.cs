@@ -67,6 +67,16 @@ public class Product : ISyncEntity
 
     // Helpers
     public int EffectiveUnitsPerPackage => UnitsPerPackage > 1 ? UnitsPerPackage : 1;
+
+    /// <summary>
+    /// Cambia las piezas por paquete (<= 1 queda en 1) y ajusta el paquete abierto como el diálogo del producto: entre 0 y
+    /// las piezas por paquete − 1, o 0 si el producto ya no tiene varias piezas.
+    /// </summary>
+    public void SetUnitsPerPackage(int unitsPerPackage)
+    {
+        UnitsPerPackage = unitsPerPackage > 1 ? unitsPerPackage : 1;
+        OpenedUnitsRemaining = UnitsPerPackage > 1 ? Math.Clamp(OpenedUnitsRemaining, 0, UnitsPerPackage - 1) : 0;
+    }
     public bool HasMultipleUnitsPerPackage => EffectiveUnitsPerPackage > 1;
     public decimal IndividualUnitPrice => HasMultipleUnitsPerPackage
         ? Math.Round(Price / EffectiveUnitsPerPackage, 2, MidpointRounding.AwayFromZero)

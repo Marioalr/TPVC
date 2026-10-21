@@ -233,11 +233,7 @@ public partial class InventoryService
                 created.Add(product.Name);
             }
 
-            if (line.UnitsPerPackage is > 0)
-            {
-                product.UnitsPerPackage = line.UnitsPerPackage.Value > 1 ? line.UnitsPerPackage.Value : 1;
-                if (product.UnitsPerPackage <= 1) product.OpenedUnitsRemaining = 0;
-            }
+            if (line.UnitsPerPackage is > 0) product.SetUnitsPerPackage(line.UnitsPerPackage.Value);
             product.SupplierCode = line.Sku;
             product.UnitCost = line.UnitCost;
             product.IsActive = true;

@@ -88,9 +88,28 @@ public partial class GoldenVectorTests
             }
         };
 
-        private static ConsultationProductItem Item(int productId, string code, string name, decimal price, int quantity) => new()
+        /// <summary>
+        /// Revisión 17: la copia de trabajo con un producto de varias piezas cargado dos veces, una caja completa y piezas sueltas
+        /// de un servicio (IsIndividualUnits), cada una en su renglón.
+        /// </summary>
+        public static ConsultationDraft WorkingCopyWithIndividualUnits()
         {
-            ProductId = productId, Code = code, Name = name, UnitPrice = price, Quantity = quantity, AddedAt = StartedAt.AddMinutes(12)
+            var draft = WorkingCopy();
+            var pieces = Item(15, "CUR-001", "Gasa Estéril 10x10 cm (Paquete con 10 piezas)", 3.50m, 3, isIndividualUnits: true);
+            pieces.Unit = "Piezas ind.";
+            draft.Items = new List<ConsultationProductItem>
+            {
+                Item(15, "CUR-001", "Gasa Estéril 10x10 cm (Paquete con 10 piezas)", 35m, 1),
+                pieces,
+                Item(-4, "SERV-004", "Monitoreo de Glucemia Capilar", 80m, 1)
+            };
+            return draft;
+        }
+
+        private static ConsultationProductItem Item(int productId, string code, string name, decimal price, int quantity, bool isIndividualUnits = false) => new()
+        {
+            ProductId = productId, Code = code, Name = name, UnitPrice = price, Quantity = quantity, AddedAt = StartedAt.AddMinutes(12),
+            IsIndividualUnits = isIndividualUnits
         };
 
         public const string PatientFieldStampsJson =
@@ -105,6 +124,20 @@ public partial class GoldenVectorTests
             return draft;
         }
     }
+
+    /// <summary>Lo que fija un caso receive-*: cada cargo con su clase, el Id de quien recibe (o cargo libre) y si son piezas sueltas.</summary>
+    private static JsonObject ReceivedJson(ConsultationDraft payload, List<string> freeLines) => new()
+    {
+        ["items"] = new JsonArray(payload.Items.Select(i => (JsonNode?)new JsonObject
+        {
+            ["name"] = i.Name,
+            ["lineKind"] = i.LineKind,
+            ["productId"] = i.ProductId <= -1_000_000 ? null : i.ProductId,
+            ["freeCharge"] = i.ProductId <= -1_000_000,
+            ["isIndividualUnits"] = i.IsIndividualUnits
+        }).ToArray()),
+        ["freeLines"] = new JsonArray(freeLines.Select(l => (JsonNode?)JsonValue.Create(l)).ToArray())
+    };
 
     private static JsonNode DraftJson(ConsultationDraft draft) => JsonNode.Parse(ConsultationDraftStore.Serialize(draft))!;
 
@@ -155,27 +188,26 @@ public partial class GoldenVectorTests
             null, null, HandoffFixture.NoteUpdatedAtUtc, null, null);
         Prepare("prepare-unstamped-patient", HandoffFixture.WorkingCopy(), HandoffFixture.PatientSyncId, HandoffFixture.PatientUpdatedAtUtc,
             "", HandoffFixture.NoteSyncId, HandoffFixture.NoteUpdatedAtUtc, null, 99);
+        Prepare("prepare-individual-units", HandoffFixture.WorkingCopyWithIndividualUnits(), HandoffFixture.PatientSyncId, HandoffFixture.PatientUpdatedAtUtc,
+            HandoffFixture.PatientFieldStampsJson, HandoffFixture.NoteSyncId, HandoffFixture.NoteUpdatedAtUtc, HandoffFixture.AppointmentSyncId, 1);
 
         // Recibir: cada cargo con el Id de este equipo, o como cargo libre
         void Receive(string name, ConsultationDraft payload, List<CatalogRef> refs)
         {
             var input = new JsonObject { ["payload"] = DraftJson(payload), ["receiverRefs"] = RefsJson(refs) };
             var freeLines = HandoffPayloadCodec.MapReceivedItems(payload, refs);
-            cases.Add(Case(name, input, new JsonObject
-            {
-                ["items"] = new JsonArray(payload.Items.Select(i => (JsonNode?)new JsonObject
-                {
-                    ["name"] = i.Name,
-                    ["lineKind"] = i.LineKind,
-                    ["productId"] = i.ProductId <= -1_000_000 ? null : i.ProductId,
-                    ["freeCharge"] = i.ProductId <= -1_000_000
-                }).ToArray()),
-                ["freeLines"] = new JsonArray(freeLines.Select(l => (JsonNode?)JsonValue.Create(l)).ToArray())
-            }));
+            cases.Add(Case(name, input, ReceivedJson(payload, freeLines)));
         }
 
         Receive("receive-translates-to-local-ids", HandoffFixture.Payload(), HandoffFixture.ReceiverRefs());
         Receive("receive-with-an-empty-catalog", HandoffFixture.Payload(), new List<CatalogRef>());
+
+        // Revisión 17, ida y vuelta: la copia con piezas sueltas tal como viaja (texto JSON) y lo que queda al recibirla
+        var withUnits = HandoffFixture.WorkingCopyWithIndividualUnits();
+        HandoffPayloadCodec.PrepareForSending(withUnits, HandoffFixture.SenderRefs(), HandoffFixture.PatientSyncId, HandoffFixture.PatientUpdatedAtUtc,
+            HandoffFixture.NoteSyncId, HandoffFixture.AppointmentSyncId, 1, HandoffFixture.SavedAt, HandoffFixture.PatientFieldStampsJson,
+            HandoffFixture.NoteUpdatedAtUtc);
+        Receive("receive-individual-units", ConsultationDraftStore.Deserialize(ConsultationDraftStore.Serialize(withUnits))!, HandoffFixture.ReceiverRefs());
 
         // FindCatalogRef: por SyncId (activo) y si no, el mismo código y el mismo nombre normalizado (activo)
         void Find(string name, CatalogRefKind kind, string? syncId, string code, string itemName)
@@ -221,6 +253,7 @@ public partial class GoldenVectorTests
                 "prepare-*: PrepareForSending con savedAt fijo. Quita los Id locales (PatientId 0, AttendingAppointmentId null, cada ProductId 0) y las marcas del envío (Handoff, ReceivedHandoffId, ReceivedHandoffToken); pone PatientSyncId, PatientUpdatedAtUtc, PatientFieldStamps (el estado normalizado de FieldStampsJson con '#piso', sin 'UpdatedAtUtc', golden/field-stamps.json; el objeto vacío si no hay marcas), ProgressNoteSyncId y su ProgressNoteUpdatedAtUtc (solo con nota), AttendingAppointmentSyncId y FeeServiceSyncId (el servicio del honorario por su Id local). Cada cargo: ProductId > 0 = producto, -1 a -999999 = servicio (-Id), lo demás o lo que no está en el catálogo = 'libre'; LineKind y CatalogSyncId. La copia viaja como el texto JSON de payload (ConsultationHandoffs.Payload, PayloadVersion 1).",
                 "Las fechas del borrador van como las escribe System.Text.Json (ISO 8601, sin zona: hora del consultorio; PatientUpdatedAtUtc, ProgressNoteUpdatedAtUtc y PatientFieldStamps son UTC sin 'Z'). Kotlin compara por significado (los valores), no el texto.",
                 "receive-*: MapReceivedItems. 'producto' y 'servicio' se buscan con FindCatalogRef en el catálogo de quien recibe (productId = Id del producto o -Id del servicio); lo que no se encuentra y lo 'libre' se cobra como cargo libre (freeCharge true, productId null): la PC le da un Id local que sale del nombre (FreeChargeId, -1000000 a -1999999) y solo vale en ese equipo, así que el vector no lo fija y Kotlin usa el suyo; los productos y servicios que no se encontraron van en freeLines (el aviso).",
+                "Piezas sueltas (revisión 17; prepare-individual-units y receive-individual-units): un cargo de piezas sueltas de un producto de varias piezas por paquete (los insumos de un servicio, a su precio por pieza) lleva IsIndividualUnits: true en la copia; en uno de paquetes completos no se escribe (falso). El mismo producto puede ir en dos cargos, uno de cada clase, y quien recibe los deja separados. Al recibir, el cargo conserva IsIndividualUnits (isIndividualUnits en receive-*) y se cobra como piezas: SaleItems.IsIndividualUnits.",
                 "find-*: FindCatalogRef: primero el SyncId (de la misma clase y activo); si no, el mismo código (sin importar mayúsculas) y el mismo nombre normalizado (TextSearch.Normalize: sin acentos, minúsculas), activo. matchId = el Id del renglón de refs, o null.",
                 "can-read-*: CanRead: la copia se entiende si PayloadVersion <= 1 (el protocolo de la consulta entre equipos) y la Version del borrador <= 1."
             }.Select(n => (JsonNode?)JsonValue.Create(n)).ToArray()),
@@ -248,14 +281,7 @@ public partial class GoldenVectorTests
             {
                 var payload = ConsultationDraftStore.Deserialize(input["payload"]!.ToJsonString())!;
                 var freeLines = HandoffPayloadCodec.MapReceivedItems(payload, ParseRefs(input["receiverRefs"]!));
-                actual = new JsonObject
-                {
-                    ["items"] = new JsonArray(payload.Items.Select(i => (JsonNode?)new JsonObject
-                    {
-                        ["name"] = i.Name, ["lineKind"] = i.LineKind, ["productId"] = i.ProductId <= -1_000_000 ? null : i.ProductId, ["freeCharge"] = i.ProductId <= -1_000_000
-                    }).ToArray()),
-                    ["freeLines"] = new JsonArray(freeLines.Select(l => (JsonNode?)JsonValue.Create(l)).ToArray())
-                };
+                actual = ReceivedJson(payload, freeLines);
             }
             else if (name.StartsWith("find-", StringComparison.Ordinal))
             {

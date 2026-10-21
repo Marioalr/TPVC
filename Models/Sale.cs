@@ -66,6 +66,13 @@ public class SaleItem : ISyncEntity
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Subtotal { get; set; }
+
+    /// <summary>
+    /// Revisión 17: true si el renglón vendió piezas sueltas de un paquete (<see cref="Quantity"/> son piezas, no paquetes),
+    /// false si vendió paquetes completos. null = renglón de antes, que al cancelarse se reconoce con la regla vieja
+    /// (<see cref="Services.InventoryService.SoldIndividualUnits"/>).
+    /// </summary>
+    public bool? IsIndividualUnits { get; set; }
 }
 
 /// <summary>
