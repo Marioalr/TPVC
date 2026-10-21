@@ -2,6 +2,14 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.45.0] - 2026-10-21
+
+### Añadido — Fase 8, paso 8.26: vectores de reglas del negocio para la app de Android
+* Sin cambios para el médico: las reglas del negocio quedan fijadas en 21 archivos de ejemplos (`contracts/golden/`, 447 casos) que la app de Android tendrá que reproducir igual que la PC.
+* Búsqueda (texto, pacientes, productos con el prefijo `3*`, medicamentos de la receta con existencias primero, CIE-10 y catálogo), seguridad (alergias, identidad del paciente, máscara de fecha), ficha y agenda (antecedentes, línea de tiempo, signos vitales y su evolución, agenda) y consulta (signos e IMC, dosis pediátrica, cuenta de la consulta, cargos de las hojas, cobro y valor del inventario).
+* Las reglas que estaban dentro de las pantallas pasaron a `Services/Rules` sin cambiar lo que hacen. Cambiar una regla sin regenerar sus ejemplos hace fallar las pruebas.
+* Con este paso quedan hechos en la PC los pasos 8.2 a 8.26, salvo el 8.20 (existencias derivadas del libro), que sigue en espera. Contrato de sincronización sin cambios (revisión 15). 854 pruebas.
+
 ## [1.44.0] - 2026-10-15
 
 ### Añadido — Fase 8, paso 8.25: kit de conformidad de escritura para la app de Android

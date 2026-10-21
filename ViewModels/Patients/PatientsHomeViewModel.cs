@@ -53,36 +53,11 @@ public partial class PatientsHomeViewModel : ObservableObject
     public string CreateFromSearchText => $"Crear paciente \"{HomeSearchText.Trim()}\"";
 
     /// <summary>
-    /// Pacientes que coinciden con lo escrito (sin acentos): primero los que empiezan así, luego
-    /// los que tienen una palabra que empieza así y al final los que lo contienen en nombre, folio,
-    /// teléfono o diagnóstico.
+    /// Pacientes que coinciden con lo escrito (sin acentos): la regla vive en <see cref="TPVC.Services.Rules.PatientSearchRules.Rank"/>
+    /// desde el paso 8.26 (vectores <c>contracts/golden/rank-patients.json</c>).
     /// </summary>
-    public static List<PatientRecord> RankPatients(IEnumerable<PatientRecord> patients, string? query, int limit = 30)
-    {
-        var q = TextSearch.Normalize(query);
-        if (q.Length == 0) return new List<PatientRecord>();
-        var digits = new string(q.Where(char.IsDigit).ToArray());
-
-        return patients
-            .Select(p =>
-            {
-                var name = TextSearch.Normalize(p.FullName);
-                var other = TextSearch.Normalize($"{p.RecordNumber} {p.OriginalFolio} {p.LastDiagnosis}");
-                int rank;
-                if (name.StartsWith(q, StringComparison.Ordinal)) rank = 0;
-                else if ((" " + name).Contains(" " + q, StringComparison.Ordinal)) rank = 1;
-                else if (name.Contains(q, StringComparison.Ordinal) || other.Contains(q, StringComparison.Ordinal)) rank = 2;
-                else if (digits.Length >= 4 && new string((p.Phone ?? string.Empty).Where(char.IsDigit).ToArray()).Contains(digits, StringComparison.Ordinal)) rank = 2;
-                else rank = -1;
-                return (Patient: p, Rank: rank);
-            })
-            .Where(x => x.Rank >= 0)
-            .OrderBy(x => x.Rank)
-            .ThenBy(x => x.Patient.FullName, StringComparer.CurrentCulture)
-            .Take(limit)
-            .Select(x => x.Patient)
-            .ToList();
-    }
+    public static List<PatientRecord> RankPatients(IEnumerable<PatientRecord> patients, string? query, int limit = 30) =>
+        TPVC.Services.Rules.PatientSearchRules.Rank(patients, query, limit);
 
     public void RefreshHomeResults()
     {
@@ -133,9 +108,8 @@ public partial class PatientsHomeViewModel : ObservableObject
         try
         {
             var list = await _inventoryService.GetAppointmentsByDayAsync(DateTime.Today);
-            var today = list.Where(a => !a.IsCancelled).OrderBy(a => AgendaPanelViewModel.ParseAppointmentTime(a.Time)).ToList();
-            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda
-            AgendaPanelViewModel.MarkOverlaps(today);
+            // Paso 8.23: las que se empalman llevan la marca "Empalme", como en la agenda (AgendaRules.TodayAppointments)
+            var today = TPVC.Services.Rules.AgendaRules.TodayAppointments(list);
             TodayAppointments = new ObservableCollection<PatientAppointment>(today);
         }
         catch (Exception ex)

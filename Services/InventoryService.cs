@@ -30,9 +30,7 @@ public class DashboardMetrics
     public int StockedProductsWithoutCost { get; set; }
 
     /// <summary>Para la tarjeta: "al costo", o cuántos productos con existencias no tienen costo todavía.</summary>
-    public string InventoryValueDetail => StockedProductsWithoutCost == 0
-        ? "al costo"
-        : $"{StockedProductsWithoutCost} sin costo";
+    public string InventoryValueDetail => TPVC.Services.Rules.InventoryValueRules.Detail(StockedProductsWithoutCost);
 }
 
 public class SystemAlertsSummary
@@ -1113,11 +1111,13 @@ public partial class InventoryService
         var stocked = await activeProducts.Where(p => p.CurrentStock > 0)
             .Select(p => new Product { CurrentStock = p.CurrentStock, UnitCost = p.UnitCost, CostExcludesVat = p.CostExcludesVat })
             .ToListAsync();
+        // Paso 8.26: la suma es InventoryValueRules.Summarize (los proyectados quedan activos, como los que se leyeron)
+        var (inventoryValue, stockedWithoutCost) = TPVC.Services.Rules.InventoryValueRules.Summarize(stocked);
 
         return new DashboardMetrics
         {
-            InventoryValue = stocked.Sum(p => p.InventoryValue),
-            StockedProductsWithoutCost = stocked.Count(p => !p.HasCost),
+            InventoryValue = inventoryValue,
+            StockedProductsWithoutCost = stockedWithoutCost,
             TotalProducts = await activeProducts.CountAsync(),
             LowStockCount = await activeProducts.CountAsync(p => p.MinStock > 0 && p.CurrentStock <= p.MinStock),
             ExpiringSoonCount = await activeBatches.CountAsync(b => b.ExpirationDate >= today && b.ExpirationDate < expiringLimit),
@@ -1911,75 +1911,10 @@ public partial class InventoryService
     // DETECCIÓN DE ALERGIAS FARMACOLÓGICAS
     // =========================================================================
 
+    /// <summary>Paso 8.26: la regla vive en <see cref="TPVC.Services.Rules.AllergyRules.CheckMedication"/> (vectores <c>allergy-check.json</c>).</summary>
     public static (bool HasConflict, string MatchedAllergy, string WarningDetails) CheckMedicationAllergy(
-        PatientRecord? patient, Product? product, string? medicineName = null)
-    {
-        if (patient == null || !patient.HasAllergies || string.IsNullOrWhiteSpace(patient.Allergies))
-        {
-            return (false, string.Empty, string.Empty);
-        }
-
-        var medName = (medicineName ?? product?.Name ?? string.Empty).Trim();
-        var generic = (product?.GenericName ?? string.Empty).Trim();
-        var medCombined = $"{medName} {generic}".Trim();
-        if (string.IsNullOrWhiteSpace(medCombined))
-        {
-            return (false, string.Empty, string.Empty);
-        }
-
-        var normalizedMed = TextSearch.Normalize(medCombined);
-
-        // Separar alergias declaradas por el paciente
-        var allergyTokens = patient.Allergies
-            .Split(new[] { ',', ';', '/', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(a => a.Trim())
-            .Where(a => !string.IsNullOrWhiteSpace(a) && !PatientRecord.DeniesAllergies(a))
-            .ToList();
-
-        // Familias farmacológicas con reactividad cruzada común
-        var drugFamilies = new Dictionary<string, string[]>
-        {
-            ["penicilina"] = new[] { "penicilina", "amoxicilina", "ampicilina", "dicloxacilina", "bencilpenicilina", "clavulonato", "clavulanico", "clavulánico", "augmentin" },
-            ["betalactamico"] = new[] { "penicilina", "amoxicilina", "ampicilina", "cefalexina", "ceftriaxona", "cefotaxima", "cefuroxima" },
-            ["cefalosporina"] = new[] { "cefalexina", "ceftriaxona", "cefotaxima", "cefuroxima", "cefixima", "cefazolina" },
-            ["aines"] = new[] { "aspirina", "acido acetilsalicilico", "ácido acetilsalicílico", "ibuprofeno", "naproxeno", "ketorolaco", "diclofenaco", "meloxicam", "piroxicam", "indometacina", "clonixinato" },
-            ["aspirina"] = new[] { "aspirina", "acido acetilsalicilico", "ácido acetilsalicílico", "aas" },
-            ["ibuprofeno"] = new[] { "ibuprofeno", "motrin", "advil" },
-            ["sulfa"] = new[] { "sulfa", "sulfas", "sulfametoxazol", "trimetoprima", "bactrim", "sulfadiazina", "sulfasalazina" },
-            ["macrolido"] = new[] { "azitromicina", "claritromicina", "eritromicina" },
-            ["quinolona"] = new[] { "ciprofloxacino", "levofloxacino", "moxifloxacino" }
-        };
-
-        foreach (var allergy in allergyTokens)
-        {
-            var normAllergy = TextSearch.Normalize(allergy);
-
-            // 1. Coincidencia directa de subcadena
-            if (normalizedMed.Contains(normAllergy) || (normAllergy.Length >= 4 && normAllergy.Contains(normalizedMed)))
-            {
-                return (true, allergy, $"El paciente registra alergia a '{allergy}'. El medicamento recetado contiene '{medName}'.");
-            }
-
-            // 2. Coincidencia por familias de fármacos
-            foreach (var kvp in drugFamilies)
-            {
-                var familyKey = kvp.Key;
-                var members = kvp.Value;
-
-                bool allergyMatchesFamily = normAllergy.Contains(familyKey) || members.Any(m => normAllergy.Contains(m));
-                if (allergyMatchesFamily)
-                {
-                    bool medMatchesFamily = normalizedMed.Contains(familyKey) || members.Any(m => normalizedMed.Contains(m));
-                    if (medMatchesFamily)
-                    {
-                        return (true, allergy, $"Riesgo de hipersensibilidad: El paciente registra alergia a '{allergy}' (grupo {familyKey.ToUpper()}). El medicamento recetado '{medName}' pertenece o presenta reactividad cruzada con esta familia farmacológica.");
-                    }
-                }
-            }
-        }
-
-        return (false, string.Empty, string.Empty);
-    }
+        PatientRecord? patient, Product? product, string? medicineName = null) =>
+        TPVC.Services.Rules.AllergyRules.CheckMedication(patient, product, medicineName);
 }
 
 public enum CatalogRefKind

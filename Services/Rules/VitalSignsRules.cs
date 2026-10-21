@@ -77,6 +77,29 @@ public static class VitalSignsRules
         return string.Join(" · ", warnings);
     }
 
+    /// <summary>
+    /// El texto de los signos que se guarda en la nota (<c>PatientConsultation.VitalSigns</c>), con lo capturado tal cual (sin
+    /// espacios a los lados) y separado por " | ": "TA: 120/80 mmHg | FC: 76 lpm | FR: 18 rpm | Temp: 36.5 °C | Peso: 70 kg |
+    /// Talla: 1.70 m | Glucosa: 95 mg/dL | SpO2: 98% | IMC: 24.2 kg/m² (Peso normal)". Lo vacío no va; la T/A pierde la diagonal
+    /// del final, la SpO₂ su "%" y el IMC no va si dice "no disponibles". Vacío sin nada capturado.
+    /// </summary>
+    public static string Format(string? bloodPressure, string? heartRate, string? respiratoryRate, string? temperature, string? weight,
+        string? height, string? glucose, string? oxygenSaturation, string? bmiText)
+    {
+        var cleanBloodPressure = (bloodPressure ?? string.Empty).Trim().TrimEnd('/');
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(cleanBloodPressure)) parts.Add($"TA: {cleanBloodPressure} mmHg");
+        if (!string.IsNullOrWhiteSpace(heartRate)) parts.Add($"FC: {heartRate.Trim()} lpm");
+        if (!string.IsNullOrWhiteSpace(respiratoryRate)) parts.Add($"FR: {respiratoryRate.Trim()} rpm");
+        if (!string.IsNullOrWhiteSpace(temperature)) parts.Add($"Temp: {temperature.Trim()} °C");
+        if (!string.IsNullOrWhiteSpace(weight)) parts.Add($"Peso: {weight.Trim()} kg");
+        if (!string.IsNullOrWhiteSpace(height)) parts.Add($"Talla: {height.Trim()} m");
+        if (!string.IsNullOrWhiteSpace(glucose)) parts.Add($"Glucosa: {glucose.Trim()} mg/dL");
+        if (!string.IsNullOrWhiteSpace(oxygenSaturation)) parts.Add($"SpO2: {oxygenSaturation.Trim().TrimEnd('%')}%");
+        if (!string.IsNullOrWhiteSpace(bmiText) && !bmiText.Contains("no disponibles")) parts.Add($"IMC: {bmiText.Trim()}");
+        return string.Join(" | ", parts);
+    }
+
     private static bool TryParse(string? text, out double value) =>
         double.TryParse((text ?? string.Empty).Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
 }

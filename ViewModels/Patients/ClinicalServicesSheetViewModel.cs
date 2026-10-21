@@ -421,8 +421,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     /// </summary>
     public void ApplyServiceSupplySuggestions(string query)
     {
-        var supplies = _catalog.AvailableProducts.Where(p => p.IsActive && CatalogStore.IsProductSupply(p));
-        ServiceSupplySuggestions = new ObservableCollection<Product>(TextSearch.RankProducts(supplies, query));
+        ServiceSupplySuggestions = new ObservableCollection<Product>(TPVC.Services.Rules.CatalogSearchRules.ServiceSupplySuggestions(_catalog.AvailableProducts, query));
         SelectedServiceSupplySuggestion = ServiceSupplySuggestions.FirstOrDefault();
         IsServiceSupplyDropdownOpen = ServiceSupplySuggestions.Count > 0;
     }

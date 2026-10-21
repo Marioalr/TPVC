@@ -48,7 +48,7 @@ v1.10): <https://claude.ai/artifact/JcdkhA3Mcr2G3hwTacsKFA>.
 | 5 | Revisión de la visualización de los temas | ✅ Hecho (v1.18) |
 | 6 | Cierre: rendimiento, limpieza y base para Android | ✅ Hecho (v1.18.1–v1.19.0) |
 | 7 | Pedidos del consultorio (2026-10-09) | ✅ Hecho (v1.18.5–v1.18.9) |
-| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19 y 8.21 a 8.25 hechos en la PC (v1.20.0 a v1.44.0); plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
+| 8 | Datos listos para tres equipos con Turso | En curso · pasos 8.2 a 8.19 y 8.21 a 8.26 hechos en la PC (v1.20.0 a v1.45.0); falta el 8.20, que espera los días sin diferencias del libro; plan en `docs/PLAN_FASE8_VARIOS_EQUIPOS.md` |
 | 9 | Pedidos del consultorio (2026-10-14) | ✅ Hecho (v1.41.0: receta y consulta; v1.42.0: insumos de un servicio) · notas del celular en la documentación |
 
 ### Fase 1 · Fundamentos comunes

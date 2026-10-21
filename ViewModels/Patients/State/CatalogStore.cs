@@ -146,41 +146,11 @@ public partial class CatalogStore : ObservableObject
     /// </summary>
     public Product? FindCatalogProduct(string? name) => TPVC.Services.Rules.PatientSheetRows.FindProductByName(AvailableProducts, name);
 
-    public static bool ProductMatchesName(Product product, string name)
-    {
-        var n = TextSearch.Normalize(name);
-        var productName = TextSearch.Normalize(product.Name);
-        return n == productName
-               || n == TextSearch.Normalize($"{product.Name} ({product.Presentation})")
-               || n.StartsWith(productName + " ", StringComparison.Ordinal)
-               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(product.GenericName))
-               || (!string.IsNullOrEmpty(product.GenericName) && n == TextSearch.Normalize(PrescriptionNaming.MedicineLine(product)));
-    }
+    /// <summary>Paso 8.26: la regla vive en <see cref="TPVC.Services.Rules.CatalogMatchingRules.ProductMatchesName"/>.</summary>
+    public static bool ProductMatchesName(Product product, string name) => TPVC.Services.Rules.CatalogMatchingRules.ProductMatchesName(product, name);
 
-    public static bool IsProductMedication(Product p)
-    {
-        if (p.Category != null && (p.Category.Name.Contains("Medicamento", StringComparison.OrdinalIgnoreCase) || p.Category.Name.Contains("Fármaco", StringComparison.OrdinalIgnoreCase)))
-            return true;
-        if (!string.IsNullOrEmpty(p.Code) && p.Code.StartsWith("MED", StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (p.Category != null && (
-            p.Category.Name.Contains("Curación", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Insumo", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Antiséptico", StringComparison.OrdinalIgnoreCase) ||
-            p.Category.Name.Contains("Diagnóstico", StringComparison.OrdinalIgnoreCase)))
-            return false;
-        if (!string.IsNullOrEmpty(p.Code) && (
-            p.Code.StartsWith("CUR", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("INS", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("ANT", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("DIA", StringComparison.OrdinalIgnoreCase) ||
-            p.Code.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)))
-            return false;
-        return true;
-    }
+    /// <summary>Paso 8.26: la regla vive en <see cref="TPVC.Services.Rules.CatalogMatchingRules.IsProductMedication"/>.</summary>
+    public static bool IsProductMedication(Product p) => TPVC.Services.Rules.CatalogMatchingRules.IsProductMedication(p);
 
-    public static bool IsProductSupply(Product p)
-    {
-        return !IsProductMedication(p);
-    }
+    public static bool IsProductSupply(Product p) => TPVC.Services.Rules.CatalogMatchingRules.IsProductSupply(p);
 }

@@ -162,6 +162,13 @@ public class Cie10Diagnosis
         new() { Code = "Z34.9", Name = "Supervisión de embarazo normal, no especificado (Control prenatal)", Category = "Control Preventivo" }
     };
 
+    /// <summary>El catálogo completo en su orden (paso 8.26: <c>contracts/golden/cie10-catalog.json</c>).</summary>
+    public static IReadOnlyList<Cie10Diagnosis> All => _allDiagnoses;
+
+    /// <summary>
+    /// Los diagnósticos en el orden del catálogo cuyo código, nombre o categoría contiene lo escrito (sin acentos ni
+    /// mayúsculas), <paramref name="maxResults"/> como mucho; sin texto, los primeros.
+    /// </summary>
     public static IEnumerable<Cie10Diagnosis> Search(string query, int maxResults = 15)
     {
         if (string.IsNullOrWhiteSpace(query))

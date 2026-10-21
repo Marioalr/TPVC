@@ -171,26 +171,9 @@ public class ConsultationService
         if (_currentConsultation == null || quantity <= 0 || _currentConsultation.IsHandedOff)
             return false;
 
-        var existing = _currentConsultation.Items.FirstOrDefault(i => i.ProductId == productId);
-        if (existing != null)
-        {
-            existing.Quantity += quantity;
-        }
-        else
-        {
-            _currentConsultation.Items.Add(new ConsultationProductItem
-            {
-                ProductId = productId,
-                Code = code,
-                Name = name,
-                GenericName = genericName,
-                Presentation = presentation,
-                Unit = unit,
-                UnitPrice = unitPrice,
-                Quantity = quantity,
-                AddedAt = DateTime.Now
-            });
-        }
+        // Paso 8.26: el mismo Id suma piezas a su renglón (ConsultationAccountRules.AddLine)
+        TPVC.Services.Rules.ConsultationAccountRules.AddLine(_currentConsultation.Items, productId, code, name, genericName, presentation,
+            unit, unitPrice, quantity, DateTime.Now);
 
         _currentConsultation.NotifyItemsChanged();
         OnActiveConsultationChanged?.Invoke();

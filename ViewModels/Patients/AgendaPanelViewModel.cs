@@ -55,9 +55,9 @@ public partial class AgendaPanelViewModel : ObservableObject
     /// <summary>Abre enlaces (WhatsApp, Google Calendar); las pruebas lo reemplazan.</summary>
     public Func<string, bool>? OpenUrl { get; set; }
 
-    public static readonly TimeSpan AgendaDayStart = new(8, 0, 0);
-    public static readonly TimeSpan AgendaDayEnd = new(20, 0, 0);
-    public static readonly TimeSpan AgendaSlotLength = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan AgendaDayStart = AgendaRules.DayStart;
+    public static readonly TimeSpan AgendaDayEnd = AgendaRules.DayEnd;
+    public static readonly TimeSpan AgendaSlotLength = AgendaRules.SlotLength;
 
     [ObservableProperty]
     private bool _isAgendaPanelOpen;
@@ -94,36 +94,11 @@ public partial class AgendaPanelViewModel : ObservableObject
         "Consulta de seguimiento", "Primera vez", "Control", "Resultados de laboratorio", "Revisión de niño sano", "Aplicación de vacuna"
     };
 
-    public string AgendaPanelTitle
-    {
-        get
-        {
-            var text = AgendaPanelDate.ToString("dddd d 'de' MMMM", Mexican);
-            return char.ToUpper(text[0], Mexican) + text[1..];
-        }
-    }
+    public string AgendaPanelTitle => AgendaRules.PanelTitle(AgendaPanelDate);
 
-    public string AgendaWeekTitle
-    {
-        get
-        {
-            var monday = StartOfWeek(AgendaPanelDate);
-            var sunday = monday.AddDays(6);
-            return monday.Month == sunday.Month
-                ? $"{monday.Day} – {sunday.Day} de {sunday.ToString("MMMM yyyy", Mexican)}"
-                : $"{monday.ToString("d MMM", Mexican)} – {sunday.ToString("d MMM yyyy", Mexican)}";
-        }
-    }
+    public string AgendaWeekTitle => AgendaRules.WeekTitle(AgendaPanelDate);
 
-    public string AgendaDaySummary
-    {
-        get
-        {
-            int appointments = AgendaSlots.Count(s => s.HasAppointment);
-            int free = AgendaSlots.Count(s => s.IsFree);
-            return $"{appointments} {(appointments == 1 ? "cita" : "citas")} · {free} {(free == 1 ? "hueco libre" : "huecos libres")}";
-        }
-    }
+    public string AgendaDaySummary => AgendaRules.DaySummary(AgendaSlots);
 
     public bool IsMovingAppointment => MovingAppointment != null;
     public string MovingAppointmentText => MovingAppointment == null ? string.Empty : $"Elija el nuevo horario para {MovingAppointment.PatientName}";
@@ -140,11 +115,7 @@ public partial class AgendaPanelViewModel : ObservableObject
         OnPropertyChanged(nameof(MovingAppointmentText));
     }
 
-    private static DateTime StartOfWeek(DateTime date)
-    {
-        int diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
-        return date.Date.AddDays(-diff);
-    }
+    private static DateTime StartOfWeek(DateTime date) => AgendaRules.StartOfWeek(date);
 
     /// <summary>El panel siempre abre en hoy (la aplicación puede quedar abierta de un día a otro).</summary>
     [RelayCommand]
@@ -221,12 +192,8 @@ public partial class AgendaPanelViewModel : ObservableObject
             _agendaWeekAppointments = new List<PatientAppointment>();
         }
 
-        AgendaWeek = new ObservableCollection<AgendaDayItem>(Enumerable.Range(0, 7).Select(i =>
-        {
-            var date = monday.AddDays(i);
-            var count = _agendaWeekAppointments.Count(a => a.Date.Date == date && !a.IsCancelled);
-            return new AgendaDayItem(date, count) { IsSelected = date == AgendaPanelDate.Date };
-        }));
+        AgendaWeek = new ObservableCollection<AgendaDayItem>(AgendaRules.Week(monday, _agendaWeekAppointments)
+            .Select(d => new AgendaDayItem(d.Date, d.Count) { IsSelected = d.Date == AgendaPanelDate.Date }));
         BuildAgendaSlots();
     }
 
@@ -257,32 +224,9 @@ public partial class AgendaPanelViewModel : ObservableObject
         OnPropertyChanged(nameof(AgendaDaySummary));
     }
 
-    /// <summary>
-    /// Citas del día y huecos libres de 30 minutos entre las 8:00 y las 20:00. Un hueco ocupado por
-    /// una cita (según su duración) no se ofrece; en el día de hoy no se ofrecen horas pasadas.
-    /// </summary>
-    public static List<AgendaSlot> BuildSlots(DateTime date, IEnumerable<PatientAppointment> appointments, DateTime now)
-    {
-        var dayAppointments = appointments
-            .Where(a => a.Date.Date == date.Date && !a.IsCancelled)
-            .Select(a => (Appointment: a, Start: ParseAppointmentTime(a.Time), Minutes: AppointmentRules.Minutes(a.DurationMinutes)))
-            .OrderBy(a => a.Start)
-            .ToList();
-        // Paso 8.23: las que se empalman llevan la marca "Empalme"
-        MarkOverlaps(dayAppointments.Select(a => a.Appointment));
-
-        var slots = dayAppointments.Select(a => new AgendaSlot(a.Start, a.Appointment)).ToList();
-
-        for (var t = AgendaDayStart; t < AgendaDayEnd; t += AgendaSlotLength)
-        {
-            if (date.Date == now.Date && date.Date + t < now) continue;
-            var slotEnd = t + AgendaSlotLength;
-            bool busy = dayAppointments.Any(a => a.Start < slotEnd && t < a.Start + TimeSpan.FromMinutes(a.Minutes));
-            if (!busy) slots.Add(new AgendaSlot(t, null));
-        }
-
-        return slots.OrderBy(s => s.Time).ThenBy(s => s.IsFree).ToList();
-    }
+    /// <summary>Los huecos del día (paso 8.26: <see cref="AgendaRules.BuildSlots"/>, vectores <c>agenda.json</c>).</summary>
+    public static List<AgendaSlot> BuildSlots(DateTime date, IEnumerable<PatientAppointment> appointments, DateTime now) =>
+        AgendaRules.BuildSlots(date, appointments, now);
 
     [RelayCommand]
     public async Task OpenAgendaSlotAsync(AgendaSlot? slot)
@@ -497,36 +441,11 @@ public partial class AgendaPanelViewModel : ObservableObject
         return stillWanted();
     }
 
-    /// <summary>"Ya hay una cita a las 10:30 con Ana López. ¿Agendar de todos modos?" (con varias, todas).</summary>
-    public static string OverlapQuestion(IReadOnlyList<PatientAppointment> overlapping)
-    {
-        var parts = overlapping.Select(a => $"a las {AppointmentRules.TimeText(a.Time)} con {a.PatientName}").ToList();
-        var list = parts.Count == 1 ? parts[0] : string.Join(", ", parts.Take(parts.Count - 1)) + " y " + parts[^1];
-        return (overlapping.Count == 1 ? "Ya hay una cita " : "Ya hay citas ") + list + ".\n\n¿Agendar de todos modos?";
-    }
+    /// <summary>"Ya hay una cita a las 10:30 con Ana López. ¿Agendar de todos modos?" (paso 8.26: <see cref="AgendaRules.OverlapQuestion"/>).</summary>
+    public static string OverlapQuestion(IReadOnlyList<PatientAppointment> overlapping) => AgendaRules.OverlapQuestion(overlapping);
 
-    /// <summary>
-    /// Paso 8.23: pone "Empalme con Ana López (10:30)" en cada cita de la lista que se empalma con otra de la misma lista
-    /// (<see cref="AppointmentRules.Overlaps"/>), y lo quita en las demás. Con varias, la primera por hora.
-    /// </summary>
-    public static void MarkOverlaps(IEnumerable<PatientAppointment> appointments)
-    {
-        var list = appointments.ToList();
-        foreach (var appointment in list) appointment.OverlapText = string.Empty;
-        var rules = list.Select(a => (Appointment: a, Rule: AppointmentRules.Of(a))).ToList();
-        foreach (var (appointment, rule) in rules)
-        {
-            var other = rules
-                .Where(o => !ReferenceEquals(o.Appointment, appointment) && AppointmentRules.Overlaps(rule, o.Rule))
-                .OrderBy(o => AppointmentRules.Start(o.Appointment.Time))
-                .ThenBy(o => SyncIds.Format(o.Appointment.SyncId), StringComparer.Ordinal)
-                .Select(o => o.Appointment)
-                .ToList();
-            if (other.Count == 0) continue;
-            appointment.OverlapText = $"Empalme con {other[0].PatientName} ({AppointmentRules.TimeText(other[0].Time)})" +
-                                      (other.Count > 1 ? $" y {other.Count - 1} más" : string.Empty);
-        }
-    }
+    /// <summary>Paso 8.23: la marca "Empalme con …" (paso 8.26: <see cref="AgendaRules.MarkOverlaps"/>).</summary>
+    public static void MarkOverlaps(IEnumerable<PatientAppointment> appointments) => AgendaRules.MarkOverlaps(appointments);
 
     [RelayCommand]
     public void StartMovingAppointment(PatientAppointment? appointment)
