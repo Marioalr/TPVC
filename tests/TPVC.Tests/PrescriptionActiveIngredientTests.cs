@@ -506,4 +506,62 @@ public class PrescriptionActiveIngredientTests
         Assert.HasCount(before.Count + 2, patient.ActivePrescription);
         records.Dispose();
     }
+
+    // ================================================================== revisión de la rama (5 defectos)
+
+    /// <summary>Una consulta en curso del paciente 2 cuya receta anterior es <paramref name="previous"/>.</summary>
+    private static (MedicalRecordsViewModel Records, ConsultationService Consultations, PatientRecord Patient) OpenWithPrevious(
+        bool withTempra, params PatientPrescriptionItem[] previous)
+    {
+        var consultations = new ConsultationService(seedDemoPatients: false);
+        var records = new MedicalRecordsViewModel(null, consultations);
+        if (withTempra) records.Catalog.AvailableProducts.Add(Tempra());
+        var patient = records.Patients.Single(p => p.Id == 2);
+        patient.ActivePrescription = previous.ToList();
+        records.SelectPatient(patient);
+        records.StartActiveConsultation();
+        consultations.CurrentConsultation!.StartedAt = DateTime.Now.AddHours(1);
+        records.Prescription.OpenPrescriptionModal();
+        return (records, consultations, patient);
+    }
+
+    [TestMethod]
+    public async Task Repeat_ComparesByProduct_SoAnOldFormatRowIsTheSameAsTheNewOne_AndNothingIsAddedOrChargedTwice()
+    {
+        var (records, consultations, patient) = OpenWithPrevious(true,
+            new PatientPrescriptionItem { MedicineName = "Paracetamol 500 mg tabletas (Tempra)", Dosage = "1 cada 8 horas" },
+            new PatientPrescriptionItem { MedicineName = "Té de manzanilla", Dosage = "Una taza en la noche" });
+        var tempra = Medicine(records, "MED-060");
+        await PrescribeAsync(records, tempra);
+        Assert.AreEqual("Tempra 500 mg tabletas (Paracetamol)", patient.ActivePrescription.Single().MedicineName);
+        CollectionAssert.AreEqual(new[] { "Té de manzanilla" }, records.Record.PendingPreviousPrescription.Select(p => p.MedicineName).ToList(),
+            "El renglón de antes es el mismo producto: ya no está pendiente");
+
+        await records.Prescription.RepeatPreviousPrescriptionAsync();
+        CollectionAssert.AreEqual(new[] { "Tempra 500 mg tabletas (Paracetamol)", "Té de manzanilla" }, patient.ActivePrescription.Select(p => p.MedicineName).ToList(),
+            "Solo se agrega lo que faltaba");
+        Assert.AreEqual(1, consultations.CurrentConsultation!.Items.Single(i => i.ProductId == tempra.Id).Quantity, "Y se cobra una sola vez");
+
+        // Lo que no es un producto del catálogo se sigue comparando por el texto
+        Assert.IsFalse(records.Prescription.CanRepeatPreviousPrescription);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task Repeat_WithTheIngredientHidden_AndAProductThatNoLongerResolves_StillWarnsOfTheAllergy()
+    {
+        var (records, _, patient) = OpenWithPrevious(false, new PatientPrescriptionItem
+        {
+            MedicineName = "Tempra 500 mg tabletas", ActiveIngredient = "Paracetamol", ShowActiveIngredient = false, Dosage = "1 cada 8 horas"
+        });
+        patient.Allergies = "Paracetamol";
+        Assert.IsNull(records.Catalog.FindCatalogProduct("Tempra 500 mg tabletas"), "El producto ya no está en el catálogo");
+
+        await records.Prescription.RepeatPreviousPrescriptionAsync();
+        Assert.IsEmpty(patient.ActivePrescription, "No se repite: choca con la alergia por su principio activo guardado");
+        StringAssert.Contains(records.Info.InfoModalMessage, "Tempra 500 mg tabletas");
+        Assert.IsTrue(AllergyRules.CheckMedication(patient, null, "Tempra 500 mg tabletas", "Paracetamol").HasConflict);
+        Assert.IsFalse(AllergyRules.CheckMedication(patient, null, "Tempra 500 mg tabletas").HasConflict, "Sin él, el nombre solo no avisa");
+        records.Dispose();
+    }
 }

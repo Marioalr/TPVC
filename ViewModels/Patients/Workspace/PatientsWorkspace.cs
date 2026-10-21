@@ -392,7 +392,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _templates = new PrescriptionTemplateStore(_inventoryService, this);
         _session = new PatientSession(this);
         _active = new ActiveConsultationSession(_consultationService, _ui, this);
-        _record = new ConsultationRecordState(_session, _inventoryService, this);
+        _record = new ConsultationRecordState(_session, _inventoryService, this, name => _catalog.FindCatalogProduct(name));
         _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
         // Lo elegido en el catálogo se agrega con la hoja que lo abrió (las hojas se crean después:

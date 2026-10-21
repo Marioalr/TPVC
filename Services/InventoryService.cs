@@ -1917,8 +1917,8 @@ public partial class InventoryService
 
     /// <summary>Paso 8.26: la regla vive en <see cref="TPVC.Services.Rules.AllergyRules.CheckMedication"/> (vectores <c>allergy-check.json</c>).</summary>
     public static (bool HasConflict, string MatchedAllergy, string WarningDetails) CheckMedicationAllergy(
-        PatientRecord? patient, Product? product, string? medicineName = null) =>
-        TPVC.Services.Rules.AllergyRules.CheckMedication(patient, product, medicineName);
+        PatientRecord? patient, Product? product, string? medicineName = null, string? activeIngredient = null) =>
+        TPVC.Services.Rules.AllergyRules.CheckMedication(patient, product, medicineName, activeIngredient);
 }
 
 public enum CatalogRefKind

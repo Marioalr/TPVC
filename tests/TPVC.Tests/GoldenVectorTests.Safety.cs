@@ -17,9 +17,10 @@ public partial class GoldenVectorTests
     [TestMethod]
     public void AllergyCheck_MatchesTheVectors()
     {
-        static JsonObject Med(string? allergies, string? medicineName, string? productName = null, string? generic = null)
+        static JsonObject Med(string? allergies, string? medicineName, string? productName = null, string? generic = null, string? activeIngredient = null)
         {
             var o = new JsonObject { ["check"] = "medication", ["allergies"] = allergies, ["medicineName"] = medicineName };
+            if (activeIngredient != null) o["activeIngredient"] = activeIngredient;
             if (productName != null || generic != null) o["product"] = new JsonObject { ["name"] = productName ?? string.Empty, ["genericName"] = generic };
             return o;
         }
@@ -30,6 +31,8 @@ public partial class GoldenVectorTests
             new("marca → genérico: el renglón de la receta de antes de v1.46 (la marca entre paréntesis)", Med("paracetamol", "Paracetamol 500 mg tabletas (Tempra)", "Tempra", "Paracetamol")),
             new("marca → genérico: el renglón de la receta (el principio activo entre paréntesis)", Med("paracetamol", "Tempra 500 mg tabletas (Paracetamol)", "Tempra 500 mg", "Paracetamol")),
             new("marca → genérico: el renglón sin el principio activo avisa por el genérico del producto", Med("Paracetamol", "Tempra 500 mg tabletas", "Tempra 500 mg", "Paracetamol")),
+            new("renglón con el principio activo oculto y sin producto en el catálogo: avisa por su principio activo guardado", Med("Paracetamol", "Tempra 500 mg tabletas", activeIngredient: "Paracetamol")),
+            new("el principio activo guardado no se repite si el nombre ya lo dice", Med("Penicilina", "Tempra 500 mg tabletas (Paracetamol)", activeIngredient: "Paracetamol")),
             new("genérico → marca: alergia a «Tempra» y se receta Paracetamol: no avisa (la regla no conoce las marcas)", Med("Tempra", "Paracetamol 500 mg", "Paracetamol 500 mg", "Paracetamol")),
             new("texto libre sin producto: solo lo escrito", Med("Paracetamol", "Tempra gotas")),
             new("familia: penicilina y amoxicilina", Med("Penicilina", "Amoxicilina 500 mg", "Amoxicilina 500 mg", "Amoxicilina")),
@@ -77,11 +80,11 @@ public partial class GoldenVectorTests
                     };
                 }
                 var product = input["product"] is { } p ? new Product { Name = Str(p, "name"), GenericName = S(p, "genericName") } : null;
-                var (conflict, matched, warning) = AllergyRules.CheckMedication(patient, product, S(input, "medicineName"));
+                var (conflict, matched, warning) = AllergyRules.CheckMedication(patient, product, S(input, "medicineName"), S(input, "activeIngredient"));
                 return new JsonObject { ["conflict"] = conflict, ["matchedAllergy"] = matched, ["warning"] = warning };
             },
             "Services/Rules/AllergyRules.cs (antes InventoryService.CheckMedicationAllergy): el aviso de alergia al recetar y al cargar «Se surte aquí». 'medicineName' es lo escrito en la receta (si es nulo, el nombre del producto); 'product' es el producto elegido (su genérico entra a la comparación).",
-            "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si med contiene la alergia, o si la alergia tiene 4 caracteres o más y contiene a med; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia es de la familia si contiene la llave o un miembro, y avisa si med también contiene la llave o un miembro. 'contiene' es comparación ordinal de subcadenas.",
+            "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados, y + ' ' + activeIngredient (revisión 16: el principio activo guardado en el renglón; sin espacios a los lados) si lo hay y medicineName normalizado no lo contiene normalizado; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si med contiene la alergia, o si la alergia tiene 4 caracteres o más y contiene a med; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia es de la familia si contiene la llave o un miembro, y avisa si med también contiene la llave o un miembro. 'contiene' es comparación ordinal de subcadenas.",
             "Familias (llave: miembros), en este orden: " + string.Join("; ", AllergyRules.DrugFamilies.Select(f => $"{f.Key}: {string.Join(", ", f.Members)}")) + ". Los miembros con acento nunca coinciden porque se comparan con texto sin acentos.",
             "Textos: directo \"El paciente registra alergia a '{alergia}'. El medicamento recetado contiene '{medicineName o nombre}'.\"; familia \"Riesgo de hipersensibilidad: El paciente registra alergia a '{alergia}' (grupo {LLAVE EN MAYÚSCULAS}). El medicamento recetado '{nombre}' pertenece o presenta reactividad cruzada con esta familia farmacológica.\" La alergia va como se escribió (sin espacios a los lados).",
             "summary (PatientRecord): niegan las respuestas que normalizadas y sin punto final son: ninguna, ninguna conocida, ningunas, negadas, negada, niega, niega alergias, no, sin alergias, no conocidas, no conocida, negativas, nada. allergySummary: las alergias sin espacios a los lados, 'No interrogadas' (vacías) o 'Negadas'; allergyBadge: 'ALERGIAS: …', 'Alergias sin interrogar' o 'Alergias negadas'. Crónicos: niegan las mismas respuestas o lo que empieza con 'ningun', 'niega' o 'negad', o es 'sin enfermedades', 'sin enfermedades cronicas', 'sin antecedentes' o 'sin cronicos'; chronicBadge 'Crónicos: …' o vacío.",
