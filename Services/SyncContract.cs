@@ -46,7 +46,8 @@ public static class SyncContract
     /// (<see cref="ActiveIngredientRevision"/>).
     /// 17: consumo parcial de paquetes en servicios: <c>Products.UnitsPerPackage</c> y <c>Products.OpenedUnitsRemaining</c>.
     /// También <c>SaleItems.IsIndividualUnits</c> (el renglón vendió piezas sueltas) y, en la consulta entre equipos, el
-    /// <c>IsIndividualUnits</c> de cada cargo de la copia.
+    /// <c>IsIndividualUnits</c> de cada cargo de la copia. Un equipo anterior no lo conoce y cobraría esas piezas como paquetes
+    /// completos: no se le envía una consulta cuya cuenta las tiene (<see cref="IndividualUnitsRevision"/>).
     /// </summary>
     public const int Revision = 17;
 
@@ -74,6 +75,14 @@ public static class SyncContract
     /// receta los tiene y lo dice.
     /// </summary>
     public const int ActiveIngredientRevision = 16;
+
+    /// <summary>
+    /// La revisión desde la que un equipo conoce las piezas sueltas de un paquete (<c>IsIndividualUnits</c> en cada cargo de la
+    /// copia de la consulta, <c>Products.UnitsPerPackage</c> y <c>OpenedUnitsRemaining</c>). Uno anterior ignora la marca y
+    /// cobraría esas piezas como paquetes completos (descontando un paquete por pieza): «Enviar a…» no le manda una consulta
+    /// cuya cuenta las tiene y lo dice.
+    /// </summary>
+    public const int IndividualUnitsRevision = 17;
 
     /// <summary>Cómo se interpreta una fecha: todas viajan como texto sin zona.</summary>
     public enum TimeKind
@@ -266,7 +275,7 @@ public static class SyncContract
                     SyncSchema.DeviceRegistryStatements),
                 OtherTable(SyncSchema.FolioCountersTable, "Un consecutivo por serie de folios (paso 8.16): 'EXP-2026' (año) y 'TKT-20261009' (día). La crea la PC; la PC y la tablet toman el siguiente número con una sola instrucción ('folio.take' de hrana/statements.json). No se replica y reemplazar la nube con un respaldo no la toca.",
                     SyncSchema.FolioCountersStatement),
-                OtherTable("ConsultationHandoffs", "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'. Desde la revisión 17 cada cargo de la copia (Payload) que son piezas sueltas de un paquete lleva IsIndividualUnits: true (no se escribe si es falso) y quien la recibe lo conserva (golden/handoff-payload.json, «Piezas sueltas»).",
+                OtherTable("ConsultationHandoffs", "Consulta entre equipos (docs/TURSO_SYNC_ARCHITECTURE.md §4.5). No se replica: cada equipo la consulta directamente. Desde la revisión 15 (paso 8.24) con el índice parcial IX_ConsultationHandoffs_Pending, que la revisión usa solo con el WHERE literal de 'check.incoming'. Desde la revisión 17 cada cargo de la copia (Payload) que son piezas sueltas de un paquete lleva IsIndividualUnits: true (no se escribe si es falso) y quien la recibe lo conserva (golden/handoff-payload.json, «Piezas sueltas»). A un equipo con ContractRevision menor que 17 (IndividualUnitsRevision), que cobraría esas piezas como paquetes completos, «Enviar a…» no le manda una consulta cuya cuenta tiene alguno, y lo dice.",
                     ConsultationHandoffService.HandoffTableDdl)),
             ["ddl"] = new JsonArray(schema.Statements.Select(s => (JsonNode)JsonValue.Create(s)!).ToArray())
         };

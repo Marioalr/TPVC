@@ -361,6 +361,7 @@ public sealed class ConsultationHandoffService
                 MergesAsWholeRow = device.MergesAsWholeRow && !thisDevice,
                 IgnoresServiceSupplies = device.IgnoresServiceSupplies && !thisDevice,
                 IgnoresActiveIngredient = device.IgnoresActiveIngredient && !thisDevice,
+                IgnoresIndividualUnits = device.IgnoresIndividualUnits && !thisDevice,
                 // Paso 8.15: no se ha conectado desde que se anularon los tokens (sin latido, tampoco)
                 TokensRotatedAtUtc = !thisDevice && !device.IsRevoked && !device.IsPendingApproval
                                      && rotatedAt is { } at && (device.LastSeenUtc == null || device.LastSeenUtc < at)
@@ -432,6 +433,9 @@ public sealed class ConsultationHandoffService
         // 2026-10-21: no reconoce el producto de un renglón de receta con el principio activo entre paréntesis
         bool ignoresActiveIngredient = compatible && revokedAt == null && !pendingApproval
                                        && (contractRevision ?? 0) < SyncContract.ActiveIngredientRevision;
+        // Revisión 17: no conoce las piezas sueltas de un paquete (cobraría cada pieza como un paquete completo)
+        bool ignoresIndividualUnits = compatible && revokedAt == null && !pendingApproval
+                                      && (contractRevision ?? 0) < SyncContract.IndividualUnitsRevision;
 
         return new LinkedDevice(
             row.GetValueOrDefault("DeviceId")?.ToString() ?? string.Empty,
@@ -448,6 +452,7 @@ public sealed class ConsultationHandoffService
             MergesAsWholeRow = mergesAsWholeRow,
             IgnoresServiceSupplies = ignoresServiceSupplies,
             IgnoresActiveIngredient = ignoresActiveIngredient,
+            IgnoresIndividualUnits = ignoresIndividualUnits,
             DeviceCode = registry?.GetValueOrDefault("DeviceCode")?.ToString(),
             IsRevoked = revokedAt != null,
             IsPendingApproval = pendingApproval,
