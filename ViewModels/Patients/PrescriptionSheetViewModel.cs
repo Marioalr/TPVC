@@ -913,14 +913,13 @@ public partial class PrescriptionSheetViewModel : ObservableObject
     /// El mismo renglón cambia su texto (no se rehace: conserva su RowId, lo que trae de otro equipo, la indicación, la cantidad
     /// y "Se surte aquí"; la cuenta no cambia) y se guarda como las demás ediciones de la receta, con la marca del renglón del
     /// paso 8.22. Solo un renglón de la receta que se ve y que tiene principio activo; con la consulta en otro equipo, avisa y la
-    /// casilla regresa. La elección queda como la de este equipo para el siguiente medicamento.
+    /// casilla regresa. No cambia la elección de este equipo para el siguiente medicamento (decisión del 2026-10-21).
     /// </summary>
     private async Task<bool> ApplyActiveIngredientAsync(PatientPrescriptionItem item, bool show)
     {
         var patient = _session.SelectedPatient;
         var ingredient = item.ActiveIngredient;
-        var suffix = $" ({ingredient?.Trim()})";
-        bool shownNow = item.MedicineName.TrimEnd().EndsWith(suffix, StringComparison.Ordinal);
+        bool shownNow = PrescriptionNaming.EndsWithActiveIngredient(item.MedicineName, ingredient);
         if (patient == null || !item.HasActiveIngredient || !patient.ActivePrescription.Contains(item) || _gate.BlockIfConsultationReadOnly())
         {
             // La casilla regresa a lo que dice el renglón
@@ -928,8 +927,8 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             return false;
         }
 
+        // Solo la casilla de "Indicación" (al recetar) es la elección para el siguiente medicamento; la de un renglón no
         item.ShowActiveIngredient = show;
-        RememberActiveIngredientChoice(show);
         item.MedicineName = PrescriptionNaming.WithActiveIngredient(item.MedicineName, ingredient, show);
         patient.SyncPrescriptionJson();
         _session.NotifySelectedPatientMutated();

@@ -101,21 +101,33 @@ public static class PrescriptionNaming
         var generic = (product.GenericName ?? string.Empty).Trim();
         if (generic.Length == 0) return name;
         var line = GenericLine(product, name, generic);
-        return BrandOf(name, generic) is { } brand ? $"{line} ({brand})" : line;
+        return LegacyBrandOf(name, generic) is { } brand ? $"{line} ({brand})" : line;
     }
 
     /// <summary>
     /// El renglón guardado <paramref name="medicineName"/> con el principio activo entre paréntesis al final, o sin él: quita
-    /// " (principio activo)" si lo trae y lo vuelve a poner si <paramref name="show"/>. Lo demás del texto no cambia.
+    /// el último paréntesis si es "(principio activo)" y lo vuelve a poner si <paramref name="show"/>, salvo que el renglón
+    /// ya diga "(principio activo)" en otro lugar (sin distinguir acentos ni mayúsculas): nunca lo repite. Lo demás del texto
+    /// no cambia.
     /// </summary>
     public static string WithActiveIngredient(string? medicineName, string? activeIngredient, bool show)
     {
         var line = (medicineName ?? string.Empty).Trim();
         var ingredient = (activeIngredient ?? string.Empty).Trim();
         if (ingredient.Length == 0) return line;
-        var suffix = $" ({ingredient})";
-        if (line.EndsWith(suffix, StringComparison.Ordinal)) line = line[..^suffix.Length].TrimEnd();
-        return show ? line + suffix : line;
+        // Ya lo dice (con cualquier escritura): mostrarlo no cambia nada
+        if (show && TextSearch.Normalize(line).Contains(TextSearch.Normalize($"({ingredient})"), StringComparison.Ordinal)) return line;
+        if (EndsWithActiveIngredient(line, ingredient)) line = line[..line.LastIndexOf('(')].TrimEnd();
+        return show ? $"{line} ({ingredient})" : line;
+    }
+
+    /// <summary>El renglón termina con "(principio activo)", sin distinguir acentos ni mayúsculas (la casilla «Mostrar (…)»).</summary>
+    public static bool EndsWithActiveIngredient(string? medicineName, string? activeIngredient)
+    {
+        var line = (medicineName ?? string.Empty).Trim();
+        var ingredient = (activeIngredient ?? string.Empty).Trim();
+        var open = line.LastIndexOf('(');
+        return ingredient.Length > 0 && open >= 0 && TextSearch.Normalize(line[open..]) == TextSearch.Normalize($"({ingredient})");
     }
 
     // El genérico, su concentración (si el genérico no trae dígitos) y su forma (si el genérico no la dice)
@@ -177,10 +189,20 @@ public static class PrescriptionNaming
     }
 
     /// <summary>
-    /// La marca: las palabras del nombre antes de la concentración, si no empiezan como el genérico (un nombre como
-    /// "Paracetamol 500 mg" no es de marca). "VALCLAN 875/125MG C/14 TABS" → "Valclan".
+    /// La marca: las palabras del nombre antes de la concentración, sin lo que va entre paréntesis ("TEMPRA (PARACETAMOL)
+    /// 500MG" → "Tempra": el principio activo va una sola vez, en el paréntesis que controla «Mostrar (…)»), si no empiezan como
+    /// el genérico (un nombre como "Paracetamol 500 mg" no es de marca). "VALCLAN 875/125MG C/14 TABS" → "Valclan".
     /// </summary>
-    public static string? BrandOf(string? name, string? generic)
+    public static string? BrandOf(string? name, string? generic) =>
+        BrandWords(string.IsNullOrWhiteSpace(name) ? name : ParenthesesRegex.Replace(name, " "), generic);
+
+    // Lo que va entre paréntesis en un nombre ("(PARACETAMOL)", "(Ácido fólico)")
+    private static readonly Regex ParenthesesRegex = new(@"\([^()]*\)", RegexOptions.CultureInvariant);
+
+    // La marca como la sacaban v1.23 a v1.45 (con lo que hubiera entre paréntesis): solo para reconocer sus renglones
+    private static string? LegacyBrandOf(string? name, string? generic) => BrandWords(name, generic);
+
+    private static string? BrandWords(string? name, string? generic)
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
         var words = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);

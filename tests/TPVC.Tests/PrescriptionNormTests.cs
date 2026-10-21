@@ -35,6 +35,8 @@ public class PrescriptionNormTests
     [DataRow("Augmentin 875/125 mg", "Amoxicilina/ácido clavulánico 875/125 mg", "Caja con 14 tabletas",
         "Augmentin 875/125 mg tabletas (Amoxicilina/ácido clavulánico)", "Amoxicilina/ácido clavulánico", DisplayName = "De marca con la concentración en el genérico: no se repite")]
     [DataRow("Tempra", "Paracetamol 500 mg", "Caja con 20 tabletas", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", DisplayName = "La concentración solo en el genérico va afuera")]
+    [DataRow("TEMPRA (PARACETAMOL) 500MG", "Paracetamol", "Caja con 20 tabletas", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", DisplayName = "El nombre ya trae el principio activo entre paréntesis: una sola vez")]
+    [DataRow("Adinol (Paracetamol) Jarabe 160mg/5ml", "Paracetamol", "Frasco con 120 ml", "Adinol 160 mg/5 ml jarabe (Paracetamol)", "Paracetamol", DisplayName = "El del médico: Adinol (Paracetamol) Jarabe")]
     public void TheMedicine_IsWrittenWithTheBrandOutside_AndTheActiveIngredientInParentheses(string name, string? generic, string? presentation, string expected, string? ingredient)
     {
         var product = new Product { Name = name, GenericName = generic, Presentation = presentation };

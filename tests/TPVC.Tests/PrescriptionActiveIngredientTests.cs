@@ -208,7 +208,7 @@ public class PrescriptionActiveIngredientTests
     // ================================================================== en un renglón agregado
 
     [TestMethod]
-    public async Task TheRowToggle_ChangesTheSameRow_KeepsTheAccount_AndIsRemembered()
+    public async Task TheRowToggle_ChangesTheSameRow_KeepsTheAccount_AndDoesNotChangeTheDefault()
     {
         var (records, consultations, patient) = OpenConsultation();
         var rx = records.Prescription;
@@ -235,7 +235,7 @@ public class PrescriptionActiveIngredientTests
         StringAssert.Contains(patient.ActivePrescriptionJson, "\"MedicineName\":\"Tempra 500 mg tabletas\",\"ActiveIngredient\":\"Paracetamol\",\"ShowActiveIngredient\":false");
         Assert.AreEqual(1, consultations.CurrentConsultation!.Items.Single(i => i.ProductId == tempra.Id).Quantity, "La cuenta no cambia");
         rx.ChoosePrescriptionProduct(Medicine(records, "MED-061"));
-        Assert.IsFalse(rx.ShowChosenActiveIngredient, "El siguiente medicamento empieza con esta elección");
+        Assert.IsTrue(rx.ShowChosenActiveIngredient, "La casilla de un renglón no cambia cómo empieza el siguiente (2026-10-21)");
         rx.ClearChosenMedicine();
 
         Assert.IsTrue(await rx.SetActiveIngredientShownAsync(row, true));
@@ -563,5 +563,36 @@ public class PrescriptionActiveIngredientTests
         Assert.IsTrue(AllergyRules.CheckMedication(patient, null, "Tempra 500 mg tabletas", "Paracetamol").HasConflict);
         Assert.IsFalse(AllergyRules.CheckMedication(patient, null, "Tempra 500 mg tabletas").HasConflict, "Sin él, el nombre solo no avisa");
         records.Dispose();
+    }
+
+    [TestMethod]
+    public void TheHistoryEditor_DropsTheIngredient_WhenTheNameIsChanged_AndKeepsItOtherwise()
+    {
+        var row = new PatientPrescriptionItem
+        {
+            MedicineName = "Tempra 500 mg tabletas (Paracetamol)", ActiveIngredient = "Paracetamol", ShowActiveIngredient = true, Dosage = "1 cada 8 horas"
+        };
+
+        var same = ViewModels.Patients.EditablePrescriptionLine.From(row).ToItem();
+        Assert.AreEqual("Paracetamol", same.ActiveIngredient, "Sin cambiar el nombre, se queda");
+        Assert.IsTrue(same.ShowActiveIngredient);
+
+        var hidden = ViewModels.Patients.EditablePrescriptionLine.From(row);
+        hidden.MedicineName = "Tempra 500 mg tabletas";
+        var hiddenItem = hidden.ToItem();
+        Assert.AreEqual("Paracetamol", hiddenItem.ActiveIngredient, "El mismo renglón sin el paréntesis");
+        Assert.IsFalse(hiddenItem.ShowActiveIngredient);
+
+        var renamed = ViewModels.Patients.EditablePrescriptionLine.From(row);
+        renamed.MedicineName = "Tempra Infantil 160 mg/5 ml jarabe";
+        var renamedItem = renamed.ToItem();
+        Assert.IsNull(renamedItem.ActiveIngredient, "Otro nombre: el principio activo guardado ya no le corresponde");
+        Assert.IsNull(renamedItem.ShowActiveIngredient);
+        Assert.IsFalse(renamedItem.HasActiveIngredient, "Sin casilla que ponga un paréntesis equivocado");
+
+        // Y la casilla nunca repite el paréntesis, aunque esté escrito con otras mayúsculas o sin acentos
+        Assert.AreEqual("Tempra 500 mg tabletas (PARACETAMOL)", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas (PARACETAMOL)", "Paracetamol", true));
+        Assert.AreEqual("Navontec 8 mg (Ondansetron) solución inyectable", PrescriptionNaming.WithActiveIngredient("Navontec 8 mg (Ondansetron) solución inyectable", "Ondansetrón", true));
+        Assert.AreEqual("Tempra 500 mg tabletas", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas (PARACETAMOL)", "Paracetamol", false));
     }
 }
