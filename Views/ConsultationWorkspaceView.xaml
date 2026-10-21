@@ -728,6 +728,16 @@
                                                                 </MultiBinding>
                                                             </TextBlock.Visibility>
                                                         </TextBlock>
+                                                        <!-- «Mostrar (Paracetamol)» del renglón (2026-10-21): quita o pone el paréntesis y guarda -->
+                                                        <CheckBox Style="{StaticResource FieldCheckBox}" Margin="0,4,0,0" HorizontalAlignment="Left"
+                                                                  IsChecked="{Binding ShowsActiveIngredient, Mode=TwoWay}"
+                                                                  Command="{Binding DataContext.Prescription.ToggleActiveIngredientCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                  CommandParameter="{Binding}"
+                                                                  Visibility="{Binding HasActiveIngredient, Converter={StaticResource BoolToVis}}"
+                                                                  ToolTip="Escribir el principio activo entre paréntesis después de la marca"
+                                                                  AutomationProperties.Name="Mostrar el principio activo">
+                                                            <TextBlock Text="{Binding ActiveIngredientToggleText}" FontSize="12" />
+                                                        </CheckBox>
                                                     </StackPanel>
                                                     <CheckBox Grid.Column="1"
                                                               Style="{StaticResource FieldCheckBox}"

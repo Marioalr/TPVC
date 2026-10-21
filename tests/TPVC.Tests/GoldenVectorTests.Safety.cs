@@ -27,7 +27,9 @@ public partial class GoldenVectorTests
         var cases = new List<RuleCase>
         {
             new("marca → genérico: alergia a Paracetamol y se receta Tempra (el producto lleva su genérico)", Med("Paracetamol", "Tempra", "Tempra", "Paracetamol")),
-            new("marca → genérico: el renglón normado de la receta", Med("paracetamol", "Paracetamol 500 mg tabletas (Tempra)", "Tempra", "Paracetamol")),
+            new("marca → genérico: el renglón de la receta de antes de v1.46 (la marca entre paréntesis)", Med("paracetamol", "Paracetamol 500 mg tabletas (Tempra)", "Tempra", "Paracetamol")),
+            new("marca → genérico: el renglón de la receta (el principio activo entre paréntesis)", Med("paracetamol", "Tempra 500 mg tabletas (Paracetamol)", "Tempra 500 mg", "Paracetamol")),
+            new("marca → genérico: el renglón sin el principio activo avisa por el genérico del producto", Med("Paracetamol", "Tempra 500 mg tabletas", "Tempra 500 mg", "Paracetamol")),
             new("genérico → marca: alergia a «Tempra» y se receta Paracetamol: no avisa (la regla no conoce las marcas)", Med("Tempra", "Paracetamol 500 mg", "Paracetamol 500 mg", "Paracetamol")),
             new("texto libre sin producto: solo lo escrito", Med("Paracetamol", "Tempra gotas")),
             new("familia: penicilina y amoxicilina", Med("Penicilina", "Amoxicilina 500 mg", "Amoxicilina 500 mg", "Amoxicilina")),

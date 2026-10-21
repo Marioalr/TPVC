@@ -3,7 +3,7 @@
   "covers": [
     "8.5"
   ],
-  "contract": 15,
+  "contract": 16,
   "protocol": 3,
   "generatedBy": "tests/TPVC.Tests/TursoSyncEndToEndTests.Scenarios.cs (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "notes": [

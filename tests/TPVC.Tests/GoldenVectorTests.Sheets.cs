@@ -143,6 +143,8 @@ public partial class GoldenVectorTests
                      ("se lee sin distinguir mayúsculas y se escribe en PascalCase", PatientSheetRows.ServicesColumn,
                          $$"""[{"rowId":"{{kept}}","serviceSyncId":"{{SyncIds.Format(GlucemiaSyncId)}}","serviceName":"Monitoreo de Glucemia Capilar","price":80,"quantity":1}]"""),
                      ("hoja vacía", PatientSheetRows.PrescriptionColumn, ""),
+                     ("receta (revisión 16): el principio activo y si se muestra se quedan; el renglón de antes, sin ellos, no los gana", PatientSheetRows.PrescriptionColumn,
+                         $$"""[{"RowId":"{{kept}}","MedicineName":"Tempra 500 mg tabletas","ActiveIngredient":"Paracetamol","ShowActiveIngredient":false,"Dosage":"1 cada 8 horas","RecommendedQuantity":1,"Presentation":"Caja con 20 tabletas","DispenseInClinic":true},{"MedicineName":"Paracetamol 500 mg tabletas (Tempra)","Dosage":"1 cada 8 horas","RecommendedQuantity":1,"DispenseInClinic":false}]"""),
                  })
         {
             var written = RewriteSheet(column, json);
@@ -205,6 +207,17 @@ public partial class GoldenVectorTests
             RowId = rowId, ServiceCode = "SERV-001", ServiceName = "Retiro de puntos a domicilio", Category = "Consulta", Notes = "Procedimiento clínico en consulta",
             Price = 200m, Quantity = 1, ChargedConsultationFolio = folio, ChargedUnits = 1
         })));
+        cases.Add(Case("escribir · renglón de receta de un medicamento de marca (revisión 16): el principio activo y si se muestra", new JsonObject
+        {
+            ["column"] = PatientSheetRows.PrescriptionColumn, ["rowId"] = kept,
+            ["product"] = new JsonObject { ["name"] = "Tempra 500 mg", ["genericName"] = "Paracetamol", ["presentation"] = "Caja con 20 tabletas" },
+            ["showActiveIngredient"] = false
+        }, WrittenRow(new PatientPrescriptionItem
+        {
+            RowId = rowId, MedicineName = "Tempra 500 mg tabletas", ActiveIngredient = "Paracetamol", ShowActiveIngredient = false,
+            Dosage = "1 tableta cada 8 horas por 3 días", RecommendedQuantity = 1, Presentation = "Caja con 20 tabletas", DispenseInClinic = true
+        })));
+        Assert.AreEqual("Tempra 500 mg tabletas", PrescriptionNaming.MedicineLine(new Product { Name = "Tempra 500 mg", GenericName = "Paracetamol", Presentation = "Caja con 20 tabletas" }, false));
         cases.Add(Case("escribir · renglón de receta", new JsonObject
         {
             ["column"] = PatientSheetRows.PrescriptionColumn, ["rowId"] = kept
@@ -302,6 +315,7 @@ public partial class GoldenVectorTests
             "Hojas del paciente (paso 8.18; los insumos de un servicio desde la revisión 14): Patients.ActivePrescriptionJson, ActiveSuppliesJson y ActiveServicesJson son arreglos JSON de renglones con nombres PascalCase (se leen sin distinguir mayúsculas) y acentos sin escapar; '' es una hoja vacía. Los campos de cada columna, en su 'note' de sync/schema.json.",
             "RowId (GUID en minúsculas): uno nuevo se toma al azar. Al leer, el renglón sin RowId, con el GUID vacío o con uno que ya usó otro renglón de la misma hoja recibe uuid5(tpvc, 'sheetrow:' + SyncId del paciente en minúsculas + ':' + columna + ':' + posición desde 0 + ':' + el nombre tal cual: MedicineName, SupplyName o ServiceName); 'uuid5Name' es ese nombre. Se guarda con la siguiente escritura de la hoja: no hay relleno al arrancar.",
             "Leer y volver a escribir: 'expected' es la hoja que escribe la PC al guardarla sin cambios. Los campos que no conoce se conservan (también objetos, arreglos y nulos), después de los suyos. Un campo con valor por omisión no se escribe (Presentation, ChargedConsultationFolio, ChargedUnits, ChargedLineId, ChargedLineKind, ChargedLineSyncId, ServiceSyncId); se comparan como JSON, no como texto.",
+            "Receta (revisión 16, pedido del médico del 2026-10-21): un renglón que se recetó de un producto de marca lleva ActiveIngredient (lo que va entre paréntesis al final de MedicineName, catalog-matching.json 'medicine-line-parts') y ShowActiveIngredient (si MedicineName lo trae); MedicineName es siempre el texto que se imprime. Ninguno de los dos se escribe en un renglón genérico, escrito a mano o de antes: esos renglones no se reescriben ni ganan los campos. Mostrar u ocultar ('with-active-ingredient' de catalog-matching.json) cambia MedicineName y ShowActiveIngredient en el mismo renglón (mismo RowId).",
             "Escribir: un insumo cargado a la cuenta lleva el folio de la consulta, sus piezas, ChargedLineKind ('producto' o 'libre') y, si es producto, ChargedLineSyncId. Un servicio del catálogo lleva ServiceSyncId. ChargedLineId y ServiceId son los Id locales de la PC, para las PC anteriores: Kotlin no los escribe (ServiceId 0) y no los usa.",
             "Renglón de la cuenta: el insumo se busca, en este orden, por 'libre' (el cargo libre de su nombre); por un ChargedLineId negativo, que es el cargo libre con ese Id tal cual (también en un producto: el que no existía al recibir la consulta; sale de un nombre y es igual en todos los equipos); por ChargedLineSyncId (el producto activo con ese SyncId o, si no hay, el de este equipo con ese SyncId aunque esté inactivo); por el Id viejo positivo solo si ese producto local activo tiene el mismo nombre normalizado (su nombre o 'Nombre (Presentación)'); por nombre (nombre, 'Nombre (Presentación)', genérico o el renglón normado de la receta, sin distinguir mayúsculas) y, si no, cargo libre. El servicio: por ServiceSyncId (activo); sin él y con ServiceId 0 es un cargo libre; el Id viejo con el mismo nombre normalizado; el servicio activo con el mismo nombre normalizado; si no, cargo libre.",
             "Kotlin compara 'syncId' (o la clase 'libre' en un cargo libre); 'productId' y 'serviceId' son los Id locales de la PC, y 'freeChargeId' el Id del cargo libre en la PC (sale de un nombre normalizado: HandoffPayloadCodec.FreeChargeId). Un ChargedLineId negativo no es local: es un cargo libre en cualquier equipo, y Kotlin también lo lee así. Los casos con 'pcOnly' dependen de un Id local positivo de la PC (ChargedLineId o ServiceId) y no le aplican: Kotlin no tiene esos Id y pasa al nombre.",
