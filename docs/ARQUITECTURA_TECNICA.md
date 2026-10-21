@@ -210,7 +210,7 @@ TPVC/
 │   ├── PatientSummary.cs        # (paso 8.22, v1.39.0) Recalcula el resumen derivado del expediente (próxima cita y última visita) después de cada guardado y al abrir, sin marca ni nada que subir
 │   ├── InventoryService.SupplierOrders.cs # «Ingresar pedido» (v1.22.0): emparejar renglones con el catálogo y recibir todo en una transacción
 │   ├── SupplierOrderParser.cs   # Lee el pedido del correo del proveedor pegado como texto (formato de LUIN)
-│   ├── PrescriptionNaming.cs    # El medicamento de la receta en el orden normado (RIS arts. 30–31): genérico, concentración, forma, (marca); v1.23.0
+│   ├── PrescriptionNaming.cs    # El medicamento de la receta: marca, concentración, forma, (principio activo), que se puede ocultar; v1.23.0, orden de v1.46
 │   ├── LabCatalog.cs            # Estudios de laboratorio por área, frecuentes, paquetes e indicaciones; búsqueda sin acentos (v1.25.0)
 │   ├── PrintingService.LabOrder.cs # Solicitud de laboratorio: FlowDocument, papel (media carta o carta) y HTML/PDF; comparte el membrete con la receta
 │   ├── ThemeService.cs          # Motor de renderizado dinámico de temas

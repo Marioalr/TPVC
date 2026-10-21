@@ -16,7 +16,9 @@ namespace TPVC.Services.Rules;
 /// (<see cref="LocalIdFields"/>: <c>ChargedLineId</c> y <c>ServiceId</c>, que la PC sigue escribiendo para las PC anteriores
 /// y Kotlin no escribe): que cada equipo escriba los suyos no es un cambio. Desde la revisión 14 un servicio lleva además su
 /// lista de insumos (<c>Supplies</c>, null sin lista), cada insumo con todos sus campos conocidos menos su <c>ChargedLineId</c>:
-/// la lista es parte del renglón, así que cambiarla marca el renglón y la combinación la lleva con él. Vectores en
+/// la lista es parte del renglón, así que cambiarla marca el renglón y la combinación la lleva con él. Desde la revisión 16 un
+/// renglón de receta lleva además <c>ActiveIngredient</c> y <c>ShowActiveIngredient</c> (null en uno sin ellos): mostrar u
+/// ocultar el principio activo cambia el renglón como cualquier otra edición. Vectores en
 /// <c>contracts/golden/canonical-json.json</c>.
 /// </summary>
 public static class PatientSheetCanonical
@@ -36,7 +38,8 @@ public static class PatientSheetCanonical
         {
             nameof(PatientPrescriptionItem.RowId), nameof(PatientPrescriptionItem.MedicineName), nameof(PatientPrescriptionItem.Dosage),
             nameof(PatientPrescriptionItem.RecommendedQuantity), nameof(PatientPrescriptionItem.Presentation),
-            nameof(PatientPrescriptionItem.DispenseInClinic)
+            nameof(PatientPrescriptionItem.DispenseInClinic), nameof(PatientPrescriptionItem.ActiveIngredient),
+            nameof(PatientPrescriptionItem.ShowActiveIngredient)
         },
         [PatientSheetRows.SuppliesColumn] = new[]
         {

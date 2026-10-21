@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.46.0] - 2026-10-21
+
+### Cambiado — Receta: la marca afuera y el principio activo entre paréntesis
+* La receta escribe primero el nombre del producto (la marca), su concentración y su forma, y entre paréntesis el principio activo: «Tempra 500 mg tabletas (Paracetamol)». Un genérico se escribe sin paréntesis: «Paracetamol 500 mg tabletas».
+* Cada medicamento tiene la casilla **Mostrar (Paracetamol)**, al elegirlo y en los renglones ya agregados (en la hoja de receta y en la consulta), para que aparezca o no lo que va entre paréntesis. La casilla al prescribir recuerda la última elección en este equipo.
+* Las recetas guardadas antes se quedan como estaban y siguen encontrando su producto para el cobro y la revisión de alergias.
+* La revisión de alergias usa el principio activo aunque esté oculto o el producto ya no esté en el inventario. **Repetir** reconoce un medicamento de una receta anterior aunque esté escrito en el formato de antes.
+* No se envía una consulta con estos renglones a un equipo con una versión anterior: el programa avisa y la consulta se queda en este equipo.
+* Contrato de sincronización en la revisión 16 (`ActiveIngredient` y `ShowActiveIngredient` en los renglones de la receta). 879 pruebas.
+
 ## [1.45.0] - 2026-10-21
 
 ### Añadido — Fase 8, paso 8.26: vectores de reglas del negocio para la app de Android

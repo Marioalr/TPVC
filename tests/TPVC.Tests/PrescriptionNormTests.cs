@@ -12,30 +12,74 @@ using TPVC.ViewModels;
 namespace TPVC.Tests;
 
 /// <summary>
-/// Receta (v1.23.0): el medicamento en el orden del Reglamento de Insumos para la Salud (genérico, concentración y
-/// forma, la marca entre paréntesis y la presentación aparte), carta cuando no cabe en una media carta y las letras
-/// que elige cada equipo.
+/// Receta (v1.23.0): el medicamento con su concentración y forma, la presentación aparte, carta cuando no cabe en una media
+/// carta y las letras que elige cada equipo. Desde el pedido del médico del 2026-10-21 la marca va afuera y el principio activo
+/// entre paréntesis (que se puede ocultar); los renglones de antes, con el genérico afuera y la marca entre paréntesis, se
+/// siguen reconociendo.
 /// </summary>
 [TestClass]
 public class PrescriptionNormTests
 {
     [TestMethod]
-    [DataRow("Paracetamol 500 mg", "Paracetamol", "Caja con 20 tabletas", "Paracetamol 500 mg tabletas", DisplayName = "Genérico: sin marca")]
-    [DataRow("Tempra 500 mg", "Paracetamol", "Caja con 20 tabletas", "Paracetamol 500 mg tabletas (Tempra)", DisplayName = "De marca")]
+    [DataRow("Paracetamol 500 mg", "Paracetamol", "Caja con 20 tabletas", "Paracetamol 500 mg tabletas", null, DisplayName = "Genérico: sin paréntesis")]
+    [DataRow("Tempra 500 mg", "Paracetamol", "Caja con 20 tabletas", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", DisplayName = "De marca")]
     [DataRow("VALCLAN 875/125MG C/14 TABS", "Amoxicilina/Ácido clavulánico", "Caja con 14 tabletas",
-        "Amoxicilina/Ácido clavulánico 875/125 mg tabletas (Valclan)", DisplayName = "Del correo de LUIN")]
+        "Valclan 875/125 mg tabletas (Amoxicilina/Ácido clavulánico)", "Amoxicilina/Ácido clavulánico", DisplayName = "Del correo de LUIN")]
     [DataRow("Amoxicilina / Ácido Clavulánico 500/125 mg", "Amoxicilina / Clavulanato", "Caja con 14 tabletas",
-        "Amoxicilina / Clavulanato 500/125 mg tabletas", DisplayName = "Nombre genérico distinto al del campo")]
-    [DataRow("SUPRATEX JARABE 600MG/100 ML 120ML", "Ambroxol", null, "Ambroxol 600 mg/100 ml jarabe (Supratex)", DisplayName = "Jarabe con concentración por volumen")]
-    [DataRow("DOLPRIN SUSPENSION 2G/100 ML 120 ML", "Paracetamol", null, "Paracetamol 2 g/100 ml suspensión (Dolprin)", DisplayName = "Suspensión en gramos")]
-    [DataRow("NAVONTEC INY 8MG C/3 AMP", "Ondansetrón", "Caja con 3 ampolletas", "Ondansetrón 8 mg solución inyectable (Navontec)", DisplayName = "Inyectable")]
-    [DataRow("Gasa Estéril 10x10 cm", null, "Paquete con 10 piezas", "Gasa Estéril 10x10 cm", DisplayName = "Sin genérico: el nombre tal cual")]
-    [DataRow("Ibuprofeno 400 mg", "Ibuprofeno 400 mg", "Caja con 10 tabletas", "Ibuprofeno 400 mg tabletas", DisplayName = "El genérico ya trae la concentración")]
-    public void TheMedicine_IsWrittenInTheMexicanNormOrder(string name, string? generic, string? presentation, string expected)
+        "Amoxicilina / Clavulanato 500/125 mg tabletas", null, DisplayName = "Nombre genérico distinto al del campo")]
+    [DataRow("SUPRATEX JARABE 600MG/100 ML 120ML", "Ambroxol", null, "Supratex 600 mg/100 ml jarabe (Ambroxol)", "Ambroxol", DisplayName = "Jarabe con concentración por volumen")]
+    [DataRow("DOLPRIN SUSPENSION 2G/100 ML 120 ML", "Paracetamol", null, "Dolprin 2 g/100 ml suspensión (Paracetamol)", "Paracetamol", DisplayName = "Suspensión en gramos")]
+    [DataRow("NAVONTEC INY 8MG C/3 AMP", "Ondansetrón", "Caja con 3 ampolletas", "Navontec 8 mg solución inyectable (Ondansetrón)", "Ondansetrón", DisplayName = "Inyectable")]
+    [DataRow("Gasa Estéril 10x10 cm", null, "Paquete con 10 piezas", "Gasa Estéril 10x10 cm", null, DisplayName = "Sin genérico: el nombre tal cual")]
+    [DataRow("Ibuprofeno 400 mg", "Ibuprofeno 400 mg", "Caja con 10 tabletas", "Ibuprofeno 400 mg tabletas", null, DisplayName = "El genérico ya trae la concentración")]
+    [DataRow("Augmentin 875/125 mg", "Amoxicilina/ácido clavulánico 875/125 mg", "Caja con 14 tabletas",
+        "Augmentin 875/125 mg tabletas (Amoxicilina/ácido clavulánico)", "Amoxicilina/ácido clavulánico", DisplayName = "De marca con la concentración en el genérico: no se repite")]
+    [DataRow("Tempra", "Paracetamol 500 mg", "Caja con 20 tabletas", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", DisplayName = "La concentración solo en el genérico va afuera")]
+    [DataRow("TEMPRA (PARACETAMOL) 500MG", "Paracetamol", "Caja con 20 tabletas", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", DisplayName = "El nombre ya trae el principio activo entre paréntesis: una sola vez")]
+    [DataRow("Adinol (Paracetamol) Jarabe 160mg/5ml", "Paracetamol", "Frasco con 120 ml", "Adinol 160 mg/5 ml jarabe (Paracetamol)", "Paracetamol", DisplayName = "El del médico: Adinol (Paracetamol) Jarabe")]
+    public void TheMedicine_IsWrittenWithTheBrandOutside_AndTheActiveIngredientInParentheses(string name, string? generic, string? presentation, string expected, string? ingredient)
     {
         var product = new Product { Name = name, GenericName = generic, Presentation = presentation };
         Assert.AreEqual(expected, PrescriptionNaming.MedicineLine(product));
         Assert.AreEqual(presentation ?? string.Empty, PrescriptionNaming.Presentation(product));
+
+        var parts = PrescriptionNaming.Parts(product);
+        Assert.AreEqual(ingredient, parts.ActiveIngredient);
+        Assert.AreEqual(expected, parts.Compose(true));
+        // Sin el paréntesis: lo de afuera; un genérico o un producto sin genérico no cambian
+        var hidden = PrescriptionNaming.MedicineLine(product, showActiveIngredient: false);
+        Assert.AreEqual(ingredient == null ? expected : expected[..^$" ({ingredient})".Length], hidden);
+        Assert.AreEqual(parts.Line, hidden);
+    }
+
+    [TestMethod]
+    [DataRow("Tempra 500 mg", "Paracetamol", "Caja con 20 tabletas", "Paracetamol 500 mg tabletas (Tempra)")]
+    [DataRow("VALCLAN 875/125MG C/14 TABS", "Amoxicilina/Ácido clavulánico", "Caja con 14 tabletas", "Amoxicilina/Ácido clavulánico 875/125 mg tabletas (Valclan)")]
+    [DataRow("NAVONTEC INY 8MG C/3 AMP", "Ondansetrón", "Caja con 3 ampolletas", "Ondansetrón 8 mg solución inyectable (Navontec)")]
+    [DataRow("Paracetamol 500 mg", "Paracetamol", "Caja con 20 tabletas", "Paracetamol 500 mg tabletas")]
+    public void ALineInTheOldOrder_StillFindsItsProduct_AsDoTheNewOnes(string name, string generic, string presentation, string oldLine)
+    {
+        var product = new Product { Id = 7, Name = name, GenericName = generic, Presentation = presentation };
+        var other = new Product { Id = 8, Name = "Loratadina 10 mg", GenericName = "Loratadina", Presentation = "Caja con 10 tabletas" };
+        Assert.AreEqual(oldLine, PrescriptionNaming.LegacyMedicineLine(product), "El orden de v1.23 a v1.45");
+
+        foreach (var line in new[] { oldLine, PrescriptionNaming.MedicineLine(product), PrescriptionNaming.MedicineLine(product, false) })
+        {
+            Assert.IsTrue(TPVC.Services.Rules.CatalogMatchingRules.ProductMatchesName(product, line), line);
+            Assert.IsTrue(TPVC.Services.Rules.CatalogMatchingRules.ProductMatchesName(product, line.ToUpperInvariant()), $"{line} en mayúsculas");
+            Assert.IsFalse(TPVC.Services.Rules.CatalogMatchingRules.ProductMatchesName(other, line), $"{line} no es otro producto");
+            Assert.AreEqual(product, TPVC.Services.Rules.PatientSheetRows.FindProductByName(new[] { other, product }, $" {line} "), line);
+        }
+    }
+
+    [TestMethod]
+    public void TheActiveIngredient_IsTakenOutOrPutBack_OnlyAtTheEnd()
+    {
+        Assert.AreEqual("Tempra 500 mg tabletas", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", false));
+        Assert.AreEqual("Tempra 500 mg tabletas (Paracetamol)", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas", "Paracetamol", true));
+        Assert.AreEqual("Tempra 500 mg tabletas (Paracetamol)", PrescriptionNaming.WithActiveIngredient("Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", true), "No se repite");
+        Assert.AreEqual("Tempra (infantil) 100 mg gotas", PrescriptionNaming.WithActiveIngredient("Tempra (infantil) 100 mg gotas (Paracetamol)", "Paracetamol", false));
+        Assert.AreEqual("Paracetamol 500 mg tabletas", PrescriptionNaming.WithActiveIngredient("Paracetamol 500 mg tabletas", null, true), "Sin principio activo, tal cual");
     }
 
     [TestMethod]
@@ -54,7 +98,7 @@ public class PrescriptionNormTests
     {
         var items = new List<PatientPrescriptionItem>
         {
-            new() { MedicineName = "Paracetamol 500 mg tabletas (Tempra)", Presentation = "Caja con 20 tabletas", Dosage = "1 tableta vía oral cada 8 horas por 5 días", RecommendedQuantity = 2 },
+            new() { MedicineName = "Tempra 500 mg tabletas (Paracetamol)", Presentation = "Caja con 20 tabletas", Dosage = "1 tableta vía oral cada 8 horas por 5 días", RecommendedQuantity = 2 },
             new() { MedicineName = "Espabion suspensión", Dosage = "5 ml vía oral cada 8 horas" }
         };
         var sheet = PrescriptionSheet.Create(new PatientRecord { FullName = "Ana López" }, items, new ClinicProfile(), null, new DateTime(2026, 10, 10));

@@ -392,7 +392,7 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _templates = new PrescriptionTemplateStore(_inventoryService, this);
         _session = new PatientSession(this);
         _active = new ActiveConsultationSession(_consultationService, _ui, this);
-        _record = new ConsultationRecordState(_session, _inventoryService, this);
+        _record = new ConsultationRecordState(_session, _inventoryService, this, name => _catalog.FindCatalogProduct(name));
         _account = new ConsultationAccount(_consultationService, _active, _catalog, _info, this, this);
         _vitalsChart = new VitalSignsChartViewModel(this);
         // Lo elegido en el catálogo se agrega con la hoja que lo abrió (las hojas se crean después:
@@ -417,9 +417,10 @@ public partial class PatientsWorkspace : ObservableObject, IDisposable, IPatient
         _chart = new PatientChartViewModel(_inventoryService, _session, _active, _record, _navigation, _info, _feedback, this, _dialogs, this);
         _supplies = new SuppliesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
         _clinicalServices = new ClinicalServicesSheetViewModel(_inventoryService, _catalog, _session, _active, _account, _info, _feedback, _catalogBrowser, this, this);
-        // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso (se lee al momento)
+        // La dosis pediátrica sugiere el peso que se capturó en la consulta en curso (se lee al momento); «Mostrar (principio
+        // activo)» empieza con la última elección de este equipo (2026-10-21)
         _prescription = new PrescriptionSheetViewModel(_inventoryService, _catalog, _templates, _session, _active, _record, _account, _info, _feedback,
-            _catalogBrowser, this, this, () => Consultation.ConsultationWeight);
+            _catalogBrowser, this, this, () => Consultation.ConsultationWeight, localPreferences);
         // La orden de laboratorio se guarda con la nota y viaja en el borrador; la hoja lleva el diagnóstico que se
         // escribe en la consulta (se lee al momento)
         _labOrder = new ConsultationLabOrder();

@@ -141,8 +141,9 @@ public partial class CatalogStore : ObservableObject
     }
 
     /// <summary>
-    /// Producto del inventario por nombre exacto, "Nombre (Presentación)", genérico o el renglón en el orden normado
-    /// (desde v1.23.0: "Paracetamol 500 mg tabletas (Tempra)").
+    /// Producto del inventario por nombre exacto, "Nombre (Presentación)", genérico o el renglón de la receta: el de hoy con o
+    /// sin el principio activo ("Tempra 500 mg tabletas (Paracetamol)", "Tempra 500 mg tabletas") o el de v1.23 a v1.45
+    /// ("Paracetamol 500 mg tabletas (Tempra)").
     /// </summary>
     public Product? FindCatalogProduct(string? name) => TPVC.Services.Rules.PatientSheetRows.FindProductByName(AvailableProducts, name);
 

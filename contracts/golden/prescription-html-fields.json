@@ -3,7 +3,7 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 15,
+  "contract": 16,
   "notes": [
     "Services/Documents/PrescriptionHtmlBuilder.cs: los valores de la receta en HTML (cada uno con data-field) y lo demás que dibuja la hoja. El PDF de la app de Android pone lo mismo en los mismos lugares.",
     "data-field: paciente, edad, fecha, alergias, ta, temp, peso, talla, spo2, telefono, domicilio. 'alergias' lleva la clase alert (en rojo, #991B1B) solo si tiene alergias.",
@@ -132,6 +132,92 @@
           {
             "name": "Paracetamol gotas 100 mg/ml",
             "posology": "0.6 ml cada 6 horas"
+          }
+        ],
+        "generalMeasures": "Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas.",
+        "footerIcons": 0
+      }
+    },
+    {
+      "name": "medicamentos de marca con y sin el principio activo entre paréntesis, y un renglón de antes de v1.46",
+      "input": {
+        "paper": "halfLetter",
+        "sheet": {
+          "patientName": "Ana López",
+          "age": "41 años",
+          "date": "11/10/2026",
+          "allergies": "Negadas",
+          "hasAllergies": false,
+          "bloodPressure": "",
+          "temperature": "",
+          "weight": "",
+          "height": "",
+          "oxygenSaturation": "",
+          "doctorName": "Dra. Prueba",
+          "university": "",
+          "licenseLine": "",
+          "medicines": [
+            {
+              "medicine": "Tempra 500 mg tabletas (Paracetamol)",
+              "detail": " · Caja con 20 tabletas",
+              "posology": "1 tableta cada 8 horas por 3 días"
+            },
+            {
+              "medicine": "Valclan 875/125 mg tabletas",
+              "detail": " · Caja con 14 tabletas",
+              "posology": "1 tableta cada 12 horas por 7 días"
+            },
+            {
+              "medicine": "Paracetamol 500 mg tabletas",
+              "detail": "",
+              "posology": "Un genérico, sin paréntesis"
+            },
+            {
+              "medicine": "Ondansetrón 8 mg solución inyectable (Navontec)",
+              "detail": " · Caja con 3 ampolletas",
+              "posology": "De antes: tal cual"
+            }
+          ],
+          "generalMeasures": "Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas.",
+          "phone": "",
+          "address": ""
+        }
+      },
+      "expected": {
+        "pageSize": "8.5in 5.5in",
+        "fields": {
+          "paciente": "Ana López",
+          "edad": "41 años",
+          "fecha": "11/10/2026",
+          "alergias": "Negadas",
+          "ta": "",
+          "temp": "",
+          "peso": "",
+          "talla": "",
+          "spo2": "",
+          "telefono": "",
+          "domicilio": ""
+        },
+        "allergiesAlert": false,
+        "doctor": "Dra. Prueba",
+        "university": "",
+        "license": "",
+        "medicines": [
+          {
+            "name": "Tempra 500 mg tabletas (Paracetamol) · Caja con 20 tabletas",
+            "posology": "1 tableta cada 8 horas por 3 días"
+          },
+          {
+            "name": "Valclan 875/125 mg tabletas · Caja con 14 tabletas",
+            "posology": "1 tableta cada 12 horas por 7 días"
+          },
+          {
+            "name": "Paracetamol 500 mg tabletas",
+            "posology": "Un genérico, sin paréntesis"
+          },
+          {
+            "name": "Ondansetrón 8 mg solución inyectable (Navontec) · Caja con 3 ampolletas",
+            "posology": "De antes: tal cual"
           }
         ],
         "generalMeasures": "Consumir abundantes líquidos, mantener reposo relativo, completar el esquema prescrito y acudir de inmediato a valoración médica o urgencias si presenta fiebre persistente, dificultad respiratoria o reacciones adversas.",

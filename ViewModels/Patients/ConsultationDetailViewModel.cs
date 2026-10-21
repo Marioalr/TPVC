@@ -28,21 +28,52 @@ public partial class EditablePrescriptionLine : ObservableObject
 
     public int RecommendedQuantity { get; init; } = 1;
 
+    /// <summary>Revisión 16: el principio activo entre paréntesis del renglón y si se muestra (ver <see cref="PatientPrescriptionItem.ActiveIngredient"/>).</summary>
+    public string? ActiveIngredient { get; init; }
+
+    public bool? ShowActiveIngredient { get; init; }
+
+    // El nombre con que se abrió la corrección: si el médico lo cambia, el principio activo guardado ya no le corresponde
+    public string? OriginalMedicineName { get; init; }
+
     public static EditablePrescriptionLine From(PatientPrescriptionItem item) => new()
     {
+        OriginalMedicineName = item.MedicineName,
         MedicineName = item.MedicineName,
         Presentation = item.Presentation ?? string.Empty,
         Dosage = item.Dosage,
-        RecommendedQuantity = item.RecommendedQuantity
+        RecommendedQuantity = item.RecommendedQuantity,
+        ActiveIngredient = item.ActiveIngredient,
+        ShowActiveIngredient = item.ShowActiveIngredient
     };
 
-    public PatientPrescriptionItem ToItem() => new()
+    /// <summary>
+    /// El renglón corregido. El principio activo y si se muestra se quedan solo si el nombre no cambió o si sigue siendo el
+    /// mismo renglón con o sin su paréntesis (<see cref="PrescriptionNaming.WithActiveIngredient"/>); con otro nombre se quitan
+    /// los dos, así «Mostrar (…)» nunca pone un paréntesis equivocado o repetido.
+    /// </summary>
+    public PatientPrescriptionItem ToItem()
     {
-        MedicineName = MedicineName.Trim(),
-        Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
-        Dosage = Dosage.Trim(),
-        RecommendedQuantity = RecommendedQuantity
-    };
+        var name = MedicineName.Trim();
+        var keep = !string.IsNullOrWhiteSpace(ActiveIngredient) && KeepsActiveIngredient(name);
+        return new PatientPrescriptionItem
+        {
+            MedicineName = name,
+            Presentation = string.IsNullOrWhiteSpace(Presentation) ? null : Presentation.Trim(),
+            Dosage = Dosage.Trim(),
+            RecommendedQuantity = RecommendedQuantity,
+            ActiveIngredient = keep ? ActiveIngredient : null,
+            ShowActiveIngredient = keep ? PrescriptionNaming.EndsWithActiveIngredient(name, ActiveIngredient) : null
+        };
+    }
+
+    private bool KeepsActiveIngredient(string name)
+    {
+        if (OriginalMedicineName == null || name == OriginalMedicineName.Trim()) return true;
+        // Sin el paréntesis las dos deben ser la misma línea
+        return string.Equals(PrescriptionNaming.WithActiveIngredient(name, ActiveIngredient, false),
+            PrescriptionNaming.WithActiveIngredient(OriginalMedicineName, ActiveIngredient, false), StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
@@ -243,15 +274,22 @@ public partial class ConsultationDetailViewModel : ObservableObject
         EditLines.Clear();
     }
 
-    /// <summary>Agrega un medicamento del catálogo, en el orden normado y con su presentación.</summary>
+    /// <summary>
+    /// Agrega un medicamento del catálogo con su presentación: la marca con su concentración y forma y el principio activo
+    /// entre paréntesis (aquí siempre se muestra; el renglón lo guarda por si después se oculta).
+    /// </summary>
     [RelayCommand]
     public void AddSuggestedMedicine(Product? product)
     {
         if (product == null) return;
+        var parts = PrescriptionNaming.Parts(product);
         EditLines.Add(new EditablePrescriptionLine
         {
-            MedicineName = PrescriptionNaming.MedicineLine(product),
-            Presentation = PrescriptionNaming.Presentation(product)
+            OriginalMedicineName = parts.Compose(true),
+            MedicineName = parts.Compose(true),
+            Presentation = PrescriptionNaming.Presentation(product),
+            ActiveIngredient = parts.ActiveIngredient,
+            ShowActiveIngredient = parts.ActiveIngredient == null ? null : true
         });
         NewMedicineText = string.Empty;
     }
@@ -316,7 +354,8 @@ public partial class ConsultationDetailViewModel : ObservableObject
             {
                 patient.ActivePrescription = items.Select(i => new PatientPrescriptionItem
                 {
-                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
+                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation,
+                    ActiveIngredient = i.ActiveIngredient, ShowActiveIngredient = i.ShowActiveIngredient
                 }).ToList();
             }
             _session.NotifySelectedPatientMutated();

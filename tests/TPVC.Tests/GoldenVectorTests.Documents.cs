@@ -310,6 +310,25 @@ public partial class GoldenVectorTests
             new ClinicProfile(),
             null,
             "TA: 95/60 | Temp: 36.25 | Peso: 9.125 | Talla: 0.745 | SpO2: 96.5"),
+        new SheetScenario("medicamentos de marca con y sin el principio activo entre paréntesis, y un renglón de antes de v1.46",
+            new PatientRecord { FullName = "Ana López", BirthDate = new DateTime(1985, 6, 1), Allergies = "Negadas" },
+            new[]
+            {
+                new PatientPrescriptionItem
+                {
+                    MedicineName = "Tempra 500 mg tabletas (Paracetamol)", ActiveIngredient = "Paracetamol", ShowActiveIngredient = true,
+                    Presentation = "Caja con 20 tabletas", Dosage = "1 tableta cada 8 horas por 3 días"
+                },
+                new PatientPrescriptionItem
+                {
+                    MedicineName = "Valclan 875/125 mg tabletas", ActiveIngredient = "Amoxicilina/Ácido clavulánico", ShowActiveIngredient = false,
+                    Presentation = "Caja con 14 tabletas", Dosage = "1 tableta cada 12 horas por 7 días"
+                },
+                new PatientPrescriptionItem { MedicineName = "Paracetamol 500 mg tabletas", Dosage = "Un genérico, sin paréntesis" },
+                new PatientPrescriptionItem { MedicineName = "Ondansetrón 8 mg solución inyectable (Navontec)", Presentation = "Caja con 3 ampolletas", Dosage = "De antes: tal cual" }
+            },
+            new ClinicProfile { DoctorName = "Dra. Prueba" },
+            null, null),
         new SheetScenario("sin fecha de nacimiento, alergias sin interrogar y sin signos",
             new PatientRecord { FullName = "Juan Sin Fecha", Age = 1 },
             Array.Empty<PatientPrescriptionItem>(),
@@ -330,10 +349,7 @@ public partial class GoldenVectorTests
             ["vitalSigns"] = s.Patient.VitalSigns
         },
         ["consultationVitalSigns"] = s.VitalSigns,
-        ["items"] = new JsonArray(s.Items.Select(i => (JsonNode)new JsonObject
-        {
-            ["medicineName"] = i.MedicineName, ["dosage"] = i.Dosage, ["presentation"] = i.Presentation
-        }).ToArray()),
+        ["items"] = new JsonArray(s.Items.Select(SheetItemInput).ToArray()),
         ["profile"] = new JsonObject
         {
             ["doctorName"] = s.Profile.DoctorName, ["professionalLicense"] = s.Profile.ProfessionalLicense, ["university"] = s.Profile.University,
@@ -341,6 +357,18 @@ public partial class GoldenVectorTests
         },
         ["generalNotes"] = s.Notes
     };
+
+    /// <summary>Un renglón de la receta en la entrada; el principio activo (revisión 16) solo si lo lleva.</summary>
+    private static JsonNode SheetItemInput(PatientPrescriptionItem i)
+    {
+        var o = new JsonObject { ["medicineName"] = i.MedicineName, ["dosage"] = i.Dosage, ["presentation"] = i.Presentation };
+        if (i.ActiveIngredient != null)
+        {
+            o["activeIngredient"] = i.ActiveIngredient;
+            o["showActiveIngredient"] = i.ShowActiveIngredient;
+        }
+        return o;
+    }
 
     /// <summary>La hoja con "hoy" en la zona (la edad y la fecha de la receta dependen de él).</summary>
     private static PrescriptionSheet SheetIn(SheetScenario s, TimeZoneInfo zone)
@@ -391,6 +419,7 @@ public partial class GoldenVectorTests
             "Edad (PatientRecord.FormatAge): con fecha de nacimiento, meses cumplidos; menos de 1 mes en días, menos de 24 en meses, menos de 6 años en años y meses, después solo años. Sin fecha, la edad guardada en años.",
             "Signos: los de la consulta si los hay; si no, los del expediente, leídos con el mismo analizador. T/A 'S/D mmHg'; temperatura con 1 decimal; peso hasta 2; talla en cm hasta 1 (la talla en metros × 100); SpO2 hasta 1 y como porcentaje si viene como fracción (0.97 = 97 %). Formato de double de .NET con el punto como separador: un punto medio exacto en binario se redondea hacia arriba (36.25 da 36.3 y 9.125 da 9.13) y uno inexacto según su valor binario.",
             "Alergias: cuáles; 'Negadas' si las niega (en rojo solo si tiene); 'No interrogadas' si está vacío. Sin medidas generales, el texto de siempre (PrescriptionDefaults.Indications). Un medicamento sin nombre no sale; el detalle es ' · ' + presentación.",
+            "El medicamento sale como está en medicineName (recortado): con o sin el principio activo entre paréntesis (revisión 16: activeIngredient y showActiveIngredient solo dicen de dónde salió y no cambian la hoja), y un renglón de antes de v1.46, con la marca entre paréntesis, tal cual.",
             "Sin nombre del médico: 'Dr. Titular'. Sin cédula, licenseLine vacío. Todo se recorta de espacios."));
     }
 

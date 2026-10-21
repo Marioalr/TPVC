@@ -19,11 +19,20 @@ public sealed class ConsultationRecordState
     private readonly InventoryService? _inventoryService;
     private readonly IPatientsWorkflow _workflow;
 
-    public ConsultationRecordState(PatientSession session, InventoryService? inventoryService, IPatientsWorkflow workflow)
+    // El producto del catálogo de un renglón de la receta (CatalogStore.FindCatalogProduct); null sin catálogo
+    private readonly Func<string?, Product?>? _findProduct;
+
+    /// <param name="findProduct">
+    /// El producto de un renglón por su nombre (el catálogo): dos renglones del mismo producto son el mismo medicamento aunque
+    /// uno se escribiera con el formato de antes de v1.46 (revisión de la rama, defecto 1).
+    /// </param>
+    public ConsultationRecordState(PatientSession session, InventoryService? inventoryService, IPatientsWorkflow workflow,
+        Func<string?, Product?>? findProduct = null)
     {
         _session = session;
         _inventoryService = inventoryService;
         _workflow = workflow;
+        _findProduct = findProduct;
     }
 
     /// <summary>Paciente de la consulta en curso (null fuera de consulta).</summary>
@@ -51,8 +60,22 @@ public sealed class ConsultationRecordState
         }
     }
 
-    private static bool SameMedicine(PatientPrescriptionItem a, PatientPrescriptionItem b) =>
-        string.Equals(a.MedicineName?.Trim(), b.MedicineName?.Trim(), StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// El mismo medicamento: primero por producto (si el catálogo resuelve los dos renglones al mismo producto, lo son, aunque
+    /// uno diga "Paracetamol 500 mg tabletas (Tempra)" y el otro "Tempra 500 mg tabletas (Paracetamol)"); solo si ninguno de
+    /// los dos es un producto del catálogo, por el texto, con o sin el principio activo entre paréntesis (2026-10-21).
+    /// </summary>
+    private bool SameMedicine(PatientPrescriptionItem a, PatientPrescriptionItem b)
+    {
+        var productA = _findProduct?.Invoke(a.MedicineName);
+        var productB = _findProduct?.Invoke(b.MedicineName);
+        if (productA != null || productB != null)
+            return productA != null && productB != null && (ReferenceEquals(productA, productB) || (productA.Id != 0 && productA.Id == productB.Id));
+        return string.Equals(WithoutActiveIngredient(a), WithoutActiveIngredient(b), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string WithoutActiveIngredient(PatientPrescriptionItem item) =>
+        TPVC.Services.PrescriptionNaming.WithActiveIngredient(item.MedicineName, item.ActiveIngredient, show: false);
 
     /// <summary>Al iniciar una consulta nueva: foto del expediente y receta vacía.</summary>
     public void BeginConsultationOnRecord(PatientRecord patient)
@@ -175,6 +198,8 @@ public sealed class ConsultationRecordState
         Dosage = item.Dosage,
         RecommendedQuantity = item.RecommendedQuantity,
         Presentation = item.Presentation,
-        DispenseInClinic = item.DispenseInClinic
+        DispenseInClinic = item.DispenseInClinic,
+        ActiveIngredient = item.ActiveIngredient,
+        ShowActiveIngredient = item.ShowActiveIngredient
     };
 }

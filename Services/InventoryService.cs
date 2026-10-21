@@ -1320,7 +1320,10 @@ public partial class InventoryService
             MedicineName = i.MedicineName.Trim(),
             Dosage = i.Dosage.Trim(),
             RecommendedQuantity = Math.Max(1, i.RecommendedQuantity),
-            Presentation = string.IsNullOrWhiteSpace(i.Presentation) ? null : i.Presentation.Trim()
+            Presentation = string.IsNullOrWhiteSpace(i.Presentation) ? null : i.Presentation.Trim(),
+            // Revisión 16: el principio activo del renglón y si se muestra
+            ActiveIngredient = string.IsNullOrWhiteSpace(i.ActiveIngredient) ? null : i.ActiveIngredient,
+            ShowActiveIngredient = string.IsNullOrWhiteSpace(i.ActiveIngredient) ? null : i.ShowActiveIngredient
         }).Where(i => i.MedicineName.Length > 0).ToList();
         consultation.Prescriptions = saved;
 
@@ -1332,7 +1335,8 @@ public partial class InventoryService
             {
                 patient.ActivePrescription = saved.Select(i => new PatientPrescriptionItem
                 {
-                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation
+                    MedicineName = i.MedicineName, Dosage = i.Dosage, RecommendedQuantity = i.RecommendedQuantity, Presentation = i.Presentation,
+                    ActiveIngredient = i.ActiveIngredient, ShowActiveIngredient = i.ShowActiveIngredient
                 }).ToList();
                 active = patient.ActivePrescription;
             }
@@ -1913,8 +1917,8 @@ public partial class InventoryService
 
     /// <summary>Paso 8.26: la regla vive en <see cref="TPVC.Services.Rules.AllergyRules.CheckMedication"/> (vectores <c>allergy-check.json</c>).</summary>
     public static (bool HasConflict, string MatchedAllergy, string WarningDetails) CheckMedicationAllergy(
-        PatientRecord? patient, Product? product, string? medicineName = null) =>
-        TPVC.Services.Rules.AllergyRules.CheckMedication(patient, product, medicineName);
+        PatientRecord? patient, Product? product, string? medicineName = null, string? activeIngredient = null) =>
+        TPVC.Services.Rules.AllergyRules.CheckMedication(patient, product, medicineName, activeIngredient);
 }
 
 public enum CatalogRefKind

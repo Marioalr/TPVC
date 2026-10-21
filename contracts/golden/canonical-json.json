@@ -3,12 +3,12 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 15,
+  "contract": 16,
   "notes": [
     "Forma canónica (Services/Rules/CanonicalJson y PatientSheetCanonical, paso 8.22): para saber si dos versiones de un expediente dicen lo mismo sin depender de cómo las escribió cada equipo. 'expected' es el texto canónico.",
     "json: sin espacios; llaves de objeto ordenadas por unidades UTF-16 (String.compareTo de Kotlin), y si una se repite se queda el último valor; texto con solo \\\" \\\\ y los caracteres de control escapados (\\b \\f \\n \\r \\t; los demás \\u00xx en minúsculas), lo demás tal cual; números en decimal sin exponente, sin ceros de más en la fracción ni punto final, y 0 sin signo (BigDecimal.stripTrailingZeros().toPlainString(), con 0 para el cero); true, false y null tal cual.",
     "value: el valor de una columna sincronizada como valor canónico: texto como texto, entero y enum como número, booleano como true/false (en la nube es 0/1), fecha como texto de 27 caracteres, GUID en minúsculas, decimal como número canónico, nulo como null. Los nombres de 'clrType' son los de contracts/sync/schema.json.",
-    "sheet: una hoja del paciente (Active*Json) como arreglo de renglones canónicos, en su orden. Se lee como la PC (nombres sin distinguir mayúsculas, lo que falta con su valor por omisión: Quantity y RecommendedQuantity 1, los demás números 0, textos '' salvo Presentation, ChargedConsultationFolio, ChargedLineKind y los SyncId, que son null; un texto que no se puede leer es una hoja vacía; RowId determinista de contracts/golden/synced-json-columns.json para un renglón sin él) y cada renglón lleva TODOS sus campos conocidos menos los Id locales (ChargedLineId en insumos, ServiceId en servicios), más los desconocidos tal cual. Campos: receta RowId, MedicineName, Dosage, RecommendedQuantity, Presentation, DispenseInClinic; insumos RowId, SupplyName, Instructions, Quantity, UnitPrice, ChargedConsultationFolio, ChargedUnits, ChargedLineKind, ChargedLineSyncId; servicios RowId, ServiceSyncId, ServiceCode, ServiceName, Category, Notes, Price, Quantity, ChargedConsultationFolio, ChargedUnits y, desde la revisión 14, Supplies (null sin lista; si no, el arreglo de sus insumos en su orden, cada uno con SupplyName, Quantity, UnitPrice, ChargedLineKind y ChargedLineSyncId, sin su ChargedLineId, más sus desconocidos)."
+    "sheet: una hoja del paciente (Active*Json) como arreglo de renglones canónicos, en su orden. Se lee como la PC (nombres sin distinguir mayúsculas, lo que falta con su valor por omisión: Quantity y RecommendedQuantity 1, los demás números 0, textos '' salvo Presentation, ActiveIngredient, ChargedConsultationFolio, ChargedLineKind y los SyncId, que son null, y ShowActiveIngredient null; un texto que no se puede leer es una hoja vacía; RowId determinista de contracts/golden/synced-json-columns.json para un renglón sin él) y cada renglón lleva TODOS sus campos conocidos menos los Id locales (ChargedLineId en insumos, ServiceId en servicios), más los desconocidos tal cual. Campos: receta RowId, MedicineName, Dosage, RecommendedQuantity, Presentation, DispenseInClinic y, desde la revisión 16, ActiveIngredient y ShowActiveIngredient (null si no los lleva); insumos RowId, SupplyName, Instructions, Quantity, UnitPrice, ChargedConsultationFolio, ChargedUnits, ChargedLineKind, ChargedLineSyncId; servicios RowId, ServiceSyncId, ServiceCode, ServiceName, Category, Notes, Price, Quantity, ChargedConsultationFolio, ChargedUnits y, desde la revisión 14, Supplies (null sin lista; si no, el arreglo de sus insumos en su orden, cada uno con SupplyName, Quantity, UnitPrice, ChargedLineKind y ChargedLineSyncId, sin su ChargedLineId, más sus desconocidos)."
   ],
   "cases": [
     {
@@ -170,7 +170,17 @@
         "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
         "json": "[{\"MedicineName\":\"Paracetamol 500 mg\",\"Dosage\":\"1 cada 8 horas\",\"Plantilla\":{\"Id\":\"fiebre\",\"V\":2.0}}]"
       },
-      "expected": "[{\"DispenseInClinic\":false,\"Dosage\":\"1 cada 8 horas\",\"MedicineName\":\"Paracetamol 500 mg\",\"Plantilla\":{\"Id\":\"fiebre\",\"V\":2},\"Presentation\":null,\"RecommendedQuantity\":1,\"RowId\":\"1d5b7626-698f-5477-9ee4-af486e6d37c2\"}]"
+      "expected": "[{\"ActiveIngredient\":null,\"DispenseInClinic\":false,\"Dosage\":\"1 cada 8 horas\",\"MedicineName\":\"Paracetamol 500 mg\",\"Plantilla\":{\"Id\":\"fiebre\",\"V\":2},\"Presentation\":null,\"RecommendedQuantity\":1,\"RowId\":\"1d5b7626-698f-5477-9ee4-af486e6d37c2\",\"ShowActiveIngredient\":null}]"
+    },
+    {
+      "name": "hoja · receta (revisión 16): el principio activo y si se muestra son parte del renglón; en uno sin ellos, null",
+      "input": {
+        "check": "sheet",
+        "column": "ActivePrescriptionJson",
+        "patientSyncId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "json": "[{\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"MedicineName\":\"Tempra 500 mg tabletas\",\"ActiveIngredient\":\"Paracetamol\",\"ShowActiveIngredient\":false,\"Dosage\":\"1 cada 8 horas\"},{\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"MedicineName\":\"Paracetamol 500 mg tabletas (Tempra)\",\"Dosage\":\"1 cada 8 horas\"}]"
+      },
+      "expected": "[{\"ActiveIngredient\":\"Paracetamol\",\"DispenseInClinic\":false,\"Dosage\":\"1 cada 8 horas\",\"MedicineName\":\"Tempra 500 mg tabletas\",\"Presentation\":null,\"RecommendedQuantity\":1,\"RowId\":\"a0000000-0000-4000-8000-000000000001\",\"ShowActiveIngredient\":false},{\"ActiveIngredient\":null,\"DispenseInClinic\":false,\"Dosage\":\"1 cada 8 horas\",\"MedicineName\":\"Paracetamol 500 mg tabletas (Tempra)\",\"Presentation\":null,\"RecommendedQuantity\":1,\"RowId\":\"a0000000-0000-4000-8000-000000000002\",\"ShowActiveIngredient\":null}]"
     },
     {
       "name": "hoja · servicios: sin ServiceId (el Id local), con ServiceSyncId",

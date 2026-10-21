@@ -36,10 +36,12 @@ public static class AllergyRules
     /// Si recetar <paramref name="medicineName"/> (o el nombre de <paramref name="product"/>), con el genérico del producto,
     /// choca con una alergia del paciente; la primera alergia que choca (tal como se escribió) y el aviso. Sin alergias
     /// declaradas (vacías o "Negadas") no hay aviso. Las alergias se separan por coma, punto y coma, diagonal o renglón, y
-    /// las que niegan ("Ninguna") no cuentan.
+    /// las que niegan ("Ninguna") no cuentan. <paramref name="activeIngredient"/> (revisión 16): el principio activo guardado en
+    /// un renglón de la receta; entra a la comparación si el nombre no lo dice (el renglón con el paréntesis oculto, "Tempra 500
+    /// mg tabletas"), así avisa aunque el producto ya no esté en el catálogo.
     /// </summary>
     public static (bool HasConflict, string MatchedAllergy, string WarningDetails) CheckMedication(
-        PatientRecord? patient, Product? product, string? medicineName = null)
+        PatientRecord? patient, Product? product, string? medicineName = null, string? activeIngredient = null)
     {
         if (patient == null || !patient.HasAllergies || string.IsNullOrWhiteSpace(patient.Allergies))
         {
@@ -49,6 +51,11 @@ public static class AllergyRules
         var medName = (medicineName ?? product?.Name ?? string.Empty).Trim();
         var generic = (product?.GenericName ?? string.Empty).Trim();
         var medCombined = $"{medName} {generic}".Trim();
+        var ingredient = (activeIngredient ?? string.Empty).Trim();
+        if (ingredient.Length > 0 && !TextSearch.Normalize(medName).Contains(TextSearch.Normalize(ingredient), StringComparison.Ordinal))
+        {
+            medCombined = $"{medCombined} {ingredient}".Trim();
+        }
         if (string.IsNullOrWhiteSpace(medCombined))
         {
             return (false, string.Empty, string.Empty);

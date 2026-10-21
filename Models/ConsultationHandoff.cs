@@ -158,6 +158,19 @@ public sealed record LinkedDevice(
           "quitarlo, descuenta esos en lugar de los que se cargaron (revise la cuenta antes de cobrar). Actualícela a la versión más reciente."
         : string.Empty;
 
+    /// <summary>
+    /// Otro equipo que recibe consultas, con una revisión del contrato anterior a <see cref="TPVC.Services.SyncContract.ActiveIngredientRevision"/>
+    /// (o sin ella): no reconoce el producto de un renglón de receta con el principio activo entre paréntesis (2026-10-21), así
+    /// que no se le envía una consulta cuya receta tiene alguno.
+    /// </summary>
+    public bool IgnoresActiveIngredient { get; init; }
+
+    public string ActiveIngredientText => IgnoresActiveIngredient
+        ? $"Tiene una versión anterior de TPVC{(string.IsNullOrWhiteSpace(AppVersion) ? string.Empty : $" ({AppVersion})")}: no reconoce los " +
+          "medicamentos de marca con el principio activo entre paréntesis. No se le puede enviar una consulta cuya receta los tiene; " +
+          "actualícela a la versión más reciente."
+        : string.Empty;
+
     public string NewTokenText => TokensRotatedAtUtc is { } at
         ? (Role is DeviceRole.AndroidTablet or DeviceRole.AndroidMobileAdmin
               ? "Pegue el token nuevo en este equipo o lea con él el QR de esta PC"

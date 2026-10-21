@@ -191,6 +191,26 @@ internal sealed class UiSmokeSession
         }
         return null;
     }
+    // Las capturas por tema se dibujan fuera de pantalla (sin PresentationSource), así que IsVisible siempre es false: se ve si ella y
+    // todos sus contenedores están en Visible y ocupa lugar
+    private static bool IsShown(System.Windows.FrameworkElement element)
+    {
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0) return false;
+        for (System.Windows.DependencyObject? node = element; node != null; node = System.Windows.Media.VisualTreeHelper.GetParent(node))
+        {
+            if (node is System.Windows.UIElement { Visibility: not System.Windows.Visibility.Visible }) return false;
+        }
+        return true;
+    }
+    // Varias casillas comparten el nombre (la de "Indicación", la de cada renglón de la hoja y la de la sección 5): basta con que una se vea
+    private static System.Collections.Generic.IEnumerable<System.Windows.FrameworkElement> FindAllNamed(System.Windows.DependencyObject root, string name)
+    {
+        if (root is System.Windows.FrameworkElement element && System.Windows.Automation.AutomationProperties.GetName(element) == name) yield return element;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            foreach (var found in FindAllNamed(System.Windows.Media.VisualTreeHelper.GetChild(root, i), name)) yield return found;
+        }
+    }
     private static T? FindDescendant<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject
     {
         if (root is T match) return match;
@@ -545,6 +565,39 @@ internal sealed class UiSmokeSession
             WaitFor(records.Prescription.RepeatPreviousPrescriptionAsync());
             records.Info.DismissInfoModal();
             Capture(host, $"11c-receta-con-medicamentos-{suffix}");
+
+            // Pedido del 2026-10-21: un medicamento de marca agregado (su renglón con «Mostrar (Paracetamol)») y otro elegido, con la
+            // casilla junto a "Indicación". Se quitan después: lo que sigue usa la receta repetida
+            var brand = new Product
+            {
+                Id = 9001, Code = "MED-9001", Name = "Tempra 500 mg", GenericName = "Paracetamol", Presentation = "Caja con 20 tabletas", CurrentStock = 5, Price = 50m
+            };
+            var brandUpper = new Product
+            {
+                Id = 9002, Code = "MED-9002", Name = "VALCLAN 875/125MG C/14 TABS", GenericName = "Amoxicilina/Ácido clavulánico", Presentation = "Caja con 14 tabletas",
+                CurrentStock = 5, Price = 180m
+            };
+            records.Catalog.AvailableProducts.Add(brand);
+            records.Catalog.AvailableProducts.Add(brandUpper);
+            records.Prescription.ChoosePrescriptionProduct(brand);
+            records.Prescription.PrescriptionDosage = "1 tableta cada 8 horas por 3 días";
+            WaitFor(records.Prescription.AddPrescriptionAsync());
+            var brandRow = records.Session.SelectedPatient!.ActivePrescription.LastOrDefault();
+            records.Prescription.ChoosePrescriptionProduct(brandUpper);
+            Capture(host, $"11i-receta-principio-activo-{suffix}");
+            if (brandRow?.MedicineName != "Tempra 500 mg tabletas (Paracetamol)" || !brandRow.HasActiveIngredient
+                || !records.Prescription.HasChosenActiveIngredient
+                || !FindAllNamed(host, "Mostrar el principio activo").Any(e => e is System.Windows.Controls.CheckBox && IsShown(e)))
+            {
+                var boxes = FindAllNamed(host, "Mostrar el principio activo").ToList();
+                _failures.Add($"[11i-{suffix}] No se ve «Mostrar (…)» o el renglón de marca no salió con el principio activo ({brandRow?.MedicineName}; " +
+                    $"activo en el renglón={brandRow?.HasActiveIngredient}, en el elegido={records.Prescription.HasChosenActiveIngredient}, " +
+                    $"casillas={boxes.Count}, visibles={boxes.Count(IsShown)})");
+            }
+            records.Prescription.ClearChosenMedicine();
+            if (brandRow != null) WaitFor(records.Prescription.RemovePrescriptionItemFromPatientAsync(brandRow));
+            records.Catalog.AvailableProducts.Remove(brand);
+            records.Catalog.AvailableProducts.Remove(brandUpper);
 
             // "Cambiar indicación" en un renglón de la hoja, con sus frecuentes abiertas
             var firstRow = records.Session.SelectedPatient!.ActivePrescription.FirstOrDefault();

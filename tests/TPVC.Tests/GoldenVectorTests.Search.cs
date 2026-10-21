@@ -412,6 +412,7 @@ public partial class GoldenVectorTests
         var paracetamol = Prod(2, "MED-001", "Paracetamol 500 mg", "Paracetamol", "Caja con 20 tabletas", 45, "Medicamentos");
         var acid = Prod(3, "MED-003", "Ácido fólico 5 mg", "Ácido fólico", "Caja con 30 tabletas", 10, "Medicamentos");
         var gauze = Prod(4, "INS-001", "Gasa Estéril 10x10 cm", null, "Sobre con 5 piezas", 120, "Material de curación");
+        var valclan = Prod(5, "MED-005", "VALCLAN 875/125MG C/14 TABS", "Amoxicilina/Ácido clavulánico", "Caja con 14 tabletas", 8, "Medicamentos");
 
         var cases = new List<RuleCase>();
         foreach (var (name, product, text) in new (string, JsonObject, string)[]
@@ -421,7 +422,12 @@ public partial class GoldenVectorTests
                      ("el nombre y algo más", paracetamol, "Paracetamol 500 mg cada 8 horas"),
                      ("el nombre pegado a otra palabra no", paracetamol, "Paracetamol 500 mgx"),
                      ("el genérico", tempra, "paracetamol"),
-                     ("el renglón normado de la receta (marca entre paréntesis)", tempra, "Paracetamol 500 mg tabletas (Tempra)"),
+                     ("el renglón de la receta: la marca afuera y el principio activo entre paréntesis", tempra, "Tempra 500 mg tabletas (Paracetamol)"),
+                     ("el renglón de la receta sin el principio activo", valclan, "Valclan 875/125 mg tabletas"),
+                     ("el renglón de la receta con el principio activo, de un nombre en mayúsculas", valclan, "valclan 875/125 mg tabletas (amoxicilina/acido clavulanico)"),
+                     ("el renglón de antes de v1.46 (el genérico afuera y la marca entre paréntesis)", tempra, "Paracetamol 500 mg tabletas (Tempra)"),
+                     ("el de antes, de un nombre en mayúsculas", valclan, "Amoxicilina/Ácido clavulánico 875/125 mg tabletas (Valclan)"),
+                     ("el renglón de otra marca no", valclan, "Augmentin 875/125 mg tabletas (Amoxicilina/Ácido clavulánico)"),
                      ("sin acentos", acid, "acido folico 5 mg"),
                      ("otro producto", acid, "Ácido acetilsalicílico"),
                      ("vacío", gauze, ""),
@@ -434,7 +440,11 @@ public partial class GoldenVectorTests
                  {
                      ("el nombre sin distinguir mayúsculas", new[] { tempra, paracetamol }, " paracetamol 500 MG "),
                      ("el genérico: el primero de la lista", new[] { tempra, paracetamol }, "Paracetamol"),
-                     ("el renglón normado", new[] { paracetamol, tempra }, "Paracetamol 500 mg tabletas (Tempra)"),
+                     ("el renglón de la receta", new[] { paracetamol, tempra }, "Tempra 500 mg tabletas (Paracetamol)"),
+                     ("el renglón de la receta sin el principio activo", new[] { paracetamol, valclan }, "Valclan 875/125 mg tabletas"),
+                     ("el renglón de antes de v1.46", new[] { paracetamol, tempra }, "Paracetamol 500 mg tabletas (Tempra)"),
+                     ("el de antes, de un nombre en mayúsculas", new[] { paracetamol, valclan }, "Amoxicilina/Ácido clavulánico 875/125 mg tabletas (Valclan)"),
+                     ("un genérico: el renglón sin paréntesis", new[] { tempra, paracetamol }, "Paracetamol 500 mg tabletas"),
                      ("nombre (presentación)", new[] { gauze }, "Gasa Estéril 10x10 cm (Sobre con 5 piezas)"),
                      ("los acentos sí cuentan aquí (a diferencia de product-matches-name)", new[] { acid }, "Acido folico 5 mg"),
                      ("el nombre y algo más no", new[] { paracetamol }, "Paracetamol 500 mg cada 8 horas"),
@@ -465,15 +475,52 @@ public partial class GoldenVectorTests
 
         foreach (var (name, product) in new (string, JsonObject)[]
                  {
-                     ("genérico, concentración del nombre y forma de la presentación, con la marca", tempra),
-                     ("el genérico ya en el nombre: sin marca", paracetamol),
+                     ("la marca, la concentración de la presentación y la forma, con el principio activo", tempra),
+                     ("el genérico ya en el nombre: sin paréntesis", paracetamol),
                      ("con acentos", acid),
                      ("sin genérico: el nombre", gauze),
+                     ("un nombre en mayúsculas: la marca como «Valclan»", valclan),
                      ("suspensión con concentración por volumen", Prod(20, "MED-020", "Amoxil 250 mg/5 ml", "Amoxicilina", "Frasco con 75 ml suspensión")),
-                     ("el genérico con su concentración no la repite", Prod(21, "MED-021", "Augmentin 875/125 mg", "Amoxicilina/ácido clavulánico 875/125 mg", "Caja con 14 tabletas")),
+                     ("el genérico con su concentración: va afuera y no se repite en el paréntesis", Prod(21, "MED-021", "Augmentin 875/125 mg", "Amoxicilina/ácido clavulánico 875/125 mg", "Caja con 14 tabletas")),
+                     ("jarabe con concentración por volumen", Prod(22, "MED-022", "SUPRATEX JARABE 600MG/100 ML 120ML", "Ambroxol")),
+                     ("inyectable", Prod(23, "MED-023", "NAVONTEC INY 8MG C/3 AMP", "Ondansetrón", "Caja con 3 ampolletas")),
+                     ("el genérico ya dice la forma: no se repite", Prod(24, "MED-024", "Dolprin 2 g/100 ml", "Paracetamol suspensión", "Frasco con 120 ml suspensión")),
+                     ("la concentración solo en el genérico", Prod(25, "MED-025", "Tempra", "Paracetamol 500 mg", "Caja con 20 tabletas")),
+                     ("el nombre ya trae el principio activo entre paréntesis: va una sola vez", Prod(26, "MED-026", "TEMPRA (PARACETAMOL) 500MG", "Paracetamol", "Caja con 20 tabletas")),
+                     ("el nombre trae el principio activo entre paréntesis antes de la forma", Prod(27, "MED-027", "Adinol (Paracetamol) Jarabe 160mg/5ml", "Paracetamol", "Frasco con 120 ml")),
                  })
         {
             cases.Add(new RuleCase($"renglón de la receta · {name}", new JsonObject { ["check"] = "medicine-line", ["product"] = (JsonObject)product.DeepClone() }));
+        }
+        foreach (var (name, product) in new (string, JsonObject)[] { ("de marca, sin el principio activo", tempra), ("un genérico no cambia", paracetamol), ("sin genérico no cambia", gauze) })
+        {
+            cases.Add(new RuleCase($"renglón de la receta · {name}", new JsonObject
+            {
+                ["check"] = "medicine-line", ["product"] = (JsonObject)product.DeepClone(), ["showActiveIngredient"] = false
+            }));
+        }
+        foreach (var (name, product) in new (string, JsonObject)[] { ("de marca", tempra), ("de un nombre en mayúsculas", valclan), ("un genérico: sin paréntesis", paracetamol), ("sin genérico", gauze) })
+        {
+            cases.Add(new RuleCase($"partes del renglón · {name}", new JsonObject { ["check"] = "medicine-line-parts", ["product"] = (JsonObject)product.DeepClone() }));
+        }
+        foreach (var (name, line, ingredient, show) in new (string, string, string?, bool)[]
+                 {
+                     ("ocultar", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", false),
+                     ("mostrar", "Tempra 500 mg tabletas", "Paracetamol", true),
+                     ("mostrar lo que ya se muestra no lo repite", "Tempra 500 mg tabletas (Paracetamol)", "Paracetamol", true),
+                     ("ocultar lo que no se muestra no cambia nada", "Tempra 500 mg tabletas", "Paracetamol", false),
+                     ("solo el paréntesis del final", "Tempra (infantil) 100 mg gotas (Paracetamol)", "Paracetamol", false),
+                     ("sin principio activo: el renglón tal cual", "Paracetamol 500 mg tabletas", null, true),
+                     ("se recortan los espacios de los lados", "  Tempra 500 mg tabletas  ", " Paracetamol ", true),
+                     ("mostrar lo que ya dice con otras mayúsculas no lo repite", "Tempra 500 mg tabletas (PARACETAMOL)", "Paracetamol", true),
+                     ("mostrar lo que ya dice en medio y sin acento no lo repite", "Navontec 8 mg (Ondansetron) solución inyectable", "Ondansetrón", true),
+                     ("ocultar sin distinguir mayúsculas ni acentos", "Navontec 8 mg solución inyectable (ONDANSETRON)", "Ondansetrón", false),
+                 })
+        {
+            cases.Add(new RuleCase($"mostrar el principio activo · {name}", new JsonObject
+            {
+                ["check"] = "with-active-ingredient", ["medicineName"] = line, ["activeIngredient"] = ingredient, ["show"] = show
+            }));
         }
 
         CheckRuleVectors("catalog-matching.json", "catalog-matching", cases, input => S(input, "check") switch
@@ -481,13 +528,19 @@ public partial class GoldenVectorTests
                 "product-matches-name" => CatalogMatchingRules.ProductMatchesName(ToProduct(input["product"]!), Str(input, "name")),
                 "find-by-name" => PatientSheetRows.FindProductByName(ProductsIn(input), S(input, "name")) is { } found ? found.Id : null,
                 "kind" => CatalogMatchingRules.IsProductMedication(ToProduct(input["product"]!)) ? "medicamento" : "insumo",
-                "medicine-line" => PrescriptionNaming.MedicineLine(ToProduct(input["product"]!)),
+                "medicine-line" => PrescriptionNaming.MedicineLine(ToProduct(input["product"]!), Bool(input, "showActiveIngredient", true)),
+                "medicine-line-parts" => PrescriptionNaming.Parts(ToProduct(input["product"]!)) is var parts
+                    ? new JsonObject { ["line"] = parts.Line, ["activeIngredient"] = parts.ActiveIngredient }
+                    : null,
+                "with-active-ingredient" => PrescriptionNaming.WithActiveIngredient(S(input, "medicineName"), S(input, "activeIngredient"), Bool(input, "show")),
                 _ => throw new ArgumentException(S(input, "check"))
             },
-            "Qué producto es un renglón y qué es medicamento (Services/Rules/CatalogMatchingRules.cs, antes CatalogStore; PatientSheetRows.FindProductByName; PrescriptionNaming.MedicineLine). Los productos, como en rank-products.json.",
-            "product-matches-name (el medicamento elegido sigue siendo ese renglón al guardar la receta y al cargarlo con «Se surte aquí»): con todo normalizado (text-search.json), el nombre, 'Nombre (Presentación)', el nombre seguido de un espacio y algo más, el genérico (si tiene) o el renglón normado de la receta (si tiene genérico).",
-            "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es, sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase, no normalizada), el nombre, 'Nombre (Presentación)', el genérico o el renglón normado; el primero de la lista; null sin texto o si ninguno. Diferencia con product-matches-name: ver la nota de los acentos y del 'algo más'.",
+            "Qué producto es un renglón y qué es medicamento (Services/Rules/CatalogMatchingRules.cs, antes CatalogStore; PatientSheetRows.FindProductByName; PrescriptionNaming). Los productos, como en rank-products.json.",
+            "product-matches-name (el medicamento elegido sigue siendo ese renglón al guardar la receta y al cargarlo con «Se surte aquí»): con todo normalizado (text-search.json), el nombre, 'Nombre (Presentación)', el nombre seguido de un espacio y algo más, el genérico (si tiene) o, si tiene genérico, un renglón de la receta: el de hoy con el principio activo entre paréntesis (medicine-line), el de hoy sin él (showActiveIngredient false) o el de antes de v1.46 (el genérico con su concentración y forma, afuera, y la marca entre paréntesis si el nombre no es el genérico, esa marca con lo que el nombre traiga entre paréntesis, como entonces: los renglones guardados así no se reescriben y siguen encontrando su producto para cobrar y para la alerta de alergias).",
+            "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es, sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase, no normalizada), el nombre, 'Nombre (Presentación)', el genérico o uno de los tres renglones de la receta de product-matches-name; el primero de la lista; null sin texto o si ninguno. Diferencia con product-matches-name: ver la nota de los acentos y del 'algo más'.",
             "kind: medicamento si el nombre de la categoría contiene 'Medicamento' o 'Fármaco' (sin distinguir mayúsculas; los acentos cuentan) o el código empieza con 'MED'; insumo si la categoría contiene 'Curación', 'Insumo', 'Antiséptico' o 'Diagnóstico', o el código empieza con CUR, INS, ANT, DIA o MAT; si nada de eso, medicamento. Se revisa en ese orden.",
-            "medicine-line (PrescriptionNaming.MedicineLine, Reglamento de Insumos para la Salud): el genérico, su concentración (del nombre o de la presentación, si el genérico no trae dígitos), su forma farmacéutica (de la presentación o del nombre, si el genérico no la dice) y la marca entre paréntesis si el nombre no es el genérico; sin genérico, el nombre.");
+            "medicine-line (PrescriptionNaming.MedicineLine, pedido del médico del 2026-10-21): sin genérico, el nombre. Para la marca, lo que el nombre trae entre paréntesis ('(PARACETAMOL)') no cuenta. Si el nombre es el genérico (sus palabras antes de la primera con dígitos o 'C/', sin las que solo dicen la forma, empiezan con la misma primera palabra que el genérico, normalizada), el genérico, su concentración (del nombre o de la presentación, si el genérico no trae dígitos) y su forma (de la presentación o del nombre, si el genérico no la dice), sin paréntesis. Si no, la marca (esas palabras; en mayúsculas se escribe en tipo título, 'Valclan'), la concentración (del nombre, de la presentación o del genérico), la forma (si el genérico no la dice) y, entre paréntesis, el principio activo: el genérico sin su concentración. Con showActiveIngredient false (por omisión true), sin el paréntesis.",
+            "medicine-line-parts: 'line' es lo de afuera y 'activeIngredient' lo de adentro del paréntesis (null si no lleva); es lo que guarda un renglón nuevo de la receta (ActiveIngredient, revisión 16; synced-json-columns.json).",
+            "with-active-ingredient (la casilla «Mostrar (…)» de un renglón): con el principio activo y el renglón recortados (sin principio activo, el renglón tal cual), en este orden: 1) si show y el renglón ya contiene '(' + principio activo + ')' en cualquier lugar, normalizados (text-search.json: sin acentos ni mayúsculas), el renglón tal cual (nunca se repite); 2) si el texto desde el último '(' del renglón es '(' + principio activo + ')' normalizados, se quita con los espacios de antes; 3) si show, se agrega ' (' + principio activo + ')' al final.");
     }
 }

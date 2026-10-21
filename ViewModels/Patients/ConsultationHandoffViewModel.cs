@@ -567,6 +567,18 @@ public partial class ConsultationHandoffViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Por qué no se envía la consulta a <paramref name="device"/>: su versión no conoce los renglones de receta con el
+    /// principio activo (<see cref="LinkedDevice.IgnoresActiveIngredient"/>) y la receta tiene alguno; null si se puede.
+    /// </summary>
+    public static string? ActiveIngredientBlock(LinkedDevice device, IEnumerable<PatientPrescriptionItem>? prescription)
+    {
+        if (!device.IgnoresActiveIngredient || prescription == null || !prescription.Any(r => r.HasActiveIngredient)) return null;
+        return $"No se puede enviar a {device.DeviceName}: tiene una versión anterior de TPVC que no reconoce los medicamentos de marca " +
+               "con el principio activo entre paréntesis de esta receta (al quitarlos dejaría su cargo en la cuenta). Actualícela a la " +
+               "versión más reciente, o envíe la consulta a otro equipo.";
+    }
+
+    /// <summary>
     /// Sube lo pendiente del expediente, deja la consulta en solo lectura (con la marca guardada en
     /// disco) y publica la copia para el otro equipo.
     /// </summary>
@@ -576,6 +588,16 @@ public partial class ConsultationHandoffViewModel : ObservableObject
         var device = SelectedHandoffDevice;
         if (_handoff == null || _inventoryService == null || _consultationService?.CurrentConsultation == null) return;
         if (device == null || !device.IsAvailable || IsSendingHandoff || !IsConsultationEditable) return;
+
+        // 2026-10-21: un equipo anterior a la revisión 16 no reconoce el producto de los renglones de marca con el principio
+        // activo (al quitar uno dejaría su cargo en la cuenta): no se le envía
+        var prescription = (_record.Patient?.ActivePrescription ?? Enumerable.Empty<PatientPrescriptionItem>())
+            .Concat(_session.SelectedPatient?.ActivePrescription ?? Enumerable.Empty<PatientPrescriptionItem>());
+        if (ActiveIngredientBlock(device, prescription) is { } blocked)
+        {
+            HandoffSheetError = blocked;
+            return;
+        }
 
         // 0. Una "Cambiar indicación" abierta se guarda antes de subir el expediente y armar la copia (después la consulta
         //    queda en solo lectura aquí y se cierran las hojas): el otro equipo recibe la indicación nueva

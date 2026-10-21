@@ -54,7 +54,80 @@ public class PatientPrescriptionItem : System.ComponentModel.INotifyPropertyChan
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? RowId { get; set; }
 
-    public string MedicineName { get; set; } = string.Empty;
+    private string _medicineName = string.Empty;
+
+    /// <summary>
+    /// El renglón del medicamento tal como se imprime. Avisa al cambiar: «Mostrar (principio activo)» (2026-10-21) le quita o
+    /// le pone el paréntesis en el mismo renglón.
+    /// </summary>
+    public string MedicineName
+    {
+        get => _medicineName;
+        set
+        {
+            if (_medicineName == value) return;
+            _medicineName = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(MedicineName)));
+        }
+    }
+
+    private string? _activeIngredient;
+
+    /// <summary>
+    /// Revisión 16 (pedido del médico del 2026-10-21): el principio activo que va entre paréntesis al final de
+    /// <see cref="MedicineName"/> ("Paracetamol" en "Tempra 500 mg tabletas (Paracetamol)"), para quitarlo o ponerlo con
+    /// «Mostrar (Paracetamol)». Solo lo lleva un renglón de un producto de marca que se recetó desde v1.46; null en uno
+    /// genérico, escrito a mano o guardado antes (esos no cambian y no tienen la casilla).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ActiveIngredient
+    {
+        get => _activeIngredient;
+        set
+        {
+            if (_activeIngredient == value) return;
+            _activeIngredient = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ActiveIngredient)));
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(HasActiveIngredient)));
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ActiveIngredientToggleText)));
+        }
+    }
+
+    private bool? _showActiveIngredient;
+
+    /// <summary>
+    /// Revisión 16: si <see cref="MedicineName"/> lleva el principio activo entre paréntesis (true) o no (false). Va junto con
+    /// <see cref="ActiveIngredient"/>; null sin él. <see cref="MedicineName"/> ya es el texto que resulta: quien no conoce el
+    /// campo imprime el renglón tal cual.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ShowActiveIngredient
+    {
+        get => _showActiveIngredient;
+        set
+        {
+            if (_showActiveIngredient == value) return;
+            _showActiveIngredient = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowActiveIngredient)));
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowsActiveIngredient)));
+        }
+    }
+
+    /// <summary>La casilla «Mostrar (…)» del renglón: sin <see cref="ShowActiveIngredient"/> cuenta como mostrado.</summary>
+    [JsonIgnore]
+    public bool ShowsActiveIngredient
+    {
+        get => ShowActiveIngredient != false;
+        set => ShowActiveIngredient = value;
+    }
+
+    /// <summary>El renglón tiene algo entre paréntesis que se puede ocultar o mostrar.</summary>
+    [JsonIgnore]
+    public bool HasActiveIngredient => !string.IsNullOrWhiteSpace(ActiveIngredient);
+
+    /// <summary>«Mostrar (Paracetamol)»: la casilla dice el texto que va entre paréntesis.</summary>
+    [JsonIgnore]
+    public string ActiveIngredientToggleText => HasActiveIngredient ? $"Mostrar ({ActiveIngredient!.Trim()})" : string.Empty;
 
     private string _dosage = string.Empty;
 
