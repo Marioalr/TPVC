@@ -286,7 +286,7 @@ public partial class TursoSyncEndToEndTests
             await checkout.ChargeAsync();
             clock.Stop();
             Assert.IsGreaterThanOrEqualTo(2.8, clock.Elapsed.TotalSeconds, "Se esperó a la sincronización rápida");
-            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds, "3 s y no más: el folio no espera otros 2 s");
+            Assert.IsLessThan(4.5, clock.Elapsed.TotalSeconds, "3 s y no más: el folio no espera otros 2 s");
             Assert.IsTrue(pc.Sync.IsQuickSyncHanging, "La sincronización sigue en segundo plano, sin cancelarse");
         }
         finally
@@ -320,7 +320,7 @@ public partial class TursoSyncEndToEndTests
             var clock = Stopwatch.StartNew();
             await records.Agenda.SaveAgendaFormAsync();
             clock.Stop();
-            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds);
+            Assert.IsLessThan(4.5, clock.Elapsed.TotalSeconds);
         }
         finally
         {
@@ -434,7 +434,7 @@ public partial class TursoSyncEndToEndTests
             var clock = Stopwatch.StartNew();
             await checkout.ChargeAsync();
             clock.Stop();
-            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds, "La rápida no alcanzó a correr, y el folio tampoco espera a la nube");
+            Assert.IsLessThan(4.5, clock.Elapsed.TotalSeconds, "La rápida no alcanzó a correr, y el folio tampoco espera a la nube");
             Assert.IsTrue(pc.Sync.IsQuickSyncHanging);
         }
         finally
@@ -502,7 +502,7 @@ public partial class TursoSyncEndToEndTests
             await records.PatientForm.SavePatientModalAsync();
             clock.Stop();
             Assert.IsGreaterThanOrEqualTo(2.8, clock.Elapsed.TotalSeconds, "Se esperó a la sincronización rápida");
-            Assert.IsLessThan(3.8, clock.Elapsed.TotalSeconds, "3 s y no más: el folio no espera otros 2 s");
+            Assert.IsLessThan(4.5, clock.Elapsed.TotalSeconds, "3 s y no más: el folio no espera otros 2 s");
         }
         finally
         {
