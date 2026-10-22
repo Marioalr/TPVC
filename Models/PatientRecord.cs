@@ -505,8 +505,7 @@ public class PatientConsultation : ISyncEntity
         var tallaMatch = System.Text.RegularExpressions.Regex.Match(vitalsText, @"(?:Talla|Height|Estatura):\s*([\d\.\,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (tallaMatch.Success && decimal.TryParse(tallaMatch.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var talla))
         {
-            if (talla > 3) talla /= 100m; // ej. 95 cm -> 0.95 m
-            Height = talla;
+            Height = TPVC.Services.Rules.VitalSignsRules.HeightInMeters(talla); // ej. 95 cm -> 0.95 m
         }
 
         // SpO2%: 0.94 o SpO2: 95
@@ -528,8 +527,7 @@ public class PatientConsultation : ISyncEntity
         // Calcular IMC automáticamente si no vino explícito pero hay Peso y Talla
         if (!BMI.HasValue && Weight.HasValue && Height.HasValue && Height.Value > 0)
         {
-            var h = Height.Value;
-            if (h > 3) h /= 100m; // convertir cm a metros si es necesario (ej. 170 -> 1.70)
+            var h = TPVC.Services.Rules.VitalSignsRules.HeightInMeters(Height.Value); // cm a metros (ej. 170 -> 1.70)
             if (h > 0)
             {
                 BMI = Math.Round(Weight.Value / (h * h), 2);
@@ -747,11 +745,16 @@ public class PatientRecord : ISyncEntity
     [NotMapped]
     public string FormattedEmergencyContactPhone => FormatPhoneNumber(EmergencyContactPhone);
 
+    /// <summary>
+    /// El teléfono como "ddd-ddd-dddd" con sus últimos 10 dígitos ASCII (revisión 20: "+52 55 1234 5678" → "551-234-5678", la
+    /// lada del país se queda fuera, como compara los teléfonos la regla de duplicados, <c>DuplicatePatientRules.PhoneKey</c>;
+    /// antes se quedaban los primeros 10). Hasta 3 dígitos tal cual y hasta 6 como "ddd-ddd".
+    /// </summary>
     public static string FormatPhoneNumber(string? phone)
     {
         if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
-        var digits = new string(phone.Where(char.IsDigit).ToArray());
-        if (digits.Length > 10) digits = digits.Substring(0, 10);
+        var digits = new string(phone.Where(char.IsAsciiDigit).ToArray());
+        if (digits.Length > 10) digits = digits[^10..];
 
         if (digits.Length <= 3) return digits;
         if (digits.Length <= 6) return $"{digits.Substring(0, 3)}-{digits.Substring(3)}";

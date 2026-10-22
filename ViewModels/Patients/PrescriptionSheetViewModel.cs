@@ -487,7 +487,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
 
         if (_session.SelectedPatient != null)
         {
-            var allergyCheck = AllergyRules.CheckMedication(_session.SelectedPatient, product, name, activeIngredient);
+            var allergyCheck = AllergyRules.CheckMedication(_session.SelectedPatient, product, name, activeIngredient, _catalog.AvailableProducts);
             if (allergyCheck.HasConflict)
             {
                 _pendingAllergyProduct = product;
@@ -780,7 +780,7 @@ public partial class PrescriptionSheetViewModel : ObservableObject
         {
             var product = _catalog.FindCatalogProduct(item.MedicineName);
             // Con el principio activo guardado: el renglón oculto avisa aunque su producto ya no esté en el catálogo
-            if (AllergyRules.CheckMedication(_session.SelectedPatient, product, item.MedicineName, item.ActiveIngredient).HasConflict)
+            if (AllergyRules.CheckMedication(_session.SelectedPatient, product, item.MedicineName, item.ActiveIngredient, _catalog.AvailableProducts).HasConflict)
             {
                 skipped.Add(item.MedicineName);
                 continue;

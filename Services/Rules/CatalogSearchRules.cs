@@ -16,7 +16,8 @@ namespace TPVC.Services.Rules;
 /// </summary>
 public static class CatalogSearchRules
 {
-    private static readonly Regex QuantityPrefix = new(@"^\s*(\d{1,3})\s*\*\s*(.*)$", RegexOptions.Compiled);
+    // Revisión 20: [0-9], no \d (que acepta dígitos de otros alfabetos que int.Parse no lee: "٣*para" tronaba)
+    private static readonly Regex QuantityPrefix = new(@"^\s*([0-9]{1,3})\s*\*\s*(.*)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>Cuántas sugerencias muestra el buscador del Punto de venta y el de los insumos de un servicio.</summary>
     public const int ProductSuggestionLimit = 8;

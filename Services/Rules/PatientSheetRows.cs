@@ -225,19 +225,31 @@ public static class PatientSheetRows
     }
 
     /// <summary>
-    /// Producto por nombre exacto (sin distinguir mayúsculas), "Nombre (Presentación)", genérico o el renglón de la receta
+    /// Producto por nombre exacto, "Nombre (Presentación)", genérico o el renglón de la receta
     /// (<see cref="CatalogMatchingRules.MedicineLineMatches"/>: "Tempra 500 mg tabletas (Paracetamol)", sin el paréntesis, o el de
-    /// v1.23 a v1.45 "Paracetamol 500 mg tabletas (Tempra)"); el primero de la lista.
+    /// v1.23 a v1.45 "Paracetamol 500 mg tabletas (Tempra)"). Primero sin distinguir mayúsculas pero con acentos; si ninguno, sin
+    /// acentos ni mayúsculas (<see cref="TextSearch.Normalize"/>, como <see cref="CatalogMatchingRules.ProductMatchesName"/>:
+    /// "Acido folico 5 mg" es "Ácido fólico 5 mg"). Siempre igual de punta a punta, nunca "empieza con": el primero de la lista.
     /// </summary>
     public static Product? FindProductByName(IEnumerable<Product> products, string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
         var clean = name.Trim();
-        return products.FirstOrDefault(p =>
+        var list = products as IReadOnlyList<Product> ?? products.ToList();
+        var exact = list.FirstOrDefault(p =>
             p.Name.Equals(clean, StringComparison.OrdinalIgnoreCase) ||
             $"{p.Name} ({p.Presentation})".Equals(clean, StringComparison.OrdinalIgnoreCase) ||
             (!string.IsNullOrEmpty(p.GenericName) && p.GenericName.Equals(clean, StringComparison.OrdinalIgnoreCase)) ||
             CatalogMatchingRules.MedicineLineMatches(p, clean, normalized: false));
+        if (exact != null) return exact;
+
+        // Revisión 20: sin acentos, como ProductMatchesName (antes "Acido folico 5 mg" nunca se cobraba)
+        var normalized = TextSearch.Normalize(clean);
+        return list.FirstOrDefault(p =>
+            TextSearch.Normalize(p.Name) == normalized ||
+            TextSearch.Normalize($"{p.Name} ({p.Presentation})") == normalized ||
+            (!string.IsNullOrEmpty(p.GenericName) && TextSearch.Normalize(p.GenericName) == normalized) ||
+            CatalogMatchingRules.MedicineLineMatches(p, clean, normalized: true));
     }
 
     // ================================================================== servicios

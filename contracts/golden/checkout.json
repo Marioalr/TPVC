@@ -6,7 +6,7 @@
   "contract": 19,
   "notes": [
     "El cobro del Punto de venta y de «Terminar consulta» (Services/Rules/CheckoutRules.cs y ViewModels/CheckoutViewModel.cs corrido tal cual, sin base). Importes como texto decimal invariante.",
-    "parse-amount (lo que se escribe en Recibido): solo los dígitos y el punto; decimal invariante; Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). La coma se quita (es separador de miles): '1,5' es 15. suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
+    "parse-amount (lo que se escribe en Recibido): solo cuentan los dígitos ASCII 0-9, el punto y la coma (lo demás se quita, también los dígitos de otros alfabetos). Revisión 20: si no hay punto, hay una sola coma y después de ella quedan 1 o 2 dígitos al final, la coma es el punto decimal ('1,5' = 1.50, '150,50' = 150.50); en cualquier otro caso las comas se quitan (separan miles: '1,500' = 1500, '1,500.50' = 1500.50, '1,000,000'). Antes la coma siempre se quitaba y '1,5' era 15. Luego decimal invariante (solo punto decimal, sin signo ni miles); Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
     "checkout: add-product agrega un producto con existencias (si ya está suma, sin pasar de sus existencias; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas sin tope); increase (+) no pasa de las existencias de un producto; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1; un producto con existencias no pasa de ellas); cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
     "Cuentas: total = Σ cantidad × precio; changeDue = max(0, recibido − total) con cualquier forma de pago; hasChange = efectivo, recibido ≥ total y total > 0; missingAmount = total − recibido si es efectivo y 0 < recibido < total; canCharge = (hay renglones o se permite la cuenta vacía) y no falta efectivo; chargeText = 'Cobrar {total con moneda de es-MX, $1,234.50}{complemento}' o el texto de la cuenta vacía. El recibo en efectivo lleva lo recibido (el total si no se escribió) y el cambio; con otra forma, nada."
   ],
@@ -57,7 +57,7 @@
         "check": "parse-amount",
         "text": "1,5"
       },
-      "expected": "15"
+      "expected": "1.5"
     },
     {
       "name": "recibido escrito · «abc»",
@@ -88,6 +88,94 @@
       "input": {
         "check": "parse-amount",
         "text": "1.2.3"
+      },
+      "expected": "0"
+    },
+    {
+      "name": "recibido escrito · «150,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "150,50"
+      },
+      "expected": "150.50"
+    },
+    {
+      "name": "recibido escrito · «1,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,50"
+      },
+      "expected": "1.50"
+    },
+    {
+      "name": "recibido escrito · «$ 1,5»",
+      "input": {
+        "check": "parse-amount",
+        "text": "$ 1,5"
+      },
+      "expected": "1.5"
+    },
+    {
+      "name": "recibido escrito · «1,500»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,500"
+      },
+      "expected": "1500"
+    },
+    {
+      "name": "recibido escrito · «1,500.50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,500.50"
+      },
+      "expected": "1500.50"
+    },
+    {
+      "name": "recibido escrito · «1,000,000»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,000,000"
+      },
+      "expected": "1000000"
+    },
+    {
+      "name": "recibido escrito · «1,5,0»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,5,0"
+      },
+      "expected": "150"
+    },
+    {
+      "name": "recibido escrito · «1,»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,"
+      },
+      "expected": "1"
+    },
+    {
+      "name": "recibido escrito · «,5»",
+      "input": {
+        "check": "parse-amount",
+        "text": ",5"
+      },
+      "expected": "0.5"
+    },
+    {
+      "name": "recibido escrito · «1.500,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1.500,50"
+      },
+      "expected": "1.50"
+    },
+    {
+      "name": "recibido escrito · «١٥٠»",
+      "input": {
+        "check": "parse-amount",
+        "text": "١٥٠"
       },
       "expected": "0"
     },

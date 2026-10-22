@@ -39,13 +39,19 @@ public static class CheckoutRules
     }
 
     /// <summary>
-    /// El recibido como se escribe ("500", "$1,000", "250.5"): solo cuentan los dígitos y el punto; redondeado a 2 decimales
-    /// (al par); 0 si no es un número mayor que 0 (vacío = paga exacto).
+    /// El recibido como se escribe ("500", "$1,000", "250.5", "150,50"): solo cuentan los dígitos 0-9, el punto y la coma. Sin
+    /// punto y con una sola coma seguida de 1 o 2 dígitos al final, la coma es el punto decimal ("1,5" = 1.50, "150,50" =
+    /// 150.50; revisión 20: antes la coma siempre se quitaba y "1,5" era 15); si no, las comas separan miles ("1,500" = 1500,
+    /// "1,500.50" = 1500.50). Redondeado a 2 decimales (al par); 0 si no es un número mayor que 0 (vacío = paga exacto).
     /// </summary>
     public static decimal ParseAmount(string? text)
     {
-        var clean = new string((text ?? string.Empty).Where(c => char.IsDigit(c) || c == '.').ToArray());
-        return decimal.TryParse(clean, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0
+        var clean = new string((text ?? string.Empty).Where(c => c is >= '0' and <= '9' or '.' or ',').ToArray());
+        int comma = clean.IndexOf(',');
+        bool decimalComma = comma >= 0 && !clean.Contains('.') && comma == clean.LastIndexOf(',')
+                            && clean.Length - comma - 1 is 1 or 2;
+        clean = decimalComma ? clean.Replace(',', '.') : clean.Replace(",", string.Empty);
+        return decimal.TryParse(clean, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount) && amount > 0
             ? Math.Round(amount, 2)
             : 0m;
     }

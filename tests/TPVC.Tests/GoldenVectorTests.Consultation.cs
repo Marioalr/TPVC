@@ -34,7 +34,10 @@ public partial class GoldenVectorTests
                      ("sobrepeso", "80", "1.70"),
                      ("obesidad grado I", "95", "1.70"),
                      ("obesidad grado II+", "120", "1.70"),
-                     ("talla en centímetros: la regla no la convierte", "70", "170"),
+                     ("talla en centímetros (revisión 20): 170 → 1.70 m, como al leer la nota", "70", "170"),
+                     ("talla en centímetros con decimales", "15,5", "95,5"),
+                     ("3 todavía son metros", "70", "3"),
+                     ("3.01 ya son centímetros (0.0301 m)", "0.1", "3.01"),
                      ("sin peso", "", "1.70"),
                      ("talla 0", "70", "0"),
                      ("texto", "setenta", "1.70"),
@@ -107,7 +110,7 @@ public partial class GoldenVectorTests
                 _ => throw new ArgumentException(S(input, "check"))
             },
             "Los signos de la consulta (Services/Rules/VitalSignsRules.cs): el IMC mientras se captura, el aviso de valores fuera de rango y el texto que se guarda en la nota. Lo que se captura llega como texto; cómo se lee de vuelta ese texto está en vitals-evolution.json.",
-            "bmi: peso y talla (en metros) con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
+            "bmi: peso y talla con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, la talla en metros (revisión 20, VitalSignsRules.HeightInMeters: más de 3 son centímetros y se divide entre 100 en decimal; es la misma regla con que vitals-evolution.json lee la nota; antes la captura no la convertía y 170 daba '0.0 kg/m² (Bajo peso)'), imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
             "warning: cada valor como double (coma = punto, sin espacios); en este orden y unidos por ' · ': Temp ≥ 38 'Temp {0.#} °C: fiebre', o 0 < Temp < 35.5 'hipotermia'; T/A 'sis/dia' ≥ 140 o ≥ 90 'T/A {0}/{0}: elevada', o 0 < sis < 90 'baja'; SpO₂ > 0 (≤ 1 se multiplica por 100) < 92 'SpO₂ {0} %: baja'; glucosa > 0, ≥ 200 'elevada' o < 70 'hipoglucemia'; FC > 0: adulto (sin edad o 12 años o más) > 100 'taquicardia', niño (menos de 12) > 140 'alta para la edad', y si no < 50 'bradicardia'. Los números con '0.#' o '0' de double con la cultura es-MX: .NET formatea el valor binario más corto y redondea el punto medio hacia arriba (38.25 → 38.3; 69.5 → 70, así que 'Glucosa 70 mg/dL: hipoglucemia' sale con 69.5).",
             "format (lo que se guarda en PatientConsultation.VitalSigns al terminar): cada dato capturado sin espacios a los lados y unidos por ' | ': 'TA: {sin la / del final} mmHg', 'FC: … lpm', 'FR: … rpm', 'Temp: … °C', 'Peso: … kg', 'Talla: … m', 'Glucosa: … mg/dL', 'SpO2: {sin % al final}%', 'IMC: {el texto de bmi}' (no va si contiene 'no disponibles'). Lo vacío o solo espacios no va; sin nada, ''.");
     }
@@ -590,7 +593,12 @@ public partial class GoldenVectorTests
     public void Checkout_MatchesTheVectors()
     {
         var cases = new List<RuleCase>();
-        foreach (var text in new[] { "500", "$1,000", "250.5", "250.", "99.999", "1,5", "abc", "", "0", "1.2.3" })
+        foreach (var text in new[]
+                 {
+                     "500", "$1,000", "250.5", "250.", "99.999", "1,5", "abc", "", "0", "1.2.3",
+                     // Revisión 20: la coma decimal
+                     "150,50", "1,50", "$ 1,5", "1,500", "1,500.50", "1,000,000", "1,5,0", "1,", ",5", "1.500,50", "١٥٠"
+                 })
         {
             cases.Add(new RuleCase($"recibido escrito · «{text}»", new JsonObject { ["check"] = "parse-amount", ["text"] = text }));
         }
@@ -684,7 +692,7 @@ public partial class GoldenVectorTests
                 }
             },
             "El cobro del Punto de venta y de «Terminar consulta» (Services/Rules/CheckoutRules.cs y ViewModels/CheckoutViewModel.cs corrido tal cual, sin base). Importes como texto decimal invariante.",
-            "parse-amount (lo que se escribe en Recibido): solo los dígitos y el punto; decimal invariante; Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). La coma se quita (es separador de miles): '1,5' es 15. suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
+            "parse-amount (lo que se escribe en Recibido): solo cuentan los dígitos ASCII 0-9, el punto y la coma (lo demás se quita, también los dígitos de otros alfabetos). Revisión 20: si no hay punto, hay una sola coma y después de ella quedan 1 o 2 dígitos al final, la coma es el punto decimal ('1,5' = 1.50, '150,50' = 150.50); en cualquier otro caso las comas se quitan (separan miles: '1,500' = 1500, '1,500.50' = 1500.50, '1,000,000'). Antes la coma siempre se quitaba y '1,5' era 15. Luego decimal invariante (solo punto decimal, sin signo ni miles); Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
             "checkout: add-product agrega un producto con existencias (si ya está suma, sin pasar de sus existencias; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas sin tope); increase (+) no pasa de las existencias de un producto; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1; un producto con existencias no pasa de ellas); cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
             "Cuentas: total = Σ cantidad × precio; changeDue = max(0, recibido − total) con cualquier forma de pago; hasChange = efectivo, recibido ≥ total y total > 0; missingAmount = total − recibido si es efectivo y 0 < recibido < total; canCharge = (hay renglones o se permite la cuenta vacía) y no falta efectivo; chargeText = 'Cobrar {total con moneda de es-MX, $1,234.50}{complemento}' o el texto de la cuenta vacía. El recibo en efectivo lleva lo recibido (el total si no se escribió) y el cambio; con otra forma, nada.");
     }

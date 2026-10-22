@@ -11,13 +11,23 @@ public static class VitalSignsRules
 {
     public const string BmiUnavailable = "Valores no disponibles";
 
-    /// <summary>"24.8 kg/m² (Peso normal)" con el peso en kg y la talla en metros; <see cref="BmiUnavailable"/> si falta alguno.</summary>
+    /// <summary>
+    /// La talla en metros: más de 3 se escribió en centímetros y se divide entre 100 (170 → 1.70, 95 → 0.95). Es la misma regla
+    /// al capturar (<see cref="BmiText"/>) y al leer la nota guardada (<c>PatientConsultation.ParseAndSetVitalSigns</c>).
+    /// </summary>
+    public static decimal HeightInMeters(decimal height) => height > 3 ? height / 100m : height;
+
+    /// <summary>
+    /// "24.8 kg/m² (Peso normal)" con el peso en kg y la talla en metros o en centímetros (<see cref="HeightInMeters"/>; antes
+    /// de la revisión 20 la talla en centímetros daba "0.0 kg/m² (Bajo peso)"); <see cref="BmiUnavailable"/> si falta alguno.
+    /// </summary>
     public static string BmiText(string? weight, string? height)
     {
         if (decimal.TryParse((weight ?? string.Empty).Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var kg) &&
-            decimal.TryParse((height ?? string.Empty).Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var meters) &&
-            meters > 0)
+            decimal.TryParse((height ?? string.Empty).Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var typed) &&
+            typed > 0)
         {
+            var meters = HeightInMeters(typed);
             var imc = kg / (meters * meters);
             return $"{imc:F1} kg/m² ({BmiCategory(imc)})";
         }
