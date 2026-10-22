@@ -405,6 +405,24 @@ public class PrescriptionCaptureTests
         records.Dispose();
     }
 
+    [TestMethod]
+    public async Task SuppliesCatalog_EnterAddsTheFirstOne_EvenWithoutStock_WithTheWarning()
+    {
+        // Revisión de la revisión 20: Enter en el catálogo de insumos saltaba los que no tienen existencias y, sin ninguno con
+        // existencias, no agregaba nada
+        var (records, consultations, patient) = OpenConsultation();
+        foreach (var supply in records.Catalog.AvailableProducts.Where(CatalogStore.IsProductSupply)) supply.CurrentStock = 0;
+        await records.Supplies.OpenSupplyCatalogAsync();
+        var first = records.CatalogBrowser.CatalogBrowserFilteredProducts.First();
+
+        await records.CatalogBrowser.AddFirstFromCatalogBrowserAsync();
+        Assert.IsTrue(patient.ActiveSupplies.Any(s => s.SupplyName.Contains(first.Name)), "Se agrega el primero");
+        Assert.AreEqual(1, consultations.CurrentConsultation!.Items.Single(i => i.ProductId == first.Id).Quantity, "Y se carga");
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        StringAssert.StartsWith(records.Info.InfoModalMessage, $"Existencias insuficientes: {first.Name} (quedan 0, se cobran 1)");
+        records.Dispose();
+    }
+
     // ================================================================== revisión adversarial de 4214fdf
 
     [TestMethod]
