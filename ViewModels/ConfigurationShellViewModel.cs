@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TPVC.Models;
 using TPVC.Services;
 
 namespace TPVC.ViewModels;
@@ -63,7 +64,8 @@ public partial class ConfigurationShellViewModel : ObservableObject
         TursoSyncViewModel tursoSyncVM,
         ServicesCatalogViewModel servicesVM,
         string appVersion,
-        DesignSystemViewModel? designSystemVM = null)
+        DesignSystemViewModel? designSystemVM = null,
+        BusinessViewModel? businessVM = null)
     {
         _navigateMain = navigateMain;
         DashboardVM = dashboardVM;
@@ -77,11 +79,13 @@ public partial class ConfigurationShellViewModel : ObservableObject
         TursoSyncVM = tursoSyncVM;
         ServicesVM = servicesVM;
         DesignSystemVM = designSystemVM ?? new DesignSystemViewModel();
-        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.47.0" : appVersion;
+        BusinessVM = businessVM;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.48.0" : appVersion;
 
-        Sections = new ObservableCollection<ConfigSectionItem>(new[]
+        var sections = new List<ConfigSectionItem>
         {
             new ConfigSectionItem(SectionDashboard, "Resumen", "Panel del consultorio", "IcoChart"),
+            new ConfigSectionItem(SectionBusiness, "Resumen", "Negocio", "IcoCart"),
             new ConfigSectionItem(SectionInventory, "Inventario", "Productos", "IcoPill"),
             new ConfigSectionItem(SectionBatches, "Inventario", "Lotes y caducidades", "IcoCalendar"),
             new ConfigSectionItem(SectionMovements, "Inventario", "Kardex", "IcoHistory"),
@@ -92,7 +96,10 @@ public partial class ConfigurationShellViewModel : ObservableObject
             new ConfigSectionItem(SectionCloud, "Sistema", "Nube y dispositivos", "IcoTablet"),
             new ConfigSectionItem(SectionUpdates, "Sistema", "Actualizaciones", "IcoRefresh"),
             new ConfigSectionItem(SectionDesignSystem, "Sistema", "Componentes", "IcoInfo")
-        });
+        };
+        // Panel «Negocio» (pedido del 2026-10-22): solo donde DevicePermissions.CanViewBusinessReports lo permite (la PC, siempre)
+        if (BusinessVM == null || !BusinessViewModel.IsAllowedOn(LocalRole)) sections.RemoveAll(s => s.Key == SectionBusiness);
+        Sections = new ObservableCollection<ConfigSectionItem>(sections);
 
         SectionGroups = Sections
             .GroupBy(s => s.Group)
@@ -102,6 +109,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         // Los resúmenes siguen a su sección sin esperar a cambiar de página (por ejemplo, el
         // "Último respaldo" al pulsar "Respaldar ahora")
         FollowSummary(ServicesVM, nameof(ServicesCatalogViewModel.Summary), SectionServices, () => ServicesVM.Summary);
+        if (BusinessVM != null) FollowSummary(BusinessVM, nameof(BusinessViewModel.Summary), SectionBusiness, () => BusinessVM.MenuSummary);
         FollowSummary(ClinicProfileVM, nameof(ClinicProfileViewModel.Summary), SectionClinic, () => ClinicProfileVM.Summary);
         FollowSummary(AppearanceVM, nameof(AppearanceViewModel.Summary), SectionAppearance, () => AppearanceVM.Summary);
         FollowSummary(DataVM, nameof(DataManagementViewModel.LastBackupText), SectionData, () => DataVM.LastBackupText);
@@ -112,6 +120,10 @@ public partial class ConfigurationShellViewModel : ObservableObject
     }
 
     public const string SectionDashboard = "Dashboard";
+    public const string SectionBusiness = "Business";
+
+    /// <summary>El papel de este equipo: la app de escritorio siempre es la PC.</summary>
+    public static DeviceRole LocalRole => DeviceRole.WindowsDesktop;
     public const string SectionInventory = "Inventory";
     public const string SectionBatches = "Batches";
     public const string SectionMovements = "Movements";
@@ -135,6 +147,12 @@ public partial class ConfigurationShellViewModel : ObservableObject
     public ServicesCatalogViewModel ServicesVM { get; }
     public DesignSystemViewModel DesignSystemVM { get; }
 
+    /// <summary>Panel «Negocio»; null si este equipo no lo muestra.</summary>
+    public BusinessViewModel? BusinessVM { get; }
+
+    /// <summary>La sección «Negocio» está en el menú.</summary>
+    public bool HasBusinessSection => Sections.Any(s => s.Key == SectionBusiness);
+
     public ObservableCollection<ConfigSectionItem> Sections { get; }
 
     public IReadOnlyList<ConfigSectionGroup> SectionGroups { get; }
@@ -146,7 +164,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = SectionDashboard;
 
     [ObservableProperty]
-    private string _appVersion = "v1.47.0";
+    private string _appVersion = "v1.48.0";
 
     /// <summary>Nombres anteriores (paleta de comandos, accesos del inicio) → sección actual.</summary>
     public static string NormalizeSection(string? viewName) => viewName switch
@@ -168,6 +186,10 @@ public partial class ConfigurationShellViewModel : ObservableObject
             case SectionDashboard:
                 CurrentSubView = DashboardVM;
                 _ = DashboardVM.RefreshAsync();
+                break;
+            case SectionBusiness when HasBusinessSection:
+                CurrentSubView = BusinessVM;
+                _ = BusinessVM!.LoadAsync();
                 break;
             case SectionInventory:
                 CurrentSubView = InventoryVM;
@@ -236,6 +258,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
 
         var m = DashboardVM.Metrics;
         SetSummary(SectionDashboard, $"Ventas de hoy {m.SalesTodayTotal.ToString("C0", Mexican)}");
+        if (BusinessVM != null) SetSummary(SectionBusiness, BusinessVM.MenuSummary);
         SetSummary(SectionInventory, m.LowStockCount > 0
             ? $"{m.TotalProducts} productos · {m.LowStockCount} con stock bajo"
             : $"{m.TotalProducts} productos");
@@ -269,6 +292,9 @@ public partial class ConfigurationShellViewModel : ObservableObject
     public static IReadOnlyList<SettingEntry> SettingsIndex { get; } = new[]
     {
         new SettingEntry("Ventas y métricas de hoy", "Panel del consultorio", SectionDashboard, "resumen ventas consumo alertas"),
+        new SettingEntry("Utilidad y ventas por periodo", "Negocio", SectionBusiness, "negocio ganancia utilidad margen costo ventas mas vendidos compras consumo insumos reporte csv"),
+        new SettingEntry("Medicamentos más vendidos", "Negocio", SectionBusiness, "top ranking vendidos medicamentos servicios"),
+        new SettingEntry("Compras del periodo y consumo de insumos", "Negocio", SectionBusiness, "proveedor pedido compras consumo insumos"),
         new SettingEntry("Nuevo producto o medicamento", "Productos", SectionInventory, "alta catalogo farmaco insumo"),
         new SettingEntry("Precios y existencias", "Productos", SectionInventory, "precio stock minimo ubicacion refrigeracion"),
         new SettingEntry("Productos con stock bajo", "Productos", SectionInventory, "reabastecer faltante"),

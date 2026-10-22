@@ -1,9 +1,10 @@
 {
-  "contract": 17,
+  "contract": 18,
   "protocol": 2,
-  "fingerprint": "33A0564F4DC5F693",
+  "fingerprint": "EE57F99F01DB13DB",
   "generatedBy": "tests/TPVC.Tests/GoldenVectorTests.cs desde SyncSchema (TPVC_WRITE_GOLDEN=1 lo regenera)",
   "rules": [
+    "Costo al vender y de las compras (revisión 18, panel «Negocio»): quien registra una venta escribe en cada renglón de producto SaleItems.UnitCost con el costo con IVA de ese momento (por pieza si vende piezas sueltas; nulo sin costo o en un servicio), y quien registra una entrada por compra o un consumo en consulta escribe InventoryMovements.UnitCost. Nunca se reescriben. Los reportes (ventas, costo, utilidad, compras y consumo de insumos) excluyen las ventas canceladas, clasifican cada renglón como Consultas, Medicamentos, Insumos, Servicios u Otros y, sin costo guardado, usan el costo de hoy del producto marcado como estimado (por paquete si el renglón no tiene la marca IsIndividualUnits 1): vectores golden/business-summary.json, sales-by-type.json, best-sellers.json, purchases.json y supply-consumption.json.",
     "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
     "La subida va tabla por tabla en el orden de 'tables' (los principales antes que sus dependientes) y al final las lápidas. Cada lápida es su upsert seguido de DELETE de la fila con UpdatedAtUtc <= DeletedAtUtc.",
     "UpdatedAtUtc la pone el equipo que escribe (contracts/golden/stamping.json); SyncedAtUtc la pone la nube con su propia hora (strftime('%Y-%m-%d %H:%M:%f','now')); OriginDeviceId es el DeviceId del equipo que escribió.",
@@ -2503,6 +2504,15 @@
           }
         },
         {
+          "name": "UnitCost",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false,
+          "note": "Desde la revisión 18: lo que costó cada unidad del renglón al venderlo, con IVA (decimal en texto): el EffectiveUnitCost del producto en ese momento (UnitCost, más 16 % redondeado a centavos hacia arriba si CostExcludesVat) o, si el renglón vendió piezas sueltas (IsIndividualUnits 1), su costo por pieza (EffectiveUnitCost / UnitsPerPackage redondeado a centavos hacia arriba). Lo escribe quien registra la venta (también Kotlin al cobrar), una sola vez. Sin él, el reporte usa el costo de hoy: por pieza solo si IsIndividualUnits es 1; con IsIndividualUnits nulo (renglón anterior a v1.47.0, cuando todo se vendía en paquetes) por paquete, nunca con la regla vieja del precio, que solo sirve para cancelar. Nulo en un servicio, en un producto que no tenía costo (UnitCost 0) y en un renglón de antes o de un equipo anterior a la revisión 18: los reportes del negocio usan entonces el costo de hoy del producto y lo marcan como estimado (golden/business-summary.json)."
+        },
+        {
           "name": "UnitPrice",
           "role": "data",
           "remoteType": "TEXT",
@@ -2564,7 +2574,7 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitCost\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")"
       ]
     },
@@ -2708,6 +2718,15 @@
           "note": "Existencia del producto antes de este renglón y, en StockAfter, después (informativo: el Kardex la muestra). Las partes de una operación la van bajando renglón por renglón."
         },
         {
+          "name": "UnitCost",
+          "role": "data",
+          "remoteType": "TEXT",
+          "nullable": true,
+          "clrType": "decimal",
+          "derived": false,
+          "note": "Desde la revisión 18: lo que costó cada unidad de inventario al moverse, con IVA (decimal en texto, el EffectiveUnitCost del producto en ese momento). Lo llevan las entradas por compra (EntradaCompra: lo de un pedido del proveedor, un lote recibido o una entrada a mano; el reporte de compras, golden/purchases.json) y el consumo en consulta (SalidaConsulta: golden/supply-consumption.json); cada parte por lote de una salida lleva el mismo. Nulo en los demás tipos, si el producto no tenía costo y en una fila de antes o de un equipo anterior a la revisión 18: el reporte usa el costo de hoy y lo marca como estimado."
+        },
+        {
           "name": "BatchSyncId",
           "role": "reference",
           "remoteType": "TEXT",
@@ -2757,7 +2776,7 @@
       ],
       "unique": [],
       "ddl": [
-        "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
+        "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"UnitCost\" TEXT, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
         "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")"
       ]
     },
@@ -3016,9 +3035,9 @@
     "CREATE INDEX IF NOT EXISTS \"IX_ProductBatches_SyncedAtUtc\" ON \"ProductBatches\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"Sales\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"CancellationReason\" TEXT, \"CancelledAt\" TEXT, \"Cashier\" TEXT, \"CustomerName\" TEXT, \"Date\" TEXT, \"Folio\" TEXT, \"IsCancelled\" INTEGER, \"LedgerVersion\" INTEGER, \"OriginalFolio\" TEXT, \"PatientName\" TEXT, \"PaymentMethod\" TEXT, \"Total\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_Sales_SyncedAtUtc\" ON \"Sales\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"SaleItems\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Code\" TEXT, \"Description\" TEXT, \"IsIndividualUnits\" INTEGER, \"IsService\" INTEGER, \"ProductName\" TEXT, \"Quantity\" INTEGER, \"Subtotal\" TEXT, \"UnitCost\" TEXT, \"UnitPrice\" TEXT, \"SaleSyncId\" TEXT, \"ProductSyncId\" TEXT, \"ClinicalServiceSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_SaleItems_SyncedAtUtc\" ON \"SaleItems\" (\"SyncedAtUtc\")",
-    "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
+    "CREATE TABLE IF NOT EXISTS \"InventoryMovements\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Date\" TEXT, \"Delta\" INTEGER, \"MovementType\" INTEGER, \"Quantity\" INTEGER, \"Reason\" TEXT, \"Responsible\" TEXT, \"StockAfter\" INTEGER, \"StockBefore\" INTEGER, \"UnitCost\" TEXT, \"BatchSyncId\" TEXT, \"ProductSyncId\" TEXT, \"SaleItemSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_InventoryMovements_SyncedAtUtc\" ON \"InventoryMovements\" (\"SyncedAtUtc\")",
     "CREATE TABLE IF NOT EXISTS \"ServiceDefaultProducts\" (\"SyncId\" TEXT PRIMARY KEY NOT NULL, \"UpdatedAtUtc\" TEXT NOT NULL, \"SyncedAtUtc\" TEXT NOT NULL, \"OriginDeviceId\" TEXT, \"Instructions\" TEXT, \"Quantity\" INTEGER, \"ClinicalServiceSyncId\" TEXT, \"ProductSyncId\" TEXT)",
     "CREATE INDEX IF NOT EXISTS \"IX_ServiceDefaultProducts_SyncedAtUtc\" ON \"ServiceDefaultProducts\" (\"SyncedAtUtc\")",

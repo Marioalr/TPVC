@@ -375,7 +375,9 @@ public partial class InventoryService
             StockAfter = product.CurrentStock,
             Date = DateTime.Now,
             Reason = $"Entrada de lote {batch.BatchNumber}",
-            Responsible = responsible ?? "Dr. Consulta"
+            Responsible = responsible ?? "Dr. Consulta",
+            // Revisión 18: lo que costó la entrada (el costo del producto en este momento), para el reporte de compras
+            UnitCost = BusinessReportRules.CostToRecord(product, individualUnits: false)
         });
 
         await db.SaveChangesAsync();
@@ -497,6 +499,7 @@ public partial class InventoryService
                 BatchId = allocation.Batch?.Id,
                 SaleItem = template.SaleItem,
                 MovementType = template.MovementType,
+                UnitCost = template.UnitCost,
                 Quantity = allocation.Quantity,
                 Delta = -allocation.Quantity,
                 StockBefore = before,
@@ -584,6 +587,8 @@ public partial class InventoryService
         {
             MovementType = MovementType.SalidaConsulta,
             Date = now,
+            // Revisión 18: lo que costó lo usado, para el consumo de insumos del panel «Negocio»
+            UnitCost = BusinessReportRules.CostToRecord(product, individualUnits: false),
             Reason = string.IsNullOrWhiteSpace(notes) ? "Uso / aplicación durante consulta médica" : notes,
             Responsible = responsible ?? "Dr. Consulta"
         });
@@ -694,6 +699,8 @@ public partial class InventoryService
                     Subtotal = line.Quantity * line.UnitPrice,
                     IsIndividualUnits = line.IsIndividualUnits && product.HasMultipleUnitsPerPackage
                 };
+                // Revisión 18: el costo al vender (por pieza en piezas sueltas), antes de que cambie el del producto
+                item.UnitCost = BusinessReportRules.CostToRecord(product, item.IsIndividualUnits == true);
                 sale.Items.Add(item);
 
                 int packagesToDeduct = item.IsIndividualUnits == true
@@ -962,7 +969,7 @@ public partial class InventoryService
     /// se cobró a menos del precio del paquete de hoy (un descuento o un cambio de precio lo pueden confundir).
     /// </summary>
     public static bool SoldIndividualUnits(SaleItem item, Product? product) =>
-        item.IsIndividualUnits ?? (product is { HasMultipleUnitsPerPackage: true } && item.UnitPrice < product.Price);
+        BusinessReportRules.SoldIndividualUnits(item.IsIndividualUnits, item.UnitPrice, product);
 
     /// <summary>Una devolución por escribir al cancelar un ticket: su SyncId determinista, adónde regresa y cuántas piezas.</summary>
     private sealed record PlannedReturn(Guid SyncId, int ProductId, int? BatchId, int? SaleItemId, int Quantity);
@@ -1156,6 +1163,12 @@ public partial class InventoryService
         movement.Batch = null;
         movement.SaleItem = null;
         movement.StockBefore = product.CurrentStock;
+
+        // Revisión 18: una entrada por compra y un consumo en consulta guardan lo que costaba el producto en este momento
+        if (movement.UnitCost == null && movement.MovementType is MovementType.EntradaCompra or MovementType.SalidaConsulta)
+        {
+            movement.UnitCost = BusinessReportRules.CostToRecord(product, individualUnits: false);
+        }
 
         var now = DateTime.Now;
         movement.Date = now;

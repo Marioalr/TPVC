@@ -48,8 +48,11 @@ public static class SyncContract
     /// También <c>SaleItems.IsIndividualUnits</c> (el renglón vendió piezas sueltas) y, en la consulta entre equipos, el
     /// <c>IsIndividualUnits</c> de cada cargo de la copia. Un equipo anterior no lo conoce y cobraría esas piezas como paquetes
     /// completos: no se le envía una consulta cuya cuenta las tiene (<see cref="IndividualUnitsRevision"/>).
+    /// 18 (panel «Negocio», pedido del médico del 2026-10-22): el costo al vender, <c>SaleItems.UnitCost</c>, y el de cada entrada
+    /// por compra y cada consumo en consulta, <c>InventoryMovements.UnitCost</c> (decimales con nulo, aditivos). Sin ellos (filas de
+    /// antes o de un equipo anterior) los reportes usan el costo de hoy del producto y lo marcan como estimado.
     /// </summary>
-    public const int Revision = 17;
+    public const int Revision = 18;
 
     /// <summary>
     /// Paso 8.23: la revisión de <c>contracts/sync/schema.json</c> que es la base de la tablet. Desde ella solo se admiten cambios
@@ -150,6 +153,10 @@ public static class SyncContract
             "Piezas individuales sobrantes del paquete actualmente abierto para consumo en servicios (desde la revisión 17).",
         [(typeof(SaleItem), nameof(SaleItem.IsIndividualUnits))] =
             "Desde la revisión 17: 1 si el renglón vendió piezas sueltas de un paquete (Quantity son piezas; sus salidas son los paquetes que abrió), 0 si vendió paquetes completos. Nulo = renglón de antes: al cancelarlo cuenta como piezas sueltas si el producto tiene UnitsPerPackage > 1 y UnitPrice es menor que su Price de hoy. Al cancelar un renglón de piezas, las piezas vuelven a OpenedUnitsRemaining y cada paquete que se completa vuelve a CurrentStock con su devolución (EntradaDevolucion): a los lotes de las salidas del renglón con su SyncId de siempre y lo que pase de ellas con uuid5('return:pieces:' + SyncId del renglón).",
+        [(typeof(SaleItem), nameof(SaleItem.UnitCost))] =
+            "Desde la revisión 18: lo que costó cada unidad del renglón al venderlo, con IVA (decimal en texto): el EffectiveUnitCost del producto en ese momento (UnitCost, más 16 % redondeado a centavos hacia arriba si CostExcludesVat) o, si el renglón vendió piezas sueltas (IsIndividualUnits 1), su costo por pieza (EffectiveUnitCost / UnitsPerPackage redondeado a centavos hacia arriba). Lo escribe quien registra la venta (también Kotlin al cobrar), una sola vez. Sin él, el reporte usa el costo de hoy: por pieza solo si IsIndividualUnits es 1; con IsIndividualUnits nulo (renglón anterior a v1.47.0, cuando todo se vendía en paquetes) por paquete, nunca con la regla vieja del precio, que solo sirve para cancelar. Nulo en un servicio, en un producto que no tenía costo (UnitCost 0) y en un renglón de antes o de un equipo anterior a la revisión 18: los reportes del negocio usan entonces el costo de hoy del producto y lo marcan como estimado (golden/business-summary.json).",
+        [(typeof(InventoryMovement), nameof(InventoryMovement.UnitCost))] =
+            "Desde la revisión 18: lo que costó cada unidad de inventario al moverse, con IVA (decimal en texto, el EffectiveUnitCost del producto en ese momento). Lo llevan las entradas por compra (EntradaCompra: lo de un pedido del proveedor, un lote recibido o una entrada a mano; el reporte de compras, golden/purchases.json) y el consumo en consulta (SalidaConsulta: golden/supply-consumption.json); cada parte por lote de una salida lleva el mismo. Nulo en los demás tipos, si el producto no tenía costo y en una fila de antes o de un equipo anterior a la revisión 18: el reporte usa el costo de hoy y lo marca como estimado.",
         [(typeof(InventoryMovement), nameof(InventoryMovement.Delta))] =
             "Lo que el movimiento suma al libro de existencias, con signo: positivo entra, negativo sale (desde la revisión 11). Quantity es |Delta|. 0 = fila anterior a la revisión 11: cuenta +Quantity si MovementType es EntradaCompra, EntradaAjuste o EntradaDevolucion, o AjusteInventario con StockAfter >= StockBefore, y si no −Quantity. Un movimiento nuevo nunca lleva 0 (regla «Existencias»).",
         [(typeof(InventoryMovement), nameof(InventoryMovement.MovementType))] =
@@ -194,6 +201,7 @@ public static class SyncContract
 
     private static readonly string[] Rules =
     {
+        "Costo al vender y de las compras (revisión 18, panel «Negocio»): quien registra una venta escribe en cada renglón de producto SaleItems.UnitCost con el costo con IVA de ese momento (por pieza si vende piezas sueltas; nulo sin costo o en un servicio), y quien registra una entrada por compra o un consumo en consulta escribe InventoryMovements.UnitCost. Nunca se reescriben. Los reportes (ventas, costo, utilidad, compras y consumo de insumos) excluyen las ventas canceladas, clasifican cada renglón como Consultas, Medicamentos, Insumos, Servicios u Otros y, sin costo guardado, usan el costo de hoy del producto marcado como estimado (por paquete si el renglón no tiene la marca IsIndividualUnits 1): vectores golden/business-summary.json, sales-by-type.json, best-sellers.json, purchases.json y supply-consumption.json.",
         "Cada tabla de 'tables' tiene una fila remota por registro, con llave SyncId: GUID en minúsculas con guiones. Los Id enteros locales nunca viajan: una referencia viaja como el SyncId de su principal (columna <Referencia>SyncId).",
         "La subida va tabla por tabla en el orden de 'tables' (los principales antes que sus dependientes) y al final las lápidas. Cada lápida es su upsert seguido de DELETE de la fila con UpdatedAtUtc <= DeletedAtUtc.",
         "UpdatedAtUtc la pone el equipo que escribe (contracts/golden/stamping.json); SyncedAtUtc la pone la nube con su propia hora (strftime('%Y-%m-%d %H:%M:%f','now')); OriginDeviceId es el DeviceId del equipo que escribió.",

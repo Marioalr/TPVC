@@ -268,7 +268,9 @@ public partial class InventoryService
                 StockAfter = product.CurrentStock,
                 Date = now,
                 Reason = reason,
-                Responsible = "Dr. Consulta"
+                Responsible = "Dr. Consulta",
+                // Revisión 18: lo que costó este renglón del pedido (con IVA si el producto lo suma), para el reporte de compras
+                UnitCost = Rules.BusinessReportRules.CostToRecord(product, individualUnits: false)
             });
         }
 

@@ -39,6 +39,16 @@ public static class ConsultationAccountRules
             ?? list.FirstOrDefault(s => s.IsActive && s.Name.Contains("Consulta", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Un servicio es un honorario de consulta con las mismas pruebas que <see cref="FeeService"/>: código SERV-001, categoría
+    /// "Consulta" o "Consulta" en el nombre (sin distinguir mayúsculas; los acentos cuentan). El panel «Negocio» lo usa para
+    /// separar las consultas de los demás servicios (con el código y el nombre del renglón si el servicio ya no existe).
+    /// </summary>
+    public static bool IsConsultationFee(string? code, string? name, string? category) =>
+        string.Equals(code, FeeServiceCode, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(category, "Consulta", StringComparison.OrdinalIgnoreCase)
+        || (name ?? string.Empty).Contains("Consulta", StringComparison.OrdinalIgnoreCase);
+
     public static string FeeName(ClinicalService? feeService) => feeService?.Name ?? DefaultFeeName;
 
     public static decimal FeeAmount(ClinicalService? feeService) => feeService?.Price ?? DefaultFee;

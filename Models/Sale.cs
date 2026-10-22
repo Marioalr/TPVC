@@ -73,6 +73,14 @@ public class SaleItem : ISyncEntity
     /// (<see cref="Services.InventoryService.SoldIndividualUnits"/>).
     /// </summary>
     public bool? IsIndividualUnits { get; set; }
+
+    /// <summary>
+    /// Revisión 18 (panel «Negocio», pedido del 2026-10-22): lo que costó cada unidad del renglón al venderlo, con IVA
+    /// (<see cref="Product.EffectiveUnitCost"/>; una pieza suelta, <see cref="Product.IndividualUnitCost"/>). null = renglón de
+    /// antes, un servicio o un producto que no tenía costo al venderse: el reporte usa el costo de hoy y lo marca como estimado
+    /// (<see cref="Services.Rules.BusinessReportRules.LineCost"/>).
+    /// </summary>
+    public decimal? UnitCost { get; set; }
 }
 
 /// <summary>
