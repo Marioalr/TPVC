@@ -158,6 +158,9 @@ public partial class TursoSyncService : IQuickSync
     private readonly object _arrivalsGate = new();
     private readonly HashSet<Guid> _arrivedPatients = new();
     private readonly HashSet<Guid> _arrivedAppointments = new();
+
+    // Productos, servicios y categorías que llegaron (la tablet edita el catálogo desde el 2026-10-22)
+    private readonly HashSet<Guid> _arrivedCatalog = new();
     private SyncArrivals _arrivals = SyncArrivals.None;
 
     // Esta sincronización revisa lo que llega (no en la primera descarga de una base: ahí llega todo)
@@ -169,6 +172,7 @@ public partial class TursoSyncService : IQuickSync
         {
             _arrivedPatients.Clear();
             _arrivedAppointments.Clear();
+            _arrivedCatalog.Clear();
             _arrivals = SyncArrivals.None;
         }
     }
@@ -184,11 +188,17 @@ public partial class TursoSyncService : IQuickSync
         }
     }
 
-    /// <summary>Anota las filas que una página de la bajada creó o cambió (solo expedientes y citas, y solo si se revisan).</summary>
+    /// <summary>
+    /// Anota las filas que una página de la bajada creó o cambió (expedientes, citas y el catálogo: productos, servicios y
+    /// categorías), solo si se revisan.
+    /// </summary>
     private void NoteArrivals(Type type, IReadOnlyCollection<Guid> syncIds)
     {
         if (syncIds.Count == 0 || !_checkingArrivals) return;
-        var target = type == typeof(PatientRecord) ? _arrivedPatients : type == typeof(PatientAppointment) ? _arrivedAppointments : null;
+        var target = type == typeof(PatientRecord) ? _arrivedPatients
+            : type == typeof(PatientAppointment) ? _arrivedAppointments
+            : type == typeof(Product) || type == typeof(ClinicalService) || type == typeof(Category) ? _arrivedCatalog
+            : null;
         if (target == null) return;
         lock (_arrivalsGate) target.UnionWith(syncIds);
     }
@@ -200,29 +210,33 @@ public partial class TursoSyncService : IQuickSync
     /// </summary>
     private async Task CheckAndKeepArrivalsAsync(CancellationToken ct)
     {
-        HashSet<Guid> patients, appointments;
+        HashSet<Guid> patients, appointments, catalog;
         lock (_arrivalsGate)
         {
             patients = new HashSet<Guid>(_arrivedPatients);
             appointments = new HashSet<Guid>(_arrivedAppointments);
+            catalog = new HashSet<Guid>(_arrivedCatalog);
         }
-        var arrivals = await CheckArrivalsAsync(patients, appointments, ct);
+        var arrivals = await CheckArrivalsAsync(patients, appointments, catalog, ct);
         if (await SyncNotices.AddAsync(_contextFactory, arrivals, ct)) RunOnUiThread(() => _inventoryService?.NotifySyncNoticesChanged());
         lock (_arrivalsGate)
         {
             _arrivedPatients.ExceptWith(patients);
             _arrivedAppointments.ExceptWith(appointments);
+            _arrivedCatalog.ExceptWith(catalog);
             _arrivals = arrivals;
         }
     }
 
     /// <summary>
-    /// Después de bajar: las citas que llegaron (de hoy en adelante, sin cancelar) contra las de su mismo día, y los expedientes
-    /// que llegaron contra los de este equipo. Solo lee la base local.
+    /// Después de bajar: las citas que llegaron (de hoy en adelante, sin cancelar) contra las de su mismo día, los expedientes
+    /// que llegaron contra los de este equipo y los productos, servicios y categorías que llegaron contra su catálogo. Solo lee
+    /// la base local.
     /// </summary>
-    private async Task<SyncArrivals> CheckArrivalsAsync(IReadOnlySet<Guid> patients, IReadOnlySet<Guid> appointments, CancellationToken ct)
+    private async Task<SyncArrivals> CheckArrivalsAsync(IReadOnlySet<Guid> patients, IReadOnlySet<Guid> appointments,
+        IReadOnlySet<Guid> catalog, CancellationToken ct)
     {
-        if (patients.Count == 0 && appointments.Count == 0) return SyncArrivals.None;
+        if (patients.Count == 0 && appointments.Count == 0 && catalog.Count == 0) return SyncArrivals.None;
 
         using var db = _contextFactory.CreateDbContext();
         var overlaps = new List<AppointmentOverlap>();
@@ -266,8 +280,20 @@ public partial class TursoSyncService : IQuickSync
                 .Select(p => new DuplicatePatientPair(bySyncId[p.First.SyncId], bySyncId[p.Second.SyncId], p.Match)));
         }
 
+        // El catálogo (2026-10-22): lo que llegó contra todo el catálogo de este equipo (CatalogDuplicateRules)
+        var duplicateCatalog = new List<DuplicateCatalogPair>();
+        if (catalog.Count > 0)
+        {
+            var items = await SyncNotices.LoadCatalogItemsAsync(db, null, ct);
+            duplicateCatalog.AddRange(CatalogDuplicateRules.Pairs(items.Values, catalog)
+                .Select(p => new DuplicateCatalogPair(p.First, p.Second, p.Match)));
+        }
+
         if (overlaps.Count > 0) AppLogger.Info($"Turso: {overlaps.Count} empalmes de citas con lo que llegó de otro equipo.");
         if (duplicates.Count > 0) AppLogger.Info($"Turso: {duplicates.Count} posibles expedientes duplicados con lo que llegó de otro equipo.");
-        return overlaps.Count == 0 && duplicates.Count == 0 ? SyncArrivals.None : new SyncArrivals(overlaps, duplicates);
+        if (duplicateCatalog.Count > 0) AppLogger.Info($"Turso: {duplicateCatalog.Count} posibles registros repetidos del catálogo con lo que llegó de otro equipo.");
+        return overlaps.Count == 0 && duplicates.Count == 0 && duplicateCatalog.Count == 0
+            ? SyncArrivals.None
+            : new SyncArrivals(overlaps, duplicates, duplicateCatalog);
     }
 }

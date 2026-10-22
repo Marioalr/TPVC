@@ -51,6 +51,18 @@ public partial class TursoSyncService
     internal const string ClinicProfileSql = "SELECT * FROM ClinicProfiles WHERE Id = 1;";
 
     /// <summary>
+    /// Escribir el perfil del consultorio (literal en contracts/hrana/statements.json): solo cuando el de este equipo es más
+    /// nuevo que el de la nube, después de subir las imágenes que nombra. La tablet también lo hace desde la revisión 19.
+    /// </summary>
+    internal const string ClinicProfileWriteSql =
+        "INSERT INTO ClinicProfiles (Id, DoctorName, ProfessionalLicense, Specialty, University, ClinicName, Address, Phone, Email, TaxId, " +
+        "AdditionalNotes, UpdatedAtUtc, CrestImageHash, HeaderImageHash) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "ON CONFLICT(Id) DO UPDATE SET DoctorName = excluded.DoctorName, ProfessionalLicense = excluded.ProfessionalLicense, " +
+        "Specialty = excluded.Specialty, University = excluded.University, ClinicName = excluded.ClinicName, Address = excluded.Address, " +
+        "Phone = excluded.Phone, Email = excluded.Email, TaxId = excluded.TaxId, AdditionalNotes = excluded.AdditionalNotes, " +
+        "UpdatedAtUtc = excluded.UpdatedAtUtc, CrestImageHash = excluded.CrestImageHash, HeaderImageHash = excluded.HeaderImageHash;";
+
+    /// <summary>
     /// La versión del protocolo de sincronización que entiende este programa (la nube puede exigir una mínima). 3 (paso
     /// 8.9) = el 2 con la cerca de generación en cada escritura.
     /// </summary>
@@ -2419,7 +2431,7 @@ public partial class TursoSyncService
                 entry.Property(property.Name).CurrentValue = property.PropertyType == typeof(int) ? id ?? 0 : id;
             }
             if (!onlyNewColumns) local.UpdatedAtUtc = remoteUpdated;
-            if (!force && (created || newColumns == null)) arrived.Add(syncId);
+            if (!force && (created || newColumns == null) && (created || ArrivalChangedCatalogIdentity(entry))) arrived.Add(syncId);
             applied++;
         }
 
@@ -2432,6 +2444,22 @@ public partial class TursoSyncService
             AppLogger.Info($"Turso: {markForUpload.Count} expedientes combinados por campo quedaron distintos de la nube y suben.");
         }
         return applied;
+    }
+
+    // Lo que hace que un registro del catálogo se parezca a otro (CatalogDuplicateRules): una bajada que solo cambia precio o
+    // existencias (una venta en la tablet) no vuelve a revisar un par que ya estaba
+    private static readonly string[] CatalogIdentityColumns = { "Code", "Name", "Presentation", "IsActive" };
+
+    /// <summary>
+    /// Una fila que ya existía cuenta como llegada para los avisos si no es del catálogo, o si la bajada le cambió el código, el
+    /// nombre, la presentación o si está activa (productos, servicios y categorías).
+    /// </summary>
+    private static bool ArrivalChangedCatalogIdentity(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        var type = entry.Metadata.ClrType;
+        if (type != typeof(Product) && type != typeof(ClinicalService) && type != typeof(Category)) return true;
+        return CatalogIdentityColumns.Any(c => entry.Metadata.FindProperty(c) != null
+                                               && !Equals(entry.Property(c).OriginalValue, entry.Property(c).CurrentValue));
     }
 
     /// <summary>
@@ -2597,16 +2625,7 @@ public partial class TursoSyncService
             var remoteHashes = RemoteLetterheadHashes(remote);
             var hashes = await PrepareLetterheadForPushAsync(client, remoteHashes, ct);
 
-            const string sql = @"
-INSERT INTO ClinicProfiles (Id, DoctorName, ProfessionalLicense, Specialty, University, ClinicName, Address, Phone, Email, TaxId, AdditionalNotes, UpdatedAtUtc, CrestImageHash, HeaderImageHash)
-VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(Id) DO UPDATE SET
-    DoctorName = excluded.DoctorName, ProfessionalLicense = excluded.ProfessionalLicense, Specialty = excluded.Specialty,
-    University = excluded.University, ClinicName = excluded.ClinicName, Address = excluded.Address, Phone = excluded.Phone,
-    Email = excluded.Email, TaxId = excluded.TaxId, AdditionalNotes = excluded.AdditionalNotes, UpdatedAtUtc = excluded.UpdatedAtUtc,
-    CrestImageHash = excluded.CrestImageHash, HeaderImageHash = excluded.HeaderImageHash;";
-
-            await client.ExecuteAsync(sql, new object?[]
+            await client.ExecuteAsync(ClinicProfileWriteSql, new object?[]
             {
                 localProfile.DoctorName, localProfile.ProfessionalLicense, localProfile.Specialty, localProfile.University,
                 localProfile.ClinicName, localProfile.Address, localProfile.Phone, localProfile.Email, localProfile.TaxId,

@@ -80,7 +80,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         ServicesVM = servicesVM;
         DesignSystemVM = designSystemVM ?? new DesignSystemViewModel();
         BusinessVM = businessVM;
-        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.48.0" : appVersion;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.49.0" : appVersion;
 
         var sections = new List<ConfigSectionItem>
         {
@@ -97,8 +97,9 @@ public partial class ConfigurationShellViewModel : ObservableObject
             new ConfigSectionItem(SectionUpdates, "Sistema", "Actualizaciones", "IcoRefresh"),
             new ConfigSectionItem(SectionDesignSystem, "Sistema", "Componentes", "IcoInfo")
         };
-        // Panel «Negocio» (pedido del 2026-10-22): solo donde DevicePermissions.CanViewBusinessReports lo permite (la PC, siempre)
-        if (BusinessVM == null || !BusinessViewModel.IsAllowedOn(LocalRole)) sections.RemoveAll(s => s.Key == SectionBusiness);
+        // Cada sección con su permiso (IsSectionAllowedOn): en la PC están todas; la tablet de Kotlin repite este menú
+        sections.RemoveAll(s => !IsSectionAllowedOn(s.Key, LocalRole));
+        if (BusinessVM == null) sections.RemoveAll(s => s.Key == SectionBusiness);
         Sections = new ObservableCollection<ConfigSectionItem>(sections);
 
         SectionGroups = Sections
@@ -124,6 +125,30 @@ public partial class ConfigurationShellViewModel : ObservableObject
 
     /// <summary>El papel de este equipo: la app de escritorio siempre es la PC.</summary>
     public static DeviceRole LocalRole => DeviceRole.WindowsDesktop;
+
+    /// <summary>
+    /// El permiso de cada sección de Configuración (plan §4.6, decisión del médico del 2026-10-22: la tablet es una copia de la
+    /// PC). La tablet de Kotlin arma el mismo menú con esta tabla; dentro de «Nube y dispositivos» y «Respaldos y datos», lo que
+    /// es del dueño de la nube pide además <see cref="DevicePermissions.CanAdministerCloud"/> (<see cref="TursoSyncViewModel.IsCloudAdministrator"/>).
+    /// <list type="bullet">
+    /// <item>Panel y Negocio: los reportes (todos los equipos).</item>
+    /// <item>Productos, Lotes y Kardex: todos los ven; editar es <see cref="DevicePermissions.CanManageInventory"/> y registrar
+    /// una entrada <see cref="DevicePermissions.CanRegisterStockEntries"/>.</item>
+    /// <item>Servicios: catálogo, <see cref="DevicePermissions.CanManageInventory"/>.</item>
+    /// <item>Médico y consultorio, Respaldos y datos: <see cref="DevicePermissions.CanConfigureSystem"/>.</item>
+    /// <item>Apariencia, Nube y dispositivos, Actualizaciones y Componentes: de cada equipo (todos).</item>
+    /// </list>
+    /// </summary>
+    public static bool IsSectionAllowedOn(string section, DeviceRole role) => section switch
+    {
+        SectionDashboard => DevicePermissions.CanViewDashboard(role),
+        SectionBusiness => BusinessViewModel.IsAllowedOn(role),
+        SectionInventory or SectionBatches or SectionMovements => DevicePermissions.CanViewStockAlerts(role),
+        SectionServices => DevicePermissions.CanManageInventory(role),
+        SectionClinic or SectionData => DevicePermissions.CanConfigureSystem(role),
+        SectionAppearance or SectionCloud or SectionUpdates or SectionDesignSystem => true,
+        _ => false
+    };
     public const string SectionInventory = "Inventory";
     public const string SectionBatches = "Batches";
     public const string SectionMovements = "Movements";
@@ -164,7 +189,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = SectionDashboard;
 
     [ObservableProperty]
-    private string _appVersion = "v1.48.0";
+    private string _appVersion = "v1.49.0";
 
     /// <summary>Nombres anteriores (paleta de comandos, accesos del inicio) → sección actual.</summary>
     public static string NormalizeSection(string? viewName) => viewName switch

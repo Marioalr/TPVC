@@ -517,6 +517,72 @@ public class InventoryTests
     }
 
     [TestMethod]
+    public async Task ACodeRepeatedByAnotherDevice_DoesNotBlockEditingEitherOne_ButANewOrChangedCodeIsChecked()
+    {
+        // Revisión 19: la tablet dio de alta el mismo código sin red y los dos productos llegaron por la sincronización
+        var cat = (await _inventoryService.GetCategoriesAsync()).First();
+        var mine = new Product { Code = "MED-900", Name = "Ketorolaco", CategoryId = cat.Id, Price = 50m };
+        await _inventoryService.SaveProductAsync(mine);
+        _context.Products.Add(new Product { SyncId = Guid.NewGuid(), Code = "med-900", Name = "Ketorolaco trometamina", CategoryId = cat.Id, Price = 55m });
+        await _context.SaveChangesAsync();
+        var theirs = _context.Products.AsNoTracking().Single(p => p.Code == "med-900");
+
+        // Cambiar el precio de cualquiera de los dos sin tocar el código se guarda
+        var edited = (await _inventoryService.GetProductByIdAsync(mine.Id))!;
+        edited.Price = 60m;
+        await _inventoryService.SaveProductAsync(edited);
+        var other = (await _inventoryService.GetProductByIdAsync(theirs.Id))!;
+        other.Price = 65m;
+        other.Code = " MED-900 ";
+        await _inventoryService.SaveProductAsync(other);
+        Assert.IsFalse(await _inventoryService.IsProductCodeTakenAsync("med-900", mine.Id), "El diálogo tampoco lo bloquea");
+        Assert.AreEqual(60m, (await _inventoryService.GetProductByIdAsync(mine.Id))!.Price);
+
+        // Un alta o un cambio de código a uno ocupado sigue sin entrar
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            _inventoryService.SaveProductAsync(new Product { Code = "Med-900", Name = "Otro", CategoryId = cat.Id, Price = 1m }));
+        var third = new Product { Code = "MED-901", Name = "Omeprazol", CategoryId = cat.Id, Price = 1m };
+        await _inventoryService.SaveProductAsync(third);
+        Assert.IsTrue(await _inventoryService.IsProductCodeTakenAsync("MED-900", third.Id));
+        third.Code = "MED-900";
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => _inventoryService.SaveProductAsync(third));
+    }
+
+    [TestMethod]
+    public async Task AServiceCodeRepeatedByAnotherDevice_DoesNotBlockEditingIt_AndAnInactiveServiceDoesNotCount()
+    {
+        await _inventoryService.SaveClinicalServiceAsync(new ClinicalService { Code = "SERV-006", Name = "Retiro de puntos", Price = 200m },
+            Array.Empty<(int, int, string?)>());
+        await _inventoryService.SaveClinicalServiceAsync(new ClinicalService { Code = "SERV-006", Name = "Lavado de oído", Price = 150m },
+            Array.Empty<(int, int, string?)>());
+        await _inventoryService.SaveClinicalServiceAsync(new ClinicalService { Code = "SERV-077", Name = "Dado de baja", Price = 1m, IsActive = false },
+            Array.Empty<(int, int, string?)>());
+
+        var vm = new ServicesCatalogViewModel(_inventoryService);
+        await vm.LoadAsync();
+        var lavado = (await _inventoryService.GetClinicalServicesAsync()).Single(s => s.Name == "Lavado de oído");
+        await vm.EditServiceAsync(lavado);
+        vm.EditPriceText = "180";
+        await vm.SaveServiceAsync();
+        Assert.IsNull(vm.EditorError);
+        Assert.AreEqual(180m, (await _inventoryService.GetClinicalServiceByIdAsync(lavado.Id))!.Price);
+
+        // Un servicio nuevo con el código de uno inactivo entra; con el de uno activo, no
+        await vm.NewServiceAsync();
+        vm.EditCode = "serv-077";
+        vm.EditName = "Curación";
+        vm.EditPriceText = "100";
+        await vm.SaveServiceAsync();
+        Assert.IsNull(vm.EditorError);
+        await vm.NewServiceAsync();
+        vm.EditCode = "SERV-006";
+        vm.EditName = "Otro";
+        vm.EditPriceText = "100";
+        await vm.SaveServiceAsync();
+        Assert.AreEqual("El código SERV-006 ya lo usa otro servicio.", vm.EditorError);
+    }
+
+    [TestMethod]
     public async Task InventoryService_IsProductCodeTakenAsync_DetectsExistingCodeCaseInsensitive()
     {
         var categories = await _inventoryService.GetCategoriesAsync();

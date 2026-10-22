@@ -238,7 +238,7 @@ public class TursoTests
     [TestMethod]
     public void DevicePermissions_EnforcesStrictRoleBoundaries()
     {
-        // 1. WindowsDesktop: Control total
+        // 1. WindowsDesktop: control total y dueña de la nube
         Assert.IsTrue(DevicePermissions.CanManageClinicalRecords(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanPrescribeMedications(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanProcessSales(DeviceRole.WindowsDesktop));
@@ -246,17 +246,19 @@ public class TursoTests
         Assert.IsTrue(DevicePermissions.CanViewDashboard(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanViewCashCut(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanConfigureSystem(DeviceRole.WindowsDesktop));
+        Assert.IsTrue(DevicePermissions.CanAdministerCloud(DeviceRole.WindowsDesktop));
 
-        // 2. AndroidTablet: Uso clínico y cobro, no administración profunda
+        // 2. AndroidTablet: copia exacta de la PC (decisión del médico del 2026-10-22), menos administrar la nube
         Assert.IsTrue(DevicePermissions.CanManageClinicalRecords(DeviceRole.AndroidTablet));
         Assert.IsTrue(DevicePermissions.CanPrescribeMedications(DeviceRole.AndroidTablet));
         Assert.IsTrue(DevicePermissions.CanProcessSales(DeviceRole.AndroidTablet));
-        Assert.IsFalse(DevicePermissions.CanManageInventory(DeviceRole.AndroidTablet));
+        Assert.IsTrue(DevicePermissions.CanManageInventory(DeviceRole.AndroidTablet));
         Assert.IsTrue(DevicePermissions.CanViewDashboard(DeviceRole.AndroidTablet));
         Assert.IsTrue(DevicePermissions.CanViewCashCut(DeviceRole.AndroidTablet));
-        Assert.IsFalse(DevicePermissions.CanConfigureSystem(DeviceRole.AndroidTablet));
+        Assert.IsTrue(DevicePermissions.CanConfigureSystem(DeviceRole.AndroidTablet));
+        Assert.IsFalse(DevicePermissions.CanAdministerCloud(DeviceRole.AndroidTablet), "El esquema, las generaciones y vincular son de la PC");
 
-        // 3. AndroidMobileAdmin: Solo funciones limitadas para administrar (Dashboard, Cortes, Stock)
+        // 3. AndroidMobileAdmin: su alcance de siempre (pacientes para consultar, citas, entradas, existencias y reportes)
         Assert.IsFalse(DevicePermissions.CanManageClinicalRecords(DeviceRole.AndroidMobileAdmin));
         Assert.IsFalse(DevicePermissions.CanPrescribeMedications(DeviceRole.AndroidMobileAdmin));
         Assert.IsFalse(DevicePermissions.CanProcessSales(DeviceRole.AndroidMobileAdmin));
@@ -265,21 +267,21 @@ public class TursoTests
         Assert.IsTrue(DevicePermissions.CanViewCashCut(DeviceRole.AndroidMobileAdmin));
         Assert.IsTrue(DevicePermissions.CanViewStockAlerts(DeviceRole.AndroidMobileAdmin));
         Assert.IsFalse(DevicePermissions.CanConfigureSystem(DeviceRole.AndroidMobileAdmin));
+        Assert.IsFalse(DevicePermissions.CanAdministerCloud(DeviceRole.AndroidMobileAdmin));
     }
 
     [TestMethod]
     public void DevicePermissions_TheFourNewOnes_FollowThePlanMatrix()
     {
-        // Paso 8.10, plan §4.6: ver expedientes, agendar y compartir, todos; registrar entradas de mercancía, la PC y el celular
+        // Paso 8.10, plan §4.6: ver expedientes, agendar y compartir, todos; registrar entradas de mercancía, todos desde que la
+        // tablet es una copia de la PC (2026-10-22)
         foreach (var role in Enum.GetValues<DeviceRole>())
         {
             Assert.IsTrue(DevicePermissions.CanViewClinicalRecords(role), role.ToString());
             Assert.IsTrue(DevicePermissions.CanScheduleAppointments(role), role.ToString());
             Assert.IsTrue(DevicePermissions.CanShareDocuments(role), role.ToString());
+            Assert.IsTrue(DevicePermissions.CanRegisterStockEntries(role), role.ToString());
         }
-        Assert.IsTrue(DevicePermissions.CanRegisterStockEntries(DeviceRole.WindowsDesktop));
-        Assert.IsFalse(DevicePermissions.CanRegisterStockEntries(DeviceRole.AndroidTablet));
-        Assert.IsTrue(DevicePermissions.CanRegisterStockEntries(DeviceRole.AndroidMobileAdmin));
 
         // El celular no lleva la consulta entre equipos; cada rol tiene su letra de código
         Assert.IsTrue(DevicePermissions.CanTakeConsultations(DeviceRole.AndroidTablet));
@@ -287,6 +289,124 @@ public class TursoTests
         Assert.AreEqual('P', DevicePermissions.CodeLetter(DeviceRole.WindowsDesktop));
         Assert.AreEqual('T', DevicePermissions.CodeLetter(DeviceRole.AndroidTablet));
         Assert.AreEqual('C', DevicePermissions.CodeLetter(DeviceRole.AndroidMobileAdmin));
+    }
+
+    /// <summary>La matriz completa de §4.6 del plan (2026-10-22): PC, tablet y celular, en ese orden.</summary>
+    private static readonly (string Name, Func<DeviceRole, bool> Rule, bool Pc, bool Tablet, bool Phone)[] PermissionMatrix =
+    {
+        (nameof(DevicePermissions.CanViewClinicalRecords), DevicePermissions.CanViewClinicalRecords, true, true, true),
+        (nameof(DevicePermissions.CanManageClinicalRecords), DevicePermissions.CanManageClinicalRecords, true, true, false),
+        (nameof(DevicePermissions.CanPrescribeMedications), DevicePermissions.CanPrescribeMedications, true, true, false),
+        (nameof(DevicePermissions.CanProcessSales), DevicePermissions.CanProcessSales, true, true, false),
+        (nameof(DevicePermissions.CanManageInventory), DevicePermissions.CanManageInventory, true, true, false),
+        (nameof(DevicePermissions.CanRegisterStockEntries), DevicePermissions.CanRegisterStockEntries, true, true, true),
+        (nameof(DevicePermissions.CanScheduleAppointments), DevicePermissions.CanScheduleAppointments, true, true, true),
+        (nameof(DevicePermissions.CanShareDocuments), DevicePermissions.CanShareDocuments, true, true, true),
+        (nameof(DevicePermissions.CanViewDashboard), DevicePermissions.CanViewDashboard, true, true, true),
+        (nameof(DevicePermissions.CanViewCashCut), DevicePermissions.CanViewCashCut, true, true, true),
+        (nameof(DevicePermissions.CanViewStockAlerts), DevicePermissions.CanViewStockAlerts, true, true, true),
+        (nameof(DevicePermissions.CanViewBusinessReports), DevicePermissions.CanViewBusinessReports, true, true, true),
+        (nameof(DevicePermissions.CanConfigureSystem), DevicePermissions.CanConfigureSystem, true, true, false),
+        (nameof(DevicePermissions.CanTakeConsultations), DevicePermissions.CanTakeConsultations, true, true, false),
+        (nameof(DevicePermissions.CanAdministerCloud), DevicePermissions.CanAdministerCloud, true, false, false),
+    };
+
+    [TestMethod]
+    public void DevicePermissions_TheTabletIsACopyOfThePc_ExceptAdministeringTheCloud()
+    {
+        // Cada permiso de DevicePermissions está en la matriz (uno nuevo obliga a decidir su fila)
+        var declared = typeof(DevicePermissions).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(m => m.ReturnType == typeof(bool) && m.GetParameters() is [{ ParameterType: var p }] && p == typeof(DeviceRole))
+            .Select(m => m.Name)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+        CollectionAssert.AreEqual(declared, PermissionMatrix.Select(r => r.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
+
+        foreach (var (name, rule, pc, tablet, phone) in PermissionMatrix)
+        {
+            Assert.AreEqual(pc, rule(DeviceRole.WindowsDesktop), $"{name} en la PC");
+            Assert.AreEqual(tablet, rule(DeviceRole.AndroidTablet), $"{name} en la tablet");
+            Assert.AreEqual(phone, rule(DeviceRole.AndroidMobileAdmin), $"{name} en el celular");
+            // La tablet es una copia de la PC: solo administrar la nube la distingue
+            if (name != nameof(DevicePermissions.CanAdministerCloud)) Assert.AreEqual(pc, tablet, $"{name}: la tablet es una copia de la PC");
+            // El celular nunca tiene algo que la tablet no tenga
+            if (phone) Assert.IsTrue(tablet, $"{name}: el celular no rebasa a la tablet");
+        }
+    }
+
+    [TestMethod]
+    public void ConfigurationSections_FollowThePermissionMatrix()
+    {
+        // La tablet de Kotlin arma el menú de Configuración con la misma tabla: igual que la PC (2026-10-22); el celular, sin
+        // Servicios, Médico y consultorio ni Respaldos y datos
+        var shell = typeof(TPVC.ViewModels.ConfigurationShellViewModel);
+        var sections = shell.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.Name.StartsWith("Section", StringComparison.Ordinal))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .ToList();
+        Assert.HasCount(12, sections);
+        var phoneHidden = new[]
+        {
+            TPVC.ViewModels.ConfigurationShellViewModel.SectionServices, TPVC.ViewModels.ConfigurationShellViewModel.SectionClinic,
+            TPVC.ViewModels.ConfigurationShellViewModel.SectionData
+        };
+        foreach (var section in sections)
+        {
+            Assert.IsTrue(TPVC.ViewModels.ConfigurationShellViewModel.IsSectionAllowedOn(section, DeviceRole.WindowsDesktop), section);
+            Assert.IsTrue(TPVC.ViewModels.ConfigurationShellViewModel.IsSectionAllowedOn(section, DeviceRole.AndroidTablet), section);
+            Assert.AreEqual(!phoneHidden.Contains(section),
+                TPVC.ViewModels.ConfigurationShellViewModel.IsSectionAllowedOn(section, DeviceRole.AndroidMobileAdmin), section);
+        }
+        Assert.IsFalse(TPVC.ViewModels.ConfigurationShellViewModel.IsSectionAllowedOn("Otra", DeviceRole.WindowsDesktop));
+
+        // En la PC se administra la nube (vincular, reemplazar, restaurar con la nube activa)
+        Assert.IsTrue(TPVC.ViewModels.TursoSyncViewModel.IsCloudAdministrator);
+    }
+
+    /// <summary>Los comandos de dueño de la nube: su primera instrucción pide <see cref="DevicePermissions.CanAdministerCloud"/>.</summary>
+    internal static readonly (string File, string Method, string Guard)[] CloudOwnerCommands =
+    {
+        ("TursoSyncViewModel.Linking.cs", "ShowLinkQrAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Linking.cs", "ApproveAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Linking.cs", "RejectDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Rotation.cs", "ReportLostDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "JoinCloudAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "ReplaceWithCloudAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "AdoptCloudIdentityAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "InitialUploadAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "MakeThisThePrimaryAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "RemoveDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("DataManagementViewModel.cs", "ReplaceCloudAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "ContinueCloudReplacementAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "StartRestoreFromFile", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "RestoreBackup", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "BackupNowAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "OpenBackupFolder", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+    };
+
+    [TestMethod]
+    public void EveryCloudOwnerCommand_AsksForCanAdministerCloudFirst()
+    {
+        // En la PC siempre se puede; la tablet de Kotlin repite la lista (plan §4.6). Se revisa el código: la primera instrucción
+        // de cada comando (sin contar comentarios) es la guarda
+        var root = AppContext.BaseDirectory;
+        while (root != null && !File.Exists(Path.Combine(root, "TPVC.sln"))) root = Path.GetDirectoryName(root);
+        Assert.IsNotNull(root);
+        foreach (var (file, method, guard) in CloudOwnerCommands)
+        {
+            var text = File.ReadAllText(Path.Combine(root, "ViewModels", file));
+            var match = System.Text.RegularExpressions.Regex.Match(text, $@"\b(?:Task|void)\s+{method}\([^)]*\)\s*\{{");
+            Assert.IsTrue(match.Success, $"{file}: no se encontró {method}");
+            var firstStatement = text[(match.Index + match.Length)..].Split('\n')
+                .Select(l => l.Trim())
+                .First(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal));
+            Assert.AreEqual(guard, firstStatement, $"{file}: {method}");
+        }
+        Assert.IsTrue(TPVC.ViewModels.TursoSyncViewModel.IsCloudAdministrator);
+
+        // La pantalla de respaldos esconde lo de respaldos (hacer, ver y restaurar) donde no se administra la nube
+        var view = File.ReadAllText(Path.Combine(root, "Views", "DataManagementView.xaml"));
+        Assert.HasCount(2, System.Text.RegularExpressions.Regex.Matches(view, @"Visibility=""\{Binding CanManageBackups, "));
     }
 
     [TestMethod]

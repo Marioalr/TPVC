@@ -66,7 +66,7 @@ public partial class TursoSyncEndToEndTests
 
     /// <summary>
     /// Si un equipo con ese papel puede hacer ese paso, con los permisos de la app (<see cref="DevicePermissions"/>): una tablet que
-    /// cambia un precio no se podría reproducir en Kotlin sin SQL directo. Los pasos del arnés (sin equipo) siempre.
+    /// reemplaza la nube no se podría reproducir en Kotlin. Los pasos del arnés (sin equipo) siempre.
     /// </summary>
     private static bool ScenarioStepAllowed(DeviceRole role, JsonObject step)
     {
@@ -89,8 +89,9 @@ public partial class TursoSyncEndToEndTests
             "sheetRow" or "newPatient" => DevicePermissions.CanManageClinicalRecords(role),
             "sell" or "cancelSale" => DevicePermissions.CanProcessSales(role),
             "closeBatch" => DevicePermissions.CanManageInventory(role),
-            // Solo la PC principal
-            "fullSync" or "regularizeFolios" or "backup" or "restoreBackup" or "replaceCloud" => DevicePermissions.CanConfigureSystem(role),
+            // Dueña de la nube: solo la PC (la tablet es una copia de la PC salvo esto, 2026-10-22). Un respaldo de los
+            // escenarios es para restaurarlo con la nube activa (cambia la generación), así que va con ellos
+            "fullSync" or "regularizeFolios" or "backup" or "restoreBackup" or "replaceCloud" => DevicePermissions.CanAdministerCloud(role),
             "sync" or "join" or "reapplySaved" => true,
             _ => false
         };

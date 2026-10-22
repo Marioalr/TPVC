@@ -47,6 +47,20 @@
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                <!-- Catálogo repetido con lo que llegó de otro equipo (la tablet también lo edita; se queda hasta «Entendido») -->
+                <Border Style="{StaticResource NoticeWarning}" Margin="0,0,0,12"
+                        Visibility="{Binding HasDuplicateCatalogNotice, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding DuplicateCatalogNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource ButtonGhost}" Padding="8,2" MinHeight="0" Margin="12,0,0,0" VerticalAlignment="Center"
+                                Content="Entendido" Command="{Binding DismissDuplicateCatalogNoticeCommand}"
+                                Foreground="{DynamicResource ThemeWarningText}" FontWeight="SemiBold" />
+                    </Grid>
+                </Border>
                 <Grid Margin="0,0,0,10">
                     <TextBox Style="{StaticResource FieldTextBox}" Height="44" Padding="40,7,12,7"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"

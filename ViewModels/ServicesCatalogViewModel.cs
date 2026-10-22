@@ -279,7 +279,11 @@ public partial class ServicesCatalogViewModel : ObservableObject
             return;
         }
         var code = string.IsNullOrWhiteSpace(EditCode) ? NextCode() : EditCode.Trim().ToUpperInvariant();
-        if (_all.Any(s => s.Id != EditId && string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase)))
+        // Solo un alta o un código que cambió, contra los servicios activos (regla «Catálogo con varios equipos», revisión 19):
+        // un servicio que quedó con el mismo código que otro de la tablet se sigue pudiendo editar sin cambiarle el código
+        var stored = _all.FirstOrDefault(s => s.Id == EditId && EditId != 0);
+        bool codeChanged = stored == null || !string.Equals(stored.Code?.Trim(), code, StringComparison.OrdinalIgnoreCase);
+        if (codeChanged && _all.Any(s => s.Id != EditId && s.IsActive && string.Equals(s.Code?.Trim(), code, StringComparison.OrdinalIgnoreCase)))
         {
             EditorError = $"El código {code} ya lo usa otro servicio.";
             return;

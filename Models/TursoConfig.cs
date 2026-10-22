@@ -6,19 +6,19 @@ namespace TPVC.Models;
 /// <summary>
 /// Roles de los dispositivos autorizados en la clínica.
 /// El sistema está diseñado para un máximo de 3 dispositivos (Free Tier de Turso):
-/// 1. Windows 11 (PC principal del consultorio / caja).
-/// 2. Tablet Android (estación de apoyo en consultorio / recepción).
-/// 3. Celular Android (administración ejecutiva limitada: métricas, cortes, stock).
+/// 1. Windows 11 (PC principal del consultorio / caja), dueña del esquema de la nube.
+/// 2. Tablet Android: una copia exacta de la PC con la interfaz adaptada al tacto (decisión del médico del 2026-10-22).
+/// 3. Celular Android (administración limitada: pacientes para consultar, citas, entradas de mercancía y reportes).
 /// </summary>
 public enum DeviceRole
 {
-    /// <summary>PC principal con Windows 11. Acceso completo sin restricciones.</summary>
+    /// <summary>PC con Windows 11. Acceso completo; solo ella administra la nube (<see cref="DevicePermissions.CanAdministerCloud"/>).</summary>
     WindowsDesktop = 1,
 
-    /// <summary>Tablet Android. Consultas médicas, recetas, pacientes, citas y cobro en POS.</summary>
+    /// <summary>Tablet Android: lo mismo que la PC (consulta, cobro, inventario y configuración) salvo administrar la nube.</summary>
     AndroidTablet = 2,
 
-    /// <summary>Celular Android. Funciones limitadas: Dashboard, Cortes de Caja, Alertas y Existencias.</summary>
+    /// <summary>Celular Android: pacientes para consultar, citas, entradas de mercancía, existencias y reportes.</summary>
     AndroidMobileAdmin = 3
 }
 
@@ -26,6 +26,11 @@ public enum DeviceRole
 /// Matriz de permisos según el rol del dispositivo (plan de la Fase 8, §4.6). Con un solo token para tablet y celular,
 /// Turso no distingue roles: estos límites los hace cumplir la app de cada equipo, con el rol que la PC le asignó en
 /// DeviceRegistry.
+/// <para>
+/// Decisión del médico del 2026-10-22: <b>la tablet es una copia exacta de la PC</b>, con solo las adaptaciones táctiles de la
+/// interfaz. Tiene todo lo que tiene la PC salvo las tareas de dueño de la nube (<see cref="CanAdministerCloud"/>): el esquema
+/// remoto, las generaciones, la vinculación de equipos y la regularización de folios. El celular conserva su alcance.
+/// </para>
 /// </summary>
 public static class DevicePermissions
 {
@@ -41,13 +46,20 @@ public static class DevicePermissions
     public static bool CanProcessSales(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
 
-    /// <summary>Editar inventario y catálogo: productos, precios, conteos y cerrar lotes. La tablet y el celular solo lo ven.</summary>
+    /// <summary>
+    /// Editar inventario y catálogo: productos (alta, precio, costo, existencias), categorías, servicios clínicos y sus insumos
+    /// por defecto, conteos y cerrar lotes. La PC y la tablet (desde el 2026-10-22); el celular solo lo ve. Los duplicados que
+    /// pueden salir de dos equipos que dan de alta lo mismo se avisan después de bajar (<c>CatalogDuplicateRules</c>).
+    /// </summary>
     public static bool CanManageInventory(DeviceRole role) =>
-        role is DeviceRole.WindowsDesktop;
+        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
 
-    /// <summary>Registrar entradas de mercancía, un lote con su movimiento de entrada (paso 8.10): la PC y el celular.</summary>
-    public static bool CanRegisterStockEntries(DeviceRole role) =>
-        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidMobileAdmin;
+    /// <summary>
+    /// Registrar entradas de mercancía: un lote de un producto que ya existe con su movimiento de entrada (paso 8.10). Todos los
+    /// equipos (la tablet desde el 2026-10-22). «Ingresar pedido» del proveedor además da de alta productos y cambia su costo,
+    /// así que pide también <see cref="CanManageInventory"/> (la PC y la tablet; el celular no, como hasta ahora).
+    /// </summary>
+    public static bool CanRegisterStockEntries(DeviceRole role) => true;
 
     /// <summary>Agendar citas (paso 8.10): todos los equipos.</summary>
     public static bool CanScheduleAppointments(DeviceRole role) => true;
@@ -69,8 +81,31 @@ public static class DevicePermissions
     /// </summary>
     public static bool CanViewBusinessReports(DeviceRole role) => true;
 
-    /// <summary>Configuración, Excel, respaldos, la nube, vincular equipos, perfil y membrete: solo la PC.</summary>
+    /// <summary>
+    /// Configuración del consultorio: médico y consultorio, membrete, servicios, plantillas de receta, dosis pediátricas e
+    /// importar el Excel (datos compartidos que se sincronizan), y las preferencias de este equipo. La PC y la tablet (desde el
+    /// 2026-10-22). Lo que es de la nube (esquema, generaciones, vincular, los respaldos de la base) es
+    /// <see cref="CanAdministerCloud"/>, no esto.
+    /// </summary>
     public static bool CanConfigureSystem(DeviceRole role) =>
+        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidTablet;
+
+    /// <summary>
+    /// Las tareas de dueño de la nube, solo la PC con Windows (también con la tablet como copia de la PC):
+    /// <list type="bullet">
+    /// <item>crear y migrar el esquema remoto (DDL, ALTER TABLE, la huella, <c>_tpvc_meta</c>) y la limpieza de
+    /// <c>ConsultationHandoffs</c> y <c>RegisteredDevices</c>;</item>
+    /// <item>la sincronización completa que verifica la nube, unirse o recuperar como PC, «Esta PC ya usaba esta nube» (adoptar la
+    /// identidad de la nube), «Reemplazar con la nube», reemplazar la
+    /// nube con un respaldo o restaurar uno con la nube activa (cambian la generación, paso 8.9);</item>
+    /// <item>vincular, aprobar, rechazar, quitar y «Perdí este equipo» (escribe <c>DeviceRegistry</c>);</item>
+    /// <item>los respaldos de la base: hacerlos, verlos y restaurarlos (por ahora solo la PC; la copia de la tablet es la nube);</item>
+    /// <item>y, solo en la PC principal (<c>_tpvc_meta.primaryDeviceId</c>), la regularización diaria de folios, los saldos
+    /// iniciales del libro y archivar o desalojar los resultados de laboratorio.</item>
+    /// </list>
+    /// Pegar el token nuevo después de una rotación lo hace cada equipo con el suyo (no es esto).
+    /// </summary>
+    public static bool CanAdministerCloud(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop;
 
     /// <summary>Recibe y envía la consulta en curso a otro equipo: el celular no.</summary>
@@ -88,8 +123,8 @@ public static class DevicePermissions
     public static string GetRoleDescription(DeviceRole role) => role switch
     {
         DeviceRole.WindowsDesktop => "Acceso completo: consultas, recetas, cobro, inventario, configuración y la nube.",
-        DeviceRole.AndroidTablet => "Consulta y recepción: expedientes, notas, recetas, citas y cobro. Ve el inventario sin editarlo.",
-        DeviceRole.AndroidMobileAdmin => "Ve expedientes, agenda citas, revisa existencias, registra entradas de mercancía y ve el corte de caja.",
+        DeviceRole.AndroidTablet => "Copia de la PC: consultas, recetas, cobro, inventario y configuración. La nube y los equipos se administran en la PC.",
+        DeviceRole.AndroidMobileAdmin => "Ve expedientes, agenda citas, revisa existencias, registra entradas de mercancía y ve el corte de caja y los reportes.",
         _ => ""
     };
 }

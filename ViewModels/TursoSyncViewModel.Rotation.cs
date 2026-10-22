@@ -57,6 +57,7 @@ public partial class TursoSyncViewModel
     [RelayCommand]
     public async Task ReportLostDeviceAsync(LinkedDevice? device)
     {
+        if (!RequireCloudAdministrator()) return;
         if (device == null || !device.CanReportLost) return;
         var pending = device.PendingCount is > 0 ? $"\n\n{device.PendingText}: se pierden." : string.Empty;
         bool confirm = DialogService.Confirm(

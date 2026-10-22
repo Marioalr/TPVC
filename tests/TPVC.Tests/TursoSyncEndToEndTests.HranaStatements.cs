@@ -77,6 +77,17 @@ public partial class TursoSyncEndToEndTests
             "Una imagen del membrete cuyo hash cambió: sin fila, todavía no está completa."));
         statements.Add(Statement("asset.chunk", TursoSyncService.AssetChunkSql, Texts("Hash", "Part"),
             "Cada trozo, cuatro por petición; se revisan el tamaño y el SHA-256."));
+        // Revisión 19 (la tablet es una copia de la PC, 2026-10-22): la tablet también edita el perfil y el membrete
+        statements.Add(Statement("asset.exists", TursoSyncService.AssetExistsSql, Texts("Hash"),
+            "Revisión 19: antes de subir una imagen del membrete (PC y tablet): si ya tiene su fila, ya está completa y no se sube."));
+        statements.Add(Statement("asset.writeChunk", TursoSyncService.AssetWriteChunkSql, Texts("Hash", "Part (integer)", "Content (blob)"),
+            "Revisión 19: cada trozo de 512 KiB de una imagen nueva, uno por petición; nunca se reescribe."));
+        statements.Add(Statement("asset.writeMeta", TursoSyncService.AssetWriteMetaSql, Texts("Hash", "Kind ('crest' o 'header')", "MimeType", "ByteCount (integer)", "ChunkCount (integer)"),
+            "Revisión 19: al final, cuando ya están todos los trozos: sin esta fila la imagen no está completa. Solo la PC borra imágenes."));
+        statements.Add(Statement("profile.write", TursoSyncService.ClinicProfileWriteSql,
+            Texts("DoctorName", "ProfessionalLicense", "Specialty", "University", "ClinicName", "Address", "Phone", "Email", "TaxId", "AdditionalNotes",
+                "UpdatedAtUtc", "CrestImageHash", "HeaderImageHash"),
+            "Revisión 19: el perfil del consultorio (PC y tablet). Se escribe solo si este equipo tiene su perfil configurado y su UpdatedAtUtc (la marca de cuando se guardó aquí, que va tal cual como argumento) es más nuevo que el de la nube leído con 'profile' en la misma sincronización, o si la nube no tiene fila; el upsert no compara marcas. Cada hash: el de la imagen que tiene este equipo, después de subirla con asset.* (si no se pudo leer para subirla, el de la nube); '' si se quitó aquí; sin imagen aquí y sin tocarla aquí, el de la nube (un equipo recién instalado no le quita el escudo a los demás). Si un hash quedó distinto del de la nube, la PC borra después las imágenes que el perfil ya no nombra; la tablet nunca borra."));
         statements.Add(Statement("folio.take", TursoSyncService.TakeFolioSql, Texts("Series ('EXP-2026' o 'TKT-20261009')", "Piso (integer)", "Piso (integer)"),
             "Paso 8.16: al guardar un expediente o un ticket, con 2 s de espera; el piso es el mayor número de esa serie en la base del equipo (los folios con letra no cuentan). Sin respuesta, el folio lleva la letra del equipo (golden/folios.json)."));
         // Paso 8.24: la revisión (cadencia y marca de cambios), literal: SQLite usa el índice parcial solo con este WHERE
@@ -104,7 +115,7 @@ public partial class TursoSyncEndToEndTests
             ["notes"] = Texts(
                 "Las instrucciones de lectura que repite Kotlin, literales: escribirlas de otra forma puede hacer que SQLite recorra la tabla completa (cada fila recorrida cuenta como leída en Turso).",
                 "Los argumentos van con la codificación de golden/values.json; las fechas como texto 'yyyy-MM-dd HH:mm:ss.fffffff'.",
-                "Los intercambios completos están en los .jsonl de esta carpeta. Lo de escribir (upsert, lápidas y cerca de generación) está en golden/lww.json; lo de los resultados de laboratorio, en golden/lab-files.json."),
+                "Los intercambios completos están en los .jsonl de esta carpeta. Lo de escribir (upsert, lápidas y cerca de generación) está en golden/lww.json; lo de los resultados de laboratorio, en golden/lab-files.json; el perfil y el membrete (asset.exists, asset.writeChunk, asset.writeMeta y profile.write, revisión 19), aquí."),
             ["statements"] = statements
         };
         GoldenVectorTests.CheckOrWrite("contracts/hrana/statements.json", SyncContract.ToStableJson(file));

@@ -188,13 +188,23 @@ public partial class InventoryService
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
+    /// <summary>
+    /// El código ya lo usa otro producto activo (sin espacios en los extremos y sin distinguir mayúsculas). Solo se revisa un
+    /// alta o un código que cambió (regla «Catálogo con varios equipos», revisión 19): un producto que quedó con el mismo
+    /// código que otro dado de alta en la tablet se sigue pudiendo editar (precio, existencias) sin cambiarle el código.
+    /// </summary>
     public async Task<bool> IsProductCodeTakenAsync(string code, int excludeProductId = 0)
     {
         if (string.IsNullOrWhiteSpace(code)) return false;
         var normalized = code.Trim().ToUpper();
         await using var db = CreateContext();
+        if (excludeProductId > 0)
+        {
+            var stored = await db.Products.AsNoTracking().Where(p => p.Id == excludeProductId).Select(p => p.Code).FirstOrDefaultAsync();
+            if (stored != null && string.Equals(stored.Trim(), code.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
+        }
         return await db.Products
-            .AnyAsync(p => p.IsActive && p.Id != excludeProductId && p.Code.ToUpper() == normalized);
+            .AnyAsync(p => p.IsActive && p.Id != excludeProductId && p.Code.Trim().ToUpper() == normalized);
     }
 
     /// <param name="originalStock">

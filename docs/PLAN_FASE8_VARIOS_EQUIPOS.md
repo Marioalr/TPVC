@@ -23,6 +23,7 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
 | 7 | **La tablet cobra sin internet.** La meta: no notar diferencia entre usar la PC o la app. | Venta, movimientos por lote, nota y cita "Atendida" sin conexión, con el folio con letra. Una existencia puede quedar en negativo con "revisar inventario" y se corrige con un conteo (8.20, K7). |
 | 8 | **El celular ve expedientes, agenda citas, revisa inventario y registra entradas de mercancía.** Ampliado el 2026-10-14: **administración del negocio** (reporte de compras, utilidad y consumo de insumos, además del resumen, el corte de caja, el valor del inventario y la compra sugerida que ya tiene la PC), **consulta del inventario** de medicamentos e insumos (existencias, lotes y caducidades) y **administración de pacientes y citas**. De los pacientes ve todo (datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio), **solo para consultar**; las citas las agenda (K4b). | Escribe citas, lotes y movimientos de entrada; **no escribe datos de pacientes**, nada clínico, ni recetas ni ventas. Con el nivel C su token es completo: los límites los aplica la app (§4.6). Su primera versión solo baja (K4); lo que escribe llega en K4b. El reporte de compras y el de utilidad todavía no existen en la PC: se hacen primero en la PC, con sus vectores, para que el celular muestre las mismas cifras (§7.5, nota del 2026-10-14). Editar pacientes desde el celular queda para una versión futura, después de que el médico evalúe una propuesta de interfaz (opcional 8.D). |
 | 9 | **La cuenta de Turso no tiene token de la API de la plataforma.** Vinculación (decisión del 2026-10-11, reemplaza el QR por la red local): cada equipo recibe la URL y el token como la PC, pegados o escaneados de un QR que la PC muestra 2 min; la PC aprueba cada equipo nuevo. | Nivel C: tokens creados a mano en el panel, sin vencimiento, que solo se cortan anulándolos todos (8.15). Sin base de vinculación ni servidor en la red local (§4.4, descartada; paso 8.14). |
+| 10 | **La tablet es una copia exacta de la PC (2026-10-22)**, con solo las adaptaciones táctiles de la interfaz. | La tablet tiene todo lo de la PC: consulta, receta, cobro, agenda, inventario y catálogo (productos, precios, conteos, lotes, servicios), entradas de mercancía y pedidos del proveedor, panel, «Negocio», corte de caja y la configuración del consultorio (perfil, membrete, plantillas, dosis pediátricas, Excel). Solo la PC administra la nube (`CanAdministerCloud`): esquema, generaciones, vincular y revocar, sincronización completa, «Reemplazar con la nube», restaurar con la nube activa y regularizar folios (§4.6). El celular no cambia. Contrato revisión 19: la regla «Catálogo con varios equipos» y el aviso de registros repetidos (`golden/duplicate-catalog.json`). |
 
 **Pedidos del médico que cubre este plan:**
 - Vincular la tablet leyendo un código QR, en la red del consultorio (paso 8.14). El 2026-10-11 el médico lo simplificó: la URL y el token, pegados o leídos de un QR de la PC, y la PC aprueba cada equipo (§4.3).
@@ -31,6 +32,7 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
 - En el celular (2026-10-14): administración del negocio (reportes de compras, utilidad y consumo de insumos, resumen, corte, valor del inventario y compra sugerida), consulta del inventario de medicamentos e insumos, y los pacientes (solo para ver) y sus citas (K4, K4b; los reportes nuevos, después de hacerlos en la PC: opcional 8.E).
 - Compartir la receta y el ticket en PDF desde donde se vean (pasos 8.11 y 8.12; app K4 en el celular y K7 en la tablet).
 - Continuar una consulta en otro equipo. Entre dos PC ya funciona desde v1.17; la tablet implementará el mismo contrato (app K8).
+- La tablet como copia exacta de la PC, con la interfaz táctil (2026-10-22, decisión 10): todo lo de la PC salvo administrar la nube (§4.6, §7.4, K9b).
 
 **Reglas de la consulta que se conservan en la tablet:** la consulta nunca manda al POS, "Se surte aquí" viene marcado por defecto y no existe "terminar sin cobrar".
 
@@ -82,14 +84,14 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
 | | PC (`WindowsDesktop`) | Tablet (`AndroidTablet`) | Celular (`AndroidMobileAdmin`) |
 |---|---|---|---|
 | Base local | `consultorio.db` (EF Core) | Room + SQLCipher, con llaves por `SyncId` | Igual que la tablet |
-| Escribe en Turso | Todo | Pacientes, notas, citas, ventas, movimientos, lápidas, su latido, `FolioCounters` y `ConsultationHandoffs` | Citas, lotes y movimientos de entrada (con sus lápidas) y su latido. Ningún dato de pacientes (los ve, no los edita: 2026-10-14), nada clínico, ni recetas ni ventas. Su token es completo: los límites los aplica la app (§4.6) |
+| Escribe en Turso | Todo | Lo mismo que la PC (2026-10-22: copia de la PC): pacientes, notas, citas, ventas, catálogo e inventario (productos, servicios, categorías, lotes y movimientos de cualquier tipo), plantillas y dosis pediátricas, `ClinicProfiles` y `ClinicAssets`, lápidas, su latido, `FolioCounters` y `ConsultationHandoffs`. Nunca `_tpvc_meta`, `DeviceRegistry` ni DDL | Citas, lotes y movimientos de entrada (con sus lápidas) y su latido. Ningún dato de pacientes (los ve, no los edita: 2026-10-14), nada clínico, ni recetas ni ventas. Su token es completo: los límites los aplica la app (§4.6) |
 | Crea o migra el esquema remoto | **Sí, solo la PC** | Nunca | Nunca |
 | Vincula y revoca equipos, escribe `DeviceRegistry` y `_tpvc_meta` | Sí | No | No |
-| Edita catálogo, inventario, perfil y membrete | Sí | No (inventario solo lectura) | No; solo registra entradas de mercancía (lote y movimiento de entrada) |
+| Edita catálogo, inventario, perfil y membrete | Sí | Sí (desde el 2026-10-22; solo la PC borra imágenes del membrete de la nube) | No; solo registra entradas de mercancía (lote y movimiento de entrada) |
 | Consulta entre equipos | Envía y recibe | Envía y recibe | No (excluido por su rol, como hoy, `ConsultationHandoffService.cs:181`) |
 | Latido en `RegisteredDevices` | Sí | Sí, solo con la app al frente | Sí, solo con la app al frente |
 | Folios | Consecutivo del contador en Turso; sin conexión, con `P1` (otra PC, `P2`…). Solo la PC principal regulariza (8.17) | Consecutivo del contador; sin conexión, con `T1`… | No crea folios |
-| Siembra datos | Solo en una base nueva (8.8) | Nunca | Nunca |
+| Siembra datos | Solo en una base nueva (8.8): el catálogo con SyncId fijos; los datos de demostración solo desde su asistente | Nunca (su base empieza vacía y baja todo) | Nunca |
 
 ### 2.3 Esquema remoto: dueño y piezas nuevas
 
@@ -103,7 +105,7 @@ El mismo día el médico respondió las cuatro preguntas abiertas (§9), y esta 
   | Tabla | Dónde y quién escribe | Para qué | Paso |
   |---|---|---|---|
   | `DeviceRegistry` (`DeviceId` PK, `DeviceCode` único, `Role`, `DisplayName`, `Model`, `PairedAtUtc`, `RevokedAtUtc`, `RevokedReason`) | Base del consultorio; solo la PC | Autoridad sobre el rol, el código de folios y la revocación de cada equipo. Sus filas nunca se borran. | 8.10, 8.14 |
-  | `ClinicAssets` (escudo y encabezado del membrete) | Base del consultorio; solo la PC | La receta de Android lleva el mismo membrete. | 8.12 |
+  | `ClinicAssets` (escudo y encabezado del membrete) | Base del consultorio; la PC y, desde el 2026-10-22 (revisión 19), la tablet suben imágenes; solo la PC las borra | La receta de Android lleva el mismo membrete. | 8.12 |
   | `FolioCounters` (`Series` PK, como `EXP-2026` o `TKT-20261009`; `LastNumber`) | Base del consultorio; la crea la PC y la incrementan la PC y la tablet con una sola instrucción | Un solo consecutivo por serie con varios equipos (§2.5). No es tabla sincronizada: no lleva `SyncId`, sus filas nunca se borran y "Reemplazar la nube" (8.9) no la toca. | 8.16 |
 
 - **Columnas nuevas en tablas que no salen del modelo de EF.** Llevan `ALTER` explícito, revisado con `pragma_table_info` e incluido en la huella, porque el ciclo de columnas nuevas solo cubre las tablas de `GetTableMaps`. Todas aceptan nulo:
@@ -357,33 +359,61 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 - **Fuera de la red local o después de los 10 min:** nada. El QR no lleva token y la PC ya no escucha.
 - **En la red local, durante la ventana y con la foto:** puede intentar vincularse antes que la tablet. La PC pregunta al médico con el nombre y el código de confirmación; el de un equipo ajeno no coincide con el de la tablet, y la tablet recibe "Ya hay un equipo vinculándose", así que el médico rechaza y empieza otra vez.
 - **Quien escucha el Wi-Fi sin el QR** solo ve el HMAC y la credencial cifrada: el secreto nunca pasa por la red.
-- **El costo del nivel C, dicho claro:** cada equipo guarda un token `full-access` sobre todos los expedientes, sin vencimiento. Los límites por rol (el celular no edita notas ni cobra; la tablet no toca catálogo ni configuración) los aplica la app, así que quien saque el token de un equipo puede hacer todo. Un equipo perdido solo se corta rotando el grupo, y eso obliga a pegar tokens nuevos en la PC y a volver a vincular los demás. Por eso: SQLCipher, credencial envuelta con el Keystore, bloqueo de pantalla obligatorio y "Cortar acceso ahora" marcado por defecto (§4.7, §4.8).
+- **El costo del nivel C, dicho claro:** cada equipo guarda un token `full-access` sobre todos los expedientes, sin vencimiento. Los límites por rol (el celular no edita notas ni cobra; la tablet no administra la nube ni los equipos) los aplica la app, así que quien saque el token de un equipo puede hacer todo. Un equipo perdido solo se corta rotando el grupo, y eso obliga a pegar tokens nuevos en la PC y a volver a vincular los demás. Por eso: SQLCipher, credencial envuelta con el Keystore, bloqueo de pantalla obligatorio y "Cortar acceso ahora" marcado por defecto (§4.7, §4.8).
 
 ### 4.6 Registro, latido y permisos
 
 - **`DeviceRegistry`** es la autoridad para rol, código y revocación. La app de Kotlin oculta pantallas y bloquea escrituras según el rol que lee ahí.
 - **`RegisteredDevices`** sigue siendo el latido. Cada equipo escribe su fila con la misma instrucción y la hora del servidor, y ahora también `Platform`, `SyncProtocol`, `HandoffProtocol`, `ContractRevision`, `LastPushUtc`, `PendingCount`, `OldestPendingUtc` e `InstanceNonce`. El celular también lo escribe con la app al frente: sube cambios, así que su `PendingCount` cuenta para *Quitar* y para la barrera de 8.20. Su rol lo sigue dejando fuera de la consulta entre equipos.
 - El rol de la PC queda fijo en `WindowsDesktop`: se quita el selector (8.2).
-- `DevicePermissions` gana `CanViewClinicalRecords`, `CanShareDocuments`, `CanScheduleAppointments` y `CanRegisterStockEntries`.
-- Con el nivel C, todo lo de esta tabla lo hace cumplir la app.
-- **El celular no escribe datos de pacientes (2026-10-14).** Ve todo lo del paciente (datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio), pero su token, como todos con el nivel C, es `full-access`: Turso no le impediría escribir un expediente. Lo impide la app por su rol (`CanManageClinicalRecords` en falso para `AndroidMobileAdmin`): sus únicas escrituras siguen siendo citas, lotes y movimientos de entrada. Editar pacientes desde el celular queda para el futuro (opcional 8.D).
+- Con el nivel C, todo lo de esta tabla lo hace cumplir la app (`DevicePermissions`, `Models/TursoConfig.cs`; la prueba `DevicePermissions_TheTabletIsACopyOfThePc_ExceptAdministeringTheCloud` fija la tabla completa).
+- **La tablet es una copia exacta de la PC (decisión del médico del 2026-10-22).** Tiene todo lo que tiene la PC, con la interfaz adaptada al tacto, salvo las tareas de dueño de la nube, que tienen su propio permiso, `CanAdministerCloud` (solo la PC), en lugar de ir escondidas dentro de `CanConfigureSystem`. Se abrieron a la tablet: editar inventario y catálogo (`CanManageInventory`), registrar entradas de mercancía (`CanRegisterStockEntries`) y la configuración del consultorio (`CanConfigureSystem`). Antes ya se le habían abierto el panel «Negocio» y el corte de caja (v1.48.0).
+- **El celular no escribe datos de pacientes (2026-10-14).** Ve todo lo del paciente (datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio), pero su token, como todos con el nivel C, es `full-access`: Turso no le impediría escribir un expediente. Lo impide la app por su rol (`CanManageClinicalRecords` en falso para `AndroidMobileAdmin`): sus únicas escrituras siguen siendo citas, lotes y movimientos de entrada. Editar pacientes desde el celular queda para el futuro (opcional 8.D). La decisión del 2026-10-22 no cambia nada del celular.
 
-| Función | PC | Tablet | Celular |
+| Función (permiso) | PC | Tablet | Celular |
 |---|:---:|:---:|:---:|
-| Ver expedientes (`CanViewClinicalRecords`, nuevo): datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio | sí | sí | sí, solo para consultar (2026-10-14) |
+| Ver expedientes (`CanViewClinicalRecords`): datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio | sí | sí | sí, solo para consultar (2026-10-14) |
 | Editar expedientes y consulta (`CanManageClinicalRecords`) | sí | sí | no (futuro, opcional 8.D) |
-| Recetar | sí | sí | no |
-| Cobrar y vender, también sin conexión | sí | sí | no |
-| Agendar citas (`CanScheduleAppointments`, nuevo) | sí | sí | sí |
-| Registrar entradas de mercancía: lote y movimiento de entrada (`CanRegisterStockEntries`, nuevo) | sí | no | sí |
-| Editar inventario y catálogo: productos, precios, conteos, cerrar lotes (`CanManageInventory`) | sí | no, solo ve | no, solo ve |
-| Resumen (con el valor del inventario), alertas y compra sugerida | sí | sí | sí |
+| Recetar (`CanPrescribeMedications`) | sí | sí | no |
+| Cobrar y vender, también sin conexión (`CanProcessSales`) | sí | sí | no |
+| Agendar citas (`CanScheduleAppointments`) | sí | sí | sí |
+| Registrar entradas de mercancía: lote de un producto que ya existe y su movimiento de entrada (`CanRegisterStockEntries`) | sí | sí (2026-10-22) | sí |
+| Editar inventario y catálogo (`CanManageInventory`): productos (alta, precio, costo, existencias), categorías, servicios y sus insumos por defecto, conteos, cerrar lotes e «Ingresar pedido» del proveedor (da de alta productos y cambia su costo) | sí | sí (2026-10-22) | no, solo ve |
+| Resumen con el valor del inventario, alertas y compra sugerida (`CanViewDashboard`, `CanViewStockAlerts`) | sí | sí | sí |
 | Consultar el inventario de medicamentos e insumos: existencias, lotes y caducidades | sí | sí | sí |
-| Reportes del negocio: compras, utilidad y consumo de insumos (2026-10-14; primero en la PC, opcional 8.E) | sí | no (no se pidió) | sí |
-| Corte de caja (`CanViewCashCut`) | sí | no (oculto) | sí (confirmado el 2026-10-14) |
-| Compartir receta y ticket (`CanShareDocuments`, nuevo) | sí | sí | sí |
-| Consulta entre equipos | sí | sí | no (`GetLinkedDevicesAsync` excluye el celular) |
-| Configuración, Excel, respaldos, Turso, vincular, perfil y membrete (`CanConfigureSystem`) | sí | no | no |
+| Reportes del negocio, panel «Negocio» (`CanViewBusinessReports`) | sí | sí (2026-10-22) | sí |
+| Corte de caja (`CanViewCashCut`) | sí | sí (2026-10-22) | sí |
+| Compartir receta y ticket (`CanShareDocuments`) | sí | sí | sí |
+| Consulta entre equipos (`CanTakeConsultations`) | sí | sí | no (`GetLinkedDevicesAsync` excluye el celular) |
+| Configuración del consultorio (`CanConfigureSystem`): médico y consultorio, membrete, servicios, plantillas de receta, dosis pediátricas, importar el Excel, y las preferencias de este equipo | sí | sí (2026-10-22) | no |
+| **Administrar la nube** (`CanAdministerCloud`, nuevo): esquema remoto y `_tpvc_meta`, sincronización completa, unirse o recuperar como PC, «Esta PC ya usaba esta nube», «Reemplazar con la nube», reemplazar la nube con un respaldo o restaurar uno con la nube activa, vincular, aprobar, rechazar, quitar y «Perdí este equipo», «Esta PC reemplaza a la principal», los respaldos de la base (hacerlos, verlos y restaurarlos; `DataManagementViewModel.CanManageBackups`); y en la PC principal, regularizar folios, saldos iniciales y archivar los resultados de laboratorio | sí | **no** | no |
+
+**Qué de Configuración se queda solo en la PC y por qué.** Todo lo que cambia la nube para todos los equipos o decide quién entra:
+
+| En la PC | Por qué no en la tablet |
+|---|---|
+| Crear y migrar el esquema remoto (DDL, `ALTER TABLE`, la huella, `_tpvc_meta`) y la limpieza de `ConsultationHandoffs` y `RegisteredDevices` | Un solo dueño del esquema (§2.3): dos equipos con versiones distintas migrando la misma base se pisarían la huella. Kotlin nunca corre DDL («Sincronice primero la PC»). |
+| Sincronización completa (verifica la nube y le da su identidad), unirse o recuperar como PC, «Esta PC ya usaba esta nube» | Fija `clinicId`, `fullUploadAtUtc` y renombra tablas `legacy_v1_*`: es el arranque de la nube. La tablet se une por la vinculación (K3) y baja todo. |
+| «Reemplazar con la nube», reemplazar la nube con un respaldo, restaurar un respaldo con la nube activa | Cambian la generación (8.9): todos los demás equipos se detienen, guardan lo pendiente y vuelven a bajar todo. Si la tablet se descompone, se vuelve a vincular y baja todo; no restaura respaldos. |
+| Vincular (QR de 2 min), aprobar, rechazar, quitar, «Perdí este equipo», PC principal | Escriben `DeviceRegistry`, que solo escribe la PC (decisiones del 2026-10-09 y 2026-10-11): la PC aprueba a cada equipo nuevo. En la tablet *Equipos vinculados* se ve **solo para consultar** (quién está en línea y sus cambios pendientes), sin esos botones. |
+| Regularización diaria de folios, saldos iniciales del libro (8.20), archivar o desalojar los resultados de laboratorio | Solo la PC principal (`_tpvc_meta.primaryDeviceId`): una sola autoridad para no repetir un número ni un saldo. |
+| Respaldos de la base (`.db`) y restaurarlos | La tablet no hace ni restaura respaldos de su base: su copia es la nube, y los respaldos son de la PC (pregunta abierta al médico: ¿quiere en la tablet «Respaldar ahora» como archivo para soporte?). |
+
+**Preferencias del equipo, datos del consultorio y credenciales.** Para Kotlin:
+
+| Qué | Dónde vive | ¿Viaja? |
+|---|---|---|
+| Letra de la receta y del nombre del médico, cronómetro de la consulta, «Mostrar (principio activo)», último proveedor de «Ingresar pedido», carpeta del respaldo de laboratorio (`LocalPreferencesStore`, `preferencias.json`); tema y apariencia (`theme.json`); impresora (el diálogo de impresión del sistema; la térmica Bluetooth de K10) | En cada equipo | No: cada equipo las suyas (en Android, `SharedPreferences` o DataStore, fuera de Room) |
+| Médico y consultorio (`ClinicProfiles`), membrete (`ClinicAssets` y sus trozos), servicios y sus insumos por defecto, categorías y productos, plantillas de receta y dosis pediátricas | En la base y en la nube | Sí: los editan la PC y la tablet, y gana la escritura más nueva (LWW por fila; el perfil, una sola fila). Solo la PC borra imágenes del membrete de la nube |
+| La URL y el token de Turso, el `DeviceId`, el `InstanceNonce`, el último folio con letra de cada serie (`folios.json`), la llave de SQLCipher y de la caché de laboratorio | En cada equipo, cifrados (DPAPI en la PC; Keystore en Android) | **Nunca**: ni en la nube ni en los respaldos. Pegar el token nuevo después de una rotación lo hace cada equipo con el suyo |
+
+**Catálogo en dos equipos (duplicados).** Antes la tablet no daba de alta nada del catálogo y el riesgo de duplicados era solo la siembra (A2, resuelto en 8.8 con SyncId fijos). Ahora:
+- **Identidad:** cada producto, servicio y categoría es su `SyncId`, con LWW por fila. Lo sembrado lleva SyncId fijos (UUIDv5) y la marca del año 2000; solo lo siembra una PC con base nueva, y los datos de demostración solo su asistente. Kotlin nunca siembra.
+- **Dos altas de lo mismo** (sin red, o antes de bajar lo del otro) dejan dos filas. **No se unen solas**: lotes, movimientos, renglones de ticket, insumos de un servicio y hojas del paciente apuntan a cada una por su SyncId.
+- **Al dar de alta o cambiar el código:** el código de un producto o servicio se revisa contra los activos del mismo tipo en este equipo; editar sin cambiar el código no se revisa, así que un par repetido no bloquea cambiar su precio. Pendiente para Kotlin (K9b): la sincronización rápida de 3 s antes de dar de alta, como antes de crear un expediente (8.23).
+- **Después de bajar** (no en la primera descarga): lo que llegó del catálogo (creados por la bajada, o con otro código, nombre, presentación o activo; un cambio de precio o de existencias, como una venta en otro equipo, no cuenta) se compara con lo de este equipo por **mismo código** o **mismo nombre** (en un producto, con su presentación), con `CatalogDuplicateRules` y `contracts/golden/duplicate-catalog.json`. Los pares van a un aviso de cada equipo que se queda hasta «Entendido» (`SyncNotices`, como el de expedientes duplicados); en la PC, arriba de Productos. Hecho en la PC (revisión 19).
+- **El siguiente SERV-00N** sale del mayor local + 1: sin red, la PC y la tablet pueden tomar el mismo, y el aviso lo muestra (mismo código). Si se vuelve molesto, el código de un servicio hecho sin red podría llevar la letra del equipo, como los folios (pregunta abierta).
+- **Unir dos registros** (pasar lotes, movimientos e historial de uno al otro) queda fuera: sería un opcional como el 8.A de los expedientes. Por ahora se desactiva uno o se le cambia el código.
 
 ### 4.7 Quitar un equipo y equipo perdido
 
@@ -1325,17 +1355,21 @@ Se empieza con cuatro módulos de Gradle y se dividen cuando crezcan:
   - Si un upsert afecta 0 filas, vuelve a leer la fila del servidor y la aplica aunque empate; si no existe, aplica su lápida.
   - Pacientes: combinación por campo y hojas por renglón (8.22), con la forma canónica. El resultado distinto se encola para subir. El resumen de citas es derivado.
 - **Existencias:**
-  - Escribe `InventoryMovements`, con `Delta`, un movimiento por lote y devoluciones deterministas. El celular escribe además el lote de una entrada de mercancía (`ProductBatches`) y su movimiento `EntradaCompra`.
+  - Escribe `InventoryMovements`, con `Delta`, un movimiento por lote y devoluciones deterministas.
+  - **La tablet** (copia de la PC, 2026-10-22) escribe además el catálogo y el inventario como la PC: productos (alta, precio, costo y existencias por conteo o ajuste), lotes, cierre de lotes con sus SyncId deterministas, entradas de mercancía y pedidos del proveedor (regla «Catálogo con varios equipos» de `schema.json`, revisión 19). Nunca los saldos iniciales (solo la PC principal, 8.20).
+  - **El celular** escribe solo el lote de una entrada de mercancía de un producto que ya existe (`ProductBatches`) y su movimiento `EntradaCompra`; nunca Products, conteos ni el resto del catálogo.
   - Recalcula las columnas derivadas, con los conteos como ancla, después de cada escritura y de cada bajada.
-  - Nunca escribe Products, saldos iniciales, conteos ni columnas derivadas, ni ProductBatches fuera de una entrada de mercancía.
 - **Folios:** con conexión, el siguiente número de `FolioCounters` con la instrucción literal de `contracts/hrana/` (8.16). Sin conexión, o sin respuesta en 2 s, con su código de `DeviceRegistry` y el último número de la serie con letra guardado fuera de la base. Nunca regulariza: eso solo lo hace la PC (8.17). La búsqueda de pacientes y de tickets compara también `OriginalFolio`. La fecha del folio y "hoy" salen del reloj anclado, en la zona del consultorio. Sin índice único de folio y sin renombrar nunca.
 - **Hojas del paciente:** formato de 8.18, con `RowId`. Conserva los campos que no conoce. No escribe `ChargedLineId`.
 - **Empalmes, duplicados y sincronización rápida (8.23):** antes de cobrar, de agendar y de crear un expediente, con red, una sincronización que espera 3 s como máximo (no con la sincronización en pausa ni antes de la primera descarga; dos a la vez comparten una; si no termina, o si otra sincronización ocupa la nube, el folio no espera a la nube; si el usuario cancela mientras tanto, no se guarda nada). Después, la pregunta del empalme (`appointment-overlap.json`); al crear un expediente, la de duplicados (`duplicate-patients.json`); después de cada bajada (no en la primera), la revisión de lo que llegó, también lo de una sincronización que se cortó después de aplicarlo. Los avisos son de cada equipo y se quedan hasta que se descartan. Nunca cancela una cita ni une expedientes solo.
 - **Freno:** como máximo 2 descargas completas al día y un tope diario estimado de lecturas y escrituras, igual que la PC (8.2).
+- **Catálogo y configuración (la tablet, revisión 19):** escribe `Categories`, `Products`, `ClinicalServices`, `ServiceDefaultProducts`, `PediatricDoseRules` y `PrescriptionTemplates` por el ciclo normal; el perfil con `profile.write` y una imagen nueva del membrete con `asset.exists`, `asset.writeChunk` y `asset.writeMeta` (literales en `contracts/hrana/statements.json`), antes del perfil que la nombra. Después de cada bajada, el aviso de registros repetidos del catálogo (`golden/duplicate-catalog.json`), como el de expedientes duplicados. El celular no escribe nada de esto.
 - **Nunca:**
   - corre DDL;
   - siembra;
-  - escribe catálogo, configuración, `ClinicProfiles`, `ClinicAssets`, `_tpvc_meta` o `DeviceRegistry`;
+  - escribe `_tpvc_meta` o `DeviceRegistry` (vincular, aprobar y revocar son de la PC);
+  - borra imágenes del membrete de la nube (solo la PC);
+  - cambia la generación: no reemplaza la nube ni restaura respaldos con la nube activa;
   - reutiliza un código ni renumera un folio;
   - sube a otra generación;
   - borra cambios sin subir: antes los sube o los exporta (§4.7).
@@ -1348,9 +1382,9 @@ Se empieza con cuatro módulos de Gradle y se dividen cuando crezcan:
 
 | | Tablet | Celular |
 |---|---|---|
-| Pantallas | Inicio (citas de hoy, recientes, búsqueda), ficha, alta y edición, agenda, consulta completa (receta, insumos, servicios, cuenta, terminar y cobrar), consulta entre equipos, punto de venta, inventario de solo lectura, resumen y alertas | Administración del negocio (2026-10-14): resumen, corte de caja, valor del inventario, alertas y compra sugerida, y el reporte de compras, la utilidad y el consumo de insumos cuando existan en la PC. Inventario de medicamentos e insumos (existencias, lotes y caducidades) con entradas de mercancía. Pacientes de solo lectura (datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio) y agenda |
+| Pantallas | **Una copia exacta de la PC con la interfaz táctil (decisión del 2026-10-22)**, con la PC como referencia de comportamiento pantalla por pantalla (los ViewModels de `docs/ARQUITECTURA_TECNICA.md` §9). Pacientes: inicio (citas de hoy, recientes, búsqueda, avisos de lo que llegó), ficha, alta y edición, agenda. Consulta completa (receta con plantillas y calculadora pediátrica, insumos, servicios, laboratorio, cuenta, terminar y cobrar) y consulta entre equipos. Punto de venta con historial de tickets y cancelar. Vista principal (resumen, alertas, compra sugerida). Configuración con el mismo menú que la PC (`ConfigurationShellViewModel.IsSectionAllowedOn`): Panel, Negocio y corte de caja; Productos (alta y edición, entrada y consumo rápidos, «Ingresar pedido», aviso de registros repetidos), Lotes y caducidades, Kardex; Servicios (con sus insumos por defecto); Médico y consultorio (con el membrete); Apariencia; Respaldos y datos (importar el Excel; sin respaldos de la base, §4.6); Nube y dispositivos (estado, token, cambios sin subir y *Equipos vinculados* solo para consultar). Adaptaciones táctiles: botones y renglones de 48 dp, sin atajos de teclado ni clic derecho (sus acciones van en un menú del renglón), paneles laterales como hojas, teclado numérico en cantidades y precios; nada de la lógica cambia. Lo único que no tiene: administrar la nube (`CanAdministerCloud`) | Administración del negocio (2026-10-14): resumen, corte de caja, valor del inventario, alertas y compra sugerida, y el reporte de compras, la utilidad y el consumo de insumos cuando existan en la PC. Inventario de medicamentos e insumos (existencias, lotes y caducidades) con entradas de mercancía. Pacientes de solo lectura (datos, alergias, expediente e historial, consultas, recetas y resultados de laboratorio) y agenda |
 | Compartir | Receta y ticket en PDF | Receta y ticket en PDF |
-| Escribe | Sí (§4.6), también sin conexión: cobra con folio con letra, y una existencia puede quedar en negativo con aviso | Citas, lotes y movimientos de entrada, con sus lápidas (K4b). Ningún dato de pacientes (los ve, no los edita), nada clínico, ni recetas ni ventas |
+| Escribe | Todo lo de la PC (§4.6) salvo lo del dueño de la nube, también sin conexión: cobra con folio con letra, y una existencia puede quedar en negativo con aviso; da de alta catálogo (con el aviso de repetidos) y edita la configuración del consultorio | Citas, lotes y movimientos de entrada, con sus lápidas (K4b). Ningún dato de pacientes (los ve, no los edita), nada clínico, ni recetas ni ventas |
 | Revisión de consultas y latido | Al frente | Solo el latido, al frente |
 
 ### 7.5 Orden de trabajo y tamaño
@@ -1370,6 +1404,7 @@ Entre paréntesis, los pasos de la PC que necesita cada uno.
 8. **K7.** Consulta: las secciones en el orden de la PC con la cuenta a la derecha, hojas con `SyncId` y `RowId`, receta con plantillas y calculadora pediátrica, terminar y cobrar (nota, venta, movimientos por lote, cita "Atendida"), también sin conexión con el folio con letra, y compartir receta y ticket. Mismos pasos y textos que la PC: la meta es que no se note la diferencia. La pantalla se queda encendida durante la consulta.
 9. **K8.** Consulta entre equipos: aviso, "Continuar aquí", "Enviar a…" y solo lectura mientras está ofrecida (8.10, 8.24, 8.25). **Con K5–K8, primera versión de la tablet.**
 10. **K9.** Punto de venta en la tablet, con `RankProducts` y el prefijo `3*`, también sin conexión. La búsqueda de tickets compara también `OriginalFolio`.
+10b. **K9b.** El resto de la copia de la PC (decisión del 2026-10-22): Vista principal, Panel, «Negocio» y corte de caja (las reglas de K1 y los vectores del negocio); Productos, Lotes y Kardex con edición (alta y edición de productos con la revisión del código, conteos, cerrar lotes, entradas y consumos, «Ingresar pedido» con `SupplierOrderParser`); Servicios con sus insumos por defecto; Médico y consultorio con el membrete (`profile.write` y `asset.*` de `contracts/hrana/statements.json`); plantillas de receta y dosis pediátricas; importar el Excel; el aviso de registros repetidos del catálogo después de cada bajada (`golden/duplicate-catalog.json`) y la sincronización rápida antes de dar de alta un producto o un servicio. *Equipos vinculados* solo para consultar. Necesita K5 (motor de escritura) y la revisión 19 del contrato.
 11. **K10.** Accesibilidad, tema oscuro y revisión de textos. Más adelante, impresión ESC/POS por Bluetooth con `TicketText`.
 
 **Celular, segunda versión:**
@@ -1380,7 +1415,7 @@ Entre paréntesis, los pasos de la PC que necesita cada uno.
 - **Ya existe en la PC** (con vectores o en camino): el resumen del panel (ventas de hoy, usado en consulta hoy, valor del inventario, stock bajo, lotes por vencer; `DashboardMetrics`), el corte de caja (`CashCutRules`, `contracts/golden/cash-cut.json`), las alertas de existencias y lotes (`alerts.json`), la compra sugerida de «Compras y resurtido» (`SuggestedPurchaseRules`, `suggested-purchase.json`), el valor del inventario (`Product.InventoryValue`: existencias por el costo con IVA; `InventoryValueRules`, `inventory-value.json`, paso 8.26), la ganancia por unidad del diálogo del producto (precio contra `Products.UnitCost`, solo en pantalla) y «Ingresar pedido» del proveedor (v1.22, que actualiza el costo y deja la entrada con su lote).
 - **No existe todavía en la PC** y se hace primero ahí, con vectores en `contracts/golden/` (opcional 8.E): un **reporte de compras por periodo** y un **reporte de utilidad del negocio** (ventas menos costo, por periodo). El consumo de insumos por periodo hoy solo se ve en el Kardex y en "usado en consulta hoy" del panel; el reporte va con los otros dos.
 - **El costo al momento.** `SaleItems` no guarda costo, y `Products.UnitCost` (desde la revisión 2) es el costo de hoy: una utilidad calculada con él cambia cada vez que cambia el costo y no da lo mismo en dos fechas. Para que la utilidad de un periodo no cambie hay que guardar el costo al vender (por ejemplo `SaleItems.UnitCost`, columna aditiva con su revisión del contrato; las ventas anteriores usarían el costo de hoy, marcado como estimado). Lo mismo para las compras: las entradas (`InventoryMovements` de compra y «Ingresar pedido») no guardan cuánto costaron, solo actualizan `Products.UnitCost`; el reporte de compras necesita el costo de cada entrada (en el movimiento o en el lote). Se decide al programar 8.E.
-- **Permisos.** Con el nivel C el token del celular es completo, así que la app hace cumplir su rol: ve los reportes, el inventario y los pacientes, y escribe solo citas, lotes y movimientos de entrada. Los reportes nuevos piden un permiso propio en `DevicePermissions` (PC y celular sí, tablet no) cuando existan.
+- **Permisos.** Con el nivel C el token del celular es completo, así que la app hace cumplir su rol: ve los reportes, el inventario y los pacientes, y escribe solo citas, lotes y movimientos de entrada. Los reportes nuevos piden un permiso propio en `DevicePermissions` (PC y celular sí, tablet no) cuando existan. *Actualización del 2026-10-22:* `CanViewBusinessReports` existe y la tablet también lo tiene (es una copia de la PC, §4.6).
 
 **Tamaño estimado** (gruesa, para un desarrollador de tiempo completo):
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -150,6 +151,52 @@ public partial class InventoryViewModel : ObservableObject
 
             _ = FilterProductsAsync();
         };
+
+        // Catálogo repetido con lo que llegó de otro equipo (la tablet edita el catálogo desde el 2026-10-22)
+        _inventoryService.OnSyncNoticesChanged += () => _ = LoadDuplicateCatalogNoticeAsync();
+    }
+
+    // ================================================================== catálogo repetido con lo que llegó de otro equipo
+
+    private IReadOnlyList<DuplicateCatalogPair> _duplicateCatalogPairs = Array.Empty<DuplicateCatalogPair>();
+
+    /// <summary>El aviso de productos, servicios o categorías que pueden estar dados de alta dos veces (se queda hasta «Entendido»).</summary>
+    [ObservableProperty]
+    private string _duplicateCatalogNoticeText = string.Empty;
+
+    public bool HasDuplicateCatalogNotice => DuplicateCatalogNoticeText.Length > 0;
+
+    partial void OnDuplicateCatalogNoticeTextChanged(string value) => OnPropertyChanged(nameof(HasDuplicateCatalogNotice));
+
+    /// <summary>Los pares que se muestran, el más reciente primero.</summary>
+    public IReadOnlyList<DuplicateCatalogPair> DuplicateCatalogPairs => _duplicateCatalogPairs;
+
+    /// <summary>Lee el aviso de la base (depurado: lo que ya no aplica se quita) y lo muestra.</summary>
+    public async Task LoadDuplicateCatalogNoticeAsync()
+    {
+        try
+        {
+            ShowDuplicateCatalogNotice((await _inventoryService.GetSyncNoticesAsync()).DuplicateCatalog);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("No se pudo leer el aviso del catálogo repetido", ex);
+        }
+    }
+
+    public void ShowDuplicateCatalogNotice(IReadOnlyList<DuplicateCatalogPair> pairs)
+    {
+        _duplicateCatalogPairs = pairs;
+        DuplicateCatalogNoticeText = new SyncArrivals(Array.Empty<AppointmentOverlap>(), Array.Empty<DuplicatePatientPair>(), pairs).DuplicateCatalogNotice;
+        OnPropertyChanged(nameof(DuplicateCatalogPairs));
+    }
+
+    /// <summary>«Entendido»: esos pares no vuelven a avisar en este equipo.</summary>
+    [RelayCommand]
+    public async Task DismissDuplicateCatalogNoticeAsync()
+    {
+        await _inventoryService.DismissSyncNoticesAsync(SyncNoticeKind.DuplicateCatalog);
+        ShowDuplicateCatalogNotice(Array.Empty<DuplicateCatalogPair>());
     }
 
     public async Task LoadDataAsync()
@@ -163,6 +210,7 @@ public partial class InventoryViewModel : ObservableObject
         SelectedCategory = Categories.FirstOrDefault(c => c.Id == (SelectedCategory?.Id ?? 0)) ?? allCat;
 
         await FilterProductsAsync();
+        await LoadDuplicateCatalogNoticeAsync();
     }
 
     public async Task FilterProductsAsync()

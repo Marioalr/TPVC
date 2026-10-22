@@ -391,6 +391,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task JoinCloudAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         bool confirm = DialogService.Confirm(
             "TPVC guardará un respaldo de esta base, quitará las categorías y los servicios de ejemplo y bajará todo lo de la nube " +
             "(catálogo, inventario, pacientes, consultas, citas y ventas). Puede tardar varios minutos si la nube tiene muchos datos; " +
@@ -420,6 +421,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task ReplaceWithCloudAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         if (!CanConfirmReplaceWithCloud) return;
         IsReplaceWithCloudOpen = false;
         ReplaceConfirmWord = string.Empty;
@@ -499,6 +501,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task AdoptCloudIdentityAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         bool confirm = DialogService.Confirm(
             "TPVC revisará que todo lo que esta computadora ya subió esté en la nube (lee la lista de registros de la nube una vez). " +
             "Si es así, la une a ella y la sincronización sigue normal; si falta algo, no cambia nada.\n\n¿Desea continuar?",
@@ -693,6 +696,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task InitialUploadAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         if (string.IsNullOrWhiteSpace(DatabaseUrl))
         {
             SaveStatusMessage = "Ingrese la URL de Turso antes de subir la base de datos.";
@@ -831,6 +835,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task MakeThisThePrimaryAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         var previous = Devices.FirstOrDefault(d => d.IsPrimary && !d.IsThisDevice);
         var detail = previous == null
             ? string.Empty
@@ -859,6 +864,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task RemoveDeviceAsync(LinkedDevice? device)
     {
+        if (!RequireCloudAdministrator()) return;
         if (device == null || !device.CanRemove) return;
         var pending = device.PendingCount is > 0
             ? $"\n\n{device.PendingText}: todavía no están en la nube y se perderían si ese equipo ya no se vuelve a conectar."

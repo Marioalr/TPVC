@@ -28,6 +28,17 @@ public partial class TursoSyncService
 
     internal static readonly string AssetChunkSql = $"SELECT Content FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash = ? AND Part = ?;";
 
+    // Subir una imagen (literal en contracts/hrana/statements.json; la tablet también lo hace desde la revisión 19): ¿ya está?,
+    // cada trozo y al final su fila. Una imagen nunca se reescribe: es otra fila con otro hash
+    internal static readonly string AssetExistsSql = $"SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;";
+
+    internal static readonly string AssetWriteChunkSql =
+        $"INSERT INTO {SyncSchema.ClinicAssetChunksTable} (Hash, Part, Content) VALUES (?, ?, ?) ON CONFLICT(Hash, Part) DO NOTHING;";
+
+    internal static readonly string AssetWriteMetaSql =
+        $"INSERT INTO {SyncSchema.ClinicAssetsTable} (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc) VALUES (?, ?, ?, ?, ?, {ServerNowSql}) " +
+        "ON CONFLICT(Hash) DO NOTHING;";
+
     /// <summary>Imágenes que no se pudieron bajar completas en esta sesión: no se reintentan hasta reiniciar (cada intento costaría todos sus trozos).</summary>
     private readonly HashSet<string> _failedAssetHashes = new(StringComparer.Ordinal);
 
@@ -111,7 +122,7 @@ public partial class TursoSyncService
     /// </summary>
     private async Task<bool> EnsureAssetUploadedAsync(TursoClient client, LetterheadImageKind kind, string hash, CancellationToken ct)
     {
-        var existing = await client.QueryAsync($"SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;", new object?[] { hash }, ct);
+        var existing = await client.QueryAsync(AssetExistsSql, new object?[] { hash }, ct);
         AddExternalUsage(1, 0);
         if (existing.Count > 0) return true;
 
@@ -126,15 +137,10 @@ public partial class TursoSyncService
         for (int part = 0; part < chunks; part++)
         {
             var piece = content.AsSpan(part * SyncSchema.AssetChunkBytes, Math.Min(SyncSchema.AssetChunkBytes, content.Length - part * SyncSchema.AssetChunkBytes)).ToArray();
-            await client.ExecuteAsync(
-                $"INSERT INTO {SyncSchema.ClinicAssetChunksTable} (Hash, Part, Content) VALUES (?, ?, ?) ON CONFLICT(Hash, Part) DO NOTHING;",
-                new object?[] { hash, part, piece }, ct);
+            await client.ExecuteAsync(AssetWriteChunkSql, new object?[] { hash, part, piece }, ct);
         }
         var mime = ClinicProfileService.ImageExtension(content) == ".png" ? "image/png" : "image/jpeg";
-        await client.ExecuteAsync(
-            $"INSERT INTO {SyncSchema.ClinicAssetsTable} (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc) VALUES (?, ?, ?, ?, ?, {ServerNowSql}) " +
-            "ON CONFLICT(Hash) DO NOTHING;",
-            new object?[] { hash, KindName(kind), mime, content.Length, chunks }, ct);
+        await client.ExecuteAsync(AssetWriteMetaSql, new object?[] { hash, KindName(kind), mime, content.Length, chunks }, ct);
         AddExternalUsage(0, chunks + 1);
         AppLogger.Info($"Turso: se subió la imagen del membrete ({KindName(kind)}, {content.Length:N0} bytes en {chunks} trozos).");
         return true;
@@ -189,16 +195,24 @@ public partial class TursoSyncService
     }
 
     /// <summary>
-    /// Después de cambiar una imagen: borra de la nube las completas que el perfil ya no nombra. Los trozos de una subida a
-    /// medias (sin su fila de ClinicAssets) no se tocan: la PC que sube los termina.
+    /// Una imagen completa que se terminó de subir hace menos de esto no se borra aunque el perfil no la nombre: otro equipo (la
+    /// tablet, desde la revisión 19) puede estar a punto de escribir el perfil que la nombra.
+    /// </summary>
+    internal static readonly TimeSpan RecentAssetGrace = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Después de cambiar una imagen: borra de la nube las completas que el perfil ya no nombra y que se subieron hace más de
+    /// una hora (<see cref="RecentAssetGrace"/>, la hora de la nube). Los trozos de una subida a medias (sin su fila de
+    /// ClinicAssets) no se tocan: el equipo que sube los termina.
     /// </summary>
     private async Task DeleteUnusedClinicAssetsAsync(TursoClient client, CancellationToken ct)
     {
         const string inUse = "(SELECT ifnull(CrestImageHash, '') FROM ClinicProfiles WHERE Id = 1 UNION SELECT ifnull(HeaderImageHash, '') FROM ClinicProfiles WHERE Id = 1)";
+        string unused = $"Hash NOT IN {inUse} AND UpdatedAtUtc < strftime('%Y-%m-%d %H:%M:%f', 'now', '-{(int)RecentAssetGrace.TotalMinutes} minutes')";
         var results = await client.TransactionAsync(new (string, object?[]?)[]
         {
-            ($"DELETE FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash IN (SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash NOT IN {inUse});", null),
-            ($"DELETE FROM {SyncSchema.ClinicAssetsTable} WHERE Hash NOT IN {inUse};", null)
+            ($"DELETE FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash IN (SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE {unused});", null),
+            ($"DELETE FROM {SyncSchema.ClinicAssetsTable} WHERE {unused};", null)
         }, ct);
         int deleted = results.Sum(r => r.AffectedRows);
         AddExternalUsage(4, deleted);
