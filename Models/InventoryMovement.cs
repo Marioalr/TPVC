@@ -56,6 +56,14 @@ public class InventoryMovement : ISyncEntity
     public string? Reason { get; set; }
     public string? Responsible { get; set; }
 
+    /// <summary>
+    /// Revisión 18 (panel «Negocio»): lo que costó cada unidad de inventario al moverse, con IVA
+    /// (<see cref="Product.EffectiveUnitCost"/> en ese momento). Lo llevan las entradas por compra (lo que costó la entrada:
+    /// el reporte de compras) y el consumo en consulta (lo que costó lo usado). null en los demás tipos, en una fila de antes o
+    /// si el producto no tenía costo: el reporte usa el costo de hoy y lo marca como estimado.
+    /// </summary>
+    public decimal? UnitCost { get; set; }
+
     /// <summary>Entra al inventario: por el signo de <see cref="Delta"/> o, en una fila anterior al paso 8.19, por su tipo.</summary>
     public bool IsEntry => Delta != 0 ? Delta > 0 : IsLegacyEntry(MovementType, StockBefore, StockAfter);
 
