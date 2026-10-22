@@ -180,7 +180,7 @@ Primera sección de Configuración, con lo de hoy y lo que conviene atender:
 
 ## 7. Módulo 5: Negocio
 
-Segunda sección de Configuración (grupo *Resumen*; también con Ctrl + K → «Negocio» o buscando «utilidad»): cómo va el negocio en un periodo, con las mismas cuentas que dará el celular.
+Segunda sección de Configuración en la PC (grupo *Resumen*; no aparece en la tablet, porque muestra costo y utilidad; también con Ctrl + K → «Negocio» o buscando «utilidad»): cómo va el negocio en un periodo, con las mismas cuentas que dará el celular.
 
 **Filtros**
 * **Periodo**: Hoy, Esta semana (del lunes a hoy), Este mes (del día 1 a hoy; abre aquí), Mes anterior, Este año (del 1 de enero a hoy) o **Personalizado**: escriba las dos fechas (dd/mm/aaaa, las diagonales se ponen solas) y pulse **Aplicar**. Los días son los del consultorio (hora de la Ciudad de México).
@@ -190,9 +190,9 @@ Segunda sección de Configuración (grupo *Resumen*; también con Ctrl + K → �
 **Tarjetas**
 * **Ventas**, **Costo de lo vendido** (con IVA), **Utilidad bruta** (ventas − costo) y **Margen** (utilidad / ventas).
 * **Tickets** y **Ticket promedio** (ventas / tickets).
-* Debajo de ventas, utilidad y tickets, el **cambio contra el periodo anterior igual** (▲ sube, ▼ baja): hoy contra ayer, la semana contra la anterior, este mes hasta hoy contra los mismos días del mes pasado, el mes anterior contra el de antes, el año hasta hoy contra los mismos días del año pasado y un rango contra los mismos días justo antes. «Sin comparación» si antes no hubo ventas.
+* Debajo de ventas, utilidad y tickets, el **cambio contra el periodo anterior igual** (▲ sube, ▼ baja): hoy contra ayer, esta semana contra los mismos días de la semana pasada (un lunes contra el lunes anterior), este mes hasta hoy contra los mismos días del mes pasado, el mes anterior contra el de antes, el año hasta hoy contra los mismos días del año pasado y un rango contra los mismos días justo antes. «Sin comparación» si antes no hubo ventas.
 * **Compras** del periodo y **Valor del inventario** de hoy (el mismo del Panel del consultorio).
-* Un aviso **Costo estimado** cuando algún renglón no guardó su costo al venderse (las ventas de antes de esta versión): para esos se usa el costo de hoy del producto. «Sin costo» son productos que no tienen costo capturado: cuentan 0, así que capturar su costo en Productos mejora la utilidad que se ve.
+* Un aviso **Costo estimado** cuando algún renglón no guardó su costo al venderse (las ventas de antes de esta versión): para esos se usa el costo de hoy del producto, por paquete (las ventas de antes de la 1.47.0 eran siempre de paquetes completos). «Sin costo» son productos que no tienen costo capturado: cuentan 0, así que capturar su costo en Productos mejora la utilidad que se ve.
 
 **Por sección**: una tabla con ventas, costo, utilidad, margen y la parte de las ventas de cada tipo. **Un clic** en un tipo filtra todo el panel por él; otro clic lo quita.
 * **Consultas** es el honorario de la consulta (el servicio con código SERV-001, de categoría «Consulta» o con «Consulta» en el nombre); **Servicios**, los demás servicios del catálogo (aunque ya se hayan borrado); **Medicamentos** e **Insumos**, los productos según su categoría o su código (las mismas reglas de siempre); **Otros**, los cargos libres y los productos que ya no están en el catálogo. Un cargo libre de un insumo cuenta como insumo.

@@ -110,19 +110,34 @@ public class BusinessReportTests
         {
             ProductLine(1, day, 3, 4, 6m, 3.48m, individual: true),
             ProductLine(2, day, 3, 1, 60m, 34.80m, individual: false),
-            ProductLine(3, day, 3, 2, 6m, null, individual: null) // de antes: a menos del precio del paquete → piezas
+            ProductLine(3, day, 3, 2, 60m, null, individual: null) // de antes de v1.47.0: paquetes completos
         }, new[] { gauze }, Array.Empty<ClinicalService>(), October);
 
         Assert.IsTrue(lines[0].IsLoosePieces);
         Assert.IsFalse(lines[1].IsLoosePieces);
-        Assert.IsTrue(lines[2].IsLoosePieces, "La regla vieja: precio menor al del paquete");
-        Assert.AreEqual(6.96m, lines[2].Cost, "Estimado por pieza: 2 × 3.48");
+        Assert.IsFalse(lines[2].IsLoosePieces, "Sin marca: paquetes");
+        Assert.AreEqual(69.60m, lines[2].Cost, "Estimado por paquete: 2 × 34.80");
 
         var top = BusinessReportRules.TopProducts(lines, BusinessLineType.Insumos, BusinessRanking.Quantity);
         Assert.HasCount(2, top, "Las piezas sueltas van aparte de los paquetes");
-        Assert.AreEqual(6, top[0].Quantity);
-        Assert.AreEqual("6 piezas sueltas", top[0].QuantityText);
-        Assert.AreEqual("1", top[1].QuantityText);
+        Assert.AreEqual(4, top[0].Quantity);
+        Assert.AreEqual("4 piezas sueltas", top[0].QuantityText);
+        Assert.AreEqual("3", top[1].QuantityText, "1 paquete con marca y 2 de antes");
+    }
+
+    [TestMethod]
+    public void ALineFromBeforeV147_IsCostedAsPackages_EvenIfThePriceRoseSince()
+    {
+        // Antes de v1.47.0 todo se vendía en paquetes: una caja de 10 a 60 sin la marca de piezas. Hoy la caja cuesta 90, así que
+        // la regla vieja de cancelar (precio menor al de hoy) la tomaría por piezas sueltas
+        var gauze = Supply(3, 90m, 30m, excludesVat: true, unitsPerPackage: 10);
+        var line = ProductLine(1, new DateTime(2026, 10, 6, 12, 0, 0), 3, 2, 60m, null, individual: null);
+        Assert.IsTrue(BusinessReportRules.SoldIndividualUnits(line.IsIndividualUnits, line.UnitPrice, gauze), "La regla de cancelar no cambia");
+
+        var evaluated = BusinessReportRules.Lines(new[] { line }, new[] { gauze }, Array.Empty<ClinicalService>(), October).Single();
+        Assert.IsFalse(evaluated.IsLoosePieces);
+        Assert.AreEqual((69.60m, BusinessCostSource.Estimated), BusinessReportRules.LineCost(line, gauze), "2 paquetes × 34.80, no 2 piezas × 3.48");
+        Assert.AreEqual("2", BusinessReportRules.TopProducts(new[] { evaluated }, null, BusinessRanking.Quantity).Single().QuantityText);
     }
 
     [TestMethod]
@@ -180,10 +195,23 @@ public class BusinessReportTests
 
         // La semana empieza el lunes; un rango al revés se voltea
         Assert.AreEqual(new DateTime(2026, 10, 26), BusinessReportRules.PeriodFor(BusinessPeriodKind.EstaSemana, new DateTime(2026, 10, 31)).From);
+        Assert.AreEqual(new BusinessPeriod(new DateTime(2026, 10, 19), new DateTime(2026, 10, 25)),
+            BusinessReportRules.PreviousPeriod(BusinessPeriodKind.EstaSemana, BusinessReportRules.PeriodFor(BusinessPeriodKind.EstaSemana, new DateTime(2026, 10, 31))),
+            "Del lunes al sábado contra del lunes al sábado de la semana anterior");
         Assert.AreEqual(new BusinessPeriod(new DateTime(2026, 10, 11), new DateTime(2026, 10, 21)),
             BusinessReportRules.PeriodFor(BusinessPeriodKind.Personalizado, new DateTime(2026, 10, 31), new DateTime(2026, 10, 20), new DateTime(2026, 10, 11)));
         Assert.AreEqual(new DateTime(2026, 10, 15), BusinessReportRules.ParseDate("15/10/2026"));
         Assert.IsNull(BusinessReportRules.ParseDate("15/10/20"));
+    }
+
+    [TestMethod]
+    public void ThisWeek_OnAMonday_ComparesWithLastMonday()
+    {
+        var monday = new DateTime(2026, 10, 26);
+        var week = BusinessReportRules.PeriodFor(BusinessPeriodKind.EstaSemana, monday);
+        Assert.AreEqual(new BusinessPeriod(monday, monday.AddDays(1)), week);
+        Assert.AreEqual(new BusinessPeriod(new DateTime(2026, 10, 19), new DateTime(2026, 10, 20)),
+            BusinessReportRules.PreviousPeriod(BusinessPeriodKind.EstaSemana, week), "El lunes anterior, no el domingo");
     }
 
     [TestMethod]
@@ -502,12 +530,16 @@ public class BusinessReportTests
     }
 
     [TestMethod]
-    public void TheBusinessReports_AreAllowedOnThePcThePhoneAndTheTablet_AndTheSectionShowsOnThePc()
+    public void TheBusinessReports_AreAllowedOnThePcAndThePhoneButNotTheTablet_AndTheSectionShowsOnThePc()
     {
         Assert.IsTrue(DevicePermissions.CanViewBusinessReports(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidMobileAdmin));
-        Assert.AreEqual(DevicePermissions.CanViewDashboard(DeviceRole.AndroidTablet), DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidTablet),
-            "La tablet sigue la regla del panel del consultorio");
+        Assert.IsFalse(DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidTablet), "Costo y utilidad: como el corte de caja, hasta que el médico decida");
+        foreach (var role in Enum.GetValues<DeviceRole>())
+        {
+            Assert.AreEqual(DevicePermissions.CanViewCashCut(role), DevicePermissions.CanViewBusinessReports(role), role.ToString());
+            Assert.AreEqual(DevicePermissions.CanViewBusinessReports(role), BusinessViewModel.IsAllowedOn(role));
+        }
 
         var main = new MainViewModel(_inventory, new ConsultationService(seedDemoPatients: false), new ThemeService(Path.Combine(_exportDir, "theme.json")),
             new AppUpdateService());
