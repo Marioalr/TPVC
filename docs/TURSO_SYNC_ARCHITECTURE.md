@@ -86,31 +86,52 @@ Tres equipos: la PC con Windows, una tablet Android y un celular Android. El 99%
 
 Papel de cada equipo (plan §2.2):
 - **PC** (`WindowsDesktop`): escribe todo. Es la única que crea o migra el esquema remoto, escribe `DeviceRegistry` y `_tpvc_meta`, vincula y revoca equipos, edita catálogo, inventario, perfil y membrete, y regulariza los folios hechos sin conexión (solo la PC principal).
-- **Tablet** (`AndroidTablet`): escribe pacientes, notas, citas, ventas (también sin conexión), movimientos, lápidas, su latido, `FolioCounters` y `ConsultationHandoffs`. El inventario lo ve, no lo edita.
+- **Tablet** (`AndroidTablet`): **una copia exacta de la PC con la interfaz táctil (decisión del médico del 2026-10-22).** Escribe lo mismo que la PC: pacientes, notas, citas, ventas (también sin conexión), catálogo e inventario, la configuración del consultorio (perfil, membrete, plantillas, dosis pediátricas), lápidas, su latido, `FolioCounters` y `ConsultationHandoffs`. No hace lo del dueño de la nube (`CanAdministerCloud`): nunca DDL, `_tpvc_meta`, `DeviceRegistry`, cambios de generación, borrar imágenes del membrete ni regularizar folios.
 - **Celular** (`AndroidMobileAdmin`): ve expedientes, agenda citas, revisa inventario y registra entradas de mercancía. Escribe citas, lotes y movimientos de entrada (con sus lápidas), y su latido solo con la app al frente; nada clínico, ni recetas ni ventas, y no envía ni recibe consultas. Su primera versión solo baja (app K4); lo que escribe llega en K4b.
 
 ### Matriz de permisos (`DevicePermissions`, `Models/TursoConfig.cs`)
 
+Desde el 2026-10-22 la tablet es una copia de la PC: tiene todo salvo `CanAdministerCloud`. La prueba
+`DevicePermissions_TheTabletIsACopyOfThePc_ExceptAdministeringTheCloud` fija esta tabla.
+
 | Permiso | PC (`WindowsDesktop`) | Tablet (`AndroidTablet`) | Celular (`AndroidMobileAdmin`) |
 |---|:---:|:---:|:---:|
+| `CanViewClinicalRecords`: ver expedientes (desde v1.27.0, paso 8.10) | sí | sí | sí |
 | `CanManageClinicalRecords`: editar expedientes y consulta | sí | sí | no |
 | `CanPrescribeMedications`: recetar | sí | sí | no |
 | `CanProcessSales`: cobrar y vender, también sin conexión | sí | sí | no |
-| `CanManageInventory`: editar inventario y catálogo (productos, precios, conteos, cerrar lotes) | sí | no (solo ve) | no (solo ve) |
-| `CanViewDashboard`: resumen | sí | sí | sí |
-| `CanViewCashCut`: corte de caja | sí | no (oculto) | sí (supuesto por confirmar, plan §9) |
-| `CanViewStockAlerts`: alertas de existencias y compra sugerida | sí | sí | sí |
-| `CanConfigureSystem`: configuración, Excel, respaldos, Turso, vincular, perfil y membrete | sí | no | no |
-| `CanViewClinicalRecords`: ver expedientes (desde v1.27.0, paso 8.10) | sí | sí | sí |
-| `CanShareDocuments`: compartir receta y ticket (desde v1.27.0) | sí | sí | sí |
 | `CanScheduleAppointments`: agendar citas (desde v1.27.0) | sí | sí | sí |
-| `CanRegisterStockEntries`: registrar entradas de mercancía, lote y movimiento de entrada (desde v1.27.0) | sí | no | sí |
+| `CanRegisterStockEntries`: registrar entradas de mercancía, lote de un producto que ya existe y su movimiento de entrada (desde v1.27.0) | sí | sí (2026-10-22) | sí |
+| `CanManageInventory`: editar inventario y catálogo (productos, precios, costos, conteos, cerrar lotes, servicios y sus insumos, «Ingresar pedido») | sí | sí (2026-10-22) | no (solo ve) |
+| `CanViewDashboard`: resumen | sí | sí | sí |
+| `CanViewStockAlerts`: alertas de existencias y compra sugerida | sí | sí | sí |
+| `CanViewCashCut`: corte de caja | sí | sí (2026-10-22) | sí |
+| `CanViewBusinessReports`: panel «Negocio» (v1.48.0) | sí | sí (2026-10-22) | sí |
+| `CanShareDocuments`: compartir receta y ticket (desde v1.27.0) | sí | sí | sí |
 | `CanTakeConsultations`: enviar y recibir la consulta entre equipos (desde v1.27.0) | sí | sí | no |
+| `CanConfigureSystem`: configuración del consultorio (perfil, membrete, servicios, plantillas, dosis pediátricas, Excel) y las preferencias del equipo | sí | sí (2026-10-22) | no |
+| `CanAdministerCloud` (nuevo, 2026-10-22): esquema y `_tpvc_meta`, sincronización completa, generaciones (reemplazar la nube, restaurar con la nube activa), vincular y revocar (`DeviceRegistry`), regularizar folios | sí | **no** | no |
 
-- La PC no aplica estos permisos (siempre es `WindowsDesktop`); los usa para la consulta entre equipos (`CanTakeConsultations`) y para la letra de los códigos (`CodeLetter`: `P`, `T`, `C`). El rol se escribe en `RegisteredDevices` con cada latido.
-- **Desde v1.20.0 (paso 8.2)** el rol de la PC queda fijo en `WindowsDesktop`: se quitó el selector y una PC guardada con otro rol se corrige al abrir. **Desde v1.27.0 (paso 8.10)** existe `DeviceRegistry` (§4.2), la autoridad sobre el rol, el código de folios y la revocación de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La tablet y el celular tendrán su fila al vincularse (8.14); la app de Kotlin ocultará pantallas y bloqueará escrituras según el rol que lea ahí.
-- **Todo lo de esta tabla lo hace cumplir la app.** Con el nivel C (§6) la tablet y el celular usan un mismo token `full-access`: Turso no distingue roles. El corte de caja de la tablet solo se oculta en su interfaz.
+- La PC siempre es `WindowsDesktop`, así que en ella todo es verdadero. Aun así cada pantalla pregunta por su permiso, para que la tablet de Kotlin copie el mismo menú: `ConfigurationShellViewModel.IsSectionAllowedOn` (cada sección de Configuración) y `TursoSyncViewModel.IsCloudAdministrator` (los botones de dueño de la nube en *Nube y dispositivos* y *Respaldos y datos*). También los usan la consulta entre equipos (`CanTakeConsultations`) y la letra de los códigos (`CodeLetter`: `P`, `T`, `C`). El rol se escribe en `RegisteredDevices` con cada latido.
+- **Desde v1.20.0 (paso 8.2)** el rol de la PC queda fijo en `WindowsDesktop`: se quitó el selector y una PC guardada con otro rol se corrige al abrir. **Desde v1.27.0 (paso 8.10)** existe `DeviceRegistry` (§4.2), la autoridad sobre el rol, el código de folios y la revocación de cada equipo. Solo la PC la escribe y sus filas nunca se borran. La tablet y el celular tienen su fila al vincularse (8.14); la app de Kotlin oculta pantallas y bloquea escrituras según el rol que lee ahí.
+- **Todo lo de esta tabla lo hace cumplir la app.** Con el nivel C (§6) la tablet y el celular usan un mismo token `full-access`: Turso no distingue roles.
 - La consulta entre equipos es solo para la PC y la tablet: `GetLinkedDevicesAsync` ya excluye el celular.
+
+### Quién escribe el catálogo y la configuración (revisión 19)
+
+| Qué | PC | Tablet | Celular |
+|---|---|---|---|
+| `Categories`, `Products`, `ClinicalServices`, `ServiceDefaultProducts` | sí | sí (2026-10-22) | no |
+| `ProductBatches` e `InventoryMovements` | sí, todo (y los saldos iniciales, solo la PC principal) | sí, todo salvo saldos iniciales | solo el lote de una entrada de mercancía y su `EntradaCompra` |
+| `PediatricDoseRules`, `PrescriptionTemplates` | sí | sí (2026-10-22) | no |
+| `ClinicProfiles` (`profile.write`) y una imagen nueva del membrete (`asset.*`) | sí | sí (2026-10-22) | no |
+| Borrar imágenes del membrete que el perfil ya no nombra | sí | no | no |
+| Sembrar el catálogo inicial (SyncId fijos, marca del año 2000) | solo con una base nueva; los datos de demostración, solo su asistente | nunca | nunca |
+
+- **Identidad y LWW:** cada registro del catálogo es su `SyncId` (al azar al darlo de alta; fijo, UUIDv5, si se sembró) y gana la escritura más nueva por fila. El perfil es una sola fila con la misma regla.
+- **Duplicados:** dos equipos que dan de alta lo mismo sin verse dejan dos filas, que **nunca se unen solas** (lotes, movimientos, renglones de ticket, insumos de un servicio y hojas del paciente apuntan a cada una). Al dar de alta un producto se revisa su código entre los activos; después de cada bajada (no en la primera descarga) los productos, servicios y categorías que llegaron se comparan por mismo código o mismo nombre (`Services/Rules/CatalogDuplicateRules.cs`, `contracts/golden/duplicate-catalog.json`) y los pares van a un aviso persistente de cada equipo (`SyncNotices`, `DbMeta` "SyncNotices", lista `Catalog`) que se ve arriba de Productos hasta **Entendido**. Se depura al mostrarse (uno borrado, desactivado o que ya no se parece).
+- **Imágenes del membrete:** cualquiera de los dos sube una imagen nueva completa antes de escribir el perfil que la nombra; una imagen nunca se reescribe (otra imagen es otro hash). Solo la PC borra las que el perfil ya no nombra, la siguiente vez que ella cambia una imagen; mientras, una imagen que quitó la tablet ocupa su lugar en la nube.
+
 
 ---
 
@@ -153,6 +174,7 @@ Se genera automáticamente desde el modelo de EF Core: **cada entidad `ISyncEnti
 - **Membrete en la nube (desde v1.29.0, paso 8.12; `TursoSyncService.ClinicAssets.cs`).** `ClinicProfiles` gana `CrestImageHash` y `HeaderImageHash`: el SHA-256 de cada imagen en hex con minúsculas, `''` sin imagen y `NULL` si ninguna PC con v1.29.0 lo ha escrito. Los bytes van en `ClinicAssetChunks (Hash, Part, Content BLOB)` en trozos de 512 KiB, uno por petición, y al final la fila de `ClinicAssets (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc)`: si existe, la imagen está completa. Una imagen nunca cambia (otra imagen es otro hash), así que se sube una sola vez.
   - **Subir:** cuando el perfil de la PC es el más nuevo, primero sube las imágenes que falten (pregunta por su hash) y después el perfil que las nombra; al final borra de la nube las imágenes completas que el perfil ya no nombra. Una imagen que no se eligió ni se quitó en esta PC (`CrestImageEditedHere`) conserva el hash de la nube: una PC recién instalada no le quita el escudo a las demás.
   - **Bajar:** cada sincronización ya lee la fila del perfil; solo si el hash de la nube es distinto del de aquí se lee `ClinicAssets` y sus trozos (cuatro por petición), se revisan el tamaño y el SHA-256, y se guarda la imagen. Una sincronización normal no toca estas tablas. Una imagen que llega dañada no se usa ni se reintenta en esa sesión.
+  - **La tablet (revisión 19, decisión del 2026-10-22):** sube igual que la PC, con las instrucciones literales `asset.exists`, `asset.writeChunk`, `asset.writeMeta` y `profile.write` de `contracts/hrana/statements.json`, pero **nunca borra** imágenes: solo la PC borra las que el perfil ya no nombra (al cambiar ella una imagen).
   - **Nube de antes de v1.29.0:** las columnas llegan con `ALTER`; con el hash en `NULL`, la PC que tiene la imagen la sube y lo anota (`UPDATE … WHERE … IS NULL`). El upsert de una PC más vieja no toca los hashes.
 - **Resultados de laboratorio (desde v1.30.0, paso 8.12b; `TursoSyncService.LabFiles.cs`; diseño en `EVALUACION_RESULTADOS_LABORATORIO.md` §6, comprobado con V17 y V19–V23).** `LabResults` es la tabla sincronizada número 14 y solo lleva los datos (paciente con borrado en cascada, consulta opcional que queda en nulo al borrarse, título, laboratorio, `ResultDate` solo fecha, notas, tipo, páginas, tamaño y `ContentSha256`). El archivo vive aparte, por su SHA-256: en cada PC en `%LocalAppData%\TPVC\laboratorio\<ab>\<sha>` (fuera de `consultorio.db` y de sus respaldos; inmutable) y en la nube en `LabBlobs (Sha256, SizeBytes, ChunkSize, ChunkCount, MimeType, CreatedAtUtc, OriginDeviceId, CompletedAtUtc, ArchivedAtUtc, EvictedAtUtc, OrphanSinceUtc)` y `LabBlobChunks (Sha256, ChunkIndex, Data BLOB)`, en trozos de 512 KiB. La nube también tiene el índice `IX_LabResults_ContentSha256`. El SQL literal de cada paso está en `contracts/golden/lab-files.json`.
   - **Cuándo:** después de cada sincronización buena, en segundo plano y con su propio candado (un archivo grande no detiene la sincronización). Lo de aquí que la nube no tiene se sabe sin preguntarle (`LabFileStates.UploadedTo`), así que una vuelta sin nada que hacer no hace ninguna petición.
