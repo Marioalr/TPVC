@@ -16,11 +16,11 @@ namespace TPVC.Tests;
 /// </summary>
 public partial class TursoSyncEndToEndTests
 {
-    private static async Task<Product> NewProductAsync(Device device, string code, string name, string? presentation = null)
+    private static async Task<Product> NewProductAsync(Device device, string code, string name, string? presentation = null, int stock = 0)
     {
         int categoryId;
         using (var db = device.Factory.CreateDbContext()) categoryId = await db.Categories.AsNoTracking().Select(c => c.Id).FirstAsync();
-        var product = new Product { Code = code, Name = name, Presentation = presentation, CategoryId = categoryId, Price = 50m };
+        var product = new Product { Code = code, Name = name, Presentation = presentation, CategoryId = categoryId, Price = 50m, CurrentStock = stock };
         await device.Inventory.SaveProductAsync(product);
         return product;
     }
@@ -108,6 +108,38 @@ public partial class TursoSyncEndToEndTests
         var again = await pc.Sync.SyncAsync();
         Assert.IsTrue(again.Arrivals.IsEmpty);
         Assert.IsEmpty((await pc.Inventory.GetSyncNoticesAsync()).DuplicatePatients);
+    }
+
+    [TestMethod]
+    public async Task ASaleThatOnlyChangesTheStockOfAnOldDuplicate_DoesNotWarnAgain_ButARenameDoes()
+    {
+        var (pc, tablet, _) = await PcAndTabletAsync();
+        _server.IsOffline = true;
+        await NewProductAsync(pc, "MED-900", "Ketorolaco", stock: 5);
+        var onTablet = await NewProductAsync(tablet, "MED-900", "Ketorolaco trometamina", stock: 5);
+        _server.IsOffline = false;
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        Assert.HasCount(1, (await pc.Sync.SyncAsync()).Arrivals.DuplicateCatalog);
+        await pc.Inventory.DismissSyncNoticesAsync(SyncNoticeKind.DuplicateCatalog);
+
+        // La tablet vende: a la PC le llega el producto con otras existencias (y su movimiento), pero el par ya se avisó
+        Assert.IsNotNull(await tablet.Inventory.RegisterSaleAsync(new[] { (onTablet.Id, 2, onTablet.Price) }, "Público General", "Efectivo"));
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        var afterSale = await pc.Sync.SyncAsync();
+        Assert.IsTrue(afterSale.Success, afterSale.ErrorMessage);
+        Assert.IsEmpty(afterSale.Arrivals.DuplicateCatalog, "Solo cambiaron las existencias");
+        using (var db = pc.Factory.CreateDbContext())
+            Assert.AreEqual(3, (await db.Products.AsNoTracking().SingleAsync(p => p.SyncId == onTablet.SyncId)).CurrentStock, "Sí llegó");
+
+        // Cambiarle el nombre sí lo vuelve a revisar (lo descartado no regresa al aviso, pero la revisión lo encuentra)
+        var renamed = (await tablet.Inventory.GetProductByIdAsync(onTablet.Id))!;
+        renamed.Name = "Ketorolaco 10 mg";
+        await tablet.Inventory.SaveProductAsync(renamed);
+        Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
+        var afterRename = await pc.Sync.SyncAsync();
+        Assert.HasCount(1, afterRename.Arrivals.DuplicateCatalog, "Mismo código, otro nombre: se revisa otra vez");
+        Assert.IsEmpty((await pc.Inventory.GetSyncNoticesAsync()).DuplicateCatalog, "Ese par ya se había descartado");
     }
 
     [TestMethod]

@@ -2431,7 +2431,7 @@ public partial class TursoSyncService
                 entry.Property(property.Name).CurrentValue = property.PropertyType == typeof(int) ? id ?? 0 : id;
             }
             if (!onlyNewColumns) local.UpdatedAtUtc = remoteUpdated;
-            if (!force && (created || newColumns == null)) arrived.Add(syncId);
+            if (!force && (created || newColumns == null) && (created || ArrivalChangedCatalogIdentity(entry))) arrived.Add(syncId);
             applied++;
         }
 
@@ -2444,6 +2444,22 @@ public partial class TursoSyncService
             AppLogger.Info($"Turso: {markForUpload.Count} expedientes combinados por campo quedaron distintos de la nube y suben.");
         }
         return applied;
+    }
+
+    // Lo que hace que un registro del catálogo se parezca a otro (CatalogDuplicateRules): una bajada que solo cambia precio o
+    // existencias (una venta en la tablet) no vuelve a revisar un par que ya estaba
+    private static readonly string[] CatalogIdentityColumns = { "Code", "Name", "Presentation", "IsActive" };
+
+    /// <summary>
+    /// Una fila que ya existía cuenta como llegada para los avisos si no es del catálogo, o si la bajada le cambió el código, el
+    /// nombre, la presentación o si está activa (productos, servicios y categorías).
+    /// </summary>
+    private static bool ArrivalChangedCatalogIdentity(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        var type = entry.Metadata.ClrType;
+        if (type != typeof(Product) && type != typeof(ClinicalService) && type != typeof(Category)) return true;
+        return CatalogIdentityColumns.Any(c => entry.Metadata.FindProperty(c) != null
+                                               && !Equals(entry.Property(c).OriginalValue, entry.Property(c).CurrentValue));
     }
 
     /// <summary>
