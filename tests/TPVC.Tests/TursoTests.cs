@@ -363,6 +363,46 @@ public class TursoTests
         Assert.IsTrue(TPVC.ViewModels.TursoSyncViewModel.IsCloudAdministrator);
     }
 
+    /// <summary>Los comandos de dueño de la nube: su primera instrucción pide <see cref="DevicePermissions.CanAdministerCloud"/>.</summary>
+    internal static readonly (string File, string Method, string Guard)[] CloudOwnerCommands =
+    {
+        ("TursoSyncViewModel.Linking.cs", "ShowLinkQrAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Linking.cs", "ApproveAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Linking.cs", "RejectDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.Rotation.cs", "ReportLostDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "JoinCloudAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "ReplaceWithCloudAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "AdoptCloudIdentityAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "InitialUploadAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "MakeThisThePrimaryAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("TursoSyncViewModel.cs", "RemoveDeviceAsync", "if (!RequireCloudAdministrator()) return;"),
+        ("DataManagementViewModel.cs", "ReplaceCloudAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "ContinueCloudReplacementAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "StartRestoreFromFile", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "RestoreBackup", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+    };
+
+    [TestMethod]
+    public void EveryCloudOwnerCommand_AsksForCanAdministerCloudFirst()
+    {
+        // En la PC siempre se puede; la tablet de Kotlin repite la lista (plan §4.6). Se revisa el código: la primera instrucción
+        // de cada comando (sin contar comentarios) es la guarda
+        var root = AppContext.BaseDirectory;
+        while (root != null && !File.Exists(Path.Combine(root, "TPVC.sln"))) root = Path.GetDirectoryName(root);
+        Assert.IsNotNull(root);
+        foreach (var (file, method, guard) in CloudOwnerCommands)
+        {
+            var text = File.ReadAllText(Path.Combine(root, "ViewModels", file));
+            var match = System.Text.RegularExpressions.Regex.Match(text, $@"\b(?:Task|void)\s+{method}\([^)]*\)\s*\{{");
+            Assert.IsTrue(match.Success, $"{file}: no se encontró {method}");
+            var firstStatement = text[(match.Index + match.Length)..].Split('\n')
+                .Select(l => l.Trim())
+                .First(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal));
+            Assert.AreEqual(guard, firstStatement, $"{file}: {method}");
+        }
+        Assert.IsTrue(TPVC.ViewModels.TursoSyncViewModel.IsCloudAdministrator);
+    }
+
     [TestMethod]
     public async Task TursoClient_QueryAsync_ParsesHranaResultsProperly()
     {

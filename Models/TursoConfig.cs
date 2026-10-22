@@ -95,7 +95,8 @@ public static class DevicePermissions
     /// <list type="bullet">
     /// <item>crear y migrar el esquema remoto (DDL, ALTER TABLE, la huella, <c>_tpvc_meta</c>) y la limpieza de
     /// <c>ConsultationHandoffs</c> y <c>RegisteredDevices</c>;</item>
-    /// <item>la sincronización completa que verifica la nube, unirse o recuperar como PC, «Reemplazar con la nube», reemplazar la
+    /// <item>la sincronización completa que verifica la nube, unirse o recuperar como PC, «Esta PC ya usaba esta nube» (adoptar la
+    /// identidad de la nube), «Reemplazar con la nube», reemplazar la
     /// nube con un respaldo o restaurar uno con la nube activa (cambian la generación, paso 8.9);</item>
     /// <item>vincular, aprobar, rechazar, quitar y «Perdí este equipo» (escribe <c>DeviceRegistry</c>);</item>
     /// <item>y, solo en la PC principal (<c>_tpvc_meta.primaryDeviceId</c>), la regularización diaria de folios, los saldos

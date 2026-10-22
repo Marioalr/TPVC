@@ -386,14 +386,14 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 | Compartir receta y ticket (`CanShareDocuments`) | sí | sí | sí |
 | Consulta entre equipos (`CanTakeConsultations`) | sí | sí | no (`GetLinkedDevicesAsync` excluye el celular) |
 | Configuración del consultorio (`CanConfigureSystem`): médico y consultorio, membrete, servicios, plantillas de receta, dosis pediátricas, importar el Excel, y las preferencias de este equipo | sí | sí (2026-10-22) | no |
-| **Administrar la nube** (`CanAdministerCloud`, nuevo): esquema remoto y `_tpvc_meta`, sincronización completa, unirse o recuperar como PC, «Reemplazar con la nube», reemplazar la nube con un respaldo o restaurar uno con la nube activa, vincular, aprobar, rechazar, quitar y «Perdí este equipo», «Esta PC reemplaza a la principal»; y en la PC principal, regularizar folios, saldos iniciales y archivar los resultados de laboratorio | sí | **no** | no |
+| **Administrar la nube** (`CanAdministerCloud`, nuevo): esquema remoto y `_tpvc_meta`, sincronización completa, unirse o recuperar como PC, «Esta PC ya usaba esta nube», «Reemplazar con la nube», reemplazar la nube con un respaldo o restaurar uno con la nube activa, vincular, aprobar, rechazar, quitar y «Perdí este equipo», «Esta PC reemplaza a la principal»; y en la PC principal, regularizar folios, saldos iniciales y archivar los resultados de laboratorio | sí | **no** | no |
 
 **Qué de Configuración se queda solo en la PC y por qué.** Todo lo que cambia la nube para todos los equipos o decide quién entra:
 
 | En la PC | Por qué no en la tablet |
 |---|---|
 | Crear y migrar el esquema remoto (DDL, `ALTER TABLE`, la huella, `_tpvc_meta`) y la limpieza de `ConsultationHandoffs` y `RegisteredDevices` | Un solo dueño del esquema (§2.3): dos equipos con versiones distintas migrando la misma base se pisarían la huella. Kotlin nunca corre DDL («Sincronice primero la PC»). |
-| Sincronización completa (verifica la nube y le da su identidad), unirse o recuperar como PC | Fija `clinicId`, `fullUploadAtUtc` y renombra tablas `legacy_v1_*`: es el arranque de la nube. La tablet se une por la vinculación (K3) y baja todo. |
+| Sincronización completa (verifica la nube y le da su identidad), unirse o recuperar como PC, «Esta PC ya usaba esta nube» | Fija `clinicId`, `fullUploadAtUtc` y renombra tablas `legacy_v1_*`: es el arranque de la nube. La tablet se une por la vinculación (K3) y baja todo. |
 | «Reemplazar con la nube», reemplazar la nube con un respaldo, restaurar un respaldo con la nube activa | Cambian la generación (8.9): todos los demás equipos se detienen, guardan lo pendiente y vuelven a bajar todo. Si la tablet se descompone, se vuelve a vincular y baja todo; no restaura respaldos. |
 | Vincular (QR de 2 min), aprobar, rechazar, quitar, «Perdí este equipo», PC principal | Escriben `DeviceRegistry`, que solo escribe la PC (decisiones del 2026-10-09 y 2026-10-11): la PC aprueba a cada equipo nuevo. En la tablet *Equipos vinculados* se ve **solo para consultar** (quién está en línea y sus cambios pendientes), sin esos botones. |
 | Regularización diaria de folios, saldos iniciales del libro (8.20), archivar o desalojar los resultados de laboratorio | Solo la PC principal (`_tpvc_meta.primaryDeviceId`): una sola autoridad para no repetir un número ni un saldo. |

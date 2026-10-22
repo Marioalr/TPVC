@@ -41,7 +41,7 @@ public partial class TursoSyncViewModel
 
     /// <summary>
     /// Administrar la nube y los equipos (vincular, aprobar, rechazar, quitar, «Perdí este equipo», la PC principal, unirse,
-    /// reemplazar y la sincronización completa) es de la PC: <see cref="DevicePermissions.CanAdministerCloud"/>. La tablet,
+    /// «Esta PC ya usaba esta nube», reemplazar y la sincronización completa) es de la PC: <see cref="DevicePermissions.CanAdministerCloud"/>. La tablet,
     /// copia de la PC desde el 2026-10-22, ve «Equipos vinculados» sin estos botones. En la PC siempre es verdadero.
     /// </summary>
     public static bool IsCloudAdministrator => DevicePermissions.CanAdministerCloud(ConfigurationShellViewModel.LocalRole);

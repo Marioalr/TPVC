@@ -501,6 +501,7 @@ public partial class TursoSyncViewModel : ObservableObject
     [RelayCommand]
     public async Task AdoptCloudIdentityAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         bool confirm = DialogService.Confirm(
             "TPVC revisará que todo lo que esta computadora ya subió esté en la nube (lee la lista de registros de la nube una vez). " +
             "Si es así, la une a ella y la sincronización sigue normal; si falta algo, no cambia nada.\n\n¿Desea continuar?",
