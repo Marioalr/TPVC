@@ -687,10 +687,37 @@ internal sealed class UiSmokeSession
             records.PatientForm.CancelPatientForm();
 
             var shell = main.ConfigurationShellVM;
-            foreach (var sub in new[] { "Dashboard", "Inventory", "Batches", "Movements", "Services", "ClinicProfile", "Appearance", "Data", "TursoSync", "Updates", "DesignSystem" })
+            foreach (var sub in new[] { "Dashboard", "Business", "Inventory", "Batches", "Movements", "Services", "ClinicProfile", "Appearance", "Data", "TursoSync", "Updates", "DesignSystem" })
             {
                 Show(host, main, sub, $"20-config-{sub.ToLowerInvariant()}-{suffix}");
             }
+
+            // Panel «Negocio» (pedido del 2026-10-22): con una venta de hoy (honorario y un medicamento), cargado antes de la captura.
+            // Fuera de pantalla IsVisible siempre es false: las tarjetas, «Por sección» y la gráfica se revisan con IsShown
+            if (suffix == "claro")
+            {
+                var sold = WaitFor(inventory.GetProductsAsync()).First(p => p.CurrentStock > 1);
+                var feeService = WaitFor(inventory.GetClinicalServicesAsync()).First(s => s.Code == "SERV-001");
+                WaitFor(inventory.RegisterSaleAsync(new[] { new SaleLineRequest(-feeService.Id, 1, feeService.Price), new SaleLineRequest(sold.Id, 1, sold.Price) }, "Paciente de prueba", "Efectivo"));
+            }
+            main.NavigateTo("Business");
+            var business = shell.BusinessVM!;
+            business.PeriodName = "Hoy";
+            WaitFor(business.LoadAsync());
+            Capture(host, $"20n-config-negocio-hoy-{suffix}");
+            if (business.Summary.Tickets == 0 || business.ByType.Count == 0
+                || !FindAllNamed(host, "Resumen del negocio").Any(IsShown)
+                || !FindAllNamed(host, "Por sección").Any(IsShown)
+                || !FindAllNamed(host, "Gráfica de ventas y utilidad").Any(IsShown))
+            {
+                _failures.Add($"[20n-{suffix}] El panel «Negocio» no muestra la venta de hoy, sus tarjetas, «Por sección» o la gráfica " +
+                    $"(tickets={business.Summary.Tickets}, secciones={business.ByType.Count})");
+            }
+            business.SelectType("Consultas");
+            Capture(host, $"20o-config-negocio-consultas-{suffix}");
+            business.SelectType("Consultas");
+            business.PeriodName = "Este mes";
+            WaitFor(business.LoadAsync());
 
             // Pedido del 2026-10-14: la receta de ejemplo en "Médico y consultorio", en media carta y en carta (papel blanco
             // con cualquier tema: las páginas son las del documento que se imprime)
