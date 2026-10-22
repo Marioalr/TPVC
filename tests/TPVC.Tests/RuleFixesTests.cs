@@ -39,6 +39,20 @@ public class RuleFixesTests
     }
 
     [TestMethod]
+    public void Allergy_WrittenWithTheBrand_MatchesTheGenericWithoutItsSalt_WithoutNewFalsePositives()
+    {
+        var catalog = new[] { new Product { Name = "Cozaar 50 mg", GenericName = "Losartán potásico" }, new Product { Name = "Ecotrin", GenericName = "AAS 100 mg" } };
+        var patient = new PatientRecord { Allergies = "Cozaar" };
+        Assert.IsTrue(AllergyRules.CheckMedication(patient, null, "Losartán 50 mg", catalog: catalog).HasConflict);
+        Assert.IsFalse(AllergyRules.CheckMedication(patient, null, "Cloruro de potasio 600 mg", catalog: catalog).HasConflict, "La sal sola no");
+        Assert.IsFalse(AllergyRules.CheckMedication(patient, null, "Losartanex 5 mg", catalog: catalog).HasConflict, "Palabra completa");
+        Assert.AreEqual("losartan", AllergyRules.GenericBase("Losartán potásico"));
+        Assert.AreEqual("metformina", AllergyRules.GenericBase("Clorhidrato de metformina 850 mg"));
+        Assert.IsNull(AllergyRules.GenericBase("AAS 100 mg"), "Menos de 4 letras");
+        Assert.IsNull(AllergyRules.GenericBase("Paracetamol"), "Nada que quitar");
+    }
+
+    [TestMethod]
     public void Allergy_FerrousSulfate_IsNotASulfonamide_ButRealSulfasStillWarn()
     {
         Assert.IsFalse(AllergyRules.CheckMedication(new PatientRecord { Allergies = "Sulfato ferroso" }, null, "Bactrim F").HasConflict);

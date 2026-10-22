@@ -90,6 +90,48 @@ public static class AllergyRules
     }
 
     /// <summary>
+    /// Revisión 20: palabras de una sal, de la forma química o de la concentración que no dicen el principio activo; se quitan
+    /// del genérico para su base ("Losartán potásico" → "losartan", "Clorhidrato de metformina" → "metformina").
+    /// </summary>
+    public static readonly IReadOnlyList<string> SaltWords = new[]
+    {
+        "potasico", "potasica", "sodico", "sodica", "calcico", "calcica", "magnesico", "magnesica", "clorhidrato", "hidrocloruro",
+        "bromhidrato", "maleato", "succinato", "besilato", "mesilato", "tartrato", "citrato", "fosfato", "sulfato", "acetato",
+        "fumarato", "hiclato", "valerato", "propionato", "dipropionato", "furoato", "monohidrato", "dihidrato", "trihidrato",
+        "anhidro", "anhidra", "base", "sal", "de", "del",
+        "mg", "g", "mcg", "ug", "ml", "ui", "u",
+    };
+
+    /// <summary>Lo menos que debe tener la base de un genérico para compararla (letras), así una base corta no avisa de más.</summary>
+    public const int MinGenericBaseLetters = 4;
+
+    /// <summary>
+    /// Revisión 20: la base de un genérico, normalizada: sin las palabras de <see cref="SaltWords"/> ni las que tienen dígitos o
+    /// "%" (concentraciones), con las palabras separadas por lo que no sea letra; null si le quedan menos de
+    /// <see cref="MinGenericBaseLetters"/> letras o si es igual al genérico normalizado (no hay nada que quitar).
+    /// </summary>
+    public static string? GenericBase(string? generic)
+    {
+        var normalized = TextSearch.Normalize(generic);
+        var words = Regex.Split(normalized, @"[^\p{L}\p{Nd}%]+")
+            .Where(w => w.Length > 0 && !w.Any(char.IsDigit) && !w.Contains('%') && !SaltWords.Contains(w))
+            .ToList();
+        var baseText = string.Join(" ", words);
+        if (baseText.Count(char.IsLetter) < MinGenericBaseLetters || baseText == normalized) return null;
+        return baseText;
+    }
+
+    /// <summary>
+    /// Si el texto normalizado contiene la base como palabras completas y seguidas: las palabras del texto (separadas por lo
+    /// que no sea letra, dígito ni "%") unidas por un espacio contienen la base con un espacio o el borde a cada lado.
+    /// </summary>
+    private static bool ContainsWords(string normalizedText, string words)
+    {
+        var text = " " + string.Join(" ", Regex.Split(normalizedText, @"[^\p{L}\p{Nd}%]+").Where(w => w.Length > 0)) + " ";
+        return text.Contains(" " + words + " ", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Si recetar <paramref name="medicineName"/> (o el nombre de <paramref name="product"/>), con el genérico del producto,
     /// choca con una alergia del paciente; la primera alergia que choca (tal como se escribió) y el aviso. Sin alergias
     /// declaradas (vacías o "Negadas") no hay aviso. Las alergias se separan por coma, punto y coma, diagonal o renglón, y
@@ -153,7 +195,9 @@ public static class AllergyRules
             var generics = GenericsOfBrand(allergy, catalog);
             foreach (var brandGeneric in generics)
             {
-                if (normalizedMed.Contains(TextSearch.Normalize(brandGeneric), StringComparison.Ordinal))
+                // El genérico tal cual o su base sin la sal ni la concentración ("Losartán potásico" avisa con "Losartán 50 mg")
+                if (normalizedMed.Contains(TextSearch.Normalize(brandGeneric), StringComparison.Ordinal)
+                    || (GenericBase(brandGeneric) is { } genericBase && ContainsWords(normalizedMed, genericBase)))
                 {
                     return (true, allergy, $"El paciente registra alergia a '{allergy}' ({brandGeneric}). El medicamento recetado contiene '{medName}'.");
                 }
