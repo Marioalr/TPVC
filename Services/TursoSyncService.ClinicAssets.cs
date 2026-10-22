@@ -28,6 +28,17 @@ public partial class TursoSyncService
 
     internal static readonly string AssetChunkSql = $"SELECT Content FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash = ? AND Part = ?;";
 
+    // Subir una imagen (literal en contracts/hrana/statements.json; la tablet también lo hace desde la revisión 19): ¿ya está?,
+    // cada trozo y al final su fila. Una imagen nunca se reescribe: es otra fila con otro hash
+    internal static readonly string AssetExistsSql = $"SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;";
+
+    internal static readonly string AssetWriteChunkSql =
+        $"INSERT INTO {SyncSchema.ClinicAssetChunksTable} (Hash, Part, Content) VALUES (?, ?, ?) ON CONFLICT(Hash, Part) DO NOTHING;";
+
+    internal static readonly string AssetWriteMetaSql =
+        $"INSERT INTO {SyncSchema.ClinicAssetsTable} (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc) VALUES (?, ?, ?, ?, ?, {ServerNowSql}) " +
+        "ON CONFLICT(Hash) DO NOTHING;";
+
     /// <summary>Imágenes que no se pudieron bajar completas en esta sesión: no se reintentan hasta reiniciar (cada intento costaría todos sus trozos).</summary>
     private readonly HashSet<string> _failedAssetHashes = new(StringComparer.Ordinal);
 
@@ -111,7 +122,7 @@ public partial class TursoSyncService
     /// </summary>
     private async Task<bool> EnsureAssetUploadedAsync(TursoClient client, LetterheadImageKind kind, string hash, CancellationToken ct)
     {
-        var existing = await client.QueryAsync($"SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash = ?;", new object?[] { hash }, ct);
+        var existing = await client.QueryAsync(AssetExistsSql, new object?[] { hash }, ct);
         AddExternalUsage(1, 0);
         if (existing.Count > 0) return true;
 
@@ -126,15 +137,10 @@ public partial class TursoSyncService
         for (int part = 0; part < chunks; part++)
         {
             var piece = content.AsSpan(part * SyncSchema.AssetChunkBytes, Math.Min(SyncSchema.AssetChunkBytes, content.Length - part * SyncSchema.AssetChunkBytes)).ToArray();
-            await client.ExecuteAsync(
-                $"INSERT INTO {SyncSchema.ClinicAssetChunksTable} (Hash, Part, Content) VALUES (?, ?, ?) ON CONFLICT(Hash, Part) DO NOTHING;",
-                new object?[] { hash, part, piece }, ct);
+            await client.ExecuteAsync(AssetWriteChunkSql, new object?[] { hash, part, piece }, ct);
         }
         var mime = ClinicProfileService.ImageExtension(content) == ".png" ? "image/png" : "image/jpeg";
-        await client.ExecuteAsync(
-            $"INSERT INTO {SyncSchema.ClinicAssetsTable} (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc) VALUES (?, ?, ?, ?, ?, {ServerNowSql}) " +
-            "ON CONFLICT(Hash) DO NOTHING;",
-            new object?[] { hash, KindName(kind), mime, content.Length, chunks }, ct);
+        await client.ExecuteAsync(AssetWriteMetaSql, new object?[] { hash, KindName(kind), mime, content.Length, chunks }, ct);
         AddExternalUsage(0, chunks + 1);
         AppLogger.Info($"Turso: se subió la imagen del membrete ({KindName(kind)}, {content.Length:N0} bytes en {chunks} trozos).");
         return true;
