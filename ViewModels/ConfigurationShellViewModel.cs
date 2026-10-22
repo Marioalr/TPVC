@@ -80,7 +80,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
         ServicesVM = servicesVM;
         DesignSystemVM = designSystemVM ?? new DesignSystemViewModel();
         BusinessVM = businessVM;
-        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.47.0" : appVersion;
+        AppVersion = string.IsNullOrWhiteSpace(appVersion) ? "v1.48.0" : appVersion;
 
         var sections = new List<ConfigSectionItem>
         {
@@ -164,7 +164,7 @@ public partial class ConfigurationShellViewModel : ObservableObject
     private string _activeSubViewName = SectionDashboard;
 
     [ObservableProperty]
-    private string _appVersion = "v1.47.0";
+    private string _appVersion = "v1.48.0";
 
     /// <summary>Nombres anteriores (paleta de comandos, accesos del inicio) → sección actual.</summary>
     public static string NormalizeSection(string? viewName) => viewName switch
