@@ -33,15 +33,31 @@ public static class StockReviewRules
     /// <summary>La insignia de un producto en negativo: "−3 · revisar inventario".</summary>
     public static string ReviewBadge(int stock) => $"{Number(stock)} · {ReviewText}";
 
+    /// <summary>
+    /// La insignia con lo que muestran sus lotes abiertos (<see cref="OpenLotsTotal"/>): si pasan de las existencias (la parte
+    /// fuera de los lotes está en negativo) y muestran algo (más de 0), "2 · revisar inventario (lotes 5)"; si no,
+    /// <see cref="ReviewBadge(int)"/>.
+    /// </summary>
+    public static string ReviewBadge(int stock, int openLots) =>
+        openLots > stock && openLots > 0 ? $"{Number(stock)} · {ReviewText} (lotes {Number(openLots)})" : ReviewBadge(stock);
+
+    /// <summary>Lo que suman los lotes abiertos (no cerrados) de un producto.</summary>
+    public static int OpenLotsTotal(IEnumerable<ProductBatch> batches) => batches.Where(b => !b.IsClosed).Sum(b => b.Quantity);
+
     /// <summary>Un lote cuenta para la revisión si está abierto (no cerrado, <see cref="ProductBatch.IsClosed"/>) y en negativo.</summary>
     public static bool IsNegativeBatch(ProductBatch batch) => !batch.IsClosed && batch.Quantity < 0;
 
     /// <summary>
-    /// Un producto activo necesita revisar su inventario si sus existencias están en negativo o si uno de sus lotes abiertos lo
-    /// está, aunque el total sea positivo (<paramref name="batches"/>: sus lotes; si es null, los que trae el producto).
+    /// Un producto activo necesita revisar su inventario si sus existencias están en negativo, si uno de sus lotes abiertos lo
+    /// está aunque el total sea positivo, o si sus lotes abiertos suman más que sus existencias: la parte fuera de los lotes
+    /// (existencias − Σ lotes) está en negativo, por ejemplo −3 sin lote y después una entrada de 5 (revisión de la rama)
+    /// (<paramref name="batches"/>: sus lotes; si es null, los que trae el producto).
     /// </summary>
-    public static bool NeedsReview(Product product, IEnumerable<ProductBatch>? batches = null) =>
-        product.IsActive && (product.CurrentStock < 0 || (batches ?? product.Batches).Any(IsNegativeBatch));
+    public static bool NeedsReview(Product product, IEnumerable<ProductBatch>? batches = null)
+    {
+        var lots = (batches ?? product.Batches).ToList();
+        return product.IsActive && (product.CurrentStock < 0 || lots.Any(IsNegativeBatch) || OpenLotsTotal(lots) > product.CurrentStock);
+    }
 
     /// <summary>
     /// Los productos que necesitan revisar su inventario (<see cref="NeedsReview"/>), del de menos existencias al de más y,
@@ -49,9 +65,9 @@ public static class StockReviewRules
     /// </summary>
     public static List<Product> InventoryReview(IEnumerable<Product> products, IEnumerable<ProductBatch> batches)
     {
-        var negativeLots = batches.Where(IsNegativeBatch).Select(b => b.ProductId).ToHashSet();
+        var byProduct = batches.ToLookup(b => b.ProductId);
         return products
-            .Where(p => p.IsActive && (p.CurrentStock < 0 || negativeLots.Contains(p.Id)))
+            .Where(p => NeedsReview(p, byProduct[p.Id]))
             .OrderBy(p => p.CurrentStock)
             .ThenBy(p => p.Name, StringComparer.Ordinal)
             .ToList();
@@ -65,13 +81,14 @@ public static class StockReviewRules
             .Select(b => $"lote {b.BatchNumber} {Number(b.Quantity)}"));
 
     /// <summary>
-    /// El renglón de la alerta del sistema: "Paracetamol 500 mg: −3 · revisar inventario", y con un lote en negativo
-    /// "Gasa: 4 · revisar inventario (lote L-01 −2)".
+    /// El renglón de la alerta del sistema: "Paracetamol 500 mg: −3 · revisar inventario"; con lotes que suman más que las
+    /// existencias "Gasa: 2 · revisar inventario (lotes 5)"; y con un lote en negativo, al final "(lote L-01 −2)".
     /// </summary>
     public static string AlertLine(Product product, IEnumerable<ProductBatch> batches)
     {
-        var lots = NegativeBatchesText(batches.Where(b => b.ProductId == product.Id));
-        return $"{product.Name}: {ReviewBadge(product.CurrentStock)}{(lots.Length > 0 ? $" ({lots})" : string.Empty)}";
+        var own = batches.Where(b => b.ProductId == product.Id).ToList();
+        var lots = NegativeBatchesText(own);
+        return $"{product.Name}: {ReviewBadge(product.CurrentStock, OpenLotsTotal(own))}{(lots.Length > 0 ? $" ({lots})" : string.Empty)}";
     }
 
     /// <summary>

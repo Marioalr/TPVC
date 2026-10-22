@@ -159,6 +159,29 @@ public class NegativeStockTests
     }
 
     [TestMethod]
+    public async Task ANegativeOutsideTheLots_StaysFlagged_AfterAnEntry_UntilACount()
+    {
+        // Revisión de la rama: 2 sin lote, se venden 5 (−3), llega un lote de 5: existencias 2 y los lotes muestran 5
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "NEG-FUERA", Name = "Producto NEG-FUERA", CategoryId = category.Id, Price = 10m, CurrentStock = 2 };
+        await _service.SaveProductAsync(product);
+        await _service.RegisterSaleAsync(new[] { new SaleLineRequest(product.Id, 5, 10m) }, "Paciente", "Efectivo");
+        await _service.ReceiveBatchAsync(new ProductBatch { ProductId = product.Id, BatchNumber = "L-01", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 5 });
+
+        var after = await ProductAsync(product.Id);
+        Assert.AreEqual(2, after.CurrentStock);
+        Assert.IsTrue(after.NeedsInventoryReview, "Fuera de los lotes sigue en −3");
+        Assert.AreEqual("2 · revisar inventario (lotes 5)", after.StockBadgeText);
+        Assert.AreEqual($"{product.Name}: 2 · revisar inventario (lotes 5)", (await _service.GetSystemAlertsSummaryAsync()).InventoryReviewLines.Single());
+
+        // El conteo: hay 5 (los del lote); el ajuste sin lote deja la parte de fuera en 0 y el aviso se va
+        await CountAsync(product.Id, 5);
+        Assert.IsFalse((await ProductAsync(product.Id)).NeedsInventoryReview);
+        Assert.AreEqual(0, (await _service.GetSystemAlertsSummaryAsync()).InventoryReviewCount);
+        await AssertLedgerCleanAsync("Después del conteo");
+    }
+
+    [TestMethod]
     public async Task ANegativeOpenLot_AsksToReview_EvenIfTheProductTotalIsPositive()
     {
         // Un lote abierto en negativo no lo deja una salida de este equipo (FEFO solo toma lotes con piezas), pero puede llegar
@@ -349,7 +372,8 @@ public class NegativeStockTests
                 }
                 await AssertLedgerCleanAsync($"Semilla {seed}, paso {step} (operación {op})");
                 var now = await ProductAsync(product.Id);
-                Assert.AreEqual(now.CurrentStock < 0 || now.Batches.Any(b => !b.IsClosed && b.Quantity < 0), now.NeedsInventoryReview);
+                Assert.AreEqual(now.CurrentStock < 0 || now.Batches.Any(b => !b.IsClosed && b.Quantity < 0)
+                                || now.Batches.Where(b => !b.IsClosed).Sum(b => b.Quantity) > now.CurrentStock, now.NeedsInventoryReview);
                 Assert.IsTrue(now.Batches.All(b => b.Quantity >= 0), "Una salida nunca deja un lote en negativo");
                 Assert.IsTrue(now.OpenedUnitsRemaining >= 0 && now.OpenedUnitsRemaining < now.EffectiveUnitsPerPackage);
             }

@@ -232,6 +232,9 @@ public partial class GoldenVectorTests
             new Product { Id = 4, Code = "R4", Name = "Ibuprofeno 400 mg", CurrentStock = -1, IsActive = false },
             new Product { Id = 5, Code = "R5", Name = "Ácido fólico 5 mg", CurrentStock = -3, IsActive = true },
             new Product { Id = 6, Code = "R6", Name = "Jeringa 5 ml", CurrentStock = 2, IsActive = true, UnitsPerPackage = 10, OpenedUnitsRemaining = 4 },
+            // Revisión de la rama: −3 fuera de los lotes y después un lote de 5: existencias 2, lotes 5
+            new Product { Id = 7, Code = "R7", Name = "Venda elástica", CurrentStock = 2, IsActive = true },
+            new Product { Id = 8, Code = "R8", Name = "Guantes", CurrentStock = 5, IsActive = true },
         };
         var reviewBatches = new[]
         {
@@ -239,7 +242,12 @@ public partial class GoldenVectorTests
             new ProductBatch { ProductId = 2, BatchNumber = "L-01", Quantity = 6 },
             new ProductBatch { ProductId = 3, BatchNumber = "CERRADO", Quantity = -1, ClosedAtUtc = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc) },
             new ProductBatch { ProductId = 1, BatchNumber = "L-09", Quantity = -1 },
+            new ProductBatch { ProductId = 7, BatchNumber = "L-07", Quantity = 5 },
+            new ProductBatch { ProductId = 8, BatchNumber = "L-08", Quantity = 5 },
+            new ProductBatch { ProductId = 8, BatchNumber = "CERRADO-8", Quantity = 4, ClosedAtUtc = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc) },
         };
+        // La insignia mira los lotes del producto
+        foreach (var p in review) p.Batches = reviewBatches.Where(b => b.ProductId == p.Id).ToList();
         cases.Add(Case("revisar inventario (revisión 20)",
             new JsonObject
             {
@@ -324,7 +332,7 @@ public partial class GoldenVectorTests
 
         CheckOrWrite("contracts/golden/alerts.json", DatedVectorFile("alerts", null, VectorNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture), cases,
             "Services/Rules/StockAlertRules.cs, Services/Rules/StockReviewRules.cs (revisión 20) y ProductBatch.StatusTextOn.",
-            "Revisar inventario (revisión 20; decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar, la política de negativos del paso 8.20 adelantada): la venta, «Se surte aquí», los insumos y el consumo en consulta pasan aunque no alcancen las existencias, que quedan en negativo. inventoryReview: los productos activos con CurrentStock < 0 o con un lote abierto (closedAtUtc nulo) con Quantity < 0, aunque el total sea positivo; del de menos existencias al de más y, con las mismas, por nombre ordinal. alertLine: '{nombre}: {existencias} · revisar inventario' y, con lotes abiertos en negativo, ' (lote {número} {cantidad}, …)' por número ordinal. Los negativos se escriben con el signo menos U+2212 ('−3'). stockBadge (Product.StockBadgeText): en negativo '{existencias} · revisar inventario'; si no, la insignia de siempre ('Existencias: N', 'Stock bajo: N', 'Sin existencias' o con el paquete abierto '(+abiertas/piezas)'). La alerta se va sola cuando un conteo o una entrada dejan todo en 0 o más: nada se compensa solo.",
+            "Revisar inventario (revisión 20; decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar, la política de negativos del paso 8.20 adelantada): la venta, «Se surte aquí», los insumos y el consumo en consulta pasan aunque no alcancen las existencias, que quedan en negativo. inventoryReview: los productos activos con CurrentStock < 0, con un lote abierto (closedAtUtc nulo) con Quantity < 0 aunque el total sea positivo, o con lotes abiertos que suman más que CurrentStock (la parte fuera de los lotes, CurrentStock − Σ lotes abiertos, en negativo: por ejemplo −3 sin lote y después una entrada de 5; revisión de la rama); del de menos existencias al de más y, con las mismas, por nombre ordinal. alertLine: '{nombre}: {existencias} · revisar inventario', con ' (lotes {Σ lotes abiertos})' después si esa suma pasa de las existencias y de 0, y con lotes abiertos en negativo, ' (lote {número} {cantidad}, …)' por número ordinal. Los negativos se escriben con el signo menos U+2212 ('−3'). stockBadge (Product.StockBadgeText, con sus lotes): si necesita revisión, '{existencias} · revisar inventario' y ' (lotes {Σ})' si los lotes abiertos suman más que las existencias y que 0; si no, la insignia de siempre ('Existencias: N', 'Stock bajo: N', 'Sin existencias' o con el paquete abierto '(+abiertas/piezas)'). La alerta se va sola cuando un conteo o una entrada dejan todo en 0 o más: nada se compensa solo.",
             "closeLot (StockLedger.ClosingDeltas, regla «Existencias»): lotDelta = −lotLedger (con su lote, SyncId 'close:'); restDelta (sin lote, SyncId 'close-rest:'; 0 = no se escribe) = −(quitado − lotLedger), con quitado = lotQuantity si el lote está al día (lotLedger = lotQuantity) aunque el producto quede en negativo (revisión 20: un negativo fuera de los lotes se queda, nada se compensa solo; antes se topaba en max(productStock, 0) y lo borraba), o min(lotQuantity, max(productStock, 0)) en un lote de antes de la revisión 11 (lotLedger ≠ lotQuantity). stockAfter = productStock + lotDelta + restDelta.",
             "shortage (StockReviewRules.Shortage): los paquetes que hacen falta son wholePackages + (si individualUnits > las piezas del paquete abierto, max(0, openedUnitsRemaining)) ⌈(piezas − abiertas) / unitsPerPackage⌉; con unitsPerPackage <= 1 las piezas cuentan como paquetes. Si no pasan de currentStock, null. Si no, en paquetes {available: currentStock, charged: paquetes}; con piezas sueltas en piezas {available: currentStock × unitsPerPackage + max(0, abiertas), charged: wholePackages × unitsPerPackage + piezas, pieces: true}. warning (StockReviewRules.WarningText): 'Existencias insuficientes: ' + cada faltante '{nombre} (quedan {available}, se cobran {charged})' (con ' pzas' después de cada número en piezas) unidos por '; ' + '. Revise el inventario.'; null sin faltantes. Es el aviso al cobrar, que nunca bloquea (checkout.json).",
             "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",

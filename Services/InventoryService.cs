@@ -2061,17 +2061,31 @@ public partial class InventoryService
         summary.ExpiredBatchesCount = summary.ExpiredBatches.Count;
         summary.NearExpiryBatchesCount = summary.NearExpiryBatches.Count;
 
-        // 4. Revisión 20: revisar inventario (existencias o un lote abierto en negativo: se cobró sin que alcanzaran)
-        var negativeLots = await db.ProductBatches.AsNoTracking()
-            .Where(b => b.ClosedAtUtc == null && b.Quantity < 0)
-            .ToListAsync();
-        var negativeLotProducts = negativeLots.Select(b => b.ProductId).Distinct().ToList();
+        // 4. Revisión 20: revisar inventario (existencias o un lote abierto en negativo, o lotes abiertos que suman más que las
+        // existencias: la parte fuera de los lotes en negativo). Se cobró sin que alcanzaran; se queda hasta un conteo
+        var activeStock = await db.Products.AsNoTracking().Where(p => p.IsActive)
+            .Select(p => new { p.Id, p.CurrentStock })
+            .ToDictionaryAsync(p => p.Id, p => p.CurrentStock);
+        var lotSummaries = (await db.ProductBatches.AsNoTracking()
+                .Where(b => b.ClosedAtUtc == null)
+                .Select(b => new { b.ProductId, b.Quantity })
+                .ToListAsync())
+            .GroupBy(b => b.ProductId)
+            .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.Quantity), AnyNegative = g.Any(b => b.Quantity < 0) })
+            .ToList();
+        var candidateIds = activeStock.Where(p => p.Value < 0).Select(p => p.Key)
+            .Concat(lotSummaries.Where(l => activeStock.TryGetValue(l.ProductId, out var stock) && (l.AnyNegative || l.Total > stock)).Select(l => l.ProductId))
+            .Distinct()
+            .ToList();
         var reviewCandidates = await db.Products.AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.IsActive && (p.CurrentStock < 0 || negativeLotProducts.Contains(p.Id)))
+            .Where(p => candidateIds.Contains(p.Id))
             .ToListAsync();
-        summary.InventoryReviewProducts = StockReviewRules.InventoryReview(reviewCandidates, negativeLots);
-        summary.InventoryReviewLines = summary.InventoryReviewProducts.Select(p => StockReviewRules.AlertLine(p, negativeLots)).ToList();
+        var candidateLots = await db.ProductBatches.AsNoTracking()
+            .Where(b => b.ClosedAtUtc == null && candidateIds.Contains(b.ProductId))
+            .ToListAsync();
+        summary.InventoryReviewProducts = StockReviewRules.InventoryReview(reviewCandidates, candidateLots);
+        summary.InventoryReviewLines = summary.InventoryReviewProducts.Select(p => StockReviewRules.AlertLine(p, candidateLots)).ToList();
 
         return summary;
     }

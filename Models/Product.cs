@@ -99,11 +99,11 @@ public class Product : ISyncEntity
     /// </summary>
     public bool NeedsInventoryReview => TPVC.Services.Rules.StockReviewRules.NeedsReview(this);
 
-    // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo). En negativo (revisión 20):
-    // "−3 · revisar inventario"
+    // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo). Si hay que revisar el inventario
+    // (revisión 20): "−3 · revisar inventario" o, con lotes que suman más, "2 · revisar inventario (lotes 5)"
     public string StockBadgeText =>
-        CurrentStock < 0
-            ? TPVC.Services.Rules.StockReviewRules.ReviewBadge(CurrentStock)
+        CurrentStock < 0 || NeedsInventoryReview
+            ? TPVC.Services.Rules.StockReviewRules.ReviewBadge(CurrentStock, TPVC.Services.Rules.StockReviewRules.OpenLotsTotal(Batches))
             : OpenedUnitsRemaining > 0 && HasMultipleUnitsPerPackage
             ? (CurrentStock <= 0
                 ? $"Abierto: {OpenedUnitsRemaining}/{EffectiveUnitsPerPackage} pzas"
