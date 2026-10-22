@@ -11,12 +11,13 @@ Bienvenido al manual oficial de **TPVC**, una aplicación de escritorio diseñad
 4. [Módulo 2: Punto de Venta (POS / Farmacia)](#4-módulo-2-punto-de-venta-pos--farmacia)
 5. [Módulo 3: Pacientes (expedientes, consulta y agenda)](#5-módulo-3-pacientes-expedientes-consulta-y-agenda)
 6. [Módulo 4: Panel del consultorio](#6-módulo-4-panel-del-consultorio)
-7. [Módulo 5: Productos](#7-módulo-5-productos)
-8. [Módulo 6: Lotes y caducidades](#8-módulo-6-lotes-y-caducidades)
-9. [Módulo 7: Kardex](#9-módulo-7-kardex)
-10. [Módulo 8: Configuración](#10-módulo-8-configuración)
-11. [Respaldo y Seguridad de Datos](#11-respaldo-y-seguridad-de-datos)
-12. [Preguntas Frecuentes (FAQ)](#12-preguntas-frecuentes-faq)
+7. [Módulo 5: Negocio](#7-módulo-5-negocio)
+8. [Módulo 6: Productos](#8-módulo-6-productos)
+9. [Módulo 7: Lotes y caducidades](#9-módulo-7-lotes-y-caducidades)
+10. [Módulo 8: Kardex](#10-módulo-8-kardex)
+11. [Módulo 9: Configuración](#11-módulo-9-configuración)
+12. [Respaldo y Seguridad de Datos](#12-respaldo-y-seguridad-de-datos)
+13. [Preguntas Frecuentes (FAQ)](#13-preguntas-frecuentes-faq)
 
 ---
 
@@ -39,7 +40,7 @@ La pantalla principal se organiza con una arquitectura intuitiva y moderna:
    * **⚙️ Configuración**: Acceso directo al centro de administración del consultorio donde reside el **Panel Lateral de Navegación**.
 2. **Configuración**:
    * A la izquierda, las secciones agrupadas, cada una con una línea de resumen (por ejemplo "120 productos · 4 con stock bajo" o "Último respaldo hoy 09:15"):
-     * **Resumen**: Panel del consultorio (ventas, consumo y alertas del día).
+     * **Resumen**: Panel del consultorio (ventas, consumo y alertas del día) y **Negocio** (ventas, costo y utilidad por periodo y por tipo, lo más vendido, las compras y el consumo de insumos).
      * **Inventario**: Productos, Lotes y caducidades y Kardex.
      * **Consultorio**: Servicios (precios e insumos) y Médico y consultorio (lo que sale en recetas y tickets).
      * **Sistema**: Apariencia, Respaldos y datos, Nube y dispositivos, Actualizaciones y Componentes.
@@ -177,7 +178,41 @@ Primera sección de Configuración, con lo de hoy y lo que conviene atender:
 
 ---
 
-## 7. Módulo 5: Productos
+## 7. Módulo 5: Negocio
+
+Segunda sección de Configuración (grupo *Resumen*; también con Ctrl + K → «Negocio» o buscando «utilidad»): cómo va el negocio en un periodo, con las mismas cuentas que dará el celular.
+
+**Filtros**
+* **Periodo**: Hoy, Esta semana (del lunes a hoy), Este mes (del día 1 a hoy; abre aquí), Mes anterior, Este año (del 1 de enero a hoy) o **Personalizado**: escriba las dos fechas (dd/mm/aaaa, las diagonales se ponen solas) y pulse **Aplicar**. Los días son los del consultorio (hora de la Ciudad de México).
+* **Tipo**: Todo, Consultas, Medicamentos, Insumos, Servicios u Otros. Cambia todo lo de abajo.
+* Las ventas **canceladas no cuentan** en nada.
+
+**Tarjetas**
+* **Ventas**, **Costo de lo vendido** (con IVA), **Utilidad bruta** (ventas − costo) y **Margen** (utilidad / ventas).
+* **Tickets** y **Ticket promedio** (ventas / tickets).
+* Debajo de ventas, utilidad y tickets, el **cambio contra el periodo anterior igual** (▲ sube, ▼ baja): hoy contra ayer, la semana contra la anterior, este mes hasta hoy contra los mismos días del mes pasado, el mes anterior contra el de antes, el año hasta hoy contra los mismos días del año pasado y un rango contra los mismos días justo antes. «Sin comparación» si antes no hubo ventas.
+* **Compras** del periodo y **Valor del inventario** de hoy (el mismo del Panel del consultorio).
+* Un aviso **Costo estimado** cuando algún renglón no guardó su costo al venderse (las ventas de antes de esta versión): para esos se usa el costo de hoy del producto. «Sin costo» son productos que no tienen costo capturado: cuentan 0, así que capturar su costo en Productos mejora la utilidad que se ve.
+
+**Por sección**: una tabla con ventas, costo, utilidad, margen y la parte de las ventas de cada tipo. **Un clic** en un tipo filtra todo el panel por él; otro clic lo quita.
+* **Consultas** es el honorario de la consulta (el servicio con código SERV-001, de categoría «Consulta» o con «Consulta» en el nombre); **Servicios**, los demás servicios del catálogo (aunque ya se hayan borrado); **Medicamentos** e **Insumos**, los productos según su categoría o su código (las mismas reglas de siempre); **Otros**, los cargos libres y los productos que ya no están en el catálogo. Un cargo libre de un insumo cuenta como insumo.
+* Las consultas y los servicios no tienen costo propio: los insumos que cobran van en su propio renglón con su costo.
+
+**En el tiempo**: barras de ventas y utilidad por día (o por mes si el periodo pasa de 62 días). Al pasar el ratón sobre una barra se ven sus cifras. Una utilidad negativa se pinta en rojo.
+
+**Más vendidos**
+* **Productos más vendidos**: los 10 primeros, de **Medicamentos** al abrir (o Insumos o Todos), **por cantidad** o **por utilidad**. Las **piezas sueltas** de un paquete se cuentan como piezas y van en su propio renglón («4 piezas sueltas»). «Costo estimado» marca los que usan el costo de hoy.
+* **Servicios más cobrados**: consultas y servicios, por veces que se cobraron, con lo que dejaron.
+
+**Compras**: las entradas por compra del periodo (pedidos del proveedor con **Ingresar pedido**, lotes recibidos y entradas a mano), con su costo **por proveedor** y **por tipo**. El proveedor sale del pedido («Pedido LUIN #5175» → LUIN); un lote o una entrada a mano va como «Entrada sin pedido». Desde esta versión cada entrada guarda lo que costó; las de antes usan el costo de hoy (costo estimado).
+
+**Consumo de insumos**: lo que se usó en consultas y servicios, con su costo: lo **usado sin cobrar** (Consumo en consulta del Kardex) y lo **cobrado** con una consulta o un servicio (los insumos de la cuenta y los de cada servicio). Las piezas sueltas se cuentan como piezas.
+
+**Exportar CSV** guarda lo que se ve (con el periodo y el filtro) en el escritorio como `Negocio_aaaaMMdd_HHmmss.csv`, para abrirlo en Excel. **Actualizar** vuelve a leer.
+
+---
+
+## 8. Módulo 6: Productos
 
 Catálogo de medicamentos e insumos con precios y existencias:
 * **Buscar** por nombre, genérico o código y filtrar con los chips de **categoría** y **"Stock bajo"** / **"Por caducar"**. La lista solo dibuja las filas visibles, así que se mueve igual de rápido con miles de productos.
@@ -190,7 +225,7 @@ Catálogo de medicamentos e insumos con precios y existencias:
 
 ---
 
-## 8. Módulo 6: Lotes y caducidades
+## 9. Módulo 7: Lotes y caducidades
 
 Trazabilidad por número de lote y fecha de caducidad; lo que vence primero aparece arriba y es lo que se descuenta primero al vender o usar (FEFO):
 * Chips con el conteo: **Todos**, **Por vencer** (60 días o menos), **Vencidos** y **Vigentes**.
@@ -199,7 +234,7 @@ Trazabilidad por número de lote y fecha de caducidad; lo que vence primero apar
 
 ---
 
-## 9. Módulo 7: Kardex
+## 10. Módulo 8: Kardex
 
 Bitácora de todo lo que mueve las existencias, con **existencias antes → después** en cada renglón:
 * Chips: **Entradas** (compras, ajustes y devoluciones), **Ventas**, **Consultas**, **Bajas** (caducidad y merma) y **Ajustes**.
@@ -207,7 +242,7 @@ Bitácora de todo lo que mueve las existencias, con **existencias antes → desp
 
 ---
 
-## 10. Módulo 8: Configuración
+## 11. Módulo 9: Configuración
 
 ### Servicios
 Lo que se cobra además de los productos (consulta, curación, inyección, certificado…): precio, duración y los **insumos que usa** cada uno, que se agregan solos a la cuenta y se descuentan del inventario. Son los de siempre: lo que se ajuste en una consulta (*Ajustar insumos*) vale solo para esa consulta y no los cambia. Los insumos se capturan en **piezas individuales**: si un producto trae varias piezas por paquete (su *Contenido por paquete*), el servicio cobra y descuenta solo las piezas que usa, a su precio por pieza, y lo que sobra queda en el paquete abierto para el siguiente servicio. Se editan en un panel lateral. **Desactivar** un servicio lo quita del Punto de Venta y de la consulta sin borrar los tickets donde aparece ("Mostrar desactivados" para volver a activarlo).
@@ -284,7 +319,7 @@ Versión instalada, **Buscar actualización** e **Instalar ahora** (el instalado
 
 ---
 
-## 11. Respaldo y Seguridad de Datos
+## 12. Respaldo y Seguridad de Datos
 
 La base de datos SQLite se almacena en:
 ```text
@@ -296,7 +331,7 @@ Los archivos de los resultados de laboratorio están aparte, en `%LocalAppData%\
 
 ---
 
-## 12. Preguntas Frecuentes (FAQ)
+## 13. Preguntas Frecuentes (FAQ)
 
 ### ¿Cómo cobro los medicamentos a un paciente que vino a consulta?
 Dentro de la consulta, marque **Se surte aquí** en los medicamentos que entrega el consultorio (y agregue insumos o servicios a la cuenta). Al pulsar **Terminar consulta** se cobra todo junto en una sola ventana; no hace falta ir al Punto de Venta.
