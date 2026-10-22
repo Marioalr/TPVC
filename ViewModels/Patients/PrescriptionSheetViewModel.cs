@@ -523,13 +523,14 @@ public partial class PrescriptionSheetViewModel : ObservableObject
             ShowActiveIngredient = string.IsNullOrWhiteSpace(activeIngredient) ? null : showActiveIngredient ?? true
         };
 
-        // "Se surte aquí" marcado por defecto con un medicamento del inventario: se carga solo a la cuenta. Revisión 20: aunque
-        // no alcancen sus existencias (se avisa sin bloquear). El producto solo cuenta si corresponde al nombre recetado (la
-        // lista de sugerencias puede traer preseleccionado otro medicamento cuando el nombre se escribió a mano).
+        // "Se surte aquí" marcado por defecto cuando el medicamento del inventario tiene existencias (decisión del médico del
+        // 2026-10-22: con 0 o en negativo queda desmarcado; a mano se puede marcar y se carga con el aviso). Se carga solo a la
+        // cuenta. El producto solo cuenta si corresponde al nombre recetado (la lista de sugerencias puede traer preseleccionado
+        // otro medicamento cuando el nombre se escribió a mano).
         if (_active.HasActiveConsultation)
         {
             var dispensed = product != null && CatalogStore.ProductMatchesName(product, name) ? product : null;
-            newItem.DispenseInClinic = _account.ChargePrescription(newItem, dispensed, out var stockWarning);
+            newItem.DispenseInClinic = _account.DispenseByDefault(newItem, dispensed, out var stockWarning);
             if (stockWarning != null) _feedback.ShowWarning(stockWarning);
         }
 

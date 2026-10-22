@@ -87,6 +87,19 @@ public class RuleFixesTests
         Assert.AreEqual(3, PatientSheetRows.FindProductByName(new[] { twin, Catalog[2] }, "Ácido fólico 5 mg")?.Id);
     }
 
+    // ================================================================== «Se surte aquí» por defecto
+
+    [TestMethod]
+    public void DispenseByDefault_OnlyWithStock_CountingLoosePieces()
+    {
+        Assert.IsTrue(ConsultationAccountRules.DispenseByDefault(new Product { CurrentStock = 1 }));
+        Assert.IsFalse(ConsultationAccountRules.DispenseByDefault(new Product { CurrentStock = 0 }));
+        Assert.IsFalse(ConsultationAccountRules.DispenseByDefault(new Product { CurrentStock = -3 }));
+        Assert.IsTrue(ConsultationAccountRules.DispenseByDefault(new Product { CurrentStock = 0, UnitsPerPackage = 10, OpenedUnitsRemaining = 4 }), "Piezas del paquete abierto");
+        Assert.IsFalse(ConsultationAccountRules.DispenseByDefault(new Product { CurrentStock = 0, UnitsPerPackage = 10 }));
+        Assert.IsFalse(ConsultationAccountRules.DispenseByDefault(null), "No está en el inventario");
+    }
+
     // ================================================================== IMC, teléfono, efectivo y prefijo
 
     [TestMethod]

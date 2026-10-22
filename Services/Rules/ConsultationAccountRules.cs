@@ -77,6 +77,16 @@ public static class ConsultationAccountRules
         product == null ? null : Math.Max(1, item.RecommendedQuantity);
 
     /// <summary>
+    /// "Se surte aquí" por defecto al agregar un medicamento a la receta (decisión del médico del 2026-10-22): marcado si el
+    /// producto del inventario tiene existencias (más de 0; en un producto de piezas sueltas cuentan las piezas disponibles,
+    /// <see cref="Product.AvailableIndividualUnits"/>, también las del paquete abierto); desmarcado con 0 o en negativo, y
+    /// sin producto. A mano se puede marcar siempre que sea del inventario: se carga con el aviso de existencias
+    /// (<see cref="PrescriptionChargeQuantity"/>).
+    /// </summary>
+    public static bool DispenseByDefault(Product? product) =>
+        product != null && (product.CurrentStock > 0 || product.AvailableIndividualUnits > 0);
+
+    /// <summary>
     /// Suma <paramref name="quantity"/> piezas a la cuenta: al renglón que ya tiene ese Id (solo cambia su cantidad; el nombre y
     /// el precio se quedan como estaban) o en uno nuevo al final. false con cantidad 0 o negativa. Las piezas sueltas de un paquete
     /// (<paramref name="isIndividualUnits"/>) van en su propio renglón, aparte de los paquetes completos del mismo producto.

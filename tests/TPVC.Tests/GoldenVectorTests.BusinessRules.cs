@@ -114,6 +114,9 @@ public partial class GoldenVectorTests
         Presentation = S(n, "presentation"),
         Location = S(n, "location"),
         CurrentStock = Int(n, "stock"),
+        // Revisión 17: piezas por paquete y el paquete abierto (sin ellas, 1 pieza por paquete y nada abierto)
+        UnitsPerPackage = IntOrNull(n, "unitsPerPackage") ?? 1,
+        OpenedUnitsRemaining = IntOrNull(n, "openedUnitsRemaining") ?? 0,
         Price = Dec(n, "price"),
         UnitCost = Dec(n, "unitCost"),
         CostExcludesVat = Bool(n, "costExcludesVat"),

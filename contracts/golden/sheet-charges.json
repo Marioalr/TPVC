@@ -6,7 +6,7 @@
   "contract": 20,
   "notes": [
     "Lo que las hojas de la consulta cargan a la cuenta (ViewModels/Patients/State/ConsultationAccount.cs, corrido tal cual con una consulta abierta y sin base; las reglas puras están en ConsultationAccountRules, PatientSheetRows y ServiceRowSupplies). Los productos y servicios son el catálogo de este equipo (defaultProducts: los insumos por defecto de un servicio, por Id del producto y piezas por unidad). Cada paso lleva la cuenta después de él: cada renglón como 'producto' o 'servicio' (por su SyncId) o 'libre' (por su nombre), con el código, nombre, genérico, presentación, unidad, precio y piezas que escribe la PC, y el total con el honorario (consultation-account.json).",
-    "prescribe («Se surte aquí»): el producto elegido si el renglón sigue siendo ese producto (catalog-matching.json, product-matches-name), si no el del nombre (find-by-name); se carga con el nombre del renglón y sus piezas (consultation-account.json, prescription-quantity) si es del inventario, alcancen o no sus existencias (revisión 20: un inventario mal contado nunca impide cobrar; antes solo si alcanzaban); 'charged' es lo que queda en DispenseInClinic. unprescribe descuenta las piezas del producto que encuentra por nombre.",
+    "prescribe (agregar a la receta con «Se surte aquí» por defecto): el producto elegido si el renglón sigue siendo ese producto (catalog-matching.json, product-matches-name), si no el del nombre (find-by-name); queda marcado y se carga con el nombre del renglón y sus piezas (consultation-account.json, prescription-quantity) solo si ese producto tiene existencias (consultation-account.json, dispense-default; decisión del médico del 2026-10-22: con 0 o en negativo queda desmarcado y sin cargo); con existencias que no alcanzan para el renglón se carga igual, con el aviso (revisión 20: un inventario mal contado nunca impide cobrar). tick-dispense (la casilla marcada a mano): se carga si es del inventario, tenga o no existencias, con el aviso. 'charged' es lo que queda en DispenseInClinic y 'warning' el aviso de existencias (stockWarning de checkout.json, con lo que ya está en la cuenta de ese producto) o null. unprescribe descuenta las piezas del producto que encuentra por nombre.",
     "add-supply: el producto elegido o el del nombre; con producto se carga con el nombre del renglón; sin producto, un cargo libre ('INSUMO', 'Material clínico', 'Piezas', su precio) solo si el precio es mayor que 0 (si no, no se carga y la PC avisa). 'line' es lo que anota el renglón (ChargedLineKind y ChargedLineSyncId: synced-json-columns.json). remove-supply descuenta las piezas que cargó, del mismo renglón de la cuenta.",
     "add-service: el servicio del catálogo del renglón (PatientSheetRows.ResolveService: el activo con su SyncId; sin SyncId ni Id local, cargo libre; si no, el del Id viejo con el mismo nombre normalizado o el primero con ese nombre normalizado) se carga por sus unidades ('Servicio Clínico • categoría', 'Duración: N min', 'Servicio') y cada insumo por defecto por sus piezas × unidades, que forman la lista del renglón (revisión 14, ServiceRowSupplies.AddUnits: synced-json-columns.json); sin servicio, un cargo libre con su precio (si es mayor que 0) y la lista vacía. Las existencias nunca frenan lo que se carga (revisión 20; antes había tope al agregar a mano): si no alcanzan, la PC avisa sin bloquear. summary es el resumen de la lista que muestra la hoja.",
     "service-units (+ / −): con lista, una unidad más carga el servicio y los insumos por defecto de esa unidad (se suman a la lista); una menos descuenta el servicio y las piezas por defecto de esa unidad, cada insumo hasta lo que tenga la lista (lo agregado a mano se queda). service-supply-add: una pieza más de un producto en la lista (o uno nuevo). service-supply-remove: la X de un insumo de la lista. remove-service (la X del renglón): descuenta el servicio por sus unidades cargadas y cada insumo de la lista como quedó."
@@ -138,6 +138,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": null,
           "account": {
             "items": [
               {
@@ -158,6 +159,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": null,
           "account": {
             "items": [
               {
@@ -189,6 +191,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": "Existencias insuficientes: Paracetamol 500 mg (quedan 2, se cobran 3). Revise el inventario.",
           "account": {
             "items": [
               {
@@ -220,6 +223,7 @@
         {
           "op": "prescribe",
           "charged": false,
+          "warning": null,
           "account": {
             "items": [
               {
@@ -251,6 +255,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": "Existencias insuficientes: Tempra (quedan 9, se cobran 11). Revise el inventario.",
           "account": {
             "items": [
               {
@@ -388,6 +393,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": null,
           "account": {
             "items": [
               {
@@ -2312,6 +2318,7 @@
         {
           "op": "prescribe",
           "charged": true,
+          "warning": null,
           "account": {
             "items": [
               {
@@ -2534,6 +2541,497 @@
               }
             ],
             "total": "1756.00"
+          }
+        }
+      ]
+    },
+    {
+      "name": "se surte aquí por defecto: marcado con existencias, desmarcado con 0 o en negativo, y marcado a mano se carga con el aviso",
+      "input": {
+        "products": [
+          {
+            "id": 11,
+            "code": "CUR-001",
+            "name": "Gasa Estéril 10x10 cm",
+            "genericName": "Gasa de algodón",
+            "presentation": "Sobre con 5 piezas",
+            "stock": 10,
+            "category": "Material de curación",
+            "price": "18.00",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000001"
+          },
+          {
+            "id": 12,
+            "code": "ANT-001",
+            "name": "Alcohol Etílico 70%",
+            "genericName": "Etanol",
+            "presentation": "Botella de 1000 ml",
+            "stock": 3,
+            "category": "Antisépticos",
+            "price": "65.50",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000002"
+          },
+          {
+            "id": 14,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 2,
+            "category": "Medicamentos",
+            "price": "45.00",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000004"
+          },
+          {
+            "id": 15,
+            "code": "MED-002",
+            "name": "Tempra",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas 500 mg",
+            "stock": 9,
+            "category": "Medicamentos",
+            "price": "89.90",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000005"
+          },
+          {
+            "id": 16,
+            "code": "MED-003",
+            "name": "Ibuprofeno 400 mg",
+            "genericName": "Ibuprofeno",
+            "presentation": "Caja con 10 tabletas",
+            "stock": 0,
+            "category": "Medicamentos",
+            "price": "55.00",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000006"
+          },
+          {
+            "id": 17,
+            "code": "MED-004",
+            "name": "Omeprazol 20 mg",
+            "genericName": "Omeprazol",
+            "presentation": "Caja con 14 cápsulas",
+            "stock": -2,
+            "category": "Medicamentos",
+            "price": "60.00",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000007"
+          },
+          {
+            "id": 18,
+            "code": "MED-005",
+            "name": "Ketorolaco 30 mg ampolletas",
+            "genericName": "Ketorolaco",
+            "presentation": "Caja con 3 ampolletas",
+            "stock": 0,
+            "category": "Medicamentos",
+            "price": "90.00",
+            "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+            "unitsPerPackage": 3,
+            "openedUnitsRemaining": 2
+          }
+        ],
+        "services": [
+          {
+            "id": 21,
+            "code": "SERV-002",
+            "name": "Curación Menor y Asepsia",
+            "category": "Curaciones",
+            "price": "250.00",
+            "minutes": 20,
+            "syncId": "b1b2c3d4-0000-4000-8000-000000000001",
+            "defaultProducts": [
+              {
+                "productId": 11,
+                "quantity": 2
+              },
+              {
+                "productId": 12,
+                "quantity": 1
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "code": "SERV-004",
+            "name": "Glucemia capilar",
+            "category": "Diagnóstico",
+            "price": "80.00",
+            "minutes": 10,
+            "syncId": "b1b2c3d4-0000-4000-8000-000000000002"
+          },
+          {
+            "id": 1,
+            "code": "SERV-001",
+            "name": "Consulta Médica General",
+            "category": "Consulta",
+            "price": "350.00",
+            "minutes": 25,
+            "syncId": "b1b2c3d4-0000-4000-8000-000000000003"
+          }
+        ],
+        "feeOverrideId": null,
+        "ops": [
+          {
+            "op": "prescribe",
+            "medicineName": "Paracetamol 500 mg",
+            "recommendedQuantity": 1,
+            "knownProductId": 14
+          },
+          {
+            "op": "prescribe",
+            "medicineName": "Ibuprofeno 400 mg",
+            "recommendedQuantity": 1,
+            "knownProductId": 16
+          },
+          {
+            "op": "prescribe",
+            "medicineName": "Omeprazol 20 mg",
+            "recommendedQuantity": 1,
+            "knownProductId": null
+          },
+          {
+            "op": "prescribe",
+            "medicineName": "Ketorolaco 30 mg ampolletas",
+            "recommendedQuantity": 1,
+            "knownProductId": 18
+          },
+          {
+            "op": "prescribe",
+            "medicineName": "Naproxeno 250 mg",
+            "recommendedQuantity": 1,
+            "knownProductId": null
+          },
+          {
+            "op": "prescribe",
+            "medicineName": "Paracetamol 500 mg",
+            "recommendedQuantity": 3,
+            "knownProductId": 14
+          },
+          {
+            "op": "tick-dispense",
+            "row": 1,
+            "value": 0
+          },
+          {
+            "op": "tick-dispense",
+            "row": 2,
+            "value": 0
+          },
+          {
+            "op": "tick-dispense",
+            "row": 4,
+            "value": 0
+          }
+        ]
+      },
+      "expected": [
+        {
+          "op": "prescribe",
+          "charged": true,
+          "warning": null,
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 1
+              }
+            ],
+            "total": "395.00"
+          }
+        },
+        {
+          "op": "prescribe",
+          "charged": false,
+          "warning": null,
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 1
+              }
+            ],
+            "total": "395.00"
+          }
+        },
+        {
+          "op": "prescribe",
+          "charged": false,
+          "warning": null,
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 1
+              }
+            ],
+            "total": "395.00"
+          }
+        },
+        {
+          "op": "prescribe",
+          "charged": true,
+          "warning": "Existencias insuficientes: Ketorolaco 30 mg ampolletas (quedan 0, se cobran 1). Revise el inventario.",
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              }
+            ],
+            "total": "485.00"
+          }
+        },
+        {
+          "op": "prescribe",
+          "charged": false,
+          "warning": null,
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              }
+            ],
+            "total": "485.00"
+          }
+        },
+        {
+          "op": "prescribe",
+          "charged": true,
+          "warning": "Existencias insuficientes: Paracetamol 500 mg (quedan 2, se cobran 4). Revise el inventario.",
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 4
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              }
+            ],
+            "total": "620.00"
+          }
+        },
+        {
+          "op": "tick-dispense",
+          "charged": true,
+          "warning": "Existencias insuficientes: Ibuprofeno 400 mg (quedan 0, se cobran 1). Revise el inventario.",
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 4
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000006",
+                "code": "MED-003",
+                "name": "Ibuprofeno 400 mg",
+                "genericName": "Ibuprofeno",
+                "presentation": "Caja con 10 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "55.00",
+                "quantity": 1
+              }
+            ],
+            "total": "675.00"
+          }
+        },
+        {
+          "op": "tick-dispense",
+          "charged": true,
+          "warning": "Existencias insuficientes: Omeprazol 20 mg (quedan −2, se cobran 1). Revise el inventario.",
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 4
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000006",
+                "code": "MED-003",
+                "name": "Ibuprofeno 400 mg",
+                "genericName": "Ibuprofeno",
+                "presentation": "Caja con 10 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "55.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000007",
+                "code": "MED-004",
+                "name": "Omeprazol 20 mg",
+                "genericName": "Omeprazol",
+                "presentation": "Caja con 14 cápsulas",
+                "unit": "Piezas",
+                "unitPrice": "60.00",
+                "quantity": 1
+              }
+            ],
+            "total": "735.00"
+          }
+        },
+        {
+          "op": "tick-dispense",
+          "charged": false,
+          "warning": null,
+          "account": {
+            "items": [
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000004",
+                "code": "MED-001",
+                "name": "Paracetamol 500 mg",
+                "genericName": "Paracetamol",
+                "presentation": "Caja con 20 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "45.00",
+                "quantity": 4
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000008",
+                "code": "MED-005",
+                "name": "Ketorolaco 30 mg ampolletas",
+                "genericName": "Ketorolaco",
+                "presentation": "Caja con 3 ampolletas",
+                "unit": "Piezas",
+                "unitPrice": "90.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000006",
+                "code": "MED-003",
+                "name": "Ibuprofeno 400 mg",
+                "genericName": "Ibuprofeno",
+                "presentation": "Caja con 10 tabletas",
+                "unit": "Piezas",
+                "unitPrice": "55.00",
+                "quantity": 1
+              },
+              {
+                "kind": "producto",
+                "syncId": "a1b2c3d4-0000-4000-8000-000000000007",
+                "code": "MED-004",
+                "name": "Omeprazol 20 mg",
+                "genericName": "Omeprazol",
+                "presentation": "Caja con 14 cápsulas",
+                "unit": "Piezas",
+                "unitPrice": "60.00",
+                "quantity": 1
+              }
+            ],
+            "total": "735.00"
           }
         }
       ]

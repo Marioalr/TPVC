@@ -103,9 +103,7 @@ public partial class ConsultationAccount : ObservableObject
     public bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct, out string? stockWarning)
     {
         stockWarning = null;
-        var product = knownProduct != null && CatalogStore.ProductMatchesName(knownProduct, item.MedicineName)
-            ? knownProduct
-            : _catalog.FindCatalogProduct(item.MedicineName);
+        var product = PrescriptionProduct(item, knownProduct);
         if (ConsultationAccountRules.PrescriptionChargeQuantity(item, product) is not int qty) return false;
         if (!ChargeProduct(product!, qty, item.MedicineName)) return false;
         stockWarning = StockWarning(product!);
@@ -114,6 +112,25 @@ public partial class ConsultationAccount : ObservableObject
 
     /// <inheritdoc cref="ChargePrescription(PatientPrescriptionItem, Product?, out string?)"/>
     public bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct = null) => ChargePrescription(item, knownProduct, out _);
+
+    /// <summary>
+    /// "Se surte aquí" al agregar un medicamento a la receta (elegido, la dosis pediátrica o «Repetir»): marcado y cargado solo
+    /// si su producto tiene existencias (<see cref="ConsultationAccountRules.DispenseByDefault"/>, decisión del médico del
+    /// 2026-10-22); con 0 o en negativo queda desmarcado y sin cargo, y el médico lo puede marcar a mano
+    /// (<see cref="ChargePrescription(PatientPrescriptionItem, Product?, out string?)"/>). Devuelve si quedó marcado.
+    /// </summary>
+    public bool DispenseByDefault(PatientPrescriptionItem item, Product? knownProduct, out string? stockWarning)
+    {
+        stockWarning = null;
+        if (!ConsultationAccountRules.DispenseByDefault(PrescriptionProduct(item, knownProduct))) return false;
+        return ChargePrescription(item, knownProduct, out stockWarning);
+    }
+
+    /// <summary>El producto de un renglón de la receta: el conocido si sigue siendo ese renglón, si no el de su nombre.</summary>
+    private Product? PrescriptionProduct(PatientPrescriptionItem item, Product? knownProduct) =>
+        knownProduct != null && CatalogStore.ProductMatchesName(knownProduct, item.MedicineName)
+            ? knownProduct
+            : _catalog.FindCatalogProduct(item.MedicineName);
 
     /// <summary>
     /// Revisión 20: el aviso de existencias de un producto con lo que ya está en la cuenta (paquetes y piezas sueltas de todos

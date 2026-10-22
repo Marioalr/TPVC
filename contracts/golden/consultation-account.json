@@ -8,6 +8,7 @@
     "La cuenta de la consulta (Services/Rules/ConsultationAccountRules.cs, antes en ConsultationAccount y ConsultationService): el honorario, el total y cómo se suman y se quitan renglones. Importes como texto decimal invariante. Lo que cada hoja carga está en sheet-charges.json.",
     "fee: entre los servicios activos, el de Id feeOverrideId (la consulta recibida de otro equipo trae el honorario que usaba aquel, por su SyncId: handoff-payload.json), si no el de código SERV-001, si no el primero de categoría 'Consulta', si no el primero cuyo nombre contiene 'Consulta' (las tres sin distinguir mayúsculas; los acentos cuentan); name y amount son los suyos o 'Consulta Médica General' y 300.00. En la lista del catálogo, en su orden.",
     "account: add suma 'quantity' piezas al renglón con el mismo lineId (solo cambia su cantidad) o agrega uno al final; con cantidad 0 o negativa no hace nada (false). remove quita piezas del renglón con ese lineId: si tiene más se reduce, si no sale; false sin renglón o con cantidad 0 o negativa. lineId es el Id local del renglón (el producto, -Id del servicio o el de un cargo libre); en Kotlin cada renglón se reconoce con la regla de synced-json-columns.json. total = honorario + Σ cantidad × precio.",
+    "dispense-default («Se surte aquí» al agregar un medicamento a la receta, decisión del médico del 2026-10-22): true si hay producto y tiene existencias: stock > 0 o, en un producto de piezas sueltas (unitsPerPackage > 1), piezas disponibles > 0 (max(0, stock) × unitsPerPackage + max(0, openedUnitsRemaining)); false con 0 o en negativo (sin paquete abierto) y sin producto. Desmarcado no se carga; el médico lo puede marcar a mano y entonces se carga con prescription-quantity y el aviso de existencias.",
     "prescription-quantity («Se surte aquí»): las piezas que carga un medicamento recetado, su cantidad recomendada (1 como mínimo), o null si no hay producto (se receta igual, sin cobrar). Revisión 20 (decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar): las existencias ya no cuentan; antes, con menos existencias que la cantidad, era null. Si no alcanzan se avisa sin bloquear con el texto de checkout.json (stockWarning).",
     "line-texts: el código de un cargo libre (el suyo o 'CARGO' si está vacío), el genérico del renglón de un servicio 'Servicio Clínico • {categoría}' y su presentación 'Duración: N min'."
   ],
@@ -556,6 +557,110 @@
         "product": null
       },
       "expected": null
+    },
+    {
+      "name": "se surte aquí por defecto · con existencias: marcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": 3
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "se surte aquí por defecto · una sola: marcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": 1
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "se surte aquí por defecto · sin existencias: desmarcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": 0
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "se surte aquí por defecto · en negativo: desmarcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": -2
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "se surte aquí por defecto · piezas sueltas: sin paquetes pero con el paquete abierto, marcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": 0,
+          "unitsPerPackage": 10,
+          "openedUnitsRemaining": 4
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "se surte aquí por defecto · piezas sueltas: en negativo aunque quede un paquete abierto, marcado (cuentan las piezas disponibles)",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": -1,
+          "unitsPerPackage": 10,
+          "openedUnitsRemaining": 4
+        }
+      },
+      "expected": true
+    },
+    {
+      "name": "se surte aquí por defecto · piezas sueltas: sin paquetes ni piezas, desmarcado",
+      "input": {
+        "check": "dispense-default",
+        "product": {
+          "id": 1,
+          "code": "MED-001",
+          "name": "Paracetamol 500 mg",
+          "stock": 0,
+          "unitsPerPackage": 10
+        }
+      },
+      "expected": false
+    },
+    {
+      "name": "se surte aquí por defecto · no está en el inventario: desmarcado",
+      "input": {
+        "check": "dispense-default",
+        "product": null
+      },
+      "expected": false
     },
     {
       "name": "textos del renglón · servicio",
