@@ -183,6 +183,44 @@ public class NegativeStockTests
     }
 
     [TestMethod]
+    public async Task ClosingALot_KeepsANegativeOutsideTheLots_NothingCompensatesItself()
+    {
+        // Revisor de la revisión 20: existencias 2 sin lote, se venden 5 (−3), llega el lote L-01 con 5 (2) y se cierra
+        var category = (await _service.GetCategoriesAsync()).First();
+        var product = new Product { Code = "NEG-CIERRE", Name = "Producto NEG-CIERRE", CategoryId = category.Id, Price = 10m, CurrentStock = 2 };
+        await _service.SaveProductAsync(product);
+        await _service.RegisterSaleAsync(new[] { new SaleLineRequest(product.Id, 5, 10m) }, "Paciente", "Efectivo");
+        var lot = new ProductBatch { ProductId = product.Id, BatchNumber = "L-01", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 5 };
+        await _service.ReceiveBatchAsync(lot);
+        Assert.AreEqual(2, (await ProductAsync(product.Id)).CurrentStock);
+
+        await _service.DeleteBatchAsync(lot.Id);
+        var closed = await ProductAsync(product.Id);
+        Assert.AreEqual(-3, closed.CurrentStock, "Sale todo el lote; el −3 de fuera de los lotes se queda");
+        Assert.IsTrue(closed.NeedsInventoryReview);
+        Assert.AreEqual(1, (await _service.GetSystemAlertsSummaryAsync()).InventoryReviewCount);
+        await AssertLedgerCleanAsync("Lote cerrado con un negativo fuera de los lotes");
+
+        // Con lotes vendidos y repuestos, cerrar uno saca lo que todavía tenía aunque el producto esté en 0
+        var second = new ProductBatch { ProductId = product.Id, BatchNumber = "L-02", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 5 };
+        await _service.ReceiveBatchAsync(second);
+        await _service.RegisterSaleAsync(new[] { new SaleLineRequest(product.Id, 5, 10m) }, "Paciente", "Efectivo");
+        var third = new ProductBatch { ProductId = product.Id, BatchNumber = "L-03", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 5 };
+        await _service.ReceiveBatchAsync(third);
+        await _service.RegisterSaleAsync(new[] { new SaleLineRequest(product.Id, 5, 10m) }, "Paciente", "Efectivo");
+        Assert.AreEqual(-3, (await ProductAsync(product.Id)).CurrentStock);
+        var fourth = new ProductBatch { ProductId = product.Id, BatchNumber = "L-04", ExpirationDate = DateTime.Today.AddMonths(6), Quantity = 5 };
+        await _service.ReceiveBatchAsync(fourth);
+        // −3 y un lote de 5: 2; se venden 2 del lote, que se queda con 3, y el producto en 0
+        Assert.AreEqual(2, (await ProductAsync(product.Id)).CurrentStock);
+        await _service.RegisterSaleAsync(new[] { new SaleLineRequest(product.Id, 2, 10m) }, "Paciente", "Efectivo");
+        Assert.AreEqual(0, (await ProductAsync(product.Id)).CurrentStock);
+        await _service.DeleteBatchAsync(fourth.Id);
+        Assert.AreEqual(-3, (await ProductAsync(product.Id)).CurrentStock, "Con existencias en 0 cierra los 3 que el lote todavía tenía");
+        await AssertLedgerCleanAsync("Cerrar con el producto en 0");
+    }
+
+    [TestMethod]
     public async Task QuickConsultationUsage_BeyondTheLots_GoesWithoutLot_AndTheLedgerStaysClean()
     {
         var (product, _, _) = await ProductWithLotsAsync("NEG-4");

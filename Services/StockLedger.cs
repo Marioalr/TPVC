@@ -127,6 +127,19 @@ public static class StockLedger
     public static Guid CloseRestSyncId(Guid batchSyncId) => SyncIds.Derived(CloseRestPrefix, batchSyncId);
 
     /// <summary>
+    /// Las dos partes del cierre de un lote: la que lleva su libro a 0 con su lote (−libro) y la sin lote, para que el producto
+    /// baje lo que el lote mostraba. Revisión 20: el producto baja la cantidad del lote aunque quede en negativo (un negativo
+    /// que ya traía fuera de los lotes se queda: nada se compensa solo). Solo un lote de antes de la revisión 11, cuyo libro no
+    /// es su cantidad, conserva el tope de antes: baja como mucho lo que el producto tiene, sin pasar de 0.
+    /// </summary>
+    public static (int LotDelta, int RestDelta) ClosingDeltas(int lotQuantity, int lotLedger, int productStock)
+    {
+        bool legacyLot = lotLedger != lotQuantity;
+        int removed = legacyLot ? Math.Min(lotQuantity, Math.Max(productStock, 0)) : lotQuantity;
+        return (-lotLedger, -(removed - lotLedger));
+    }
+
+    /// <summary>
     /// Compara lo guardado con el libro, por lote y por producto, sin cambiar nada. Una diferencia que ya estaba en la foto
     /// (<see cref="DbMeta.StockLedgerBaseline"/>) no cuenta como nueva, salvo en un lote cerrado: al cerrarlo, lo guardado y
     /// el libro quedan en 0.

@@ -303,9 +303,29 @@ public partial class GoldenVectorTests
             },
             StockReviewRules.WarningText(new[] { new StockShortage("Paracetamol", 2, 5, false), new StockShortage("Jeringa", -6, 5, true) })));
 
+        // Revisión 20: cerrar un lote baja lo que mostraba aunque el producto quede en negativo (solo un lote de antes de la
+        // revisión 11 conserva el tope)
+        foreach (var (name, quantity, ledger, stock) in new (string, int, int, int)[]
+                 {
+                     ("lote al día", 5, 5, 8),
+                     ("lote al día con un negativo fuera de los lotes: queda en negativo", 5, 5, 2),
+                     ("lote al día con el producto ya en negativo", 5, 5, -3),
+                     ("lote al día después de un conteo más bajo", 10, 10, 8),
+                     ("lote de antes de la revisión 11 (su libro no es su cantidad): el tope de antes", 5, 0, 3),
+                     ("lote de antes con el producto en negativo: no baja nada sin lote", 5, 2, -1),
+                     ("lote de antes que alcanza", 6, -4, 6),
+                 })
+        {
+            var (lotDelta, restDelta) = TPVC.Services.StockLedger.ClosingDeltas(quantity, ledger, stock);
+            cases.Add(Case($"cerrar un lote · {name}",
+                new JsonObject { ["kind"] = "closeLot", ["lotQuantity"] = quantity, ["lotLedger"] = ledger, ["productStock"] = stock },
+                new JsonObject { ["lotDelta"] = lotDelta, ["restDelta"] = restDelta, ["stockAfter"] = stock + lotDelta + restDelta }));
+        }
+
         CheckOrWrite("contracts/golden/alerts.json", DatedVectorFile("alerts", null, VectorNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture), cases,
             "Services/Rules/StockAlertRules.cs, Services/Rules/StockReviewRules.cs (revisión 20) y ProductBatch.StatusTextOn.",
             "Revisar inventario (revisión 20; decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar, la política de negativos del paso 8.20 adelantada): la venta, «Se surte aquí», los insumos y el consumo en consulta pasan aunque no alcancen las existencias, que quedan en negativo. inventoryReview: los productos activos con CurrentStock < 0 o con un lote abierto (closedAtUtc nulo) con Quantity < 0, aunque el total sea positivo; del de menos existencias al de más y, con las mismas, por nombre ordinal. alertLine: '{nombre}: {existencias} · revisar inventario' y, con lotes abiertos en negativo, ' (lote {número} {cantidad}, …)' por número ordinal. Los negativos se escriben con el signo menos U+2212 ('−3'). stockBadge (Product.StockBadgeText): en negativo '{existencias} · revisar inventario'; si no, la insignia de siempre ('Existencias: N', 'Stock bajo: N', 'Sin existencias' o con el paquete abierto '(+abiertas/piezas)'). La alerta se va sola cuando un conteo o una entrada dejan todo en 0 o más: nada se compensa solo.",
+            "closeLot (StockLedger.ClosingDeltas, regla «Existencias»): lotDelta = −lotLedger (con su lote, SyncId 'close:'); restDelta (sin lote, SyncId 'close-rest:'; 0 = no se escribe) = −(quitado − lotLedger), con quitado = lotQuantity si el lote está al día (lotLedger = lotQuantity) aunque el producto quede en negativo (revisión 20: un negativo fuera de los lotes se queda, nada se compensa solo; antes se topaba en max(productStock, 0) y lo borraba), o min(lotQuantity, max(productStock, 0)) en un lote de antes de la revisión 11 (lotLedger ≠ lotQuantity). stockAfter = productStock + lotDelta + restDelta.",
             "shortage (StockReviewRules.Shortage): los paquetes que hacen falta son wholePackages + (si individualUnits > las piezas del paquete abierto, max(0, openedUnitsRemaining)) ⌈(piezas − abiertas) / unitsPerPackage⌉; con unitsPerPackage <= 1 las piezas cuentan como paquetes. Si no pasan de currentStock, null. Si no, en paquetes {available: currentStock, charged: paquetes}; con piezas sueltas en piezas {available: currentStock × unitsPerPackage + max(0, abiertas), charged: wholePackages × unitsPerPackage + piezas, pieces: true}. warning (StockReviewRules.WarningText): 'Existencias insuficientes: ' + cada faltante '{nombre} (quedan {available}, se cobran {charged})' (con ' pzas' después de cada número en piezas) unidos por '; ' + '. Revise el inventario.'; null sin faltantes. Es el aviso al cobrar, que nunca bloquea (checkout.json).",
             "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",
             "Caducidad: cuentan los lotes con piezas, sin marcar como agotados, abiertos (closedAtUtc nulo, desde v1.37.0) y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",

@@ -238,7 +238,7 @@ Catálogo de medicamentos e insumos con precios y existencias:
 Trazabilidad por número de lote y fecha de caducidad; lo que vence primero aparece arriba y es lo que se descuenta primero al vender o usar (FEFO):
 * Chips con el conteo: **Todos**, **Por vencer** (60 días o menos), **Vencidos** y **Vigentes**.
 * **Registrar lote** abre un panel lateral: producto, número de lote, piezas y **caducidad escrita como en la caja** (`12/2027` toma el último día del mes, o `dd/mm/aaaa`), con atajos **+6 meses**, **+1 año** y **+2 años**.
-* **Quitar** un lote descuenta sus piezas de las existencias y queda en el kardex.
+* **Quitar** un lote descuenta sus piezas de las existencias y queda en el kardex. Si el producto ya tenía un faltante fuera de los lotes (por ejemplo, se vendió sin existencias), quitar el lote no lo borra: el producto puede quedar en negativo y pide revisar el inventario.
 * Al vender o usar, se descuenta primero de los lotes con piezas (el que vence antes); si no alcanzan, lo que falta sale **sin lote** y las existencias del producto quedan en negativo, para revisar el inventario. Un lote nunca queda en negativo por una venta. Al cancelar el ticket, cada pieza regresa a donde salió.
 
 ---

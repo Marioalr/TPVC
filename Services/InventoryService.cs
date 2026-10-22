@@ -408,8 +408,9 @@ public partial class InventoryService
 
     /// <summary>
     /// «Eliminar lote» (paso 8.19): el lote ya no se borra, se cierra (<see cref="ProductBatch.ClosedAtUtc"/>, con su
-    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto, como antes sin dejarlas en negativo, y
-    /// un movimiento con su lote lleva su libro a 0 (Delta = −libro del lote). Los movimientos del cierre llevan SyncId
+    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto (revisión 20: aunque quede en negativo,
+    /// que pide revisar el inventario; nada se compensa solo) y un movimiento con su lote lleva su libro a 0 (Delta = −libro
+    /// del lote). Solo un lote de antes de la revisión 11 (su libro no es su cantidad) conserva el tope de antes. Los movimientos del cierre llevan SyncId
     /// deterministas: dos equipos que cierran el mismo lote escriben las mismas filas. Un movimiento de otro equipo que
     /// llegue después sigue en este lote.
     /// </summary>
@@ -457,13 +458,14 @@ public partial class InventoryService
             });
         }
 
-        // Lo que sale del producto es lo que el lote mostraba, sin pasar de lo que tiene (como antes del paso 8.19: un lote
-        // de antes puede mostrar más que el producto). El libro del lote va a 0 con su lote, y lo que falte para que el libro
-        // del producto baje lo mismo va sin lote (un lote de antes del Kardex completo puede mostrar otra cantidad que su
-        // libro: FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento). En el Kardex es un renglón
-        int removed = Math.Min(batch.Quantity, Math.Max(product.CurrentStock, 0));
-        Close(lotPartId, batch.Id, -ledger);
-        Close(restPartId, null, -(removed - ledger));
+        // Lo que sale del producto es lo que el lote mostraba, aunque el producto quede en negativo (revisión 20: un negativo
+        // que ya traía, fuera de los lotes, se queda; nada se compensa solo). Solo un lote de antes de la revisión 11, cuyo
+        // libro no es su cantidad (FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento), puede mostrar más que
+        // el producto: ese conserva el tope de antes, sin pasar de lo que tiene. El libro del lote va a 0 con su lote, y lo que
+        // falte para que el libro del producto baje lo mismo va sin lote. En el Kardex es un renglón
+        var (lotDelta, restDelta) = StockLedger.ClosingDeltas(batch.Quantity, ledger, product.CurrentStock);
+        Close(lotPartId, batch.Id, lotDelta);
+        Close(restPartId, null, restDelta);
 
         batch.Quantity = 0;
         batch.IsDepleted = true;
