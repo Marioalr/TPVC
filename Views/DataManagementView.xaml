@@ -101,7 +101,9 @@
                 </Border>
 
                 <!-- Respaldo -->
-                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16">
+                <!-- Respaldos de la base: solo la PC por ahora (CanAdministerCloud; la tablet no los muestra) -->
+                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="20" Margin="0,0,0,16"
+                        Visibility="{Binding CanManageBackups, Converter={StaticResource BoolToVis}}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -222,7 +224,8 @@
                             </Button>
                         </StackPanel>
                     </Border>
-                    <Border Style="{StaticResource Card}" Padding="20" Margin="8,0,0,0">
+                    <Border Style="{StaticResource Card}" Padding="20" Margin="8,0,0,0"
+                            Visibility="{Binding CanManageBackups, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource ThemeWarningSubtle}" HorizontalAlignment="Left" Margin="0,0,0,12">
                                 <helpers:Icon Data="{StaticResource IcoRefresh}" Foreground="{DynamicResource ThemeWarningText}" />

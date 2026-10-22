@@ -214,9 +214,16 @@ public partial class DataManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(HasBackups));
     }
 
+    /// <summary>
+    /// Respaldos de la base (hacer, ver, abrir la carpeta y restaurar): solo la PC por ahora (<see cref="DevicePermissions.CanAdministerCloud"/>;
+    /// plan §4.6). La tablet no los muestra: su copia es la nube. En la PC siempre es verdadero.
+    /// </summary>
+    public bool CanManageBackups => TursoSyncViewModel.IsCloudAdministrator;
+
     [RelayCommand]
     public async Task BackupNowAsync()
     {
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
         if (IsBackingUp) return;
         IsBackingUp = true;
         try
@@ -237,7 +244,11 @@ public partial class DataManagementViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void OpenBackupFolder() => OpenFolder(_backupService.BackupDirectory);
+    public void OpenBackupFolder()
+    {
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
+        OpenFolder(_backupService.BackupDirectory);
+    }
 
     public static void OpenFolder(string path)
     {

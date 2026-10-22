@@ -84,7 +84,7 @@ public static class DevicePermissions
     /// <summary>
     /// Configuración del consultorio: médico y consultorio, membrete, servicios, plantillas de receta, dosis pediátricas e
     /// importar el Excel (datos compartidos que se sincronizan), y las preferencias de este equipo. La PC y la tablet (desde el
-    /// 2026-10-22). Lo que es de la nube (esquema, generaciones, vincular, respaldos que se restauran) es
+    /// 2026-10-22). Lo que es de la nube (esquema, generaciones, vincular, los respaldos de la base) es
     /// <see cref="CanAdministerCloud"/>, no esto.
     /// </summary>
     public static bool CanConfigureSystem(DeviceRole role) =>
@@ -99,6 +99,7 @@ public static class DevicePermissions
     /// identidad de la nube), «Reemplazar con la nube», reemplazar la
     /// nube con un respaldo o restaurar uno con la nube activa (cambian la generación, paso 8.9);</item>
     /// <item>vincular, aprobar, rechazar, quitar y «Perdí este equipo» (escribe <c>DeviceRegistry</c>);</item>
+    /// <item>los respaldos de la base: hacerlos, verlos y restaurarlos (por ahora solo la PC; la copia de la tablet es la nube);</item>
     /// <item>y, solo en la PC principal (<c>_tpvc_meta.primaryDeviceId</c>), la regularización diaria de folios, los saldos
     /// iniciales del libro y archivar o desalojar los resultados de laboratorio.</item>
     /// </list>

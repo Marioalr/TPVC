@@ -386,7 +386,7 @@ Volver a vincular con el mismo `clinicId` y el mismo `DeviceId` conserva la base
 | Compartir receta y ticket (`CanShareDocuments`) | sí | sí | sí |
 | Consulta entre equipos (`CanTakeConsultations`) | sí | sí | no (`GetLinkedDevicesAsync` excluye el celular) |
 | Configuración del consultorio (`CanConfigureSystem`): médico y consultorio, membrete, servicios, plantillas de receta, dosis pediátricas, importar el Excel, y las preferencias de este equipo | sí | sí (2026-10-22) | no |
-| **Administrar la nube** (`CanAdministerCloud`, nuevo): esquema remoto y `_tpvc_meta`, sincronización completa, unirse o recuperar como PC, «Esta PC ya usaba esta nube», «Reemplazar con la nube», reemplazar la nube con un respaldo o restaurar uno con la nube activa, vincular, aprobar, rechazar, quitar y «Perdí este equipo», «Esta PC reemplaza a la principal»; y en la PC principal, regularizar folios, saldos iniciales y archivar los resultados de laboratorio | sí | **no** | no |
+| **Administrar la nube** (`CanAdministerCloud`, nuevo): esquema remoto y `_tpvc_meta`, sincronización completa, unirse o recuperar como PC, «Esta PC ya usaba esta nube», «Reemplazar con la nube», reemplazar la nube con un respaldo o restaurar uno con la nube activa, vincular, aprobar, rechazar, quitar y «Perdí este equipo», «Esta PC reemplaza a la principal», los respaldos de la base (hacerlos, verlos y restaurarlos; `DataManagementViewModel.CanManageBackups`); y en la PC principal, regularizar folios, saldos iniciales y archivar los resultados de laboratorio | sí | **no** | no |
 
 **Qué de Configuración se queda solo en la PC y por qué.** Todo lo que cambia la nube para todos los equipos o decide quién entra:
 

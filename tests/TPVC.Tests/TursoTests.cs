@@ -380,6 +380,8 @@ public class TursoTests
         ("DataManagementViewModel.cs", "ContinueCloudReplacementAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
         ("DataManagementViewModel.cs", "StartRestoreFromFile", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
         ("DataManagementViewModel.cs", "RestoreBackup", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "BackupNowAsync", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
+        ("DataManagementViewModel.cs", "OpenBackupFolder", "if (!TursoSyncViewModel.IsCloudAdministrator) return;"),
     };
 
     [TestMethod]
@@ -401,6 +403,10 @@ public class TursoTests
             Assert.AreEqual(guard, firstStatement, $"{file}: {method}");
         }
         Assert.IsTrue(TPVC.ViewModels.TursoSyncViewModel.IsCloudAdministrator);
+
+        // La pantalla de respaldos esconde lo de respaldos (hacer, ver y restaurar) donde no se administra la nube
+        var view = File.ReadAllText(Path.Combine(root, "Views", "DataManagementView.xaml"));
+        Assert.HasCount(2, System.Text.RegularExpressions.Regex.Matches(view, @"Visibility=""\{Binding CanManageBackups, "));
     }
 
     [TestMethod]
