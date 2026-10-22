@@ -40,6 +40,30 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
+    public async Task AnImageJustUploadedByTheTablet_IsNotDeletedByThePc_BeforeItsProfileArrives()
+    {
+        // Revisión 19: la tablet sube una imagen completa y todavía no escribe el perfil que la nombra; la PC cambia su escudo
+        // en ese momento y limpia lo que el perfil no nombra: la de la tablet (de hace segundos) se queda, la vieja no
+        var pc = CreateDevice("pc", seed: true);
+        pc.Profile.SaveProfile(new ClinicProfile { DoctorName = "Dra. Prueba", ClinicName = "Consultorio" });
+        pc.Profile.SaveLetterheadImage(LetterheadImageKind.Crest, CrestPng);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        ExecuteCloud("UPDATE ClinicAssets SET UpdatedAtUtc = '2026-01-01 00:00:00.000';");
+
+        const string tabletHash = "abababababababababababababababababababababababababababababababab";
+        ExecuteCloud($"INSERT INTO ClinicAssetChunks (Hash, Part, Content) VALUES ('{tabletHash}', 0, x'0102');" +
+                     $"INSERT INTO ClinicAssets (Hash, Kind, MimeType, ByteCount, ChunkCount, UpdatedAtUtc) VALUES ('{tabletHash}', 'header', 'image/png', 2, 1, {TursoSyncService.ServerNowSql});");
+
+        pc.Profile.SaveLetterheadImage(LetterheadImageKind.Crest, OtherCrestPng);
+        Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
+        Assert.AreEqual(0L, (long)CloudScalar($"SELECT COUNT(*) FROM ClinicAssets WHERE Hash = '{ClinicProfileService.HashImage(CrestPng)}'")!,
+            "El escudo anterior (de hace más de una hora) se borró");
+        Assert.AreEqual(1L, (long)CloudScalar($"SELECT COUNT(*) FROM ClinicAssets WHERE Hash = '{tabletHash}'")!, "La de la tablet se queda");
+        Assert.AreEqual(1L, (long)CloudScalar($"SELECT COUNT(*) FROM ClinicAssetChunks WHERE Hash = '{tabletHash}'")!, "… con sus trozos");
+        Assert.AreEqual(2L, CloudAssets());
+    }
+
+    [TestMethod]
     public async Task ChangingTheCrest_UploadsItOnce_AndTheOthersDownloadItOnlyWhenItChanges()
     {
         var pc = CreateDevice("pc", seed: true);
@@ -78,7 +102,8 @@ public partial class TursoSyncEndToEndTests
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
         Assert.AreEqual(0, AssetStatements(), "Las bajadas normales no leen ClinicAssets");
 
-        // Otro escudo: sube el nuevo, la nube olvida el anterior y el otro equipo baja el nuevo
+        // Otro escudo: sube el nuevo, la nube olvida el anterior (subido hace más de una hora) y el otro equipo baja el nuevo
+        ExecuteCloud("UPDATE ClinicAssets SET UpdatedAtUtc = '2026-01-01 00:00:00.000';");
         pc.Profile.SaveLetterheadImage(LetterheadImageKind.Crest, OtherCrestPng);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         Assert.AreEqual(ClinicProfileService.HashImage(OtherCrestPng), CloudProfileHash("CrestImageHash"));
@@ -86,7 +111,8 @@ public partial class TursoSyncEndToEndTests
         Assert.IsTrue((await tablet.Sync.SyncAsync()).Success);
         CollectionAssert.AreEqual(OtherCrestPng, CrestOf(tablet));
 
-        // Quitarlo también viaja
+        // Quitarlo también viaja (y se borra de la nube la imagen de hace más de una hora)
+        ExecuteCloud("UPDATE ClinicAssets SET UpdatedAtUtc = '2026-01-01 00:00:00.000';");
         pc.Profile.ClearLetterheadImage(LetterheadImageKind.Crest);
         Assert.IsTrue((await pc.Sync.SyncAsync()).Success);
         Assert.AreEqual(string.Empty, CloudProfileHash("CrestImageHash"));

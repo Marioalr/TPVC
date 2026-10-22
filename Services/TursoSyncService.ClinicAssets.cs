@@ -195,16 +195,24 @@ public partial class TursoSyncService
     }
 
     /// <summary>
-    /// Después de cambiar una imagen: borra de la nube las completas que el perfil ya no nombra. Los trozos de una subida a
-    /// medias (sin su fila de ClinicAssets) no se tocan: la PC que sube los termina.
+    /// Una imagen completa que se terminó de subir hace menos de esto no se borra aunque el perfil no la nombre: otro equipo (la
+    /// tablet, desde la revisión 19) puede estar a punto de escribir el perfil que la nombra.
+    /// </summary>
+    internal static readonly TimeSpan RecentAssetGrace = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Después de cambiar una imagen: borra de la nube las completas que el perfil ya no nombra y que se subieron hace más de
+    /// una hora (<see cref="RecentAssetGrace"/>, la hora de la nube). Los trozos de una subida a medias (sin su fila de
+    /// ClinicAssets) no se tocan: el equipo que sube los termina.
     /// </summary>
     private async Task DeleteUnusedClinicAssetsAsync(TursoClient client, CancellationToken ct)
     {
         const string inUse = "(SELECT ifnull(CrestImageHash, '') FROM ClinicProfiles WHERE Id = 1 UNION SELECT ifnull(HeaderImageHash, '') FROM ClinicProfiles WHERE Id = 1)";
+        string unused = $"Hash NOT IN {inUse} AND UpdatedAtUtc < strftime('%Y-%m-%d %H:%M:%f', 'now', '-{(int)RecentAssetGrace.TotalMinutes} minutes')";
         var results = await client.TransactionAsync(new (string, object?[]?)[]
         {
-            ($"DELETE FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash IN (SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE Hash NOT IN {inUse});", null),
-            ($"DELETE FROM {SyncSchema.ClinicAssetsTable} WHERE Hash NOT IN {inUse};", null)
+            ($"DELETE FROM {SyncSchema.ClinicAssetChunksTable} WHERE Hash IN (SELECT Hash FROM {SyncSchema.ClinicAssetsTable} WHERE {unused});", null),
+            ($"DELETE FROM {SyncSchema.ClinicAssetsTable} WHERE {unused};", null)
         }, ct);
         int deleted = results.Sum(r => r.AffectedRows);
         AddExternalUsage(4, deleted);
