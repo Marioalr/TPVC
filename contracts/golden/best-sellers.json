@@ -6,7 +6,7 @@
   "contract": 18,
   "notes": [
     "«Más vendidos» del panel «Negocio» (BusinessReportRules.TopProducts y TopServices): las mismas entradas y reglas de renglón que business-summary.json; sin canceladas.",
-    "products: los renglones de producto del type (Medicamentos por omisión en la pantalla; sin type, todos los productos), uno por producto y por si son piezas sueltas (las piezas cuentan como piezas: quantityText '4 piezas sueltas'). ranking Quantity: Σ cantidad de mayor a menor, luego utilidad; Profit: utilidad, luego cantidad; después ventas de mayor a menor y el nombre (de hoy) con Collator es-MX. hasEstimatedCost si algún renglón no tiene costo guardado. top como máximo.",
+    "products: los renglones de producto del type (Medicamentos por omisión en la pantalla; sin type, todos los productos), uno por producto y por si son piezas sueltas (solo los renglones con isIndividualUnits true; sin la marca, paquetes; las piezas cuentan como piezas: quantityText '4 piezas sueltas'). ranking Quantity: Σ cantidad de mayor a menor, luego utilidad; Profit: utilidad, luego cantidad; después ventas de mayor a menor y el nombre (de hoy) con Collator es-MX. hasEstimatedCost si algún renglón no tiene costo guardado. top como máximo.",
     "services: los renglones de Consultas y Servicios (del type si se da), uno por serviceId (o por nombre sin él): count = Σ cantidad, income = Σ subtotal; de más a menos veces, luego ingreso y nombre (es-MX)."
   ],
   "cases": [
@@ -375,18 +375,6 @@
       },
       "expected": [
         {
-          "productId": 5,
-          "name": "Ketorolaco ampolleta 30 mg",
-          "type": "Medicamentos",
-          "isLoosePieces": true,
-          "quantity": 3,
-          "quantityText": "3 piezas sueltas",
-          "sales": "90.00",
-          "cost": "35.49",
-          "profit": "54.51",
-          "hasEstimatedCost": true
-        },
-        {
           "productId": 1,
           "name": "Paracetamol 500 mg",
           "type": "Medicamentos",
@@ -399,6 +387,18 @@
           "hasEstimatedCost": false
         },
         {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": false,
+          "quantity": 2,
+          "quantityText": "2",
+          "sales": "60.00",
+          "cost": "71.00",
+          "profit": "-11.00",
+          "hasEstimatedCost": true
+        },
+        {
           "productId": 2,
           "name": "Amoxicilina 500 mg",
           "type": "Medicamentos",
@@ -409,6 +409,18 @@
           "cost": "70.00",
           "profit": "50.00",
           "hasEstimatedCost": true
+        },
+        {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": true,
+          "quantity": 1,
+          "quantityText": "1 pieza suelta",
+          "sales": "30.00",
+          "cost": "11.83",
+          "profit": "18.17",
+          "hasEstimatedCost": false
         }
       ]
     },
@@ -777,18 +789,6 @@
       },
       "expected": [
         {
-          "productId": 5,
-          "name": "Ketorolaco ampolleta 30 mg",
-          "type": "Medicamentos",
-          "isLoosePieces": true,
-          "quantity": 3,
-          "quantityText": "3 piezas sueltas",
-          "sales": "90.00",
-          "cost": "35.49",
-          "profit": "54.51",
-          "hasEstimatedCost": true
-        },
-        {
           "productId": 1,
           "name": "Paracetamol 500 mg",
           "type": "Medicamentos",
@@ -810,6 +810,30 @@
           "sales": "120.00",
           "cost": "70.00",
           "profit": "50.00",
+          "hasEstimatedCost": true
+        },
+        {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": true,
+          "quantity": 1,
+          "quantityText": "1 pieza suelta",
+          "sales": "30.00",
+          "cost": "11.83",
+          "profit": "18.17",
+          "hasEstimatedCost": false
+        },
+        {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": false,
+          "quantity": 2,
+          "quantityText": "2",
+          "sales": "60.00",
+          "cost": "71.00",
+          "profit": "-11.00",
           "hasEstimatedCost": true
         }
       ]
@@ -1580,18 +1604,6 @@
           "hasEstimatedCost": false
         },
         {
-          "productId": 5,
-          "name": "Ketorolaco ampolleta 30 mg",
-          "type": "Medicamentos",
-          "isLoosePieces": true,
-          "quantity": 3,
-          "quantityText": "3 piezas sueltas",
-          "sales": "90.00",
-          "cost": "35.49",
-          "profit": "54.51",
-          "hasEstimatedCost": true
-        },
-        {
           "productId": 1,
           "name": "Paracetamol 500 mg",
           "type": "Medicamentos",
@@ -1604,6 +1616,18 @@
           "hasEstimatedCost": false
         },
         {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": false,
+          "quantity": 2,
+          "quantityText": "2",
+          "sales": "60.00",
+          "cost": "71.00",
+          "profit": "-11.00",
+          "hasEstimatedCost": true
+        },
+        {
           "productId": 2,
           "name": "Amoxicilina 500 mg",
           "type": "Medicamentos",
@@ -1614,6 +1638,18 @@
           "cost": "70.00",
           "profit": "50.00",
           "hasEstimatedCost": true
+        },
+        {
+          "productId": 5,
+          "name": "Ketorolaco ampolleta 30 mg",
+          "type": "Medicamentos",
+          "isLoosePieces": true,
+          "quantity": 1,
+          "quantityText": "1 pieza suelta",
+          "sales": "30.00",
+          "cost": "11.83",
+          "profit": "18.17",
+          "hasEstimatedCost": false
         },
         {
           "productId": 99,
@@ -2017,16 +2053,16 @@
           "hasEstimatedCost": false
         },
         {
-          "productId": 5,
-          "name": "Ketorolaco ampolleta 30 mg",
+          "productId": 1,
+          "name": "Paracetamol 500 mg",
           "type": "Medicamentos",
-          "isLoosePieces": true,
-          "quantity": 3,
-          "quantityText": "3 piezas sueltas",
+          "isLoosePieces": false,
+          "quantity": 2,
+          "quantityText": "2",
           "sales": "90.00",
-          "cost": "35.49",
-          "profit": "54.51",
-          "hasEstimatedCost": true
+          "cost": "40.00",
+          "profit": "50.00",
+          "hasEstimatedCost": false
         }
       ]
     },

@@ -384,9 +384,9 @@
           "type": "Medicamentos",
           "name": "Medicamentos",
           "sales": "300.00",
-          "cost": "145.49",
-          "profit": "154.51",
-          "marginPercent": "51.5",
+          "cost": "192.83",
+          "profit": "107.17",
+          "marginPercent": "35.7",
           "sharePercent": "19.4",
           "lines": 4,
           "estimatedCostLines": 2

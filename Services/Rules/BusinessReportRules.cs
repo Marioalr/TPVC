@@ -66,7 +66,8 @@ public static class BusinessReportRules
     }
 
     /// <summary>
-    /// El periodo anterior igual: Hoy → ayer; una semana, un rango o un día → los mismos días justo antes; Este mes y Este año →
+    /// El periodo anterior igual: Hoy → ayer; Esta semana → los mismos días de la semana anterior (del lunes anterior, tantos días
+    /// como van: un lunes se compara con el lunes anterior); un rango → los mismos días justo antes; Este mes y Este año →
     /// el mes (o el año) anterior desde su inicio y con los mismos días transcurridos, sin pasar de su fin (el 31 de marzo se
     /// compara con febrero completo); Mes anterior → el mes completo de antes.
     /// </summary>
@@ -77,6 +78,8 @@ public static class BusinessReportRules
         {
             case BusinessPeriodKind.MesAnterior:
                 return new BusinessPeriod(period.From.AddMonths(-1), period.From);
+            case BusinessPeriodKind.EstaSemana:
+                return new BusinessPeriod(period.From.AddDays(-7), period.From.AddDays(-7 + days));
             case BusinessPeriodKind.EsteMes:
             {
                 var start = period.From.AddMonths(-1);
@@ -183,16 +186,25 @@ public static class BusinessReportRules
         isIndividualUnits ?? (product is { HasMultipleUnitsPerPackage: true } && unitPrice < product.Price);
 
     /// <summary>
+    /// En los reportes, el renglón vendió piezas sueltas solo si lo dice su marca (revisión 17). Un renglón sin marca es anterior a
+    /// v1.47.0, cuando todo se vendía en paquetes completos: cuenta como paquetes. No se usa la regla vieja de
+    /// <see cref="SoldIndividualUnits"/> (precio y piezas por paquete de hoy): con un precio que subió después, una caja vendida
+    /// antes saldría como piezas, con un costo por pieza muy bajo. Esa regla se queda para cancelar.
+    /// </summary>
+    public static bool IsLoosePiecesLine(bool? isIndividualUnits) => isIndividualUnits ?? false;
+
+    /// <summary>
     /// El costo de un renglón: un servicio o cargo libre no tiene (NotApplicable); un producto con costo guardado, cantidad × ese
-    /// costo (Recorded); sin él, cantidad × el costo de hoy del producto, por pieza si son piezas sueltas (Estimated); y si el
-    /// producto no tiene costo hoy o ya no existe, 0 (Missing).
+    /// costo (Recorded); sin él, cantidad × el costo de hoy del producto, por pieza si el renglón tiene la marca de piezas sueltas
+    /// (<see cref="IsLoosePiecesLine"/>; sin marca, por paquete) (Estimated); y si el producto no tiene costo hoy o ya no existe,
+    /// 0 (Missing).
     /// </summary>
     public static (decimal Cost, BusinessCostSource Source) LineCost(BusinessSaleLine line, Product? product)
     {
         if (line.IsService) return (0m, BusinessCostSource.NotApplicable);
         if (line.UnitCost is decimal recorded) return (recorded * line.Quantity, BusinessCostSource.Recorded);
         if (product == null || !product.HasCost) return (0m, BusinessCostSource.Missing);
-        var unit = SoldIndividualUnits(line.IsIndividualUnits, line.UnitPrice, product) ? product.IndividualUnitCost : product.EffectiveUnitCost;
+        var unit = IsLoosePiecesLine(line.IsIndividualUnits) ? product.IndividualUnitCost : product.EffectiveUnitCost;
         return (unit * line.Quantity, BusinessCostSource.Estimated);
     }
 
@@ -230,7 +242,7 @@ public static class BusinessReportRules
         ClinicalService? service = line.IsService && line.ClinicalServiceId is int sid && services.TryGetValue(sid, out var s) ? s : null;
         var type = Classify(line, product, service);
         var (cost, source) = LineCost(line, product);
-        bool loose = !line.IsService && SoldIndividualUnits(line.IsIndividualUnits, line.UnitPrice, product);
+        bool loose = !line.IsService && IsLoosePiecesLine(line.IsIndividualUnits);
         // Un producto se nombra como hoy (dos renglones del mismo producto se juntan); un servicio o cargo, como se cobró
         var name = product?.Name ?? (string.IsNullOrWhiteSpace(line.Description) ? line.Code : line.Description);
         return new BusinessLine(line, type, name, loose, line.Subtotal, cost, source);
