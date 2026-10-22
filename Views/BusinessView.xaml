@@ -1,0 +1,514 @@
+<UserControl x:Class="TPVC.Views.BusinessView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:TPVC.ViewModels"
+             xmlns:models="clr-namespace:TPVC.Models"
+             xmlns:helpers="clr-namespace:TPVC.Helpers"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:BusinessViewModel}"
+             d:DesignHeight="1400" d:DesignWidth="1000"
+             AutomationProperties.Name="Panel del negocio">
+
+    <!-- Panel «Negocio» (pedido del médico del 2026-10-22): ventas, costo y utilidad por periodo y por tipo, los más vendidos, -->
+    <!-- la gráfica en el tiempo, las compras, el consumo de insumos y el valor del inventario. Las cifras son las de las      -->
+    <!-- reglas puras (BusinessReportRules / BusinessStockRules), las mismas que dará el celular.                               -->
+    <UserControl.Resources>
+        <Style x:Key="AmountCell" TargetType="TextBlock" BasedOn="{StaticResource TextMono}">
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="HeaderCell" TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+            <Setter Property="TextAlignment" Value="Right" />
+        </Style>
+        <Style x:Key="CardValue" TargetType="TextBlock" BasedOn="{StaticResource TextMono}">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+        <Style x:Key="SalesBar" TargetType="Rectangle">
+            <Setter Property="Fill" Value="{DynamicResource ThemeAccentStrong}" />
+            <Setter Property="RadiusX" Value="2" />
+            <Setter Property="RadiusY" Value="2" />
+            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="MaxWidth" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+        </Style>
+        <Style x:Key="ProfitBar" TargetType="Rectangle" BasedOn="{StaticResource SalesBar}">
+            <Setter Property="Fill" Value="{DynamicResource ThemeSuccess}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ProfitIsNegative}" Value="True">
+                    <Setter Property="Fill" Value="{DynamicResource ThemeDanger}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="TypeRowBorder" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="8,8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemeSelectionBackground}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28,24,28,24">
+            <!-- Encabezado -->
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TextTitle}" Text="Negocio" />
+                    <TextBlock Style="{StaticResource TextDetail}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="Ventas, costo y utilidad por periodo y por tipo, lo más vendido, las compras y el consumo de insumos" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Style="{StaticResource ButtonSecondary}" Content="Actualizar" Margin="0,0,8,0"
+                            Command="{Binding LoadCommand}" AutomationProperties.Name="Actualizar el panel del negocio" />
+                    <Button Style="{StaticResource ButtonSecondary}" Content="Exportar CSV"
+                            Command="{Binding ExportCsvCommand}" AutomationProperties.Name="Exportar el panel del negocio a CSV" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Filtros -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource TextLabel}" Text="Periodo" Margin="0,7,0,0" />
+                        <ListBox Grid.Column="1" Style="{StaticResource ChipList}" ItemsSource="{Binding PeriodOptions}"
+                                 SelectedItem="{Binding PeriodName, Mode=TwoWay}" AutomationProperties.Name="Periodo" />
+                    </Grid>
+
+                    <!-- Rango personalizado, con la máscara de fecha -->
+                    <StackPanel Orientation="Horizontal" Margin="70,4,0,6" Visibility="{Binding IsCustomPeriod, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource TextDetail}" Text="Del" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Width="130" Text="{Binding CustomFromText, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="dd/mm/aaaa" helpers:DateMask.IsEnabled="True" AutomationProperties.Name="Desde" />
+                        <TextBlock Style="{StaticResource TextDetail}" Text="al" VerticalAlignment="Center" Margin="8,0" />
+                        <TextBox Style="{StaticResource FieldTextBox}" Width="130" Text="{Binding CustomToText, UpdateSourceTrigger=PropertyChanged}"
+                                 helpers:Field.Placeholder="dd/mm/aaaa" helpers:DateMask.IsEnabled="True" AutomationProperties.Name="Hasta" />
+                        <Button Style="{StaticResource ButtonPrimary}" Content="Aplicar" Margin="10,0,0,0" Command="{Binding ApplyCustomRangeCommand}" />
+                        <TextBlock Style="{StaticResource FieldError}" Text="{Binding CustomRangeError}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                   Visibility="{Binding CustomRangeError, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource TextLabel}" Text="Tipo" Margin="0,7,0,0" />
+                        <ListBox Grid.Column="1" Style="{StaticResource ChipList}" ItemsSource="{Binding TypeOptions}"
+                                 SelectedItem="{Binding TypeName, Mode=TwoWay}" AutomationProperties.Name="Tipo" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource TextCaption}" Margin="70,4,0,0" TextWrapping="Wrap">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0} · {1} · sin ventas canceladas">
+                                <Binding Path="PeriodText" />
+                                <Binding Path="ComparisonText" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource TextDetail}" Text="Cargando…" Margin="0,0,0,12"
+                       Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+            <Border Style="{StaticResource NoticeDanger}" Margin="0,0,0,12" Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+            </Border>
+            <Border Style="{StaticResource Notice}" Margin="0,0,0,12" Visibility="{Binding StatusMessage, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+            </Border>
+            <!-- Costo estimado: renglones sin costo guardado al vender (ventas de antes de la revisión 18) -->
+            <Border Style="{StaticResource NoticeWarning}" Margin="0,0,0,12" Visibility="{Binding HasCostNote, Converter={StaticResource BoolToVis}}"
+                    AutomationProperties.Name="Aviso de costo estimado">
+                <TextBlock TextWrapping="Wrap">
+                    <Run Text="Costo estimado:" FontWeight="SemiBold" />
+                    <Run Text="{Binding CostNote, Mode=OneWay}" />
+                </TextBlock>
+            </Border>
+
+            <!-- Tarjetas del resumen -->
+            <UniformGrid Columns="4" Margin="0,0,0,16" AutomationProperties.Name="Resumen del negocio">
+                <Border Style="{StaticResource Card}" Margin="0,0,12,12">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Ventas" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.Sales, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding SalesChangeText}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,12,12">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Costo de lo vendido" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.Cost, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="con IVA" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,12,12">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Utilidad bruta" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.Profit, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ProfitChangeText}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Margen" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.MarginPercent, StringFormat='{}{0:0.0} %', TargetNullValue='—'}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="utilidad / ventas" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,12,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Tickets" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.Tickets}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TicketsChangeText}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,12,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Ticket promedio" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Summary.AverageTicket, StringFormat={}{0:C2}, ConverterCulture=es-MX, TargetNullValue='—'}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="ventas / tickets" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,12,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Compras" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding Purchases.Cost, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Purchases.Entries, StringFormat='{}{0} entrada(s)'}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Valor del inventario (hoy)" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding InventoryValue, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding InventoryValueDetail}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Por sección y en el tiempo -->
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="Por sección">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Por sección" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Un clic en un tipo filtra el resto del panel; otro clic lo quita" Margin="0,2,0,10" TextWrapping="Wrap" />
+                        <Grid Margin="8,0,8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="96" />
+                                <ColumnDefinition Width="96" />
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource TextCaption}" Text="Tipo" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource HeaderCell}" Text="Ventas" />
+                            <TextBlock Grid.Column="2" Style="{StaticResource HeaderCell}" Text="Utilidad" />
+                            <TextBlock Grid.Column="3" Style="{StaticResource HeaderCell}" Text="Margen" />
+                            <TextBlock Grid.Column="4" Style="{StaticResource HeaderCell}" Text="Parte" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding ByType}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:BusinessTypeRowItem}">
+                                    <Button Style="{StaticResource ButtonGhost}" Padding="0" Margin="0,0,0,2" HorizontalContentAlignment="Stretch"
+                                            Command="{Binding DataContext.SelectTypeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding Row.Name}" AutomationProperties.Name="{Binding Row.Name}">
+                                        <Border Style="{StaticResource TypeRowBorder}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="96" />
+                                                    <ColumnDefinition Width="96" />
+                                                    <ColumnDefinition Width="60" />
+                                                    <ColumnDefinition Width="60" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource TextBody}" FontWeight="SemiBold" Text="{Binding Row.Name}" />
+                                                    <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Row.Cost, StringFormat='Costo {0:C2}', ConverterCulture=es-MX}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Style="{StaticResource AmountCell}" Text="{Binding Row.Sales, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                <TextBlock Grid.Column="2" Style="{StaticResource AmountCell}" Text="{Binding Row.Profit, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                <TextBlock Grid.Column="3" Style="{StaticResource AmountCell}" Text="{Binding Row.MarginPercent, StringFormat='{}{0:0.0} %', TargetNullValue='—'}" />
+                                                <TextBlock Grid.Column="4" Style="{StaticResource AmountCell}" Text="{Binding Row.SharePercent, StringFormat='{}{0:0.0} %', TargetNullValue='—'}" />
+                                            </Grid>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextDetail}" Text="No hay ventas en el periodo." Margin="8,4,0,0"
+                                   Visibility="{Binding HasNoSales, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="En el tiempo">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource TextSection}" Text="En el tiempo" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{DynamicResource ThemeAccentStrong}" Margin="0,0,6,0" />
+                                <TextBlock Style="{StaticResource TextCaption}" Text="Ventas" Margin="0,0,12,0" />
+                                <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{DynamicResource ThemeSuccess}" Margin="0,0,6,0" />
+                                <TextBlock Style="{StaticResource TextCaption}" Text="Utilidad" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ChartScaleText}" Margin="0,2,0,10" />
+                        <ItemsControl ItemsSource="{Binding ChartBars}" Height="164" AutomationProperties.Name="Gráfica de ventas y utilidad">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:BusinessChartBar}">
+                                    <Grid Background="Transparent" ToolTip="{Binding ToolTip}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="140" />
+                                            <RowDefinition Height="24" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.ColumnSpan="2" Height="1" VerticalAlignment="Bottom" Background="{DynamicResource ThemeBorder}" />
+                                        <Rectangle Style="{StaticResource SalesBar}" Height="{Binding SalesHeight}" />
+                                        <Rectangle Grid.Column="1" Style="{StaticResource ProfitBar}" Height="{Binding ProfitHeight}" />
+                                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource TextCaption}" Text="{Binding Point.Label}" Margin="0,6,0,0"
+                                                   HorizontalAlignment="Left" Visibility="{Binding ShowLabel, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Más vendidos -->
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="Productos más vendidos">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Productos más vendidos" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding TopProductsTitle}" Margin="0,2,0,8" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ListBox Style="{StaticResource ChipList}" ItemsSource="{Binding TopProductsOptions}" SelectedItem="{Binding TopProductsName, Mode=TwoWay}"
+                                     Margin="0,0,12,0" AutomationProperties.Name="Productos"
+                                     Visibility="{Binding CanChooseTopProducts, Converter={StaticResource BoolToVis}}" />
+                            <ListBox Style="{StaticResource ChipList}" ItemsSource="{Binding RankingOptions}" SelectedItem="{Binding RankingName, Mode=TwoWay}"
+                                     AutomationProperties.Name="Ordenar" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding TopProducts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:BusinessTopProduct}">
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="96" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding QuantityText, StringFormat='Cantidad: {0}'}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource AmountCell}" Text="{Binding Sales, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                <TextBlock Style="{StaticResource HeaderCell}" Text="ventas" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource AmountCell}" Text="{Binding Profit, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                                <TextBlock Style="{StaticResource HeaderCell}" Text="utilidad" />
+                                                <TextBlock Style="{StaticResource HeaderCell}" Text="costo estimado"
+                                                           Visibility="{Binding HasEstimatedCost, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextDetail}" Text="Ningún producto vendido en el periodo."
+                                   Visibility="{Binding HasNoTopProducts, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="Servicios más cobrados">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Servicios más cobrados" />
+                        <TextBlock Style="{StaticResource TextCaption}" Text="Consultas y servicios, por veces que se cobraron" Margin="0,2,0,8" />
+                        <ItemsControl ItemsSource="{Binding TopServices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:BusinessTopService}">
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="70" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}" Text="{Binding Type}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource AmountCell}" Text="{Binding CountText}" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource AmountCell}" Text="{Binding Income, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextDetail}" Text="Ningún servicio cobrado en el periodo."
+                                   Visibility="{Binding HasNoTopServices, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Compras y consumo de insumos -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="Compras">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Compras" />
+                        <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,8" TextWrapping="Wrap">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} entrada(s) · {1} pedido(s) del proveedor · {2} unidad(es)">
+                                    <Binding Path="Purchases.Entries" />
+                                    <Binding Path="Purchases.Orders" />
+                                    <Binding Path="Purchases.Units" />
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource TextLabel}" Text="Por proveedor" Margin="0,0,0,4" />
+                        <ItemsControl ItemsSource="{Binding Purchases.BySupplier}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:BusinessPurchaseSupplierRow}">
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Supplier}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} entrada(s) · {1} unidad(es)">
+                                                            <Binding Path="Entries" />
+                                                            <Binding Path="Units" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource AmountCell}" Text="{Binding Cost, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextLabel}" Text="Por tipo" Margin="0,10,0,4"
+                                   Visibility="{Binding Purchases.ByType, Converter={StaticResource BoolToVis}}" />
+                        <ItemsControl ItemsSource="{Binding Purchases.ByType}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:BusinessPurchaseTypeRow}">
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource TextBody}" VerticalAlignment="Center">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} · {1} unidad(es)">
+                                                        <Binding Path="Name" />
+                                                        <Binding Path="Units" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource AmountCell}" Text="{Binding Cost, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding PurchasesCostNote}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Visibility="{Binding PurchasesCostNote, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Style="{StaticResource TextDetail}" Text="No hubo entradas por compra en el periodo."
+                                   Visibility="{Binding HasNoPurchases, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource Card}" VerticalAlignment="Top" AutomationProperties.Name="Consumo de insumos">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource TextSection}" Text="Consumo de insumos" />
+                        <TextBlock Style="{StaticResource TextCaption}" Margin="0,2,0,8" TextWrapping="Wrap"
+                                   Text="{Binding Consumption.Cost, StringFormat='Usado en consultas y servicios · costo {0:C2}', ConverterCulture=es-MX}" />
+                        <ItemsControl ItemsSource="{Binding Consumption.Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:BusinessConsumptionRow}">
+                                    <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Padding="0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TextBody}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource TextCaption}">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}Sin cobrar: {0} · Cobrado: {1}">
+                                                            <Binding Path="UsedInConsultation" />
+                                                            <Binding Path="ChargedWithServices" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource AmountCell}" Text="{Binding QuantityText}" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource AmountCell}" Text="{Binding Cost, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource TextCaption}" Text="{Binding ConsumptionCostNote}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Visibility="{Binding ConsumptionCostNote, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Style="{StaticResource TextDetail}" Text="No se usaron insumos en consultas ni servicios en el periodo." TextWrapping="Wrap"
+                                   Visibility="{Binding HasNoConsumption, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

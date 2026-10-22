@@ -201,7 +201,8 @@ public partial class MainViewModel : ObservableObject
             TursoSyncVM,
             ServicesCatalogVM,
             AppVersion,
-            new DesignSystemViewModel(themeService, Notifications));
+            new DesignSystemViewModel(themeService, Notifications),
+            new BusinessViewModel(inventoryService, _clinicProfileService));
 
         // Paso 8.17: en la PC principal, una vez al día después de una sincronización buena, los folios hechos sin conexión
         // reciben su número normal; nunca con una consulta, una venta o el formulario de un paciente abiertos
@@ -341,6 +342,14 @@ public partial class MainViewModel : ObservableObject
             Category = "Módulos",
             Icon = "IcoChart",
             Action = () => NavigateTo("Dashboard")
+        });
+        _staticCommandItems.Add(new CommandPaletteItem
+        {
+            Title = "Negocio",
+            Subtitle = "Ventas, costo, utilidad, más vendidos, compras y consumo de insumos por periodo",
+            Category = "Módulos",
+            Icon = "IcoCart",
+            Action = () => NavigateTo("Business")
         });
         _staticCommandItems.Add(new CommandPaletteItem
         {
@@ -631,6 +640,7 @@ public partial class MainViewModel : ObservableObject
                 CurrentView = ConfigurationShellVM;
                 break;
             case "Dashboard":
+            case "Business":
             case "Inventory":
             case "Batches":
             case "Movements":

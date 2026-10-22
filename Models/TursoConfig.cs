@@ -63,6 +63,18 @@ public static class DevicePermissions
 
     public static bool CanViewStockAlerts(DeviceRole role) => true;
 
+    /// <summary>
+    /// Los reportes del negocio (panel «Negocio», pedido del 2026-10-22: ventas, costo, utilidad, más vendidos, compras y consumo
+    /// de insumos): la PC sí; el celular sí (cuando el K4 los tenga, con los vectores de contracts/golden); la tablet, con la regla
+    /// del panel del consultorio (<see cref="CanViewDashboard"/>). Donde no se permite, la sección no aparece.
+    /// </summary>
+    public static bool CanViewBusinessReports(DeviceRole role) => role switch
+    {
+        DeviceRole.WindowsDesktop => true,
+        DeviceRole.AndroidMobileAdmin => true,
+        _ => CanViewDashboard(role)
+    };
+
     /// <summary>Configuración, Excel, respaldos, la nube, vincular equipos, perfil y membrete: solo la PC.</summary>
     public static bool CanConfigureSystem(DeviceRole role) =>
         role is DeviceRole.WindowsDesktop;

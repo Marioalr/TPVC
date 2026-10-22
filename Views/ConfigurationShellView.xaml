@@ -17,6 +17,7 @@
     <!-- ======================================================================== -->
     <UserControl.Resources>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BusinessViewModel}"><views:BusinessView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:InventoryViewModel}"><views:InventoryView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:BatchesViewModel}"><views:BatchesView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:MovementsViewModel}"><views:MovementsView /></DataTemplate>

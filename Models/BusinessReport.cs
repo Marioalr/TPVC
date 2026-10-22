@@ -153,7 +153,11 @@ public sealed record BusinessTopProduct(
 }
 
 /// <summary>Un servicio de «Más vendidos»: cuántas veces se cobró y cuánto dejó.</summary>
-public sealed record BusinessTopService(int? ClinicalServiceId, string Name, BusinessLineType Type, int Count, decimal Income);
+public sealed record BusinessTopService(int? ClinicalServiceId, string Name, BusinessLineType Type, int Count, decimal Income)
+{
+    /// <summary>"1 vez" o "12 veces".</summary>
+    public string CountText => Count == 1 ? "1 vez" : $"{Count} veces";
+}
 
 /// <summary>Una barra de «En el tiempo»: un día o un mes.</summary>
 public sealed record BusinessTimePoint(DateTime Start, string Label, decimal Sales, decimal Profit);
