@@ -202,8 +202,10 @@ del equipo B en un folio con letra: P2 en la PC, T1 en la tablet).
 **Los equipos son siempre los mismos:** A es la PC principal (`role` `WindowsDesktop`, `engine` `pc`: el motor de la PC, también
 en la CI de Kotlin) y B la tablet (`AndroidTablet`, `engine` `kotlin`; en la CI de la PC lo hace otra instancia del motor de la
 PC). `fullSync` («Sincronización completa») de A le da la identidad a la nube; B se une (`join`) y baja. Cada paso de un
-equipo es algo que su papel puede hacer en la app (`DevicePermissions`): B escribe expedientes, notas, hojas, citas y ventas,
-nunca el inventario ni el catálogo; la prueba `Scenario_EachDeviceOnlyDoesWhatItsRoleAllows` lo exige.
+equipo es algo que su papel puede hacer en la app (`DevicePermissions`). Desde la decisión del médico del 2026-10-22 la tablet
+es una copia de la PC: B escribe expedientes, notas, hojas, citas, ventas, el inventario y el catálogo, y la configuración del
+consultorio; **nunca** hace lo que es del dueño de la nube (`CanAdministerCloud`): `fullSync`, `regularizeFolios`, `backup`,
+`restoreBackup` ni `replaceCloud`. La prueba `Scenario_EachDeviceOnlyDoesWhatItsRoleAllows` lo exige.
 
 | Operación | Quién | Qué hace |
 |---|---|---|

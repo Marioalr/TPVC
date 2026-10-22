@@ -39,9 +39,24 @@ public partial class TursoSyncViewModel
     [ObservableProperty]
     private string _linkStatusText = string.Empty;
 
+    /// <summary>
+    /// Administrar la nube y los equipos (vincular, aprobar, rechazar, quitar, «Perdí este equipo», la PC principal, unirse,
+    /// reemplazar y la sincronización completa) es de la PC: <see cref="DevicePermissions.CanAdministerCloud"/>. La tablet,
+    /// copia de la PC desde el 2026-10-22, ve «Equipos vinculados» sin estos botones. En la PC siempre es verdadero.
+    /// </summary>
+    public static bool IsCloudAdministrator => DevicePermissions.CanAdministerCloud(ConfigurationShellViewModel.LocalRole);
+
+    private bool RequireCloudAdministrator()
+    {
+        if (IsCloudAdministrator) return true;
+        SaveStatusMessage = "Esto se hace en la PC: la nube y los equipos vinculados se administran desde ahí.";
+        return false;
+    }
+
     [RelayCommand]
     public async Task ShowLinkQrAsync()
     {
+        if (!RequireCloudAdministrator()) return;
         var (data, problem) = await _syncService.GetLinkDataAsync();
         if (data == null)
         {
@@ -107,11 +122,14 @@ public partial class TursoSyncViewModel
 
     private async Task ApproveAsync(LinkedDevice? device, DeviceRole role)
     {
+        if (!RequireCloudAdministrator()) return;
         if (device == null || !device.IsPendingApproval) return;
         var kind = role == DeviceRole.AndroidTablet ? "tablet" : "celular";
         bool confirm = DialogService.Confirm(
             $"¿Vincular «{device.DeviceName}» como {kind}?\n\nVerifique que el equipo muestre {device.DeviceIdSuffix}. Después podrá ver y " +
-            (role == DeviceRole.AndroidTablet ? "escribir expedientes, recetas, citas y cobros." : "ver expedientes, agendar citas y registrar entradas de mercancía."),
+            (role == DeviceRole.AndroidTablet
+                ? "hacer todo lo que hace esta computadora (consultas, recetas, cobros, inventario y configuración), salvo administrar la nube y los equipos."
+                : "ver expedientes, agendar citas y registrar entradas de mercancía."),
             "TPVC - Vincular equipo");
         if (!confirm) return;
 
@@ -132,6 +150,7 @@ public partial class TursoSyncViewModel
     [RelayCommand]
     public async Task RejectDeviceAsync(LinkedDevice? device)
     {
+        if (!RequireCloudAdministrator()) return;
         if (device == null || !device.IsPendingApproval) return;
         bool confirm = DialogService.Confirm(
             $"¿Rechazar «{device.DeviceName}»?\n\nNo bajará ningún dato y sale de la lista. Si no reconoce ese equipo, alguien más tiene el token: " +

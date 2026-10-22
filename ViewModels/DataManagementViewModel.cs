@@ -114,6 +114,8 @@ public partial class DataManagementViewModel : ObservableObject
     [RelayCommand]
     public async Task ReplaceCloudAsync()
     {
+        // Cambia la generación de la nube (paso 8.9): solo la PC, dueña de la nube
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
         if (_syncService == null || !CanConfirmCloudReplace) return;
         IsCloudBusy = true;
         CloudDecisionMessage = string.Empty;
@@ -136,6 +138,7 @@ public partial class DataManagementViewModel : ObservableObject
     [RelayCommand]
     public async Task ContinueCloudReplacementAsync()
     {
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
         if (_syncService == null || IsCloudBusy) return;
         IsCloudBusy = true;
         try
@@ -367,6 +370,8 @@ public partial class DataManagementViewModel : ObservableObject
     [RelayCommand]
     public void StartRestoreFromFile()
     {
+        // Restaurar con la nube activa cambia la generación (paso 8.9): solo la PC. La tablet vuelve a bajar todo de la nube
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
         if (IsImporting) return;
         var path = DialogService.ShowOpenFileDialog(
             "Bases de datos SQLite (*.db;*.sqlite;*.sqlite3)|*.db;*.sqlite;*.sqlite3|Todos los archivos (*.*)|*.*",
@@ -377,6 +382,7 @@ public partial class DataManagementViewModel : ObservableObject
     [RelayCommand]
     public void RestoreBackup(BackupEntry? backup)
     {
+        if (!TursoSyncViewModel.IsCloudAdministrator) return;
         if (backup != null && !IsImporting) OpenImportSheet(ImportDatabase, backup.Path);
     }
 

@@ -430,11 +430,19 @@ public partial class TursoSyncEndToEndTests
                     $"{definition.Name}: {device} ({ScenarioRoles[device]}) no puede hacer {step.ToJsonString()}");
             }
         }
-        // La regla misma: la tablet no cambia precios ni cierra lotes; la PC sí
-        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Edit("B", "Products", 1, ("Price", "1"))));
-        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", "closeBatch")));
-        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", "fullSync")));
+        // La regla misma: la tablet es una copia de la PC (2026-10-22): cambia precios, cierra lotes y edita la configuración
+        // del consultorio, pero no administra la nube (sincronización completa, regularizar, respaldos que se restauran, reemplazar)
+        Assert.IsTrue(ScenarioStepAllowed(DeviceRole.AndroidTablet, Edit("B", "Products", 1, ("Price", "1"))));
+        Assert.IsTrue(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", "closeBatch")));
+        Assert.IsTrue(ScenarioStepAllowed(DeviceRole.AndroidTablet, Edit("B", "PrescriptionTemplates", 1, ("Text", "x"))));
+        foreach (var op in new[] { "fullSync", "regularizeFolios", "backup", "restoreBackup", "replaceCloud" })
+        {
+            Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidTablet, Step("B", op)), op);
+            Assert.IsTrue(ScenarioStepAllowed(DeviceRole.WindowsDesktop, Step("A", op)), op);
+        }
         Assert.IsTrue(ScenarioStepAllowed(DeviceRole.WindowsDesktop, Edit("A", "Products", 1, ("Price", "1"))));
+        // El celular no está en los escenarios, pero su regla tampoco cambió: entradas sí, precios no
+        Assert.IsFalse(ScenarioStepAllowed(DeviceRole.AndroidMobileAdmin, Edit("C", "Products", 1, ("Price", "1"))));
     }
 
     /// <summary>
