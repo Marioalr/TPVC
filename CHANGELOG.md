@@ -2,6 +2,16 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.49.0] - 2026-10-22
+
+### Cambiado — La tablet será una copia de la PC
+* Decisión del médico: la app de la tablet tendrá todo lo de la PC, con ajustes para la pantalla táctil. La tablet podrá editar el inventario y el catálogo, registrar entradas de mercancía y entrar a Configuración (perfil, membrete, servicios, Excel).
+* Lo que cambia la nube se queda solo en la PC: su estructura, reemplazar la nube o restaurar un respaldo en ella, vincular, aprobar o quitar equipos, la regularización de folios y los respaldos. En la tablet, «Equipos vinculados» se ve pero no se cambia.
+* Si dos equipos crean el mismo producto, servicio o categoría (mismo código, o mismo nombre y presentación), aparece un aviso arriba de Productos hasta pulsar **Entendido**. Nunca se unen solos.
+* Un código repetido que llegó de otro equipo ya no impide editar el producto o el servicio; solo se revisa al crearlo o al cambiar el código.
+* En la PC no cambia nada para el médico.
+* Contrato de sincronización en la revisión 19: quién escribe el catálogo y el membrete, las instrucciones de subida de imágenes y el vector `duplicate-catalog.json`. 924 pruebas.
+
 ## [1.48.0] - 2026-10-22
 
 ### Añadido — Panel «Negocio» para administrar el consultorio
