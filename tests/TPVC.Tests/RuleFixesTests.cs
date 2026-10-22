@@ -60,7 +60,7 @@ public class RuleFixesTests
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
             var warning = AllergyRules.CheckMedication(new PatientRecord { Allergies = "AINEs" }, null, "Ibuprofeno 400 mg").WarningDetails;
             StringAssert.Contains(warning, "(grupo AINES)");
-            Assert.IsFalse(warning.Contains('İ'), warning);
+            Assert.DoesNotContain("İ", warning);
         }
         finally
         {
