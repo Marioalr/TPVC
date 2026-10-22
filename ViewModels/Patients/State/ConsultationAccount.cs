@@ -96,16 +96,60 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>
-    /// "Se surte aquí": un medicamento recetado con existencias se carga a la cuenta en automático.
-    /// Devuelve false si no está en inventario o no alcanza (se receta, pero no se cobra).
+    /// "Se surte aquí": un medicamento recetado del inventario se carga a la cuenta en automático. Devuelve false si no está
+    /// en el inventario (se receta, pero no se cobra). Revisión 20: aunque no alcancen sus existencias se carga; el aviso
+    /// (sin bloquear) queda en <paramref name="stockWarning"/>.
     /// </summary>
-    public bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct = null)
+    public bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct, out string? stockWarning)
     {
+        stockWarning = null;
         var product = knownProduct != null && CatalogStore.ProductMatchesName(knownProduct, item.MedicineName)
             ? knownProduct
             : _catalog.FindCatalogProduct(item.MedicineName);
         if (ConsultationAccountRules.PrescriptionChargeQuantity(item, product) is not int qty) return false;
-        return ChargeProduct(product!, qty, item.MedicineName);
+        if (!ChargeProduct(product!, qty, item.MedicineName)) return false;
+        stockWarning = StockWarning(product!);
+        return true;
+    }
+
+    /// <inheritdoc cref="ChargePrescription(PatientPrescriptionItem, Product?, out string?)"/>
+    public bool ChargePrescription(PatientPrescriptionItem item, Product? knownProduct = null) => ChargePrescription(item, knownProduct, out _);
+
+    /// <summary>
+    /// Revisión 20: el aviso de existencias de un producto con lo que ya está en la cuenta (paquetes y piezas sueltas de todos
+    /// sus renglones): "Existencias insuficientes: Gasa (quedan 2, se cobran 3). Revise el inventario."; null si alcanza. No
+    /// impide nada: se muestra al cargar y al cobrar.
+    /// </summary>
+    public string? StockWarning(Product product)
+    {
+        var items = _consultationService?.CurrentConsultation?.Items.Where(i => i.ProductId == product.Id).ToList();
+        if (items == null || items.Count == 0) return null;
+        var shortage = StockReviewRules.Shortage(product,
+            items.Where(i => !i.IsIndividualUnits).Sum(i => i.Quantity),
+            items.Where(i => i.IsIndividualUnits).Sum(i => i.Quantity));
+        return shortage == null ? null : StockReviewRules.WarningText(new[] { shortage });
+    }
+
+    /// <summary>
+    /// Revisión 20: el aviso de existencias de varios productos de la cuenta (los del inventario con esos Id, en ese orden y sin
+    /// repetir), juntos en un solo texto; null si todos alcanzan.
+    /// </summary>
+    public string? StockWarning(IEnumerable<int> productIds)
+    {
+        var items = _consultationService?.CurrentConsultation?.Items;
+        if (items == null) return null;
+        var shortages = new List<StockShortage>();
+        foreach (var id in productIds.Where(id => id > 0).Distinct())
+        {
+            if (_catalog.AvailableProducts.FirstOrDefault(p => p.Id == id) is not { } product) continue;
+            var lines = items.Where(i => i.ProductId == id).ToList();
+            if (StockReviewRules.Shortage(product, lines.Where(i => !i.IsIndividualUnits).Sum(i => i.Quantity),
+                    lines.Where(i => i.IsIndividualUnits).Sum(i => i.Quantity)) is { } shortage)
+            {
+                shortages.Add(shortage);
+            }
+        }
+        return StockReviewRules.WarningText(shortages);
     }
 
     public void UnchargePrescription(PatientPrescriptionItem item)
@@ -456,8 +500,8 @@ public partial class ConsultationAccount : ObservableObject
     }
 
     /// <summary>
-    /// Piezas de un producto que todavía caben en la cuenta (<see cref="ServiceRowSupplies.PiecesThatFit"/>): sus existencias
-    /// menos lo que ya está cargado de él.
+    /// Piezas de un producto que todavía caben en sus existencias (<see cref="ServiceRowSupplies.PiecesThatFit"/>): sus
+    /// existencias menos lo que ya está cargado de él. Revisión 20: ya no topa lo que se carga; solo dice si hay que avisar.
     /// </summary>
     public int PiecesThatFit(Product product, int requested)
     {

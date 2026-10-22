@@ -3,9 +3,11 @@
   "culture": "es-MX",
   "today": null,
   "now": "2026-10-12T05:30:00Z",
-  "contract": 19,
+  "contract": 20,
   "notes": [
-    "Services/Rules/StockAlertRules.cs y ProductBatch.StatusTextOn.",
+    "Services/Rules/StockAlertRules.cs, Services/Rules/StockReviewRules.cs (revisión 20) y ProductBatch.StatusTextOn.",
+    "Revisar inventario (revisión 20; decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar, la política de negativos del paso 8.20 adelantada): la venta, «Se surte aquí», los insumos y el consumo en consulta pasan aunque no alcancen las existencias, que quedan en negativo. inventoryReview: los productos activos con CurrentStock < 0 o con un lote abierto (closedAtUtc nulo) con Quantity < 0, aunque el total sea positivo; del de menos existencias al de más y, con las mismas, por nombre ordinal. alertLine: '{nombre}: {existencias} · revisar inventario' y, con lotes abiertos en negativo, ' (lote {número} {cantidad}, …)' por número ordinal. Los negativos se escriben con el signo menos U+2212 ('−3'). stockBadge (Product.StockBadgeText): en negativo '{existencias} · revisar inventario'; si no, la insignia de siempre ('Existencias: N', 'Stock bajo: N', 'Sin existencias' o con el paquete abierto '(+abiertas/piezas)'). La alerta se va sola cuando un conteo o una entrada dejan todo en 0 o más: nada se compensa solo.",
+    "shortage (StockReviewRules.Shortage): los paquetes que hacen falta son wholePackages + (si individualUnits > las piezas del paquete abierto, max(0, openedUnitsRemaining)) ⌈(piezas − abiertas) / unitsPerPackage⌉; con unitsPerPackage <= 1 las piezas cuentan como paquetes. Si no pasan de currentStock, null. Si no, en paquetes {available: currentStock, charged: paquetes}; con piezas sueltas en piezas {available: currentStock × unitsPerPackage + max(0, abiertas), charged: wholePackages × unitsPerPackage + piezas, pieces: true}. warning (StockReviewRules.WarningText): 'Existencias insuficientes: ' + cada faltante '{nombre} (quedan {available}, se cobran {charged})' (con ' pzas' después de cada número en piezas) unidos por '; ' + '. Revise el inventario.'; null sin faltantes. Es el aviso al cobrar, que nunca bloquea (checkout.json).",
     "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",
     "Caducidad: cuentan los lotes con piezas, sin marcar como agotados, abiertos (closedAtUtc nulo, desde v1.37.0) y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
     "Estado del lote (Inventario): 'Vencido' antes de hoy; 'Vence en N días' de hoy a 60 días; si no, 'Vigente'.",
@@ -293,6 +295,269 @@
           "CERRADO-CON-PIEZAS": "Vencido"
         }
       }
+    },
+    {
+      "name": "revisar inventario (revisión 20)",
+      "input": {
+        "kind": "inventoryReview",
+        "products": [
+          {
+            "id": 1,
+            "code": "R1",
+            "name": "Paracetamol 500 mg",
+            "active": true,
+            "currentStock": -3,
+            "unitsPerPackage": 1,
+            "openedUnitsRemaining": 0
+          },
+          {
+            "id": 2,
+            "code": "R2",
+            "name": "Gasa estéril",
+            "active": true,
+            "currentStock": 4,
+            "unitsPerPackage": 1,
+            "openedUnitsRemaining": 0
+          },
+          {
+            "id": 3,
+            "code": "R3",
+            "name": "Agua inyectable",
+            "active": true,
+            "currentStock": 0,
+            "unitsPerPackage": 1,
+            "openedUnitsRemaining": 0
+          },
+          {
+            "id": 4,
+            "code": "R4",
+            "name": "Ibuprofeno 400 mg",
+            "active": false,
+            "currentStock": -1,
+            "unitsPerPackage": 1,
+            "openedUnitsRemaining": 0
+          },
+          {
+            "id": 5,
+            "code": "R5",
+            "name": "Ácido fólico 5 mg",
+            "active": true,
+            "currentStock": -3,
+            "unitsPerPackage": 1,
+            "openedUnitsRemaining": 0
+          },
+          {
+            "id": 6,
+            "code": "R6",
+            "name": "Jeringa 5 ml",
+            "active": true,
+            "currentStock": 2,
+            "unitsPerPackage": 10,
+            "openedUnitsRemaining": 4
+          }
+        ],
+        "batches": [
+          {
+            "productId": 2,
+            "batch": "L-02",
+            "quantity": -2,
+            "closedAtUtc": null
+          },
+          {
+            "productId": 2,
+            "batch": "L-01",
+            "quantity": 6,
+            "closedAtUtc": null
+          },
+          {
+            "productId": 3,
+            "batch": "CERRADO",
+            "quantity": -1,
+            "closedAtUtc": "2026-10-05 12:00:00.0000000"
+          },
+          {
+            "productId": 1,
+            "batch": "L-09",
+            "quantity": -1,
+            "closedAtUtc": null
+          }
+        ]
+      },
+      "expected": {
+        "review": [
+          {
+            "code": "R1",
+            "alertLine": "Paracetamol 500 mg: −3 · revisar inventario (lote L-09 −1)"
+          },
+          {
+            "code": "R5",
+            "alertLine": "Ácido fólico 5 mg: −3 · revisar inventario"
+          },
+          {
+            "code": "R2",
+            "alertLine": "Gasa estéril: 4 · revisar inventario (lote L-02 −2)"
+          }
+        ],
+        "stockBadge": {
+          "R1": "−3 · revisar inventario",
+          "R2": "Stock bajo: 4",
+          "R3": "Sin existencias",
+          "R4": "−1 · revisar inventario",
+          "R5": "−3 · revisar inventario",
+          "R6": "Stock bajo: 2 (+4/10)"
+        }
+      }
+    },
+    {
+      "name": "faltante al cobrar · alcanza justo",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Tempra",
+          "currentStock": 2,
+          "unitsPerPackage": 1,
+          "openedUnitsRemaining": 0
+        },
+        "wholePackages": 2,
+        "individualUnits": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "faltante al cobrar · paquetes de más",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Tempra",
+          "currentStock": 2,
+          "unitsPerPackage": 1,
+          "openedUnitsRemaining": 0
+        },
+        "wholePackages": 5,
+        "individualUnits": 0
+      },
+      "expected": {
+        "available": 2,
+        "charged": 5,
+        "pieces": false,
+        "warning": "Existencias insuficientes: Tempra (quedan 2, se cobran 5). Revise el inventario."
+      }
+    },
+    {
+      "name": "faltante al cobrar · ya en negativo",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Tempra",
+          "currentStock": -2,
+          "unitsPerPackage": 1,
+          "openedUnitsRemaining": 0
+        },
+        "wholePackages": 1,
+        "individualUnits": 0
+      },
+      "expected": {
+        "available": -2,
+        "charged": 1,
+        "pieces": false,
+        "warning": "Existencias insuficientes: Tempra (quedan −2, se cobran 1). Revise el inventario."
+      }
+    },
+    {
+      "name": "faltante al cobrar · piezas: alcanzan con el paquete abierto",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Jeringa",
+          "currentStock": 0,
+          "unitsPerPackage": 10,
+          "openedUnitsRemaining": 4
+        },
+        "wholePackages": 0,
+        "individualUnits": 4
+      },
+      "expected": null
+    },
+    {
+      "name": "faltante al cobrar · piezas: abre un paquete que no hay",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Jeringa",
+          "currentStock": 0,
+          "unitsPerPackage": 10,
+          "openedUnitsRemaining": 4
+        },
+        "wholePackages": 0,
+        "individualUnits": 5
+      },
+      "expected": {
+        "available": 4,
+        "charged": 5,
+        "pieces": true,
+        "warning": "Existencias insuficientes: Jeringa (quedan 4 pzas, se cobran 5 pzas). Revise el inventario."
+      }
+    },
+    {
+      "name": "faltante al cobrar · piezas y paquetes juntos",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Jeringa",
+          "currentStock": 1,
+          "unitsPerPackage": 10,
+          "openedUnitsRemaining": 3
+        },
+        "wholePackages": 1,
+        "individualUnits": 4
+      },
+      "expected": {
+        "available": 13,
+        "charged": 14,
+        "pieces": true,
+        "warning": "Existencias insuficientes: Jeringa (quedan 13 pzas, se cobran 14 pzas). Revise el inventario."
+      }
+    },
+    {
+      "name": "faltante al cobrar · piezas de un producto de 1 pieza por paquete: cuentan como paquetes",
+      "input": {
+        "kind": "shortage",
+        "product": {
+          "name": "Venda",
+          "currentStock": 1,
+          "unitsPerPackage": 1,
+          "openedUnitsRemaining": 0
+        },
+        "wholePackages": 0,
+        "individualUnits": 2
+      },
+      "expected": {
+        "available": 1,
+        "charged": 2,
+        "pieces": false,
+        "warning": "Existencias insuficientes: Venda (quedan 1, se cobran 2). Revise el inventario."
+      }
+    },
+    {
+      "name": "faltante al cobrar · el aviso de varios",
+      "input": {
+        "kind": "warning",
+        "shortages": [
+          {
+            "name": "Paracetamol",
+            "available": 2,
+            "charged": 5,
+            "pieces": false
+          },
+          {
+            "name": "Jeringa",
+            "available": -6,
+            "charged": 5,
+            "pieces": true
+          }
+        ]
+      },
+      "expected": "Existencias insuficientes: Paracetamol (quedan 2, se cobran 5); Jeringa (quedan −6 pzas, se cobran 5 pzas). Revise el inventario."
     }
   ]
 }

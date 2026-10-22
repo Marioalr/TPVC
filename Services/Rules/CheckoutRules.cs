@@ -88,11 +88,33 @@ public static class CheckoutRules
         return (cash, cash.HasValue ? Math.Max(0m, cash.Value - total) : null);
     }
 
-    /// <summary>La cantidad escrita a mano en un renglón: mínimo 1 y, en un producto con existencias conocidas, no más de lo que hay.</summary>
-    public static int ClampQuantity(int value, bool isService, int availableStock)
+    /// <summary>
+    /// La cantidad escrita a mano en un renglón: mínimo 1. Revisión 20 (un inventario mal contado nunca impide cobrar): las
+    /// existencias ya no la topan; <paramref name="isService"/> y <paramref name="availableStock"/> se quedan por compatibilidad.
+    /// </summary>
+    public static int ClampQuantity(int value, bool isService, int availableStock) => value < 1 ? 1 : value;
+
+    /// <summary>Un renglón de la cuenta para el aviso de existencias (revisión 20).</summary>
+    public sealed record CartLine(int ProductId, string Name, bool IsService, bool IsIndividualUnits, int AvailableStock, int Quantity);
+
+    /// <summary>
+    /// Revisión 20: los renglones de producto (Id mayor que 0, no servicio) que cobran más de las existencias que se conocían al
+    /// agregarlos, en el orden de la cuenta: cada uno con lo que había y lo que se cobra (en piezas si son piezas sueltas).
+    /// </summary>
+    public static List<StockShortage> CartShortages(IEnumerable<CartLine> lines) =>
+        lines.Where(l => l.ProductId > 0 && !l.IsService && l.Quantity > l.AvailableStock)
+            .Select(l => new StockShortage(l.Name, l.AvailableStock, l.Quantity, l.IsIndividualUnits))
+            .ToList();
+
+    /// <summary>
+    /// Lo que dice un renglón de la cuenta: "Servicio", "Existencias: 12" o, en piezas sueltas, "Piezas disp.: 12"; con
+    /// <see cref="StockReviewRules.Number"/> (los negativos como "−3"), y si se cobran más de las que hay, más
+    /// " · revisar inventario" (revisión 20).
+    /// </summary>
+    public static string StockText(bool isService, bool isIndividualUnits, int availableStock, int quantity)
     {
-        if (value < 1) return 1;
-        if (!isService && availableStock > 0 && value > availableStock) return availableStock;
-        return value;
+        if (isService) return "Servicio";
+        var text = $"{(isIndividualUnits ? "Piezas disp." : "Existencias")}: {StockReviewRules.Number(availableStock)}";
+        return quantity > availableStock ? $"{text} · {StockReviewRules.ReviewText}" : text;
     }
 }

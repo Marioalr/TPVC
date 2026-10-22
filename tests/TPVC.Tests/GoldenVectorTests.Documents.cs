@@ -223,8 +223,90 @@ public partial class GoldenVectorTests
                 }));
         }
 
+        // Revisión 20: revisar inventario (se cobró sin que alcanzaran: existencias o un lote abierto en negativo)
+        var review = new[]
+        {
+            new Product { Id = 1, Code = "R1", Name = "Paracetamol 500 mg", CurrentStock = -3, IsActive = true },
+            new Product { Id = 2, Code = "R2", Name = "Gasa estéril", CurrentStock = 4, IsActive = true },
+            new Product { Id = 3, Code = "R3", Name = "Agua inyectable", CurrentStock = 0, IsActive = true },
+            new Product { Id = 4, Code = "R4", Name = "Ibuprofeno 400 mg", CurrentStock = -1, IsActive = false },
+            new Product { Id = 5, Code = "R5", Name = "Ácido fólico 5 mg", CurrentStock = -3, IsActive = true },
+            new Product { Id = 6, Code = "R6", Name = "Jeringa 5 ml", CurrentStock = 2, IsActive = true, UnitsPerPackage = 10, OpenedUnitsRemaining = 4 },
+        };
+        var reviewBatches = new[]
+        {
+            new ProductBatch { ProductId = 2, BatchNumber = "L-02", Quantity = -2 },
+            new ProductBatch { ProductId = 2, BatchNumber = "L-01", Quantity = 6 },
+            new ProductBatch { ProductId = 3, BatchNumber = "CERRADO", Quantity = -1, ClosedAtUtc = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc) },
+            new ProductBatch { ProductId = 1, BatchNumber = "L-09", Quantity = -1 },
+        };
+        cases.Add(Case("revisar inventario (revisión 20)",
+            new JsonObject
+            {
+                ["kind"] = "inventoryReview",
+                ["products"] = new JsonArray(review.Select(p => (JsonNode)new JsonObject
+                {
+                    ["id"] = p.Id, ["code"] = p.Code, ["name"] = p.Name, ["active"] = p.IsActive, ["currentStock"] = p.CurrentStock,
+                    ["unitsPerPackage"] = p.UnitsPerPackage, ["openedUnitsRemaining"] = p.OpenedUnitsRemaining
+                }).ToArray()),
+                ["batches"] = new JsonArray(reviewBatches.Select(b => (JsonNode)new JsonObject
+                {
+                    ["productId"] = b.ProductId, ["batch"] = b.BatchNumber, ["quantity"] = b.Quantity,
+                    ["closedAtUtc"] = b.ClosedAtUtc is { } closed ? TPVC.Services.TursoSyncService.FormatDate(closed) : null
+                }).ToArray())
+            },
+            new JsonObject
+            {
+                ["review"] = new JsonArray(StockReviewRules.InventoryReview(review, reviewBatches).Select(p => (JsonNode)new JsonObject
+                {
+                    ["code"] = p.Code, ["alertLine"] = StockReviewRules.AlertLine(p, reviewBatches)
+                }).ToArray()),
+                ["stockBadge"] = new JsonObject(review.Select(p => KeyValuePair.Create(p.Code, (JsonNode?)JsonValue.Create(p.StockBadgeText))))
+            }));
+
+        // Revisión 20: el faltante al cobrar (paquetes y piezas sueltas) y el aviso
+        foreach (var (name, product, packages, pieces) in new (string, Product, int, int)[]
+                 {
+                     ("alcanza justo", new Product { Name = "Tempra", CurrentStock = 2 }, 2, 0),
+                     ("paquetes de más", new Product { Name = "Tempra", CurrentStock = 2 }, 5, 0),
+                     ("ya en negativo", new Product { Name = "Tempra", CurrentStock = -2 }, 1, 0),
+                     ("piezas: alcanzan con el paquete abierto", new Product { Name = "Jeringa", CurrentStock = 0, UnitsPerPackage = 10, OpenedUnitsRemaining = 4 }, 0, 4),
+                     ("piezas: abre un paquete que no hay", new Product { Name = "Jeringa", CurrentStock = 0, UnitsPerPackage = 10, OpenedUnitsRemaining = 4 }, 0, 5),
+                     ("piezas y paquetes juntos", new Product { Name = "Jeringa", CurrentStock = 1, UnitsPerPackage = 10, OpenedUnitsRemaining = 3 }, 1, 4),
+                     ("piezas de un producto de 1 pieza por paquete: cuentan como paquetes", new Product { Name = "Venda", CurrentStock = 1, UnitsPerPackage = 1 }, 0, 2),
+                 })
+        {
+            var shortage = StockReviewRules.Shortage(product, packages, pieces);
+            cases.Add(Case($"faltante al cobrar · {name}",
+                new JsonObject
+                {
+                    ["kind"] = "shortage",
+                    ["product"] = new JsonObject
+                    {
+                        ["name"] = product.Name, ["currentStock"] = product.CurrentStock, ["unitsPerPackage"] = product.UnitsPerPackage,
+                        ["openedUnitsRemaining"] = product.OpenedUnitsRemaining
+                    },
+                    ["wholePackages"] = packages, ["individualUnits"] = pieces
+                },
+                shortage == null ? null : new JsonObject
+                {
+                    ["available"] = shortage.Available, ["charged"] = shortage.Charged, ["pieces"] = shortage.Pieces,
+                    ["warning"] = StockReviewRules.WarningText(new[] { shortage })
+                }));
+        }
+        cases.Add(Case("faltante al cobrar · el aviso de varios", new JsonObject
+            {
+                ["kind"] = "warning",
+                ["shortages"] = new JsonArray(
+                    new JsonObject { ["name"] = "Paracetamol", ["available"] = 2, ["charged"] = 5, ["pieces"] = false },
+                    new JsonObject { ["name"] = "Jeringa", ["available"] = -6, ["charged"] = 5, ["pieces"] = true })
+            },
+            StockReviewRules.WarningText(new[] { new StockShortage("Paracetamol", 2, 5, false), new StockShortage("Jeringa", -6, 5, true) })));
+
         CheckOrWrite("contracts/golden/alerts.json", DatedVectorFile("alerts", null, VectorNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture), cases,
-            "Services/Rules/StockAlertRules.cs y ProductBatch.StatusTextOn.",
+            "Services/Rules/StockAlertRules.cs, Services/Rules/StockReviewRules.cs (revisión 20) y ProductBatch.StatusTextOn.",
+            "Revisar inventario (revisión 20; decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar, la política de negativos del paso 8.20 adelantada): la venta, «Se surte aquí», los insumos y el consumo en consulta pasan aunque no alcancen las existencias, que quedan en negativo. inventoryReview: los productos activos con CurrentStock < 0 o con un lote abierto (closedAtUtc nulo) con Quantity < 0, aunque el total sea positivo; del de menos existencias al de más y, con las mismas, por nombre ordinal. alertLine: '{nombre}: {existencias} · revisar inventario' y, con lotes abiertos en negativo, ' (lote {número} {cantidad}, …)' por número ordinal. Los negativos se escriben con el signo menos U+2212 ('−3'). stockBadge (Product.StockBadgeText): en negativo '{existencias} · revisar inventario'; si no, la insignia de siempre ('Existencias: N', 'Stock bajo: N', 'Sin existencias' o con el paquete abierto '(+abiertas/piezas)'). La alerta se va sola cuando un conteo o una entrada dejan todo en 0 o más: nada se compensa solo.",
+            "shortage (StockReviewRules.Shortage): los paquetes que hacen falta son wholePackages + (si individualUnits > las piezas del paquete abierto, max(0, openedUnitsRemaining)) ⌈(piezas − abiertas) / unitsPerPackage⌉; con unitsPerPackage <= 1 las piezas cuentan como paquetes. Si no pasan de currentStock, null. Si no, en paquetes {available: currentStock, charged: paquetes}; con piezas sueltas en piezas {available: currentStock × unitsPerPackage + max(0, abiertas), charged: wholePackages × unitsPerPackage + piezas, pieces: true}. warning (StockReviewRules.WarningText): 'Existencias insuficientes: ' + cada faltante '{nombre} (quedan {available}, se cobran {charged})' (con ' pzas' después de cada número en piezas) unidos por '; ' + '. Revise el inventario.'; null sin faltantes. Es el aviso al cobrar, que nunca bloquea (checkout.json).",
             "Stock bajo: activo, MinStock > 0 y CurrentStock <= MinStock; ordenado por CurrentStock (el orden de los empates no está definido).",
             "Caducidad: cuentan los lotes con piezas, sin marcar como agotados, abiertos (closedAtUtc nulo, desde v1.37.0) y de un producto activo. Vencido: caduca antes de hoy. Por vencer: de hoy a hoy + 30 días, los dos incluidos. Por fecha de caducidad.",
             "Estado del lote (Inventario): 'Vencido' antes de hoy; 'Vence en N días' de hoy a 60 días; si no, 'Vigente'.",

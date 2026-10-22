@@ -193,7 +193,7 @@ public class ServiceSuppliesTests
     }
 
     [TestMethod]
-    public async Task Plus_AndAdd_RespectTheStockCap_LikeTheSuppliesSheet()
+    public async Task Plus_AndAdd_PassTheStockWithAWarning_LikeTheSuppliesSheet()
     {
         using var clinic = new Fase6Clinic();
         var (records, consultations, curacion) = await OpenConsultationAsync(clinic);
@@ -206,11 +206,13 @@ public class ServiceSuppliesTests
         for (int i = 0; i < 3; i++) await records.ClinicalServices.IncreaseServiceSupplyAsync(Entry(row, bandage));
         Assert.AreEqual(4, Charged(consultations, bandage.Id));
         Assert.IsFalse(records.Info.IsInfoModalVisible, records.Info.InfoModalMessage);
+        // Revisión 20 (un inventario mal contado nunca impide cobrar): pasa de sus existencias y se avisa
         await records.ClinicalServices.IncreaseServiceSupplyAsync(Entry(row, bandage));
-        Assert.AreEqual(4, Charged(consultations, bandage.Id), "No pasa de sus existencias");
-        Assert.AreEqual(4, Entry(row, bandage).Quantity);
+        Assert.AreEqual(5, Charged(consultations, bandage.Id), "Pasa de sus existencias");
+        Assert.AreEqual(5, Entry(row, bandage).Quantity);
         Assert.IsTrue(records.Info.IsInfoModalVisible);
-        StringAssert.Contains(records.Info.InfoModalMessage, "No hay más existencias");
+        StringAssert.Contains(records.Info.InfoModalMessage, "Existencias insuficientes: ");
+        StringAssert.Contains(records.Info.InfoModalMessage, "(quedan 4, se cobran 5). Revise el inventario.");
         records.Info.IsInfoModalVisible = false;
 
         // Lo que ya está en la cuenta por otra hoja también cuenta: los guantes (2) cargados en la hoja de insumos
@@ -218,9 +220,9 @@ public class ServiceSuppliesTests
         await records.Supplies.SelectAndAddSupplyProductAsync(gloves);
         Assert.AreEqual(2, Charged(consultations, gloves.Id));
         await records.ClinicalServices.AddServiceSupplyAsync(gloves);
-        Assert.IsTrue(records.Info.IsInfoModalVisible, "Sin lugar no se agrega");
-        Assert.AreEqual(2, Charged(consultations, gloves.Id));
-        Assert.IsFalse(row.Supplies!.Any(e => e.SupplyName == GlovesName));
+        Assert.IsTrue(records.Info.IsInfoModalVisible, "Se agrega y se avisa");
+        Assert.AreEqual(3, Charged(consultations, gloves.Id));
+        Assert.IsTrue(row.Supplies!.Any(e => e.SupplyName == GlovesName));
         records.Dispose();
     }
 

@@ -31,18 +31,29 @@ public partial class CartItem : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Subtotal))]
+    [NotifyPropertyChangedFor(nameof(StockText))]
+    [NotifyPropertyChangedFor(nameof(IsShortOfStock))]
     private int _quantity = 1;
 
     public decimal Subtotal => Quantity * UnitPrice;
 
-    /// <summary>"Existencias: 12", "Piezas disp.: 12" o "Servicio".</summary>
-    public string StockText => IsService ? "Servicio" : IsIndividualUnits ? $"Piezas disp.: {AvailableStock}" : $"Existencias: {AvailableStock}";
+    /// <summary>
+    /// Revisión 20: se cobran más de las que hay (un producto; las existencias pueden estar en negativo). No impide cobrar:
+    /// el renglón y el cobro lo avisan (<see cref="CheckoutRules.CartShortages"/>).
+    /// </summary>
+    public bool IsShortOfStock => !IsService && Quantity > AvailableStock;
 
-    /// <summary>La cantidad escrita a mano se ajusta a lo posible: mínimo 1 y, en productos, lo que hay.</summary>
+    /// <summary>
+    /// "Existencias: 12", "Piezas disp.: 12" o "Servicio"; si se cobran más de las que hay, con " · revisar inventario"
+    /// (los negativos como "−3").
+    /// </summary>
+    public string StockText => CheckoutRules.StockText(IsService, IsIndividualUnits, AvailableStock, Quantity);
+
+    /// <summary>La cantidad escrita a mano: mínimo 1. Revisión 20: las existencias ya no la topan.</summary>
     partial void OnQuantityChanged(int value)
     {
         // Paso 8.26: CheckoutRules.ClampQuantity
-        var allowed = TPVC.Services.Rules.CheckoutRules.ClampQuantity(value, IsService, AvailableStock);
+        var allowed = CheckoutRules.ClampQuantity(value, IsService, AvailableStock);
         if (allowed != value) Quantity = allowed;
     }
 }
@@ -129,6 +140,15 @@ public partial class CheckoutViewModel : ObservableObject
 
     public string ChargeText => CheckoutRules.ChargeText(HasItems, TotalAmount, ChargeSuffix, EmptyChargeText);
 
+    /// <summary>
+    /// Revisión 20: el aviso de existencias al cobrar, sin bloquear: "Existencias insuficientes: Paracetamol (quedan 2, se
+    /// cobran 5). Revise el inventario." (<see cref="CheckoutRules.CartShortages"/>); null si todo alcanza.
+    /// </summary>
+    public string? StockWarning => StockReviewRules.WarningText(CheckoutRules.CartShortages(
+        Cart.Select(c => new CheckoutRules.CartLine(c.ProductId, c.Name, c.IsService, c.IsIndividualUnits, c.AvailableStock, c.Quantity))));
+
+    public bool HasStockWarning => StockWarning != null;
+
     private string _cashReceivedText = string.Empty;
     private bool _typingCashReceived;
 
@@ -205,33 +225,27 @@ public partial class CheckoutViewModel : ObservableObject
         OnPropertyChanged(nameof(IsCashShort));
         OnPropertyChanged(nameof(CanCharge));
         OnPropertyChanged(nameof(ChargeText));
+        OnPropertyChanged(nameof(StockWarning));
+        OnPropertyChanged(nameof(HasStockWarning));
     }
 
     // ------------------------------------------------------------------ renglones
 
-    /// <summary>Agrega un producto respetando existencias; si ya está, suma la cantidad.</summary>
+    /// <summary>
+    /// Agrega un producto; si ya está, suma la cantidad. Revisión 20 (un inventario mal contado nunca impide cobrar): sin
+    /// existencias o con menos de las que se piden se agrega igual y se avisa sin bloquear (<see cref="StockReviewRules.WarningText"/>).
+    /// </summary>
     public bool AddProduct(Product product, int quantity = 1)
     {
-        if (product.CurrentStock <= 0)
-        {
-            Notify?.Invoke($"'{product.Name}' no tiene existencias.", false);
-            return false;
-        }
-
         int requested = Math.Max(1, quantity);
         var existing = Cart.FirstOrDefault(c => c.ProductId == product.Id && !c.IsIndividualUnits);
         if (existing != null)
         {
             existing.AvailableStock = product.CurrentStock;
-            int allowed = Math.Min(existing.Quantity + requested, product.CurrentStock);
+            existing.Quantity += requested;
             SelectedItem = existing;
-            if (allowed <= existing.Quantity)
-            {
-                Notify?.Invoke($"No hay más existencias de '{product.Name}' ({product.CurrentStock}).", false);
-                return false;
-            }
-            existing.Quantity = allowed;
-            Notify?.Invoke($"{product.Name}: {allowed} en la cuenta", true);
+            Recalculate();
+            NotifyAdded(existing, $"{product.Name}: {existing.Quantity} en la cuenta");
             return true;
         }
 
@@ -246,19 +260,25 @@ public partial class CheckoutViewModel : ObservableObject
             AvailableStock = product.CurrentStock,
             UnitPrice = product.Price,
             RequiresRefrigeration = product.RequiresRefrigeration,
-            Quantity = Math.Min(requested, product.CurrentStock)
+            Quantity = requested
         };
         Cart.Add(line);
         SelectedItem = line;
-        if (requested > product.CurrentStock)
+        NotifyAdded(line, $"{product.Name} agregado ({line.Quantity})");
+        return true;
+    }
+
+    /// <summary>El aviso de un renglón agregado: el de éxito, o el de existencias (sin bloquear) si se cobran más de las que hay.</summary>
+    private void NotifyAdded(CartItem line, string ok)
+    {
+        if (line.IsShortOfStock)
         {
-            Notify?.Invoke($"Solo hay {product.CurrentStock} de '{product.Name}': se agregaron {line.Quantity}.", false);
+            Notify?.Invoke(StockReviewRules.WarningText(new[] { new StockShortage(line.Name, line.AvailableStock, line.Quantity, line.IsIndividualUnits) })!, false);
         }
         else
         {
-            Notify?.Invoke($"{product.Name} agregado ({line.Quantity})", true);
+            Notify?.Invoke(ok, true);
         }
-        return true;
     }
 
     /// <summary>Agrega un renglón ya armado (servicio, cargo de la consulta); si ya existe, suma la cantidad.</summary>
@@ -285,13 +305,11 @@ public partial class CheckoutViewModel : ObservableObject
         item ??= SelectedItem;
         if (item == null) return;
         SelectedItem = item;
-        if (item.IsService || item.Quantity < item.AvailableStock)
+        // Revisión 20: sin tope; pasar de las existencias se avisa sin bloquear
+        item.Quantity++;
+        if (item.IsShortOfStock)
         {
-            item.Quantity++;
-        }
-        else
-        {
-            Notify?.Invoke($"No hay más existencias de '{item.Name}' ({item.AvailableStock}).", false);
+            Notify?.Invoke(StockReviewRules.WarningText(new[] { new StockShortage(item.Name, item.AvailableStock, item.Quantity, item.IsIndividualUnits) })!, false);
         }
     }
 
@@ -369,8 +387,9 @@ public partial class CheckoutViewModel : ObservableObject
     public void SetExactCash() => CashReceived = TotalAmount;
 
     /// <summary>
-    /// Registra la venta (descuenta existencias por FEFO y genera el folio) y avisa a quien usa el
-    /// cobro. Si el efectivo escrito no alcanza o falta stock, no se cobra nada.
+    /// Registra la venta (descuenta existencias por FEFO y genera el folio) y avisa a quien usa el cobro. Si el efectivo
+    /// escrito no alcanza, no se cobra nada. Revisión 20: las existencias nunca lo impiden; si no alcanzaron, después de cobrar
+    /// se avisa (<see cref="SaleReceipt.StockWarning"/>) y el producto queda en "revisar inventario".
     /// </summary>
     [RelayCommand]
     public async Task ChargeAsync()
@@ -413,7 +432,8 @@ public partial class CheckoutViewModel : ObservableObject
             var cashier = _cashierName();
             var lines = Cart.Select(c => new SaleLineRequest(c.ProductId, c.Quantity, c.UnitPrice, c.Code, c.Name, c.IsIndividualUnits)).ToList();
 
-            // Se registra primero: si falta stock no se genera recibo ni se vacía la cuenta
+            // Se registra primero: si falla (p. ej. un producto que ya no existe) no se genera recibo ni se vacía la cuenta.
+            // Las existencias que no alcanzan no lo impiden (revisión 20)
             var sale = await _inventoryService.RegisterSaleAsync(lines, patient, SelectedPaymentMethod, cashier);
 
             var total = TotalAmount;
@@ -427,6 +447,7 @@ public partial class CheckoutViewModel : ObservableObject
                 Cashier = cashier,
                 CashReceived = received,
                 Change = change,
+                StockWarning = StockReviewRules.WarningText(sale?.StockShortages ?? Array.Empty<StockShortage>()),
                 Items = Cart.Select(c => new SaleReceiptItem
                 {
                     Name = c.Name,
@@ -438,6 +459,8 @@ public partial class CheckoutViewModel : ObservableObject
 
             Reset();
             if (Completed != null) await Completed(receipt);
+            // Después del aviso de la venta, para que no lo tape
+            if (receipt.StockWarning != null) Notify?.Invoke(receipt.StockWarning, false);
         }
         catch (Exception ex)
         {

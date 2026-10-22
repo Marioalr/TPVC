@@ -92,9 +92,19 @@ public class Product : ISyncEntity
     public bool IsOutOfStock => CurrentStock <= 0 && OpenedUnitsRemaining <= 0;
     public bool HasStock => CurrentStock > 0;
     public bool HasServiceUnitsAvailable => AvailableIndividualUnits > 0;
-    // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo)
+    /// <summary>
+    /// Revisión 20: se cobró sin que alcanzaran las existencias y quedaron en negativo (o un lote abierto cargado con el
+    /// producto lo está): pide revisar el inventario hasta que un conteo o una entrada lo corrijan
+    /// (<see cref="TPVC.Services.Rules.StockReviewRules.NeedsReview"/>).
+    /// </summary>
+    public bool NeedsInventoryReview => TPVC.Services.Rules.StockReviewRules.NeedsReview(this);
+
+    // El distintivo dice el estado con palabras, no solo con el color (verde/ámbar/rojo). En negativo (revisión 20):
+    // "−3 · revisar inventario"
     public string StockBadgeText =>
-        OpenedUnitsRemaining > 0 && HasMultipleUnitsPerPackage
+        CurrentStock < 0
+            ? TPVC.Services.Rules.StockReviewRules.ReviewBadge(CurrentStock)
+            : OpenedUnitsRemaining > 0 && HasMultipleUnitsPerPackage
             ? (CurrentStock <= 0
                 ? $"Abierto: {OpenedUnitsRemaining}/{EffectiveUnitsPerPackage} pzas"
                 : IsLowStock

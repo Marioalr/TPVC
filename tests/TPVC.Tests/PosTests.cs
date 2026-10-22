@@ -121,11 +121,13 @@ public class PosTests
     // ------------------------------------------------------------------ cuenta
 
     [TestMethod]
-    public void CartItem_QuantityTypedByHand_StaysWithinStock()
+    public void CartItem_QuantityTypedByHand_IsAtLeastOne_AndCanPassTheStock()
     {
-        var item = new CartItem { Name = "Gasa", AvailableStock = 5, UnitPrice = 2m };
+        var item = new CartItem { ProductId = 7, Name = "Gasa", AvailableStock = 5, UnitPrice = 2m };
         item.Quantity = 9;
-        Assert.AreEqual(5, item.Quantity, "No más de lo que hay");
+        Assert.AreEqual(9, item.Quantity, "Revisión 20: las existencias no topan lo que se cobra");
+        Assert.IsTrue(item.IsShortOfStock);
+        Assert.AreEqual("Existencias: 5 · revisar inventario", item.StockText);
         item.Quantity = 0;
         Assert.AreEqual(1, item.Quantity, "Mínimo 1 (para quitarlo está Supr o la ×)");
 

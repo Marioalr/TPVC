@@ -70,13 +70,11 @@ public static class ConsultationAccountRules
 
     /// <summary>
     /// "Se surte aquí": cuántas piezas carga un medicamento recetado (su cantidad recomendada, 1 como mínimo), o null si no se
-    /// carga porque no hay producto o sus existencias no alcanzan (se receta igual).
+    /// carga porque no está en el inventario (se receta igual). Revisión 20 (un inventario mal contado nunca impide cobrar):
+    /// las existencias ya no cuentan; si no alcanzan, se carga igual y se avisa (<see cref="StockReviewRules.WarningText"/>).
     /// </summary>
-    public static int? PrescriptionChargeQuantity(PatientPrescriptionItem item, Product? product)
-    {
-        var quantity = Math.Max(1, item.RecommendedQuantity);
-        return product == null || product.CurrentStock < quantity ? null : quantity;
-    }
+    public static int? PrescriptionChargeQuantity(PatientPrescriptionItem item, Product? product) =>
+        product == null ? null : Math.Max(1, item.RecommendedQuantity);
 
     /// <summary>
     /// Suma <paramref name="quantity"/> piezas a la cuenta: al renglón que ya tiene ese Id (solo cambia su cantidad; el nombre y

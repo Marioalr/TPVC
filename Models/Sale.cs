@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using TPVC.Services.Rules;
 
 namespace TPVC.Models;
 
@@ -41,6 +43,13 @@ public class Sale : ISyncEntity
     public string? CancellationReason { get; set; }
 
     public List<SaleItem> Items { get; set; } = new();
+
+    /// <summary>
+    /// Revisión 20: los productos que se cobraron sin que alcanzaran sus existencias (quedaron en negativo), para el aviso al
+    /// cobrar. Solo lo llena <c>RegisterSaleAsync</c>; no se guarda ni viaja.
+    /// </summary>
+    [NotMapped]
+    public IReadOnlyList<StockShortage> StockShortages { get; set; } = Array.Empty<StockShortage>();
 }
 
 /// <summary>

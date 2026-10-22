@@ -878,6 +878,11 @@
                 <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
                 <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeDangerText}" />
             </DataTrigger>
+            <!-- Revisión 20: en negativo, "−3 · revisar inventario" (aunque quede un paquete abierto) -->
+            <DataTrigger Binding="{Binding NeedsInventoryReview}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ThemeDangerSubtle}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeDangerText}" />
+            </DataTrigger>
         </Style.Triggers>
     </Style>
 
