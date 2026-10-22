@@ -258,6 +258,12 @@ public partial class GoldenVectorTests
                      ("once dígitos con el 1 de antes", "1 55 1234 5678"),
                      ("ya con formato no cambia", "551-234-5678"),
                      ("dígitos que no son ASCII no cuentan", "55 ١٢٣ 1234 5678"),
+                     ("sin la extensión (revisión 20)", "+52 55 9876 5432 ext 10"),
+                     ("extensión con punto y mayúsculas", "55 9876 5432 Ext. 123"),
+                     ("extensión con acento", "55 9876 5432 extensión 7"),
+                     ("extensión con x", "55 9876 5432 x22"),
+                     ("extensión con #", "55 9876 5432 #4"),
+                     ("«ext» sin dígitos no es extensión", "55 9876 5432 ext"),
                      ("seis dígitos", "123456"),
                      ("tres", "911"),
                      ("vacío", " "),
@@ -312,7 +318,7 @@ public partial class GoldenVectorTests
             "email: vacío vale; si no, sin espacios a los lados debe cumplir ^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$ sin distinguir mayúsculas.",
             "validate (al guardar el alta o la edición): el primer problema en este orden, o null: nombre vacío, paterno vacío, folio vacío, fecha escrita que no se lee (birth-date null con texto), sin fecha y una edad que no es un entero entre 0 y 130, sexo vacío, alergias vacías (\"Negadas\" sí vale), correo inválido. 'age' es la de la fecha (CalculateAge) o la capturada; 0 si el problema es la edad. Los textos son los de la PC.",
             "record: initials (con coma, la primera letra de lo de después y de lo de antes; si no, de las dos primeras palabras; en mayúscula invariante; '?' sin nombre), age (meses completos / 12 con la fecha; sin ella, la capturada), months (TotalMonths: (año·12 + mes) de hoy menos los del nacimiento, uno menos si el día de hoy es menor que el del nacimiento, nunca negativo), ageText ('N días' con menos de un mes, 'N meses' con menos de 24, 'N años M meses' antes de los 6 años, si no 'N años'; '1 día', '1 mes', '1 año' en singular), isFemale (el sexo empieza con 'Fem' sin distinguir mayúsculas), isPediatric (menos de 18), showsGynecoObstetric (mujer de 10 o más).",
-            "phone (FormatPhoneNumber): solo los dígitos ASCII 0-9, los últimos 10 (revisión 20: la lada del país se queda fuera, como los compara duplicate-patients.json; antes se quedaban los primeros 10 y '+52 55 1234 5678' daba '525-512-3456'); hasta 3 tal cual, hasta 6 como 'ddd-ddd', más como 'ddd-ddd-dddd'. El alta lo aplica a cada tecla: escribir de corrido un número con lada termina en sus últimos 10.");
+            "phone (FormatPhoneNumber): sin la extensión (revisión 20, decisión del médico del 2026-10-22; la misma regla que duplicate-patients.json: DuplicatePatientRules.PhoneDigitsOf), solo los dígitos ASCII 0-9, los últimos 10 (revisión 20: la lada del país se queda fuera, como los compara duplicate-patients.json; antes se quedaban los primeros 10 y '+52 55 1234 5678' daba '525-512-3456'); hasta 3 tal cual, hasta 6 como 'ddd-ddd', más como 'ddd-ddd-dddd'. El alta lo aplica a cada tecla: escribir de corrido un número con lada termina en sus últimos 10.");
     }
 
     // ================================================================== contracts/golden/date-mask.json

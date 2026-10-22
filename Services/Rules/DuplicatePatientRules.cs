@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using TPVC.Models;
 
 namespace TPVC.Services.Rules;
@@ -12,8 +13,8 @@ namespace TPVC.Services.Rules;
 /// <item><b>El nombre</b> se normaliza como la búsqueda (<see cref="TextSearch.Normalize"/>: sin acentos ni diéresis, la ñ
 /// como n, minúsculas) y los espacios seguidos (también tabuladores y el espacio duro) cuentan como uno. Nada más: un guion
 /// o un punto siguen contando ("María-José" no es "María José").</item>
-/// <item><b>El teléfono</b>: solo sus dígitos ASCII, los últimos 10 (así "+52 (55) 1234-5678" es "55 1234 5678"). Con menos
-/// de 10 dígitos no se compara.</item>
+/// <item><b>El teléfono</b>: sin la extensión (<see cref="PhoneDigitsOf"/>, revisión 20), solo sus dígitos ASCII, los
+/// últimos 10 (así "+52 (55) 1234-5678 ext. 10" es "55 1234 5678"). Con menos de 10 dígitos no se compara.</item>
 /// <item><b>La fecha de nacimiento</b>, solo la fecha; sin ella no se compara.</item>
 /// <item>Solo cuentan los expedientes activos y sin <c>MergedIntoSyncId</c> (el que se unió a otro en el paso 8.A), con
 /// nombre. Un expediente nunca es duplicado de sí mismo (mismo SyncId, no vacío: uno nuevo todavía no lo tiene).</item>
@@ -47,10 +48,26 @@ public static class DuplicatePatientRules
     public static string NormalizeName(string? name) =>
         string.Join(' ', TextSearch.Normalize(name).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-    /// <summary>Los últimos 10 dígitos del teléfono, o null si tiene menos.</summary>
+    // La extensión (revisión 20), sobre el texto normalizado (sin acentos, en minúsculas): "ext", "ext.", "extension" o una
+    // "x" que no sigue a una letra, o "#", con dígitos después; desde ahí hasta el final
+    private static readonly Regex Extension = new(@"(?:(?<![a-z])(?:extension|ext\.?|x)|#)\s*[0-9].*$",
+        RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+    /// <summary>
+    /// Los dígitos ASCII del teléfono sin su extensión (revisión 20, decisión del médico del 2026-10-22): se quita desde "ext",
+    /// "ext.", "extensión", "x" o "#" seguidos de dígitos (sin distinguir mayúsculas ni acentos) hasta el final. "+52 55 9876
+    /// 5432 ext 10" da "525598765432". La usan esta regla y el formato del teléfono (<c>PatientRecord.FormatPhoneNumber</c>).
+    /// </summary>
+    public static string PhoneDigitsOf(string? phone)
+    {
+        var withoutExtension = Extension.Replace(TextSearch.Normalize(phone), string.Empty);
+        return new string(withoutExtension.Where(char.IsAsciiDigit).ToArray());
+    }
+
+    /// <summary>Los últimos 10 dígitos del teléfono sin su extensión (<see cref="PhoneDigitsOf"/>), o null si tiene menos.</summary>
     public static string? PhoneKey(string? phone)
     {
-        var digits = new string((phone ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
+        var digits = PhoneDigitsOf(phone);
         return digits.Length >= PhoneDigits ? digits[^PhoneDigits..] : null;
     }
 

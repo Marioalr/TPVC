@@ -1290,8 +1290,9 @@ public class InventoryTests
         recordsVm.PatientForm.FormPhone = "551";
         Assert.AreEqual("551", recordsVm.PatientForm.FormPhone);
 
-        // Filtro de teléfono de emergencia: xxx-xxx-xxxx con los últimos 10 dígitos (revisión 20: la lada del país se queda fuera)
-        recordsVm.PatientForm.FormEmergencyContactPhone = "+52-55-9876-5432";
+        // Filtro de teléfono de emergencia: xxx-xxx-xxxx con los últimos 10 dígitos sin la extensión (revisión 20: la lada del
+        // país y la extensión se quedan fuera)
+        recordsVm.PatientForm.FormEmergencyContactPhone = "+52-55-9876-5432 ext 10";
         Assert.AreEqual("559-876-5432", recordsVm.PatientForm.FormEmergencyContactPhone);
 
         // Escrito tecla por tecla con la lada del país: termina en los últimos 10 dígitos

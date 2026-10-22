@@ -124,6 +124,20 @@ public class RuleFixesTests
     }
 
     [TestMethod]
+    public void Phone_DropsTheExtension_InTheFormatAndInTheDuplicateRule()
+    {
+        foreach (var phone in new[] { "+52 55 9876 5432 ext 10", "55 9876 5432 Ext. 123", "55 9876 5432 EXTENSIÓN 7", "55 9876 5432 x22", "55 9876 5432 #4" })
+        {
+            Assert.AreEqual("559-876-5432", PatientRecord.FormatPhoneNumber(phone), phone);
+            Assert.AreEqual("5598765432", DuplicatePatientRules.PhoneKey(phone), phone);
+        }
+        Assert.AreEqual("559-876-5432", PatientRecord.FormatPhoneNumber("55 9876 5432 ext"), "Sin dígitos no es extensión");
+        Assert.AreEqual(DuplicatePatientRules.Match.Phone, DuplicatePatientRules.Compare(
+            new DuplicatePatientRules.Patient(Guid.NewGuid(), "Ana", null, "+52 55 9876 5432 ext 10"),
+            new DuplicatePatientRules.Patient(Guid.NewGuid(), "Ana", null, "559-876-5432")));
+    }
+
+    [TestMethod]
     public void CashReceived_ACommaWithOneOrTwoDigits_IsTheDecimalPoint()
     {
         var checkout = new CheckoutViewModel(null) { CashReceivedText = "1,5" };

@@ -746,14 +746,15 @@ public class PatientRecord : ISyncEntity
     public string FormattedEmergencyContactPhone => FormatPhoneNumber(EmergencyContactPhone);
 
     /// <summary>
-    /// El teléfono como "ddd-ddd-dddd" con sus últimos 10 dígitos ASCII (revisión 20: "+52 55 1234 5678" → "551-234-5678", la
-    /// lada del país se queda fuera, como compara los teléfonos la regla de duplicados, <c>DuplicatePatientRules.PhoneKey</c>;
-    /// antes se quedaban los primeros 10). Hasta 3 dígitos tal cual y hasta 6 como "ddd-ddd".
+    /// El teléfono como "ddd-ddd-dddd" con sus últimos 10 dígitos ASCII sin la extensión (revisión 20: "+52 55 1234 5678 ext
+    /// 10" → "551-234-5678", la lada del país y la extensión se quedan fuera, como compara los teléfonos la regla de duplicados,
+    /// <c>DuplicatePatientRules.PhoneDigitsOf</c> y <c>PhoneKey</c>; antes se quedaban los primeros 10). Hasta 3 dígitos tal
+    /// cual y hasta 6 como "ddd-ddd".
     /// </summary>
     public static string FormatPhoneNumber(string? phone)
     {
         if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
-        var digits = new string(phone.Where(char.IsAsciiDigit).ToArray());
+        var digits = TPVC.Services.Rules.DuplicatePatientRules.PhoneDigitsOf(phone);
         if (digits.Length > 10) digits = digits[^10..];
 
         if (digits.Length <= 3) return digits;

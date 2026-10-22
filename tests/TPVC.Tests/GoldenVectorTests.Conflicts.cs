@@ -137,6 +137,7 @@ public partial class GoldenVectorTests
         ("mismo nombre, otra fecha de nacimiento y sin teléfono", Pac(1, "Juan Pérez", "1990-02-01"), Pac(2, "Juan Pérez", "1991-02-01"), DuplicatePatientRules.Match.None),
         ("mismo nombre, otra fecha de nacimiento pero el mismo teléfono", Pac(1, "Juan Pérez", "1990-02-01", "5598765432"), Pac(2, "Juan Pérez", "1991-02-01", "55-9876-5432"), DuplicatePatientRules.Match.Phone),
         ("misma fecha y mismo teléfono", Pac(1, "Juan Pérez", "1990-02-01", "5598765432"), Pac(2, "juan perez", "1990-02-01", "+525598765432"), DuplicatePatientRules.Match.BirthDateAndPhone),
+        ("el mismo teléfono con extensión (revisión 20)", Pac(1, "Juan Pérez", null, "+52 55 9876 5432 ext 10"), Pac(2, "Juan Pérez", null, "5598765432"), DuplicatePatientRules.Match.Phone),
         ("uno sin fecha de nacimiento: solo cuenta el teléfono (aquí, otro)", Pac(1, "Juan Pérez", null, "5598765432"), Pac(2, "Juan Pérez", "1990-02-01", "5511112222"), DuplicatePatientRules.Match.None),
         ("otro nombre con la misma fecha y teléfono", Pac(1, "Juan Pérez", "1990-02-01", "5598765432"), Pac(2, "Juana Pérez", "1990-02-01", "5598765432"), DuplicatePatientRules.Match.None),
         ("un guion cuenta: 'María-José' no es 'María José'", Pac(1, "María-José Ruiz", "2001-03-03"), Pac(2, "María José Ruiz", "2001-03-03"), DuplicatePatientRules.Match.None),
@@ -155,7 +156,13 @@ public partial class GoldenVectorTests
         {
             cases.Add(Case($"nombre · '{name}'", new JsonObject { ["check"] = "name", ["name"] = name }, DuplicatePatientRules.NormalizeName(name)));
         }
-        foreach (var phone in new[] { "+52 (55) 1234-5678", "044 55 1234 5678", "55 1234 5678", "1234-5678", "", "５５１２３４５６７８" })
+        foreach (var phone in new[]
+                 {
+                     "+52 (55) 1234-5678", "044 55 1234 5678", "55 1234 5678", "1234-5678", "", "５５１２３４５６７８",
+                     // Revisión 20: sin la extensión
+                     "+52 55 9876 5432 ext 10", "55 9876 5432 Ext. 123", "55 9876 5432 extensión 7", "55 9876 5432 EXTENSION 7", "55 9876 5432 x22",
+                     "55 9876 5432 #4", "55 9876 5432 ext", "55-9876-5432x 9"
+                 })
         {
             cases.Add(Case($"teléfono · '{phone}'", new JsonObject { ["check"] = "phone", ["phone"] = phone }, DuplicatePatientRules.PhoneKey(phone)));
         }
@@ -190,7 +197,7 @@ public partial class GoldenVectorTests
         CheckOrWrite("contracts/golden/duplicate-patients.json", VectorFile("duplicate-patients", cases,
             "Posibles expedientes duplicados (Services/Rules/DuplicatePatientRules, paso 8.23, H3). No hay CURP: dos expedientes pueden ser el mismo paciente si su nombre normalizado es igual y además tienen la misma BirthDate (solo la fecha) o los mismos últimos 10 dígitos de Phone. 'compare' da el motivo: None, BirthDate, Phone o BirthDateAndPhone.",
             "name: la normalización de la búsqueda (Services/TextSearch.Normalize: quitar espacios de los extremos, NFD, quitar las marcas sin espacio (categoría Mn: acentos, diéresis, la tilde de la ñ), minúsculas invariantes, NFC) y luego los espacios seguidos como uno (separa todo lo que char.IsWhiteSpace de .NET o Char.isWhitespace() de Kotlin toman por espacio, también el tabulador y el espacio duro U+00A0). Nada más: un guion o un punto siguen contando.",
-            "phone: solo los dígitos ASCII 0-9 (los de ancho completo no cuentan), los últimos 10; con menos de 10, null (no se compara).",
+            "phone: sin la extensión (revisión 20, decisión del médico del 2026-10-22: con el texto normalizado como text-search.json, se quita desde 'extension', 'ext', 'ext.' o una 'x' que no sigue a una letra a-z, o '#', seguidos de espacios opcionales y un dígito 0-9, hasta el final; expresión (?:(?<![a-z])(?:extension|ext\\.?|x)|#)\\s*[0-9].*$), solo los dígitos ASCII 0-9 (los de ancho completo no cuentan), los últimos 10; con menos de 10, null (no se compara). patient-identity.json formatea el teléfono con estos mismos dígitos.",
             "Solo cuentan los expedientes con IsActive, sin MergedIntoSyncId y con nombre; nunca el mismo SyncId (uno vacío es un expediente nuevo sin guardar).",
             "pairs: los pares de posibles duplicados en que está alguno de 'involving' (los SyncId de los expedientes que acaban de bajar), cada par una vez [SyncId menor, SyncId mayor, motivo], ordenados por SyncId en minúsculas (orden ordinal).",
             "Al crear un expediente: aviso con los parecidos y se puede crear de todos modos. Después de bajar: 'pairs' con los que llegaron, en un aviso (en la PC, el banner de Pacientes). Nunca se une nada solo (la herramienta de unir es el paso opcional 8.A, que escribirá MergedIntoSyncId)."));
