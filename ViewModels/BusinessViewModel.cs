@@ -35,7 +35,10 @@ public sealed class BusinessChartBar
 /// <summary>
 /// Panel «Negocio» (pedido del médico del 2026-10-22): ventas, costo, utilidad y margen por periodo y por tipo, los más
 /// vendidos, la gráfica en el tiempo, las compras, el consumo de insumos y el valor del inventario, con exportación a CSV. Lee
-/// con <see cref="IBusinessReportQueries"/> (asíncrono: la pantalla no se bloquea) y todas las cuentas son las reglas puras
+/// con <see cref="IBusinessReportQueries"/> en un hilo de fondo (<see cref="Task.Run(System.Func{Task})"/>: Microsoft.Data.Sqlite
+/// trabaja de forma síncrona por debajo, así que un await directo ocuparía el hilo de la pantalla); cada lectura abre su propio
+/// contexto de la base (InventoryService crea uno nuevo con su fábrica) y no toca nada de la pantalla. Lo leído se aplica de
+/// vuelta en el hilo de la pantalla, en memoria. Todas las cuentas son las reglas puras
 /// de <see cref="BusinessReportRules"/> y <see cref="BusinessStockRules"/>.
 /// </summary>
 public partial class BusinessViewModel : ObservableObject
@@ -257,7 +260,7 @@ public partial class BusinessViewModel : ObservableObject
     // ================================================================== carga
 
     /// <summary>
-    /// Lee el periodo elegido y el anterior igual (una sola lectura de la base, asíncrona) y recalcula todo. Si mientras tanto se
+    /// Lee el periodo elegido y el anterior igual (una sola lectura de la base, en un hilo de fondo) y recalcula todo. Si mientras tanto se
     /// pidió otra carga, el resultado viejo se descarta.
     /// </summary>
     [RelayCommand]
@@ -275,7 +278,8 @@ public partial class BusinessViewModel : ObservableObject
         {
             var from = previous.From < period.From ? previous.From : period.From;
             var to = previous.To > period.To ? previous.To : period.To;
-            var data = await _queries.LoadBusinessReportAsync(from, to);
+            // En un hilo de fondo: la lectura de SQLite es síncrona por debajo. Solo usa su propio contexto y los valores copiados aquí
+            var data = await Task.Run(() => _queries.LoadBusinessReportAsync(from, to));
             if (version != _loadVersion) return;
             _data = data;
             Period = period;
