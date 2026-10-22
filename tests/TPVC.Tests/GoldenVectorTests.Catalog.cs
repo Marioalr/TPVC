@@ -110,6 +110,26 @@ public partial class GoldenVectorTests
     }
 
     [TestMethod]
+    public void TheContract_SaysTheTabletWritesTheProfileAndTheLetterhead_AndOnlyThePcDeletes()
+    {
+        // Revisión 19: ninguna parte del contrato puede seguir diciendo que solo la PC escribe el perfil o el membrete
+        var schema = JsonNode.Parse(SyncContract.BuildSchemaJson(Model()))!.AsObject();
+        var purposes = schema["otherTables"]!.AsArray().ToDictionary(t => t!["table"]!.GetValue<string>(), t => t!["purpose"]!.GetValue<string>());
+        foreach (var table in new[] { "ClinicProfiles", SyncSchema.ClinicAssetsTable, SyncSchema.ClinicAssetChunksTable })
+        {
+            StringAssert.Contains(purposes[table], "la tablet", table);
+            Assert.IsFalse(purposes[table].Contains("Solo la escribe la PC", StringComparison.Ordinal)
+                           || purposes[table].Contains("Solo los escribe la PC", StringComparison.Ordinal)
+                           || purposes[table].Contains("solo lo edita la PC", StringComparison.Ordinal), table);
+        }
+        StringAssert.Contains(purposes[SyncSchema.ClinicAssetsTable], "solo la PC borra");
+        StringAssert.Contains(purposes[SyncSchema.ClinicAssetChunksTable], "solo la PC borra");
+        var membrete = schema["rules"]!.AsArray().Select(r => r!.GetValue<string>()).Single(r => r.StartsWith("Membrete", StringComparison.Ordinal));
+        StringAssert.Contains(membrete, "la tablet");
+        StringAssert.Contains(membrete, "Solo la PC borra");
+    }
+
+    [TestMethod]
     public void DuplicateCatalog_PairsAreTheSameAsComparingEveryTwo()
     {
         // La búsqueda por código y nombre (no todos contra todos) da lo mismo que comparar cada par

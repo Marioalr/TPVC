@@ -2946,7 +2946,7 @@
     {
       "table": "ClinicAssets",
       "replicated": false,
-      "purpose": "Las imágenes del membrete por su SHA-256 (paso 8.12): una fila por imagen completa (nunca cambia). Solo la escribe la PC.",
+      "purpose": "Las imágenes del membrete por su SHA-256 (paso 8.12): una fila por imagen completa (nunca cambia). La escriben la PC y, desde la revisión 19, la tablet (asset.exists / asset.writeChunk / asset.writeMeta de hrana/statements.json); solo la PC borra.",
       "ddl": [
         "CREATE TABLE IF NOT EXISTS ClinicAssets (Hash TEXT PRIMARY KEY NOT NULL, Kind TEXT NOT NULL, MimeType TEXT NOT NULL, ByteCount INTEGER NOT NULL, ChunkCount INTEGER NOT NULL, UpdatedAtUtc TEXT NOT NULL)"
       ]
@@ -2954,7 +2954,7 @@
     {
       "table": "ClinicAssetChunks",
       "replicated": false,
-      "purpose": "Los bytes de cada imagen en trozos de 512 KiB (paso 8.12). Solo los escribe la PC.",
+      "purpose": "Los bytes de cada imagen en trozos de 512 KiB (paso 8.12). Los escriben la PC y, desde la revisión 19, la tablet (asset.exists / asset.writeChunk / asset.writeMeta de hrana/statements.json); solo la PC borra.",
       "ddl": [
         "CREATE TABLE IF NOT EXISTS ClinicAssetChunks (Hash TEXT NOT NULL, Part INTEGER NOT NULL, Content BLOB NOT NULL, PRIMARY KEY (Hash, Part))"
       ]
