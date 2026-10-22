@@ -180,7 +180,7 @@ Primera sección de Configuración, con lo de hoy y lo que conviene atender:
 
 ## 7. Módulo 5: Negocio
 
-Segunda sección de Configuración en la PC (grupo *Resumen*; no aparece en la tablet, porque muestra costo y utilidad; también con Ctrl + K → «Negocio» o buscando «utilidad»): cómo va el negocio en un periodo, con las mismas cuentas que dará el celular.
+Segunda sección de Configuración en la PC (grupo *Resumen*; también en la tablet, que es una copia de la PC; también con Ctrl + K → «Negocio» o buscando «utilidad»): cómo va el negocio en un periodo, con las mismas cuentas que dará el celular.
 
 **Filtros**
 * **Periodo**: Hoy, Esta semana (del lunes a hoy), Este mes (del día 1 a hoy; abre aquí), Mes anterior, Este año (del 1 de enero a hoy) o **Personalizado**: escriba las dos fechas (dd/mm/aaaa, las diagonales se ponen solas) y pulse **Aplicar**. Los días son los del consultorio (hora de la Ciudad de México).

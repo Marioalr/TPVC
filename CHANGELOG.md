@@ -9,7 +9,7 @@ Todas las modificaciones notables de este proyecto se documentan en este archivo
 * Periodos: hoy, esta semana, este mes, mes anterior, este año o un rango de fechas. Tipos: consultas, medicamentos, insumos, servicios y otros; al hacer clic en una sección se filtra todo el panel.
 * **Más vendidos** (medicamentos por cantidad o por ganancia, y servicios), ventas y ganancia **en el tiempo**, **compras** por proveedor y por tipo, **consumo de insumos** en consultas y servicios, **valor del inventario** y **exportar a CSV**.
 * Desde esta versión cada venta guarda el costo del producto en ese momento y cada entrada de mercancía lo que costó. En las ventas y entradas anteriores se usa el costo de hoy y el panel lo marca como **costo estimado**; los productos sin costo cuentan 0 («sin costo»). El costo incluye IVA, como el valor del inventario; la consulta no tiene costo propio.
-* Se ve en la PC y, más adelante, en el celular; no en la tablet (igual que el corte de caja).
+* Se ve en la PC y, más adelante, en la tablet y el celular. La tablet será una copia de la PC (decisión del médico del 2026-10-22): desde esta versión también puede ver el corte de caja.
 * Contrato de sincronización en la revisión 18: `SaleItems.UnitCost` e `InventoryMovements.UnitCost`, con los vectores de los reportes para la app del celular. 912 pruebas.
 
 ## [1.47.0] - 2026-10-21

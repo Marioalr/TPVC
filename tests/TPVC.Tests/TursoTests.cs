@@ -253,7 +253,7 @@ public class TursoTests
         Assert.IsTrue(DevicePermissions.CanProcessSales(DeviceRole.AndroidTablet));
         Assert.IsFalse(DevicePermissions.CanManageInventory(DeviceRole.AndroidTablet));
         Assert.IsTrue(DevicePermissions.CanViewDashboard(DeviceRole.AndroidTablet));
-        Assert.IsFalse(DevicePermissions.CanViewCashCut(DeviceRole.AndroidTablet));
+        Assert.IsTrue(DevicePermissions.CanViewCashCut(DeviceRole.AndroidTablet));
         Assert.IsFalse(DevicePermissions.CanConfigureSystem(DeviceRole.AndroidTablet));
 
         // 3. AndroidMobileAdmin: Solo funciones limitadas para administrar (Dashboard, Cortes, Stock)

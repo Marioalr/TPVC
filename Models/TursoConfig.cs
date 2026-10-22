@@ -57,20 +57,17 @@ public static class DevicePermissions
 
     public static bool CanViewDashboard(DeviceRole role) => true;
 
-    /// <summary>Corte de caja: oculto en la tablet.</summary>
-    public static bool CanViewCashCut(DeviceRole role) =>
-        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidMobileAdmin;
+    /// <summary>Corte de caja: todos los equipos (desde el 2026-10-22 la tablet es una copia de la PC).</summary>
+    public static bool CanViewCashCut(DeviceRole role) => true;
 
     public static bool CanViewStockAlerts(DeviceRole role) => true;
 
     /// <summary>
     /// Los reportes del negocio (panel «Negocio», pedido del 2026-10-22: ventas, costo, utilidad, más vendidos, compras y consumo
-    /// de insumos): la PC y el celular (cuando el K4 los tenga, con los vectores de contracts/golden), como el corte de caja. La
-    /// tablet no, por ahora: muestra costo y utilidad y el médico no lo ha decidido (se puede abrir a la tablet si lo pide). Donde
-    /// no se permite, la sección no aparece.
+    /// de insumos): todos los equipos, como el corte de caja. La tablet es una copia de la PC (decisión del médico del 2026-10-22)
+    /// y el celular los muestra en K4 con los vectores de contracts/golden.
     /// </summary>
-    public static bool CanViewBusinessReports(DeviceRole role) =>
-        role is DeviceRole.WindowsDesktop or DeviceRole.AndroidMobileAdmin;
+    public static bool CanViewBusinessReports(DeviceRole role) => true;
 
     /// <summary>Configuración, Excel, respaldos, la nube, vincular equipos, perfil y membrete: solo la PC.</summary>
     public static bool CanConfigureSystem(DeviceRole role) =>

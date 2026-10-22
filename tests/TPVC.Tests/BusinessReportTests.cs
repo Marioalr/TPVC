@@ -534,7 +534,7 @@ public class BusinessReportTests
     {
         Assert.IsTrue(DevicePermissions.CanViewBusinessReports(DeviceRole.WindowsDesktop));
         Assert.IsTrue(DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidMobileAdmin));
-        Assert.IsFalse(DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidTablet), "Costo y utilidad: como el corte de caja, hasta que el médico decida");
+        Assert.IsTrue(DevicePermissions.CanViewBusinessReports(DeviceRole.AndroidTablet), "La tablet es una copia de la PC (2026-10-22)");
         foreach (var role in Enum.GetValues<DeviceRole>())
         {
             Assert.AreEqual(DevicePermissions.CanViewCashCut(role), DevicePermissions.CanViewBusinessReports(role), role.ToString());
