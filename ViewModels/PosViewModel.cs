@@ -331,11 +331,14 @@ public partial class PosViewModel : ObservableObject, IDisposable
         FocusSearchRequested?.Invoke();
     }
 
-    /// <summary>Enter en el buscador del catálogo: agrega el primero de la lista.</summary>
+    /// <summary>
+    /// Enter en el buscador del catálogo: agrega el primero de la lista con existencias o, si ninguno tiene, el primero
+    /// (revisión 20: un inventario mal contado nunca impide cobrar; se avisa al agregarlo).
+    /// </summary>
     [RelayCommand]
     public void AddFirstCatalogProduct()
     {
-        var first = CatalogFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0);
+        var first = CatalogFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0) ?? CatalogFilteredProducts.FirstOrDefault();
         if (first != null) AddToCart(first);
     }
 

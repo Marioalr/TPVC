@@ -34,7 +34,10 @@ public partial class GoldenVectorTests
                      ("sobrepeso", "80", "1.70"),
                      ("obesidad grado I", "95", "1.70"),
                      ("obesidad grado II+", "120", "1.70"),
-                     ("talla en centímetros: la regla no la convierte", "70", "170"),
+                     ("talla en centímetros (revisión 20): 170 → 1.70 m, como al leer la nota", "70", "170"),
+                     ("talla en centímetros con decimales", "15,5", "95,5"),
+                     ("3 todavía son metros", "70", "3"),
+                     ("3.01 ya son centímetros (0.0301 m)", "0.1", "3.01"),
                      ("sin peso", "", "1.70"),
                      ("talla 0", "70", "0"),
                      ("texto", "setenta", "1.70"),
@@ -107,7 +110,7 @@ public partial class GoldenVectorTests
                 _ => throw new ArgumentException(S(input, "check"))
             },
             "Los signos de la consulta (Services/Rules/VitalSignsRules.cs): el IMC mientras se captura, el aviso de valores fuera de rango y el texto que se guarda en la nota. Lo que se captura llega como texto; cómo se lee de vuelta ese texto está en vitals-evolution.json.",
-            "bmi: peso y talla (en metros) con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
+            "bmi: peso y talla con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, la talla en metros (revisión 20, VitalSignsRules.HeightInMeters: más de 3 son centímetros y se divide entre 100 en decimal; es la misma regla con que vitals-evolution.json lee la nota; antes la captura no la convertía y 170 daba '0.0 kg/m² (Bajo peso)'), imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
             "warning: cada valor como double (coma = punto, sin espacios); en este orden y unidos por ' · ': Temp ≥ 38 'Temp {0.#} °C: fiebre', o 0 < Temp < 35.5 'hipotermia'; T/A 'sis/dia' ≥ 140 o ≥ 90 'T/A {0}/{0}: elevada', o 0 < sis < 90 'baja'; SpO₂ > 0 (≤ 1 se multiplica por 100) < 92 'SpO₂ {0} %: baja'; glucosa > 0, ≥ 200 'elevada' o < 70 'hipoglucemia'; FC > 0: adulto (sin edad o 12 años o más) > 100 'taquicardia', niño (menos de 12) > 140 'alta para la edad', y si no < 50 'bradicardia'. Los números con '0.#' o '0' de double con la cultura es-MX: .NET formatea el valor binario más corto y redondea el punto medio hacia arriba (38.25 → 38.3; 69.5 → 70, así que 'Glucosa 70 mg/dL: hipoglucemia' sale con 69.5).",
             "format (lo que se guarda en PatientConsultation.VitalSigns al terminar): cada dato capturado sin espacios a los lados y unidos por ' | ': 'TA: {sin la / del final} mmHg', 'FC: … lpm', 'FR: … rpm', 'Temp: … °C', 'Peso: … kg', 'Talla: … m', 'Glucosa: … mg/dL', 'SpO2: {sin % al final}%', 'IMC: {el texto de bmi}' (no va si contiene 'no disponibles'). Lo vacío o solo espacios no va; sin nada, ''.");
     }
@@ -245,7 +248,9 @@ public partial class GoldenVectorTests
                  {
                      ("alcanzan las existencias", 2, 5, true),
                      ("existencias justas", 2, 2, true),
-                     ("no alcanzan: se receta sin cobrar", 3, 2, true),
+                     ("no alcanzan: se carga igual (revisión 20; antes se recetaba sin cobrar)", 3, 2, true),
+                     ("sin existencias: se carga igual", 2, 0, true),
+                     ("existencias en negativo: se carga igual", 1, -3, true),
                      ("cantidad 0 cuenta como 1", 0, 1, true),
                      ("sin producto", 1, 0, false),
                  })
@@ -254,6 +259,29 @@ public partial class GoldenVectorTests
             {
                 ["check"] = "prescription-quantity", ["recommendedQuantity"] = recommended, ["product"] = hasProduct ? Prod(1, "MED-001", "Paracetamol 500 mg", stock: stock) : null
             }));
+        }
+
+        // Decisión del médico del 2026-10-22: «Se surte aquí» por defecto solo con existencias
+        foreach (var (name, stock, unitsPerPackage, opened, hasProduct) in new (string, int, int, int, bool)[]
+                 {
+                     ("con existencias: marcado", 3, 1, 0, true),
+                     ("una sola: marcado", 1, 1, 0, true),
+                     ("sin existencias: desmarcado", 0, 1, 0, true),
+                     ("en negativo: desmarcado", -2, 1, 0, true),
+                     ("piezas sueltas: sin paquetes pero con el paquete abierto, marcado", 0, 10, 4, true),
+                     ("piezas sueltas: en negativo aunque quede un paquete abierto, marcado (cuentan las piezas disponibles)", -1, 10, 4, true),
+                     ("piezas sueltas: sin paquetes ni piezas, desmarcado", 0, 10, 0, true),
+                     ("no está en el inventario: desmarcado", 5, 1, 0, false),
+                 })
+        {
+            JsonObject? product = null;
+            if (hasProduct)
+            {
+                product = Prod(1, "MED-001", "Paracetamol 500 mg", stock: stock);
+                if (unitsPerPackage > 1) product["unitsPerPackage"] = unitsPerPackage;
+                if (opened > 0) product["openedUnitsRemaining"] = opened;
+            }
+            cases.Add(new RuleCase($"se surte aquí por defecto · {name}", new JsonObject { ["check"] = "dispense-default", ["product"] = product }));
         }
 
         foreach (var (name, code, category, minutes) in new (string, string?, string, int)[] { ("servicio", "SERV-002", "Curaciones", 20), ("cargo libre sin código", "  ", "Otros", 0) })
@@ -296,6 +324,8 @@ public partial class GoldenVectorTests
                     case "prescription-quantity":
                         return ConsultationAccountRules.PrescriptionChargeQuantity(new PatientPrescriptionItem { RecommendedQuantity = Int(input, "recommendedQuantity") },
                             input["product"] is { } p ? ToProduct(p) : null);
+                    case "dispense-default":
+                        return ConsultationAccountRules.DispenseByDefault(input["product"] is { } dp ? ToProduct(dp) : null);
                     case "line-texts":
                         return new JsonObject
                         {
@@ -310,7 +340,8 @@ public partial class GoldenVectorTests
             "La cuenta de la consulta (Services/Rules/ConsultationAccountRules.cs, antes en ConsultationAccount y ConsultationService): el honorario, el total y cómo se suman y se quitan renglones. Importes como texto decimal invariante. Lo que cada hoja carga está en sheet-charges.json.",
             "fee: entre los servicios activos, el de Id feeOverrideId (la consulta recibida de otro equipo trae el honorario que usaba aquel, por su SyncId: handoff-payload.json), si no el de código SERV-001, si no el primero de categoría 'Consulta', si no el primero cuyo nombre contiene 'Consulta' (las tres sin distinguir mayúsculas; los acentos cuentan); name y amount son los suyos o 'Consulta Médica General' y 300.00. En la lista del catálogo, en su orden.",
             "account: add suma 'quantity' piezas al renglón con el mismo lineId (solo cambia su cantidad) o agrega uno al final; con cantidad 0 o negativa no hace nada (false). remove quita piezas del renglón con ese lineId: si tiene más se reduce, si no sale; false sin renglón o con cantidad 0 o negativa. lineId es el Id local del renglón (el producto, -Id del servicio o el de un cargo libre); en Kotlin cada renglón se reconoce con la regla de synced-json-columns.json. total = honorario + Σ cantidad × precio.",
-            "prescription-quantity («Se surte aquí»): las piezas que carga un medicamento recetado, su cantidad recomendada (1 como mínimo), o null si no hay producto o sus existencias son menores (se receta igual, sin cobrar).",
+            "dispense-default («Se surte aquí» al agregar un medicamento a la receta, decisión del médico del 2026-10-22): true si hay producto y tiene existencias: stock > 0 o, en un producto de piezas sueltas (unitsPerPackage > 1), piezas disponibles > 0 (max(0, stock) × unitsPerPackage + max(0, openedUnitsRemaining)); false con 0 o en negativo (sin paquete abierto) y sin producto. Desmarcado no se carga; el médico lo puede marcar a mano y entonces se carga con prescription-quantity y el aviso de existencias.",
+            "prescription-quantity («Se surte aquí»): las piezas que carga un medicamento recetado, su cantidad recomendada (1 como mínimo), o null si no hay producto (se receta igual, sin cobrar). Revisión 20 (decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar): las existencias ya no cuentan; antes, con menos existencias que la cantidad, era null. Si no alcanzan se avisa sin bloquear con el texto de checkout.json (stockWarning).",
             "line-texts: el código de un cargo libre (el suyo o 'CARGO' si está vacío), el genérico del renglón de un servicio 'Servicio Clínico • {categoría}' y su presentación 'Duración: N min'.");
     }
 
@@ -419,7 +450,7 @@ public partial class GoldenVectorTests
         var cases = new List<RuleCase>();
         foreach (var (name, ops) in new (string, JsonObject[])[]
                  {
-                     ("receta que se surte aquí: el producto elegido, por nombre o por el renglón normado; sin existencias suficientes no se carga (cada renglón se compara solo con las existencias, no con lo ya cargado)", new[]
+                     ("receta que se surte aquí: el producto elegido, por nombre o por el renglón normado; sin existencias suficientes se carga igual (revisión 20)", new[]
                      {
                          Prescribe("Paracetamol 500 mg", 2, 14), Prescribe("Paracetamol 500 mg tabletas (Tempra)", 1), Prescribe("Paracetamol 500 mg", 1),
                          Prescribe("Ibuprofeno 400 mg", 1), Prescribe("Tempra", 10, 15)
@@ -453,6 +484,22 @@ public partial class GoldenVectorTests
             cases.Add(new RuleCase(name, new JsonObject { ["products"] = SheetProductsFixture(), ["services"] = SheetServicesFixture(), ["feeOverrideId"] = null, ["ops"] = new JsonArray(ops.Select(o => (JsonNode)o).ToArray()) }));
         }
 
+        // Decisión del médico del 2026-10-22: «Se surte aquí» viene marcado solo con existencias; a mano se carga con el aviso
+        var withoutStock = SheetProductsFixture();
+        withoutStock.Add(WithSync(Prod(16, "MED-003", "Ibuprofeno 400 mg", "Ibuprofeno", "Caja con 10 tabletas", 0, "Medicamentos", price: "55.00"), "a1b2c3d4-0000-4000-8000-000000000006"));
+        withoutStock.Add(WithSync(Prod(17, "MED-004", "Omeprazol 20 mg", "Omeprazol", "Caja con 14 cápsulas", -2, "Medicamentos", price: "60.00"), "a1b2c3d4-0000-4000-8000-000000000007"));
+        var ampoules = WithSync(Prod(18, "MED-005", "Ketorolaco 30 mg ampolletas", "Ketorolaco", "Caja con 3 ampolletas", 0, "Medicamentos", price: "90.00"), "a1b2c3d4-0000-4000-8000-000000000008");
+        ampoules["unitsPerPackage"] = 3;
+        ampoules["openedUnitsRemaining"] = 2;
+        withoutStock.Add(ampoules);
+        cases.Add(new RuleCase("se surte aquí por defecto: marcado con existencias, desmarcado con 0 o en negativo, y marcado a mano se carga con el aviso", new JsonObject
+        {
+            ["products"] = withoutStock, ["services"] = SheetServicesFixture(), ["feeOverrideId"] = null,
+            ["ops"] = new JsonArray(
+                Prescribe("Paracetamol 500 mg", 1, 14), Prescribe("Ibuprofeno 400 mg", 1, 16), Prescribe("Omeprazol 20 mg", 1), Prescribe("Ketorolaco 30 mg ampolletas", 1, 18),
+                Prescribe("Naproxeno 250 mg", 1), Prescribe("Paracetamol 500 mg", 3, 14), Row("tick-dispense", 1), Row("tick-dispense", 2), Row("tick-dispense", 4))
+        }));
+
         CheckRuleVectors("sheet-charges.json", "sheet-charges", cases, input =>
             {
                 var products = ProductsIn(input);
@@ -472,11 +519,22 @@ public partial class GoldenVectorTests
                     {
                         case "prescribe":
                         {
+                            // Al agregar a la receta: marcado solo con existencias (decisión del médico del 2026-10-22)
                             var item = new PatientPrescriptionItem { MedicineName = Str(op, "medicineName"), RecommendedQuantity = Int(op, "recommendedQuantity") };
                             var known = IntOrNull(op, "knownProductId") is int id ? products.First(p => p.Id == id) : null;
-                            item.DispenseInClinic = h.Account.ChargePrescription(item, known);
+                            item.DispenseInClinic = h.Account.DispenseByDefault(item, known, out var warning);
                             rows.Add(item);
                             step["charged"] = item.DispenseInClinic;
+                            step["warning"] = warning;
+                            break;
+                        }
+                        case "tick-dispense":
+                        {
+                            // La casilla marcada a mano: se carga si es del inventario, aunque no haya existencias (con el aviso)
+                            var item = (PatientPrescriptionItem)rows[Int(op, "row")];
+                            item.DispenseInClinic = h.Account.ChargePrescription(item, null, out var warning);
+                            step["charged"] = item.DispenseInClinic;
+                            step["warning"] = warning;
                             break;
                         }
                         case "unprescribe":
@@ -578,9 +636,9 @@ public partial class GoldenVectorTests
                 return steps;
             },
             "Lo que las hojas de la consulta cargan a la cuenta (ViewModels/Patients/State/ConsultationAccount.cs, corrido tal cual con una consulta abierta y sin base; las reglas puras están en ConsultationAccountRules, PatientSheetRows y ServiceRowSupplies). Los productos y servicios son el catálogo de este equipo (defaultProducts: los insumos por defecto de un servicio, por Id del producto y piezas por unidad). Cada paso lleva la cuenta después de él: cada renglón como 'producto' o 'servicio' (por su SyncId) o 'libre' (por su nombre), con el código, nombre, genérico, presentación, unidad, precio y piezas que escribe la PC, y el total con el honorario (consultation-account.json).",
-            "prescribe («Se surte aquí»): el producto elegido si el renglón sigue siendo ese producto (catalog-matching.json, product-matches-name), si no el del nombre (find-by-name); se carga con el nombre del renglón y sus piezas (consultation-account.json, prescription-quantity) solo si sus existencias alcanzan para ese renglón (no se resta lo que ya está en la cuenta: dos renglones pueden cargar más de lo que hay); 'charged' es lo que queda en DispenseInClinic. unprescribe descuenta las piezas del producto que encuentra por nombre.",
+            "prescribe (agregar a la receta con «Se surte aquí» por defecto): el producto elegido si el renglón sigue siendo ese producto (catalog-matching.json, product-matches-name), si no el del nombre (find-by-name); queda marcado y se carga con el nombre del renglón y sus piezas (consultation-account.json, prescription-quantity) solo si ese producto tiene existencias (consultation-account.json, dispense-default; decisión del médico del 2026-10-22: con 0 o en negativo queda desmarcado y sin cargo); con existencias que no alcanzan para el renglón se carga igual, con el aviso (revisión 20: un inventario mal contado nunca impide cobrar). tick-dispense (la casilla marcada a mano): se carga si es del inventario, tenga o no existencias, con el aviso. 'charged' es lo que queda en DispenseInClinic y 'warning' el aviso de existencias (stockWarning de checkout.json, con lo que ya está en la cuenta de ese producto) o null. unprescribe descuenta las piezas del producto que encuentra por nombre.",
             "add-supply: el producto elegido o el del nombre; con producto se carga con el nombre del renglón; sin producto, un cargo libre ('INSUMO', 'Material clínico', 'Piezas', su precio) solo si el precio es mayor que 0 (si no, no se carga y la PC avisa). 'line' es lo que anota el renglón (ChargedLineKind y ChargedLineSyncId: synced-json-columns.json). remove-supply descuenta las piezas que cargó, del mismo renglón de la cuenta.",
-            "add-service: el servicio del catálogo del renglón (PatientSheetRows.ResolveService: el activo con su SyncId; sin SyncId ni Id local, cargo libre; si no, el del Id viejo con el mismo nombre normalizado o el primero con ese nombre normalizado) se carga por sus unidades ('Servicio Clínico • categoría', 'Duración: N min', 'Servicio') y cada insumo por defecto por sus piezas × unidades, que forman la lista del renglón (revisión 14, ServiceRowSupplies.AddUnits: synced-json-columns.json); sin servicio, un cargo libre con su precio (si es mayor que 0) y la lista vacía. Las existencias no frenan los insumos por defecto (el tope solo aplica al agregar a mano). summary es el resumen de la lista que muestra la hoja.",
+            "add-service: el servicio del catálogo del renglón (PatientSheetRows.ResolveService: el activo con su SyncId; sin SyncId ni Id local, cargo libre; si no, el del Id viejo con el mismo nombre normalizado o el primero con ese nombre normalizado) se carga por sus unidades ('Servicio Clínico • categoría', 'Duración: N min', 'Servicio') y cada insumo por defecto por sus piezas × unidades, que forman la lista del renglón (revisión 14, ServiceRowSupplies.AddUnits: synced-json-columns.json); sin servicio, un cargo libre con su precio (si es mayor que 0) y la lista vacía. Las existencias nunca frenan lo que se carga (revisión 20; antes había tope al agregar a mano): si no alcanzan, la PC avisa sin bloquear. summary es el resumen de la lista que muestra la hoja.",
             "service-units (+ / −): con lista, una unidad más carga el servicio y los insumos por defecto de esa unidad (se suman a la lista); una menos descuenta el servicio y las piezas por defecto de esa unidad, cada insumo hasta lo que tenga la lista (lo agregado a mano se queda). service-supply-add: una pieza más de un producto en la lista (o uno nuevo). service-supply-remove: la X de un insumo de la lista. remove-service (la X del renglón): descuenta el servicio por sus unidades cargadas y cada insumo de la lista como quedó.");
     }
 
@@ -590,7 +648,12 @@ public partial class GoldenVectorTests
     public void Checkout_MatchesTheVectors()
     {
         var cases = new List<RuleCase>();
-        foreach (var text in new[] { "500", "$1,000", "250.5", "250.", "99.999", "1,5", "abc", "", "0", "1.2.3" })
+        foreach (var text in new[]
+                 {
+                     "500", "$1,000", "250.5", "250.", "99.999", "1,5", "abc", "", "0", "1.2.3",
+                     // Revisión 20: la coma decimal
+                     "150,50", "1,50", "$ 1,5", "1,500", "1,500.50", "1,000,000", "1,5,0", "1,", ",5", "1.500,50", "١٥٠"
+                 })
         {
             cases.Add(new RuleCase($"recibido escrito · «{text}»", new JsonObject { ["check"] = "parse-amount", ["text"] = text }));
         }
@@ -611,10 +674,11 @@ public partial class GoldenVectorTests
                      ("efectivo de menos: falta y no se puede cobrar", null, "", new[] { AddProduct(1, "Paracetamol 500 mg", "45.00", 10, 3), Op("cash-text", "100") }),
                      ("sin recibido escrito paga exacto", null, "", new[] { AddProduct(1, "Paracetamol 500 mg", "45.00", 10, 1) }),
                      ("con tarjeta no hay cambio aunque se escriba", null, "", new[] { AddProduct(1, "Paracetamol 500 mg", "45.00", 10, 1), Op("cash-text", "500"), Op("payment", "Tarjeta Débito/Crédito") }),
-                     ("las existencias topan lo que se agrega", null, "", new[] { AddProduct(1, "Tempra", "89.90", 3, 5), AddProduct(1, "Tempra", "89.90", 3, 1) }),
-                     ("sin existencias no se agrega", null, "", new[] { AddProduct(1, "Tempra", "89.90", 0, 1) }),
-                     ("+ y − con el tope; − en 1 quita el renglón", null, "", new[] { AddProduct(1, "Tempra", "89.90", 2, 1), Op("increase", 0), Op("increase", 0), AddProduct(2, "Gasa", "18.00", 5, 1), Op("decrease", 1) }),
-                     ("la cantidad escrita: mínimo 1 y no más de lo que hay; un servicio no tiene tope", null, "", new[]
+                     ("más de las existencias: se agrega todo y se avisa (revisión 20)", null, "", new[] { AddProduct(1, "Tempra", "89.90", 3, 5), AddProduct(1, "Tempra", "89.90", 3, 1) }),
+                     ("sin existencias: se agrega y se avisa", null, "", new[] { AddProduct(1, "Tempra", "89.90", 0, 1) }),
+                     ("existencias en negativo: se agrega y se avisa con el signo menos", null, "", new[] { AddProduct(1, "Tempra", "89.90", -2, 1), AddProduct(2, "Gasa", "18.00", 5, 1) }),
+                     ("+ pasa de las existencias y avisa; − en 1 quita el renglón", null, "", new[] { AddProduct(1, "Tempra", "89.90", 2, 1), Op("increase", 0), Op("increase", 0), AddProduct(2, "Gasa", "18.00", 5, 1), Op("decrease", 1) }),
+                     ("la cantidad escrita: mínimo 1, sin tope; un servicio no tiene existencias", null, "", new[]
                      {
                          AddProduct(1, "Tempra", "89.90", 4, 1), Op("set-quantity-0", 9), AddLine(-21, "SERV-002", "Curación", "250.00", 1, true), Op("set-quantity-1", 0), Op("set-quantity-1", 7)
                      }),
@@ -676,6 +740,7 @@ public partial class GoldenVectorTests
                             ["quickCash"] = new JsonArray(vm.QuickCashAmounts.Select(a => (JsonNode)JsonValue.Create(Money(a))!).ToArray()),
                             ["receipt"] = new JsonObject { ["cashReceived"] = received is { } r ? Money(r) : null, ["change"] = change is { } c ? Money(c) : null },
                             ["missingText"] = vm.MissingAmount > 0 ? CheckoutRules.MissingText(vm.MissingAmount) : null,
+                            ["stockWarning"] = vm.StockWarning,
                             ["notices"] = notices
                         };
                     }
@@ -684,8 +749,8 @@ public partial class GoldenVectorTests
                 }
             },
             "El cobro del Punto de venta y de «Terminar consulta» (Services/Rules/CheckoutRules.cs y ViewModels/CheckoutViewModel.cs corrido tal cual, sin base). Importes como texto decimal invariante.",
-            "parse-amount (lo que se escribe en Recibido): solo los dígitos y el punto; decimal invariante; Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). La coma se quita (es separador de miles): '1,5' es 15. suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
-            "checkout: add-product agrega un producto con existencias (si ya está suma, sin pasar de sus existencias; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas sin tope); increase (+) no pasa de las existencias de un producto; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1; un producto con existencias no pasa de ellas); cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
+            "parse-amount (lo que se escribe en Recibido): solo cuentan los dígitos ASCII 0-9, el punto y la coma (lo demás se quita, también los dígitos de otros alfabetos). Revisión 20: si no hay punto, hay una sola coma y después de ella quedan 1 o 2 dígitos al final, la coma es el punto decimal ('1,5' = 1.50, '150,50' = 150.50); en cualquier otro caso las comas se quitan (separan miles: '1,500' = 1500, '1,500.50' = 1500.50, '1,000,000'). Antes la coma siempre se quitaba y '1,5' era 15. Luego decimal invariante (solo punto decimal, sin signo ni miles); Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
+            "checkout: add-product agrega un producto (si ya está suma; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas); increase (+) suma una; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1). Revisión 20 (decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar): las existencias nunca topan ni impiden agregar (antes add-product no agregaba sin existencias y nada pasaba de ellas); el aviso de agregar o de + cuando el renglón pasa de las existencias es el de stockWarning de ese renglón solo (ok false), y si no, el de éxito. stockText del renglón: 'Servicio', o 'Existencias: N' ('Piezas disp.: N' en piezas sueltas) con N con el signo menos U+2212 si es negativo, más ' · revisar inventario' si la cantidad pasa de N. stockWarning (CheckoutRules.CartShortages y StockReviewRules.WarningText; se muestra junto al botón de cobrar y no lo deshabilita): los renglones de producto (Id > 0, no servicio) con cantidad > existencias, en su orden, como 'Existencias insuficientes: {nombre} (quedan {N}, se cobran {cantidad}); {…}. Revise el inventario.' ('{N} pzas' y '{cantidad} pzas' en piezas sueltas), o null. Después de cobrar, la PC avisa lo mismo con lo que calculó al registrar la venta (los faltantes por producto, Sale.StockShortages). cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
             "Cuentas: total = Σ cantidad × precio; changeDue = max(0, recibido − total) con cualquier forma de pago; hasChange = efectivo, recibido ≥ total y total > 0; missingAmount = total − recibido si es efectivo y 0 < recibido < total; canCharge = (hay renglones o se permite la cuenta vacía) y no falta efectivo; chargeText = 'Cobrar {total con moneda de es-MX, $1,234.50}{complemento}' o el texto de la cuenta vacía. El recibo en efectivo lleva lo recibido (el total si no se escribió) y el cambio; con otra forma, nada.");
     }
 

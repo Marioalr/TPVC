@@ -182,6 +182,8 @@ public partial class GoldenVectorTests
                      ("sin cantidad", "*para"),
                      ("sin asterisco", "para"),
                      ("una x no es asterisco", "3x para"),
+                     ("dígitos de otro alfabeto no son cantidad (revisión 20: antes tronaba)", "٣*para"),
+                     ("dígitos de ancho completo tampoco", "３*gasa"),
                      ("vacío", ""),
                      ("nulo", null),
                  })
@@ -279,7 +281,7 @@ public partial class GoldenVectorTests
                 }
             },
             "Búsquedas de productos (Services/TextSearch.RankProducts y Services/Rules/CatalogSearchRules.cs). Los productos de entrada: id, code, name, genericName, presentation, stock (CurrentStock), category (el nombre de su categoría), categoryId, active (true si falta), location y price. 'expected' son los id en orden. Qué es insumo o medicamento: catalog-matching.json.",
-            "quantity-prefix (el buscador del Punto de venta, '3*para' agrega 3): la expresión ^\\s*(\\d{1,3})\\s*\\*\\s*(.*)$ con dígitos ASCII; la cantidad es el número (1 si es 0) y lo que sigue es la búsqueda tal cual; si no coincide, cantidad 1 y el texto completo.",
+            "quantity-prefix (el buscador del Punto de venta, '3*para' agrega 3): la expresión ^\\s*([0-9]{1,3})\\s*\\*\\s*(.*)$ (solo dígitos ASCII; revisión 20: antes era \\d, que en .NET acepta dígitos de cualquier alfabeto, y '٣*para' tronaba al leer el número; ahora no coincide); la cantidad es el número (1 si es 0) y lo que sigue es la búsqueda tal cual; si no coincide, cantidad 1 y el texto completo.",
             "pos (TextSearch.RankProducts, la que usan el Punto de venta y los insumos de un servicio): con q = el texto normalizado (vacío = nada), grupo 0 si el código normalizado es igual a q, 1 si el nombre empieza con q, 2 si el genérico empieza con q, 3 si una palabra del nombre o del genérico empieza con q, 4 si el nombre, el genérico, el código o la ubicación lo contienen; si no, fuera. Orden: grupo, luego los que tienen existencias (stock > 0) antes, luego el nombre tal cual con es-MX (Collator); 8 como mucho ('limit' -1 = sin límite). No mira si el producto está activo.",
             "pos-catalog (la lista del catálogo del Punto de venta): si categoryId es mayor que 0, solo esa categoría; sin texto (vacío o espacios), todos por nombre con es-MX; con texto, pos sin límite.",
             "service-supplies (buscar un insumo para un servicio en la consulta): pos sobre los productos activos que son insumo. supplies-sheet (la hoja de insumos): los insumos (activos o no) en el orden de la lista cuyo nombre, genérico o código contiene el texto normalizado, 20 como mucho; sin texto, los primeros 20. browser-supplies (el catálogo de insumos de la consulta): los insumos cuyo nombre, genérico, código o presentación contiene el texto, por nombre con es-MX, sin límite.");
@@ -413,6 +415,8 @@ public partial class GoldenVectorTests
         var acid = Prod(3, "MED-003", "Ácido fólico 5 mg", "Ácido fólico", "Caja con 30 tabletas", 10, "Medicamentos");
         var gauze = Prod(4, "INS-001", "Gasa Estéril 10x10 cm", null, "Sobre con 5 piezas", 120, "Material de curación");
         var valclan = Prod(5, "MED-005", "VALCLAN 875/125MG C/14 TABS", "Amoxicilina/Ácido clavulánico", "Caja con 14 tabletas", 8, "Medicamentos");
+        // Revisión 20: otro producto que solo se distingue por los acentos (para el orden de find-by-name)
+        var acidNoAccent = Prod(6, "MED-006", "Acido folico 5 mg", "Acido folico", "Frasco con 100 tabletas", 4, "Medicamentos");
 
         var cases = new List<RuleCase>();
         foreach (var (name, product, text) in new (string, JsonObject, string)[]
@@ -446,7 +450,12 @@ public partial class GoldenVectorTests
                      ("el de antes, de un nombre en mayúsculas", new[] { paracetamol, valclan }, "Amoxicilina/Ácido clavulánico 875/125 mg tabletas (Valclan)"),
                      ("un genérico: el renglón sin paréntesis", new[] { tempra, paracetamol }, "Paracetamol 500 mg tabletas"),
                      ("nombre (presentación)", new[] { gauze }, "Gasa Estéril 10x10 cm (Sobre con 5 piezas)"),
-                     ("los acentos sí cuentan aquí (a diferencia de product-matches-name)", new[] { acid }, "Acido folico 5 mg"),
+                     ("sin acentos (revisión 20; antes nunca se cobraba)", new[] { acid }, "Acido folico 5 mg"),
+                     ("sin acentos ni mayúsculas: el genérico", new[] { tempra, acid }, "ACIDO FOLICO"),
+                     ("sin acentos: el renglón de la receta", new[] { paracetamol, valclan }, "Valclan 875/125 mg tabletas (Amoxicilina/Acido clavulanico)"),
+                     ("primero con acentos: gana el que se escribió igual aunque otro vaya antes", new[] { acidNoAccent, acid }, "Ácido fólico 5 mg"),
+                     ("sin acentos, el primero de la lista", new[] { acid, acidNoAccent }, "acido folico 5 MG"),
+                     ("sin acentos, el nombre y algo más sigue sin contar", new[] { acid }, "Acido folico 5 mg cada 24 horas"),
                      ("el nombre y algo más no", new[] { paracetamol }, "Paracetamol 500 mg cada 8 horas"),
                      ("vacío", new[] { paracetamol }, "  "),
                  })
@@ -537,7 +546,7 @@ public partial class GoldenVectorTests
             },
             "Qué producto es un renglón y qué es medicamento (Services/Rules/CatalogMatchingRules.cs, antes CatalogStore; PatientSheetRows.FindProductByName; PrescriptionNaming). Los productos, como en rank-products.json.",
             "product-matches-name (el medicamento elegido sigue siendo ese renglón al guardar la receta y al cargarlo con «Se surte aquí»): con todo normalizado (text-search.json), el nombre, 'Nombre (Presentación)', el nombre seguido de un espacio y algo más, el genérico (si tiene) o, si tiene genérico, un renglón de la receta: el de hoy con el principio activo entre paréntesis (medicine-line), el de hoy sin él (showActiveIngredient false) o el de antes de v1.46 (el genérico con su concentración y forma, afuera, y la marca entre paréntesis si el nombre no es el genérico, esa marca con lo que el nombre traiga entre paréntesis, como entonces: los renglones guardados así no se reescriben y siguen encontrando su producto para cobrar y para la alerta de alergias).",
-            "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es, sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase, no normalizada), el nombre, 'Nombre (Presentación)', el genérico o uno de los tres renglones de la receta de product-matches-name; el primero de la lista; null sin texto o si ninguno. Diferencia con product-matches-name: ver la nota de los acentos y del 'algo más'.",
+            "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato, el que cobra «Se surte aquí»; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es el nombre, 'Nombre (Presentación)', el genérico o uno de los tres renglones de la receta de product-matches-name, en dos vueltas: 1) sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase), el primero de la lista que coincide; 2) si ninguno, con los dos lados normalizados (text-search.json: sin acentos ni mayúsculas), el primero de la lista. null sin texto o si ninguno. Siempre igual de punta a punta: a diferencia de product-matches-name, 'el nombre y algo más' no cuenta. Revisión 20: antes solo existía la primera vuelta, y 'Acido folico 5 mg' (escrito sin acentos) nunca se cobraba; la primera vuelta conserva el producto de antes cuando dos solo se distinguen por los acentos.",
             "kind: medicamento si el nombre de la categoría contiene 'Medicamento' o 'Fármaco' (sin distinguir mayúsculas; los acentos cuentan) o el código empieza con 'MED'; insumo si la categoría contiene 'Curación', 'Insumo', 'Antiséptico' o 'Diagnóstico', o el código empieza con CUR, INS, ANT, DIA o MAT; si nada de eso, medicamento. Se revisa en ese orden.",
             "medicine-line (PrescriptionNaming.MedicineLine, pedido del médico del 2026-10-21): sin genérico, el nombre. Para la marca, lo que el nombre trae entre paréntesis ('(PARACETAMOL)') no cuenta. Si el nombre es el genérico (sus palabras antes de la primera con dígitos o 'C/', sin las que solo dicen la forma, empiezan con la misma primera palabra que el genérico, normalizada), el genérico, su concentración (del nombre o de la presentación, si el genérico no trae dígitos) y su forma (de la presentación o del nombre, si el genérico no la dice), sin paréntesis. Si no, la marca (esas palabras; en mayúsculas se escribe en tipo título, 'Valclan'), la concentración (del nombre, de la presentación o del genérico), la forma (si el genérico no la dice) y, entre paréntesis, el principio activo: el genérico sin su concentración. Con showActiveIngredient false (por omisión true), sin el paréntesis.",
             "medicine-line-parts: 'line' es lo de afuera y 'activeIngredient' lo de adentro del paréntesis (null si no lleva); es lo que guarda un renglón nuevo de la receta (ActiveIngredient, revisión 16; synced-json-columns.json).",

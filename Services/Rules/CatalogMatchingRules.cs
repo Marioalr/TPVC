@@ -32,8 +32,8 @@ public static class CatalogMatchingRules
     /// ("Tempra 500 mg tabletas (Paracetamol)") o sin él ("Tempra 500 mg tabletas"), o el que escribían v1.23.0 a v1.45
     /// ("Paracetamol 500 mg tabletas (Tempra)", <see cref="PrescriptionNaming.LegacyMedicineLine"/>), así los renglones de
     /// antes siguen encontrando su producto para cobrar y para la alerta de alergias. <paramref name="normalized"/>: sin
-    /// acentos ni mayúsculas (<see cref="TextSearch.Normalize"/>); si no, sin distinguir mayúsculas pero con acentos
-    /// (<see cref="PatientSheetRows.FindProductByName"/>).
+    /// acentos ni mayúsculas (<see cref="TextSearch.Normalize"/>); si no, sin distinguir mayúsculas pero con acentos (la
+    /// primera vuelta de <see cref="PatientSheetRows.FindProductByName"/>, que después la repite normalizada).
     /// </summary>
     public static bool MedicineLineMatches(Product product, string? text, bool normalized)
     {

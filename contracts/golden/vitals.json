@@ -3,10 +3,10 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 19,
+  "contract": 20,
   "notes": [
     "Los signos de la consulta (Services/Rules/VitalSignsRules.cs): el IMC mientras se captura, el aviso de valores fuera de rango y el texto que se guarda en la nota. Lo que se captura llega como texto; cómo se lee de vuelta ese texto está en vitals-evolution.json.",
-    "bmi: peso y talla (en metros) con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
+    "bmi: peso y talla con coma o punto decimal, cultura invariante; con los dos y talla mayor que 0, la talla en metros (revisión 20, VitalSignsRules.HeightInMeters: más de 3 son centímetros y se divide entre 100 en decimal; es la misma regla con que vitals-evolution.json lee la nota; antes la captura no la convertía y 170 daba '0.0 kg/m² (Bajo peso)'), imc = peso / talla² en decimal y 'F1 kg/m² (clasificación)' (F1 de decimal: el punto medio hacia arriba); si no, 'Valores no disponibles'. bmi-category (OMS): < 18.5 'Bajo peso', < 25 'Peso normal', < 30 'Sobrepeso', < 35 'Obesidad Grado I', si no 'Obesidad Grado II+'.",
     "warning: cada valor como double (coma = punto, sin espacios); en este orden y unidos por ' · ': Temp ≥ 38 'Temp {0.#} °C: fiebre', o 0 < Temp < 35.5 'hipotermia'; T/A 'sis/dia' ≥ 140 o ≥ 90 'T/A {0}/{0}: elevada', o 0 < sis < 90 'baja'; SpO₂ > 0 (≤ 1 se multiplica por 100) < 92 'SpO₂ {0} %: baja'; glucosa > 0, ≥ 200 'elevada' o < 70 'hipoglucemia'; FC > 0: adulto (sin edad o 12 años o más) > 100 'taquicardia', niño (menos de 12) > 140 'alta para la edad', y si no < 50 'bradicardia'. Los números con '0.#' o '0' de double con la cultura es-MX: .NET formatea el valor binario más corto y redondea el punto medio hacia arriba (38.25 → 38.3; 69.5 → 70, así que 'Glucosa 70 mg/dL: hipoglucemia' sale con 69.5).",
     "format (lo que se guarda en PatientConsultation.VitalSigns al terminar): cada dato capturado sin espacios a los lados y unidos por ' | ': 'TA: {sin la / del final} mmHg', 'FC: … lpm', 'FR: … rpm', 'Temp: … °C', 'Peso: … kg', 'Talla: … m', 'Glucosa: … mg/dL', 'SpO2: {sin % al final}%', 'IMC: {el texto de bmi}' (no va si contiene 'no disponibles'). Lo vacío o solo espacios no va; sin nada, ''."
   ],
@@ -75,13 +75,40 @@
       "expected": "41.5 kg/m² (Obesidad Grado II+)"
     },
     {
-      "name": "IMC · talla en centímetros: la regla no la convierte",
+      "name": "IMC · talla en centímetros (revisión 20): 170 → 1.70 m, como al leer la nota",
       "input": {
         "check": "bmi",
         "weight": "70",
         "height": "170"
       },
-      "expected": "0.0 kg/m² (Bajo peso)"
+      "expected": "24.2 kg/m² (Peso normal)"
+    },
+    {
+      "name": "IMC · talla en centímetros con decimales",
+      "input": {
+        "check": "bmi",
+        "weight": "15,5",
+        "height": "95,5"
+      },
+      "expected": "17.0 kg/m² (Bajo peso)"
+    },
+    {
+      "name": "IMC · 3 todavía son metros",
+      "input": {
+        "check": "bmi",
+        "weight": "70",
+        "height": "3"
+      },
+      "expected": "7.8 kg/m² (Bajo peso)"
+    },
+    {
+      "name": "IMC · 3.01 ya son centímetros (0.0301 m)",
+      "input": {
+        "check": "bmi",
+        "weight": "0.1",
+        "height": "3.01"
+      },
+      "expected": "110.4 kg/m² (Obesidad Grado II+)"
     },
     {
       "name": "IMC · sin peso",

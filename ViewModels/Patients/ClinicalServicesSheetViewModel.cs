@@ -235,6 +235,9 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
             newItem.ChargedConsultationFolio = _active.ActiveConsultation?.Folio;
             newItem.ChargedUnits = qty;
             _session.SelectedPatient.SyncServicesJson();
+            // Revisión 20: los insumos por defecto se cargan aunque no alcancen las existencias; solo se avisa
+            var supplyIds = (newItem.Supplies ?? new List<PatientServiceSupply>()).Select(e => _account.ServiceSupplyLine(e).LineId);
+            if (_account.StockWarning(supplyIds) is { } warning) _feedback.ShowWarning(warning);
         }
         newItem.IsFromEarlierConsultation = !IsFromThisConsultation(newItem);
 
@@ -484,8 +487,9 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     /// <summary>
     /// Cambia las piezas de un insumo del renglón abierto (+, − o la X en 0), solo para esta consulta: lo que se suma se carga
     /// a la cuenta y lo que se resta se descuenta, del mismo renglón de la cuenta con que se cargó. Como en la hoja de insumos
-    /// (v1.18.7), un insumo del inventario no pasa de sus existencias (cuenta todo lo del producto que ya está en la cuenta) y
-    /// se avisa. La configuración del servicio no cambia.
+    /// (v1.18.7), un insumo del inventario que pasa de sus existencias (cuenta todo lo del producto que ya está en la cuenta) se
+    /// avisa; desde la revisión 20 se carga igual (un inventario mal contado nunca impide cobrar). La configuración del
+    /// servicio no cambia.
     /// </summary>
     public async Task SetServiceSupplyQuantityAsync(PatientServiceSupply entry, int quantity)
     {
@@ -503,8 +507,8 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
                 _feedback.ShowWarning($"'{entry.SupplyName}' ya no está en el inventario: no se pueden cargar más piezas.");
                 return;
             }
-            if (product != null && !FitsInStock(product, ref difference, entry.SupplyName)) return;
             if (!_account.ChargeServiceSupply(entry, product, line, difference)) return;
+            if (product != null) WarnIfShortOfStock(product);
         }
         else if (difference < 0)
         {
@@ -522,7 +526,7 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
 
     /// <summary>
     /// Agrega un insumo del inventario al renglón abierto (Enter o clic en la búsqueda): una pieza, cargada a la cuenta; si el
-    /// renglón ya lo tiene, le suma una. Con el mismo tope de existencias que + .
+    /// renglón ya lo tiene, le suma una. Con el mismo aviso de existencias que + (revisión 20: sin tope).
     /// </summary>
     [RelayCommand]
     public async Task AddServiceSupplyAsync(Product? product)
@@ -540,10 +544,9 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
             return;
         }
 
-        int one = 1;
-        if (!FitsInStock(product, ref one, product.Name)) return;
         var entry = ServiceRowSupplies.NewEntry(product, 0);
         if (!_account.ChargeServiceSupply(entry, product, PatientSheetRows.SupplyLine.ForProduct(product), 1)) return;
+        WarnIfShortOfStock(product);
         AdoptList(row, list.Append(entry));
         ClearServiceSupplySearch();
         await SaveServiceRowAsync(row);
@@ -556,21 +559,12 @@ public partial class ClinicalServicesSheetViewModel : ObservableObject
     }
 
     /// <summary>
-    /// El tope del Punto de venta: lo que ya está en la cuenta de ese producto (otros renglones, servicios, receta) más lo que
-    /// se carga no pasa de sus existencias. Si no cabe todo, se avisa y se carga lo que quepa; false si no cabe nada.
+    /// Revisión 20 (un inventario mal contado nunca impide cobrar): después de cargar, si lo que hay en la cuenta de ese producto
+    /// (otros renglones, servicios, receta) pasa de sus existencias, se avisa sin bloquear.
     /// </summary>
-    private bool FitsInStock(Product product, ref int pieces, string name)
+    private void WarnIfShortOfStock(Product product)
     {
-        int fit = _account.PiecesThatFit(product, pieces);
-        if (fit < pieces)
-        {
-            string stockInfo = product.HasMultipleUnitsPerPackage
-                ? $"{product.AvailableIndividualUnits} pzas individuales"
-                : $"{product.CurrentStock}";
-            _feedback.ShowWarning($"No hay más existencias de '{name}' ({stockInfo}).");
-        }
-        pieces = fit;
-        return pieces > 0;
+        if (_account.StockWarning(product) is { } warning) _feedback.ShowWarning(warning);
     }
 
     [RelayCommand]

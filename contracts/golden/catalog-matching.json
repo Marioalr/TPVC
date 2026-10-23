@@ -3,11 +3,11 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 19,
+  "contract": 20,
   "notes": [
     "Qué producto es un renglón y qué es medicamento (Services/Rules/CatalogMatchingRules.cs, antes CatalogStore; PatientSheetRows.FindProductByName; PrescriptionNaming). Los productos, como en rank-products.json.",
     "product-matches-name (el medicamento elegido sigue siendo ese renglón al guardar la receta y al cargarlo con «Se surte aquí»): con todo normalizado (text-search.json), el nombre, 'Nombre (Presentación)', el nombre seguido de un espacio y algo más, el genérico (si tiene) o, si tiene genérico, un renglón de la receta: el de hoy con el principio activo entre paréntesis (medicine-line), el de hoy sin él (showActiveIngredient false) o el de antes de v1.46 (el genérico con su concentración y forma, afuera, y la marca entre paréntesis si el nombre no es el genérico, esa marca con lo que el nombre traiga entre paréntesis, como entonces: los renglones guardados así no se reescriben y siguen encontrando su producto para cobrar y para la alerta de alergias).",
-    "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es, sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase, no normalizada), el nombre, 'Nombre (Presentación)', el genérico o uno de los tres renglones de la receta de product-matches-name; el primero de la lista; null sin texto o si ninguno. Diferencia con product-matches-name: ver la nota de los acentos y del 'algo más'.",
+    "find-by-name (el producto de un renglón de la receta o de insumos sin otro dato, el que cobra «Se surte aquí»; synced-json-columns.json lo usa al final): el texto sin espacios a los lados es el nombre, 'Nombre (Presentación)', el genérico o uno de los tres renglones de la receta de product-matches-name, en dos vueltas: 1) sin distinguir mayúsculas pero con acentos (comparación OrdinalIgnoreCase), el primero de la lista que coincide; 2) si ninguno, con los dos lados normalizados (text-search.json: sin acentos ni mayúsculas), el primero de la lista. null sin texto o si ninguno. Siempre igual de punta a punta: a diferencia de product-matches-name, 'el nombre y algo más' no cuenta. Revisión 20: antes solo existía la primera vuelta, y 'Acido folico 5 mg' (escrito sin acentos) nunca se cobraba; la primera vuelta conserva el producto de antes cuando dos solo se distinguen por los acentos.",
     "kind: medicamento si el nombre de la categoría contiene 'Medicamento' o 'Fármaco' (sin distinguir mayúsculas; los acentos cuentan) o el código empieza con 'MED'; insumo si la categoría contiene 'Curación', 'Insumo', 'Antiséptico' o 'Diagnóstico', o el código empieza con CUR, INS, ANT, DIA o MAT; si nada de eso, medicamento. Se revisa en ese orden.",
     "medicine-line (PrescriptionNaming.MedicineLine, pedido del médico del 2026-10-21): sin genérico, el nombre. Para la marca, lo que el nombre trae entre paréntesis ('(PARACETAMOL)') no cuenta. Si el nombre es el genérico (sus palabras antes de la primera con dígitos o 'C/', sin las que solo dicen la forma, empiezan con la misma primera palabra que el genérico, normalizada), el genérico, su concentración (del nombre o de la presentación, si el genérico no trae dígitos) y su forma (de la presentación o del nombre, si el genérico no la dice), sin paréntesis. Si no, la marca (esas palabras; en mayúsculas se escribe en tipo título, 'Valclan'), la concentración (del nombre, de la presentación o del genérico), la forma (si el genérico no la dice) y, entre paréntesis, el principio activo: el genérico sin su concentración. Con showActiveIngredient false (por omisión true), sin el paréntesis.",
     "medicine-line-parts: 'line' es lo de afuera y 'activeIngredient' lo de adentro del paréntesis (null si no lleva); es lo que guarda un renglón nuevo de la receta (ActiveIngredient, revisión 16; synced-json-columns.json).",
@@ -466,7 +466,7 @@
       "expected": 4
     },
     {
-      "name": "producto por nombre · los acentos sí cuentan aquí (a diferencia de product-matches-name)",
+      "name": "producto por nombre · sin acentos (revisión 20; antes nunca se cobraba)",
       "input": {
         "check": "find-by-name",
         "products": [
@@ -481,6 +481,137 @@
           }
         ],
         "name": "Acido folico 5 mg"
+      },
+      "expected": 3
+    },
+    {
+      "name": "producto por nombre · sin acentos ni mayúsculas: el genérico",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 1,
+            "code": "MED-002",
+            "name": "Tempra",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas 500 mg",
+            "stock": 10,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 3,
+            "code": "MED-003",
+            "name": "Ácido fólico 5 mg",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 10,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "ACIDO FOLICO"
+      },
+      "expected": 3
+    },
+    {
+      "name": "producto por nombre · sin acentos: el renglón de la receta",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 2,
+            "code": "MED-001",
+            "name": "Paracetamol 500 mg",
+            "genericName": "Paracetamol",
+            "presentation": "Caja con 20 tabletas",
+            "stock": 45,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 5,
+            "code": "MED-005",
+            "name": "VALCLAN 875/125MG C/14 TABS",
+            "genericName": "Amoxicilina/Ácido clavulánico",
+            "presentation": "Caja con 14 tabletas",
+            "stock": 8,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Valclan 875/125 mg tabletas (Amoxicilina/Acido clavulanico)"
+      },
+      "expected": 5
+    },
+    {
+      "name": "producto por nombre · primero con acentos: gana el que se escribió igual aunque otro vaya antes",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 6,
+            "code": "MED-006",
+            "name": "Acido folico 5 mg",
+            "genericName": "Acido folico",
+            "presentation": "Frasco con 100 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 3,
+            "code": "MED-003",
+            "name": "Ácido fólico 5 mg",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 10,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Ácido fólico 5 mg"
+      },
+      "expected": 3
+    },
+    {
+      "name": "producto por nombre · sin acentos, el primero de la lista",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 3,
+            "code": "MED-003",
+            "name": "Ácido fólico 5 mg",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 10,
+            "category": "Medicamentos"
+          },
+          {
+            "id": 6,
+            "code": "MED-006",
+            "name": "Acido folico 5 mg",
+            "genericName": "Acido folico",
+            "presentation": "Frasco con 100 tabletas",
+            "stock": 4,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "acido folico 5 MG"
+      },
+      "expected": 6
+    },
+    {
+      "name": "producto por nombre · sin acentos, el nombre y algo más sigue sin contar",
+      "input": {
+        "check": "find-by-name",
+        "products": [
+          {
+            "id": 3,
+            "code": "MED-003",
+            "name": "Ácido fólico 5 mg",
+            "genericName": "Ácido fólico",
+            "presentation": "Caja con 30 tabletas",
+            "stock": 10,
+            "category": "Medicamentos"
+          }
+        ],
+        "name": "Acido folico 5 mg cada 24 horas"
       },
       "expected": null
     },

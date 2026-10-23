@@ -88,8 +88,8 @@
                                 </Border>
                                 <TextBlock Grid.Column="2" Style="{StaticResource TextMono}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center"
                                            Text="{Binding Price, StringFormat={}{0:C2}, ConverterCulture=es-MX}" />
+                                <!-- Revisión 20: se agrega aunque no tenga existencias (se avisa sin bloquear) -->
                                 <Button Grid.Column="3" Style="{StaticResource ButtonSecondary}" MinHeight="0" Padding="12,5" Margin="16,0,0,0"
-                                        IsEnabled="{Binding HasStock}"
                                         Command="{Binding DataContext.AddToCartCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}">
                                     <StackPanel Orientation="Horizontal">

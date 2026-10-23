@@ -2,6 +2,24 @@
 
 Todas las modificaciones notables de este proyecto se documentan en este archivo siguiendo los estándares de [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y [Semantic Versioning](https://semver.org/lang/es/).
 
+## [1.50.0] - 2026-10-23
+
+### Cambiado — Un inventario mal contado nunca impide cobrar
+* El punto de venta, el cobro de la consulta, «Se surte aquí» y los insumos siempre cobran. Si no alcanzan las existencias aparece un aviso que no detiene el cobro: «Existencias insuficientes: Paracetamol (quedan 2, se cobran 5). Revise el inventario.»
+* El producto puede quedar en negativo y se marca «−3 · revisar inventario»; en el inicio aparece **Revisar inventario (N)** hasta que un conteo o una entrada lo corrija. También se marca cuando los lotes suman más que el total del producto.
+* «Se surte aquí» viene marcado cuando el medicamento tiene existencias y desmarcado cuando está en 0; se puede marcar a mano y se cobra con el aviso.
+* Cancelar una venta devuelve exactamente lo que tomó, también en piezas sueltas. Eliminar un lote ya no borra un negativo pendiente. Las bajas manuales (merma, caducidad) siguen sin pasar de las existencias.
+
+### Corregido
+* Una alergia escrita como marca (por ejemplo «Tempra» o «Cozaar») avisa al recetar su genérico, aunque el genérico del inventario lleve la sal («Losartán potásico»).
+* «Sulfato ferroso» ya no cuenta como alergia a las sulfas; Bactrim y las sulfonamidas siguen avisando.
+* Un medicamento escrito sin acentos («Acido folico 5 mg») encuentra su producto y se cobra.
+* El IMC se calcula bien al capturar la estatura en centímetros.
+* Los teléfonos con +52 o con extensión se muestran con sus últimos 10 dígitos (sin la extensión), igual que al buscar pacientes duplicados.
+* «1,5» en el efectivo recibido es $1.50 («1,500» sigue siendo mil quinientos).
+* Enter en el catálogo de insumos agrega aunque el producto no tenga existencias.
+* Contrato de sincronización en la revisión 20. 950 pruebas.
+
 ## [1.49.0] - 2026-10-22
 
 ### Cambiado — La tablet será una copia de la PC

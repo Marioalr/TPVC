@@ -413,7 +413,7 @@ public class StockLedgerTests
     }
 
     [TestMethod]
-    public async Task DeleteBatch_AfterTheDialogLoweredTheStock_NeverLeavesItNegative()
+    public async Task DeleteBatch_AfterTheDialogLoweredTheStock_TakesTheWholeLot_AndLeavesItNegative()
     {
         var category = (await _service.GetCategoriesAsync()).First();
         var product = new Product { Code = "PISO-1", Name = "Producto con un lote", CategoryId = category.Id, Price = 10m };
@@ -429,16 +429,19 @@ public class StockLedgerTests
 
         await _service.DeleteBatchAsync(batch.Id);
 
-        Assert.AreEqual(0, (await _service.GetProductByIdAsync(product.Id))!.CurrentStock, "Como antes: sin pasar de lo que tenía el producto");
+        // Revisión 20: el conteo dejó −2 fuera de los lotes; cerrar el lote saca sus 10 y el −2 se queda para revisar
+        // (antes se topaba en 0 y el negativo se borraba solo)
+        var after = (await _service.GetProductByIdAsync(product.Id))!;
+        Assert.AreEqual(-2, after.CurrentStock);
+        Assert.IsTrue(after.NeedsInventoryReview);
         var parts = (await MovementsOfAsync(product.Id)).Where(m => m.Reason == "Eliminación del lote PISO-L").OrderBy(m => m.Id).ToList();
-        CollectionAssert.AreEqual(new int?[] { batch.Id, null }, parts.Select(m => m.BatchId).ToArray());
-        CollectionAssert.AreEqual(new[] { -10, 2 }, parts.Select(m => m.Delta).ToArray(), "El libro del lote a 0 y lo que el producto ya no tenía");
+        Assert.AreEqual(batch.Id, parts.Single().BatchId, "Solo la parte con su lote: el lote cuadraba con su libro");
+        Assert.AreEqual(-10, parts.Single().Delta);
         Assert.AreEqual(StockLedger.CloseSyncId(batch.SyncId), parts[0].SyncId);
-        Assert.AreEqual(StockLedger.CloseRestSyncId(batch.SyncId), parts[1].SyncId);
         var row = (await _service.GetKardexAsync(5)).First();
-        Assert.AreEqual(8, row.Quantity);
+        Assert.AreEqual(10, row.Quantity);
         Assert.AreEqual(8, row.StockBefore);
-        Assert.AreEqual(0, row.StockAfter);
+        Assert.AreEqual(-2, row.StockAfter);
         Assert.IsTrue((await VerifyAsync()).IsClean);
     }
 

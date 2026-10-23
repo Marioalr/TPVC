@@ -25,6 +25,8 @@ MissingAmount
 IsCashShort
 CanCharge
 ChargeText
+StockWarning
+HasStockWarning
 HasActiveConsultation
 ActiveConsultation
 ActiveConsultationFolio

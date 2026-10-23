@@ -33,6 +33,14 @@ public partial class MainHubViewModel : ObservableObject
     [ObservableProperty]
     private int _nearExpiryBatchesCount;
 
+    /// <summary>Revisión 20: productos en negativo (se cobraron sin que alcanzaran): "revisar inventario".</summary>
+    [ObservableProperty]
+    private int _inventoryReviewCount;
+
+    /// <summary>Un renglón por producto: "Paracetamol 500 mg: −3 · revisar inventario".</summary>
+    [ObservableProperty]
+    private string _inventoryReviewText = string.Empty;
+
     [ObservableProperty]
     private bool _hasAlerts;
 
@@ -108,6 +116,8 @@ public partial class MainHubViewModel : ObservableObject
             LowStockCount = summary.LowStockCount;
             ExpiredBatchesCount = summary.ExpiredBatchesCount;
             NearExpiryBatchesCount = summary.NearExpiryBatchesCount;
+            InventoryReviewCount = summary.InventoryReviewCount;
+            InventoryReviewText = string.Join(Environment.NewLine, summary.InventoryReviewLines);
             HasAlerts = summary.HasAlerts;
 
             var alerts = new StringBuilder();
@@ -119,6 +129,8 @@ public partial class MainHubViewModel : ObservableObject
                 alerts.Append($"⛔ {ExpiredBatchesCount} lote{(ExpiredBatchesCount > 1 ? "s" : "")} caducado{(ExpiredBatchesCount > 1 ? "s" : "")}. ");
             else if (NearExpiryBatchesCount > 0)
                 alerts.Append($"⏳ {NearExpiryBatchesCount} lote{(NearExpiryBatchesCount > 1 ? "s" : "")} por caducar (próximos 30 días). ");
+            if (InventoryReviewCount > 0)
+                alerts.Append($"📦 {InventoryReviewCount} producto{(InventoryReviewCount > 1 ? "s" : "")} en negativo: revisar inventario. ");
 
             AlertNotificationMessage = alerts.ToString().Trim();
         }
@@ -143,6 +155,13 @@ public partial class MainHubViewModel : ObservableObject
 
     [RelayCommand]
     public void NavigateToBatches()
+    {
+        _navigate("Config");
+    }
+
+    /// <summary>Revisión 20: al inventario, donde un conteo o una entrada corrigen lo que quedó en negativo.</summary>
+    [RelayCommand]
+    public void NavigateToInventoryReview()
     {
         _navigate("Config");
     }

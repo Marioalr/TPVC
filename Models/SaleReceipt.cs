@@ -31,6 +31,12 @@ public class SaleReceipt
     public decimal? Change { get; set; }
     public bool HasCashDetail => CashReceived.HasValue;
 
+    /// <summary>
+    /// Revisión 20: el aviso de existencias de esta venta ("Existencias insuficientes: …. Revise el inventario."), o null si
+    /// todo alcanzó. No se imprime ni se guarda.
+    /// </summary>
+    public string? StockWarning { get; set; }
+
     public int TotalItems => Items.Sum(i => i.Quantity);
     public decimal TotalAmount => Items.Sum(i => i.Subtotal);
 }

@@ -17,13 +17,33 @@ public partial class GoldenVectorTests
     [TestMethod]
     public void AllergyCheck_MatchesTheVectors()
     {
-        static JsonObject Med(string? allergies, string? medicineName, string? productName = null, string? generic = null, string? activeIngredient = null)
+        static JsonObject Med(string? allergies, string? medicineName, string? productName = null, string? generic = null, string? activeIngredient = null,
+            (string Name, string? Generic)[]? catalog = null)
         {
             var o = new JsonObject { ["check"] = "medication", ["allergies"] = allergies, ["medicineName"] = medicineName };
             if (activeIngredient != null) o["activeIngredient"] = activeIngredient;
             if (productName != null || generic != null) o["product"] = new JsonObject { ["name"] = productName ?? string.Empty, ["genericName"] = generic };
+            if (catalog != null)
+            {
+                o["catalog"] = new JsonArray(catalog.Select(c => (JsonNode)new JsonObject { ["name"] = c.Name, ["genericName"] = c.Generic }).ToArray());
+            }
             return o;
         }
+
+        // Revisión 20: el catálogo con que se reconoce una alergia escrita con la marca
+        var brandCatalog = new (string, string?)[]
+        {
+            ("TEMPRA (PARACETAMOL) 500MG C/20 TABS", "Paracetamol"),
+            ("Tempra infantil 160 mg/5 ml jarabe", "Paracetamol"),
+            ("Flanax 550 mg", "Naproxeno sódico"),
+            ("Paracetamol 500 mg", "Paracetamol"),
+            ("Bactrim F", "Sulfametoxazol/Trimetoprima"),
+            ("Gasas estériles", null),
+            ("Cozaar 50 mg", "Losartán potásico"),
+            ("Glucophage 850 mg", "Clorhidrato de metformina 850 mg"),
+            ("Viagra 50 mg", "Sildenafil citrato"),
+            ("Ecotrin", "AAS 100 mg"),
+        };
 
         var cases = new List<RuleCase>
         {
@@ -33,7 +53,20 @@ public partial class GoldenVectorTests
             new("marca → genérico: el renglón sin el principio activo avisa por el genérico del producto", Med("Paracetamol", "Tempra 500 mg tabletas", "Tempra 500 mg", "Paracetamol")),
             new("renglón con el principio activo oculto y sin producto en el catálogo: avisa por su principio activo guardado", Med("Paracetamol", "Tempra 500 mg tabletas", activeIngredient: "Paracetamol")),
             new("el principio activo guardado no se repite si el nombre ya lo dice", Med("Penicilina", "Tempra 500 mg tabletas (Paracetamol)", activeIngredient: "Paracetamol")),
-            new("genérico → marca: alergia a «Tempra» y se receta Paracetamol: no avisa (la regla no conoce las marcas)", Med("Tempra", "Paracetamol 500 mg", "Paracetamol 500 mg", "Paracetamol")),
+            new("genérico → marca sin catálogo: alergia a «Tempra» y se receta Paracetamol: no avisa (no sabe qué es Tempra)", Med("Tempra", "Paracetamol 500 mg", "Paracetamol 500 mg", "Paracetamol")),
+            new("genérico → marca (revisión 20): alergia a «Tempra» y se receta Paracetamol; el catálogo dice que Tempra es paracetamol", Med("Tempra", "Paracetamol 500 mg", "Paracetamol 500 mg", "Paracetamol", catalog: brandCatalog)),
+            new("genérico → marca: escrito a mano, sin producto elegido", Med("tempra", "Paracetamol gotas", catalog: brandCatalog)),
+            new("genérico → marca: la alergia es el nombre completo del producto", Med("Bactrim F", "Sulfametoxazol/Trimetoprima 400/80 mg", catalog: brandCatalog)),
+            new("genérico → marca y familia: alergia a «Flanax» (naproxeno) y se receta ibuprofeno (AINES)", Med("Flanax", "Ibuprofeno 400 mg", catalog: brandCatalog)),
+            new("genérico → marca: una marca que no está en el catálogo no avisa", Med("Panadol", "Paracetamol 500 mg", catalog: brandCatalog)),
+            new("genérico → marca: un producto sin genérico no aporta nada", Med("Gasas estériles", "Paracetamol 500 mg", catalog: brandCatalog)),
+            new("genérico → marca: otro medicamento no avisa", Med("Tempra", "Loratadina 10 mg", catalog: brandCatalog)),
+            new("genérico → marca con sal: alergia a «Cozaar» (losartán potásico) y se receta Losartán 50 mg (por su base)", Med("Cozaar", "Losartán 50 mg", catalog: brandCatalog)),
+            new("genérico → marca con sal antes: «Glucophage» (clorhidrato de metformina) y Metformina 850 mg tabletas", Med("Glucophage", "Metformina 850 mg tabletas", catalog: brandCatalog)),
+            new("genérico → marca con sal: la sal sola no avisa («Viagra», sildenafil citrato, y Citrato de potasio)", Med("Viagra", "Citrato de potasio 1080 mg", catalog: brandCatalog)),
+            new("genérico → marca con sal: otra sal del mismo ion no avisa («Cozaar» y Cloruro de potasio)", Med("Cozaar", "Cloruro de potasio 600 mg", catalog: brandCatalog)),
+            new("genérico → marca con sal: la base tiene que ser palabra completa («Cozaar» y Losartanex, que no existe)", Med("Cozaar", "Losartanex 5 mg", catalog: brandCatalog)),
+            new("genérico → marca: una base de menos de 4 letras no se usa («Ecotrin», AAS 100 mg, y AAS Protect sí avisa por la familia aspirina)", Med("Ecotrin", "AAS Protect", catalog: brandCatalog)),
             new("texto libre sin producto: solo lo escrito", Med("Paracetamol", "Tempra gotas")),
             new("familia: penicilina y amoxicilina", Med("Penicilina", "Amoxicilina 500 mg", "Amoxicilina 500 mg", "Amoxicilina")),
             new("familia con acento: clavulánico y Augmentin", Med("Ácido clavulánico", "Augmentin 875/125 mg")),
@@ -42,7 +75,14 @@ public partial class GoldenVectorTests
             new("AAS solo es de la familia aspirina", Med("AAS", "Aspirina 500 mg")),
             new("varias alergias en renglones: la segunda avisa con su familia (ibuprofeno → Advil)", Med("Penicilina\r\nIbuprofeno", "Advil 200 mg")),
             new("separadas por coma, punto y coma o diagonal; «Ninguna» no cuenta", Med("Ninguna, látex; Sulfas / polen", "Bactrim F", "Bactrim F", "Sulfametoxazol/Trimetoprima")),
-            new("falso positivo que la regla tiene hoy: «Sulfato ferroso» entra en la familia sulfa", Med("Sulfato ferroso", "Bactrim")),
+            new("sulfato no es sulfa (revisión 20): alergia a «Sulfato ferroso» y se receta Bactrim: no avisa", Med("Sulfato ferroso", "Bactrim")),
+            new("sulfato no es sulfa: alergia a las sulfas y se receta sulfato ferroso: no avisa", Med("Sulfas", "Sulfato ferroso 200 mg", "Sulfato ferroso 200 mg", "Sulfato ferroso")),
+            new("sulfato no es sulfa: alergia a «sulfa» y se receta salbutamol sulfato: no avisa (ni directo)", Med("sulfa", "Salbutamol sulfato 100 mcg")),
+            new("sulfato no es sulfa: sulfatos de magnesio", Med("Sulfonamidas", "Sulfatos de magnesio")),
+            new("sulfa: las sulfonamidas con trimetoprim-sulfametoxazol", Med("Sulfonamidas", "Trimetoprim-sulfametoxazol 160/800 mg")),
+            new("sulfa: alergia a «sulfa» y se receta sulfadiazina (directo)", Med("sulfa", "Sulfadiazina de plata crema")),
+            new("sulfa: alergia a Bactrim y se receta sulfametoxazol", Med("Bactrim", "Sulfametoxazol 400 mg")),
+            new("sulfa: alergia al sulfato ferroso y se receta sulfato ferroso (directo, como antes)", Med("Sulfato ferroso", "Sulfato ferroso 200 mg")),
             new("la alergia contiene al medicamento (4 letras o más)", Med("Amoxicilina con clavulanato", "amoxicilina")),
             new("sin coincidencia", Med("Mariscos, polen", "Loratadina 10 mg", "Loratadina 10 mg", "Loratadina")),
             new("alergias negadas", Med("Negadas", "Penicilina benzatínica")),
@@ -80,15 +120,16 @@ public partial class GoldenVectorTests
                     };
                 }
                 var product = input["product"] is { } p ? new Product { Name = Str(p, "name"), GenericName = S(p, "genericName") } : null;
-                var (conflict, matched, warning) = AllergyRules.CheckMedication(patient, product, S(input, "medicineName"), S(input, "activeIngredient"));
+                var catalog = (input["catalog"] as JsonArray)?.Select(c => new Product { Name = Str(c!, "name"), GenericName = S(c!, "genericName") }).ToList();
+                var (conflict, matched, warning) = AllergyRules.CheckMedication(patient, product, S(input, "medicineName"), S(input, "activeIngredient"), catalog);
                 return new JsonObject { ["conflict"] = conflict, ["matchedAllergy"] = matched, ["warning"] = warning };
             },
             "Services/Rules/AllergyRules.cs (antes InventoryService.CheckMedicationAllergy): el aviso de alergia al recetar y al cargar «Se surte aquí». 'medicineName' es lo escrito en la receta (si es nulo, el nombre del producto); 'product' es el producto elegido (su genérico entra a la comparación).",
-            "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados, y + ' ' + activeIngredient (revisión 16: el principio activo guardado en el renglón; sin espacios a los lados) si lo hay y medicineName normalizado no lo contiene normalizado; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si med contiene la alergia, o si la alergia tiene 4 caracteres o más y contiene a med; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia es de la familia si contiene la llave o un miembro, y avisa si med también contiene la llave o un miembro. 'contiene' es comparación ordinal de subcadenas.",
-            "Familias (llave: miembros), en este orden: " + string.Join("; ", AllergyRules.DrugFamilies.Select(f => $"{f.Key}: {string.Join(", ", f.Members)}")) + ". Los miembros con acento nunca coinciden porque se comparan con texto sin acentos.",
-            "Textos: directo \"El paciente registra alergia a '{alergia}'. El medicamento recetado contiene '{medicineName o nombre}'.\"; familia \"Riesgo de hipersensibilidad: El paciente registra alergia a '{alergia}' (grupo {LLAVE EN MAYÚSCULAS}). El medicamento recetado '{nombre}' pertenece o presenta reactividad cruzada con esta familia farmacológica.\" La alergia va como se escribió (sin espacios a los lados).",
+            "medication: sin alergias (hasAllergies falso: vacías o que niegan) no hay aviso. med = (medicineName o el nombre del producto) + ' ' + genérico, sin espacios a los lados, y + ' ' + activeIngredient (revisión 16: el principio activo guardado en el renglón; sin espacios a los lados) si lo hay y medicineName normalizado no lo contiene normalizado; vacío = sin aviso. Las alergias se parten por , ; / \\n \\r, sin espacios a los lados, sin las vacías y sin las que niegan (DeniesAllergies). Para cada alergia en su orden, con todo normalizado (text-search.json): 1) aviso directo si medDirecto contiene la alergia, o si la alergia tiene 4 caracteres o más, medDirecto sin espacios a los lados no está vacío y la alergia lo contiene; medDirecto es med sin las palabras excluidas (abajo) de cada familia de la que es la alergia; 1b) (revisión 20) si no, los genéricos de la marca: por cada producto de 'catalog' en su orden, su genérico sin espacios a los lados si no está vacío, no es igual a la alergia (normalizados) y la alergia normalizada es igual a su nombre normalizado o a su marca normalizada (PrescriptionNaming.BrandOf(nombre, genérico), catalog-matching.json), sin repetir genéricos iguales normalizados; avisa si med contiene uno, o (revisión 20, revisión de la rama) contiene su base como palabras completas: la base es el genérico normalizado partido en palabras por lo que no sea letra, dígito ni '%', sin las que tienen dígitos o '%' ni las de AllergyRules.SaltWords (abajo), unidas por un espacio; solo cuenta si tiene 4 letras o más y no es igual al genérico normalizado; 'palabras completas' es que ' ' + base + ' ' esté en ' ' + las palabras de med unidas por un espacio + ' '; 2) si no, por cada familia en su orden (AllergyRules.DrugFamilies, abajo): la alergia (normalizada y, si tiene genéricos de marca, alergia + ' ' + los genéricos unidos con espacio, normalizado) es de la familia si, sin las palabras excluidas de la familia, contiene la llave o un miembro, y avisa si med también lo es. 'contiene' es comparación ordinal de subcadenas. Sin 'catalog' (o vacío) no hay paso 1b.",
+            "Familias (llave: miembros), en este orden: " + string.Join("; ", AllergyRules.DrugFamilies.Select(f => $"{f.Key}: {string.Join(", ", f.Members)}")) + ". Los miembros con acento nunca coinciden porque se comparan con texto sin acentos. Palabras excluidas (revisión 20): " + string.Join("; ", AllergyRules.FamilyExcludedWords.Select(f => $"{f.Key}: {string.Join(", ", f.Value)}")) + ". Se quitan del texto normalizado como palabras completas (sin letra ni dígito Unicode antes ni después; se reemplazan por un espacio): el sulfato ferroso, de magnesio o el salbutamol sulfato no son sulfonamidas. Palabras de sal y concentración (SaltWords) que no forman la base de un genérico: " + string.Join(", ", AllergyRules.SaltWords) + ".",
+            "Textos: directo \"El paciente registra alergia a '{alergia}'. El medicamento recetado contiene '{medicineName o nombre}'.\"; por la marca (revisión 20) \"El paciente registra alergia a '{alergia}' ({genérico}). El medicamento recetado contiene '{medicineName o nombre}'.\"; familia \"Riesgo de hipersensibilidad: El paciente registra alergia a '{alergia}' (grupo {LLAVE EN MAYÚSCULAS}). El medicamento recetado '{nombre}' pertenece o presenta reactividad cruzada con esta familia farmacológica.\" La alergia va como se escribió (sin espacios a los lados); la llave en mayúsculas invariantes (revisión 20: antes con la cultura actual, que en tr-TR daba 'AİNES').",
             "summary (PatientRecord): niegan las respuestas que normalizadas y sin punto final son: ninguna, ninguna conocida, ningunas, negadas, negada, niega, niega alergias, no, sin alergias, no conocidas, no conocida, negativas, nada. allergySummary: las alergias sin espacios a los lados, 'No interrogadas' (vacías) o 'Negadas'; allergyBadge: 'ALERGIAS: …', 'Alergias sin interrogar' o 'Alergias negadas'. Crónicos: niegan las mismas respuestas o lo que empieza con 'ningun', 'niega' o 'negad', o es 'sin enfermedades', 'sin enfermedades cronicas', 'sin antecedentes' o 'sin cronicos'; chronicBadge 'Crónicos: …' o vacío.",
-            "Lo que la regla no hace (no se corrige aquí, está en el reporte del paso 8.26): no conoce marcas (una alergia escrita con la marca no avisa con el genérico), y 'sulfa' dentro de otra palabra ('Sulfato ferroso') hace a la alergia de la familia sulfa.");
+            "Revisión 20 (corrige lo que reportó el paso 8.26): una alergia escrita con la marca avisa con el genérico si el catálogo la conoce (paso 1b; 'catalog' son los productos que la PC tiene cargados al recetar: Kotlin pasa los suyos), y 'sulfato'/'sulfatos' ya no hacen a un texto de la familia sulfa (el miembro 'sulfonamida' es nuevo).");
     }
 
     // ================================================================== contracts/golden/patient-identity.json
@@ -222,7 +263,17 @@ public partial class GoldenVectorTests
         foreach (var (name, phone) in new (string, string?)[]
                  {
                      ("diez dígitos", "5512345678"),
-                     ("con lada y signos: los primeros diez dígitos", "+52 (55) 1234-5678"),
+                     ("con lada y signos: los últimos diez dígitos (revisión 20)", "+52 (55) 1234-5678"),
+                     ("con lada del país sin signos", "+52 55 1234 5678"),
+                     ("once dígitos con el 1 de antes", "1 55 1234 5678"),
+                     ("ya con formato no cambia", "551-234-5678"),
+                     ("dígitos que no son ASCII no cuentan", "55 ١٢٣ 1234 5678"),
+                     ("sin la extensión (revisión 20)", "+52 55 9876 5432 ext 10"),
+                     ("extensión con punto y mayúsculas", "55 9876 5432 Ext. 123"),
+                     ("extensión con acento", "55 9876 5432 extensión 7"),
+                     ("extensión con x", "55 9876 5432 x22"),
+                     ("extensión con #", "55 9876 5432 #4"),
+                     ("«ext» sin dígitos no es extensión", "55 9876 5432 ext"),
                      ("seis dígitos", "123456"),
                      ("tres", "911"),
                      ("vacío", " "),
@@ -277,7 +328,7 @@ public partial class GoldenVectorTests
             "email: vacío vale; si no, sin espacios a los lados debe cumplir ^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$ sin distinguir mayúsculas.",
             "validate (al guardar el alta o la edición): el primer problema en este orden, o null: nombre vacío, paterno vacío, folio vacío, fecha escrita que no se lee (birth-date null con texto), sin fecha y una edad que no es un entero entre 0 y 130, sexo vacío, alergias vacías (\"Negadas\" sí vale), correo inválido. 'age' es la de la fecha (CalculateAge) o la capturada; 0 si el problema es la edad. Los textos son los de la PC.",
             "record: initials (con coma, la primera letra de lo de después y de lo de antes; si no, de las dos primeras palabras; en mayúscula invariante; '?' sin nombre), age (meses completos / 12 con la fecha; sin ella, la capturada), months (TotalMonths: (año·12 + mes) de hoy menos los del nacimiento, uno menos si el día de hoy es menor que el del nacimiento, nunca negativo), ageText ('N días' con menos de un mes, 'N meses' con menos de 24, 'N años M meses' antes de los 6 años, si no 'N años'; '1 día', '1 mes', '1 año' en singular), isFemale (el sexo empieza con 'Fem' sin distinguir mayúsculas), isPediatric (menos de 18), showsGynecoObstetric (mujer de 10 o más).",
-            "phone (FormatPhoneNumber): solo los dígitos, los primeros 10; hasta 3 tal cual, hasta 6 como 'ddd-ddd', más como 'ddd-ddd-dddd'.");
+            "phone (FormatPhoneNumber): sin la extensión (revisión 20, decisión del médico del 2026-10-22; la misma regla que duplicate-patients.json: DuplicatePatientRules.PhoneDigitsOf), solo los dígitos ASCII 0-9, los últimos 10 (revisión 20: la lada del país se queda fuera, como los compara duplicate-patients.json; antes se quedaban los primeros 10 y '+52 55 1234 5678' daba '525-512-3456'); hasta 3 tal cual, hasta 6 como 'ddd-ddd', más como 'ddd-ddd-dddd'. El alta lo aplica a cada tecla: escribir de corrido un número con lada termina en sus últimos 10.");
     }
 
     // ================================================================== contracts/golden/date-mask.json

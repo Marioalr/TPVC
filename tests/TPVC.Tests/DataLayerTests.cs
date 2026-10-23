@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TPVC.Data;
 using TPVC.Models;
+using TPVC.Services.Rules;
 using TPVC.Services;
 using TPVC.ViewModels;
 
@@ -159,22 +160,34 @@ public class DataLayerTests
     }
 
     [TestMethod]
-    public async Task RegisterSaleAsync_InsufficientStock_ThrowsAndSavesNothing()
+    public async Task RegisterSaleAsync_InsufficientStock_SellsAnyway_GoesNegative_AndReportsTheShortage()
     {
+        // Revisión 20 (decisión del médico del 2026-10-22): un inventario mal contado nunca impide cobrar
         var products = await _service.GetProductsAsync();
         var ok = products.First(p => p.CurrentStock >= 2);
         var scarce = products.First(p => p.Id != ok.Id && p.CurrentStock > 0);
 
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => _service.RegisterSaleAsync(new[]
+        var sale = await _service.RegisterSaleAsync(new[]
         {
             (ok.Id, 1, ok.Price),
             (scarce.Id, scarce.CurrentStock + 5, scarce.Price)
-        }, "Paciente", "Efectivo"));
+        }, "Paciente", "Efectivo");
 
-        // Transacción completa: ni el producto válido se descontó ni se creó ticket
-        Assert.AreEqual(ok.CurrentStock, (await _service.GetProductByIdAsync(ok.Id))!.CurrentStock);
-        Assert.AreEqual(scarce.CurrentStock, (await _service.GetProductByIdAsync(scarce.Id))!.CurrentStock);
-        Assert.IsEmpty(await _service.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1)));
+        Assert.IsNotNull(sale);
+        Assert.AreEqual(ok.CurrentStock - 1, (await _service.GetProductByIdAsync(ok.Id))!.CurrentStock);
+        var after = (await _service.GetProductByIdAsync(scarce.Id))!;
+        Assert.AreEqual(-5, after.CurrentStock, "Queda en negativo");
+        Assert.AreEqual("\u22125 · revisar inventario", after.StockBadgeText);
+        Assert.HasCount(1, sale.StockShortages);
+        Assert.AreEqual(new StockShortage(scarce.Name, scarce.CurrentStock, scarce.CurrentStock + 5, false), sale.StockShortages[0]);
+        Assert.HasCount(1, await _service.GetSalesAsync(DateTime.Today, DateTime.Today.AddDays(1)));
+
+        var alerts = await _service.GetSystemAlertsSummaryAsync();
+        Assert.AreEqual(scarce.Id, alerts.InventoryReviewProducts.Single().Id);
+        Assert.AreEqual($"{scarce.Name}: \u22125 · revisar inventario", alerts.InventoryReviewLines.Single());
+        Assert.IsTrue(alerts.HasAlerts);
+        using var db = NewContext();
+        Assert.IsTrue((await StockLedger.VerifyAsync(db)).IsClean, "El libro sigue cuadrando con el negativo");
     }
 
     [TestMethod]
@@ -235,11 +248,16 @@ public class DataLayerTests
     }
 
     [TestMethod]
-    public async Task RegisterQuickConsultationUsage_MoreThanStock_Throws()
+    public async Task RegisterQuickConsultationUsage_MoreThanStock_GoesThrough_AndGoesNegative()
     {
+        // Revisión 20: el consumo en consulta tampoco se bloquea; una cantidad 0 sí
         var product = (await _service.GetProductsAsync()).First(p => p.CurrentStock > 0);
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            _service.RegisterQuickConsultationUsageAsync(product.Id, product.CurrentStock + 1, null));
+        var shortage = await _service.RegisterQuickConsultationUsageAsync(product.Id, product.CurrentStock + 1, null);
+        Assert.AreEqual(new StockShortage(product.Name, product.CurrentStock, product.CurrentStock + 1, false), shortage);
+        Assert.AreEqual(-1, (await _service.GetProductByIdAsync(product.Id))!.CurrentStock);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => _service.RegisterQuickConsultationUsageAsync(product.Id, 0, null));
+        using var db = NewContext();
+        Assert.IsTrue((await StockLedger.VerifyAsync(db)).IsClean);
     }
 
     [TestMethod]

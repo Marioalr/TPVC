@@ -70,13 +70,21 @@ public static class ConsultationAccountRules
 
     /// <summary>
     /// "Se surte aquí": cuántas piezas carga un medicamento recetado (su cantidad recomendada, 1 como mínimo), o null si no se
-    /// carga porque no hay producto o sus existencias no alcanzan (se receta igual).
+    /// carga porque no está en el inventario (se receta igual). Revisión 20 (un inventario mal contado nunca impide cobrar):
+    /// las existencias ya no cuentan; si no alcanzan, se carga igual y se avisa (<see cref="StockReviewRules.WarningText"/>).
     /// </summary>
-    public static int? PrescriptionChargeQuantity(PatientPrescriptionItem item, Product? product)
-    {
-        var quantity = Math.Max(1, item.RecommendedQuantity);
-        return product == null || product.CurrentStock < quantity ? null : quantity;
-    }
+    public static int? PrescriptionChargeQuantity(PatientPrescriptionItem item, Product? product) =>
+        product == null ? null : Math.Max(1, item.RecommendedQuantity);
+
+    /// <summary>
+    /// "Se surte aquí" por defecto al agregar un medicamento a la receta (decisión del médico del 2026-10-22): marcado si el
+    /// producto del inventario tiene existencias (más de 0; en un producto de piezas sueltas cuentan las piezas disponibles,
+    /// <see cref="Product.AvailableIndividualUnits"/>, también las del paquete abierto); desmarcado con 0 o en negativo, y
+    /// sin producto. A mano se puede marcar siempre que sea del inventario: se carga con el aviso de existencias
+    /// (<see cref="PrescriptionChargeQuantity"/>).
+    /// </summary>
+    public static bool DispenseByDefault(Product? product) =>
+        product != null && (product.CurrentStock > 0 || product.AvailableIndividualUnits > 0);
 
     /// <summary>
     /// Suma <paramref name="quantity"/> piezas a la cuenta: al renglón que ya tiene ese Id (solo cambia su cantidad; el nombre y

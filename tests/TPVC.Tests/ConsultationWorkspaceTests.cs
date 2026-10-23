@@ -305,7 +305,7 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
-    public async Task SupplyPlusMinus_ChargesOnlyTheDifference_StopsAtStock_AndZeroRemovesIt()
+    public async Task SupplyPlusMinus_ChargesOnlyTheDifference_WarnsPastTheStock_AndZeroRemovesIt()
     {
         var (records, _, consultations, patient) = await StartConsultationAsync();
         var items = consultations.CurrentConsultation!.Items;
@@ -332,18 +332,19 @@ public class ConsultationWorkspaceTests
         Assert.AreEqual(1, supply.Quantity);
         Assert.AreEqual(1, Charged(product.Id));
 
-        // A mano: no pasa de las existencias (como el Punto de venta) y se avisa
+        // A mano: revisión 20, pasar de las existencias se carga igual (un inventario mal contado nunca impide cobrar) y se avisa
         records.Info.IsInfoModalVisible = false;
         await records.Supplies.SetSupplyQuantityAsync(supply, product.CurrentStock + 5);
-        Assert.AreEqual(product.CurrentStock, supply.Quantity);
-        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.AreEqual(product.CurrentStock + 5, supply.Quantity);
+        Assert.AreEqual(product.CurrentStock + 5, Charged(product.Id));
         Assert.IsTrue(records.Info.IsInfoModalVisible);
-        StringAssert.Contains(records.Info.InfoModalMessage, "No hay más existencias");
+        Assert.AreEqual($"Existencias insuficientes: {product.Name} (quedan {product.CurrentStock}, se cobran {product.CurrentStock + 5}). Revise el inventario.",
+            records.Info.InfoModalMessage);
 
         records.Info.IsInfoModalVisible = false;
         await records.Supplies.IncreaseSupplyQuantityAsync(supply);
-        Assert.AreEqual(product.CurrentStock, supply.Quantity, "Sin existencias, + no suma");
-        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.AreEqual(product.CurrentStock + 6, supply.Quantity, "+ suma aunque no haya existencias");
+        Assert.AreEqual(product.CurrentStock + 6, Charged(product.Id));
         Assert.IsTrue(records.Info.IsInfoModalVisible);
 
         // Hasta 0 se quita, también de la cuenta
@@ -372,7 +373,7 @@ public class ConsultationWorkspaceTests
     }
 
     [TestMethod]
-    public async Task SupplyRowsFromAnEarlierConsultation_AreOnlyShown_AndTheStockCapCountsTheWholeAccount()
+    public async Task SupplyRowsFromAnEarlierConsultation_AreOnlyShown_AndTheStockWarningCountsTheWholeAccount()
     {
         var (records, _, consultations, patient) = await StartConsultationAsync();
         var items = consultations.CurrentConsultation!.Items;
@@ -403,19 +404,20 @@ public class ConsultationWorkspaceTests
         await records.Supplies.RemoveSupplyItemFromPatientAsync(earlier);
         Assert.AreEqual(1, Charged(product.Id), "Quitar lo de otra consulta no descuenta lo de hoy");
 
-        // El tope cuenta todo lo del producto que ya está en la cuenta (otro renglón, servicios, receta)
+        // El aviso cuenta todo lo del producto que ya está en la cuenta (otro renglón, servicios, receta); revisión 20: no topa
         records.Supplies.SupplyQuantity = 1;
         await records.Supplies.SelectAndAddSupplyProductAsync(product);
         var second = patient.ActiveSupplies.Last();
         Assert.AreEqual(2, Charged(product.Id));
         records.Info.IsInfoModalVisible = false;
-        await records.Supplies.SetSupplyQuantityAsync(today, product.CurrentStock);
-        Assert.AreEqual(product.CurrentStock - 1, today.Quantity, "Queda lugar solo para lo que no carga el otro renglón");
-        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
-        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        await records.Supplies.SetSupplyQuantityAsync(today, product.CurrentStock - 1);
+        Assert.AreEqual(product.CurrentStock, Charged(product.Id), "Justo lo que hay: sin aviso");
+        Assert.IsFalse(records.Info.IsInfoModalVisible, records.Info.InfoModalMessage);
         await records.Supplies.IncreaseSupplyQuantityAsync(second);
-        Assert.AreEqual(1, second.Quantity);
-        Assert.AreEqual(product.CurrentStock, Charged(product.Id));
+        Assert.AreEqual(2, second.Quantity, "Pasa de las existencias con el otro renglón: se carga igual");
+        Assert.AreEqual(product.CurrentStock + 1, Charged(product.Id));
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        StringAssert.Contains(records.Info.InfoModalMessage, $"(quedan {product.CurrentStock}, se cobran {product.CurrentStock + 1})");
 
         // Lo que se cobra hoy queda guardado con el renglón (sobrevive a reabrir el programa)
         var saved = new PatientRecord { ActiveSuppliesJson = patient.ActiveSuppliesJson }.ActiveSupplies;

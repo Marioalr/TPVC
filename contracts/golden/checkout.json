@@ -3,11 +3,11 @@
   "culture": "es-MX",
   "today": null,
   "now": null,
-  "contract": 19,
+  "contract": 20,
   "notes": [
     "El cobro del Punto de venta y de «Terminar consulta» (Services/Rules/CheckoutRules.cs y ViewModels/CheckoutViewModel.cs corrido tal cual, sin base). Importes como texto decimal invariante.",
-    "parse-amount (lo que se escribe en Recibido): solo los dígitos y el punto; decimal invariante; Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). La coma se quita (es separador de miles): '1,5' es 15. suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
-    "checkout: add-product agrega un producto con existencias (si ya está suma, sin pasar de sus existencias; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas sin tope); increase (+) no pasa de las existencias de un producto; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1; un producto con existencias no pasa de ellas); cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
+    "parse-amount (lo que se escribe en Recibido): solo cuentan los dígitos ASCII 0-9, el punto y la coma (lo demás se quita, también los dígitos de otros alfabetos). Revisión 20: si no hay punto, hay una sola coma y después de ella quedan 1 o 2 dígitos al final, la coma es el punto decimal ('1,5' = 1.50, '150,50' = 150.50); en cualquier otro caso las comas se quitan (separan miles: '1,500' = 1500, '1,500.50' = 1500.50, '1,000,000'). Antes la coma siempre se quitaba y '1,5' era 15. Luego decimal invariante (solo punto decimal, sin signo ni miles); Math.Round a 2 (al par); 0 si no se lee o no es mayor que 0 (vacío = paga exacto). suggest-cash: con total > 0, el total redondeado hacia arriba a múltiplos de 50, 100, 200, 500 y 1000, solo los mayores que el total, sin repetir, de menor a mayor, 3 como mucho.",
+    "checkout: add-product agrega un producto (si ya está suma; los avisos son los de la PC); add-line agrega un renglón armado (servicio o cargo de la consulta; si ya hay uno con el mismo Id, código y si es servicio, suma sus piezas); increase (+) suma una; decrease (−) en 1 quita el renglón; set-quantity-N escribe la cantidad del renglón N (mínimo 1). Revisión 20 (decisión del médico del 2026-10-22: un inventario mal contado nunca impide cobrar): las existencias nunca topan ni impiden agregar (antes add-product no agregaba sin existencias y nada pasaba de ellas); el aviso de agregar o de + cuando el renglón pasa de las existencias es el de stockWarning de ese renglón solo (ok false), y si no, el de éxito. stockText del renglón: 'Servicio', o 'Existencias: N' ('Piezas disp.: N' en piezas sueltas) con N con el signo menos U+2212 si es negativo, más ' · revisar inventario' si la cantidad pasa de N. stockWarning (CheckoutRules.CartShortages y StockReviewRules.WarningText; se muestra junto al botón de cobrar y no lo deshabilita): los renglones de producto (Id > 0, no servicio) con cantidad > existencias, en su orden, como 'Existencias insuficientes: {nombre} (quedan {N}, se cobran {cantidad}); {…}. Revise el inventario.' ('{N} pzas' y '{cantidad} pzas' en piezas sueltas), o null. Después de cobrar, la PC avisa lo mismo con lo que calculó al registrar la venta (los faltantes por producto, Sale.StockShortages). cash-text es lo que se escribe en Recibido (parse-amount); set-cash elige un billete (el texto queda '0.##' invariante); payment cambia la forma de pago (efectivo es exactamente 'Efectivo').",
     "Cuentas: total = Σ cantidad × precio; changeDue = max(0, recibido − total) con cualquier forma de pago; hasChange = efectivo, recibido ≥ total y total > 0; missingAmount = total − recibido si es efectivo y 0 < recibido < total; canCharge = (hay renglones o se permite la cuenta vacía) y no falta efectivo; chargeText = 'Cobrar {total con moneda de es-MX, $1,234.50}{complemento}' o el texto de la cuenta vacía. El recibo en efectivo lleva lo recibido (el total si no se escribió) y el cambio; con otra forma, nada."
   ],
   "cases": [
@@ -57,7 +57,7 @@
         "check": "parse-amount",
         "text": "1,5"
       },
-      "expected": "15"
+      "expected": "1.5"
     },
     {
       "name": "recibido escrito · «abc»",
@@ -88,6 +88,94 @@
       "input": {
         "check": "parse-amount",
         "text": "1.2.3"
+      },
+      "expected": "0"
+    },
+    {
+      "name": "recibido escrito · «150,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "150,50"
+      },
+      "expected": "150.50"
+    },
+    {
+      "name": "recibido escrito · «1,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,50"
+      },
+      "expected": "1.50"
+    },
+    {
+      "name": "recibido escrito · «$ 1,5»",
+      "input": {
+        "check": "parse-amount",
+        "text": "$ 1,5"
+      },
+      "expected": "1.5"
+    },
+    {
+      "name": "recibido escrito · «1,500»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,500"
+      },
+      "expected": "1500"
+    },
+    {
+      "name": "recibido escrito · «1,500.50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,500.50"
+      },
+      "expected": "1500.50"
+    },
+    {
+      "name": "recibido escrito · «1,000,000»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,000,000"
+      },
+      "expected": "1000000"
+    },
+    {
+      "name": "recibido escrito · «1,5,0»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,5,0"
+      },
+      "expected": "150"
+    },
+    {
+      "name": "recibido escrito · «1,»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1,"
+      },
+      "expected": "1"
+    },
+    {
+      "name": "recibido escrito · «,5»",
+      "input": {
+        "check": "parse-amount",
+        "text": ",5"
+      },
+      "expected": "0.5"
+    },
+    {
+      "name": "recibido escrito · «1.500,50»",
+      "input": {
+        "check": "parse-amount",
+        "text": "1.500,50"
+      },
+      "expected": "1.50"
+    },
+    {
+      "name": "recibido escrito · «١٥٠»",
+      "input": {
+        "check": "parse-amount",
+        "text": "١٥٠"
       },
       "expected": "0"
     },
@@ -238,6 +326,7 @@
           "change": "91.50"
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": [
           {
             "text": "Paracetamol 500 mg agregado (2)",
@@ -303,6 +392,7 @@
           "change": "0"
         },
         "missingText": "Faltan $35.00 en el efectivo recibido.",
+        "stockWarning": null,
         "notices": [
           {
             "text": "Paracetamol 500 mg agregado (3)",
@@ -360,6 +450,7 @@
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": [
           {
             "text": "Paracetamol 500 mg agregado (1)",
@@ -425,6 +516,7 @@
           "change": null
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": [
           {
             "text": "Paracetamol 500 mg agregado (1)",
@@ -434,7 +526,7 @@
       }
     },
     {
-      "name": "cobro · las existencias topan lo que se agrega",
+      "name": "cobro · más de las existencias: se agrega todo y se avisa (revisión 20)",
       "input": {
         "check": "checkout",
         "emptyChargeText": null,
@@ -468,13 +560,13 @@
         "cart": [
           {
             "name": "Tempra",
-            "quantity": 3,
-            "subtotal": "269.70",
-            "stockText": "Existencias: 3"
+            "quantity": 6,
+            "subtotal": "539.40",
+            "stockText": "Existencias: 3 · revisar inventario"
           }
         ],
-        "totalItems": 3,
-        "total": "269.70",
+        "totalItems": 6,
+        "total": "539.40",
         "isCash": true,
         "cashReceived": "0",
         "cashReceivedText": "",
@@ -482,31 +574,32 @@
         "hasChange": false,
         "missingAmount": "0",
         "canCharge": true,
-        "chargeText": "Cobrar $269.70",
+        "chargeText": "Cobrar $539.40",
         "quickCash": [
-          "300",
-          "400",
-          "500"
+          "550",
+          "600",
+          "1000"
         ],
         "receipt": {
-          "cashReceived": "269.70",
+          "cashReceived": "539.40",
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": "Existencias insuficientes: Tempra (quedan 3, se cobran 6). Revise el inventario.",
         "notices": [
           {
-            "text": "Solo hay 3 de 'Tempra': se agregaron 3.",
+            "text": "Existencias insuficientes: Tempra (quedan 3, se cobran 5). Revise el inventario.",
             "ok": false
           },
           {
-            "text": "No hay más existencias de 'Tempra' (3).",
+            "text": "Existencias insuficientes: Tempra (quedan 3, se cobran 6). Revise el inventario.",
             "ok": false
           }
         ]
       }
     },
     {
-      "name": "cobro · sin existencias no se agrega",
+      "name": "cobro · sin existencias: se agrega y se avisa",
       "input": {
         "check": "checkout",
         "emptyChargeText": null,
@@ -526,33 +619,124 @@
         ]
       },
       "expected": {
-        "cart": [],
-        "totalItems": 0,
-        "total": "0",
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 1,
+            "subtotal": "89.90",
+            "stockText": "Existencias: 0 · revisar inventario"
+          }
+        ],
+        "totalItems": 1,
+        "total": "89.90",
         "isCash": true,
         "cashReceived": "0",
         "cashReceivedText": "",
         "changeDue": "0",
         "hasChange": false,
         "missingAmount": "0",
-        "canCharge": false,
-        "chargeText": "Cobrar $0.00",
-        "quickCash": [],
+        "canCharge": true,
+        "chargeText": "Cobrar $89.90",
+        "quickCash": [
+          "100",
+          "200",
+          "500"
+        ],
         "receipt": {
-          "cashReceived": "0",
+          "cashReceived": "89.90",
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": "Existencias insuficientes: Tempra (quedan 0, se cobran 1). Revise el inventario.",
         "notices": [
           {
-            "text": "'Tempra' no tiene existencias.",
+            "text": "Existencias insuficientes: Tempra (quedan 0, se cobran 1). Revise el inventario.",
             "ok": false
           }
         ]
       }
     },
     {
-      "name": "cobro · + y − con el tope; − en 1 quita el renglón",
+      "name": "cobro · existencias en negativo: se agrega y se avisa con el signo menos",
+      "input": {
+        "check": "checkout",
+        "emptyChargeText": null,
+        "chargeSuffix": "",
+        "ops": [
+          {
+            "op": "add-product",
+            "product": {
+              "id": 1,
+              "code": "P-1",
+              "name": "Tempra",
+              "stock": -2,
+              "price": "89.90"
+            },
+            "quantity": 1
+          },
+          {
+            "op": "add-product",
+            "product": {
+              "id": 2,
+              "code": "P-2",
+              "name": "Gasa",
+              "stock": 5,
+              "price": "18.00"
+            },
+            "quantity": 1
+          }
+        ]
+      },
+      "expected": {
+        "cart": [
+          {
+            "name": "Tempra",
+            "quantity": 1,
+            "subtotal": "89.90",
+            "stockText": "Existencias: −2 · revisar inventario"
+          },
+          {
+            "name": "Gasa",
+            "quantity": 1,
+            "subtotal": "18.00",
+            "stockText": "Existencias: 5"
+          }
+        ],
+        "totalItems": 2,
+        "total": "107.90",
+        "isCash": true,
+        "cashReceived": "0",
+        "cashReceivedText": "",
+        "changeDue": "0",
+        "hasChange": false,
+        "missingAmount": "0",
+        "canCharge": true,
+        "chargeText": "Cobrar $107.90",
+        "quickCash": [
+          "150",
+          "200",
+          "500"
+        ],
+        "receipt": {
+          "cashReceived": "107.90",
+          "change": "0"
+        },
+        "missingText": null,
+        "stockWarning": "Existencias insuficientes: Tempra (quedan −2, se cobran 1). Revise el inventario.",
+        "notices": [
+          {
+            "text": "Existencias insuficientes: Tempra (quedan −2, se cobran 1). Revise el inventario.",
+            "ok": false
+          },
+          {
+            "text": "Gasa agregado (1)",
+            "ok": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cobro · + pasa de las existencias y avisa; − en 1 quita el renglón",
       "input": {
         "check": "checkout",
         "emptyChargeText": null,
@@ -598,13 +782,13 @@
         "cart": [
           {
             "name": "Tempra",
-            "quantity": 2,
-            "subtotal": "179.80",
-            "stockText": "Existencias: 2"
+            "quantity": 3,
+            "subtotal": "269.70",
+            "stockText": "Existencias: 2 · revisar inventario"
           }
         ],
-        "totalItems": 2,
-        "total": "179.80",
+        "totalItems": 3,
+        "total": "269.70",
         "isCash": true,
         "cashReceived": "0",
         "cashReceivedText": "",
@@ -612,24 +796,25 @@
         "hasChange": false,
         "missingAmount": "0",
         "canCharge": true,
-        "chargeText": "Cobrar $179.80",
+        "chargeText": "Cobrar $269.70",
         "quickCash": [
-          "200",
-          "500",
-          "1000"
+          "300",
+          "400",
+          "500"
         ],
         "receipt": {
-          "cashReceived": "179.80",
+          "cashReceived": "269.70",
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": "Existencias insuficientes: Tempra (quedan 2, se cobran 3). Revise el inventario.",
         "notices": [
           {
             "text": "Tempra agregado (1)",
             "ok": true
           },
           {
-            "text": "No hay más existencias de 'Tempra' (2).",
+            "text": "Existencias insuficientes: Tempra (quedan 2, se cobran 3). Revise el inventario.",
             "ok": false
           },
           {
@@ -644,7 +829,7 @@
       }
     },
     {
-      "name": "cobro · la cantidad escrita: mínimo 1 y no más de lo que hay; un servicio no tiene tope",
+      "name": "cobro · la cantidad escrita: mínimo 1, sin tope; un servicio no tiene existencias",
       "input": {
         "check": "checkout",
         "emptyChargeText": null,
@@ -688,9 +873,9 @@
         "cart": [
           {
             "name": "Tempra",
-            "quantity": 4,
-            "subtotal": "359.60",
-            "stockText": "Existencias: 4"
+            "quantity": 9,
+            "subtotal": "809.10",
+            "stockText": "Existencias: 4 · revisar inventario"
           },
           {
             "name": "Curación",
@@ -699,8 +884,8 @@
             "stockText": "Servicio"
           }
         ],
-        "totalItems": 11,
-        "total": "2109.60",
+        "totalItems": 16,
+        "total": "2559.10",
         "isCash": true,
         "cashReceived": "0",
         "cashReceivedText": "",
@@ -708,17 +893,17 @@
         "hasChange": false,
         "missingAmount": "0",
         "canCharge": true,
-        "chargeText": "Cobrar $2,109.60",
+        "chargeText": "Cobrar $2,559.10",
         "quickCash": [
-          "2150",
-          "2200",
-          "2500"
+          "2600",
+          "3000"
         ],
         "receipt": {
-          "cashReceived": "2109.60",
+          "cashReceived": "2559.10",
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": "Existencias insuficientes: Tempra (quedan 4, se cobran 9). Revise el inventario.",
         "notices": [
           {
             "text": "Tempra agregado (1)",
@@ -775,7 +960,7 @@
             "name": "Gasa",
             "quantity": 3,
             "subtotal": "54.00",
-            "stockText": "Existencias: 0"
+            "stockText": "Existencias: 0 · revisar inventario"
           }
         ],
         "totalItems": 4,
@@ -798,6 +983,7 @@
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": "Existencias insuficientes: Gasa (quedan 0, se cobran 3). Revise el inventario.",
         "notices": []
       }
     },
@@ -827,6 +1013,7 @@
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": []
       }
     },
@@ -856,6 +1043,7 @@
           "change": "0"
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": []
       }
     },
@@ -912,6 +1100,7 @@
           "change": "20.70"
         },
         "missingText": null,
+        "stockWarning": null,
         "notices": [
           {
             "text": "Tempra agregado (2)",

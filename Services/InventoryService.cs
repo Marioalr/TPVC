@@ -48,7 +48,19 @@ public class SystemAlertsSummary
     public int NearExpiryBatchesCount { get; set; }
     public List<ProductBatch> NearExpiryBatches { get; set; } = new();
 
-    public bool HasAlerts => TodayAppointmentsCount > 0 || LowStockProductsCount > 0 || ExpiredBatchesCount > 0 || NearExpiryBatchesCount > 0;
+    /// <summary>
+    /// Revisión 20 (un inventario mal contado nunca impide cobrar): los productos activos en negativo o con un lote abierto en
+    /// negativo (<see cref="StockReviewRules.InventoryReview"/>), hasta que un conteo o una entrada los corrijan.
+    /// </summary>
+    public List<Product> InventoryReviewProducts { get; set; } = new();
+
+    /// <summary>El renglón de cada uno: "Paracetamol 500 mg: −3 · revisar inventario" (<see cref="StockReviewRules.AlertLine"/>).</summary>
+    public List<string> InventoryReviewLines { get; set; } = new();
+
+    public int InventoryReviewCount => InventoryReviewProducts.Count;
+
+    public bool HasAlerts => TodayAppointmentsCount > 0 || LowStockProductsCount > 0 || ExpiredBatchesCount > 0 || NearExpiryBatchesCount > 0
+                             || InventoryReviewCount > 0;
 }
 
 /// <summary>
@@ -396,8 +408,9 @@ public partial class InventoryService
 
     /// <summary>
     /// «Eliminar lote» (paso 8.19): el lote ya no se borra, se cierra (<see cref="ProductBatch.ClosedAtUtc"/>, con su
-    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto, como antes sin dejarlas en negativo, y
-    /// un movimiento con su lote lleva su libro a 0 (Delta = −libro del lote). Los movimientos del cierre llevan SyncId
+    /// cantidad en 0). Las piezas que mostraba salen de las existencias del producto (revisión 20: aunque quede en negativo,
+    /// que pide revisar el inventario; nada se compensa solo) y un movimiento con su lote lleva su libro a 0 (Delta = −libro
+    /// del lote). Solo un lote de antes de la revisión 11 (su libro no es su cantidad) conserva el tope de antes. Los movimientos del cierre llevan SyncId
     /// deterministas: dos equipos que cierran el mismo lote escriben las mismas filas. Un movimiento de otro equipo que
     /// llegue después sigue en este lote.
     /// </summary>
@@ -445,13 +458,14 @@ public partial class InventoryService
             });
         }
 
-        // Lo que sale del producto es lo que el lote mostraba, sin pasar de lo que tiene (como antes del paso 8.19: un lote
-        // de antes puede mostrar más que el producto). El libro del lote va a 0 con su lote, y lo que falte para que el libro
-        // del producto baje lo mismo va sin lote (un lote de antes del Kardex completo puede mostrar otra cantidad que su
-        // libro: FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento). En el Kardex es un renglón
-        int removed = Math.Min(batch.Quantity, Math.Max(product.CurrentStock, 0));
-        Close(lotPartId, batch.Id, -ledger);
-        Close(restPartId, null, -(removed - ledger));
+        // Lo que sale del producto es lo que el lote mostraba, aunque el producto quede en negativo (revisión 20: un negativo
+        // que ya traía, fuera de los lotes, se queda; nada se compensa solo). Solo un lote de antes de la revisión 11, cuyo
+        // libro no es su cantidad (FEFO anotaba solo el primer lote, SaveBatchAsync no dejaba movimiento), puede mostrar más que
+        // el producto: ese conserva el tope de antes, sin pasar de lo que tiene. El libro del lote va a 0 con su lote, y lo que
+        // falte para que el libro del producto baje lo mismo va sin lote. En el Kardex es un renglón
+        var (lotDelta, restDelta) = StockLedger.ClosingDeltas(batch.Quantity, ledger, product.CurrentStock);
+        Close(lotPartId, batch.Id, lotDelta);
+        Close(restPartId, null, restDelta);
 
         batch.Quantity = 0;
         batch.IsDepleted = true;
@@ -521,40 +535,28 @@ public partial class InventoryService
         }
     }
 
-    private static void EnsureStock(Product product, int quantity)
+    /// <summary>
+    /// Una baja a mano (caducidad, merma o ajuste) no puede sacar más de lo que hay: es una corrección del inventario, y la
+    /// manera de corregir unas existencias equivocadas es un conteo. Revisión 20: una venta o un consumo en consulta
+    /// nunca pasan por aquí (un inventario mal contado nunca impide cobrar, <see cref="StockReviewRules"/>).
+    /// </summary>
+    private static void EnsureStockForWriteOff(Product product, int quantity)
     {
-        if (quantity <= 0)
-        {
-            throw new InvalidOperationException("La cantidad debe ser mayor a cero.");
-        }
         if (quantity > product.CurrentStock)
         {
             throw new InvalidOperationException(
-                $"Stock insuficiente para '{product.Name}': solicitado {quantity}, disponible {product.CurrentStock}.");
+                $"Stock insuficiente para '{product.Name}': solicitado {quantity}, disponible {product.CurrentStock}. " +
+                "Para corregir las existencias use el ajuste por conteo.");
         }
     }
 
     /// <summary>
     /// Calcula cuántos paquetes cerrados de <see cref="Product.CurrentStock"/> se necesitan para cubrir
     /// <paramref name="wholePackages"/> paquetes completos más <paramref name="individualUnits"/> piezas individuales
-    /// (tomando primero de <see cref="Product.OpenedUnitsRemaining"/>).
+    /// (tomando primero de <see cref="Product.OpenedUnitsRemaining"/>; <see cref="StockReviewRules.PackagesNeededFor"/>).
     /// </summary>
-    public static int PackagesNeededFor(Product product, int wholePackages, int individualUnits)
-    {
-        int packages = Math.Max(0, wholePackages);
-        int units = Math.Max(0, individualUnits);
-        if (units == 0) return packages;
-
-        int u = product.EffectiveUnitsPerPackage;
-        if (u <= 1) return packages + units;
-
-        int opened = Math.Max(0, product.OpenedUnitsRemaining);
-        if (units <= opened) return packages;
-
-        int deficit = units - opened;
-        int extraPackages = (deficit + u - 1) / u;
-        return packages + extraPackages;
-    }
+    public static int PackagesNeededFor(Product product, int wholePackages, int individualUnits) =>
+        StockReviewRules.PackagesNeededFor(product, wholePackages, individualUnits);
 
     /// <summary>
     /// Consume <paramref name="individualUnits"/> piezas individuales del paquete abierto (<see cref="Product.OpenedUnitsRemaining"/>),
@@ -580,16 +582,21 @@ public partial class InventoryService
         return packagesToOpen;
     }
 
-    // Registro rápido de consumo en consulta médica
-    public async Task RegisterQuickConsultationUsageAsync(int productId, int quantity, string? notes, string? responsible = "Dr. Consulta")
+    /// <summary>
+    /// Registro rápido de consumo en consulta médica. Revisión 20: pasa aunque no alcancen las existencias (quedan en negativo
+    /// y el producto pide revisar el inventario); regresa el faltante, o null si alcanzó.
+    /// </summary>
+    public async Task<StockShortage?> RegisterQuickConsultationUsageAsync(int productId, int quantity, string? notes, string? responsible = "Dr. Consulta")
     {
+        if (quantity <= 0) throw new InvalidOperationException("La cantidad debe ser mayor a cero.");
         await using var db = CreateContext();
         var product = await db.Products
             .Include(p => p.Batches)
             .FirstOrDefaultAsync(p => p.Id == productId)
             ?? throw new InvalidOperationException("Producto no encontrado");
 
-        EnsureStock(product, quantity);
+        var shortage = StockReviewRules.Shortage(product, quantity, 0);
+        if (shortage != null) AppLogger.Warn($"Consumo sin existencias suficientes: {StockReviewRules.WarningText(new[] { shortage })}");
 
         var now = DateTime.Now;
         product.UpdatedAt = now;
@@ -605,6 +612,7 @@ public partial class InventoryService
 
         await db.SaveChangesAsync();
         NotifyInventoryChanged();
+        return shortage;
     }
 
     // =========================================================================
@@ -626,9 +634,11 @@ public partial class InventoryService
     }
 
     /// <summary>
-    /// Registra una venta completa (productos y servicios) en una transacción: valida
-    /// existencias, descuenta lotes por FEFO, genera movimientos de Kardex y persiste el
-    /// ticket con folio consecutivo. Si algún producto no alcanza, no se guarda nada.
+    /// Registra una venta completa (productos y servicios) en una transacción: descuenta lotes por FEFO, genera movimientos
+    /// de Kardex y persiste el ticket con folio consecutivo. Revisión 20 (decisión del médico del 2026-10-22): un inventario
+    /// mal contado nunca impide cobrar. Si las existencias no alcanzan, la venta pasa igual: lo que no alcanza con los lotes
+    /// sale sin lote (8.19) y las existencias quedan en negativo; los faltantes van en <see cref="Sale.StockShortages"/> para
+    /// el aviso al cobrar (<see cref="StockReviewRules.WarningText"/>). Solo un producto que ya no existe la detiene.
     /// </summary>
     public async Task<Sale?> RegisterSaleAsync(
         IEnumerable<SaleLineRequest> lines,
@@ -658,7 +668,9 @@ public partial class InventoryService
             .Where(s => serviceIds.Contains(s.Id))
             .ToDictionaryAsync(s => s.Id);
 
-        // Validar todo antes de modificar nada
+        // Revisar todo antes de modificar nada: un producto que ya no existe detiene la venta; las existencias que no alcanzan,
+        // no (revisión 20: se anotan para el aviso y la venta pasa)
+        var shortages = new List<StockShortage>();
         foreach (var group in lineList.Where(l => l.ProductId > 0).GroupBy(l => l.ProductId))
         {
             if (!products.TryGetValue(group.Key, out var product) || !product.IsActive)
@@ -668,19 +680,9 @@ public partial class InventoryService
             }
             int wholePackages = group.Where(l => !l.IsIndividualUnits || !product.HasMultipleUnitsPerPackage).Sum(l => l.Quantity);
             int individualUnits = group.Where(l => l.IsIndividualUnits && product.HasMultipleUnitsPerPackage).Sum(l => l.Quantity);
-            int packagesNeeded = PackagesNeededFor(product, wholePackages, individualUnits);
-            if (packagesNeeded > product.CurrentStock)
-            {
-                if (individualUnits > 0 && product.HasMultipleUnitsPerPackage)
-                {
-                    throw new InvalidOperationException(
-                        $"Stock insuficiente para '{product.Name}': solicitado {individualUnits} pieza(s) individual(es)" +
-                        (wholePackages > 0 ? $" + {wholePackages} paquete(s)" : string.Empty) +
-                        $", disponible {product.AvailableIndividualUnits} pieza(s) ({product.CurrentStock} paq. + {product.OpenedUnitsRemaining} sueltas).");
-                }
-                EnsureStock(product, packagesNeeded);
-            }
+            if (StockReviewRules.Shortage(product, wholePackages, individualUnits) is { } shortage) shortages.Add(shortage);
         }
+        if (shortages.Count > 0) AppLogger.Warn($"Venta sin existencias suficientes: {StockReviewRules.WarningText(shortages)}");
 
         var now = DateTime.Now;
         var sale = new Sale
@@ -752,6 +754,7 @@ public partial class InventoryService
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
 
+        sale.StockShortages = shortages;
         NotifyInventoryChanged();
         NotifySalesChanged();
         return sale;
@@ -1200,7 +1203,11 @@ public partial class InventoryService
         }
         else
         {
-            EnsureStock(product, movement.Quantity);
+            // Revisión 20: una venta o un consumo en consulta pasan aunque no alcance (quedan en negativo); una baja a mano no
+            if (movement.MovementType is not (MovementType.SalidaVenta or MovementType.SalidaConsulta))
+            {
+                EnsureStockForWriteOff(product, movement.Quantity);
+            }
             AddOutgoingMovements(db, product, DeductFromBatches(product, movement.Quantity, movement.BatchId), movement);
         }
 
@@ -2053,6 +2060,32 @@ public partial class InventoryService
         (summary.ExpiredBatches, summary.NearExpiryBatches) = StockAlertRules.SplitByExpiration(batches, today);
         summary.ExpiredBatchesCount = summary.ExpiredBatches.Count;
         summary.NearExpiryBatchesCount = summary.NearExpiryBatches.Count;
+
+        // 4. Revisión 20: revisar inventario (existencias o un lote abierto en negativo, o lotes abiertos que suman más que las
+        // existencias: la parte fuera de los lotes en negativo). Se cobró sin que alcanzaran; se queda hasta un conteo
+        var activeStock = await db.Products.AsNoTracking().Where(p => p.IsActive)
+            .Select(p => new { p.Id, p.CurrentStock })
+            .ToDictionaryAsync(p => p.Id, p => p.CurrentStock);
+        var lotSummaries = (await db.ProductBatches.AsNoTracking()
+                .Where(b => b.ClosedAtUtc == null)
+                .Select(b => new { b.ProductId, b.Quantity })
+                .ToListAsync())
+            .GroupBy(b => b.ProductId)
+            .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.Quantity), AnyNegative = g.Any(b => b.Quantity < 0) })
+            .ToList();
+        var candidateIds = activeStock.Where(p => p.Value < 0).Select(p => p.Key)
+            .Concat(lotSummaries.Where(l => activeStock.TryGetValue(l.ProductId, out var stock) && (l.AnyNegative || l.Total > stock)).Select(l => l.ProductId))
+            .Distinct()
+            .ToList();
+        var reviewCandidates = await db.Products.AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => candidateIds.Contains(p.Id))
+            .ToListAsync();
+        var candidateLots = await db.ProductBatches.AsNoTracking()
+            .Where(b => b.ClosedAtUtc == null && candidateIds.Contains(b.ProductId))
+            .ToListAsync();
+        summary.InventoryReviewProducts = StockReviewRules.InventoryReview(reviewCandidates, candidateLots);
+        summary.InventoryReviewLines = summary.InventoryReviewProducts.Select(p => StockReviewRules.AlertLine(p, candidateLots)).ToList();
 
         return summary;
     }

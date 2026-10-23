@@ -86,6 +86,11 @@
             </Border>
         </StackPanel>
 
+        <!-- Revisión 20: un inventario mal contado nunca impide cobrar; solo se avisa -->
+        <Border Style="{StaticResource NoticeWarning}" Margin="0,12,0,0" Visibility="{Binding HasStockWarning, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="{Binding StockWarning}" TextWrapping="Wrap" AutomationProperties.Name="Aviso de existencias" />
+        </Border>
+
         <Button Style="{StaticResource ButtonPrimary}" Margin="0,16,0,0" MinHeight="52" FontSize="16"
                 Command="{Binding ChargeCommand}" IsEnabled="{Binding CanCharge}"
                 Content="{Binding ChargeText}" AutomationProperties.Name="Cobrar" />

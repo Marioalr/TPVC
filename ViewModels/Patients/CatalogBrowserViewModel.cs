@@ -122,9 +122,10 @@ public partial class CatalogBrowserViewModel : ObservableObject
         }
         else
         {
-            // En insumos solo sirve lo que hay; en la receta se puede recetar aunque no se surta aquí
+            // En insumos, primero lo que hay; si nada tiene existencias, el primero (revisión 20: un inventario mal contado
+            // nunca impide cobrar, se carga con el aviso). En la receta se puede recetar aunque no se surta aquí
             var first = CatalogBrowserMode == "Supplies"
-                ? CatalogBrowserFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0)
+                ? CatalogBrowserFilteredProducts.FirstOrDefault(p => p.CurrentStock > 0) ?? CatalogBrowserFilteredProducts.FirstOrDefault()
                 : CatalogBrowserFilteredProducts.FirstOrDefault();
             await AddProductFromCatalogBrowserAsync(first);
         }

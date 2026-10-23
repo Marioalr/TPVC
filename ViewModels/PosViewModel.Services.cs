@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TPVC.Models;
+using TPVC.Services.Rules;
 using TPVC.Services;
 
 namespace TPVC.ViewModels;
@@ -138,7 +139,9 @@ public partial class PosViewModel
             IsService = true
         });
 
-        int added = 0, withoutStock = 0;
+        // Revisión 20: los insumos por defecto se agregan siempre, aunque no alcancen las existencias (se avisa sin bloquear)
+        int added = 0;
+        var shortages = new List<StockShortage>();
         if (includeDefaultSupplies)
         {
             foreach (var dp in service.DefaultProducts ?? new List<ServiceDefaultProduct>())
@@ -147,21 +150,18 @@ public partial class PosViewModel
                 if (prod == null) continue;
                 bool isIndividual = prod.HasMultipleUnitsPerPackage;
                 int availableUnits = isIndividual ? prod.AvailableIndividualUnits : prod.CurrentStock;
-                if (availableUnits <= 0)
-                {
-                    withoutStock++;
-                    continue;
-                }
 
                 var existing = Cart.FirstOrDefault(c => c.ProductId == prod.Id && c.IsIndividualUnits == isIndividual);
+                CartItem line;
                 if (existing != null)
                 {
                     existing.AvailableStock = availableUnits;
-                    existing.Quantity = Math.Min(existing.Quantity + dp.Quantity, availableUnits);
+                    existing.Quantity += dp.Quantity;
+                    line = existing;
                 }
                 else
                 {
-                    Cart.Add(new CartItem
+                    line = new CartItem
                     {
                         ProductId = prod.Id,
                         Code = prod.Code,
@@ -173,17 +173,19 @@ public partial class PosViewModel
                         UnitPrice = prod.IndividualUnitPrice,
                         RequiresRefrigeration = prod.RequiresRefrigeration,
                         IsIndividualUnits = isIndividual,
-                        Quantity = Math.Min(dp.Quantity, availableUnits)
-                    });
+                        Quantity = Math.Max(1, dp.Quantity)
+                    };
+                    Cart.Add(line);
                 }
+                if (line.IsShortOfStock) shortages.Add(new StockShortage(line.Name, line.AvailableStock, line.Quantity, line.IsIndividualUnits));
                 added++;
             }
         }
 
         var msg = added > 0 ? $"{service.Name} y {added} insumo(s) agregados a la venta" : $"{service.Name} agregado a la venta";
-        if (withoutStock > 0)
+        if (StockReviewRules.WarningText(shortages) is { } warning)
         {
-            ShowAlert($"{msg}. {withoutStock} insumo(s) sin existencias no se agregaron.", false);
+            ShowAlert($"{msg}. {warning}", false);
         }
         else
         {

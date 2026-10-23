@@ -194,11 +194,14 @@ public partial class SuppliesSheetViewModel : ObservableObject
 
         // Durante la consulta, lo que se usa se carga de inmediato a la cuenta (no se olvida cobrarlo);
         // el renglón recuerda qué consulta lo cargó para que + / − y la X muevan solo eso
-        if (_active.HasActiveConsultation && _account.ChargeSupply(newItem, product ?? _catalog.FindCatalogProduct(name)))
+        var chargedProduct = product ?? _catalog.FindCatalogProduct(name);
+        if (_active.HasActiveConsultation && _account.ChargeSupply(newItem, chargedProduct))
         {
             newItem.ChargedConsultationFolio = _active.ActiveConsultation?.Folio;
             newItem.ChargedUnits = qty;
             _session.SelectedPatient.SyncSuppliesJson();
+            // Revisión 20: se carga aunque no alcancen las existencias; solo se avisa
+            if (chargedProduct != null && _account.StockWarning(chargedProduct) is { } warning) _feedback.ShowWarning(warning);
         }
         newItem.IsFromEarlierConsultation = !IsFromThisConsultation(newItem);
 
@@ -311,15 +314,7 @@ public partial class SuppliesSheetViewModel : ObservableObject
             _feedback.ShowWarning($"'{item.SupplyName}' ya no está en el inventario: no se pueden cargar más piezas.");
             return;
         }
-        if (difference > 0 && product != null)
-        {
-            int room = product.CurrentStock - _account.ChargedProductUnits(product.Id);
-            if (difference > room)
-            {
-                _feedback.ShowWarning($"No hay más existencias de '{item.SupplyName}' ({product.CurrentStock}).");
-                difference = Math.Max(0, room);
-            }
-        }
+        // Revisión 20: las existencias ya no topan lo que se carga (un inventario mal contado nunca impide cobrar); se avisa abajo
         if (difference == 0) return;
 
         if (difference > 0)
@@ -327,6 +322,7 @@ public partial class SuppliesSheetViewModel : ObservableObject
             // Un cargo libre, en el renglón libre que ya tiene (al recibir la consulta pudo quedar en uno con otro nombre)
             if (!_account.ChargeSupplyUnits(item, product, difference, lineId < 0 ? lineId : null)) return;
             item.ChargedUnits += difference;
+            if (product != null && _account.StockWarning(product) is { } warning) _feedback.ShowWarning(warning);
         }
         else
         {

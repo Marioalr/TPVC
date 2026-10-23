@@ -333,6 +333,96 @@ public class PrescriptionCaptureTests
         records.Dispose();
     }
 
+    // ================================================================== «Se surte aquí» por defecto (2026-10-22)
+
+    [TestMethod]
+    public async Task DispenseInClinic_ComesTickedOnlyWithStock_AndTickedByHandChargesWithTheWarning()
+    {
+        var (records, consultations, patient) = OpenConsultation();
+        var rx = records.Prescription;
+        var amoxicillin = Medicine(records, "MED-002");
+        var omeprazole = Medicine(records, "MED-004");
+        amoxicillin.CurrentStock = 0;
+        omeprazole.CurrentStock = -2;
+        int Charged(Product p) => consultations.CurrentConsultation!.Items.Where(i => i.ProductId == p.Id).Sum(i => i.Quantity);
+
+        rx.PrescriptionSearchText = "amox";
+        rx.ConfirmPrescriptionSearch();
+        await rx.AddPrescriptionAsync();
+        var noStock = patient.ActivePrescription.Last();
+        Assert.IsFalse(noStock.DispenseInClinic, "Sin existencias viene desmarcado");
+        Assert.AreEqual(0, Charged(amoxicillin), "Y no se carga");
+        Assert.IsFalse(records.Info.IsInfoModalVisible, records.Info.InfoModalMessage);
+
+        rx.PrescriptionSearchText = "omepra";
+        rx.ConfirmPrescriptionSearch();
+        await rx.AddPrescriptionAsync();
+        var negative = patient.ActivePrescription.Last();
+        Assert.IsFalse(negative.DispenseInClinic, "En negativo viene desmarcado");
+        Assert.AreEqual(0, Charged(omeprazole));
+
+        // Marcado a mano: se carga con el aviso de siempre (un inventario mal contado nunca impide cobrar)
+        noStock.DispenseInClinic = true;
+        await rx.ToggleDispenseInClinicAsync(noStock);
+        Assert.IsTrue(noStock.DispenseInClinic);
+        Assert.AreEqual(1, Charged(amoxicillin));
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        Assert.AreEqual($"Existencias insuficientes: {amoxicillin.Name} (quedan 0, se cobran 1). Revise el inventario.", records.Info.InfoModalMessage);
+
+        // Con existencias sigue marcado por defecto (la regla de la consulta: «Se surte aquí» por defecto)
+        records.Info.IsInfoModalVisible = false;
+        var paracetamol = Medicine(records, "MED-001");
+        Assert.IsGreaterThan(0, paracetamol.CurrentStock);
+        rx.PrescriptionSearchText = "paracet";
+        rx.ConfirmPrescriptionSearch();
+        await rx.AddPrescriptionAsync();
+        Assert.IsTrue(patient.ActivePrescription.Last().DispenseInClinic);
+        Assert.AreEqual(1, Charged(paracetamol));
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task RepeatPreviousPrescription_TicksOnlyWhatHasStock()
+    {
+        var (records, consultations) = Open();
+        var patient = records.Patients.Single(p => p.Id == 2);
+        var paracetamol = Medicine(records, "MED-001");
+        var amoxicillin = Medicine(records, "MED-002");
+        amoxicillin.CurrentStock = 0;
+        patient.ActivePrescription = new List<PatientPrescriptionItem>
+        {
+            new() { MedicineName = paracetamol.Name, Dosage = "1 cada 8 horas", RecommendedQuantity = 1 },
+            new() { MedicineName = amoxicillin.Name, Dosage = "1 cada 8 horas", RecommendedQuantity = 1 }
+        };
+        records.SelectPatient(patient);
+        records.StartActiveConsultation();
+
+        await records.Prescription.RepeatPreviousPrescriptionAsync();
+        var rows = patient.ActivePrescription;
+        Assert.IsTrue(rows.Single(r => r.MedicineName == paracetamol.Name).DispenseInClinic, "Con existencias viene marcado");
+        Assert.IsFalse(rows.Single(r => r.MedicineName == amoxicillin.Name).DispenseInClinic, "Sin existencias viene desmarcado");
+        Assert.AreEqual(paracetamol.Id, consultations.CurrentConsultation!.Items.Single().ProductId);
+        records.Dispose();
+    }
+
+    [TestMethod]
+    public async Task SuppliesCatalog_EnterAddsTheFirstOne_EvenWithoutStock_WithTheWarning()
+    {
+        // Revisión de la revisión 20: Enter en el catálogo de insumos saltaba los que no tienen existencias y, sin ninguno con
+        // existencias, no agregaba nada
+        var (records, consultations, patient) = OpenConsultation();
+        foreach (var supply in records.Catalog.AvailableProducts.Where(CatalogStore.IsProductSupply)) supply.CurrentStock = 0;
+        await records.Supplies.OpenSupplyCatalogAsync();
+        var first = records.CatalogBrowser.CatalogBrowserFilteredProducts.First();
+
+        await records.CatalogBrowser.AddFirstFromCatalogBrowserAsync();
+        Assert.IsTrue(patient.ActiveSupplies.Any(s => s.SupplyName.Contains(first.Name)), "Se agrega el primero");
+        Assert.AreEqual(1, consultations.CurrentConsultation!.Items.Single(i => i.ProductId == first.Id).Quantity, "Y se carga");
+        Assert.IsTrue(records.Info.IsInfoModalVisible);
+        StringAssert.StartsWith(records.Info.InfoModalMessage, $"Existencias insuficientes: {first.Name} (quedan 0, se cobran 1)");
+        records.Dispose();
+    }
+
     // ================================================================== revisión adversarial de 4214fdf
 
     [TestMethod]

@@ -140,6 +140,21 @@
                                 </StackPanel>
                             </Button>
 
+                            <!-- Revisión 20: existencias en negativo (se cobró sin que alcanzaran) -->
+                            <Button Style="{StaticResource ButtonDanger}" 
+                                    Command="{Binding NavigateToInventoryReviewCommand}" 
+                                    Visibility="{Binding InventoryReviewCount, Converter={StaticResource BoolToVis}}" 
+                                    ToolTip="{Binding InventoryReviewText}"
+                                    AutomationProperties.Name="Revisar inventario"
+                                    MinHeight="0" Padding="10,6" Margin="0,2,8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <helpers:Icon Data="{StaticResource IcoAlert}" Width="14" Height="14" Margin="0,0,6,0" />
+                                    <TextBlock Text="Revisar inventario (" FontSize="11.5" />
+                                    <TextBlock Text="{Binding InventoryReviewCount}" FontWeight="Bold" FontSize="11.5" />
+                                    <TextBlock Text=")" FontSize="11.5" />
+                                </StackPanel>
+                            </Button>
+
                             <!-- Lotes por vencer -->
                             <Button Style="{StaticResource ButtonSecondary}" 
                                     Command="{Binding NavigateToBatchesCommand}" 

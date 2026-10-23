@@ -238,7 +238,7 @@ public partial class TursoSyncEndToEndTests
     }
 
     [TestMethod]
-    public async Task ChargingOnThePc_SyncsFirst_AndSeesWhatTheTabletAlreadySold()
+    public async Task ChargingOnThePc_SyncsFirst_AndWarnsAboutWhatTheTabletAlreadySold()
     {
         var (pc, tablet, _) = await PcAndTabletAsync();
         var product = (await pc.Inventory.GetProductsAsync()).First(p => p.CurrentStock is > 0 and <= 50 && p.Price > 0);
@@ -253,9 +253,15 @@ public partial class TursoSyncEndToEndTests
         Assert.IsTrue(checkout.AddProduct(product));
         await checkout.ChargeAsync();
 
-        StringAssert.Contains(message, $"Stock insuficiente para '{product.Name}'");
-        Assert.IsTrue(checkout.HasItems, "No se cobró: la cuenta sigue");
-        Assert.AreEqual(salesBefore + 1, await CountSalesAsync(pc), "Solo bajó la venta de la tablet");
+        // Revisión 20 (un inventario mal contado nunca impide cobrar): se cobra igual, se avisa y queda en −1 para revisar
+        Assert.AreEqual($"Existencias insuficientes: {product.Name} (quedan 0, se cobran 1). Revise el inventario.", message);
+        Assert.IsFalse(checkout.HasItems, "Se cobró: la cuenta quedó vacía");
+        Assert.AreEqual(salesBefore + 2, await CountSalesAsync(pc), "Bajó la venta de la tablet y se cobró la de la PC");
+        var after = (await pc.Inventory.GetProductsAsync()).Single(p => p.Id == product.Id);
+        Assert.AreEqual(-1, after.CurrentStock);
+        Assert.AreEqual("\u22121 · revisar inventario", after.StockBadgeText);
+        Assert.IsTrue((await pc.Inventory.GetSystemAlertsSummaryAsync()).InventoryReviewProducts.Any(p => p.Id == product.Id));
+        Assert.IsTrue((await pc.Inventory.VerifyStockLedgerAsync()).IsClean, "El libro sigue cuadrando con el negativo");
     }
 
     private static async Task<int> CountSalesAsync(Device device)
